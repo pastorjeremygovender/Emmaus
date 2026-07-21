@@ -1,0 +1,1 @@
+- [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.

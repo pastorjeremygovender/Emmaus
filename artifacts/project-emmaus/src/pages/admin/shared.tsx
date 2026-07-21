@@ -3,13 +3,15 @@ import React, { useState } from 'react';
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  // Journey / sermon statuses
+  // Journey / sermon / media statuses
   Draft: 'bg-gray-100 text-gray-700',
   draft: 'bg-gray-100 text-gray-700',
   'Pastoral Review': 'bg-amber-100 text-amber-800',
   review: 'bg-amber-100 text-amber-800',
   Approved: 'bg-blue-100 text-blue-800',
   approved: 'bg-blue-100 text-blue-800',
+  Scheduled: 'bg-purple-100 text-purple-800',
+  scheduled: 'bg-purple-100 text-purple-800',
   Published: 'bg-emerald-100 text-emerald-800',
   published: 'bg-emerald-100 text-emerald-800',
   Archived: 'bg-gray-100 text-gray-400',

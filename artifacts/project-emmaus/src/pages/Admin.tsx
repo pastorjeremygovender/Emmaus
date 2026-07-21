@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'wouter';
 import { AdminProvider } from '@/contexts/AdminContext';
+import { MediaStudioProvider } from '@/contexts/MediaStudioContext';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
   BookOpen,
   Video,
+  Clapperboard,
   HeartHandshake,
   Users,
   Settings2,
   ArrowLeft,
   Menu,
-  X,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -25,24 +26,30 @@ import SermonEditor from './admin/SermonEditor';
 import PrayerRequests from './admin/PrayerRequests';
 import AdminUsers from './admin/Users';
 import AdminSettings from './admin/Settings';
+import MediaStudioDashboard from './admin/media-studio/MediaStudioDashboard';
+import MediaKitWizard from './admin/media-studio/MediaKitWizard';
+import MediaKitEditor from './admin/media-studio/MediaKitEditor';
+import MediaCalendar from './admin/media-studio/MediaCalendar';
 
-export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'prayers' | 'users' | 'settings';
+export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings';
 export type AdminNav = {
   section: AdminSection;
-  subView?: 'editor' | 'day-editor' | 'preview';
+  subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard' | 'calendar';
   journeyId?: string;
   day?: number;
   sermonId?: string;
+  kitId?: string;
   freshlyGenerated?: boolean;
 };
 
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
-  { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { id: 'journeys', label: 'Journeys', Icon: BookOpen },
-  { id: 'sermons', label: 'Sermons', Icon: Video },
-  { id: 'prayers', label: 'Prayer Requests', Icon: HeartHandshake },
-  { id: 'users', label: 'Users', Icon: Users },
-  { id: 'settings', label: 'Settings', Icon: Settings2 },
+  { id: 'dashboard',    label: 'Dashboard',       Icon: LayoutDashboard },
+  { id: 'journeys',     label: 'Journeys',         Icon: BookOpen },
+  { id: 'sermons',      label: 'Sermons',          Icon: Video },
+  { id: 'media-studio', label: 'Media Studio',     Icon: Clapperboard },
+  { id: 'prayers',      label: 'Prayer Requests',  Icon: HeartHandshake },
+  { id: 'users',        label: 'Users',            Icon: Users },
+  { id: 'settings',     label: 'Settings',         Icon: Settings2 },
 ];
 
 export default function Admin() {
@@ -124,6 +131,39 @@ export default function Admin() {
         />
       );
     }
+    if (section === 'media-studio') {
+      if (subView === 'kit-wizard') {
+        return (
+          <MediaKitWizard
+            onBack={() => navigate({ section: 'media-studio' })}
+            onCreated={(kitId) => navigate({ section: 'media-studio', subView: 'kit-editor', kitId })}
+          />
+        );
+      }
+      if (subView === 'kit-editor') {
+        return (
+          <MediaKitEditor
+            kitId={nav.kitId ?? null}
+            onBack={() => navigate({ section: 'media-studio' })}
+          />
+        );
+      }
+      if (subView === 'calendar') {
+        return (
+          <MediaCalendar
+            onBack={() => navigate({ section: 'media-studio' })}
+            onOpenKit={(kitId) => navigate({ section: 'media-studio', subView: 'kit-editor', kitId })}
+          />
+        );
+      }
+      return (
+        <MediaStudioDashboard
+          onCreateKit={() => navigate({ section: 'media-studio', subView: 'kit-wizard' })}
+          onOpenKit={(kitId) => navigate({ section: 'media-studio', subView: 'kit-editor', kitId })}
+          onCalendar={() => navigate({ section: 'media-studio', subView: 'calendar' })}
+        />
+      );
+    }
     if (section === 'prayers') return <PrayerRequests />;
     if (section === 'users') return <AdminUsers />;
     if (section === 'settings') return <AdminSettings />;
@@ -174,6 +214,7 @@ export default function Admin() {
 
   return (
     <AdminProvider>
+      <MediaStudioProvider>
       <div className="flex h-[100dvh] bg-gray-50 overflow-hidden">
         {/* Desktop sidebar */}
         <aside className="hidden md:flex w-56 flex-col flex-shrink-0">
@@ -214,6 +255,7 @@ export default function Admin() {
           </main>
         </div>
       </div>
+      </MediaStudioProvider>
     </AdminProvider>
   );
 }

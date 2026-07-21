@@ -1,0 +1,419 @@
+Build a new major module called Emmaus Media Studio.
+
+This is NOT a social graphics generator.
+
+This is a complete ministry content production studio.
+
+The purpose of Media Studio is to allow one sermon, devotional or journey to become an entire week's worth of ministry content while preserving pastoral review before publication.
+
+This is a major Admin Portal module.
+
+Do not modify the user-facing Emmaus application.
+
+Do not modify authentication.
+
+Do not change existing journeys.
+
+Do not alter Firestore structures unnecessarily.
+
+Preserve all current functionality.
+
+--------------------------------------------------
+
+Add a new Admin menu item
+
+🎬 Media Studio
+
+Position:
+
+Dashboard
+Journeys
+Sermons
+Media Studio
+Prayer Requests
+Users
+Settings
+
+--------------------------------------------------
+
+Media Studio Dashboard
+
+Display:
+
+Recent Media Kits
+
+Draft
+
+Approved
+
+Scheduled
+
+Published
+
+Recently Generated
+
+Upcoming Scheduled Posts
+
+--------------------------------------------------
+
+Primary Action
+
+✨ Create Media Kit
+
+The administrator chooses:
+
+Source
+
+○ Sermon
+
+○ Companion Journey
+
+○ Devotional
+
+○ Journey
+
+The source automatically loads:
+
+Title
+
+Scripture
+
+Summary
+
+Reflection
+
+Mentor text
+
+Journey data
+
+Sermon data
+
+--------------------------------------------------
+
+Media Kit Generator
+
+The administrator selects which assets to generate.
+
+☑ Companion Journey
+
+☑ Monday-Friday Devotionals
+
+☑ Instagram Square
+
+☑ Instagram Portrait
+
+☑ Facebook Graphic
+
+☑ WhatsApp Status
+
+☑ Facebook Caption
+
+☑ Instagram Caption
+
+☑ WhatsApp Message
+
+☑ YouTube Community Post
+
+☑ YouTube Thumbnail
+
+☑ Short Devotional
+
+☑ Audio Narration Script
+
+☑ Suggested Shorts
+
+☑ Suggested Sermon Clips
+
+--------------------------------------------------
+
+Everything generated must remain
+
+Status = Draft
+
+Never publish automatically.
+
+Never schedule automatically.
+
+Never share automatically.
+
+--------------------------------------------------
+
+Companion Journey
+
+Generate:
+
+5 devotional days.
+
+Each day contains
+
+Title
+
+Mentor Introduction
+
+Scripture
+
+Reflection
+
+Reflection Question
+
+Prayer
+
+Today's Step
+
+Sermon Timestamp
+
+Status
+
+Draft
+
+--------------------------------------------------
+
+Social Graphics
+
+Generate
+
+Instagram Square
+
+1080x1080
+
+Instagram Portrait
+
+1080x1350
+
+Facebook
+
+1200x630
+
+WhatsApp Story
+
+1080x1920
+
+Each graphic follows the Emmaus visual identity.
+
+The administrator can:
+
+Edit Quote
+
+Change Template
+
+Preview
+
+Approve
+
+Download
+
+Share
+
+--------------------------------------------------
+
+Captions
+
+Generate
+
+Facebook Caption
+
+Instagram Caption
+
+WhatsApp Message
+
+YouTube Community Post
+
+Everything editable.
+
+--------------------------------------------------
+
+Audio
+
+Generate
+
+2-minute devotional narration script.
+
+No audio synthesis yet.
+
+Only script generation.
+
+--------------------------------------------------
+
+YouTube
+
+Generate
+
+Thumbnail concept
+
+Description
+
+Hashtags
+
+Chapters
+
+Pinned Comment
+
+--------------------------------------------------
+
+Suggested Shorts
+
+Generate five suggested clips.
+
+Each contains
+
+Title
+
+Reason
+
+Start Time
+
+End Time
+
+Suggested Caption
+
+Suggested Thumbnail Text
+
+Do not create video clips yet.
+
+Only clip suggestions.
+
+--------------------------------------------------
+
+Media Calendar
+
+Create a Calendar view.
+
+Monday
+
+Instagram
+
+Facebook
+
+WhatsApp
+
+Companion Day 1
+
+Tuesday
+
+...
+
+Sunday
+
+New Sermon
+
+Allow scheduling.
+
+Do not automatically publish.
+
+--------------------------------------------------
+
+Workflow
+
+Everything follows
+
+Draft
+
+↓
+
+Pastoral Review
+
+↓
+
+Approved
+
+↓
+
+Scheduled
+
+↓
+
+Published
+
+Nothing bypasses this workflow.
+
+--------------------------------------------------
+
+Approval
+
+No asset may become Published without explicit confirmation.
+
+Confirmation dialog
+
+"Publish this media?"
+
+--------------------------------------------------
+
+Version History
+
+Every regeneration creates
+
+Version 1
+
+Version 2
+
+Version 3
+
+etc.
+
+The administrator can compare versions.
+
+Restore previous versions.
+
+Never overwrite approved content silently.
+
+--------------------------------------------------
+
+Preview
+
+Every generated asset can be previewed before approval.
+
+--------------------------------------------------
+
+Architecture
+
+Reuse existing sermon data.
+
+Reuse existing journey data.
+
+Do not duplicate content unnecessarily.
+
+--------------------------------------------------
+
+Future AI
+
+Add disabled buttons
+
+Generate Voice
+
+Generate Video
+
+Generate Carousel
+
+Translate
+
+Repurpose
+
+Label them
+
+Coming Soon
+
+--------------------------------------------------
+
+Validation
+
+After implementation
+
+Generate a Media Kit from the sample sermon.
+
+Verify every generated asset remains Draft.
+
+Verify Companion Journey remains Draft.
+
+Verify social graphics remain Draft.
+
+Verify captions remain Draft.
+
+Verify scheduling requires approval.
+
+Verify publishing requires confirmation.
+
+Verify no content becomes visible to users before publication.
+
+Resolve all TypeScript errors.
+
+Summarize all files changed.
