@@ -1,0 +1,266 @@
+Simplify the existing Emmaus Media Studio.
+
+The current Media Studio is too complex and is generating assets the administrator did not select.
+
+This is a focused redesign of the Media Studio workflow only.
+
+Do not change:
+- the user-facing Emmaus app
+- authentication
+- journeys
+- sermons
+- prayer requests
+- users
+- Firebase setup
+- existing admin access
+- sermon companion workflow
+
+## Core problem
+
+Current behaviour is confusing because:
+
+- selecting 4 assets can generate 13
+- some assets receive incorrect statuses
+- assets are scattered across multiple sections
+- Publish actions appear too early
+- one sermon can appear as multiple media kits
+- the interface requires too much scrolling
+- the workflow is unclear
+
+## New principle
+
+One sermon creates one Media Kit.
+
+A Media Kit contains only the assets explicitly selected by the administrator.
+
+Nothing else is generated.
+
+## Generation rules
+
+When the administrator selects:
+
+- Instagram Square
+- Facebook Caption
+- WhatsApp Message
+- Suggested Sermon Clips
+
+the system must generate exactly those 4 assets.
+
+Do not generate:
+- Instagram Portrait
+- Facebook Graphic
+- WhatsApp Story
+- YouTube Thumbnail
+- YouTube Description
+- Audio Script
+- Suggested Shorts
+- any companion journey
+- any other asset
+
+unless explicitly selected.
+
+## Default status
+
+Every newly generated asset must start as:
+
+Draft
+
+No asset may start as:
+- Approved
+- Pastoral Review
+- Scheduled
+- Published
+- Exported
+
+Generation must never change status automatically.
+
+## Media Kit list
+
+Replace the current complex dashboard with a simple list.
+
+Each Media Kit row should show:
+
+- sermon title
+- source type
+- number of assets
+- overall status
+- last updated
+- Open button
+
+Do not show all individual assets on the dashboard.
+
+Do not show unscheduled assets on the dashboard.
+
+Do not show the calendar on the dashboard.
+
+## Media Kit workspace
+
+Opening a Media Kit should show one clean page:
+
+Title:
+Media Kit — [Sermon Title]
+
+Source:
+[Sermon title and Scripture]
+
+Assets:
+
+- Instagram Square — Draft — Review
+- Facebook Caption — Draft — Review
+- WhatsApp Message — Draft — Review
+- Suggested Sermon Clips — Draft — Review
+
+Only show assets contained in that Media Kit.
+
+Do not group assets into many expandable categories.
+
+Do not repeat the same asset in multiple places.
+
+## Review flow
+
+Clicking Review opens that asset only.
+
+The asset review page should allow:
+
+- preview
+- edit
+- regenerate
+- save draft
+- submit for pastoral review
+- approve
+
+Do not show Publish on the individual asset review page.
+
+## Status workflow
+
+Use this workflow only:
+
+Draft
+→ Pastoral Review
+→ Approved
+
+Publishing happens at Media Kit level, not individual asset level.
+
+Assets may only move forward one step at a time.
+
+## Media Kit publishing
+
+At the bottom of the Media Kit workspace show:
+
+- Submit All for Review
+- Approve All
+- Publish Media Kit
+
+Rules:
+
+- Submit All for Review is available when at least one asset is Draft
+- Approve All is available when all assets are in Pastoral Review
+- Publish Media Kit is available only when every asset is Approved
+
+Before publishing, show:
+
+“Publish this media kit?”
+
+Publishing must require confirmation.
+
+## Visibility
+
+Do not display Publish beside every asset.
+
+Do not display scheduling beside every asset.
+
+Do not display statuses from previous test media kits inside the current media kit.
+
+## Scheduling
+
+Remove scheduling from this sprint.
+
+Remove:
+- Assign Day
+- Upcoming Scheduled Posts
+- scheduled status
+- calendar view
+
+Scheduling can be added later after the core workflow is proven.
+
+## Duplicate media kits
+
+Prevent accidental duplicate media kits for the same source.
+
+If a Media Kit already exists for a sermon, show:
+
+“A Media Kit already exists for this sermon.”
+
+Buttons:
+
+- Open Existing Media Kit
+- Create New Version
+
+Do not silently create another duplicate.
+
+## Versioning
+
+If Create New Version is chosen:
+
+- create Version 2
+- preserve Version 1
+- keep both clearly labelled
+- do not mix assets across versions
+
+## Clean-up existing demo data
+
+The current demo data contains extra generated assets and incorrect statuses.
+
+Add a demo-only action:
+
+Reset Media Studio Demo Data
+
+This should:
+- remove existing demo media kits
+- remove demo assets
+- create no new assets
+- leave sermons and journeys untouched
+
+Require confirmation before reset.
+
+## Overall status
+
+Media Kit overall status should be calculated as:
+
+- Draft if any asset is Draft
+- Pastoral Review if all assets are Pastoral Review
+- Approved if all assets are Approved
+- Published only after explicit Media Kit publication
+
+Do not manually assign conflicting overall status.
+
+## Validation
+
+After implementation:
+
+1. Reset Media Studio demo data.
+2. Create a Media Kit from the sample sermon.
+3. Select exactly:
+   - Instagram Square
+   - Facebook Caption
+   - WhatsApp Message
+   - Suggested Sermon Clips
+4. Generate.
+5. Confirm exactly 4 assets exist.
+6. Confirm all 4 are Draft.
+7. Confirm there are no extra assets.
+8. Confirm no asset is Approved automatically.
+9. Confirm no Publish button appears beside individual assets.
+10. Submit all for review.
+11. Confirm all become Pastoral Review.
+12. Approve all.
+13. Confirm all become Approved.
+14. Confirm Publish Media Kit becomes available only then.
+15. Confirm publishing requires confirmation.
+16. Confirm no scheduling or calendar controls appear.
+17. Confirm no existing user-facing functionality changed.
+18. Resolve all TypeScript errors.
+19. Summarise files changed.
+
+Do not add any new features.
+Only simplify and correct the Media Studio.

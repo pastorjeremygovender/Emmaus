@@ -3,7 +3,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useMediaStudio } from '@/contexts/MediaStudioContext';
 import { useAdmin } from '@/contexts/AdminContext';
 import {
-  ALL_ASSET_TYPES, ASSET_GROUPS, ASSET_LABELS,
+  ASSET_GROUPS, ASSET_LABELS,
   type MediaAssetType, type MediaSourceType,
 } from '@/lib/media-studio-types';
 import type { MediaKit, MediaAsset } from '@/lib/media-studio-types';
@@ -18,7 +18,7 @@ import {
   generateAudioScript,
   generateSuggestedShorts,
 } from '@/lib/media-studio-demo-data';
-import { AdminBtn, Field, Select, PageHeader } from '../shared';
+import { AdminBtn, Field, Select, PageHeader, ConfirmDialog } from '../shared';
 
 type Props = {
   onBack: () => void;
@@ -36,7 +36,6 @@ type SourceOption = {
 const QUOTE_FROM = (title: string) =>
   `[Edit this quote for "${title}" before publishing]`;
 
-// Generate content for a single asset type given source context
 function buildAssetContent(
   type: MediaAssetType,
   title: string,
@@ -45,80 +44,65 @@ function buildAssetContent(
   extra?: { speaker?: string; topics?: string[] },
 ): string {
   const speaker = extra?.speaker ?? 'Isipingo Community Church';
-  const topics = extra?.topics ?? ['faith', 'grace', 'community'];
-  const quote = QUOTE_FROM(title);
+  const topics  = extra?.topics  ?? ['faith', 'grace', 'community'];
+  const quote   = QUOTE_FROM(title);
 
   switch (type) {
-    case 'instagram-square':
-      return generateGraphicContent(quote, scripture, '1080×1080', 'classic');
-    case 'instagram-portrait':
-      return generateGraphicContent(quote, scripture, '1080×1350', 'modern');
-    case 'facebook-graphic':
-      return generateGraphicContent(quote, scripture, '1200×630', 'minimal');
-    case 'whatsapp-story':
-      return generateGraphicContent(quote, scripture, '1080×1920', 'classic');
-    case 'facebook-caption':
-      return generateFacebookCaption(title, scripture, summary);
-    case 'instagram-caption':
-      return generateInstagramCaption(title, scripture);
-    case 'whatsapp-message':
-      return generateWhatsAppMessage(title, scripture, summary);
-    case 'youtube-community':
-      return generateYouTubeCommunityPost(title, scripture);
-    case 'youtube-thumbnail':
-      return generateYouTubeThumbnailConcept(title, speaker);
-    case 'youtube-description':
-      return generateYouTubeDescription(title, speaker, scripture, summary, topics);
-    case 'audio-script':
-      return generateAudioScript(title, scripture, summary);
+    case 'instagram-square':   return generateGraphicContent(quote, scripture, '1080×1080', 'classic');
+    case 'instagram-portrait': return generateGraphicContent(quote, scripture, '1080×1350', 'modern');
+    case 'facebook-graphic':   return generateGraphicContent(quote, scripture, '1200×630',  'minimal');
+    case 'whatsapp-story':     return generateGraphicContent(quote, scripture, '1080×1920', 'classic');
+    case 'facebook-caption':   return generateFacebookCaption(title, scripture, summary);
+    case 'instagram-caption':  return generateInstagramCaption(title, scripture);
+    case 'whatsapp-message':   return generateWhatsAppMessage(title, scripture, summary);
+    case 'youtube-community':  return generateYouTubeCommunityPost(title, scripture);
+    case 'youtube-thumbnail':  return generateYouTubeThumbnailConcept(title, speaker);
+    case 'youtube-description':return generateYouTubeDescription(title, speaker, scripture, summary, topics);
+    case 'audio-script':       return generateAudioScript(title, scripture, summary);
     case 'suggested-shorts':
-    case 'suggested-clips':
-      return JSON.stringify(generateSuggestedShorts(title, scripture));
-    default:
-      return '[Content to be edited]';
+    case 'suggested-clips':    return JSON.stringify(generateSuggestedShorts(title, scripture));
+    default:                   return '[Content to be edited]';
   }
 }
 
 export default function MediaKitWizard({ onBack, onCreated }: Props) {
-  const { journeys } = useJourney();
-  const { sermons } = useAdmin();
-  const { addKit, addAsset } = useMediaStudio();
+  const { journeys }          = useJourney();
+  const { sermons }           = useAdmin();
+  const { kits, addKit, addAsset } = useMediaStudio();
 
-  const [step, setStep] = useState<1 | 2>(1);
-  const [sourceType, setSourceType] = useState<MediaSourceType>('sermon');
-  const [sourceId, setSourceId] = useState('');
-  const [selectedTypes, setSelectedTypes] = useState<Set<MediaAssetType>>(new Set(ALL_ASSET_TYPES));
-  const [generating, setGenerating] = useState(false);
+  const [step, setStep]               = useState<1 | 2>(1);
+  const [sourceType, setSourceType]   = useState<MediaSourceType>('sermon');
+  const [sourceId, setSourceId]       = useState('');
+  // Default to EMPTY — admin must explicitly select asset types
+  const [selectedTypes, setSelectedTypes] = useState<Set<MediaAssetType>>(new Set());
+  const [generating, setGenerating]   = useState(false);
+  const [duplicateDialog, setDuplicateDialog] = useState(false);
 
-  // Build source options depending on chosen type
   const sourceOptions: SourceOption[] = (() => {
     if (sourceType === 'sermon') {
       return sermons.map(s => ({
-        id: s.id,
-        label: s.title,
-        scripture: s.scriptureReference,
-        summary: s.summary ?? '',
+        id: s.id, label: s.title,
+        scripture: s.scriptureReference, summary: s.summary ?? '',
         extra: { speaker: s.speaker, topics: s.topics },
       }));
     }
-    if (sourceType === 'companion-journey' || sourceType === 'journey' || sourceType === 'devotional') {
-      return journeys
-        .filter(j => {
-          if (sourceType === 'companion-journey') return j.journeyType === 'companion';
-          if (sourceType === 'devotional') return j.journeyType === 'devotional';
-          return j.journeyType === 'journey' || !j.journeyType;
-        })
-        .map(j => ({
-          id: j.id,
-          label: j.title,
-          scripture: j.sermon?.scriptureReference ?? '',
-          summary: j.description ?? '',
-        }));
-    }
-    return [];
+    return journeys
+      .filter(j => {
+        if (sourceType === 'companion-journey') return j.journeyType === 'companion';
+        if (sourceType === 'devotional')        return j.journeyType === 'devotional';
+        return j.journeyType === 'journey' || !j.journeyType;
+      })
+      .map(j => ({
+        id: j.id, label: j.title,
+        scripture: j.sermon?.scriptureReference ?? '', summary: j.description ?? '',
+      }));
   })();
 
   const selectedSource = sourceOptions.find(o => o.id === sourceId);
+
+  // Existing kits for the chosen source
+  const existingKits = kits.filter(k => k.sourceId === sourceId && k.sourceType === sourceType);
+  const hasDuplicate = existingKits.length > 0;
 
   const toggleType = (t: MediaAssetType) => {
     setSelectedTypes(prev => {
@@ -137,29 +121,34 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
     });
   };
 
-  const handleGenerate = () => {
+  const handleNextStep = () => {
+    if (hasDuplicate) {
+      setDuplicateDialog(true);
+    } else {
+      setStep(2);
+    }
+  };
+
+  const doGenerate = (newVersion: boolean) => {
     if (!selectedSource || selectedTypes.size === 0) return;
     setGenerating(true);
 
-    const kitId = `ms-kit-${Date.now()}`;
-    const assetTypes = [...selectedTypes];
+    const version = newVersion
+      ? Math.max(0, ...existingKits.map(k => k.version)) + 1
+      : 1;
+
+    const kitId    = `ms-kit-${Date.now()}`;
     const assetIds: string[] = [];
 
-    assetTypes.forEach(type => {
+    [...selectedTypes].forEach(type => {
       const assetId = `ms-asset-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       assetIds.push(assetId);
-      const content = buildAssetContent(
-        type,
-        selectedSource.label,
-        selectedSource.scripture,
-        selectedSource.summary,
-        selectedSource.extra,
-      );
+      const content = buildAssetContent(type, selectedSource.label, selectedSource.scripture, selectedSource.summary, selectedSource.extra);
       const asset: MediaAsset = {
         id: assetId,
         kitId,
         type,
-        status: 'Draft', // ALWAYS Draft — never auto-publish
+        status: 'Draft', // ALWAYS Draft — never auto-advance
         content,
         versions: [{ version: 1, content, createdAt: new Date().toISOString() }],
       };
@@ -176,6 +165,7 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
       sourceSummary: selectedSource.summary,
       status: 'Draft', // ALWAYS Draft
       assetIds,
+      version,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -184,6 +174,8 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
     setGenerating(false);
     onCreated(kitId);
   };
+
+  const handleGenerate = () => doGenerate(false);
 
   return (
     <div className="p-6 lg:p-8 max-w-2xl">
@@ -201,10 +193,10 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
             <div className="grid grid-cols-2 gap-3">
               {(
                 [
-                  { value: 'sermon',             label: '📹 Sermon' },
-                  { value: 'companion-journey',   label: '🤝 Companion Journey' },
-                  { value: 'journey',             label: '🗺️ Journey' },
-                  { value: 'devotional',          label: '📖 Devotional' },
+                  { value: 'sermon',           label: '📹 Sermon' },
+                  { value: 'companion-journey', label: '🤝 Companion Journey' },
+                  { value: 'journey',           label: '🗺️ Journey' },
+                  { value: 'devotional',        label: '📖 Devotional' },
                 ] as { value: MediaSourceType; label: string }[]
               ).map(opt => (
                 <button
@@ -250,14 +242,17 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
                 )}
               </div>
             )}
+
+            {/* Duplicate warning */}
+            {hasDuplicate && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+                ⚠️ A Media Kit already exists for this {sourceType.replace(/-/g, ' ')} ({existingKits.length} version{existingKits.length !== 1 ? 's' : ''}).
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end">
-            <AdminBtn
-              variant="primary"
-              disabled={!sourceId}
-              onClick={() => setStep(2)}
-            >
+            <AdminBtn variant="primary" disabled={!sourceId} onClick={handleNextStep}>
               Next: Select Assets →
             </AdminBtn>
           </div>
@@ -267,7 +262,7 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
       {step === 2 && (
         <div className="space-y-5">
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-            ⚠️ All generated assets start as <strong>Draft</strong>. Nothing will be published automatically.
+            ⚠️ All generated assets start as <strong>Draft</strong>. Select only the assets you need.
           </div>
 
           {/* Asset type selection */}
@@ -275,7 +270,6 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
             const allOn = group.types.every(t => selectedTypes.has(t));
             return (
               <div key={group.label} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                {/* Group header */}
                 <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
                   <span className="text-sm font-semibold text-gray-700">{group.emoji} {group.label}</span>
                   <button
@@ -315,6 +309,43 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
             >
               {generating ? 'Generating…' : `✨ Generate ${selectedTypes.size} Asset${selectedTypes.size !== 1 ? 's' : ''}`}
             </AdminBtn>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate dialog */}
+      {duplicateDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+            <h2 className="font-semibold text-gray-900 text-[15px]">
+              A Media Kit already exists for this {sourceType.replace(/-/g, ' ')}.
+            </h2>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Would you like to open the existing kit, or create a new version?
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <AdminBtn
+                variant="primary"
+                onClick={() => {
+                  setDuplicateDialog(false);
+                  onCreated(existingKits[existingKits.length - 1].id);
+                }}
+              >
+                Open Existing Media Kit
+              </AdminBtn>
+              <AdminBtn
+                variant="secondary"
+                onClick={() => { setDuplicateDialog(false); setStep(2); }}
+              >
+                Create New Version
+              </AdminBtn>
+              <button
+                onClick={() => setDuplicateDialog(false)}
+                className="text-sm text-gray-400 hover:text-gray-600 py-1"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

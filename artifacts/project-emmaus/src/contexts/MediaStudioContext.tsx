@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { MediaKit, MediaAsset, MediaAssetStatus, AssetVersion } from '@/lib/media-studio-types';
-import { DEMO_MEDIA_KIT, DEMO_MEDIA_ASSETS } from '@/lib/media-studio-demo-data';
 
 type MediaStudioContextType = {
   kits: MediaKit[];
@@ -13,29 +12,29 @@ type MediaStudioContextType = {
   deleteKit: (kitId: string) => void;
   addAsset: (asset: MediaAsset) => void;
   updateAsset: (asset: MediaAsset) => void;
-  deleteAsset: (assetId: string) => void;
   advanceAssetStatus: (assetId: string, to: MediaAssetStatus) => void;
   regenerateAsset: (assetId: string, newContent: string) => void;
   restoreVersion: (assetId: string, version: number) => void;
+  /** Clears all kits and assets. Leaves sermons and journeys untouched. */
+  resetDemoData: () => void;
 };
 
 const MediaStudioContext = createContext<MediaStudioContextType | null>(null);
 
-const KIT_KEY = 'emmaus_media_kits';
+const KIT_KEY   = 'emmaus_media_kits';
 const ASSET_KEY = 'emmaus_media_assets';
 
 export function MediaStudioProvider({ children }: { children: React.ReactNode }) {
-  const [kits, setKits] = useState<MediaKit[]>([]);
+  const [kits, setKits]     = useState<MediaKit[]>([]);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
 
+  // Start from whatever is stored; if nothing, start empty (no seeded demo data).
   useEffect(() => {
     const sk = localStorage.getItem(KIT_KEY);
-    setKits(sk ? JSON.parse(sk) : [DEMO_MEDIA_KIT]);
-    if (!sk) localStorage.setItem(KIT_KEY, JSON.stringify([DEMO_MEDIA_KIT]));
+    setKits(sk ? JSON.parse(sk) : []);
 
     const sa = localStorage.getItem(ASSET_KEY);
-    setAssets(sa ? JSON.parse(sa) : DEMO_MEDIA_ASSETS);
-    if (!sa) localStorage.setItem(ASSET_KEY, JSON.stringify(DEMO_MEDIA_ASSETS));
+    setAssets(sa ? JSON.parse(sa) : []);
   }, []);
 
   const saveKits = (next: MediaKit[]) => {
@@ -48,11 +47,11 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
     localStorage.setItem(ASSET_KEY, JSON.stringify(next));
   };
 
-  const getKit = (id: string) => kits.find(k => k.id === id);
-  const getAsset = (id: string) => assets.find(a => a.id === id);
+  const getKit       = (id: string) => kits.find(k => k.id === id);
+  const getAsset     = (id: string) => assets.find(a => a.id === id);
   const getAssetsForKit = (kitId: string) => assets.filter(a => a.kitId === kitId);
 
-  const addKit = (kit: MediaKit) => saveKits([...kits, kit]);
+  const addKit    = (kit: MediaKit) => saveKits([...kits, kit]);
   const updateKit = (kit: MediaKit) =>
     saveKits(kits.map(k => k.id === kit.id ? { ...kit, updatedAt: new Date().toISOString() } : k));
   const deleteKit = (kitId: string) => {
@@ -60,11 +59,9 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
     saveAssets(assets.filter(a => a.kitId !== kitId));
   };
 
-  const addAsset = (asset: MediaAsset) => saveAssets([...assets, asset]);
+  const addAsset    = (asset: MediaAsset) => saveAssets([...assets, asset]);
   const updateAsset = (asset: MediaAsset) =>
     saveAssets(assets.map(a => a.id === asset.id ? asset : a));
-  const deleteAsset = (assetId: string) =>
-    saveAssets(assets.filter(a => a.id !== assetId));
 
   const advanceAssetStatus = (assetId: string, to: MediaAssetStatus) => {
     const asset = assets.find(a => a.id === assetId);
@@ -72,7 +69,7 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
     updateAsset({
       ...asset,
       status: to,
-      approvedAt: to === 'Approved' ? new Date().toISOString() : asset.approvedAt,
+      approvedAt:  to === 'Approved'  ? new Date().toISOString() : asset.approvedAt,
       publishedAt: to === 'Published' ? new Date().toISOString() : asset.publishedAt,
     });
   };
@@ -96,17 +93,23 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
   const restoreVersion = (assetId: string, version: number) => {
     const asset = assets.find(a => a.id === assetId);
     if (!asset) return;
-    const v = asset.versions.find(v => v.version === version);
+    const v = asset.versions.find(ver => ver.version === version);
     if (!v) return;
     regenerateAsset(assetId, v.content);
+  };
+
+  const resetDemoData = () => {
+    saveKits([]);
+    saveAssets([]);
   };
 
   return (
     <MediaStudioContext.Provider value={{
       kits, assets, getKit, getAsset, getAssetsForKit,
       addKit, updateKit, deleteKit,
-      addAsset, updateAsset, deleteAsset,
+      addAsset, updateAsset,
       advanceAssetStatus, regenerateAsset, restoreVersion,
+      resetDemoData,
     }}>
       {children}
     </MediaStudioContext.Provider>

@@ -29,12 +29,11 @@ import AdminSettings from './admin/Settings';
 import MediaStudioDashboard from './admin/media-studio/MediaStudioDashboard';
 import MediaKitWizard from './admin/media-studio/MediaKitWizard';
 import MediaKitEditor from './admin/media-studio/MediaKitEditor';
-import MediaCalendar from './admin/media-studio/MediaCalendar';
 
 export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings';
 export type AdminNav = {
   section: AdminSection;
-  subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard' | 'calendar';
+  subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard';
   journeyId?: string;
   day?: number;
   sermonId?: string;
@@ -148,19 +147,10 @@ export default function Admin() {
           />
         );
       }
-      if (subView === 'calendar') {
-        return (
-          <MediaCalendar
-            onBack={() => navigate({ section: 'media-studio' })}
-            onOpenKit={(kitId) => navigate({ section: 'media-studio', subView: 'kit-editor', kitId })}
-          />
-        );
-      }
       return (
         <MediaStudioDashboard
           onCreateKit={() => navigate({ section: 'media-studio', subView: 'kit-wizard' })}
           onOpenKit={(kitId) => navigate({ section: 'media-studio', subView: 'kit-editor', kitId })}
-          onCalendar={() => navigate({ section: 'media-studio', subView: 'calendar' })}
         />
       );
     }

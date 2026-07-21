@@ -1,6 +1,8 @@
 // ─── Media Studio — shared types ─────────────────────────────────────────────
 
-export type MediaAssetStatus = 'Draft' | 'Pastoral Review' | 'Approved' | 'Scheduled' | 'Published';
+// Scheduling removed from this sprint. Status flow: Draft → Pastoral Review → Approved.
+// Publishing happens at Media Kit level only.
+export type MediaAssetStatus = 'Draft' | 'Pastoral Review' | 'Approved' | 'Published';
 
 export type MediaSourceType = 'sermon' | 'companion-journey' | 'devotional' | 'journey';
 
@@ -42,18 +44,17 @@ export type AssetGroup = {
 };
 
 export const ASSET_GROUPS: AssetGroup[] = [
-  { label: 'Social Graphics',    emoji: '🖼️', types: ['instagram-square', 'instagram-portrait', 'facebook-graphic', 'whatsapp-story'] },
-  { label: 'Captions & Posts',   emoji: '✍️', types: ['facebook-caption', 'instagram-caption', 'whatsapp-message', 'youtube-community'] },
-  { label: 'YouTube',            emoji: '▶️', types: ['youtube-thumbnail', 'youtube-description'] },
-  { label: 'Audio & Scripts',    emoji: '🎙️', types: ['audio-script'] },
-  { label: 'Video Suggestions',  emoji: '🎬', types: ['suggested-shorts', 'suggested-clips'] },
+  { label: 'Social Graphics',   emoji: '🖼️', types: ['instagram-square', 'instagram-portrait', 'facebook-graphic', 'whatsapp-story'] },
+  { label: 'Captions & Posts',  emoji: '✍️', types: ['facebook-caption', 'instagram-caption', 'whatsapp-message', 'youtube-community'] },
+  { label: 'YouTube',           emoji: '▶️', types: ['youtube-thumbnail', 'youtube-description'] },
+  { label: 'Audio & Scripts',   emoji: '🎙️', types: ['audio-script'] },
+  { label: 'Video Suggestions', emoji: '🎬', types: ['suggested-shorts', 'suggested-clips'] },
 ];
 
 export const ALL_ASSET_TYPES: MediaAssetType[] = ASSET_GROUPS.flatMap(g => g.types);
 
-export const STATUS_ORDER: MediaAssetStatus[] = [
-  'Draft', 'Pastoral Review', 'Approved', 'Scheduled', 'Published',
-];
+// Asset-level status progression stops at Approved. Publishing is kit-level only.
+export const STATUS_ORDER: MediaAssetStatus[] = ['Draft', 'Pastoral Review', 'Approved'];
 
 export type AssetVersion = {
   version: number;
@@ -68,8 +69,6 @@ export type MediaAsset = {
   status: MediaAssetStatus;
   content: string;
   versions: AssetVersion[];
-  scheduledAt?: string;
-  scheduledDay?: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   approvedAt?: string;
   publishedAt?: string;
 };
@@ -82,11 +81,13 @@ export type MediaKit = {
   sourceTitle: string;
   sourceScripture: string;
   sourceSummary: string;
+  /** Stored status — only reflects Published; otherwise derived from assets. */
   status: MediaAssetStatus;
   assetIds: string[];
+  /** Version number for duplicate-source kits. Starts at 1. */
+  version: number;
   createdAt: string;
   updatedAt: string;
-  weekOf?: string; // ISO YYYY-MM-DD of Monday
 };
 
 // Parsed from graphic asset content (JSON string)
@@ -114,6 +115,21 @@ export const GRAPHIC_ASSET_TYPES: MediaAssetType[] = [
 
 export const VIDEO_ASSET_TYPES: MediaAssetType[] = ['suggested-shorts', 'suggested-clips'];
 
-export const SCHEDULED_DAYS: MediaAsset['scheduledDay'][] = [
-  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-];
+/**
+ * Compute the derived overall status of a kit from its assets.
+ * Published is stored explicitly on the kit and is never derived from assets.
+ *
+ * Draft    — any asset is still Draft
+ * Pastoral Review — no Drafts; at least one is still Pastoral Review
+ * Approved — every asset is Approved
+ */
+export function computeKitStatus(
+  assets: MediaAsset[],
+  storedStatus: MediaAssetStatus,
+): MediaAssetStatus {
+  if (storedStatus === 'Published') return 'Published';
+  if (assets.length === 0) return 'Draft';
+  if (assets.every(a => a.status === 'Approved')) return 'Approved';
+  if (assets.some(a => a.status === 'Draft')) return 'Draft';
+  return 'Pastoral Review';
+}

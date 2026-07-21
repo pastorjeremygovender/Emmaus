@@ -1,9 +1,8 @@
-// ─── Media Studio — seed data & content-generation templates ─────────────────
+// ─── Media Studio — content-generation templates ─────────────────────────────
+// Seed data removed. All kits start empty; the Reset Demo Data action also
+// clears to empty. Content generators are used by MediaKitWizard at creation time.
 
-import type {
-  MediaKit, MediaAsset, GraphicContent, SuggestedShort,
-} from './media-studio-types';
-import { DEMO_SERMON_RECORD } from './admin-demo-data';
+import type { GraphicContent, SuggestedShort } from './media-studio-types';
 
 // ─── Content generators (template-based, no AI) ───────────────────────────────
 
@@ -51,7 +50,7 @@ export function generateAudioScript(title: string, scripture: string, summary: s
 export function generateSuggestedShorts(title: string, scripture: string): SuggestedShort[] {
   return [
     {
-      title: `The Moment That Changes Everything`,
+      title: 'The Moment That Changes Everything',
       reason: 'High-emotion pivot where the main truth lands. Perfect hook for social.',
       startTime: '18:30',
       endTime: '20:45',
@@ -63,7 +62,7 @@ export function generateSuggestedShorts(title: string, scripture: string): Sugge
       reason: 'Personal, vulnerable moment — connects with viewers experiencing isolation or shame.',
       startTime: '24:10',
       endTime: '26:00',
-      caption: `No matter where you've been or what you've done — you are not forgotten. 💙 #ChristianLife #Faith #Healing`,
+      caption: 'No matter where you\'ve been or what you\'ve done — you are not forgotten. 💙 #ChristianLife #Faith #Healing',
       thumbnailText: 'YOU ARE NOT FORGOTTEN',
     },
     {
@@ -79,7 +78,7 @@ export function generateSuggestedShorts(title: string, scripture: string): Sugge
       reason: 'Clear, quotable definition of grace — works well as a standalone clip.',
       startTime: '31:00',
       endTime: '32:45',
-      caption: `Grace isn't what you think it is. 🙌 #Grace #Gospel #ChristianShorts`,
+      caption: 'Grace isn\'t what you think it is. 🙌 #Grace #Gospel #ChristianShorts',
       thumbnailText: 'WHAT GRACE LOOKS LIKE',
     },
     {
@@ -87,154 +86,8 @@ export function generateSuggestedShorts(title: string, scripture: string): Sugge
       reason: 'Closing altar call — emotionally powerful and evangelistic.',
       startTime: '38:45',
       endTime: '41:00',
-      caption: `You didn't expect this invitation. But it's real and it's for you. 🙏 #Hope #IsipingoCommunityChurch`,
+      caption: 'You didn\'t expect this invitation. But it\'s real and it\'s for you. 🙏 #Hope #IsipingoCommunityChurch',
       thumbnailText: 'AN UNEXPECTED INVITATION',
     },
   ];
 }
-
-// ─── Demo kit seed ─────────────────────────────────────────────────────────────
-
-const S = DEMO_SERMON_RECORD;
-const QUOTE = "God's kindness finds us even when we feel most broken and unworthy.";
-
-function mondayOfThisWeek(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d.toISOString().slice(0, 10);
-}
-
-const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
-
-export const DEMO_MEDIA_ASSETS: MediaAsset[] = [
-  {
-    id: 'ms-asset-ig-sq',
-    kitId: 'ms-kit-demo',
-    type: 'instagram-square',
-    status: 'Approved',
-    content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1080', 'classic'),
-    versions: [
-      { version: 1, content: generateGraphicContent('God restores the broken.', S.scriptureReference, '1080×1080', 'classic'), createdAt: daysAgo(2) },
-      { version: 2, content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1080', 'classic'), createdAt: daysAgo(1) },
-    ],
-    approvedAt: daysAgo(0),
-  },
-  {
-    id: 'ms-asset-ig-pt',
-    kitId: 'ms-kit-demo',
-    type: 'instagram-portrait',
-    status: 'Draft',
-    content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1350', 'modern'),
-    versions: [{ version: 1, content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1350', 'modern'), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-fb-gr',
-    kitId: 'ms-kit-demo',
-    type: 'facebook-graphic',
-    status: 'Draft',
-    content: generateGraphicContent(QUOTE, S.scriptureReference, '1200×630', 'minimal'),
-    versions: [{ version: 1, content: generateGraphicContent(QUOTE, S.scriptureReference, '1200×630', 'minimal'), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-wa-st',
-    kitId: 'ms-kit-demo',
-    type: 'whatsapp-story',
-    status: 'Draft',
-    content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1920', 'classic'),
-    versions: [{ version: 1, content: generateGraphicContent(QUOTE, S.scriptureReference, '1080×1920', 'classic'), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-fb-cap',
-    kitId: 'ms-kit-demo',
-    type: 'facebook-caption',
-    status: 'Pastoral Review',
-    content: generateFacebookCaption(S.title, S.scriptureReference, S.summary ?? ''),
-    versions: [{ version: 1, content: generateFacebookCaption(S.title, S.scriptureReference, S.summary ?? ''), createdAt: daysAgo(2) }],
-    scheduledDay: 'Monday',
-  },
-  {
-    id: 'ms-asset-ig-cap',
-    kitId: 'ms-kit-demo',
-    type: 'instagram-caption',
-    status: 'Draft',
-    content: generateInstagramCaption(S.title, S.scriptureReference),
-    versions: [{ version: 1, content: generateInstagramCaption(S.title, S.scriptureReference), createdAt: daysAgo(2) }],
-    scheduledDay: 'Wednesday',
-  },
-  {
-    id: 'ms-asset-wa-msg',
-    kitId: 'ms-kit-demo',
-    type: 'whatsapp-message',
-    status: 'Draft',
-    content: generateWhatsAppMessage(S.title, S.scriptureReference, S.summary ?? ''),
-    versions: [{ version: 1, content: generateWhatsAppMessage(S.title, S.scriptureReference, S.summary ?? ''), createdAt: daysAgo(2) }],
-    scheduledDay: 'Monday',
-  },
-  {
-    id: 'ms-asset-yt-com',
-    kitId: 'ms-kit-demo',
-    type: 'youtube-community',
-    status: 'Draft',
-    content: generateYouTubeCommunityPost(S.title, S.scriptureReference),
-    versions: [{ version: 1, content: generateYouTubeCommunityPost(S.title, S.scriptureReference), createdAt: daysAgo(2) }],
-    scheduledDay: 'Tuesday',
-  },
-  {
-    id: 'ms-asset-yt-th',
-    kitId: 'ms-kit-demo',
-    type: 'youtube-thumbnail',
-    status: 'Draft',
-    content: generateYouTubeThumbnailConcept(S.title, S.speaker),
-    versions: [{ version: 1, content: generateYouTubeThumbnailConcept(S.title, S.speaker), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-yt-desc',
-    kitId: 'ms-kit-demo',
-    type: 'youtube-description',
-    status: 'Draft',
-    content: generateYouTubeDescription(S.title, S.speaker, S.scriptureReference, S.summary ?? '', S.topics),
-    versions: [{ version: 1, content: generateYouTubeDescription(S.title, S.speaker, S.scriptureReference, S.summary ?? '', S.topics), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-audio',
-    kitId: 'ms-kit-demo',
-    type: 'audio-script',
-    status: 'Draft',
-    content: generateAudioScript(S.title, S.scriptureReference, S.summary ?? ''),
-    versions: [{ version: 1, content: generateAudioScript(S.title, S.scriptureReference, S.summary ?? ''), createdAt: daysAgo(2) }],
-    scheduledDay: 'Thursday',
-  },
-  {
-    id: 'ms-asset-shorts',
-    kitId: 'ms-kit-demo',
-    type: 'suggested-shorts',
-    status: 'Draft',
-    content: JSON.stringify(generateSuggestedShorts(S.title, S.scriptureReference)),
-    versions: [{ version: 1, content: JSON.stringify(generateSuggestedShorts(S.title, S.scriptureReference)), createdAt: daysAgo(2) }],
-  },
-  {
-    id: 'ms-asset-clips',
-    kitId: 'ms-kit-demo',
-    type: 'suggested-clips',
-    status: 'Draft',
-    content: JSON.stringify(generateSuggestedShorts(S.title, S.scriptureReference).slice(0, 3)),
-    versions: [{ version: 1, content: JSON.stringify(generateSuggestedShorts(S.title, S.scriptureReference).slice(0, 3)), createdAt: daysAgo(2) }],
-  },
-];
-
-export const DEMO_MEDIA_KIT: MediaKit = {
-  id: 'ms-kit-demo',
-  title: `Media Kit: ${S.title}`,
-  sourceType: 'sermon',
-  sourceId: S.id,
-  sourceTitle: S.title,
-  sourceScripture: S.scriptureReference,
-  sourceSummary: S.summary ?? '',
-  status: 'Pastoral Review',
-  assetIds: DEMO_MEDIA_ASSETS.map(a => a.id),
-  createdAt: daysAgo(2),
-  updatedAt: daysAgo(0),
-  weekOf: mondayOfThisWeek(),
-};
