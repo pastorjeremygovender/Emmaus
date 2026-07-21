@@ -1,0 +1,661 @@
+Continue building the existing **Project Emmaus** application in this Replit project.
+
+Do not rebuild the application from scratch.
+
+First inspect the existing repository, routes, components, database structure, authentication, design system and working features. Preserve all existing functionality and visual styling.
+
+## Current working state
+
+The following already exist and must remain working:
+
+* User app
+* Authentication
+* Bottom navigation
+* Walk experience
+* Journeys
+* Personal area
+* Admin Portal
+* Sermon Companion workflow
+* Timestamped YouTube sermon links
+* Simplified Media Studio prototype
+* Emmaus Rooms work completed so far
+
+The simplified Media Studio is paused. Do not expand or redesign it.
+
+Emmaus Rooms must not be removed or rewritten.
+
+The next feature to build is the **Bible module**.
+
+## Important build rule
+
+Do not change existing architecture or locked product decisions unless a change is technically necessary to make the Bible module work.
+
+Before editing, inspect the current project and reuse:
+
+* Existing components
+* Existing styling
+* Existing typography
+* Existing card design
+* Existing navigation
+* Existing authentication
+* Existing Firebase or database integration
+* Existing church and user data structures
+* Existing sermon data
+* Existing loading, empty and error states
+
+Do not create a second design system or duplicate existing services.
+
+## Permanent bottom navigation
+
+The user app bottom navigation must remain:
+
+* Walk
+* Bible
+* Journeys
+* Personal
+
+The Bible tab must open the new Bible Home screen.
+
+## Core Bible principle
+
+The Bible module is not intended to compete with conventional Bible apps.
+
+Its purpose is to help people meet Jesus every day through Scripture and connect Bible reading naturally to prayer, reflection, journeys and approved church teaching.
+
+Scripture must remain the visual and theological centre of the experience.
+
+Supporting features must never distract from or replace Scripture.
+
+# Build Phase 1: Working Bible vertical slice
+
+Build a complete, testable Bible vertical slice using one Bible book first.
+
+Use the **Gospel of John** as the initial seeded book.
+
+The vertical slice must include:
+
+1. Bible Home
+2. Browse Books
+3. Book Detail
+4. Chapter Reader
+5. Continue Reading
+6. Bible Journey
+7. Chapter completion options
+8. Personal notes and saved verses
+9. Ask Emmaus placeholder or bounded response flow
+10. Preached Here sermon integration using existing sermon data where possible
+
+Do not attempt to load the entire Bible before this vertical slice works.
+
+# 1. Bible Home
+
+When the user taps Bible, do not open Genesis 1 or a chapter directly.
+
+Open a welcoming Bible Home screen.
+
+Keep the screen clean, calm and uncluttered.
+
+Include these sections:
+
+## Continue Reading
+
+Show the user’s most recently opened chapter.
+
+Example:
+
+Continue Reading
+
+John 3
+
+Jesus and Nicodemus
+
+Continue
+
+If the user has no reading history, hide this card or show a gentle start-reading state.
+
+## Today’s Reading
+
+Show one suggested reading.
+
+For the prototype, use seeded content such as:
+
+Today’s Reading
+
+John 15
+
+Approximately 7 minutes
+
+Read
+
+Build the component so the recommendation source can later come from:
+
+* Active Bible Journey
+* Church reading plan
+* Reading history
+* Recommendation engine
+
+## Bible Journeys
+
+Show large horizontal cards.
+
+For the first implementation include:
+
+* Walk Through John
+* New to Jesus — 7 Days
+* Psalms for Difficult Days
+
+Only Walk Through John needs to be fully functional in this phase. The others may display a safe “Coming soon” state.
+
+## Browse Books
+
+Show:
+
+* Old Testament
+* New Testament
+
+For the initial vertical slice, John may be the only fully available book.
+
+Do not pretend that unavailable Bible books contain working content. Clearly use a coming-soon or unavailable state where necessary.
+
+# 2. Browse Books
+
+Create a clean Browse Books screen.
+
+Include Old Testament and New Testament sections.
+
+Each book card should support:
+
+* Book name
+* Number of chapters
+* Availability state
+* Reading progress if available
+
+John must be selectable.
+
+Selecting John opens the Book Detail screen.
+
+# 3. Book Detail
+
+Create a Book Detail screen for John.
+
+Display:
+
+* Gospel of John
+* 21 chapters
+* Short description
+* Continue button if reading has begun
+* Start Reading button if not
+* Start Bible Journey option
+* Chapter list from John 1 to John 21
+
+Each chapter row may display:
+
+* Chapter number
+* Optional chapter heading
+* Completion state
+* Preached Here indicator when matching sermon content exists
+
+Selecting a chapter opens the Chapter Reader.
+
+# 4. Chapter Reader
+
+The reading screen must prioritise Scripture.
+
+Display:
+
+* Back button
+* Book and chapter selector
+* Translation selector placeholder
+* Chapter title if available
+* Scripture text
+* Minimal verse numbers
+
+Avoid clutter.
+
+Do not place large controls over the Scripture text.
+
+Use a compact persistent or bottom action area containing:
+
+* Save
+* Notes
+* Pray
+* Continue
+
+Also include access to:
+
+* Ask Emmaus
+* Preached Here
+
+These may appear in a small overflow menu, contextual panel or subtle section below the chapter.
+
+## Scripture licensing
+
+Do not scrape or hard-code a copyrighted Bible translation without permission.
+
+Use one of the following safe approaches:
+
+1. Existing licensed Bible API already present in the project
+2. Public-domain Scripture source
+3. Seeded placeholder Scripture clearly labelled for development
+4. A Bible-provider abstraction with mock development data
+
+Create the Bible data service so a licensed provider can be connected later without rewriting the UI.
+
+# 5. Reading persistence
+
+Save Bible reading activity per authenticated user.
+
+Persist at minimum:
+
+* Last opened book
+* Last opened chapter
+* Last verse position if practical
+* Last opened timestamp
+* Completed chapters
+* Reading duration if reliable
+* Active Bible Journey
+* Current Bible Journey chapter
+
+Continue Reading must be generated from saved user data, not hard-coded.
+
+Use the project’s existing database conventions.
+
+# 6. Walk Through John Bible Journey
+
+Create a working Bible Journey called:
+
+Walk Through John
+
+Subtitle:
+
+Discover who Jesus is through the Gospel of John.
+
+Length:
+
+21 chapters
+
+Allow:
+
+* Start Journey
+* Continue Journey
+* Self-paced progress
+
+Each chapter is one Bible Journey step.
+
+For the initial prototype, fully seed at least John 1, John 2 and John 3 so the complete experience can be tested.
+
+The remaining chapters may use safe development placeholders but must preserve the same data structure.
+
+Each step contains:
+
+## Short introduction
+
+Two or three sentences maximum.
+
+Its purpose is to prepare the reader for the chapter, not replace the chapter with a devotional.
+
+## Scripture
+
+The complete available chapter text from the configured Bible source.
+
+Do not interrupt Scripture with commentary cards.
+
+## Chapter completion
+
+When the user reaches the end or presses Continue, mark the chapter as read and show:
+
+What would you like to do next?
+
+Display four large options:
+
+* Reflect
+* Pray
+* Go Deeper
+* Ask Emmaus
+
+Also provide:
+
+* Finish for today
+* Continue to next chapter
+
+Do not force the user to complete all four options.
+
+# 7. Reflect
+
+Open a private reflection panel or screen.
+
+Prompt:
+
+What stood out to you?
+
+Allow the user to enter and save a private reflection.
+
+Reuse the project’s existing journal or note patterns if they exist.
+
+The user must be able to skip this.
+
+Private reflections must not become visible to church administrators by default.
+
+# 8. Pray
+
+Display a short chapter-based prayer prompt.
+
+For the prototype, use approved seeded prayer text.
+
+Do not claim that the AI is praying for the user.
+
+Use language such as:
+
+You could pray:
+
+Then show the prayer.
+
+Allow the user to:
+
+* Read it
+* Edit it privately
+* Save it as a personal prayer
+* Finish
+
+# 9. Go Deeper
+
+Create a Go Deeper panel for the current chapter.
+
+It may include:
+
+* Cross references
+* Related Bible Journey
+* Related Emmaus Journey
+* Related devotional
+* Related sermon
+* Related church resource
+
+For John 3, seed an example related journey such as:
+
+Understanding Salvation
+
+If that journey does not exist in the current database, use a clearly labelled development card rather than silently creating a conflicting production journey.
+
+# 10. Ask Emmaus
+
+Add an Ask Emmaus action to every chapter.
+
+For this phase, build a safe bounded interface.
+
+Suggested prompts:
+
+* What is happening in this chapter?
+* What does Jesus mean here?
+* Why did Nicodemus come at night?
+* How can I apply this chapter?
+
+Answers must follow this order:
+
+1. Explanation from the passage
+2. Historical or literary context
+3. Practical application
+4. Approved church insight, only when available
+
+The answer UI must clearly distinguish:
+
+* Scripture
+* Explanation
+* Church teaching
+
+Do not present church teaching as Scripture.
+
+Do not fabricate sermon quotations, timestamps or claims.
+
+If the existing AI service is already available, reuse it with chapter context and existing guardrails.
+
+If it is not available, create a clean mock service and interface that can later be connected without redesigning the screen.
+
+# 11. Preached Here
+
+This is a defining Emmaus Bible feature.
+
+When approved indexed sermon data references the current chapter or passage, show a subtle indicator:
+
+Preached Here
+
+Example:
+
+Jeremy has preached from this chapter 3 times.
+
+Selecting it opens a list containing:
+
+* Sermon title
+* Sermon date
+* Speaker
+* Relevant start timestamp
+* Optional end timestamp
+* Watch Clip button
+
+The Watch Clip button must use the project’s existing timestamped YouTube link logic.
+
+Reuse the existing sermon records and indexed sermon segments where possible.
+
+Do not create duplicate sermon storage.
+
+For development, if no matching sermon data is available, seed one clearly identified test link for John 3 through the existing sermon data model.
+
+Only approved or published sermon material may appear to normal users.
+
+# 12. Verse actions
+
+Allow a user to interact with an individual verse.
+
+At minimum support:
+
+* Favourite
+* Highlight
+* Note
+* Prayer
+
+For highlighting, use a small restrained set of options.
+
+Do not overbuild a complex colour system in this phase.
+
+Persist all verse actions per authenticated user.
+
+Users must later be able to revisit saved verses and notes from Personal or Bible Home.
+
+# 13. Encouragement and progress language
+
+Do not make the Bible experience feel like a points competition.
+
+Use grace-based language.
+
+Examples:
+
+Walking with Jesus
+
+5 days
+
+Today you spent 14 minutes with Jesus.
+
+You completed John 3.
+
+Welcome back. Continue where you left off.
+
+Do not shame users for missing days.
+
+Do not reset spiritual progress because a user missed a day.
+
+# 14. Data model
+
+Inspect the current database before creating collections or tables.
+
+Reuse existing user, church, journey, progress, journal and sermon structures where appropriate.
+
+Add Bible-specific structures only where required.
+
+The data model should support concepts equivalent to:
+
+* Bible books
+* Bible chapters
+* Bible verses or passages
+* Bible translations
+* User reading state
+* User completed chapters
+* Bible Journeys
+* Bible Journey progress
+* Verse favourites
+* Verse highlights
+* Verse notes
+* Personal prayers
+* Chapter reflections
+* Scripture-to-sermon references
+
+All user records must be associated with the authenticated user.
+
+Church-specific content must remain tenant-aware.
+
+Do not expose one church’s private content to another church.
+
+# 15. Admin preparation
+
+Do not build a large new Bible Admin Portal in this phase.
+
+However, structure the data so a later admin interface can manage:
+
+* Bible Journeys
+* Chapter introductions
+* Today’s Reading
+* Church reading plans
+* Approved commentary sources
+* Scripture-to-sermon links
+* Related journeys and resources
+
+If a minimal seed-management page is necessary for testing, place it inside the existing Admin Portal and reuse its design.
+
+# 16. Loading, empty and error states
+
+Every Bible screen must include appropriate:
+
+* Loading state
+* Empty state
+* Error state
+* Retry action
+* Offline-safe message where relevant
+
+Never show a blank screen when Bible data fails to load.
+
+# 17. Accessibility and responsive behaviour
+
+The Bible reader must work well on:
+
+* Mobile
+* Tablet
+* Desktop web preview
+
+Use readable line length and text sizing.
+
+Support larger text without breaking layouts.
+
+Buttons must have clear labels and adequate touch targets.
+
+Do not rely only on icons to communicate actions.
+
+# 18. Do not build yet
+
+Do not fully implement these items in this phase:
+
+* Full licensed multi-translation Bible catalogue
+* Full Old and New Testament content import
+* Audio Bible playback
+* Narrator selection
+* Background audio
+* Complex search engine
+* Full commentary library
+* Public sharing
+* Social features
+* Advanced recommendation engine
+* Church Bible content marketplace
+
+Create clean extension points for these features, but do not let them delay the working vertical slice.
+
+# 19. Required test flow
+
+After implementation, the following flow must work:
+
+1. Sign in as a test user.
+2. Tap Bible in the bottom navigation.
+3. See Bible Home.
+4. Open Walk Through John.
+5. Start the Bible Journey.
+6. Read John 1.
+7. Complete the chapter.
+8. Save a reflection.
+9. Open Pray.
+10. Open Go Deeper.
+11. Ask Emmaus a seeded question.
+12. Open Preached Here where available.
+13. Open a timestamped sermon clip.
+14. Finish for today.
+15. Leave the Bible module.
+16. Return to Bible.
+17. Confirm Continue Reading shows the correct chapter.
+18. Confirm Bible Journey progress persisted.
+19. Confirm notes and saved verses remain available.
+20. Confirm the existing Walk, Journeys, Personal, Rooms, Admin Portal and Sermon Companion features still work.
+
+# 20. Implementation process
+
+Work incrementally.
+
+Do not attempt the entire module in one uncontrolled rewrite.
+
+Use this order:
+
+Phase A:
+
+* Inspect repository
+* Identify architecture
+* Identify current data services
+* Identify sermon integration
+* Identify reusable UI components
+* Report what will be reused
+
+Phase B:
+
+* Add Bible routes and navigation
+* Build Bible Home
+* Build Browse Books and Book Detail
+
+Phase C:
+
+* Build Chapter Reader
+* Add development Bible data provider
+* Add reading persistence
+
+Phase D:
+
+* Build Walk Through John
+* Add chapter completion flow
+* Add Reflect, Pray and Go Deeper
+
+Phase E:
+
+* Add Ask Emmaus interface
+* Add Preached Here using existing sermon integration
+* Add verse actions
+
+Phase F:
+
+* Add loading, empty and error states
+* Test responsive layouts
+* Run regression checks
+
+At the end of each phase:
+
+* Run the application
+* Fix compilation errors
+* Fix runtime errors
+* Verify existing features
+* Summarise completed changes
+* State exactly what should be manually tested next
+
+Do not simply describe the code. Implement it in the repository.
+
+Begin now with Phase A: inspect the existing application and identify the exact files, services, database structures and components that will be reused for the Bible module. Then proceed into Phase B unless a genuine technical blocker is found.
