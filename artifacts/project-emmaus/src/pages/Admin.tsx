@@ -33,6 +33,7 @@ export type AdminNav = {
   journeyId?: string;
   day?: number;
   sermonId?: string;
+  freshlyGenerated?: boolean;
 };
 
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
@@ -90,6 +91,7 @@ export default function Admin() {
         return (
           <JourneyEditor
             journeyId={journeyId ?? null}
+            freshlyGenerated={nav.freshlyGenerated}
             onBack={() => navigate({ section: 'journeys' })}
             onEditDay={(jId, d) => navigate({ section: 'journeys', subView: 'day-editor', journeyId: jId, day: d })}
             onPreviewDay={(jId, d) => navigate({ section: 'journeys', subView: 'preview', journeyId: jId, day: d })}
@@ -110,7 +112,7 @@ export default function Admin() {
           <SermonEditor
             sermonId={sermonId ?? null}
             onBack={() => navigate({ section: 'sermons' })}
-            onOpenCompanion={(jId) => navigate({ section: 'journeys', subView: 'editor', journeyId: jId })}
+            onOpenCompanion={(jId, fresh) => navigate({ section: 'journeys', subView: 'editor', journeyId: jId, freshlyGenerated: fresh })}
           />
         );
       }

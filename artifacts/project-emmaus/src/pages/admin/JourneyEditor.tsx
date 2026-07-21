@@ -8,6 +8,7 @@ import {
 
 type Props = {
   journeyId: string | null;
+  freshlyGenerated?: boolean;
   onBack: () => void;
   onEditDay: (journeyId: string, day: number) => void;
   onPreviewDay: (journeyId: string, day: number) => void;
@@ -53,7 +54,7 @@ function validatePublish(journey: Journey, steps: Step[]): string[] {
   return errors;
 }
 
-export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewDay }: Props) {
+export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onEditDay, onPreviewDay }: Props) {
   const { journeys, getStepsForJourney, updateJourney, addJourney, addStep, deleteStep } = useJourney();
 
   const isNew = !journeyId;
@@ -67,6 +68,7 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
   const [errors, setErrors] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Step | null>(null);
   const [confirmBack, setConfirmBack] = useState(false);
+  const [confirmPublish, setConfirmPublish] = useState(false);
   const [resolvedId, setResolvedId] = useState<string | null>(journeyId);
 
   const steps = resolvedId ? getStepsForJourney(resolvedId) : [];
@@ -113,11 +115,24 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
   const handleStatusAction = (targetStatus: string) => {
     const curSteps = resolvedId ? getStepsForJourney(resolvedId) : [];
     if (targetStatus === 'Published') {
+      // Guard: must be Approved first
+      if (form.status !== 'Approved') {
+        setErrors(['This companion must be approved before publishing.']);
+        return;
+      }
       const errs = validatePublish({ ...form, id: resolvedId ?? '' } as Journey, curSteps);
       if (errs.length) { setErrors(errs); return; }
     }
     handleSave(targetStatus);
     setForm(f => ({ ...f, status: targetStatus }));
+  };
+
+  const handlePublishClick = () => {
+    if (form.status !== 'Approved') {
+      setErrors(['This companion must be approved before publishing.']);
+      return;
+    }
+    setConfirmPublish(true);
   };
 
   const handleDeleteStep = (s: Step) => {
@@ -152,6 +167,16 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
     <div className="max-w-3xl">
       {isDirty && <UnsavedBanner onDiscard={() => { setIsDirty(false); setForm(existing ? { ...existing } : { ...EMPTY_JOURNEY }); }} />}
 
+      {/* Freshly-generated companion banner */}
+      {freshlyGenerated && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-start gap-3">
+          <span className="text-amber-500 mt-0.5 flex-shrink-0">⚠</span>
+          <p className="text-sm text-amber-800 font-medium">
+            Draft generated. Pastoral review required before publishing.
+          </p>
+        </div>
+      )}
+
       <div className="p-6 lg:p-8">
         <PageHeader
           title={isNew ? 'New Journey' : form.title || 'Edit Journey'}
@@ -161,13 +186,20 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
             <div className="flex items-center gap-2 flex-wrap">
               <SaveMessage state={saveState} />
               <AdminBtn variant="secondary" onClick={() => handleSave()}>Save Draft</AdminBtn>
+              {/* Step-forward action (Draft → Review → Approved) */}
               {nextStatus && nextStatus !== 'Published' && (
                 <AdminBtn variant="primary" onClick={() => handleStatusAction(nextStatus)}>
                   {nextStatus === 'Pastoral Review' ? 'Submit for Review' : nextStatus === 'Approved' ? 'Approve' : nextStatus}
                 </AdminBtn>
               )}
-              {form.status === 'Approved' && (
-                <AdminBtn variant="primary" onClick={() => handleStatusAction('Published')}>Publish</AdminBtn>
+              {/* Publish — always visible when not yet published; enforces Approved gate */}
+              {form.status !== 'Published' && (
+                <AdminBtn
+                  variant={form.status === 'Approved' ? 'primary' : 'secondary'}
+                  onClick={handlePublishClick}
+                >
+                  Publish
+                </AdminBtn>
               )}
             </div>
           }
@@ -179,7 +211,11 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
 
         {errors.length > 0 && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-red-700 mb-1">Cannot publish:</p>
+            <p className="text-sm font-semibold text-red-700 mb-1">
+              {errors[0] === 'This companion must be approved before publishing.'
+                ? 'Cannot publish yet:'
+                : 'Cannot publish:'}
+            </p>
             <ul className="list-disc pl-5 space-y-1">
               {errors.map((e, i) => <li key={i} className="text-sm text-red-600">{e}</li>)}
             </ul>
@@ -313,6 +349,16 @@ export default function JourneyEditor({ journeyId, onBack, onEditDay, onPreviewD
           danger
           onConfirm={() => { setConfirmBack(false); onBack(); }}
           onCancel={() => setConfirmBack(false)}
+        />
+      )}
+
+      {confirmPublish && (
+        <ConfirmDialog
+          title="Publish this journey?"
+          message="Publish this companion to all users? It will become visible in the app immediately."
+          confirmLabel="Publish"
+          onConfirm={() => { setConfirmPublish(false); handleStatusAction('Published'); }}
+          onCancel={() => setConfirmPublish(false)}
         />
       )}
     </div>

@@ -10,7 +10,7 @@ import {
 type Props = {
   sermonId: string | null;
   onBack: () => void;
-  onOpenCompanion: (journeyId: string) => void;
+  onOpenCompanion: (journeyId: string, fresh?: boolean) => void;
 };
 
 const STATUS_SEQ = ['draft', 'review', 'published'] as const;
@@ -36,7 +36,7 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
   const { sermons, addSermon, updateSermon } = useAdmin();
-  const { journeys, addJourney, addStep } = useJourney();
+  const { journeys, addJourney, addStep, updateJourney } = useJourney();
 
   const isNew = !sermonId;
   const existing = sermonId ? sermons.find(s => s.id === sermonId) : undefined;
@@ -48,7 +48,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmBack, setConfirmBack] = useState(false);
-  const [companionMsg, setCompanionMsg] = useState('');
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
   const [resolvedId, setResolvedId] = useState<string | null>(sermonId);
 
   const patch = (k: keyof typeof form, v: unknown) => {
@@ -77,19 +77,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     setTimeout(() => setSaveState('idle'), 2500);
   }, [form, isNew, resolvedId]);
 
-  const handleGenerateCompanion = () => {
+  // Create the companion journey and navigate into it immediately
+  const doGenerateCompanion = () => {
     handleSave();
     const sid = resolvedId ?? `sermon-${Date.now()}`;
-    // If companion already exists, open it
-    const existingCompanion = form.companionJourneyId
-      ? journeys.find(j => j.id === form.companionJourneyId)
-      : null;
-    if (existingCompanion) {
-      onOpenCompanion(existingCompanion.id);
-      return;
-    }
-    // Create 5-day draft companion journey
     const jId = `companion-${sid}-${Date.now()}`;
+    // Status is ALWAYS Draft — never published automatically
     const newJourney = {
       id: jId,
       title: `Companion: ${form.title}`,
@@ -103,7 +96,6 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       updatedAt: new Date().toISOString(),
     };
     addJourney(newJourney);
-    // Create 5 placeholder days
     for (let d = 1; d <= 5; d++) {
       addStep({
         journeyId: jId,
@@ -115,13 +107,44 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         reflectionQuestion: '[Reflection question — edit before publication]',
         prayerPrompt: '[Prayer prompt — edit before publication]',
         actionStep: '[Action step — edit before publication]',
-        sermonContextualSentence: `This moment in Sunday's sermon on ${form.title} connects directly with today's reflection.`,
+        sermonContextualSentence: `This moment in Sunday's sermon on "${form.title}" connects directly with today's reflection.`,
       });
     }
-    // Link companion to sermon
+    // Link companion to sermon record
     patch('companionJourneyId', jId);
-    setCompanionMsg('Companion Journey draft created. Pastoral review is required before publication.');
-    setTimeout(() => setCompanionMsg(''), 6000);
+    // Navigate to companion editor immediately, showing the review banner
+    onOpenCompanion(jId, true);
+  };
+
+  // Reset an existing Approved/Published companion back to Draft, then open editor
+  const doOverwriteCompanion = () => {
+    const existing = form.companionJourneyId
+      ? journeys.find(j => j.id === form.companionJourneyId)
+      : null;
+    if (!existing) return;
+    updateJourney({ ...existing, status: 'Draft', updatedAt: new Date().toISOString() });
+    setConfirmOverwrite(false);
+    onOpenCompanion(existing.id, true);
+  };
+
+  const handleGenerateCompanion = () => {
+    const existingCompanion = form.companionJourneyId
+      ? journeys.find(j => j.id === form.companionJourneyId)
+      : null;
+
+    if (existingCompanion) {
+      if (existingCompanion.status === 'Approved' || existingCompanion.status === 'Published') {
+        // Must confirm before resetting an approved/published companion back to Draft
+        setConfirmOverwrite(true);
+        return;
+      }
+      // Draft companion already exists — just open it (no banner needed)
+      onOpenCompanion(existingCompanion.id, false);
+      return;
+    }
+
+    // No companion yet — create one
+    doGenerateCompanion();
   };
 
   const handleBackClick = () => {
@@ -144,12 +167,6 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
             </div>
           }
         />
-
-        {companionMsg && (
-          <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-4">
-            <p className="text-sm text-teal-800 font-medium">{companionMsg}</p>
-          </div>
-        )}
 
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
           <h2 className="text-sm font-semibold text-gray-700">Sermon Details</h2>
@@ -230,18 +247,18 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               placeholder="gods-kindness-restores-the-broken"
             />
           </Field>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <AdminBtn variant="secondary" onClick={handleGenerateCompanion}>
-              {form.companionJourneyId ? 'Open Companion Journey' : 'Generate Companion Draft'}
+              {form.companionJourneyId ? 'Regenerate Companion Draft' : 'Generate Companion Draft'}
             </AdminBtn>
             {form.companionJourneyId && (
-              <AdminBtn variant="ghost" onClick={() => form.companionJourneyId && onOpenCompanion(form.companionJourneyId)}>
-                Open Editor
+              <AdminBtn variant="ghost" onClick={() => form.companionJourneyId && onOpenCompanion(form.companionJourneyId, false)}>
+                Open Companion Editor
               </AdminBtn>
             )}
           </div>
           <p className="text-xs text-gray-400">
-            Generated drafts require pastoral review before publication. Existing pastor edits will never be overwritten.
+            Generated drafts always start as Draft. Pastoral review and approval are required before the companion is visible to users.
           </p>
         </div>
 
@@ -259,6 +276,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
           danger
           onConfirm={() => { setConfirmBack(false); onBack(); }}
           onCancel={() => setConfirmBack(false)}
+        />
+      )}
+
+      {confirmOverwrite && (
+        <ConfirmDialog
+          title="Overwrite Approved Companion?"
+          message="This companion has already been approved or published. Regenerating will reset it to Draft and require pastoral review again before it can be published. Continue?"
+          confirmLabel="Reset to Draft"
+          danger
+          onConfirm={doOverwriteCompanion}
+          onCancel={() => setConfirmOverwrite(false)}
         />
       )}
     </div>

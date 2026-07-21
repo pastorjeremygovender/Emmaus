@@ -23,7 +23,7 @@ export default function Walk() {
   const currentDay = coreProg ? coreProg.currentDay : 1;
   const streak = coreProg ? coreProg.completedDays.length : 0;
 
-  const companionJourney = journeys.find((j) => j.journeyType === 'companion');
+  const companionJourney = journeys.find((j) => j.journeyType === 'companion' && j.status === 'Published');
   const companionProg = companionJourney ? progress[companionJourney.id] : null;
   const companionStarted =
     companionProg && companionProg.completedDays.length > 0;

@@ -9,7 +9,7 @@ export default function Journeys() {
   const [, setLocation] = useLocation();
 
   const coreJourneys = journeys.filter((j) => j.journeyType === 'core');
-  const companionJourneys = journeys.filter((j) => j.journeyType === 'companion');
+  const companionJourneys = journeys.filter((j) => j.journeyType === 'companion' && j.status === 'Published');
 
   const upcoming = [
     { title: 'Prayer Basics', desc: 'A 14-day guide to building a quiet time.' },
