@@ -1,0 +1,94 @@
+Fix the Media Studio asset count mismatch.
+
+Current bug:
+The Media Studio list shows a Media Kit with 4 assets, but opening the kit shows only 1 asset.
+
+Expected behaviour:
+The displayed asset count must always equal the number of assets actually contained in that Media Kit.
+
+Make a focused fix only.
+
+Requirements:
+
+1. Use one canonical source of truth for media kit assets.
+
+2. The Media Kit list must calculate the asset count from the actual asset IDs or asset objects linked to that kit.
+
+3. Do not use:
+- an old cached count
+- a manually stored count that can become stale
+- assets from another version
+- assets from another kit with the same sermon
+
+4. Opening a Media Kit must load every asset linked to that exact:
+- mediaKitId
+- version
+- sourceId
+
+5. Confirm selected asset types are all stored correctly when generating a kit.
+
+For this test selection:
+- Instagram Square
+- Facebook Caption
+- WhatsApp Message
+- Suggested Sermon Clips
+
+the generated Media Kit must contain exactly those 4 assets.
+
+6. When creating a new Media Kit:
+- create the kit first
+- create each selected asset
+- link every asset to the new kit ID
+- store the asset IDs on the kit if the current architecture uses asset IDs
+- only show generation success after all selected assets are stored
+
+7. If asset generation partially fails:
+- do not show the requested count
+- show the actual count
+- show a warning:
+  “Some assets could not be created.”
+- list which asset types failed
+
+8. Remove or recompute any stale assetCount field.
+
+If an assetCount field must remain, update it automatically from the linked assets and never treat it as independent data.
+
+9. Version safety:
+- Version 1 assets must not appear in Version 2
+- assets from duplicate kits must not be mixed
+- opening a kit must use the selected kit’s exact ID, not only the sermon ID
+
+10. Demo data cleanup:
+Add or preserve the existing:
+“Reset Media Studio Demo Data”
+
+After reset, create one new test kit with exactly the four asset types listed above.
+
+11. Test:
+- reset demo data
+- create a Media Kit from the sample sermon
+- select exactly 4 assets
+- generate
+- confirm the list page says 4 assets
+- open the kit
+- confirm exactly 4 asset rows appear
+- confirm their names are:
+  Instagram Square
+  Facebook Caption
+  WhatsApp Message
+  Suggested Sermon Clips
+- confirm all four start as Draft
+- refresh the browser
+- confirm all four still appear
+- return to the list
+- confirm the count remains 4
+- confirm no unrelated assets appear
+
+12. Resolve all TypeScript errors and summarise:
+- root cause
+- files changed
+- how the count is now calculated
+
+Do not redesign the Media Studio.
+Do not add new features.
+Only fix the data-linking and asset-count mismatch.

@@ -68,7 +68,7 @@ function buildAssetContent(
 export default function MediaKitWizard({ onBack, onCreated }: Props) {
   const { journeys }          = useJourney();
   const { sermons }           = useAdmin();
-  const { kits, addKit, addAsset } = useMediaStudio();
+  const { kits, addKit, addAssets } = useMediaStudio();
 
   const [step, setStep]               = useState<1 | 2>(1);
   const [sourceType, setSourceType]   = useState<MediaSourceType>('sermon');
@@ -137,23 +137,29 @@ export default function MediaKitWizard({ onBack, onCreated }: Props) {
       ? Math.max(0, ...existingKits.map(k => k.version)) + 1
       : 1;
 
-    const kitId    = `ms-kit-${Date.now()}`;
-    const assetIds: string[] = [];
+    const kitId = `ms-kit-${Date.now()}`;
 
-    [...selectedTypes].forEach(type => {
+    // Build ALL assets first into a plain array, then write them in ONE batch
+    // call. Calling addAsset() in a loop reads the same stale React state
+    // closure each time, causing every iteration to overwrite the previous one
+    // and leaving only the last asset in storage.
+    const newAssets: MediaAsset[] = [...selectedTypes].map(type => {
       const assetId = `ms-asset-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      assetIds.push(assetId);
       const content = buildAssetContent(type, selectedSource.label, selectedSource.scripture, selectedSource.summary, selectedSource.extra);
-      const asset: MediaAsset = {
+      return {
         id: assetId,
         kitId,
         type,
-        status: 'Draft', // ALWAYS Draft — never auto-advance
+        status: 'Draft' as const, // ALWAYS Draft — never auto-advance
         content,
         versions: [{ version: 1, content, createdAt: new Date().toISOString() }],
       };
-      addAsset(asset);
     });
+
+    const assetIds = newAssets.map(a => a.id);
+
+    // Single write — all assets persisted atomically
+    addAssets(newAssets);
 
     const kit: MediaKit = {
       id: kitId,

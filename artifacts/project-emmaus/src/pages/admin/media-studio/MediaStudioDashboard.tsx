@@ -72,7 +72,7 @@ export default function MediaStudioDashboard({ onCreateKit, onOpenKit }: Props) 
                   <Td>
                     <span className="capitalize text-gray-500 text-sm">{kit.sourceType.replace(/-/g, ' ')}</span>
                   </Td>
-                  <Td className="text-gray-500 text-sm">{kit.assetIds.length}</Td>
+                  <Td className="text-gray-500 text-sm">{kitAssets.length}</Td>
                   <Td><StatusBadge status={derived} /></Td>
                   <Td className="text-gray-400 text-[12px]">{fmtDate(kit.updatedAt)}</Td>
                   <Td>

@@ -10,7 +10,10 @@ type MediaStudioContextType = {
   addKit: (kit: MediaKit) => void;
   updateKit: (kit: MediaKit) => void;
   deleteKit: (kitId: string) => void;
+  /** Add a single asset — avoid calling in a loop (use addAssets instead). */
   addAsset: (asset: MediaAsset) => void;
+  /** Batch-add multiple assets in a single write. Use this when creating a kit. */
+  addAssets: (newAssets: MediaAsset[]) => void;
   updateAsset: (asset: MediaAsset) => void;
   advanceAssetStatus: (assetId: string, to: MediaAssetStatus) => void;
   regenerateAsset: (assetId: string, newContent: string) => void;
@@ -60,6 +63,10 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
   };
 
   const addAsset    = (asset: MediaAsset) => saveAssets([...assets, asset]);
+  // Batch version: reads the current assets snapshot once and appends all new
+  // assets in a single saveAssets call — avoids the stale-closure bug that
+  // occurs when addAsset is called in a loop.
+  const addAssets   = (newAssets: MediaAsset[]) => saveAssets([...assets, ...newAssets]);
   const updateAsset = (asset: MediaAsset) =>
     saveAssets(assets.map(a => a.id === asset.id ? asset : a));
 
@@ -107,7 +114,7 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
     <MediaStudioContext.Provider value={{
       kits, assets, getKit, getAsset, getAssetsForKit,
       addKit, updateKit, deleteKit,
-      addAsset, updateAsset,
+      addAsset, addAssets, updateAsset,
       advanceAssetStatus, regenerateAsset, restoreVersion,
       resetDemoData,
     }}>
