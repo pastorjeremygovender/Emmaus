@@ -3,8 +3,18 @@ import { useLocation, useParams } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Check, PlayCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+function formatTimestamp(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export default function JourneyDay() {
   const { journeyId, day: dayStr } = useParams<{ journeyId: string; day: string }>();
@@ -15,7 +25,6 @@ export default function JourneyDay() {
   const step = getStep(journeyId || '', day);
   const journey = getJourney(journeyId || '');
 
-  const [stage, setStage] = useState(0);
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
 
@@ -32,131 +41,12 @@ export default function JourneyDay() {
     );
   }
 
-  const stages = [
-    {
-      id: 'intro',
-      label: 'Introduction',
-      content: (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              Day {day}
-            </span>
-            <h1 className="text-[30px] font-serif font-semibold leading-tight">
-              {step.title}
-            </h1>
-          </div>
-          <p className="text-[18px] text-foreground leading-[1.65] italic border-l-2 border-primary/25 pl-5">
-            {step.mentorIntro}
-          </p>
-        </div>
-      ),
-    },
-    {
-      id: 'scripture',
-      label: 'Scripture',
-      content: (
-        <div className="space-y-4 bg-card rounded-2xl p-6 border border-border shadow-sm">
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            The Word
-          </h3>
-          <p className="font-serif text-[20px] leading-[1.65] text-foreground">
-            {step.scripture}
-          </p>
-          {step.sermonLink && (
-            <a
-              href={step.sermonLink}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-primary underline underline-offset-2 inline-block mt-2"
-            >
-              Watch this moment in Sunday's sermon
-            </a>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: 'devotional',
-      label: 'Reflection',
-      content: (
-        <div className="space-y-4">
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Reflection
-          </h3>
-          <p className="text-[18px] leading-[1.65] text-foreground">{step.devotional}</p>
-        </div>
-      ),
-    },
-    {
-      id: 'response',
-      label: 'Your Response',
-      content: (
-        <div className="space-y-4">
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Consider
-          </h3>
-          <p className="text-[18px] font-medium text-foreground leading-[1.55]">
-            {step.reflectionQuestion}
-          </p>
-          <Textarea
-            placeholder="Write your thoughts here… (Optional)"
-            className="min-h-[120px] text-[17px] resize-none rounded-xl mt-2"
-            value={reflection}
-            onChange={(e) => setReflection(e.target.value)}
-            data-testid="input-reflection"
-            aria-label="Your reflection"
-          />
-        </div>
-      ),
-    },
-    {
-      id: 'prayer',
-      label: 'Prayer',
-      content: (
-        <div className="space-y-4">
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Prayer
-          </h3>
-          <p className="text-[18px] font-serif italic leading-[1.65] text-foreground">
-            "{step.prayerPrompt}"
-          </p>
-        </div>
-      ),
-    },
-    {
-      id: 'action',
-      label: 'Today\'s Step',
-      content: (
-        <div className="space-y-4 bg-accent/10 border border-accent/20 rounded-2xl p-6">
-          <h3 className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-            Today's Step
-          </h3>
-          <p className="text-[18px] font-medium text-foreground leading-[1.55]">
-            {step.actionStep}
-          </p>
-        </div>
-      ),
-    },
-  ];
-
-  const handleNext = () => {
-    if (stage < stages.length - 1) {
-      setStage((s) => s + 1);
-      setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }, 150);
-    } else {
-      handleComplete();
-    }
-  };
+  const isCompanion = journey.journeyType === 'companion';
+  const hasSermon = isCompanion && (step as any).sermonTimestampSeconds != null;
 
   const handleComplete = () => {
     setIsCompleting(true);
     completeStep(journey.id, day, reflection);
-    setTimeout(() => {
-      setLocation('/walk');
-    }, 2200);
   };
 
   if (isCompleting) {
@@ -166,13 +56,22 @@ export default function JourneyDay() {
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="text-center space-y-4"
+          className="text-center space-y-4 max-w-[320px]"
         >
           <div className="w-16 h-16 bg-primary/15 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
             <Check size={30} strokeWidth={2.5} />
           </div>
           <h2 className="text-[26px] font-serif font-medium">Great job.</h2>
           <p className="text-base text-muted-foreground">See you tomorrow.</p>
+          <div className="pt-6">
+            <Button
+              variant="outline"
+              className="rounded-xl px-8"
+              onClick={() => setLocation('/walk')}
+            >
+              Back to Walk
+            </Button>
+          </div>
         </motion.div>
       </div>
     );
@@ -190,39 +89,138 @@ export default function JourneyDay() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 text-center font-medium text-sm text-muted-foreground truncate px-4">
-            {journey.title}
+          <div className="flex-1 min-w-0 text-center px-3">
+            <div className="font-medium text-sm text-foreground truncate leading-tight">
+              {journey.title}
+            </div>
+            <div className="text-[12px] text-muted-foreground">
+              Day {day} of {journey.durationDays}
+            </div>
           </div>
-          {/* Step indicator */}
-          <div className="text-[13px] font-medium text-muted-foreground whitespace-nowrap">
-            {stage + 1} of {stages.length}
-          </div>
+          {/* spacer to balance the back arrow */}
+          <div className="min-w-[44px]" />
         </div>
       </header>
 
-      <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-10">
-        {stages.slice(0, stage + 1).map((s, i) => (
-          <motion.div
-            key={s.id}
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
-          >
-            {s.content}
-          </motion.div>
-        ))}
+      <main className="px-5 pt-10 max-w-[480px] mx-auto">
 
-        <div className="pt-6">
+        {/* Day label + title */}
+        <section className="mb-10">
+          <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+            Day {day}
+          </span>
+          <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
+            {step.title}
+          </h1>
+        </section>
+
+        {/* Mentor introduction */}
+        <section className="mb-10">
+          <p className="text-[18px] text-foreground leading-[1.7] italic border-l-2 border-primary/25 pl-5">
+            {step.mentorIntro}
+          </p>
+        </section>
+
+        {/* Scripture */}
+        <section className="mb-10">
+          <SectionLabel>The Word</SectionLabel>
+          <div className="mt-4 bg-card rounded-2xl p-6 border border-border shadow-sm">
+            <p className="font-serif text-[19px] leading-[1.7] text-foreground">
+              {step.scripture}
+            </p>
+          </div>
+        </section>
+
+        {/* Devotional reflection */}
+        <section className="mb-10">
+          <SectionLabel>Reflection</SectionLabel>
+          <p className="mt-4 text-[18px] leading-[1.7] text-foreground">
+            {step.devotional}
+          </p>
+        </section>
+
+        {/* Sermon moment — placed here for companion journeys */}
+        {hasSermon && (
+          <section className="mb-10">
+            <SectionLabel>Sermon Moment</SectionLabel>
+            <div className="mt-4 bg-card rounded-2xl p-5 border border-border shadow-sm space-y-3">
+              <p className="text-[17px] text-foreground leading-[1.6]">
+                This moment in Sunday's sermon connects directly with today's reflection.
+              </p>
+              <a
+                href={(step as any).sermonLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
+                aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
+              >
+                <PlayCircle size={18} className="shrink-0" />
+                Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
+              </a>
+            </div>
+          </section>
+        )}
+
+        {/* Reflection question + optional response */}
+        <section className="mb-10">
+          <SectionLabel>Consider</SectionLabel>
+          <p className="mt-4 text-[18px] font-medium text-foreground leading-[1.6]">
+            {step.reflectionQuestion}
+          </p>
+          <Textarea
+            placeholder="What stood out to you today?"
+            className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+            value={reflection}
+            onChange={(e) => setReflection(e.target.value)}
+            data-testid="input-reflection"
+            aria-label="Your reflection"
+          />
+        </section>
+
+        {/* Prayer */}
+        <section className="mb-10">
+          <SectionLabel>Prayer</SectionLabel>
+          <p className="mt-4 text-[18px] font-serif italic leading-[1.7] text-foreground">
+            "{step.prayerPrompt}"
+          </p>
+        </section>
+
+        {/* Action step */}
+        <section className="mb-10">
+          <SectionLabel primary>Today's Step</SectionLabel>
+          <div className="mt-4 bg-accent/10 border border-accent/20 rounded-2xl p-6">
+            <p className="text-[18px] font-medium text-foreground leading-[1.6]">
+              {step.actionStep}
+            </p>
+          </div>
+        </section>
+
+        {/* Single completion button */}
+        <div className="pt-2 pb-8">
           <Button
             size="lg"
             className="w-full h-14 text-[17px] rounded-2xl"
-            onClick={handleNext}
-            data-testid="button-journey-continue"
+            onClick={handleComplete}
+            data-testid="button-complete-today"
           >
-            {stage < stages.length - 1 ? 'Continue' : 'Complete Today'}
+            Complete Today
           </Button>
         </div>
+
       </main>
     </div>
+  );
+}
+
+function SectionLabel({ children, primary }: { children: React.ReactNode; primary?: boolean }) {
+  return (
+    <h2
+      className={
+        'text-[11px] font-semibold uppercase tracking-widest ' +
+        (primary ? 'text-primary' : 'text-muted-foreground')
+      }
+    >
+      {children}
+    </h2>
   );
 }

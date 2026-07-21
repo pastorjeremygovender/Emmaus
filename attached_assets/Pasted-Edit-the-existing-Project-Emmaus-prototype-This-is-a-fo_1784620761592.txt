@@ -1,0 +1,273 @@
+Edit the existing Project Emmaus prototype.
+
+This is a focused UX change to the daily journey experience only.
+
+Do not rebuild the app.
+Do not change the technology stack.
+Do not alter authentication, routes, Firestore document shapes, progress logic, admin workflow, sermon data, bottom navigation, or demo mode.
+Do not remove any existing content.
+
+## Goal
+
+Replace the current six-step click-through journey flow with one calm, continuous devotional page.
+
+The user should no longer need to press “Continue” after every section.
+
+Each day should feel like one complete devotional moment, not a slideshow or course.
+
+## Current problem
+
+The current journey experience displays:
+
+1 of 6
+2 of 6
+3 of 6
+etc.
+
+The user must press “Continue” after:
+
+- introduction
+- Scripture
+- reflection
+- response
+- prayer
+- action step
+
+This feels repetitive and mechanical.
+
+Remove this interaction pattern.
+
+## New daily journey layout
+
+Render all sections for the selected day on one vertically scrolling page in this order:
+
+1. Day heading
+2. Mentor introduction
+3. Scripture
+4. Devotional reflection
+5. Reflection question and optional response box
+6. Prayer
+7. Today’s action step
+8. One final completion button
+
+Use one page and one final button only.
+
+## Top navigation
+
+At the top show:
+
+- back arrow
+- journey title
+- “Day [current day] of [total journey days]”
+
+Example:
+
+15 Minutes with Jesus
+Day 1 of 7
+
+Do not show:
+
+- 1 of 6
+- 2 of 6
+- internal section counts
+
+The internal content sections should not be treated as separate screens.
+
+## Page structure
+
+Use this visual hierarchy:
+
+DAY 1
+
+Jesus Meets You Here
+
+[mentor introduction]
+
+THE WORD
+
+[Scripture reference and text]
+
+REFLECTION
+
+[devotional reflection]
+
+CONSIDER
+
+[reflection question]
+
+[optional multiline response field]
+
+PRAYER
+
+[prayer prompt]
+
+TODAY’S STEP
+
+[action step]
+
+[Complete Today button]
+
+Keep all headings and content dynamic from the existing journey step data.
+
+Do not hard-code Day 1 content into the component.
+
+## Scrolling behaviour
+
+The page must:
+
+- scroll naturally from top to bottom
+- preserve comfortable reading width
+- use generous vertical spacing between sections
+- maintain readable typography
+- avoid giant blank gaps
+- keep content clear above the mobile bottom edge
+- work correctly at 360px, 390px and 430px widths
+
+Do not use horizontal scrolling.
+
+Do not use accordions, carousels, tabs, modals or swipe navigation for the devotional sections.
+
+## Reflection response
+
+Keep the reflection response optional.
+
+Use the existing reflection question as the visible question.
+
+Use this placeholder in the multiline input:
+
+“What stood out to you today?”
+
+Preserve the existing save behaviour.
+
+The response may be saved as the user types or when they complete the day, but do not require an extra “Save” button unless the existing architecture requires it.
+
+Do not lose a typed response if the user scrolls or temporarily leaves the field.
+
+## Completion button
+
+There should be only one primary action button on the page:
+
+“Complete Today”
+
+Place it after the action step.
+
+When tapped:
+
+- save the optional reflection
+- mark the day complete
+- update current journey progress
+- update streak logic using the existing implementation
+- show the existing completion message exactly:
+
+“Great job. See you tomorrow.”
+
+Then provide a clear way to return to Walk.
+
+Do not show another “Continue” button after completion.
+
+## Sermon Companion Journey
+
+Apply the same single-page devotional layout to the five-day sermon Companion Journey.
+
+The sermon journey page should include all normal sections plus the timestamped sermon moment in the most contextually appropriate position.
+
+Recommended order:
+
+1. Introduction
+2. Scripture
+3. Reflection
+4. Sermon Moment
+5. Reflection question
+6. Prayer
+7. Today’s step
+8. Complete Today
+
+Display the sermon section as:
+
+SERMON MOMENT
+
+[short contextual sentence]
+
+“Watch from [formatted timestamp]”
+
+The timestamp button must preserve the existing YouTube timestamp link behaviour.
+
+Do not remove or alter timestamp seconds stored in the data.
+
+## Typography and visual treatment
+
+Preserve the existing warm, calm design.
+
+Use:
+
+- serif font for the day title
+- clean sans-serif for labels and controls
+- body text around 17–19px
+- comfortable line height
+- subtle section labels
+- restrained cards only where they improve readability
+- one consistent primary button style
+
+Avoid turning every section into a heavy card.
+
+The page should feel like reading a beautifully designed devotional, not completing a form.
+
+## Back behaviour
+
+The back arrow should return to the previous relevant page without losing saved progress.
+
+If the user has typed a reflection but has not completed the day, preserve it locally or through the existing save mechanism where possible.
+
+Do not mark the day complete merely because the user opened or scrolled through it.
+
+## Functional safety
+
+Do not change:
+
+- route URLs
+- journey IDs
+- Firestore collection names
+- Firestore field names
+- authentication logic
+- demo user logic
+- admin editing structure
+- primary and companion journey data
+- completion calculations
+- streak calculations
+- bottom navigation
+
+Reuse the existing data and functions.
+
+Refactor only the presentation and navigation of the daily journey content.
+
+## Remove obsolete code
+
+After the new single-page experience works, remove or stop using:
+
+- internal section-step navigation state
+- “1 of 6” style counters
+- repeated section “Continue” buttons
+- obsolete functions used only to advance between internal sections
+
+Do not delete shared utilities that are still used elsewhere.
+
+## Validation
+
+After making the changes:
+
+1. Run the app.
+2. Resolve build and TypeScript errors.
+3. Test Day 1 of “15 Minutes with Jesus”.
+4. Confirm every section appears on one scrollable page.
+5. Confirm there is only one “Complete Today” button.
+6. Confirm the optional reflection saves.
+7. Confirm completion updates progress.
+8. Confirm the completion message is:
+   “Great job. See you tomorrow.”
+9. Test the sermon Companion Journey.
+10. Confirm the timestamped YouTube link still works.
+11. Test at 360px and 390px mobile widths.
+12. Confirm no other app screens or working features were changed.
+13. Summarise which files were edited and any unresolved issue.
+
+Make only this focused change.
