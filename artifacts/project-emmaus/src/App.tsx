@@ -3,6 +3,7 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
 import { RoomsProvider } from './contexts/RoomsContext';
+import { BibleProvider } from './contexts/BibleContext';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -17,6 +18,13 @@ import Journeys from '@/pages/Journeys';
 import Personal from '@/pages/Personal';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
+
+// Bible
+import BrowseBooks from '@/pages/bible/BrowseBooks';
+import BookDetail from '@/pages/bible/BookDetail';
+import ChapterReader from '@/pages/bible/ChapterReader';
+import ChapterCompletion from '@/pages/bible/ChapterCompletion';
+import BibleJourneyDetail from '@/pages/bible/BibleJourneyDetail';
 
 // Rooms
 import Rooms from '@/pages/rooms/Rooms';
@@ -37,7 +45,15 @@ function Router() {
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
       <Route path="/journey/:journeyId/day/:day" component={JourneyDay} />
+
+      {/* Bible */}
       <Route path="/bible" component={Bible} />
+      <Route path="/bible/books" component={BrowseBooks} />
+      <Route path="/bible/books/:bookId" component={BookDetail} />
+      <Route path="/bible/read/:bookId/:chapter/complete" component={ChapterCompletion} />
+      <Route path="/bible/read/:bookId/:chapter" component={ChapterReader} />
+      <Route path="/bible/journey/:journeyId" component={BibleJourneyDetail} />
+
       <Route path="/journeys" component={Journeys} />
       <Route path="/personal" component={Personal} />
       <Route path="/admin" component={Admin} />
@@ -65,12 +81,14 @@ function App() {
     <AuthProvider>
       <JourneyProvider>
         <RoomsProvider>
-          <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </TooltipProvider>
+          <BibleProvider>
+            <TooltipProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </TooltipProvider>
+          </BibleProvider>
         </RoomsProvider>
       </JourneyProvider>
     </AuthProvider>

@@ -1,0 +1,667 @@
+# Project Emmaus — Bible Engine v1.0
+
+Continue building the EXISTING Project Emmaus application.
+
+DO NOT create a new application.
+
+DO NOT redesign the existing UI.
+
+DO NOT replace the current architecture.
+
+Before writing any code, inspect the existing repository and identify:
+
+• Existing routing
+• Existing authentication
+• Existing Firebase structure
+• Existing reusable UI components
+• Existing design system
+• Existing typography
+• Existing cards
+• Existing navigation
+• Existing Admin Portal
+• Existing Sermon Companion workflow
+• Existing Emmaus Rooms implementation
+
+Reuse everything possible.
+
+Do not duplicate services.
+
+Do not create a second design system.
+
+Preserve all existing functionality.
+
+--------------------------------------------------
+CURRENT BUILD STATUS (LOCKED)
+--------------------------------------------------
+
+The following are already implemented and working:
+
+✓ Authentication
+
+✓ Walk
+
+✓ Journeys
+
+✓ Personal
+
+✓ Admin Portal
+
+✓ Sermon Companion workflow
+
+✓ Timestamped YouTube integration
+
+✓ Emmaus Rooms
+
+✓ Media Studio prototype (paused)
+
+Media Studio remains paused.
+
+Do not expand it.
+
+All previous Codex decisions remain locked.
+
+--------------------------------------------------
+MISSION
+--------------------------------------------------
+
+Build the Emmaus Bible Engine.
+
+Do NOT build "another Bible app."
+
+The Bible must become the heart of Emmaus.
+
+Every major feature should begin with Scripture or naturally lead people back to Scripture.
+
+Emmaus exists to help people meet Jesus through God's Word.
+
+--------------------------------------------------
+CORE PRINCIPLE (LOCKED)
+--------------------------------------------------
+
+Scripture is the centre.
+
+Everything else supports Scripture.
+
+Nothing competes with Scripture.
+
+Nothing replaces Scripture.
+
+--------------------------------------------------
+BOTTOM NAVIGATION (LOCKED)
+--------------------------------------------------
+
+Walk
+
+Bible
+
+Journeys
+
+Personal
+
+Bible becomes a permanent navigation item.
+
+--------------------------------------------------
+THE BIBLE ENGINE
+--------------------------------------------------
+
+Design the Bible module from the beginning to support:
+
+• The complete Bible
+• Multiple Bible translations
+• Bible Journeys
+• Reading Plans
+• Continue Reading
+• Ask Emmaus
+• Sermon integration
+• Verse notes
+• Highlights
+• Bookmarks
+• Personal prayers
+• Audio Bible
+• Church reading plans
+• Future Bible study tools
+
+Even if these features are not all implemented now, the architecture must support them without major refactoring.
+
+--------------------------------------------------
+BIBLE DATA ARCHITECTURE
+--------------------------------------------------
+
+Build the Bible Engine around a provider pattern.
+
+The UI must never depend directly on one Bible translation.
+
+Create a Bible Provider abstraction.
+
+It must later support:
+
+• Licensed Bible APIs
+• Public-domain Bibles
+• Offline Bible databases
+• Multiple providers
+
+Switching providers should not require UI changes.
+
+--------------------------------------------------
+BIBLE HOME
+--------------------------------------------------
+
+When the user taps Bible they must NOT land in Genesis 1.
+
+Instead open a peaceful Bible Home.
+
+Include:
+
+--------------------------------
+
+Continue Reading
+
+Automatically remember the user's last chapter.
+
+Example:
+
+John 7
+
+Jesus at the Festival
+
+Continue Reading
+
+--------------------------------
+
+Today's Reading
+
+Suggested reading.
+
+Example:
+
+John 15
+
+Approx. 7 minutes
+
+Read
+
+--------------------------------
+
+Bible Journeys
+
+Large cards.
+
+Initially include:
+
+Walk Through John
+
+New to Jesus
+
+Psalms for Difficult Days
+
+Acts
+
+Foundations
+
+Only Walk Through John needs to be fully implemented.
+
+--------------------------------
+
+Browse Books
+
+Old Testament
+
+New Testament
+
+--------------------------------
+
+Bookmarks
+
+Recently saved verses.
+
+--------------------------------
+
+Memory Verse
+
+Simple weekly memory verse.
+
+--------------------------------------------------
+BROWSE BOOKS
+--------------------------------------------------
+
+Display ALL 66 books.
+
+Genesis through Revelation.
+
+Each book displays:
+
+Book name
+
+Number of chapters
+
+Progress
+
+Availability
+
+John becomes the first fully implemented vertical slice.
+
+Every other book uses the same architecture.
+
+--------------------------------------------------
+BOOK SCREEN
+--------------------------------------------------
+
+Selecting John opens:
+
+Book description
+
+21 chapters
+
+Continue Reading
+
+Start Journey
+
+Chapter list
+
+Each chapter row supports:
+
+Completion
+
+Preached Here indicator
+
+Chapter title
+
+--------------------------------------------------
+BIBLE JOURNEYS (LOCKED)
+--------------------------------------------------
+
+The Bible itself becomes the Journey.
+
+Users journey THROUGH Scripture.
+
+Example:
+
+Walk Through John
+
+21 Chapter Journey
+
+Discover who Jesus is through John's Gospel.
+
+Each chapter becomes one journey step.
+
+Each chapter includes:
+
+Short introduction
+
+Scripture
+
+Reflection
+
+Prayer
+
+Go Deeper
+
+Ask Emmaus
+
+Completion
+
+Eventually every biblical book can become a guided Emmaus Journey.
+
+--------------------------------------------------
+SCRIPTURE READER
+--------------------------------------------------
+
+Scripture occupies almost the entire screen.
+
+Minimal controls.
+
+Bottom actions only:
+
+❤️ Save
+
+📝 Notes
+
+🙏 Pray
+
+▶ Continue
+
+Also include:
+
+Ask Emmaus
+
+Preached Here
+
+Nothing interrupts Scripture.
+
+--------------------------------------------------
+CHAPTER COMPLETION
+--------------------------------------------------
+
+After finishing a chapter Emmaus asks:
+
+"What would you like to do next?"
+
+Display four large cards.
+
+Reflect
+
+Pray
+
+Go Deeper
+
+Ask Emmaus
+
+Do NOT force all four.
+
+The user may finish immediately.
+
+--------------------------------------------------
+REFLECT
+--------------------------------------------------
+
+Prompt:
+
+"What stood out to you?"
+
+Allow a private journal entry.
+
+User may skip.
+
+--------------------------------------------------
+PRAY
+--------------------------------------------------
+
+Show:
+
+"You could pray..."
+
+Display a short prayer based on the chapter.
+
+Allow:
+
+Save
+
+Edit
+
+Finish
+
+Never imply the AI is praying.
+
+--------------------------------------------------
+GO DEEPER
+--------------------------------------------------
+
+Show related:
+
+Cross references
+
+Emmaus Journey
+
+Devotional
+
+Church resource
+
+Bible study
+
+Related reading plan
+
+--------------------------------------------------
+ASK EMMAUS
+--------------------------------------------------
+
+Every chapter supports conversation.
+
+Examples:
+
+What does Jesus mean here?
+
+Why did Nicodemus come at night?
+
+How do I apply this?
+
+Every response follows this order:
+
+1 Scripture explanation
+
+2 Historical context
+
+3 Practical application
+
+4 Church teaching (if available)
+
+Never place church teaching above Scripture.
+
+--------------------------------------------------
+PREACHED HERE (LOCKED)
+--------------------------------------------------
+
+Whenever approved sermons reference the passage show:
+
+🎤 Preached Here
+
+Selecting opens:
+
+Sermon title
+
+Speaker
+
+Date
+
+Timestamp
+
+Watch Clip
+
+Reuse the existing sermon indexing.
+
+Do NOT duplicate sermon storage.
+
+--------------------------------------------------
+PERSONAL STUDY BIBLE
+--------------------------------------------------
+
+Every verse supports:
+
+Favourite
+
+Highlight
+
+Bookmark
+
+Note
+
+Prayer
+
+Everything syncs to the authenticated user.
+
+Private means private.
+
+--------------------------------------------------
+READING PROGRESS
+--------------------------------------------------
+
+Grace-based language.
+
+Examples:
+
+Walking with Jesus
+
+5 Days
+
+Today you spent 12 minutes with Jesus.
+
+Continue where you left off.
+
+Never shame people for missing days.
+
+--------------------------------------------------
+SEARCH ARCHITECTURE
+--------------------------------------------------
+
+Design support for:
+
+Reference search
+
+Word search
+
+Topic search
+
+Person search
+
+Place search
+
+Future semantic search
+
+Search will later include sermons and journeys.
+
+--------------------------------------------------
+ADMIN PREPARATION
+--------------------------------------------------
+
+Prepare the data model for future management of:
+
+Bible Journeys
+
+Reading Plans
+
+Scripture introductions
+
+Church reading plans
+
+Recommended passages
+
+Scripture-to-sermon links
+
+Translation management
+
+Do NOT build the full admin UI yet.
+
+--------------------------------------------------
+FUTURE EXTENSION POINTS
+--------------------------------------------------
+
+Prepare architecture for:
+
+Audio Bible
+
+Offline mode
+
+Bible maps
+
+Timelines
+
+Original languages
+
+Word studies
+
+Commentaries
+
+Children's mode
+
+Family reading
+
+Multiple Bible providers
+
+--------------------------------------------------
+PERFORMANCE
+--------------------------------------------------
+
+Design for:
+
+66 books
+
+1,189 chapters
+
+31,000+ verses
+
+Millions of user notes
+
+Multiple churches
+
+Long-term scalability
+
+Avoid solutions that require future rewrites.
+
+--------------------------------------------------
+PHASE 1 DELIVERABLE
+--------------------------------------------------
+
+Implement:
+
+✓ Bible Home
+
+✓ Browse Books
+
+✓ Book Screen
+
+✓ Walk Through John
+
+✓ John chapter reader
+
+✓ Continue Reading
+
+✓ Reading persistence
+
+✓ Reflect
+
+✓ Pray
+
+✓ Go Deeper
+
+✓ Ask Emmaus interface
+
+✓ Preached Here
+
+✓ Verse notes
+
+✓ Bookmarks
+
+✓ Highlights
+
+Everything else should have scalable architecture ready.
+
+--------------------------------------------------
+TEST FLOW
+--------------------------------------------------
+
+Verify:
+
+Sign in
+
+Open Bible
+
+Start Walk Through John
+
+Read John 1
+
+Complete the chapter
+
+Reflect
+
+Pray
+
+Ask Emmaus
+
+Open Preached Here
+
+Watch a timestamped sermon
+
+Leave Bible
+
+Return later
+
+Continue Reading remembers the correct chapter
+
+Progress persists
+
+Existing Walk, Journeys, Rooms, Personal, Admin Portal and Sermon Companion continue working without regression.
+
+--------------------------------------------------
+ENGINEERING PHILOSOPHY
+--------------------------------------------------
+
+Build this module as if it will become the primary experience of Emmaus for the next decade.
+
+Prefer clean architecture over shortcuts.
+
+Prefer reusable components over duplication.
+
+Preserve every existing feature.
+
+Make Scripture the centre of every design decision.
+
+Only begin coding after inspecting the existing project and identifying exactly what can be reused.

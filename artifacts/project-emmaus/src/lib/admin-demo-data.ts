@@ -68,6 +68,24 @@ export type RecentActivity = {
 
 // ─── Seed data ───────────────────────────────────────────────────────────────
 
+export const DEMO_JOHN_SERMON: Sermon = {
+  id: 'sermon-john-3',
+  title: 'Born Again: The Night Nicodemus Met Jesus',
+  speaker: 'Pastor Jeremy Govender',
+  sermonDate: '2024-09-15',
+  series: 'Gospel of John',
+  scriptureReference: 'John 3:1–21',
+  youtubeUrl: 'https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID',
+  summary: 'Jesus tells Nicodemus something that changes everything: "You must be born again." What does it mean, and why does it matter for you today?',
+  topics: ['salvation', 'rebirth', 'Holy Spirit', 'John 3:16'],
+  keywords: ['Nicodemus', 'born again', 'John 3:16', 'Spirit', 'eternal life'],
+  transcriptStatus: 'none',
+  aiIndexStatus: 'none',
+  status: 'published',
+  pastorEdited: true,
+  updatedAt: new Date().toISOString(),
+};
+
 export const DEMO_SERMON_RECORD: Sermon = {
   id: 'sermon-2-samuel-9',
   title: "God's Kindness Restores the Broken",
