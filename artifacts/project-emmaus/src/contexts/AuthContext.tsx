@@ -17,7 +17,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   isDemoMode: boolean;
-  signIn: (email: string, pass: string) => Promise<void>;
+  signIn: (email: string, pass: string) => Promise<'admin' | 'user'>;
   signUp: (email: string, pass: string, name: string) => Promise<void>;
   signInDemo: (asAdmin?: boolean) => void;
   signOut: () => void;
@@ -39,14 +39,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const signIn = async (email: string, pass: string) => {
-    // Demo only for now
-    if (email.includes('admin')) {
+  const signIn = async (email: string, pass: string): Promise<'admin' | 'user'> => {
+    // Demo only for now — exact match for the demo admin account
+    if (email === 'admin@emmaus.demo' && pass === 'admin123') {
       setUser(DEMO_ADMIN);
       localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_ADMIN));
+      return 'admin';
     } else {
       setUser(DEMO_USER);
       localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_USER));
+      return 'user';
     }
   };
 

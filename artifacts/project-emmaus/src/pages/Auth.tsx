@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -22,12 +22,13 @@ export default function Auth() {
   const [error, setError] = useState('');
 
   // Redirect if already authed
-  useState(() => {
+  useEffect(() => {
     if (user) {
-      if (!user.currentFeeling) setLocation('/checkin');
+      if (user.role === 'admin') setLocation('/admin');
+      else if (!user.currentFeeling) setLocation('/checkin');
       else setLocation('/walk');
     }
-  });
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,11 +50,12 @@ export default function Auth() {
     setLoading(true);
     try {
       if (mode === 'login') {
-        await signIn(email, password);
+        const role = await signIn(email, password);
+        setLocation(role === 'admin' ? '/admin' : '/checkin');
       } else {
         await signUp(email, password, name);
+        setLocation('/checkin');
       }
-      setLocation('/checkin');
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -64,6 +66,11 @@ export default function Auth() {
   const handleDemo = () => {
     signInDemo(false);
     setLocation('/checkin');
+  };
+
+  const handleDemoAdmin = () => {
+    signInDemo(true);
+    setLocation('/admin');
   };
 
   return (
@@ -176,7 +183,7 @@ export default function Auth() {
 
           {isDemoMode && (
             <div className="pt-8 mt-6 border-t border-border">
-              <div className="text-center space-y-4">
+              <div className="text-center space-y-3">
                 <p className="text-sm text-muted-foreground">Or explore without an account</p>
                 <Button
                   variant="secondary"
@@ -185,6 +192,14 @@ export default function Auth() {
                   data-testid="button-demo"
                 >
                   Continue with Demo
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDemoAdmin}
+                  className="w-full h-12 text-base rounded-xl"
+                  data-testid="button-demo-admin"
+                >
+                  Continue as Demo Admin
                 </Button>
               </div>
             </div>
