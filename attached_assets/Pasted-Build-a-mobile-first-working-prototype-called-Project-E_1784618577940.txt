@@ -1,0 +1,575 @@
+Build a mobile-first working prototype called **Project Emmaus**.
+
+Project Emmaus is a Christian discipleship app for Isipingo Community Church. Its purpose is to help people take a meaningful next step with Jesus through short guided journeys, Scripture reflection, prayer, action steps, sermon-based devotionals, and pastoral support.
+
+This is a prototype, not the full platform. Do not add features outside the scope below unless instructed later.
+
+## Core product principles
+
+The experience must be:
+
+* Clean
+* Calm
+* Warm
+* Uncluttered
+* Mobile-first
+* Easy for non-technical users
+* Encouraging rather than guilt-driven
+* Designed for transformation rather than maximum screen time
+
+The app must feel like a thoughtful guided conversation, not a traditional learning-management system.
+
+Use plain, natural language. Avoid corporate dashboard styling, excessive statistics, complex menus, gamified clutter, or long scrolling pages.
+
+## Technical requirements
+
+Build a responsive web application that works well on mobile phones.
+
+Preferred stack:
+
+* React
+* TypeScript
+* Tailwind CSS
+* Firebase Authentication
+* Cloud Firestore
+
+Use a clean and maintainable component structure.
+
+All journey and devotional content must load from Firestore or a clearly separated seed-data layer. Do not permanently hard-code devotional content directly into page components.
+
+Create environment-variable placeholders for Firebase configuration.
+
+Do not expose private keys or secrets in client code.
+
+Include basic input validation, loading states, empty states, and error messages.
+
+## Prototype scope
+
+Build only the following:
+
+1. Welcome and authentication
+2. User onboarding
+3. Feeling check-in
+4. Four-tab mobile navigation
+5. Walk home screen
+6. Seven-day “15 Minutes with Jesus” journey
+7. Journey progress tracking
+8. One five-day sermon Companion Journey
+9. Timestamped YouTube sermon links
+10. Simple Personal page
+11. Placeholder Bible and Journeys pages
+12. Basic pastor/admin review interface
+
+Do not build advanced gamification, complex reports, payments, subscriptions, multi-church support, events, volunteer management, or full AI chat yet.
+
+## Main navigation
+
+Create a persistent bottom navigation bar with four sections:
+
+* Walk
+* Bible
+* Journeys
+* Personal
+
+The active tab must be clearly visible without using loud colours or oversized icons.
+
+## Screen 1: Welcome
+
+Create a simple welcome page.
+
+Display:
+
+Project Emmaus
+
+A short message:
+
+“Walk with Jesus, one step at a time.”
+
+Buttons:
+
+* Get Started
+* Sign In
+
+Use a clean white or soft-neutral background with generous spacing and rounded buttons.
+
+## Screen 2: Authentication
+
+Provide:
+
+* Create account
+* Sign in
+* Email
+* Password
+* Preferred name
+
+Use Firebase Authentication.
+
+For development, also provide a clearly marked demo mode so the prototype can be tested before Firebase credentials are configured.
+
+## Screen 3: Feeling check-in
+
+After sign-in, ask:
+
+“How are you feeling today?”
+
+Display six rounded selectable cards:
+
+* Hopeful
+* Tired
+* Struggling
+* Nervous
+* Afraid
+* Okay
+
+Save the selected feeling with the current date.
+
+After selection, show a brief response that adapts to the feeling.
+
+Examples:
+
+Hopeful:
+“It’s good to see you today. Let’s keep walking together.”
+
+Tired:
+“You don’t have to rush today. Let’s take one small step together.”
+
+Struggling:
+“I’m glad you came. We can take this one step at a time.”
+
+Afraid:
+“You’re not alone in what you’re carrying today. Let’s begin gently.”
+
+Do not make the system claim to have feelings, pray independently, hear God’s voice, or speak prophetically.
+
+Button:
+
+* Let’s Begin
+
+## Screen 4: Walk home
+
+This is the main home screen.
+
+Display a natural greeting using the user’s preferred name.
+
+Example:
+
+“Good morning, Jeremy.”
+
+Below it, display the user’s current primary journey:
+
+15 Minutes with Jesus
+
+Show:
+
+* Current day
+* Today’s theme
+* A short description
+* Streak count
+* Continue button
+
+Do not use a large progress bar.
+
+Also create a section titled:
+
+“This Week”
+
+This section contains the current Sermon Companion Journey.
+
+The sermon journey must always be suggested, even if the user has another journey active.
+
+Example card:
+
+Continue Sunday’s Message
+
+God’s Kindness Restores the Broken
+
+5 short weekday devotionals based on Sunday’s sermon.
+
+Buttons:
+
+* Start
+* Maybe Later
+
+The sermon invitation must not replace or interrupt the primary journey.
+
+## Primary journey: 15 Minutes with Jesus
+
+Create a seven-day journey.
+
+Each day should load one step at a time rather than displaying one very long scrolling page.
+
+Each day contains:
+
+1. Today’s theme
+2. Short mentor introduction
+3. Scripture reference
+4. Devotional reflection
+5. Reflection question
+6. Optional written response
+7. Prayer prompt
+8. Practical action step
+9. Completion button
+
+Use the completion message:
+
+“Great job. See you tomorrow.”
+
+The journey screen should feel conversational and spacious.
+
+Do not place a large repeated Scripture block at the bottom.
+
+Use realistic sample content that can later be replaced.
+
+Create seven seed journey steps with these placeholder themes:
+
+Day 1 — Jesus Meets You Here
+Day 2 — You Are Not Alone
+Day 3 — Learning to Trust
+Day 4 — Listening to Jesus
+Day 5 — Taking One Faithful Step
+Day 6 — Walking with Others
+Day 7 — Keep Walking
+
+## Progress tracking
+
+Store:
+
+* Current journey
+* Current day
+* Completed steps
+* Completion date
+* Current streak
+* Longest streak
+* Last activity date
+
+A missed day must not shame the user.
+
+When someone returns after a break, display:
+
+“Welcome back. We’re glad you’re here. Let’s take the next step together.”
+
+Do not display language such as:
+
+“You lost your streak.”
+
+## Sermon Companion Journey
+
+Create one five-day Monday-to-Friday Companion Journey based on a sermon.
+
+Use the example sermon:
+
+Title:
+God’s Kindness Restores the Broken
+
+Scripture:
+2 Samuel 9
+
+Speaker:
+Pastor Jeremy Govender
+
+YouTube URL:
+Use a configurable placeholder URL.
+
+Each day must include:
+
+* Daily theme
+* Short mentor introduction
+* Scripture reference
+* Devotional reflection
+* Reflection question
+* Prayer prompt
+* Action step
+* One relevant sermon link with a timestamp
+
+Use these sample daily themes:
+
+Monday — When Brokenness Changes How You See Yourself
+Tuesday — The King Is Looking for You
+Wednesday — Grace Brings You Out of Lo Debar
+Thursday — There Is a Place for You at the Table
+Friday — Live as Someone Who Has Been Restored
+
+Create timestamp links using YouTube’s time parameter format.
+
+For example:
+
+https://www.youtube.com/watch?v=VIDEO_ID&t=736s
+
+Store the timestamp in seconds separately from the URL.
+
+After Friday, the journey should remain visible in the Journeys library.
+
+## Bible tab
+
+For the prototype, create a simple placeholder screen with:
+
+* Search Scripture
+* Continue Reading
+* Saved Verses
+
+Do not integrate a licensed Bible translation yet.
+
+Use clearly marked placeholder Scripture data or public-domain sample text only.
+
+## Journeys tab
+
+Display:
+
+* Active Journey
+* This Week’s Companion Journey
+* Available Journeys
+* Completed Journeys
+
+Include cards for:
+
+* 15 Minutes with Jesus
+* Prayer Basics
+* Foundations
+* Serving
+* God’s Kindness Restores the Broken
+
+Only the first journey and sermon journey need to work fully.
+
+## Personal tab
+
+Display:
+
+* Preferred name
+* Current streak
+* Completed journeys
+* Saved reflections
+* Prayer requests
+* Notification preference
+* Sign out
+
+Keep the page minimal.
+
+Do not create a competitive public profile.
+
+## Pastor/admin prototype
+
+Create a protected route at:
+
+/admin
+
+For the prototype, support a simple admin role.
+
+The admin interface should allow a pastor to:
+
+* View journeys
+* View the sermon record
+* View the generated five-day Companion Journey
+* Edit daily titles
+* Edit devotional text
+* Edit Scripture references
+* Edit questions
+* Edit prayer prompts
+* Edit action steps
+* Edit timestamps
+* Preview the journey
+* Change status between Draft, Approved, and Published
+
+The system must never automatically publish AI-generated pastoral content.
+
+The workflow is:
+
+Draft
+Pastoral Review
+Approved
+Published
+
+Pastor-approved edits must not be overwritten by future regeneration.
+
+## Suggested Firestore structure
+
+Create collections or equivalent local seed structures for:
+
+users
+
+Fields:
+
+* id
+* email
+* preferredName
+* role
+* createdAt
+* lastActiveAt
+* currentFeeling
+* feelingUpdatedAt
+
+journeys
+
+Fields:
+
+* id
+* title
+* description
+* journeyType
+* durationDays
+* status
+* coverImage
+* createdAt
+* updatedAt
+
+Journey types:
+
+* core
+* companion
+
+journeySteps
+
+Fields:
+
+* id
+* journeyId
+* dayNumber
+* title
+* mentorIntro
+* scriptureReference
+* devotionalText
+* reflectionQuestion
+* prayerPrompt
+* actionStep
+* sermonTimestampSeconds
+* sermonLink
+* order
+
+userJourneyProgress
+
+Fields:
+
+* id
+* userId
+* journeyId
+* currentDay
+* completedStepIds
+* startedAt
+* lastCompletedAt
+* completedAt
+* status
+
+userReflections
+
+Fields:
+
+* id
+* userId
+* journeyId
+* stepId
+* response
+* createdAt
+* updatedAt
+
+sermons
+
+Fields:
+
+* id
+* title
+* speaker
+* scriptureReference
+* youtubeUrl
+* transcriptStatus
+* aiIndexStatus
+* companionJourneyId
+* createdAt
+* updatedAt
+
+## Design system
+
+Use:
+
+* Soft white or warm-neutral backgrounds
+* Dark readable text
+* One restrained accent colour
+* Rounded cards
+* Subtle borders
+* Generous spacing
+* Accessible font sizes
+* Clear button hierarchy
+
+Avoid:
+
+* Neon colours
+* Dark gaming interfaces
+* Excessive gradients
+* Dense dashboards
+* Large blocks of statistics
+* Cartoon imagery
+* Competitive leaderboards
+* Overuse of badges
+
+The app should feel pastoral, contemporary, and trustworthy.
+
+## Accessibility
+
+Ensure:
+
+* Good text contrast
+* Large touch targets
+* Keyboard accessibility
+* Clear focus states
+* Responsive typography
+* Form labels
+* Helpful validation messages
+
+## Seed data
+
+Create realistic seed data for:
+
+* One demo user
+* Seven-day primary journey
+* Five-day sermon Companion Journey
+* Progress records
+* One sermon
+* One administrator
+
+Provide a simple seed script or setup function.
+
+## Build order
+
+Build in this order:
+
+1. Project structure and design tokens
+2. Mobile navigation shell
+3. Welcome and authentication
+4. Feeling check-in
+5. Walk home
+6. Seven-day primary journey
+7. Progress saving
+8. Sermon Companion Journey
+9. Personal page
+10. Bible and Journeys placeholders
+11. Admin review interface
+12. Testing and cleanup
+
+Do not skip ahead to advanced features.
+
+## Required output
+
+When the first version is complete:
+
+* Run the application
+* Resolve build errors
+* Test the main flow
+* Confirm mobile responsiveness
+* Provide a concise README
+* Explain how to add Firebase environment variables
+* Explain how to run the seed data
+* List any parts currently running in demo mode
+* List any security or production work still required
+
+The main test flow must work:
+
+Welcome
+→ Sign in or demo access
+→ Select feeling
+→ Walk home
+→ Open today’s journey
+→ Complete the devotional
+→ Save reflection
+→ Update progress
+→ Open Sermon Companion Journey
+→ Open timestamped sermon link
+
+Begin by building the smallest working version of this flow. Do not redesign the product or expand the scope.

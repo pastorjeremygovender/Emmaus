@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Project Emmaus"
+version = "1.0.0"
+id = "artifacts/project-emmaus"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22788
+
+[services.development]
+run = "pnpm --filter @workspace/project-emmaus run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/project-emmaus", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/project-emmaus/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22788"
+BASE_PATH = "/"
