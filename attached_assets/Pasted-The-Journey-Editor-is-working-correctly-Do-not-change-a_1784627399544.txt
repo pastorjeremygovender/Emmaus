@@ -1,0 +1,156 @@
+The Journey Editor is working correctly. Do not change any existing functionality.
+
+Now improve the authoring experience so it becomes a polished ministry content editor rather than a generic CMS.
+
+GOAL
+
+The editor should follow the same workflow a pastor naturally follows when writing a devotional.
+
+--------------------------------------------------
+
+SECTION 1
+Journey Details
+
+• Journey title
+• Description
+• Journey type
+• Status
+• Church-wide toggle
+
+--------------------------------------------------
+
+SECTION 2
+Day Editor
+
+Instead of one long form, divide each day into collapsible cards.
+
+Card 1
+Today's Theme
+- Day Number
+- Title
+- Theme
+
+Card 2
+Mentor
+- Mentor Introduction
+- Today's Encouragement
+
+Card 3
+The Word
+- Scripture Reference
+- Scripture Text (optional field for now)
+
+Card 4
+Reflection
+- Large rich text editor
+
+Card 5
+Reflection Question
+
+Card 6
+Prayer
+
+Card 7
+Today's Step
+
+Card 8
+Completion
+
+Default completion message:
+
+"Great job.
+See you tomorrow."
+
+--------------------------------------------------
+
+SECTION 3
+
+Live Preview
+
+On desktop show a phone preview beside the editor.
+
+The preview must render exactly like the Emmaus mobile app including:
+
+• title
+• mentor introduction
+• scripture
+• reflection
+• prayer
+• today's step
+• Complete Today button
+
+The preview updates live while typing.
+
+--------------------------------------------------
+
+SECTION 4
+
+Top Toolbar
+
+Sticky toolbar containing
+
+Save Draft
+
+Preview
+
+Duplicate Day
+
+Delete Day
+
+--------------------------------------------------
+
+SECTION 5
+
+Future AI
+
+Add a disabled button
+
+✨ Generate with Emmaus AI
+
+Clicking it currently displays
+
+"Coming soon"
+
+No AI implementation yet.
+
+--------------------------------------------------
+
+SECTION 6
+
+Autosave
+
+Warn if leaving with unsaved changes.
+
+--------------------------------------------------
+
+SECTION 7
+
+Publishing Validation
+
+Prevent publishing unless every required field is complete.
+
+Show a checklist such as
+
+✓ Title
+
+✓ Scripture
+
+✓ Reflection
+
+✓ Prayer
+
+✓ Today's Step
+
+--------------------------------------------------
+
+IMPORTANT
+
+Do not change the existing data structure.
+
+Do not break the Journey Editor.
+
+Do not modify user-facing Emmaus screens.
+
+Only improve the admin authoring experience.
+
+Maintain zero TypeScript errors.
