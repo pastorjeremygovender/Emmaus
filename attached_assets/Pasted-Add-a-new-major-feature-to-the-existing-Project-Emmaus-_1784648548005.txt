@@ -1,0 +1,706 @@
+Add a new major feature to the existing Project Emmaus application called Emmaus Rooms.
+
+This is a shared-journey feature.
+
+Do not redesign the existing app.
+Do not change authentication, current journeys, sermon companions, admin portal, Media Studio, Bible placeholder, reflections, prayer requests, or progress logic except where integration with Rooms is explicitly required.
+
+Create a checkpoint before editing.
+
+## Purpose
+
+Rooms allow families, friends, couples, small groups and ministry teams to do selected journeys together while each person still retains a private personal walk.
+
+The core principle is:
+
+Private by default. Shared by choice.
+
+A Room must never expose a member’s private reflections, private prayers, Bible notes, AI conversations or personal journal unless that person explicitly shares something.
+
+## Locked journey-start wording
+
+Before any journey begins, show this exact standardised screen:
+
+How would you like to do this journey?
+
+Option 1:
+
+I’d like to do this alone
+
+A private journey between you and Jesus.
+
+Option 2:
+
+I’d like to do this with others
+
+Invite family, friends or a group to walk together.
+
+Button:
+
+Continue
+
+Use this exact wording for every journey type.
+
+Do not vary it by journey category.
+
+Add a small reassurance below the options:
+
+You can always invite others later.
+
+## Personal journey behaviour
+
+If the user selects:
+
+I’d like to do this alone
+
+start the journey through the existing personal journey flow.
+
+Do not create a Room.
+
+Do not alter existing personal progress.
+
+## Shared journey behaviour
+
+If the user selects:
+
+I’d like to do this with others
+
+show:
+
+Who would you like to walk with?
+
+Options:
+
+- Choose an existing Room
+- Create a new Room
+- Join an existing Room
+
+Do not show a public list of Rooms.
+
+Do not allow Room search by name.
+
+Do not allow users to browse or randomly join Rooms.
+
+## Room creation
+
+Create a Room form with:
+
+- Room name
+- Optional Room type
+- Invite expiry preference
+
+Room types:
+
+- Family
+- Friends
+- Couple
+- Small Group
+- Ministry Team
+- Other
+
+Invite expiry options:
+
+- 24 hours
+- 7 days
+- Never expires
+
+After creation:
+
+- the creator becomes Owner
+- create a unique access code
+- create a unique invitation token or link
+- allow the owner to share the invitation
+- return the user to the shared journey flow
+
+## Joining a Room
+
+A person may join a Room only through one of these methods:
+
+1. Invitation link
+2. Access code
+
+No other joining mechanism is allowed.
+
+### Invitation link
+
+Use a route such as:
+
+/join-room/:inviteToken
+
+When opened, show:
+
+You’ve been invited to join
+
+[Room Name]
+
+Invited by:
+[Owner or inviter name]
+
+Room type:
+[Type]
+
+Buttons:
+
+- Join Room
+- Cancel
+
+Validate:
+
+- invite exists
+- invite has not expired
+- invite has not been revoked
+- Room still exists
+- user is not already a member
+
+Do not add the person until they explicitly tap Join Room.
+
+### Access code
+
+Create a Join Existing Room page.
+
+Fields:
+
+- Room access code
+
+Button:
+
+Join Room
+
+Before joining, show a confirmation screen with:
+
+- Room name
+- Room type
+- inviter or owner
+- member count
+
+Then require:
+
+Join Room
+
+Do not join silently after code entry.
+
+## Invite sharing
+
+Room owners and leaders can open:
+
+Invite Members
+
+Provide:
+
+- invitation link
+- access code
+- Copy Link
+- Copy Code
+- Share
+
+Use the device Web Share API when supported.
+
+Fallbacks:
+
+- Copy Link
+- Copy Code
+
+Do not automatically send messages or post publicly.
+
+Also generate a QR code for the invitation link.
+
+The QR code is for display or download only.
+
+## Room roles
+
+Use these roles:
+
+Owner
+
+Can:
+- rename Room
+- invite members
+- revoke invitations
+- remove members
+- assign or remove Leaders
+- start a shared journey invitation
+- archive or delete Room
+
+Leader
+
+Can:
+- invite members
+- revoke invitations they created
+- start a shared journey invitation
+- moderate Room discussion where enabled
+
+Cannot:
+- delete Room
+- remove Owner
+- transfer ownership
+
+Member
+
+Can:
+- view Room
+- accept journey invitations
+- participate in shared journeys
+- view Room-level shared content
+- leave Room
+
+Cannot:
+- change Room settings
+- remove members
+- assign roles
+
+## Room privacy
+
+Joining a Room must never expose:
+
+- private journey reflections
+- private prayer requests
+- private Bible notes
+- personal AI conversations
+- private journal entries
+- personal journeys not associated with the Room
+- email addresses of other members unless current privacy settings already permit this
+
+Room members may see only:
+
+- display name
+- optional profile image
+- Room role
+- shared journey participation
+- completion state for a Room journey
+- content explicitly shared with the Room
+
+## Shared journey invitations
+
+Do not create complex journey-specific membership management.
+
+When a Room member starts a journey with a Room:
+
+1. Create a shared journey invitation for that Room.
+2. Notify or display the invitation to all current Room members.
+3. Do not automatically enrol anyone except the person who starts it.
+4. Every other Room member chooses individually whether to participate.
+
+Show:
+
+[Member Name] has invited [Room Name] to begin:
+
+[Journey Title]
+
+Buttons:
+
+- Join Journey
+- Maybe Later
+
+If they choose Join Journey:
+
+- create their own user journey progress record
+- link that progress to the Room shared journey instance
+- preserve independent personal progress
+- start at Day 1 unless the product already supports another start rule
+
+If they choose Maybe Later:
+
+- do not enrol them
+- keep the invitation accessible in the Room
+- allow them to join later
+
+Do not create separate admin-controlled membership lists for each journey.
+
+## Shared progress
+
+Within a Room journey, show a simple member list:
+
+[Display Name] — Completed today
+[Display Name] — Not yet
+[Display Name] — Not participating
+
+Use calm, non-judgmental wording.
+
+Do not use:
+
+- failed
+- behind
+- missed
+- overdue
+- red warning states
+- competitive ranking
+
+Do not show private answers or reflections.
+
+## Optional reflection sharing
+
+Private reflections must remain private by default.
+
+After saving a reflection, provide an optional control:
+
+Share this reflection with your Room
+
+Default:
+
+Off
+
+If enabled:
+
+- share only that specific reflection
+- show the Room and journey it will be shared with
+- allow the user to revoke sharing later
+
+Do not automatically share previous or future reflections.
+
+## Room discussion
+
+For the prototype, create a simple Room discussion attached to each shared journey day.
+
+Members may post:
+
+- short text responses
+- encouragement
+- discussion answers
+
+Do not create real-time chat in this sprint.
+
+Use a simple chronological thread.
+
+Allow the owner or leader to remove inappropriate posts.
+
+Provide an optional discussion question sourced from the journey day.
+
+## Room home screen
+
+Add a Rooms entry within the existing app without adding a fifth bottom-navigation tab.
+
+Recommended placement:
+
+Journeys page
+→ My Rooms
+
+Also add a small My Rooms section to Personal if appropriate.
+
+Do not change the locked bottom navigation:
+
+- Walk
+- Bible
+- Journeys
+- Personal
+
+The Rooms page should show:
+
+- Rooms I belong to
+- Pending Room invitations
+- Shared journey invitations
+- Create Room
+- Join Room
+
+Each Room card should show:
+
+- Room name
+- Room type
+- member count
+- active shared journeys
+- user’s role
+
+## Room detail screen
+
+Show:
+
+- Room name
+- Room type
+- members
+- active shared journey invitations
+- active shared journeys
+- completed shared journeys
+- Invite Members, where permitted
+- Room Settings, where permitted
+- Leave Room
+
+Do not show private personal data.
+
+## Leaving and removal
+
+Members may leave a Room.
+
+Require confirmation:
+
+Leave this Room?
+
+Leaving a Room must:
+
+- remove Room membership
+- stop access to Room discussion
+- preserve the user’s personal journey progress
+- preserve any personal reflections
+- remove their Room-sharing permissions
+- not delete the Room
+
+Owners cannot leave until they:
+
+- transfer ownership
+or
+- delete the Room
+
+Removing a member must not delete that person’s personal journey data.
+
+## Room deletion
+
+Only the Owner may delete a Room.
+
+Require strong confirmation:
+
+Delete this Room permanently?
+
+Deleting a Room must:
+
+- archive or remove Room membership
+- revoke active invitations
+- stop new shared activity
+- preserve each user’s personal journey progress and private content
+- not delete journey definitions
+
+Prefer soft deletion or archival where possible.
+
+## Data model
+
+Reuse existing users, journeys, journeySteps and userJourneyProgress collections or equivalent structures.
+
+Add only the minimum required structures.
+
+Suggested collections:
+
+rooms
+
+Fields:
+- id
+- name
+- type
+- ownerId
+- status
+- inviteExpiryDefault
+- createdAt
+- updatedAt
+- archivedAt
+
+roomMembers
+
+Fields:
+- id
+- roomId
+- userId
+- role
+- joinedAt
+- invitedBy
+- status
+
+roomInvites
+
+Fields:
+- id
+- roomId
+- token
+- accessCode
+- createdBy
+- expiresAt
+- revokedAt
+- maxUses
+- useCount
+- createdAt
+
+roomJourneyInvitations
+
+Fields:
+- id
+- roomId
+- journeyId
+- createdBy
+- status
+- createdAt
+- closedAt
+
+roomJourneyParticipants
+
+Fields:
+- id
+- roomJourneyInvitationId
+- roomId
+- journeyId
+- userId
+- userJourneyProgressId
+- participationStatus
+- joinedAt
+
+roomPosts
+
+Fields:
+- id
+- roomId
+- journeyId
+- journeyStepId
+- userId
+- body
+- status
+- createdAt
+- updatedAt
+
+sharedReflections
+
+Fields:
+- id
+- userReflectionId
+- roomId
+- journeyId
+- journeyStepId
+- userId
+- sharedAt
+- revokedAt
+
+If the current app uses local demo storage, implement equivalent demo-mode records and preserve them across refreshes.
+
+Do not rename or delete existing fields or collections.
+
+## Security requirements
+
+Implement or prepare for these rules:
+
+- only Room members can view a Room
+- only Owner and Leader can invite
+- only Owner can delete Room or transfer ownership
+- users can only join through a valid invite or access code
+- users can only edit or delete their own Room posts unless Owner or Leader moderates
+- users control whether their reflection is shared
+- Room membership never grants access to private user records
+- ordinary users cannot modify Room roles directly
+- access codes and invite tokens must not be predictable
+
+Do not weaken existing application security.
+
+## Admin portal
+
+Add a basic Rooms section to the Admin Portal for support and moderation.
+
+Show:
+
+- Room name
+- type
+- owner
+- member count
+- status
+- created date
+
+Admin actions:
+
+- view summary
+- archive Room
+- revoke an abusive invite
+- review reported Room posts
+
+Do not expose private reflections, private prayers or private discussion content unless a post has been reported and policy allows review.
+
+Do not allow ordinary church administrators to silently join Rooms.
+
+## Notifications
+
+For this sprint, use in-app notification records or demo notifications only.
+
+Create notifications for:
+
+- invited to Room
+- accepted into Room
+- invited to shared journey
+- someone shared a reflection
+- Room journey completed by all participating members
+
+Do not build push notifications yet.
+
+## Completion milestone
+
+When all participating members complete a shared journey, show:
+
+Congratulations!
+
+Your Room completed:
+
+[Journey Title]
+
+Do not automatically enrol the Room in another journey.
+
+Offer:
+
+- Browse another journey
+- Return to Room
+
+## Functional safety
+
+Do not:
+
+- make Rooms public
+- allow browsing of all Rooms
+- automatically enrol all Room members
+- share private reflections by default
+- expose email addresses unnecessarily
+- alter personal journey progress when someone leaves a Room
+- create journey-specific member administration
+- add competitive leaderboards
+- change the bottom navigation
+- automatically publish or notify outside the app
+- alter the Media Studio
+
+## Build order
+
+Build in this order:
+
+1. Room data structures and demo storage
+2. Create Room
+3. Join by access code
+4. Join by invitation link
+5. Room list and Room detail
+6. Standard journey-start choice
+7. Shared journey invitations
+8. Individual acceptance and linked progress
+9. Shared progress display
+10. Optional reflection sharing
+11. Simple Room discussion
+12. Room role management
+13. Leave, remove and archive flows
+14. Admin Rooms support page
+15. Testing and cleanup
+
+## Validation
+
+After implementation:
+
+1. Create a Room as Demo User A.
+2. Confirm User A becomes Owner.
+3. Generate an invite link and access code.
+4. Sign in as Demo User B.
+5. Confirm B cannot browse or discover the Room.
+6. Join using the access code.
+7. Confirm a preview and Join Room confirmation appear.
+8. Confirm B becomes Member.
+9. Start 15 Minutes with Jesus from User A.
+10. Select:
+    I’d like to do this with others.
+11. Choose the Room.
+12. Confirm User A is enrolled.
+13. Confirm User B receives an invitation but is not automatically enrolled.
+14. Have B select Join Journey.
+15. Confirm both users maintain separate progress records linked to the shared Room journey.
+16. Complete a day as A.
+17. Confirm B sees only “Completed today”, not A’s private reflection.
+18. Share one specific reflection from A.
+19. Confirm B can see only that explicitly shared reflection.
+20. Revoke sharing and confirm it disappears.
+21. Confirm private prayer requests, Bible notes and other journeys remain hidden.
+22. Have B leave the Room.
+23. Confirm B’s personal journey progress remains intact.
+24. Confirm B loses Room discussion access.
+25. Confirm an invalid or expired code cannot be used.
+26. Confirm the normal user app, admin portal and existing journey flows still work.
+27. Resolve all TypeScript errors.
+28. Summarise:
+    - files changed
+    - new data structures
+    - demo-mode limitations
+    - Firebase security work still required
+    - unresolved issues
+
+Build only Emmaus Rooms.
+Do not begin the Bible module yet.

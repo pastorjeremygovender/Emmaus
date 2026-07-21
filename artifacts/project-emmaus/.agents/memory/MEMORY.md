@@ -1,0 +1,2 @@
+- [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
+- [Emmaus Rooms feature](rooms-feature.md) — shared-journey feature: RoomsContext + 9 room pages + JourneyStartModal; all state in localStorage; second demo user friend@emmaus.church.

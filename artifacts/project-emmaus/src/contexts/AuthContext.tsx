@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { isDemoMode } from '../lib/firebase';
 import { DEMO_USER, DEMO_ADMIN } from '../lib/demo-data';
+import { DEMO_USER_2 } from '../lib/rooms-demo-data';
 
 export type User = {
   id: string;
@@ -45,6 +46,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(DEMO_ADMIN);
       localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_ADMIN));
       return 'admin';
+    } else if (email === 'friend@emmaus.church') {
+      setUser(DEMO_USER_2);
+      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_USER_2));
+      return 'user';
     } else {
       setUser(DEMO_USER);
       localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_USER));

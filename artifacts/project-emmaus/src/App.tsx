@@ -2,6 +2,7 @@ import React from 'react';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
+import { RoomsProvider } from './contexts/RoomsContext';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -17,6 +18,17 @@ import Personal from '@/pages/Personal';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
 
+// Rooms
+import Rooms from '@/pages/rooms/Rooms';
+import RoomDetail from '@/pages/rooms/RoomDetail';
+import CreateRoom from '@/pages/rooms/CreateRoom';
+import JoinByCode from '@/pages/rooms/JoinByCode';
+import JoinByLink from '@/pages/rooms/JoinByLink';
+import InviteMembers from '@/pages/rooms/InviteMembers';
+import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
+import RoomDiscussion from '@/pages/rooms/RoomDiscussion';
+import RoomSettings from '@/pages/rooms/RoomSettings';
+
 function Router() {
   return (
     <Switch>
@@ -29,6 +41,20 @@ function Router() {
       <Route path="/journeys" component={Journeys} />
       <Route path="/personal" component={Personal} />
       <Route path="/admin" component={Admin} />
+
+      {/* Rooms */}
+      <Route path="/rooms" component={Rooms} />
+      <Route path="/rooms/create" component={CreateRoom} />
+      <Route path="/rooms/join" component={JoinByCode} />
+      <Route path="/rooms/:roomId/invite" component={InviteMembers} />
+      <Route path="/rooms/:roomId/settings" component={RoomSettings} />
+      <Route path="/rooms/:roomId/journey/:journeyId/view" component={SharedJourneyView} />
+      <Route path="/rooms/:roomId/journey/:journeyId/day/:day/discussion" component={RoomDiscussion} />
+      <Route path="/rooms/:roomId" component={RoomDetail} />
+
+      {/* Invite link */}
+      <Route path="/join-room/:inviteToken" component={JoinByLink} />
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -38,12 +64,14 @@ function App() {
   return (
     <AuthProvider>
       <JourneyProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <RoomsProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </RoomsProvider>
       </JourneyProvider>
     </AuthProvider>
   );

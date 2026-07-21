@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut } from 'lucide-react';
+import { LogOut, Users, ChevronRight } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,12 +21,16 @@ function streakLabel(n: number): string {
 export default function Personal() {
   const { user, signOut } = useAuth();
   const { progress, reflections, journeys } = useJourney();
+  const { getMyRooms, getUnreadCount } = useRooms();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [prayerRequest, setPrayerRequest] = useState('');
   const [notifs, setNotifs] = useState(true);
 
   if (!user) return null;
+
+  const myRooms = getMyRooms(user.id);
+  const roomUnread = getUnreadCount(user.id);
 
   const coreJourneyId = '15-minutes-with-jesus';
   const coreProg = progress[coreJourneyId];
@@ -136,6 +141,54 @@ export default function Personal() {
                   <p className="text-[15px] text-foreground italic leading-relaxed">"{r.text}"</p>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* My Rooms */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              My Rooms
+            </h2>
+            {roomUnread > 0 && (
+              <span className="text-[11px] font-semibold text-primary">{roomUnread} new</span>
+            )}
+          </div>
+          {myRooms.length === 0 ? (
+            <button
+              onClick={() => setLocation('/rooms')}
+              className="w-full text-left p-4 rounded-xl border border-dashed border-border bg-background hover:border-primary/30 transition-all flex items-center gap-3"
+            >
+              <Users size={17} className="text-muted-foreground shrink-0" />
+              <span className="text-[15px] text-muted-foreground">Walk journeys with family or friends</span>
+            </button>
+          ) : (
+            <div className="space-y-2">
+              {myRooms.slice(0, 3).map(room => (
+                <button
+                  key={room.id}
+                  onClick={() => setLocation(`/rooms/${room.id}`)}
+                  className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Users size={15} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] font-medium text-foreground truncate">{room.name}</div>
+                    <div className="text-[12px] text-muted-foreground">{room.type}</div>
+                  </div>
+                  <ChevronRight size={15} className="text-muted-foreground shrink-0" />
+                </button>
+              ))}
+              {myRooms.length > 3 && (
+                <button
+                  onClick={() => setLocation('/rooms')}
+                  className="w-full text-center text-[13px] text-primary font-medium py-2 hover:underline"
+                >
+                  View all {myRooms.length} Rooms
+                </button>
+              )}
             </div>
           )}
         </section>

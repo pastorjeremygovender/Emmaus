@@ -14,6 +14,7 @@ import {
   Settings2,
   ArrowLeft,
   Menu,
+  DoorOpen,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -29,8 +30,9 @@ import AdminSettings from './admin/Settings';
 import MediaStudioDashboard from './admin/media-studio/MediaStudioDashboard';
 import MediaKitWizard from './admin/media-studio/MediaKitWizard';
 import MediaKitEditor from './admin/media-studio/MediaKitEditor';
+import AdminRooms from './admin/AdminRooms';
 
-export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings';
+export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings' | 'rooms';
 export type AdminNav = {
   section: AdminSection;
   subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard';
@@ -48,6 +50,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
   { id: 'media-studio', label: 'Media Studio',     Icon: Clapperboard },
   { id: 'prayers',      label: 'Prayer Requests',  Icon: HeartHandshake },
   { id: 'users',        label: 'Users',            Icon: Users },
+  { id: 'rooms',        label: 'Rooms',            Icon: DoorOpen },
   { id: 'settings',     label: 'Settings',         Icon: Settings2 },
 ];
 
@@ -156,6 +159,7 @@ export default function Admin() {
     }
     if (section === 'prayers') return <PrayerRequests />;
     if (section === 'users') return <AdminUsers />;
+    if (section === 'rooms') return <AdminRooms />;
     if (section === 'settings') return <AdminSettings />;
     return <AdminDashboard onNavigate={navigate} />;
   };

@@ -1,0 +1,243 @@
+import React, { useState } from 'react';
+import { useLocation } from 'wouter';
+import { Button } from '@/components/ui/button';
+import { useRooms } from '@/contexts/RoomsContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Users, User, ChevronRight, X } from 'lucide-react';
+import type { Room } from '@/lib/rooms-types';
+
+interface Props {
+  journeyId: string;
+  journeyTitle: string;
+  onClose: () => void;
+  /** Called when the user chooses "alone" — let the caller navigate */
+  onStartAlone: () => void;
+  /** Called when the user has selected a room and wants to start shared */
+  onStartWithRoom: (roomId: string) => void;
+}
+
+type Step = 'choice' | 'room-select';
+
+export default function JourneyStartModal({ journeyId, journeyTitle, onClose, onStartAlone, onStartWithRoom }: Props) {
+  const { user } = useAuth();
+  const { getMyRooms, startSharedJourney } = useRooms();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<Step>('choice');
+  const [mode, setMode] = useState<'alone' | 'together'>('alone');
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+
+  const myRooms: Room[] = user ? getMyRooms(user.id) : [];
+
+  const handleContinue = () => {
+    if (mode === 'alone') {
+      onStartAlone();
+      return;
+    }
+    // With others
+    if (step === 'choice') {
+      setStep('room-select');
+    }
+  };
+
+  const handleRoomSelect = (roomId: string) => {
+    if (selectedRoomId === roomId) {
+      setSelectedRoomId(null);
+    } else {
+      setSelectedRoomId(roomId);
+    }
+  };
+
+  const handleStartWithRoom = () => {
+    if (!selectedRoomId || !user) return;
+    onStartWithRoom(selectedRoomId);
+  };
+
+  return (
+    // Backdrop
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-[480px] bg-background rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-2">
+          {step === 'room-select' ? (
+            <button
+              onClick={() => setStep('choice')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ← Back
+            </button>
+          ) : (
+            <div />
+          )}
+          <button
+            onClick={onClose}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors -mr-2"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {step === 'choice' && (
+          <div className="px-6 pb-8 space-y-6">
+            <div className="space-y-1 text-center">
+              <h2 className="text-[22px] font-serif font-semibold leading-snug">
+                How would you like to do this journey?
+              </h2>
+            </div>
+
+            {/* Options */}
+            <div className="space-y-3">
+              {/* Alone */}
+              <button
+                onClick={() => setMode('alone')}
+                className={`w-full text-left p-5 rounded-2xl border-2 transition-all ${
+                  mode === 'alone'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border bg-card hover:border-primary/40'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`mt-0.5 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    mode === 'alone' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <User size={20} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[16px] text-foreground">I'd like to do this alone</div>
+                    <div className="text-[14px] text-muted-foreground mt-0.5 leading-relaxed">
+                      A private journey between you and Jesus.
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {/* Together */}
+              <button
+                onClick={() => setMode('together')}
+                className={`w-full text-left p-5 rounded-2xl border-2 transition-all ${
+                  mode === 'together'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border bg-card hover:border-primary/40'
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`mt-0.5 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    mode === 'together' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[16px] text-foreground">I'd like to do this with others</div>
+                    <div className="text-[14px] text-muted-foreground mt-0.5 leading-relaxed">
+                      Invite family, friends or a group to walk together.
+                    </div>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <Button
+              className="w-full h-12 rounded-2xl text-[16px]"
+              onClick={handleContinue}
+            >
+              Continue
+            </Button>
+
+            <p className="text-center text-[13px] text-muted-foreground">
+              You can always invite others later.
+            </p>
+          </div>
+        )}
+
+        {step === 'room-select' && (
+          <div className="px-6 pb-8 space-y-5">
+            <div className="space-y-1">
+              <h2 className="text-[20px] font-serif font-semibold">Who would you like to walk with?</h2>
+              <p className="text-[14px] text-muted-foreground">Choose a Room to walk this journey together.</p>
+            </div>
+
+            {myRooms.length === 0 ? (
+              <div className="p-6 bg-muted/40 rounded-2xl text-center space-y-3">
+                <p className="text-[15px] text-muted-foreground">You're not in any Rooms yet.</p>
+                <Button
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => { onClose(); setLocation('/rooms/create'); }}
+                >
+                  Create a Room
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="rounded-xl"
+                  onClick={() => { onClose(); setLocation('/rooms/join'); }}
+                >
+                  Join a Room
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {myRooms.map(room => (
+                  <button
+                    key={room.id}
+                    onClick={() => handleRoomSelect(room.id)}
+                    className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${
+                      selectedRoomId === room.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border bg-card hover:border-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        selectedRoomId === room.id ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}>
+                        <Users size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[15px] truncate">{room.name}</div>
+                        <div className="text-[12px] text-muted-foreground">{room.type}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                    </div>
+                  </button>
+                ))}
+
+                {/* Create / Join options */}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 rounded-xl text-[13px]"
+                    onClick={() => { onClose(); setLocation('/rooms/create'); }}
+                  >
+                    Create new Room
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 rounded-xl text-[13px]"
+                    onClick={() => { onClose(); setLocation('/rooms/join'); }}
+                  >
+                    Join a Room
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectedRoomId && (
+              <Button
+                className="w-full h-12 rounded-2xl text-[16px]"
+                onClick={handleStartWithRoom}
+              >
+                Start with this Room
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

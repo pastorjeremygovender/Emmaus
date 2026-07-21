@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useRooms } from '@/contexts/RoomsContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Check, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 function formatTimestamp(seconds: number): string {
@@ -21,12 +23,23 @@ export default function JourneyDay() {
   const day = parseInt(dayStr || '1', 10);
   const [, setLocation] = useLocation();
   const { getStep, completeStep, startJourney, getJourney } = useJourney();
+  const { user } = useAuth();
+  const {
+    getMyRooms,
+    getJourneyInvitations,
+    getMyParticipation,
+    shareReflection,
+    getMySharedReflection,
+  } = useRooms();
 
   const step = getStep(journeyId || '', day);
   const journey = getJourney(journeyId || '');
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [sharedRoomId, setSharedRoomId] = useState<string | null>(null);
+  const [sharingDone, setSharingDone] = useState(false);
 
   useEffect(() => {
     if (journeyId) startJourney(journeyId);
@@ -44,11 +57,102 @@ export default function JourneyDay() {
   const isCompanion = journey.journeyType === 'companion';
   const hasSermon = isCompanion && (step as any).sermonTimestampSeconds != null;
 
+  // Find rooms where user is doing this journey (to offer sharing)
+  const myRooms = user ? getMyRooms(user.id) : [];
+  const activeRoomsForJourney = journeyId
+    ? myRooms.filter(room => {
+        const invitations = getJourneyInvitations(room.id);
+        return invitations.some(ji => ji.journeyId === journeyId && ji.status === 'open');
+      })
+    : [];
+
+  const reflectionKey = `${journeyId}-${day}`;
+
   const handleComplete = () => {
-    setIsCompleting(true);
     completeStep(journey.id, day, reflection);
+    if (reflection.trim() && activeRoomsForJourney.length > 0) {
+      // Show share prompt
+      setShowSharePrompt(true);
+      setIsCompleting(true);
+    } else {
+      setIsCompleting(true);
+    }
   };
 
+  const handleShareReflection = (roomId: string) => {
+    if (!user || !journeyId) return;
+    const stepId = `day-${day}`;
+    shareReflection(user.id, reflectionKey, roomId, journeyId, stepId);
+    setSharedRoomId(roomId);
+    setSharingDone(true);
+  };
+
+  const handleSkipShare = () => {
+    setSharingDone(true);
+  };
+
+  // Share prompt screen (between completing and the final "Great job" screen)
+  if (isCompleting && showSharePrompt && !sharingDone && activeRoomsForJourney.length > 0) {
+    const firstRoom = activeRoomsForJourney[0];
+    const alreadyShared = user
+      ? getMySharedReflection(user.id, reflectionKey, firstRoom.id)
+      : undefined;
+
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="text-center space-y-5 max-w-[340px]"
+        >
+          <div className="w-14 h-14 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3">
+            <Eye size={26} />
+          </div>
+          <h2 className="text-[22px] font-serif font-medium">Share your reflection?</h2>
+          <p className="text-[15px] text-muted-foreground leading-relaxed">
+            Share this reflection with <strong>{firstRoom.name}</strong>
+          </p>
+          <div className="p-4 bg-card border border-border rounded-xl text-left">
+            <p className="text-[14px] text-foreground italic leading-relaxed">
+              "{reflection.trim()}"
+            </p>
+          </div>
+          <p className="text-[12px] text-muted-foreground">
+            Only this reflection will be shared. You can revoke sharing at any time from the Room discussion.
+          </p>
+
+          {!alreadyShared ? (
+            <div className="space-y-2.5 pt-2">
+              <Button
+                className="w-full rounded-2xl h-12"
+                onClick={() => handleShareReflection(firstRoom.id)}
+              >
+                Share this reflection with {firstRoom.name}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full rounded-2xl"
+                onClick={handleSkipShare}
+              >
+                <EyeOff size={15} className="mr-1.5" />
+                Keep private
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2.5 pt-2">
+              <p className="text-[13px] text-primary">Already shared with this Room.</p>
+              <Button variant="outline" className="w-full rounded-2xl" onClick={handleSkipShare}>
+                Continue
+              </Button>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Final completion screen
   if (isCompleting) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
@@ -63,6 +167,11 @@ export default function JourneyDay() {
           </div>
           <h2 className="text-[26px] font-serif font-medium">Great job.</h2>
           <p className="text-base text-muted-foreground">See you tomorrow.</p>
+          {sharedRoomId && (
+            <p className="text-[13px] text-primary">
+              Your reflection has been shared with your Room.
+            </p>
+          )}
           <div className="pt-6">
             <Button
               variant="outline"
