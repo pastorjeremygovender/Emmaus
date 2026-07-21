@@ -1,0 +1,617 @@
+Build Sprint 2 of the existing Project Emmaus application: the Minimum Viable Admin Portal.
+
+This is an extension of the current working app.
+
+Do not rebuild the user-facing app.
+Do not replace the existing architecture.
+Do not change the technology stack.
+Do not remove or redesign the existing Walk, Bible, Journeys, Personal, authentication, demo mode, progress, reflection, prayer request, core journey, or sermon companion functionality.
+
+Create a checkpoint before making changes.
+
+## Sprint goal
+
+Create a secure, simple administration area where an authorised pastor can manage Emmaus content without editing code.
+
+The first version must allow an administrator to:
+
+1. View the admin dashboard
+2. View existing journeys
+3. Create and edit journeys
+4. Create and edit journey days
+5. View and edit sermons
+6. Review and publish Sermon Companion Journeys
+7. View prayer requests
+8. View basic user progress
+9. Preview published content exactly as users will see it
+
+This is a Minimum Viable Admin Portal.
+
+Do not build the complete future church management platform yet.
+
+## Preserve existing application
+
+Do not change:
+
+- existing public routes
+- Firebase environment-variable names
+- Firestore collection names already in use
+- Firestore document IDs
+- authentication logic
+- demo mode
+- user journey progress logic
+- reflection saving
+- prayer request saving
+- sermon timestamp behaviour
+- existing journey content
+- existing bottom navigation
+- existing user-facing visual design
+
+The current application must continue working after this sprint.
+
+## Admin route
+
+Use the existing protected route:
+
+/admin
+
+If the route already exists, improve it rather than creating a duplicate.
+
+Only authenticated users with an admin role may access it.
+
+For demo mode, preserve the existing demo administrator access so the portal can be tested before Firebase roles are configured.
+
+Unauthorised users should be redirected safely to the normal app.
+
+Do not rely only on hidden navigation links for security.
+
+## Admin design direction
+
+The admin portal may use a desktop-oriented layout, but it must still work on tablets.
+
+Use:
+
+- clean white or warm-neutral background
+- restrained Emmaus blue/teal accent
+- clear left sidebar
+- readable tables
+- simple forms
+- clear status labels
+- generous spacing
+- accessible controls
+
+The admin portal should feel calm and professional.
+
+Avoid:
+
+- cluttered analytics dashboards
+- excessive charts
+- gradients
+- animations
+- competitive gamification
+- unnecessary decorative elements
+
+## Admin navigation
+
+Create a sidebar with:
+
+- Dashboard
+- Journeys
+- Sermons
+- Prayer Requests
+- Users
+- Settings
+
+Use only these sections in this sprint.
+
+Do not add Events, Giving, Small Groups, Volunteer Teams, Bible Studies, Reports, Scheduling, Notifications, or multi-church management yet.
+
+Those remain deferred.
+
+# 1. Dashboard
+
+Create a simple overview page.
+
+Display summary cards for:
+
+- Total users
+- Active users in the last 7 days
+- Journey completions in the last 7 days
+- Open prayer requests
+- Draft Companion Journeys awaiting review
+- Published journeys
+
+Use real Firestore data when Firebase is configured.
+
+Use clearly labelled demo data when running in demo mode.
+
+Below the summary cards, show:
+
+Recent activity
+
+Examples:
+
+- User completed Day 3 of 15 Minutes with Jesus
+- New prayer request received
+- Companion Journey approved
+- Journey published
+- New user registered
+
+Do not build complex analytics yet.
+
+# 2. Journeys section
+
+Create a Journeys list page.
+
+Display each journey with:
+
+- Title
+- Journey type
+- Number of days
+- Status
+- Last updated
+- Active user count if available
+- Actions
+
+Journey types:
+
+- core
+- companion
+
+Statuses:
+
+- draft
+- review
+- approved
+- published
+- archived
+
+Actions:
+
+- View
+- Edit
+- Preview
+- Duplicate
+- Archive
+
+Add a primary button:
+
++ New Journey
+
+## Journey editor
+
+Create a journey editor with fields:
+
+- Title
+- Description
+- Journey type
+- Duration in days
+- Status
+- Cover image URL or placeholder
+- Optional church-wide flag
+- Optional start date
+- Optional end date
+
+For Companion Journeys, include:
+
+- Linked sermon
+- Weekly recommendation enabled
+- Exempt from overload rules
+
+The sermon Companion Journey exemption must remain enabled by default.
+
+## Journey days editor
+
+Within the journey editor, display all days in order.
+
+Each day should show:
+
+- Day number
+- Title
+- Scripture reference
+- Status
+- Edit action
+
+Provide:
+
++ Add Day
+
+Allow administrators to:
+
+- add a day
+- edit a day
+- delete a draft day
+- reorder days
+- duplicate a day
+
+Do not allow silent deletion of a published day.
+
+Require confirmation before deleting content.
+
+## Day editor fields
+
+Use the existing journey step structure.
+
+Fields:
+
+- Day number
+- Title
+- Mentor introduction
+- Scripture reference
+- Scripture text
+- Devotional reflection
+- Reflection question
+- Prayer prompt
+- Action step
+- Sermon contextual sentence
+- Sermon timestamp seconds
+- Sermon link
+- Order
+
+Use multiline editors where appropriate.
+
+Provide:
+
+- Save Draft
+- Preview
+- Submit for Review
+- Publish where permitted
+
+Do not introduce a rich-text editor with complex formatting in this sprint.
+
+A well-designed textarea is sufficient.
+
+## Preview
+
+The Preview action must show the devotional in the same single scrolling layout used in the user-facing app.
+
+The preview must include:
+
+- day title
+- mentor introduction
+- Scripture
+- reflection
+- reflection question
+- prayer
+- action step
+- sermon moment where applicable
+
+Do not create a separate incompatible preview design.
+
+# 3. Sermons section
+
+Create a Sermons list page.
+
+Display:
+
+- Title
+- Speaker
+- Scripture reference
+- YouTube URL
+- Transcript status
+- AI index status
+- Linked Companion Journey
+- Status
+- Last updated
+
+Actions:
+
+- View
+- Edit
+- Generate Companion Draft
+- Open Companion Journey
+- Preview YouTube link
+
+## Sermon editor
+
+Fields:
+
+- Title
+- Speaker
+- Sermon date
+- Series
+- Scripture reference
+- YouTube URL
+- Summary
+- Topics
+- Keywords
+- Transcript
+- Transcript status
+- AI index status
+- Linked Companion Journey ID
+
+Do not build real automated transcription or AI generation in this sprint.
+
+For “Generate Companion Draft”, create a safe prototype action:
+
+- If a Companion Journey already exists, open it.
+- If no Companion Journey exists, create a five-day draft using clearly marked placeholder or existing demo content.
+- Set its status to draft.
+- Never publish it automatically.
+- Link it to the sermon.
+
+Display a clear message:
+
+“Companion Journey draft created. Pastoral review is required before publication.”
+
+## Sermon Companion workflow
+
+Use this exact workflow:
+
+Draft
+→ Pastoral Review
+→ Approved
+→ Published
+
+Do not allow Draft to jump directly to Published without an explicit approval action.
+
+Pastor edits must remain canonical and must not be overwritten by future regeneration.
+
+Add a boolean or equivalent field indicating that content has pastor-approved edits.
+
+# 4. Prayer Requests section
+
+Create a prayer requests list.
+
+Display:
+
+- Date
+- User preferred name
+- Request preview
+- Status
+- Privacy level
+- Assigned person if available
+
+Statuses:
+
+- new
+- acknowledged
+- followed_up
+- answered
+- archived
+
+Privacy levels:
+
+- private
+- pastoral
+- prayer_team
+
+For this sprint, user-created prayer requests should default to private unless existing data says otherwise.
+
+Admin actions:
+
+- View full request
+- Change status
+- Add private pastoral note
+- Mark followed up
+- Mark answered
+- Archive
+
+Do not make prayer requests publicly visible.
+
+Do not create a prayer wall in this sprint.
+
+Do not expose requests to ordinary users other than the owner.
+
+# 5. Users section
+
+Create a basic users list.
+
+Display:
+
+- Preferred name
+- Email
+- Role
+- Current journey
+- Current day
+- Days walking
+- Last active
+- Completed journeys
+
+Actions:
+
+- View user summary
+
+The user summary may show:
+
+- active journeys
+- completed journeys
+- recent progress
+- saved prayer request count
+- saved reflection count
+
+Do not display the full contents of private reflections in the users list.
+
+Do not display private AI conversations.
+
+Do not create detailed pastoral profiling.
+
+This section is for basic discipleship progress only.
+
+# 6. Settings section
+
+Create a minimal settings page.
+
+Fields:
+
+- Church name
+- Church tagline
+- Contact email
+- Website
+- YouTube channel URL
+- Primary accent colour
+- Default notification time placeholder
+- Weekly sermon companion enabled
+
+Use:
+
+Church name:
+Isipingo Community Church
+
+Tagline:
+It’s All About JESUS.
+
+Weekly sermon companion enabled:
+true
+
+Do not build multi-church support.
+
+Do not build billing, subscriptions, integrations, role management, API keys, or advanced AI personality settings yet.
+
+# Firestore compatibility
+
+Use the existing collections where possible.
+
+Expected existing or supported collections:
+
+users
+journeys
+journeySteps
+userJourneyProgress
+userReflections
+sermons
+prayerRequests
+
+Add only the minimum additional fields required for admin workflow.
+
+Suggested optional fields:
+
+journeys:
+- status
+- journeyType
+- linkedSermonId
+- churchWide
+- overloadExempt
+- pastorEdited
+- publishedAt
+- updatedAt
+
+sermons:
+- status
+- companionJourneyId
+- pastorEdited
+- sermonDate
+- series
+- topics
+- keywords
+- summary
+
+prayerRequests:
+- status
+- privacyLevel
+- assignedTo
+- pastoralNotes
+- followedUpAt
+- answeredAt
+
+Do not rename or delete existing fields.
+
+When reading data, tolerate missing optional fields safely.
+
+## Demo mode
+
+The admin portal must work immediately in demo mode.
+
+Use the existing seed data:
+
+- 15 Minutes with Jesus
+- God’s Kindness Restores the Broken
+- one sermon
+- demo user
+- demo administrator
+- sample progress
+- sample prayer request
+
+Admin edits in demo mode may persist to local storage.
+
+Clearly label demo data where appropriate.
+
+Do not present demo records as live church data.
+
+## Form behaviour
+
+All forms must have:
+
+- required-field validation
+- unsaved-changes warning
+- saving state
+- success message
+- error message
+- cancel action
+- confirmation before destructive actions
+
+Buttons must not appear to save when no save occurred.
+
+## Publishing rules
+
+Only approved content can be published.
+
+A published journey must have:
+
+- title
+- description
+- at least one day
+- valid ordered day numbers
+- Scripture reference for each day
+- devotional reflection for each day
+- prayer prompt for each day
+- action step for each day
+
+A Companion Journey must also have:
+
+- linked sermon
+- valid YouTube URL or a clearly marked placeholder in demo mode
+- timestamp seconds where a sermon moment is used
+
+Show validation errors clearly.
+
+## Functional safety
+
+Do not:
+
+- open Firestore security rules
+- weaken authentication
+- make every user an administrator
+- expose admin pages through ordinary bottom navigation
+- publish generated content automatically
+- overwrite pastor edits
+- delete working user data
+- replace the existing seed structures
+- add unrequested features
+
+## Validation
+
+After implementation:
+
+1. Run the application.
+2. Resolve build and TypeScript errors.
+3. Confirm the existing user app still works.
+4. Test /admin in demo mode.
+5. Test admin route protection.
+6. Create a new draft journey.
+7. Add two days.
+8. Edit and reorder the days.
+9. Preview the journey.
+10. Submit it for review.
+11. Approve and publish it.
+12. Confirm the published journey appears in the user-facing Journeys section.
+13. Edit the sample sermon.
+14. Generate or open its Companion Journey draft.
+15. Confirm it cannot publish without approval.
+16. Update a prayer request status.
+17. View a user’s progress summary.
+18. Test unsaved-change warnings.
+19. Test at desktop and tablet widths.
+20. Confirm no existing public functionality was removed.
+
+At completion, provide:
+
+- a summary of files changed
+- any new Firestore fields
+- demo-mode limitations
+- Firebase setup still required
+- security work still required
+- any unresolved issue
+
+Build only this Minimum Viable Admin Portal.
+Do not expand the scope.
