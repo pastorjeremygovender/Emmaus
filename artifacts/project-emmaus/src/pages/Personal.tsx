@@ -1,31 +1,39 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Heart } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useLocation } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
+
+function streakLabel(n: number): string {
+  if (n === 0) return 'Your walk begins today';
+  if (n === 1) return '1 day walking';
+  return `${n} days walking`;
+}
 
 export default function Personal() {
   const { user, signOut } = useAuth();
   const { progress, reflections, journeys } = useJourney();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [prayerRequest, setPrayerRequest] = useState('');
   const [notifs, setNotifs] = useState(true);
 
   if (!user) return null;
 
-  const coreJourneyId = "15-minutes-with-jesus";
+  const coreJourneyId = '15-minutes-with-jesus';
   const coreProg = progress[coreJourneyId];
   const streak = coreProg ? coreProg.completedDays.length : 0;
-  
-  // Collect reflections
+
   const savedReflections = Object.entries(reflections).map(([key, text]) => {
     const [jId, day] = key.split('-');
-    const j = journeys.find(j => j.id === jId);
+    const j = journeys.find((jx) => jx.id === jId);
     return { title: j ? `${j.title} — Day ${day}` : `Day ${day}`, text };
   });
 
@@ -34,63 +42,133 @@ export default function Personal() {
     setLocation('/');
   };
 
+  const handleSavePrayer = () => {
+    if (!prayerRequest.trim()) return;
+    // Save to localStorage
+    const existing = JSON.parse(localStorage.getItem('emmaus_prayers') || '[]') as string[];
+    existing.push(prayerRequest.trim());
+    localStorage.setItem('emmaus_prayers', JSON.stringify(existing));
+    setPrayerRequest('');
+    toast({ title: 'Saved', description: 'Your prayer request has been saved.' });
+  };
+
+  const initials = user.preferredName
+    .split(' ')
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
-      <main className="px-6 pt-12 max-w-lg mx-auto space-y-10">
-        
-        <header className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-2xl font-serif font-medium">
-            {user.preferredName.charAt(0)}
+      <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-9">
+
+        {/* Profile header */}
+        <header className="flex items-center gap-5">
+          <div
+            className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-serif font-semibold shrink-0"
+            aria-hidden="true"
+          >
+            {initials}
           </div>
           <div>
-            <h1 className="text-2xl font-serif font-medium">{user.preferredName}</h1>
-            <p className="text-sm text-muted-foreground">{streak} days walking</p>
+            <h1 className="text-[26px] font-serif font-medium leading-tight">
+              {user.preferredName}
+            </h1>
+            <p
+              className="text-[15px] text-muted-foreground mt-0.5"
+              data-testid="text-streak"
+            >
+              {streakLabel(streak)}
+            </p>
           </div>
         </header>
 
-        <section className="space-y-4">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Prayer Requests</h2>
-          <Card className="bg-card">
-            <CardContent className="p-4 space-y-3">
-              <Textarea 
-                placeholder="What can we pray for today?"
+        {/* Prayer Requests */}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Prayer Requests
+          </h2>
+          <Card className="bg-card border-border">
+            <CardContent className="p-5 space-y-3">
+              <Label htmlFor="prayer-input" className="sr-only">
+                Prayer request
+              </Label>
+              <Textarea
+                id="prayer-input"
+                placeholder="What would you like prayer for today?"
                 value={prayerRequest}
                 onChange={(e) => setPrayerRequest(e.target.value)}
-                className="resize-none bg-background border-border"
+                className="resize-none bg-background border-border text-[16px] leading-relaxed rounded-xl min-h-[100px]"
+                data-testid="input-prayer-request"
               />
-              <Button size="sm" variant="secondary" className="w-full">Save Note</Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="w-full h-11 text-base rounded-xl"
+                onClick={handleSavePrayer}
+                data-testid="button-save-prayer"
+              >
+                Save Prayer Request
+              </Button>
             </CardContent>
           </Card>
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saved Reflections</h2>
+        {/* Saved Reflections */}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Saved Reflections
+          </h2>
           {savedReflections.length === 0 ? (
-            <div className="p-6 border border-dashed border-border rounded-xl text-center">
-              <p className="text-sm text-muted-foreground">Your reflections will appear here as you journey.</p>
+            <div className="p-8 border border-dashed border-border rounded-2xl text-center">
+              <p className="text-[15px] text-muted-foreground leading-relaxed">
+                Your reflections will appear here as you journey.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {savedReflections.map((r, i) => (
                 <div key={i} className="p-4 rounded-xl border border-border bg-card space-y-2">
-                  <h4 className="text-xs font-semibold text-primary uppercase tracking-wider">{r.title}</h4>
-                  <p className="text-sm text-foreground italic">"{r.text}"</p>
+                  <h4 className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                    {r.title}
+                  </h4>
+                  <p className="text-[15px] text-foreground italic leading-relaxed">"{r.text}"</p>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Settings</h2>
-          <div className="p-4 rounded-xl border border-border bg-card flex justify-between items-center">
-            <span className="text-sm font-medium">Daily Reminders</span>
-            <Switch checked={notifs} onCheckedChange={setNotifs} />
+        {/* Settings */}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Settings
+          </h2>
+          <div className="p-4 rounded-xl border border-border bg-card flex justify-between items-center min-h-[56px]">
+            <Label
+              htmlFor="notifications-toggle"
+              className="text-[16px] font-medium cursor-pointer"
+            >
+              Daily Reminders
+            </Label>
+            <Switch
+              id="notifications-toggle"
+              checked={notifs}
+              onCheckedChange={setNotifs}
+              data-testid="toggle-notifications"
+            />
           </div>
         </section>
 
-        <Button variant="ghost" className="w-full text-destructive flex gap-2" onClick={handleSignOut}>
-          <LogOut size={18} />
+        {/* Sign Out */}
+        <Button
+          variant="ghost"
+          className="w-full h-12 text-destructive hover:text-destructive flex gap-2 text-base"
+          onClick={handleSignOut}
+          data-testid="button-sign-out"
+        >
+          <LogOut size={17} aria-hidden="true" />
           Sign Out
         </Button>
 

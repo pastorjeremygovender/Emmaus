@@ -1,0 +1,396 @@
+Refine the existing Project Emmaus prototype.
+
+This is an EDIT of the current working application. Do not rebuild the project, replace the architecture, change the technology stack, remove working functionality, or add new features.
+
+Preserve all current routes, authentication behaviour, demo mode, Firestore-ready structure, journey data, progress tracking, admin interface, bottom navigation and existing working interactions.
+
+The purpose of this edit is to improve the emotional experience, readability and mobile presentation of the existing prototype.
+
+Work carefully and make a checkpoint before editing.
+
+## Core rule
+
+Project Emmaus should feel like opening a calm, personal devotional rather than viewing a software dashboard.
+
+The app must remain:
+
+- clean
+- warm
+- calm
+- spacious
+- Christ-centred
+- easy for non-technical users
+- mobile-first
+- encouraging rather than guilt-driven
+
+Do not introduce visual clutter, large dashboards, excessive animations, gradients, stock photography, competitive elements or new product features.
+
+## 1. Preserve the current design direction
+
+Keep:
+
+- the existing soft white or warm-neutral background
+- the current restrained blue/teal accent direction
+- the serif heading style
+- the simple rounded cards
+- the four bottom navigation tabs
+- the current journey and sermon content
+- all working routes and interactions
+
+Refine the current design rather than replacing it.
+
+## 2. Improve mobile layout
+
+The current preview is often shown in a wide browser window, but the primary design target is a mobile phone.
+
+Create a centred mobile content container with:
+
+- maximum width around 480px on desktop
+- full width on mobile
+- comfortable left and right page padding
+- content that never stretches excessively across desktop screens
+- bottom padding sufficient to keep content above the fixed navigation bar
+- no horizontal scrolling
+
+Ensure all screens look intentional at approximately:
+
+- 360px width
+- 390px width
+- 430px width
+- desktop preview width
+
+Do not make the mobile app look like a narrow desktop website.
+
+## 3. Typography and readability
+
+Increase readability throughout the app.
+
+Use approximately:
+
+- page titles: 30–36px
+- major card titles: 23–28px
+- body text: 17–19px
+- labels and metadata: 13–15px
+- buttons: 16–18px
+
+Use a comfortable body line height of approximately 1.55–1.7.
+
+Do not make every heading oversized.
+
+Keep serif typography for meaningful titles and use the existing clean sans-serif style for body text and controls.
+
+Improve contrast for pale grey labels and text. Some current labels are too faint.
+
+## 4. Welcome screen
+
+Keep the existing content:
+
+Project Emmaus
+
+“Walk with Jesus, one step at a time.”
+
+Get Started
+
+Sign In
+
+Refine this screen by:
+
+- vertically centring the main content more naturally
+- increasing the title slightly
+- improving spacing between title, tagline and buttons
+- keeping the screen quiet and uncluttered
+- preserving the current wording
+- ensuring the primary and secondary actions are clearly distinguishable
+
+Do not add a logo, illustration or photograph during this edit.
+
+## 5. Authentication screen
+
+Preserve all current authentication functionality and demo behaviour.
+
+Improve the layout by:
+
+- keeping the form inside the same mobile-width content container
+- increasing spacing between fields
+- ensuring labels remain clearly associated with their fields
+- using accessible field heights and touch targets
+- ensuring the password field and submit button fit correctly on small mobile screens
+- making the secondary sign-in link easier to read
+
+Do not change Firebase integration or authentication logic.
+
+## 6. Feeling check-in experience
+
+Keep the six feelings:
+
+- Hopeful
+- Tired
+- Struggling
+- Nervous
+- Afraid
+- Okay
+
+Retain the two-column card layout on normal mobile screens.
+
+Improve the screen by:
+
+- making each card a consistent size
+- increasing card padding and touch area
+- making the selected state clear but calm
+- ensuring unselected card borders are visible
+- keeping the adaptive response below the cards
+- improving spacing before the “Let’s Begin” button
+
+After a feeling is selected and the user taps “Let’s Begin”, add a short transitional moment before navigation.
+
+Display:
+
+“Thanks for sharing that.”
+
+Then:
+
+“Let’s spend some time with Jesus.”
+
+Show this transition for approximately 900–1200 milliseconds and then navigate to the Walk screen automatically.
+
+Keep this animation subtle. Use a gentle fade only. Do not use loading spinners, bouncing elements or dramatic animation.
+
+Respect prefers-reduced-motion where possible.
+
+Do not alter the saved feeling data or existing check-in logic.
+
+## 7. Walk home screen
+
+This is the most important visual refinement.
+
+The Walk screen should feel like today’s personal invitation, not a dashboard.
+
+At the top, add a time-aware greeting using the user’s preferred name:
+
+- “Good morning, Jeremy.”
+- “Good afternoon, Jeremy.”
+- “Good evening, Jeremy.”
+
+Use the actual preferred name dynamically.
+
+Under the greeting, display one short line:
+
+“Let’s take the next step together.”
+
+Then display the primary journey.
+
+Refine the primary journey card to show:
+
+DAY 1 OF 7
+
+Jesus Meets You Here
+
+A short one- or two-sentence invitation based on the existing journey description.
+
+Continue
+
+Preserve dynamic day and progress data. Do not hard-code Day 1 if progress already supports other days.
+
+Do not add a large progress bar.
+
+If a streak is shown, keep it subtle and encouraging.
+
+## 8. Sermon Companion Journey
+
+Preserve the weekly sermon recommendation and its exemption from overload limits.
+
+Visually separate it from the primary journey without making it look like an advertisement.
+
+Use this structure:
+
+THIS WEEK AT CHURCH
+
+Continue Sunday’s Message
+
+God’s Kindness Restores the Broken
+
+5 short weekday devotionals based on Sunday’s sermon.
+
+Start Monday
+or
+Continue
+
+Use the appropriate action dynamically.
+
+Add a subtle warm accent such as a fine border, small heading accent or soft neutral background. Do not use a loud colour, gradient, large image or oversized icon.
+
+The whole card should communicate that this is a shared church journey.
+
+Do not remove the sermon journey from the Walk screen or Journeys screen.
+
+## 9. Journey day experience
+
+The journey day page is the centre of Project Emmaus.
+
+Preserve its existing step-by-step structure:
+
+- mentor introduction
+- Scripture
+- reflection
+- response
+- prayer
+- action
+- completion
+
+Do not convert it into one long article.
+
+Improve it by:
+
+- displaying one meaningful section at a time
+- using generous vertical spacing
+- limiting text width for comfortable reading
+- increasing devotional body text
+- providing a subtle step indicator such as “2 of 6”
+- using a clear primary button to continue
+- preserving written response saving
+- keeping back navigation available without making it dominant
+
+Do not add a traditional large progress bar.
+
+Keep the completion message exactly:
+
+“Great job. See you tomorrow.”
+
+Avoid repeating a long Scripture block at the end.
+
+## 10. Bible page
+
+Keep the Bible page as a prototype placeholder.
+
+Do not add licensed Bible content or new integrations.
+
+Refine the presentation by:
+
+- retaining Search Scripture
+- retaining Continue Reading
+- clearly marking the displayed Bible text as prototype/public-domain sample content where appropriate
+- improving spacing and text readability
+- keeping the bottom navigation visible
+
+Do not imply that full Bible integration is already complete.
+
+## 11. Journeys page
+
+Keep the existing sections and functionality.
+
+Refine the hierarchy:
+
+- Active Journey
+- This Week
+- Available Journeys
+- Completed Journeys
+
+The active journey should be visually prominent.
+
+The sermon companion should remain distinct as a weekly church journey.
+
+Journey cards that are not functional must remain clearly labelled “Coming soon”.
+
+Do not create new journeys.
+
+## 12. Personal page
+
+Keep the bottom navigation label as “Personal” for now. Do not rename it in this edit.
+
+Improve the page by:
+
+- making the profile header warmer and more balanced
+- changing “0 days walking” to natural language:
+  - “Your walk begins today” when there is no completed day
+  - “1 day walking” for one day
+  - “[number] days walking” for more than one
+- keeping Prayer Requests
+- keeping Saved Reflections
+- changing the prayer input placeholder from:
+  “What can we pray for today?”
+  to:
+  “What would you like prayer for today?”
+- changing the button label from:
+  “Save Note”
+  to:
+  “Save Prayer Request”
+- retaining all current save functionality
+
+Do not imply that the AI itself is praying. Saved prayer requests are private user records unless later submitted to church leadership through a separate consent-based feature.
+
+## 13. Bottom navigation
+
+Preserve these exact labels:
+
+- Walk
+- Bible
+- Journeys
+- Personal
+
+Improve:
+
+- icon and label alignment
+- active state contrast
+- touch target size
+- spacing above the device/browser bottom edge
+- consistency across all screens
+
+The navigation should remain fixed and should not cover page content.
+
+Do not rename tabs or add tabs.
+
+## 14. Accessibility
+
+Verify:
+
+- body text has sufficient contrast
+- buttons have visible focus states
+- all interactive elements are keyboard accessible
+- inputs have labels
+- touch targets are at least approximately 44px
+- selected feeling cards expose selected state accessibly
+- the fade transition respects reduced-motion preferences
+- no important meaning relies only on colour
+
+## 15. Functional safety
+
+Do not change:
+
+- route names
+- Firebase environment-variable names
+- demo-mode behaviour
+- Firestore document shapes
+- progress calculations
+- saved reflection behaviour
+- admin workflow
+- sermon timestamp structure
+- authentication logic
+
+Do not delete or rename existing database fields.
+
+If a visual change requires changing data architecture, stop and explain the issue instead of making the change.
+
+## 16. Validation
+
+After completing the edit:
+
+1. Run the app.
+2. Resolve build and TypeScript errors.
+3. Test the main flow:
+   Welcome
+   → demo/sign-in
+   → feeling selection
+   → transitional message
+   → Walk home
+   → primary journey
+   → reflection save
+   → completion
+   → sermon companion
+4. Test all four bottom navigation tabs.
+5. Test at 360px and 390px widths.
+6. Confirm the desktop preview remains centred and readable.
+7. Confirm no current working feature was removed.
+8. Summarise exactly which files were changed.
+9. List any issue that remains unresolved.
+
+Make only these refinements. Do not expand the scope.
