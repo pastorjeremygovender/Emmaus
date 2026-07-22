@@ -1,2 +1,3 @@
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Bible module architecture](bible-module.md) — full Bible module shipped; KJV John 1–3 seed data, BibleProvider (localStorage), 5 routes, verse-tap sheets, Preached Here links to admin sermons via JOHN_SERMON_LINKS.
+- [Ask Emmaus backend](ask-emmaus-backend.md) — conversation service at POST /api/emmaus/conversation; SSE streaming; mock+OpenAI providers; safety layer; in-memory store; system-instructions.ts is the single source of truth.

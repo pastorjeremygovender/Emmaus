@@ -1,0 +1,232 @@
+# PROJECT EMMAUS – AUTHORITATIVE BUILD PROMPT
+## Bible Engine v1.3 – Complete 66-Book Scripture Coverage
+
+Continue from the current Bible Engine implementation.
+
+Do not redesign the Bible experience.
+
+Do not add AI features.
+
+Do not add Ask Emmaus, Go Deeper, Preached Here, audio, or search in this phase.
+
+The goal of this phase is to make all 66 books of the Bible fully readable through the existing Bible Provider architecture.
+
+=========================================================
+PRIMARY REQUIREMENT
+=========================================================
+
+Complete Scripture coverage for all 66 books.
+
+Genesis through Revelation must be readable.
+
+Every chapter must load through the existing Bible Provider abstraction.
+
+Do not create separate custom UI implementations for each book.
+
+Do not hard-code book-specific behaviour.
+
+All books must use the same reusable:
+
+- Bible Home
+- Browse Books
+- Book Detail
+- Chapter Reader
+- Reading Progress
+- Bookmark
+- Note
+- Continue Reading
+
+architecture.
+
+=========================================================
+SCRIPTURE SOURCE
+=========================================================
+
+Use only a legally permitted Scripture source.
+
+For the current development build:
+
+- Use a public-domain translation such as KJV or another verified public-domain source.
+- Do not copy or hard-code NIV text.
+- Do not label public-domain text as NIV.
+- Keep the provider abstraction ready for a future licensed NIV integration.
+
+The intended future default translation is NIV, but NIV must be connected later through an authorised provider or licence.
+
+=========================================================
+DATA ARCHITECTURE
+=========================================================
+
+Do not store each Bible book as a hand-written TypeScript module unless technically unavoidable.
+
+Prefer one of these scalable approaches:
+
+1. Structured JSON data grouped by translation, book, chapter, and verse.
+2. A local database or indexed data store.
+3. A provider-backed import pipeline.
+4. Another clean data-driven architecture compatible with the existing Bible Provider interface.
+
+The application UI must request Scripture only through the Bible Provider.
+
+The UI must not import translation-specific book files directly.
+
+=========================================================
+CANON STRUCTURE
+=========================================================
+
+Ensure the canonical structure is complete and accurate:
+
+- 39 Old Testament books
+- 27 New Testament books
+- 66 books total
+- Correct chapter count for every book
+- Stable book IDs
+- Stable chapter references
+- Stable verse identifiers where available
+
+Browse Books must show all books as available once their Scripture data has been loaded.
+
+Remove “coming soon” or “Luke is available now” messaging after full coverage is complete.
+
+=========================================================
+LUKE JOURNEY
+=========================================================
+
+Preserve Walk Through Luke as the flagship Bible Journey.
+
+Luke remains the first guided Bible Journey.
+
+Completing all 66 books does not mean creating guided Journeys for all 66 books in this phase.
+
+This phase provides readable Scripture for all books.
+
+Guided Bible Journeys for additional books will be created later.
+
+=========================================================
+READING EXPERIENCE
+=========================================================
+
+Preserve the current continuous reading behaviour:
+
+- Read a chapter.
+- Continue directly to the next chapter.
+- Or finish for today.
+
+Do not restore reflection or prayer interruption screens inside the Bible reader.
+
+Preserve the architectural distinction:
+
+- Bible is Scripture-first.
+- Walk is discipleship-first.
+- Journeys manages intentional growth.
+
+=========================================================
+PERFORMANCE
+=========================================================
+
+Do not load the entire Bible into memory at application startup.
+
+Load only the requested book or chapter as needed.
+
+Use lazy loading or equivalent efficient retrieval.
+
+The Bible Home and Browse Books screens must remain fast.
+
+Large Scripture data must not cause long startup times or unstable builds.
+
+=========================================================
+PERSISTENCE
+=========================================================
+
+Preserve and verify:
+
+- Last opened book
+- Last opened chapter
+- Reading position
+- Reading history
+- Bookmarks
+- Personal notes
+- Continue Reading
+
+User data must continue working consistently across all 66 books.
+
+=========================================================
+ERROR HANDLING
+=========================================================
+
+If a chapter cannot load:
+
+- Show a clear error state.
+- Provide Retry.
+- Do not show a blank screen.
+- Do not silently substitute Scripture from the wrong book or chapter.
+
+Validate that every book and chapter resolves correctly before marking the phase complete.
+
+=========================================================
+TESTING REQUIREMENTS
+=========================================================
+
+Test at minimum:
+
+- Genesis 1
+- Psalm 23
+- Proverbs 1
+- Isaiah 53
+- Matthew 1
+- Luke 24
+- John 3
+- Acts 1
+- Romans 8
+- Revelation 22
+
+Also validate:
+
+- Navigation between chapters
+- Navigation between books
+- Final chapter of a book
+- Transition to the next book
+- Bookmark persistence
+- Note persistence
+- Continue Reading
+- Mobile layout
+- Desktop preview
+
+Run a full canonical validation to confirm that all 66 books and their chapter counts exist.
+
+=========================================================
+SUCCESS CRITERIA
+=========================================================
+
+At the end of this phase:
+
+- All 66 books are readable.
+- Every chapter loads through the Bible Provider.
+- No book-specific UI duplication exists.
+- Luke remains the flagship guided Bible Journey.
+- NIV is not copied or falsely represented.
+- The architecture remains ready for future licensed translations.
+- Existing Walk, Journeys, Rooms, Personal, Sermon Companion, Admin Portal, and Media Studio continue working.
+- The project compiles without errors.
+- No Bible screens show placeholder or “coming soon” content for Scripture reading.
+
+=========================================================
+WHEN COMPLETE
+=========================================================
+
+Report:
+
+1. Which Scripture source was used.
+2. How all 66 books are stored and loaded.
+3. Which files were added.
+4. Which files were modified.
+5. How the Bible Provider accesses chapters.
+6. How canonical chapter counts were validated.
+7. Any licensing or provider steps still required before NIV can become the default.
+8. Results of regression testing.
+
+Then stop.
+
+Do not begin the next Bible phase automatically.
+
+END OF PROMPT

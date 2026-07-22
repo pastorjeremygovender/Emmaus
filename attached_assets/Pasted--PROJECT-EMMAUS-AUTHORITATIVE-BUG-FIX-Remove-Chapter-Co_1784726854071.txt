@@ -1,0 +1,90 @@
+# PROJECT EMMAUS — AUTHORITATIVE BUG FIX
+## Remove Chapter Completion Modal Completely
+
+The current Bible chapter completion flow is still incorrect.
+
+When the user reaches the end of Luke 1, the app still opens a modal or bottom sheet with:
+
+- a darkened background
+- a close button
+- Scripture obscured behind it
+- a separate overlay layer
+
+This must be removed completely.
+
+Do not restyle the existing modal.
+
+Do not simplify the existing modal.
+
+Delete or retire the modal/bottom-sheet completion component and remove every route, state variable, overlay, backdrop, portal, drawer, sheet, or dialog that triggers it.
+
+The completion controls must be rendered directly inside the Chapter Reader page, immediately after the final verse, as ordinary page content.
+
+The correct structure is:
+
+[final verse]
+
+Luke 1 Complete
+
+[ Continue to Luke 2 ]
+
+Finish for today
+
+Requirements:
+
+- No modal
+- No bottom sheet
+- No dialog
+- No drawer
+- No overlay
+- No dark backdrop
+- No close X
+- No fixed panel covering Scripture
+- No portal-based rendering
+- No separate completion route
+- No animation that slides over the page
+
+The user must scroll naturally from the final verse into the completion actions.
+
+When the user selects Continue to Luke 2:
+
+- navigate immediately to /bible/read/luke/2
+- do not open any intermediate component
+- scroll to the top of Luke 2
+
+When the user selects Finish for today:
+
+- save reading progress
+- return to Walk
+- do not show another completion screen
+
+Inspect the existing code for any component or state named similar to:
+
+ChapterCompletion
+CompletionSheet
+BottomSheet
+Dialog
+Modal
+Drawer
+Overlay
+completionOpen
+showCompletion
+isComplete
+
+Remove the obsolete implementation rather than leaving dead code behind.
+
+Test the full flow:
+
+1. Open Luke 1.
+2. Scroll to the final verse.
+3. Confirm the completion actions appear inline beneath the text.
+4. Confirm the page behind them is not darkened.
+5. Confirm there is no close button.
+6. Select Continue to Luke 2.
+7. Confirm Luke 2 opens immediately.
+8. Return to Luke 1 and select Finish for today.
+9. Confirm the app returns to Walk.
+
+Do not report this fixed until the preview clearly shows ordinary inline page content with no overlay.
+
+END OF PROMPT

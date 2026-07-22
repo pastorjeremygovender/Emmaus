@@ -1,0 +1,145 @@
+# PROJECT EMMAUS – AUTHORITATIVE BUILD PROMPT
+## Bible Engine v1.2 – Continuous Reading Experience
+
+Perform one final refinement to the Bible reading experience before merging to the main branch.
+
+This prompt supersedes the current chapter completion UX while preserving all existing functionality.
+
+---
+
+PRIMARY PRINCIPLE
+
+The Bible exists to help people read Scripture.
+
+It should never interrupt reading unnecessarily.
+
+Emmaus should remove friction, not create it.
+
+---
+
+REMOVE THE CHAPTER COMPLETION SCREEN
+
+The current completion screen displays:
+
+- Well done
+- Take a moment to reflect
+- Reflect
+- Pray
+- Continue to next chapter
+- Finish for today
+
+This screen should be removed.
+
+Do not interrupt the reading flow after every chapter.
+
+---
+
+NEW CHAPTER COMPLETION FLOW
+
+When a user reaches the end of a chapter, present only two simple actions.
+
+--------------------------------------------------
+
+✓ Luke 1 Complete
+
+Continue to Luke 2 →
+
+Finish for today
+
+--------------------------------------------------
+
+Nothing else.
+
+No congratulatory message.
+
+No reflection prompts.
+
+No prayer card.
+
+No additional explanations.
+
+No unnecessary UI.
+
+The experience should feel calm, clean and uninterrupted.
+
+---
+
+CONTINUE READING
+
+If the user selects:
+
+Continue to Luke 2
+
+Immediately open Luke 2.
+
+Do not show another intermediate screen.
+
+Do not require additional confirmation.
+
+Reading should feel continuous.
+
+---
+
+FINISH FOR TODAY
+
+If the user selects:
+
+Finish for today
+
+Return them to the Walk screen.
+
+Walk—not the Bible—is responsible for:
+
+- Reflection
+- Prayer
+- Live It
+- Ask Emmaus
+- Go Deeper
+- Journey continuation
+
+The Bible should simply complete the reading session.
+
+---
+
+PRESERVE BIBLE PHILOSOPHY
+
+The Bible is Scripture-first.
+
+Walk is discipleship-first.
+
+Do not move discipleship features back into the Bible.
+
+Maintain the architectural separation established in Bible Engine v1.1.
+
+---
+
+DO NOT BREAK
+
+Preserve:
+
+- Reading progress
+- Continue Reading
+- Bookmarks
+- Translation abstraction
+- Browse Books
+- Reading history
+- Chapter navigation
+- Bible provider architecture
+
+Only simplify the completion experience.
+
+---
+
+SUCCESS CRITERIA
+
+A user who wishes to read several chapters should experience an uninterrupted reading flow.
+
+A user who wishes to stop reading should return naturally to Walk.
+
+The Bible should never feel like it is constantly asking the user to perform another activity.
+
+Technology should disappear.
+
+Scripture should remain the focus.
+
+Perform a regression review, verify that all Bible functionality remains intact, then prepare the build for merge into the main branch.

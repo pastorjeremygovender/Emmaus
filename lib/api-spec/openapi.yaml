@@ -10,7 +10,134 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: emmaus
+    description: Ask Emmaus discipleship conversation engine
 paths:
+  /emmaus/conversation:
+    post:
+      operationId: startEmmausConversation
+      tags: [emmaus]
+      summary: Start or continue an Ask Emmaus conversation (SSE stream)
+      description: |
+        Streams a pastoral AI response as Server-Sent Events.
+        Events: {"type":"text","content":"..."} | {"type":"done","conversationId":"...","messageId":"...","metadata":{...},"promptVersion":"..."} | {"type":"error","message":"..."}
+        Do NOT use generated React Query hooks for this endpoint — consume with fetch + ReadableStream.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmmausConversationRequest"
+      responses:
+        "200":
+          description: SSE stream of text chunks and final metadata
+          content:
+            text/event-stream: {}
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmmausError"
+  /emmaus/conversation/{id}/message:
+    post:
+      operationId: appendEmmausMessage
+      tags: [emmaus]
+      summary: Append a message to an existing Ask Emmaus conversation (SSE stream)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmmausConversationRequest"
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream: {}
+  /emmaus/conversations:
+    get:
+      operationId: listEmmausConversations
+      tags: [emmaus]
+      summary: List a user's Ask Emmaus conversation stubs
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of conversation stubs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmmausConversationStub"
+  /emmaus/conversation/{id}/messages:
+    get:
+      operationId: getEmmausMessages
+      tags: [emmaus]
+      summary: Get all messages in an Ask Emmaus conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmmausMessage"
+  /emmaus/memory:
+    post:
+      operationId: saveEmmausMemory
+      tags: [emmaus]
+      summary: Save a user-approved memory note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmmausMemoryInput"
+      responses:
+        "201":
+          description: Saved memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmmausMemory"
+  /emmaus/memory/{id}:
+    delete:
+      operationId: deleteEmmausMemory
+      tags: [emmaus]
+      summary: Delete a user memory note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +153,136 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    EmmausConversationRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        context:
+          type: object
+          description: Optional context about where the user came from
+          properties:
+            entryPoint:
+              type: string
+              enum: [bible, walk, journeys, sermons, personal, standalone]
+            userId:
+              type: string
+            conversationId:
+              type: string
+            userName:
+              type: string
+            bookId:
+              type: string
+            bookName:
+              type: string
+            chapter:
+              type: integer
+            chapterHeading:
+              type: string
+            verseText:
+              type: string
+            journeyId:
+              type: string
+            journeyTitle:
+              type: string
+            currentDay:
+              type: integer
+            sermonId:
+              type: string
+            sermonTitle:
+              type: string
+            scriptureReference:
+              type: string
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              content:
+                type: string
+            required: [role, content]
+      required:
+        - message
+    EmmausConversationStub:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        title:
+          type: string
+        entryPoint:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        messageCount:
+          type: integer
+      required: [id, userId, title, entryPoint, createdAt, updatedAt, messageCount]
+    EmmausMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        promptVersion:
+          type: string
+        entryPoint:
+          type: string
+        safetyChecked:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, userId, role, content, promptVersion, entryPoint, safetyChecked, createdAt]
+    EmmausMemoryInput:
+      type: object
+      properties:
+        userId:
+          type: string
+        content:
+          type: string
+        source:
+          type: string
+      required: [userId, content]
+    EmmausMemory:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        content:
+          type: string
+        source:
+          type: string
+        approved:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, content, source, approved, createdAt]
+    EmmausError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
     HealthStatus:
       type: object
       properties:
