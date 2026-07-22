@@ -19,6 +19,11 @@ import Personal from '@/pages/Personal';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
 
+// Ask Emmaus
+import AskEmmausHome from '@/pages/personal/AskEmmausHome';
+import AskEmmausConversation from '@/pages/personal/AskEmmausConversation';
+import AskEmmausHistory from '@/pages/personal/AskEmmausHistory';
+
 // Bible
 import BrowseBooks from '@/pages/bible/BrowseBooks';
 import BookDetail from '@/pages/bible/BookDetail';
@@ -54,6 +59,10 @@ function Router() {
 
       <Route path="/journeys" component={Journeys} />
       <Route path="/personal" component={Personal} />
+      <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
+      <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />
+      <Route path="/personal/ask-emmaus/conversation/:id" component={AskEmmausConversation} />
+      <Route path="/personal/ask-emmaus/history/:id" component={AskEmmausHistory} />
       <Route path="/admin" component={Admin} />
 
       {/* Rooms */}

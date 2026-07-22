@@ -1,0 +1,58 @@
+/**
+ * ScriptureCard — displays a Bible reference surfaced by Emmaus.
+ * Shows the reference, an optional display text, and an "Open in Bible" link
+ * that navigates into the existing Bible reader at the correct chapter.
+ */
+
+import { BookOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useLocation } from 'wouter';
+import type { ScriptureRef } from '@/lib/emmaus-client';
+
+interface ScriptureCardProps {
+  scripture: ScriptureRef;
+}
+
+export function ScriptureCard({ scripture }: ScriptureCardProps) {
+  const [, setLocation] = useLocation();
+
+  function handleOpen() {
+    const bookId = scripture.book.toLowerCase().replace(/\s+/g, '-');
+    setLocation(`/bible/read/${bookId}/${scripture.chapter}`);
+  }
+
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardContent className="p-4 flex items-start gap-3">
+        <div
+          className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5"
+          aria-hidden="true"
+        >
+          <BookOpen size={15} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
+            Scripture
+          </p>
+          <p className="text-[16px] font-serif font-medium text-foreground">
+            {scripture.reference}
+          </p>
+          {scripture.displayText && (
+            <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed">
+              {scripture.displayText}
+            </p>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2 -ml-2 h-8 text-primary text-[13px] font-medium hover:bg-primary/10 px-2"
+            onClick={handleOpen}
+          >
+            Open in Bible
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
