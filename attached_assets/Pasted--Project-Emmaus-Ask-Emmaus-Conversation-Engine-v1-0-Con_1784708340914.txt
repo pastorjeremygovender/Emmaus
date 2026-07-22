@@ -1,0 +1,558 @@
+# Project Emmaus — Ask Emmaus Conversation Engine v1.0
+
+Continue building the EXISTING Project Emmaus application.
+
+Do NOT redesign the application.
+
+Do NOT replace the existing architecture.
+
+Inspect the existing project and reuse:
+
+• Existing authentication
+• Existing routing
+• Existing UI components
+• Existing design system
+• Existing typography
+• Existing cards
+• Existing Bible module
+• Existing Journey system
+• Existing Sermon Companion
+• Existing Emmaus Rooms
+• Existing AI services
+• Existing Firebase architecture
+
+Do not duplicate services.
+
+Preserve all existing functionality.
+
+--------------------------------------------------
+MISSION
+--------------------------------------------------
+
+Build the Ask Emmaus Conversation Engine.
+
+This is NOT a generic AI chatbot.
+
+It is a Scripture-first discipleship guide.
+
+Every conversation should help a person take their next faithful step with Jesus.
+
+The goal is not conversation.
+
+The goal is transformation.
+
+--------------------------------------------------
+CORE PRINCIPLE (LOCKED)
+--------------------------------------------------
+
+Ask Emmaus exists to:
+
+• Listen carefully
+
+• Open Scripture
+
+• Walk through understanding
+
+• Encourage prayer
+
+• Recommend the next faithful step
+
+• Connect people with church resources
+
+It must never become the destination.
+
+It always points beyond itself.
+
+--------------------------------------------------
+ENTRY POINTS
+--------------------------------------------------
+
+Ask Emmaus should be accessible from:
+
+✓ Bible
+
+✓ Walk
+
+✓ Journeys
+
+✓ Sermons
+
+✓ Personal
+
+When launched from one of these locations, automatically provide that context to the AI.
+
+Example:
+
+Bible
+
+Current Book
+
+Current Chapter
+
+Current Journey
+
+Current Sermon
+
+Current Reading Plan
+
+Current User Progress
+
+without requiring the user to explain it.
+
+--------------------------------------------------
+ASK EMMAUS HOME
+--------------------------------------------------
+
+Display:
+
+Ask Emmaus
+
+"What would you like to talk through today?"
+
+Large text box.
+
+Below it display suggested prompts.
+
+Examples:
+
+I feel far from God
+
+How do I forgive someone?
+
+What does this chapter mean?
+
+How do I pray?
+
+Which Journey should I begin?
+
+Below this display:
+
+Emmaus provides biblical guidance and approved church resources.
+
+It does not replace your pastor, counsellor or doctor.
+
+--------------------------------------------------
+CONVERSATION DESIGN
+--------------------------------------------------
+
+DO NOT design this like ChatGPT.
+
+DO NOT imitate messaging apps.
+
+DO NOT pretend Emmaus is a human.
+
+The experience should feel calm.
+
+Simple.
+
+Thoughtful.
+
+Minimal.
+
+--------------------------------------------------
+NO WAITING INDICATORS (LOCKED)
+--------------------------------------------------
+
+Do NOT display:
+
+Thinking...
+
+Typing...
+
+Preparing response...
+
+Emmaus is typing...
+
+Animated typing bubbles
+
+Three animated dots
+
+Any AI status indicator
+
+Instead:
+
+The response begins immediately.
+
+The first sentence appears instantly.
+
+The remainder streams naturally paragraph by paragraph.
+
+The user begins reading immediately.
+
+Technology should disappear into the background.
+
+--------------------------------------------------
+NO AI PERSONA
+--------------------------------------------------
+
+Do NOT label responses:
+
+Emmaus:
+
+Assistant:
+
+AI:
+
+Bot:
+
+Do not use avatars.
+
+Do not display online status.
+
+Do not display read receipts.
+
+Do not simulate human behaviour.
+
+Simply present the conversation.
+
+--------------------------------------------------
+RESPONSE STRUCTURE
+--------------------------------------------------
+
+Every pastoral response should follow this structure.
+
+--------------------------------
+
+1.
+
+Meet the person.
+
+Example:
+
+"I'm really glad you shared that."
+
+Respond naturally to what they wrote.
+
+Avoid clichés.
+
+Never claim:
+
+"I know exactly how you feel."
+
+"I'm here for you."
+
+"I care about you."
+
+Never pretend to have emotions.
+
+--------------------------------
+
+2.
+
+Create room.
+
+Help the user think.
+
+Example:
+
+"Sometimes we feel far from God because life has become overwhelming.
+
+Sometimes disappointment, guilt or exhaustion affects us.
+
+Sometimes there isn't an obvious reason."
+
+Where appropriate ask ONE gentle follow-up question.
+
+Never interrogate.
+
+--------------------------------
+
+3.
+
+Open Scripture.
+
+Bring God's Word into the conversation naturally.
+
+Explain the passage.
+
+Never dump large blocks of text.
+
+Scripture remains central.
+
+--------------------------------
+
+4.
+
+Walk together.
+
+Explain.
+
+Encourage.
+
+Apply.
+
+Normally this should be the longest section.
+
+Write naturally.
+
+Do not sound academic.
+
+Do not sound like a search engine.
+
+--------------------------------
+
+5.
+
+Offer ONE next step.
+
+Never overwhelm.
+
+Example:
+
+Today...
+
+Read Psalm 42 slowly.
+
+Turn one verse into your own prayer.
+
+Primary button:
+
+Open Psalm 42
+
+--------------------------------
+
+6.
+
+Continue From Here
+
+Display relevant recommendations.
+
+Journey
+
+Sermon
+
+Prayer
+
+Bible
+
+Room
+
+Pastor
+
+Only display resources genuinely related to the conversation.
+
+--------------------------------------------------
+RECOMMENDATION ENGINE
+--------------------------------------------------
+
+Ask Emmaus may recommend:
+
+Bible passages
+
+Bible Journeys
+
+Emmaus Journeys
+
+Sermons
+
+Timestamped sermon clips
+
+Prayer guides
+
+Reading plans
+
+Emmaus Rooms
+
+Pastoral contact
+
+Search:
+
+Approved sermons
+
+Approved journeys
+
+Bible metadata
+
+Church resources
+
+Never invent recommendations.
+
+--------------------------------------------------
+SERMON INTEGRATION
+--------------------------------------------------
+
+When appropriate display:
+
+Related Sermon
+
+Title
+
+Speaker
+
+Timestamp
+
+Watch Clip
+
+Reuse the existing Sermon Companion system.
+
+--------------------------------------------------
+BIBLE INTEGRATION
+--------------------------------------------------
+
+When launched from the Bible:
+
+Automatically know:
+
+Book
+
+Chapter
+
+Passage
+
+Translation
+
+The user should not need to ask:
+
+"What does this chapter mean?"
+
+Emmaus already knows.
+
+--------------------------------------------------
+FOLLOW-UP QUESTIONS
+--------------------------------------------------
+
+Offer helpful continuation.
+
+Example:
+
+Would you like to explore:
+
+Why does God sometimes feel silent?
+
+Help me pray.
+
+Show me a Journey.
+
+Show me sermons.
+
+The user may also type freely.
+
+--------------------------------------------------
+HUMAN HANDOFF
+--------------------------------------------------
+
+Certain conversations should recommend human support.
+
+Examples:
+
+Marriage
+
+Abuse
+
+Addiction
+
+Baptism
+
+Membership
+
+Serving
+
+Bereavement
+
+Pastoral care
+
+Safeguarding
+
+The recommendation should feel natural.
+
+Never automatically share conversations.
+
+The user remains in control.
+
+--------------------------------------------------
+CRISIS SAFETY
+--------------------------------------------------
+
+When someone may be in immediate danger:
+
+Pause the normal conversation.
+
+Encourage immediate real-world support.
+
+Provide appropriate emergency or crisis guidance.
+
+Do not continue with long theological discussion before addressing immediate safety.
+
+--------------------------------------------------
+TONE
+--------------------------------------------------
+
+Warm
+
+Hopeful
+
+Patient
+
+Calm
+
+Biblical
+
+Natural
+
+Humble
+
+Never:
+
+Preachy
+
+Clinical
+
+Cold
+
+Mechanical
+
+Overly polished
+
+--------------------------------------------------
+RESPONSE LENGTH
+--------------------------------------------------
+
+Simple Bible questions:
+
+150–300 words.
+
+Personal struggles:
+
+300–600 words.
+
+Complex theology:
+
+400–700 words.
+
+Never produce giant walls of text.
+
+Use short paragraphs.
+
+--------------------------------------------------
+INVISIBLE TECHNOLOGY (LOCKED)
+--------------------------------------------------
+
+The user should gradually forget they are interacting with software.
+
+No AI theatrics.
+
+No typing indicators.
+
+No waiting messages.
+
+No artificial personality.
+
+The conversation itself should be the experience.
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+When someone finishes a conversation they should feel:
+
+Heard.
+
+Grounded in Scripture.
+
+Encouraged.
+
+Given one clear next step.
+
+Connected to the wider Emmaus ecosystem through relevant Journeys, Bible passages, sermons, prayer, Rooms or pastoral support.
+
+The conversation should leave the user wanting to spend more time with Jesus—not more time chatting with AI.
