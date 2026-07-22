@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
-import { BIBLE_BOOKS, getBibleBook } from '@/lib/bible-data';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 
@@ -9,7 +9,7 @@ const NT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'NT');
 
 export default function BrowseBooks() {
   const [, setLocation] = useLocation();
-  const { completedChapters, isChapterComplete } = useBible();
+  const { isChapterComplete } = useBible();
 
   function progressForBook(bookId: string, totalChapters: number): number {
     let done = 0;
@@ -87,7 +87,7 @@ export default function BrowseBooks() {
         </section>
 
         <p className="text-center text-[12px] text-muted-foreground pb-4">
-          The complete Bible is coming. John is available now.
+          The complete Bible is coming. Luke is available now.
         </p>
 
       </main>

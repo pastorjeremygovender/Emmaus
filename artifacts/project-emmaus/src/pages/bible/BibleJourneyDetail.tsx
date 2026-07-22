@@ -2,39 +2,24 @@ import { useParams, useLocation } from 'wouter';
 import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { getBibleJourney, getJohnChapter } from '@/lib/bible-data';
+import { getBibleJourney } from '@/lib/bible-data';
+import { getChapter } from '@/lib/bible-provider';
+import { LUKE_HEADINGS, LUKE_READING_MINUTES } from '@/data/kjv-luke';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
-
-const JOHN_HEADINGS: Record<number, string> = {
-  1: 'The Word Became Flesh', 2: 'Water into Wine', 3: 'Jesus and Nicodemus',
-  4: 'The Woman at the Well', 5: 'Healing at the Pool', 6: 'Bread of Life',
-  7: 'Jesus at the Festival', 8: 'Light of the World', 9: 'The Man Born Blind',
-  10: 'The Good Shepherd', 11: 'The Raising of Lazarus', 12: 'The Triumphal Entry',
-  13: 'Jesus Washes Feet', 14: 'Jesus Comforts His Disciples', 15: 'The Vine and the Branches',
-  16: 'The Holy Spirit', 17: 'Jesus Prays', 18: 'The Arrest and Trial',
-  19: 'The Crucifixion', 20: 'The Resurrection', 21: 'Jesus by the Sea',
-};
-
-const JOHN_MINUTES: Record<number, number> = {
-  1: 7, 2: 4, 3: 5, 4: 7, 5: 6, 6: 9, 7: 7, 8: 8,
-  9: 6, 10: 6, 11: 7, 12: 7, 13: 5, 14: 4, 15: 4,
-  16: 5, 17: 4, 18: 5, 19: 6, 20: 4, 21: 4,
-};
 
 export default function BibleJourneyDetail() {
   const { journeyId } = useParams<{ journeyId: string }>();
   const [, setLocation] = useLocation();
-  const journey = getBibleJourney(journeyId || 'walk-through-john');
+  const journey = getBibleJourney(journeyId || 'walk-through-luke');
 
   const {
     startBibleJourney,
     getJourneyProgress,
-    markJourneyChapterComplete,
     isChapterComplete,
   } = useBible();
 
-  const progress = getJourneyProgress(journeyId || 'walk-through-john');
+  const progress = getJourneyProgress(journeyId || 'walk-through-luke');
 
   if (!journey) {
     return (
@@ -60,6 +45,18 @@ export default function BibleJourneyDetail() {
     );
   }
 
+  function getHeading(ch: number): string {
+    if (journey!.bookId === 'luke') return LUKE_HEADINGS[ch] ?? `Chapter ${ch}`;
+    const data = getChapter(journey!.bookId, ch);
+    return data?.heading ?? `Chapter ${ch}`;
+  }
+
+  function getMinutes(ch: number): number {
+    if (journey!.bookId === 'luke') return LUKE_READING_MINUTES[ch] ?? 5;
+    const data = getChapter(journey!.bookId, ch);
+    return data?.readingMinutes ?? 5;
+  }
+
   function handleStart() {
     startBibleJourney(journey!.id);
     setLocation(`/bible/read/${journey!.bookId}/1?journey=${journey!.id}`);
@@ -72,7 +69,11 @@ export default function BibleJourneyDetail() {
 
   const completedCount = progress?.completedChapters.length ?? 0;
   const pct = Math.round((completedCount / journey.chapterCount) * 100);
-  const totalMinutes = Object.values(JOHN_MINUTES).reduce((a, b) => a + b, 0);
+
+  // Total reading time estimate
+  const totalMinutes = journey.bookId === 'luke'
+    ? Object.values(LUKE_READING_MINUTES).reduce((a, b) => a + b, 0)
+    : journey.chapterCount * 5;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -119,7 +120,7 @@ export default function BibleJourneyDetail() {
             </span>
           </div>
 
-          {/* Progress */}
+          {/* Progress bar */}
           {progress && (
             <div className="space-y-1.5">
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
@@ -139,17 +140,19 @@ export default function BibleJourneyDetail() {
           {!progress ? (
             <Button className="w-full h-12 rounded-xl text-[16px]" onClick={handleStart}>
               <BookOpen size={17} className="mr-2" />
-              Start Walk Through John
+              Start {journey.title}
             </Button>
           ) : completedCount === journey.chapterCount ? (
             <div className="flex items-center gap-2.5 p-4 bg-primary/8 border border-primary/20 rounded-xl">
               <CheckCircle2 size={20} className="text-primary shrink-0" />
-              <p className="text-[15px] font-medium text-primary">You have completed Walk Through John.</p>
+              <p className="text-[15px] font-medium text-primary">
+                You have completed {journey.title}. Well done.
+              </p>
             </div>
           ) : (
             <Button className="w-full h-12 rounded-xl text-[16px]" onClick={handleContinue}>
               <BookOpen size={17} className="mr-2" />
-              Continue — John {progress.currentChapter}
+              Continue — {journey.bookId === 'luke' ? 'Luke' : 'Chapter'} {progress.currentChapter}
             </Button>
           )}
         </motion.section>
@@ -165,9 +168,9 @@ export default function BibleJourneyDetail() {
               const completedStandalone = isChapterComplete(journey.bookId, ch);
               const done = completedViaJourney || completedStandalone;
               const isCurrent = progress?.currentChapter === ch && !done;
-              const isLocked = progress ? ch > (progress.currentChapter) : ch > 1;
-              const heading = JOHN_HEADINGS[ch] ?? `Chapter ${ch}`;
-              const mins = JOHN_MINUTES[ch] ?? 5;
+              const isLocked = progress ? ch > (progress.currentChapter) && !done : ch > 1;
+              const heading = getHeading(ch);
+              const mins = getMinutes(ch);
 
               return (
                 <div

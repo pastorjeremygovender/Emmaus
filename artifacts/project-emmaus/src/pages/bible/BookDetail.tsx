@@ -1,29 +1,28 @@
 import { useParams, useLocation } from 'wouter';
-import { ArrowLeft, CheckCircle2, Mic, BookOpen, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { getBibleBook, getJohnChapter, BIBLE_JOURNEYS } from '@/lib/bible-data';
+import { getBibleBook, getBibleJourney, BIBLE_JOURNEYS } from '@/lib/bible-data';
+import { getChapter } from '@/lib/bible-provider';
+import { LUKE_HEADINGS } from '@/data/kjv-luke';
+import { JOHN_HEADINGS } from '@/data/kjv-john';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 
-// Chapter headings for display
-const JOHN_HEADINGS: Record<number, string> = {
-  1: 'The Word Became Flesh', 2: 'Water into Wine', 3: 'Jesus and Nicodemus',
-  4: 'The Woman at the Well', 5: 'Healing at the Pool', 6: 'Bread of Life',
-  7: 'Jesus at the Festival', 8: 'Light of the World', 9: 'The Man Born Blind',
-  10: 'The Good Shepherd', 11: 'The Raising of Lazarus', 12: 'The Triumphal Entry',
-  13: 'Jesus Washes Feet', 14: 'Jesus Comforts His Disciples', 15: 'The Vine and the Branches',
-  16: 'The Holy Spirit', 17: 'Jesus Prays', 18: 'The Arrest and Trial',
-  19: 'The Crucifixion', 20: 'The Resurrection', 21: 'Jesus by the Sea',
-};
+function getChapterHeading(bookId: string, ch: number): string {
+  if (bookId === 'luke') return LUKE_HEADINGS[ch] ?? `Chapter ${ch}`;
+  if (bookId === 'john') return JOHN_HEADINGS[ch] ?? `Chapter ${ch}`;
+  const data = getChapter(bookId, ch);
+  return data?.heading ?? `Chapter ${ch}`;
+}
 
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const [, setLocation] = useLocation();
   const { isChapterComplete, readingHistory, getJourneyProgress } = useBible();
 
-  const book = getBibleBook(bookId || 'john');
-  const journey = BIBLE_JOURNEYS.find(j => j.bookId === bookId && j.available);
+  const resolvedBookId = bookId || 'luke';
+  const book = getBibleBook(resolvedBookId);
+  const journey = BIBLE_JOURNEYS.find(j => j.bookId === resolvedBookId && j.available);
   const journeyProg = journey ? getJourneyProgress(journey.id) : null;
 
   if (!book || !book.available) {
@@ -59,6 +58,8 @@ export default function BookDetail() {
     if (journey) setLocation(`/bible/journey/${journey.id}`);
   }
 
+  const bookDisplayName = book.genre === 'Gospel' ? `Gospel of ${book.name}` : book.name;
+
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
       {/* Header */}
@@ -84,7 +85,7 @@ export default function BookDetail() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="text-[26px] font-serif font-semibold leading-tight">
-                {book.genre === 'Gospel' ? `Gospel of ${book.name}` : book.name}
+                {bookDisplayName}
               </h1>
               <p className="text-[13px] text-muted-foreground mt-1">
                 {book.chapters} chapters · {book.genre}
@@ -123,12 +124,12 @@ export default function BookDetail() {
           {completedCount === 0 ? (
             <Button className="h-12 rounded-xl text-[16px]" onClick={handleStart}>
               <BookOpen size={17} className="mr-2" />
-              Start Reading John
+              Start Reading {book.name}
             </Button>
           ) : (
             <Button className="h-12 rounded-xl text-[16px]" onClick={handleContinue}>
               <BookOpen size={17} className="mr-2" />
-              Continue — John {nextChapter}
+              Continue — {book.name} {nextChapter}
             </Button>
           )}
           {journey && (
@@ -145,10 +146,10 @@ export default function BookDetail() {
           </h2>
           <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
             {Array.from({ length: book.chapters }, (_, i) => i + 1).map(ch => {
-              const completed = isChapterComplete(book.id, ch);
-              const chapterData = book.id === 'john' ? getJohnChapter(ch) : null;
-              const hasSermon = chapterData && chapterData.sermonRefs.length > 0;
-              const heading = book.id === 'john' ? (JOHN_HEADINGS[ch] ?? '') : '';
+              const done = isChapterComplete(book.id, ch);
+              const heading = getChapterHeading(book.id, ch);
+              const chapterData = getChapter(book.id, ch);
+              const isPlaceholder = chapterData?.isPlaceholder ?? false;
 
               return (
                 <div
@@ -156,9 +157,9 @@ export default function BookDetail() {
                   onClick={() => setLocation(`/bible/read/${book.id}/${ch}`)}
                   className="flex items-center gap-3 px-4 py-3.5 bg-card hover:bg-muted/40 active:bg-muted/60 cursor-pointer transition-colors"
                 >
-                  {/* Chapter number */}
+                  {/* Chapter number / status */}
                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    {completed ? (
+                    {done ? (
                       <CheckCircle2 size={16} className="text-primary" />
                     ) : (
                       <span className="text-[13px] font-semibold text-muted-foreground">{ch}</span>
@@ -167,14 +168,14 @@ export default function BookDetail() {
 
                   {/* Title */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-foreground leading-tight">
-                      {heading || `Chapter ${ch}`}
+                    <div className={[
+                      'text-[15px] font-medium leading-tight',
+                      isPlaceholder ? 'text-muted-foreground' : 'text-foreground',
+                    ].join(' ')}>
+                      {heading}
                     </div>
-                    {hasSermon && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Mic size={11} className="text-primary" />
-                        <span className="text-[11px] text-primary font-medium">Preached Here</span>
-                      </div>
+                    {isPlaceholder && (
+                      <div className="text-[11px] text-muted-foreground/70 mt-0.5">Coming soon</div>
                     )}
                   </div>
 

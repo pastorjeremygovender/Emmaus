@@ -1,39 +1,39 @@
 ---
 name: Bible module architecture
-description: Design decisions, data flow, and extension points for the Bible module in Project Emmaus.
+description: Full Bible Engine v1.0 shipped; Luke-first, BibleProvider abstraction, simplified reader, 24 chapters KJV data.
 ---
 
+# Bible Module Architecture
+
 ## Overview
-The Bible module is the theological and visual centre of Project Emmaus. Scripture is the primary surface.
+Complete Bible Engine v1.0 shipped as a refactor of the existing Bible module. Luke is the flagship book/journey (Walk Through Luke, 24 chapters). John data is preserved as an ordinary available book with chapters 1–21 (1–3 real KJV, 4–21 placeholder).
 
-## Key files
-- `src/lib/bible-data.ts` — all 66 books catalogue, full KJV John 1–3, placeholder verses John 4–21, chapter metadata (journeyIntro, askEmmaus, goDeeper, prayerPrompt), 5 BIBLE_JOURNEYS, JOHN_SERMON_LINKS
-- `src/contexts/BibleContext.tsx` — BibleProvider + useBible() hook, all state in localStorage
-- `src/pages/Bible.tsx` — Bible home
-- `src/pages/bible/BrowseBooks.tsx` — all 66 books
-- `src/pages/bible/BookDetail.tsx` — John detail with chapter list
-- `src/pages/bible/ChapterReader.tsx` — main reading screen
-- `src/pages/bible/ChapterCompletion.tsx` — post-chapter: Reflect, Pray, Go Deeper, Ask Emmaus
-- `src/pages/bible/BibleJourneyDetail.tsx` — Walk Through John hub
+## Key Files
 
-## localStorage keys (do not rename without bumping)
-emmaus_bible_history, emmaus_bible_completed, emmaus_bible_journey_progress, emmaus_bible_highlights, emmaus_bible_favourites, emmaus_bible_notes, emmaus_bible_reflections, emmaus_bible_prayers
+| File | Role |
+|---|---|
+| `src/lib/bible-provider.ts` | BibleProvider interface + KJVLocalProvider singleton; `getChapter(bookId, ch)` is the sole scripture access point |
+| `src/data/kjv-luke.ts` | Complete KJV Luke 1–24 (1,151 verses); exports `LUKE_CHAPTERS`, `LUKE_HEADINGS`, `LUKE_READING_MINUTES` |
+| `src/data/kjv-john.ts` | KJV John (ch 1–3 real, 4–21 placeholder); exports `JOHN_CHAPTERS`, `JOHN_HEADINGS`, `JOHN_READING_MINUTES`, `JOHN_SERMON_REFS_MAP` |
+| `src/lib/bible-data.ts` | Thin catalogue: `BIBLE_BOOKS` (66 books; Luke+John `available:true`), `BIBLE_JOURNEYS` (Walk Through Luke flagship + placeholder cards), `TODAYS_READING`, `WEEKLY_MEMORY_VERSE`; re-exports types+`getChapter` from provider |
+| `src/contexts/BibleContext.tsx` | localStorage persistence; `ChapterBookmark` type; `emmaus_bible_bookmarks_v2` key; `addBookmark`/`removeBookmark`/`isBookmarked` |
+| `src/pages/Bible.tsx` | Home: Continue Reading (uses `readingHistory.bookId`), Today's Reading, Journeys, Browse Books, Bookmarks |
+| `src/pages/bible/ChapterReader.tsx` | Scripture-first reader; bottom toolbar: Prev | Notes | Bookmark | Continue; verse-tap sheet (Save/Highlight/Note); no Ask Emmaus / Preached Here in active UI |
+| `src/pages/bible/ChapterCompletion.tsx` | Gentle 2-card layout (Reflect + Pray); Continue / Finish buttons |
+| `src/pages/bible/BibleJourneyDetail.tsx` | Walk Through Luke; imports LUKE_HEADINGS/LUKE_READING_MINUTES directly |
+| `src/pages/bible/BookDetail.tsx` | Dynamic via `getChapter` provider; supports any available book |
+| `src/pages/bible/BrowseBooks.tsx` | 66-book browse; "Luke is available now" copy |
 
-## Routes (in App.tsx)
-- /bible
-- /bible/books
-- /bible/books/:bookId
-- /bible/read/:bookId/:chapter  ← ChapterReader; accepts ?journey=journeyId
-- /bible/read/:bookId/:chapter/complete  ← ChapterCompletion; note: /complete MUST come BEFORE the reader route
-- /bible/journey/:journeyId
+## Architecture decisions
 
-**Why the route order matters:** Wouter matches top-to-bottom; /complete must be declared before the bare /:chapter route or it won't match.
+**Why provider abstraction:**
+All UI components call `getChapter(bookId, ch)` from `bible-provider.ts` — never raw data files. Adding a new translation or remote source is a single `KJVLocalProvider` swap.
 
-## Preached Here data pattern
-`JOHN_SERMON_LINKS` in bible-data.ts maps chapter number → array of { sermonId, timestampSeconds, note }. ChapterReader looks up the sermon from localStorage ('emmaus_admin_sermons') with fallback to DEMO_JOHN_SERMON imported from admin-demo-data.ts. No duplicate storage — the sermon record lives in admin, the link lives in bible-data.
+**Why localStorage stays:**
+Firebase swap is a Task #5 follow-up. BibleContext is structured so only the context's read/write layer changes — UI is untouched.
 
-## Extension points
-- Swap KJV for a licensed provider: implement `BibleProvider` interface in bible-data.ts and swap getJohnChapter() with an API call — no UI changes needed.
-- John only is available:true; all 65 others show a lock/unavailable state.
-- Ask Emmaus and Go Deeper are seeded for John 1–3; chapters 4–21 show "coming soon" gracefully.
-- DEMO_JOHN_SERMON (id: sermon-john-3) is in admin-demo-data.ts; add it to the admin sermon list if needed.
+**Why Ask Emmaus / Preached Here / Go Deeper are removed from active UI:**
+Phase-2 features per spec. The verse-tap sheet and completion flow have slots ready for them. Sermon-to-verse mapping pattern lives in `JOHN_SERMON_REFS_MAP` in `kjv-john.ts`.
+
+**localStorage key versioning:**
+`emmaus_bible_bookmarks_v2` is new (chapter bookmarks, distinct from verse favourites). Other existing `emmaus_bible_*` keys are unchanged in shape. Any future shape change must bump the version suffix.

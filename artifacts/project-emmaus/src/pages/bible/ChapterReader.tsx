@@ -1,41 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
-import { ArrowLeft, Heart, FileText, HelpCircle, Mic, ChevronRight, Highlighter, Bookmark, X, Check, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Heart, FileText, Bookmark, ChevronRight, X, Check, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { getJohnChapter, JOHN_SERMON_LINKS } from '@/lib/bible-data';
+import { getChapter } from '@/lib/bible-provider';
 import { getBibleBook } from '@/lib/bible-data';
-import { DEMO_JOHN_SERMON, DEMO_SERMON_RECORD } from '@/lib/admin-demo-data';
 import { useBible, HighlightColor } from '@/contexts/BibleContext';
-import type { Sermon } from '@/lib/admin-demo-data';
-import type { AskEmmausQA } from '@/lib/bible-data';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getSermon(id: string): Sermon | undefined {
-  try {
-    const stored = localStorage.getItem('emmaus_admin_sermons');
-    const sermons: Sermon[] = stored
-      ? JSON.parse(stored)
-      : [DEMO_JOHN_SERMON, DEMO_SERMON_RECORD];
-    return sermons.find(s => s.id === id);
-  } catch {
-    return id === 'sermon-john-3' ? DEMO_JOHN_SERMON : undefined;
-  }
-}
-
-function timestampUrl(youtubeUrl: string, seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${youtubeUrl}&t=${seconds}`;
-}
-
-function formatTimestamp(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -64,22 +37,21 @@ export default function ChapterReader() {
     getHighlight, addHighlight, removeHighlight,
     isFavourite, addFavourite, removeFavourite,
     getNote, saveNote, getChapterNotes,
+    isBookmarked, addBookmark, removeBookmark,
   } = useBible();
 
-  const book = getBibleBook(bookId || 'john');
-  const chapterData = bookId === 'john' ? getJohnChapter(chapterNum) : null;
-  const sermonLinks = bookId === 'john' ? (JOHN_SERMON_LINKS[chapterNum] ?? []) : [];
+  const resolvedBookId = bookId || 'luke';
+  const book = getBibleBook(resolvedBookId);
+  const chapterData = getChapter(resolvedBookId, chapterNum);
 
-  // Panel state
+  // Sheet state
   const [verseSheet, setVerseSheet] = useState<{ verse: number; text: string } | null>(null);
   const [noteText, setNoteText] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
-  const [askOpen, setAskOpen] = useState(false);
-  const [preachedOpen, setPreachedOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
-  const [selectedQA, setSelectedQA] = useState<AskEmmausQA | null>(null);
+  const [completionOpen, setCompletionOpen] = useState(false);
 
-  const chapterNotes = getChapterNotes(bookId || 'john', chapterNum);
+  const chapterNotes = getChapterNotes(resolvedBookId, chapterNum);
 
   // Mark chapter opened on mount
   useEffect(() => {
@@ -100,7 +72,7 @@ export default function ChapterReader() {
       setShowNoteInput(false);
       return;
     }
-    const existing = getNote(bookId || 'john', chapterNum, verseSheet.verse);
+    const existing = getNote(resolvedBookId, chapterNum, verseSheet.verse);
     if (existing) setNoteText(existing.text);
     else setNoteText('');
   }, [verseSheet]);
@@ -116,19 +88,48 @@ export default function ChapterReader() {
     );
   }
 
-  const completed = isChapterComplete(book.id, chapterNum);
+  const bookmarked = isBookmarked(book.id, chapterNum);
   const prevChapter = chapterNum > 1 ? chapterNum - 1 : null;
   const nextChapter = chapterNum < book.chapters ? chapterNum + 1 : null;
 
   function handleContinue() {
     markChapterComplete(book!.id, chapterNum);
-    const completionPath = `/bible/read/${book!.id}/${chapterNum}/complete`;
-    const qs = journeyId ? `?journey=${journeyId}` : '';
-    setLocation(completionPath + qs);
+    setCompletionOpen(true);
   }
 
-  function handleVerseAction(verse: number, text: string) {
-    setVerseSheet({ verse, text });
+  function handleNextChapter() {
+    setCompletionOpen(false);
+    if (journeyId) {
+      if (nextChapter) {
+        setLocation(`/bible/read/${book!.id}/${nextChapter}?journey=${journeyId}`);
+      } else {
+        setLocation(`/bible/journey/${journeyId}`);
+      }
+    } else {
+      if (nextChapter) {
+        setLocation(`/bible/read/${book!.id}/${nextChapter}`);
+      } else {
+        setLocation(`/bible/books/${book!.id}`);
+      }
+    }
+  }
+
+  function handleFinishForToday() {
+    setCompletionOpen(false);
+    setLocation('/walk');
+  }
+
+  function handleToggleBookmark() {
+    if (bookmarked) {
+      removeBookmark(book!.id, chapterNum);
+    } else {
+      addBookmark({
+        bookId: book!.id,
+        bookName: book!.name,
+        chapter: chapterNum,
+        chapterHeading: chapterData!.heading,
+      });
+    }
   }
 
   function toggleFavourite(verse: number, text: string) {
@@ -139,7 +140,7 @@ export default function ChapterReader() {
     }
   }
 
-  function setHighlight(verse: number, color: HighlightColor) {
+  function setHighlightColor(verse: number, color: HighlightColor) {
     const existing = getHighlight(book!.id, chapterNum, verse);
     if (existing?.color === color) {
       removeHighlight(book!.id, chapterNum, verse);
@@ -184,27 +185,15 @@ export default function ChapterReader() {
         </div>
       </header>
 
-      {/* Journey intro */}
-      {journeyId && chapterData.journeyIntro && (
-        <div className="px-5 pt-6 pb-2 max-w-[600px] mx-auto">
-          <div className="p-5 bg-primary/5 border border-primary/15 rounded-2xl">
-            <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-2">
-              Walk Through John · Chapter {chapterNum}
-            </div>
-            <p className="text-[15px] leading-[1.7] text-foreground">{chapterData.journeyIntro}</p>
-          </div>
-        </div>
-      )}
-
       {/* Scripture */}
       <main className="px-5 pt-8 pb-32 max-w-[600px] mx-auto">
         {chapterData.isPlaceholder ? (
           <div className="py-16 text-center space-y-4">
             <p className="text-[17px] text-muted-foreground">
-              Full text for John {chapterNum} will be available when the complete Bible is connected.
+              Full text for {book.name} {chapterNum} will be available when the complete Bible is connected.
             </p>
             <p className="text-[13px] text-muted-foreground">
-              The architecture is ready for a licensed Bible provider.
+              The provider architecture is ready for a licensed translation.
             </p>
           </div>
         ) : (
@@ -216,7 +205,7 @@ export default function ChapterReader() {
               return (
                 <span
                   key={v.verse}
-                  onClick={() => handleVerseAction(v.verse, v.text)}
+                  onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
                   className={[
                     'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
                     hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
@@ -238,28 +227,9 @@ export default function ChapterReader() {
             })}
           </div>
         )}
-
-        {/* Preached Here notice (inline) */}
-        {sermonLinks.length > 0 && (
-          <button
-            onClick={() => setPreachedOpen(true)}
-            className="mt-10 w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-card text-left hover:border-primary/30 transition-colors"
-          >
-            <Mic size={17} className="text-primary shrink-0" />
-            <div className="flex-1">
-              <div className="text-[14px] font-semibold text-foreground">Preached Here</div>
-              <div className="text-[12px] text-muted-foreground">
-                {sermonLinks.length === 1
-                  ? 'Pastor Jeremy has preached from this chapter'
-                  : `${sermonLinks.length} sermons from this chapter`}
-              </div>
-            </div>
-            <ChevronRight size={16} className="text-muted-foreground" />
-          </button>
-        )}
       </main>
 
-      {/* Fixed bottom toolbar */}
+      {/* Fixed bottom toolbar — Save, Notes, Bookmark, Continue */}
       <div className="fixed bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border/50 safe-area-bottom">
         <div className="flex items-center justify-around h-16 max-w-[600px] mx-auto px-4">
           {/* Prev chapter */}
@@ -289,32 +259,23 @@ export default function ChapterReader() {
             )}
           </button>
 
-          {/* Ask Emmaus */}
+          {/* Bookmark */}
           <button
-            onClick={() => { setSelectedQA(null); setAskOpen(true); }}
-            className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors p-2 min-w-[44px]"
-            aria-label="Ask Emmaus"
+            onClick={handleToggleBookmark}
+            className={[
+              'flex flex-col items-center gap-0.5 transition-colors p-2 min-w-[44px]',
+              bookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+            aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark chapter'}
           >
-            <HelpCircle size={20} />
-            <span className="text-[10px]">Ask</span>
+            <Bookmark size={20} className={bookmarked ? 'fill-primary' : ''} />
+            <span className="text-[10px]">{bookmarked ? 'Saved' : 'Bookmark'}</span>
           </button>
 
-          {/* Preached Here */}
-          {sermonLinks.length > 0 && (
-            <button
-              onClick={() => setPreachedOpen(true)}
-              className="flex flex-col items-center gap-0.5 text-primary hover:text-primary/80 transition-colors p-2 min-w-[44px]"
-              aria-label="Preached Here"
-            >
-              <Mic size={20} />
-              <span className="text-[10px]">Preached</span>
-            </button>
-          )}
-
-          {/* Continue / Next */}
+          {/* Continue */}
           <button
             onClick={handleContinue}
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 h-10 rounded-xl text-[14px] font-medium hover:bg-primary/90 transition-colors min-w-[44px]"
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 h-10 rounded-xl text-[14px] font-medium hover:bg-primary/90 transition-colors"
             aria-label="Continue"
           >
             Continue
@@ -339,7 +300,7 @@ export default function ChapterReader() {
 
               {/* Action grid */}
               <div className="grid grid-cols-2 gap-2.5">
-                {/* Favourite */}
+                {/* Save / Favourite */}
                 <button
                   onClick={() => toggleFavourite(verseSheet.verse, verseSheet.text)}
                   className={[
@@ -368,7 +329,7 @@ export default function ChapterReader() {
                 </button>
               </div>
 
-              {/* Highlight */}
+              {/* Highlight colours */}
               <div className="space-y-2">
                 <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest">
                   Highlight
@@ -380,7 +341,7 @@ export default function ChapterReader() {
                     return (
                       <button
                         key={color}
-                        onClick={() => setHighlight(verseSheet.verse, color)}
+                        onClick={() => setHighlightColor(verseSheet.verse, color)}
                         className={[
                           'flex items-center gap-2 px-3 py-2 rounded-lg border transition-all',
                           active ? 'border-primary ring-1 ring-primary/30' : 'border-border',
@@ -460,132 +421,50 @@ export default function ChapterReader() {
         </SheetContent>
       </Sheet>
 
-      {/* ── Ask Emmaus Sheet ───────────────────────────────────────────────── */}
-      <Sheet open={askOpen} onOpenChange={open => { setAskOpen(open); if (!open) setSelectedQA(null); }}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[90dvh] overflow-y-auto">
-          <div className="space-y-4 pb-6">
-            <SheetHeader>
-              <SheetTitle className="text-left">Ask Emmaus</SheetTitle>
-            </SheetHeader>
+      {/* ── Chapter Completion Sheet ───────────────────────────────────────── */}
+      <Sheet open={completionOpen} onOpenChange={setCompletionOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <div className="space-y-4 pb-6 pt-2">
+            {/* Status line */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
+                <Check size={13} strokeWidth={2.5} />
+              </div>
+              <p className="text-[15px] font-semibold text-foreground">
+                {book.name} {chapterNum} Complete
+              </p>
+            </div>
 
-            {!selectedQA ? (
-              <>
-                <p className="text-[14px] text-muted-foreground">
-                  Select a question about {book.name} {chapterNum}:
-                </p>
-                <div className="space-y-2">
-                  {(chapterData.askEmmaus ?? []).length === 0 ? (
-                    <p className="py-8 text-center text-[15px] text-muted-foreground">
-                      Ask Emmaus questions for this chapter are coming soon.
-                    </p>
-                  ) : (
-                    (chapterData.askEmmaus ?? []).map((qa, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setSelectedQA(qa)}
-                        className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-colors"
-                      >
-                        <p className="text-[15px] text-foreground">{qa.prompt}</p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setSelectedQA(null)}
-                  className="flex items-center gap-1.5 text-[13px] text-primary font-medium"
+            {/* Actions */}
+            <div className="flex flex-col gap-2.5">
+              {nextChapter ? (
+                <Button
+                  className="h-12 rounded-xl text-[16px]"
+                  onClick={handleNextChapter}
                 >
-                  <ChevronLeft size={15} /> All questions
-                </button>
-
-                <div className="p-4 bg-primary/5 border border-primary/15 rounded-xl">
-                  <p className="text-[15px] font-medium text-foreground">{selectedQA.prompt}</p>
-                </div>
-
-                <div className="space-y-4">
-                  <AnswerSection label="Explanation" text={selectedQA.answer.explanation} />
-                  <AnswerSection label="Historical context" text={selectedQA.answer.historicalContext} />
-                  <AnswerSection label="Practical application" text={selectedQA.answer.practicalApplication} />
-                  {selectedQA.answer.churchInsight && (
-                    <AnswerSection label="Church insight" text={selectedQA.answer.churchInsight} accent />
-                  )}
-                </div>
-
-                <p className="text-[11px] text-muted-foreground text-center pt-2">
-                  Responses are seeded reflections, not AI-generated in this phase.
-                </p>
-              </>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* ── Preached Here Sheet ────────────────────────────────────────────── */}
-      <Sheet open={preachedOpen} onOpenChange={setPreachedOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto">
-          <div className="space-y-4 pb-6">
-            <SheetHeader>
-              <SheetTitle className="text-left flex items-center gap-2">
-                <Mic size={17} className="text-primary" />
-                Preached Here
-              </SheetTitle>
-            </SheetHeader>
-            <p className="text-[14px] text-muted-foreground">
-              This passage has been preached from at your church.
-            </p>
-            <div className="space-y-3">
-              {sermonLinks.map((link, i) => {
-                const sermon = getSermon(link.sermonId);
-                if (!sermon || sermon.status !== 'published') return null;
-                return (
-                  <div key={i} className="p-4 bg-card rounded-xl border border-border space-y-3">
-                    <div>
-                      <div className="text-[15px] font-semibold text-foreground">{sermon.title}</div>
-                      <div className="text-[13px] text-muted-foreground mt-0.5">
-                        {sermon.speaker} · {new Date(sermon.sermonDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </div>
-                      {link.note && (
-                        <div className="text-[13px] text-muted-foreground mt-1 italic">{link.note}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12px] text-muted-foreground">
-                        Starts at {formatTimestamp(link.timestampSeconds)}
-                      </span>
-                    </div>
-                    <a
-                      href={timestampUrl(sermon.youtubeUrl, link.timestampSeconds)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-center gap-2 h-10 w-full bg-primary text-primary-foreground rounded-xl text-[14px] font-medium hover:bg-primary/90 transition-colors"
-                    >
-                      Watch Clip from {formatTimestamp(link.timestampSeconds)}
-                    </a>
-                  </div>
-                );
-              })}
-              {sermonLinks.length === 0 && (
-                <p className="py-8 text-center text-[15px] text-muted-foreground">
-                  No sermons indexed for this chapter yet.
-                </p>
+                  Continue to {book.name} {nextChapter}
+                  <ChevronRight size={17} className="ml-1.5" />
+                </Button>
+              ) : (
+                <Button
+                  className="h-12 rounded-xl text-[16px]"
+                  onClick={handleNextChapter}
+                >
+                  You've finished {book.name}
+                  <Check size={17} className="ml-1.5" />
+                </Button>
               )}
+              <Button
+                variant="ghost"
+                className="h-11 text-muted-foreground text-[15px]"
+                onClick={handleFinishForToday}
+              >
+                Finish for today
+              </Button>
             </div>
           </div>
         </SheetContent>
       </Sheet>
-    </div>
-  );
-}
-
-function AnswerSection({ label, text, accent }: { label: string; text: string; accent?: boolean }) {
-  return (
-    <div className="space-y-1.5">
-      <p className={`text-[11px] font-semibold uppercase tracking-widest ${accent ? 'text-primary' : 'text-muted-foreground'}`}>
-        {label}
-      </p>
-      <p className="text-[15px] leading-[1.7] text-foreground">{text}</p>
     </div>
   );
 }

@@ -1,0 +1,215 @@
+# PROJECT EMMAUS – AUTHORITATIVE BUILD PROMPT
+## Bible Engine v1.1 – Final Pre-Merge Revision
+
+The Bible Engine is now functionally complete. Before applying these changes to the main branch, perform one final UX and architecture refinement.
+
+These instructions supersede previous UX decisions while preserving all completed engineering work.
+
+---
+
+PRIMARY DESIGN PRINCIPLE
+
+"The Bible is not one of Emmaus' features.
+
+It is one of Emmaus' destinations.
+
+Every feature should lead people into Scripture.
+
+Once people are reading Scripture, the interface should quietly step aside."
+
+The Bible should feel peaceful, uncluttered and centred entirely on God's Word.
+
+---
+
+1. SEPARATE WALK FROM BIBLE
+
+Refactor the navigation philosophy.
+
+WALK
+
+Walk is the discipleship dashboard.
+
+It answers:
+
+"What is God inviting me to do today?"
+
+Walk should contain:
+
+• Active Journeys
+• Today's Journey Scripture
+• Continue Journey
+• Prayer prompts
+• Reflection
+• Journey progress
+• Daily discipleship actions
+
+Users may have multiple active journeys simultaneously.
+
+Example:
+
+15 Minutes with Jesus
+Today's Scripture
+Luke 6
+Continue →
+
+Serving Journey
+Acts 6
+Continue →
+
+Marriage Journey
+Ephesians 5
+Continue →
+
+Walk is responsible for multiple journeys.
+
+The Bible is not.
+
+---
+
+BIBLE
+
+Bible answers only one question:
+
+"What am I reading in God's Word?"
+
+The Bible should contain ONLY:
+
+• Continue Reading
+• Browse Books
+• Search (future-ready placeholder)
+• Bookmarks
+• Reading Plans (future-ready placeholder)
+• Translation selector
+• Reading history
+
+Do NOT place Journey cards inside the Bible.
+
+Do NOT display discipleship reminders inside the Bible.
+
+Do NOT clutter the Bible with dashboard functionality.
+
+---
+
+2. REMOVE DUPLICATE READING CARDS
+
+Never display both:
+
+Continue Reading
+
+and
+
+Today's Reading
+
+when they refer to the same chapter.
+
+Rules:
+
+First-time reader:
+
+Display only:
+
+Walk Through Luke
+
+Luke 1
+
+Read
+
+---
+
+Returning reader:
+
+Display only:
+
+Continue Reading
+
+Current Chapter
+
+Continue
+
+There should always be ONE obvious next step.
+
+---
+
+3. LUKE REMAINS THE FLAGSHIP GOSPEL
+
+Luke permanently replaces John as the onboarding Gospel.
+
+John remains available as a normal Bible book.
+
+Remove any remaining John-first assumptions.
+
+---
+
+4. PRESERVE COMPLETED ENGINEERING
+
+Do NOT break:
+
+• Bible Provider abstraction
+• Translation architecture
+• Bookmarks
+• Reading progress
+• Browse Books
+• Continue Reading
+• Reading history
+• 66-book architecture
+
+Only simplify the user experience.
+
+---
+
+5. PREPARE FOR FUTURE BIBLE FEATURES
+
+Do NOT place these on the Bible Home.
+
+Instead prepare clean extension points inside the chapter reading experience for:
+
+• Ask Emmaus
+• Go Deeper
+• Preached Here
+• Live It
+
+These belong within the reading experience, not on the Bible Home.
+
+---
+
+6. DESIGN PHILOSOPHY
+
+When making UX decisions always choose:
+
+Less clutter.
+
+Less duplication.
+
+Less noise.
+
+Less navigation.
+
+More Scripture.
+
+More peace.
+
+More clarity.
+
+More focus.
+
+Technology should disappear.
+
+Christ should become more visible.
+
+---
+
+SUCCESS CRITERIA
+
+Walk becomes the home of discipleship.
+
+Bible becomes the home of Scripture.
+
+Journeys becomes the home of intentional growth.
+
+Personal becomes the home of the individual.
+
+A first-time user should immediately know what to do.
+
+A mature believer should feel that Scripture—not the interface—is the centre of the experience.
+
+Perform a final regression review, ensure all existing functionality remains intact, then apply the changes to the main branch.

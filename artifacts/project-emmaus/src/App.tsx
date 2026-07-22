@@ -23,7 +23,6 @@ import NotFound from '@/pages/not-found';
 import BrowseBooks from '@/pages/bible/BrowseBooks';
 import BookDetail from '@/pages/bible/BookDetail';
 import ChapterReader from '@/pages/bible/ChapterReader';
-import ChapterCompletion from '@/pages/bible/ChapterCompletion';
 import BibleJourneyDetail from '@/pages/bible/BibleJourneyDetail';
 
 // Rooms
@@ -50,7 +49,6 @@ function Router() {
       <Route path="/bible" component={Bible} />
       <Route path="/bible/books" component={BrowseBooks} />
       <Route path="/bible/books/:bookId" component={BookDetail} />
-      <Route path="/bible/read/:bookId/:chapter/complete" component={ChapterCompletion} />
       <Route path="/bible/read/:bookId/:chapter" component={ChapterReader} />
       <Route path="/bible/journey/:journeyId" component={BibleJourneyDetail} />
 

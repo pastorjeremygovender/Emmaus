@@ -32,6 +32,16 @@ export type VerseNote = {
   updatedAt: string;
 };
 
+/** Chapter-level bookmark — distinct from verse highlights/favourites */
+export type ChapterBookmark = {
+  id: string;
+  bookId: string;
+  bookName: string;
+  chapter: number;
+  chapterHeading: string;
+  savedAt: string;
+};
+
 export type ReadingHistoryEntry = {
   bookId: string;
   bookName: string;
@@ -67,14 +77,15 @@ export type PersonalPrayer = {
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 const LS = {
-  history: 'emmaus_bible_history',
-  completed: 'emmaus_bible_completed',      // string[] "bookId-chapter"
+  history:         'emmaus_bible_history',
+  completed:       'emmaus_bible_completed',       // string[] "bookId-chapter"
   journeyProgress: 'emmaus_bible_journey_progress',
-  highlights: 'emmaus_bible_highlights',
-  favourites: 'emmaus_bible_favourites',
-  notes: 'emmaus_bible_notes',
-  reflections: 'emmaus_bible_reflections',
-  prayers: 'emmaus_bible_prayers',
+  highlights:      'emmaus_bible_highlights',
+  favourites:      'emmaus_bible_favourites',
+  notes:           'emmaus_bible_notes',
+  reflections:     'emmaus_bible_reflections',
+  prayers:         'emmaus_bible_prayers',
+  bookmarks:       'emmaus_bible_bookmarks_v2',    // chapter bookmarks (v2 key)
 } as const;
 
 function load<T>(key: string, fallback: T): T {
@@ -99,7 +110,7 @@ function chapterKey(bookId: string, chapter: number) {
 // ─── Context type ─────────────────────────────────────────────────────────────
 
 type BibleContextType = {
-  // Reading history
+  // Reading history (last opened chapter)
   readingHistory: ReadingHistoryEntry | null;
   markChapterOpened: (entry: Omit<ReadingHistoryEntry, 'openedAt'>) => void;
 
@@ -120,11 +131,17 @@ type BibleContextType = {
   removeHighlight: (bookId: string, chapter: number, verse: number) => void;
   getHighlight: (bookId: string, chapter: number, verse: number) => VerseHighlight | undefined;
 
-  // Favourites
+  // Favourites (saved verses)
   favourites: VerseFavourite[];
   addFavourite: (fav: Omit<VerseFavourite, 'id' | 'savedAt'>) => void;
   removeFavourite: (bookId: string, chapter: number, verse: number) => void;
   isFavourite: (bookId: string, chapter: number, verse: number) => boolean;
+
+  // Chapter bookmarks
+  bookmarks: ChapterBookmark[];
+  addBookmark: (entry: Omit<ChapterBookmark, 'id' | 'savedAt'>) => void;
+  removeBookmark: (bookId: string, chapter: number) => void;
+  isBookmarked: (bookId: string, chapter: number) => boolean;
 
   // Notes
   notes: VerseNote[];
@@ -160,6 +177,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   const [journeyProgress, setJourneyProgress] = useState<Record<string, BibleJourneyProgress>>({});
   const [highlights, setHighlights] = useState<VerseHighlight[]>([]);
   const [favourites, setFavourites] = useState<VerseFavourite[]>([]);
+  const [bookmarks, setBookmarks] = useState<ChapterBookmark[]>([]);
   const [notes, setNotes] = useState<VerseNote[]>([]);
   const [reflections, setReflections] = useState<ChapterReflection[]>([]);
   const [prayers, setPrayers] = useState<PersonalPrayer[]>([]);
@@ -172,6 +190,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     setJourneyProgress(load(LS.journeyProgress, {}));
     setHighlights(load(LS.highlights, []));
     setFavourites(load(LS.favourites, []));
+    setBookmarks(load(LS.bookmarks, []));
     setNotes(load(LS.notes, []));
     setReflections(load(LS.reflections, []));
     setPrayers(load(LS.prayers, []));
@@ -286,6 +305,28 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
     return favourites.some(f => f.bookId === bookId && f.chapter === chapter && f.verse === verse);
   }, [favourites]);
 
+  // Chapter bookmarks
+  const addBookmark = useCallback((entry: Omit<ChapterBookmark, 'id' | 'savedAt'>) => {
+    setBookmarks(prev => {
+      if (prev.some(b => b.bookId === entry.bookId && b.chapter === entry.chapter)) return prev;
+      const next = [...prev, { ...entry, id: genId('bkm'), savedAt: new Date().toISOString() }];
+      save(LS.bookmarks, next);
+      return next;
+    });
+  }, []);
+
+  const removeBookmark = useCallback((bookId: string, chapter: number) => {
+    setBookmarks(prev => {
+      const next = prev.filter(b => !(b.bookId === bookId && b.chapter === chapter));
+      save(LS.bookmarks, next);
+      return next;
+    });
+  }, []);
+
+  const isBookmarked = useCallback((bookId: string, chapter: number) => {
+    return bookmarks.some(b => b.bookId === bookId && b.chapter === chapter);
+  }, [bookmarks]);
+
   // Notes
   const saveNote = useCallback((bookId: string, chapter: number, verse: number, verseText: string, text: string) => {
     setNotes(prev => {
@@ -362,6 +403,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       journeyProgress, startBibleJourney, markJourneyChapterComplete, getJourneyProgress,
       highlights, addHighlight, removeHighlight, getHighlight,
       favourites, addFavourite, removeFavourite, isFavourite,
+      bookmarks, addBookmark, removeBookmark, isBookmarked,
       notes, saveNote, deleteNote, getNote, getChapterNotes,
       reflections, saveReflection, getReflection,
       prayers, savePrayer, getPrayer,

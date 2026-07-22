@@ -3,16 +3,11 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { BookOpen, Clock, ChevronRight, Bookmark, Heart, BookMarked } from 'lucide-react';
-import { BIBLE_JOURNEYS, WEEKLY_MEMORY_VERSE, TODAYS_READING } from '@/lib/bible-data';
+import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, ListChecks, Languages } from 'lucide-react';
 
 export default function Bible() {
   const [, setLocation] = useLocation();
-  const { readingHistory, favourites, getJourneyProgress } = useBible();
-
-  const walkThroughJohn = BIBLE_JOURNEYS[0];
-  const journeyProg = getJourneyProgress('walk-through-john');
+  const { readingHistory, favourites, bookmarks } = useBible();
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -26,13 +21,13 @@ export default function Bible() {
           </p>
         </header>
 
-        {/* Continue Reading */}
+        {/* Single smart reading card */}
         {readingHistory ? (
           <section className="space-y-3">
             <SectionLabel>Continue Reading</SectionLabel>
             <Card
               className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
-              onClick={() => setLocation(`/bible/read/john/${readingHistory.chapter}`)}
+              onClick={() => setLocation(`/bible/read/${readingHistory.bookId}/${readingHistory.chapter}`)}
             >
               <CardContent className="p-5 flex items-center gap-4">
                 <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
@@ -56,8 +51,8 @@ export default function Bible() {
           <section className="space-y-3">
             <SectionLabel>Begin Reading</SectionLabel>
             <Card
-              className="bg-card border-border cursor-pointer"
-              onClick={() => setLocation('/bible/read/john/1')}
+              className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
+              onClick={() => setLocation('/bible/read/luke/1')}
             >
               <CardContent className="p-5 flex items-center gap-4">
                 <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
@@ -65,88 +60,19 @@ export default function Bible() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                    Start here
+                    Walk Through Luke · Luke 1
                   </div>
                   <div className="text-[16px] font-medium text-foreground">
-                    John 1 — The Word Became Flesh
+                    The Birth of John the Baptist Foretold
                   </div>
                 </div>
-                <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+                <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">
+                  Read
+                </Button>
               </CardContent>
             </Card>
           </section>
         )}
-
-        {/* Today's Reading */}
-        <section className="space-y-3">
-          <SectionLabel>Today's Reading</SectionLabel>
-          <Card
-            className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
-            onClick={() => setLocation(`/bible/read/${TODAYS_READING.bookId}/${TODAYS_READING.chapter}`)}
-          >
-            <CardContent className="p-5 space-y-3">
-              <div>
-                <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
-                  John {TODAYS_READING.chapter}
-                </div>
-                <div className="text-[17px] font-medium text-foreground">
-                  {TODAYS_READING.heading}
-                </div>
-                <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-muted-foreground">
-                  <Clock size={13} />
-                  <span>Approx. {TODAYS_READING.readingMinutes} minutes</span>
-                </div>
-              </div>
-              <Button variant="outline" className="w-full rounded-xl h-10" size="sm">
-                Read
-              </Button>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Bible Journeys */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Bible Journeys</SectionLabel>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-5 px-5 scrollbar-none">
-            {BIBLE_JOURNEYS.map(journey => (
-              <div
-                key={journey.id}
-                onClick={() => journey.available && setLocation(`/bible/journey/${journey.id}`)}
-                className={[
-                  'shrink-0 w-[200px] rounded-2xl border p-4 space-y-2 transition-all',
-                  journey.available
-                    ? 'bg-card border-border cursor-pointer active:scale-[0.97]'
-                    : 'bg-muted/30 border-border/50 opacity-60',
-                ].join(' ')}
-              >
-                <div className="text-[10px] font-semibold text-primary uppercase tracking-widest">
-                  {journey.coverLabel ?? journey.subtitle}
-                </div>
-                <div className="text-[15px] font-serif font-semibold leading-tight text-foreground">
-                  {journey.title}
-                </div>
-                <div className="text-[12px] text-muted-foreground leading-snug">
-                  {journey.available ? journey.subtitle : 'Coming soon'}
-                </div>
-                {journey.available && journeyProg && journey.id === 'walk-through-john' && (
-                  <div className="pt-1">
-                    <div className="h-1 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${(journeyProg.completedChapters.length / 21) * 100}%` }}
-                      />
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-1">
-                      {journeyProg.completedChapters.length} of 21 chapters
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
 
         {/* Browse Books */}
         <section className="space-y-3">
@@ -159,64 +85,74 @@ export default function Bible() {
               <BookMarked size={17} className="text-primary" />
               <div>
                 <div className="text-[15px] font-medium text-foreground">Old Testament · New Testament</div>
-                <div className="text-[12px] text-muted-foreground">66 books · John available now</div>
+                <div className="text-[12px] text-muted-foreground">66 books · Luke available now</div>
               </div>
             </div>
             <ChevronRight size={17} className="text-muted-foreground" />
           </div>
         </section>
 
-        {/* Saved Verses / Bookmarks */}
+        {/* Bookmarks */}
         <section className="space-y-3">
-          <SectionLabel>Saved Verses</SectionLabel>
-          {favourites.length === 0 ? (
+          <SectionLabel>Bookmarks</SectionLabel>
+          {bookmarks.length === 0 && favourites.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
               <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                <Heart size={18} />
+                <Bookmark size={18} />
               </div>
               <p className="text-[14px] text-muted-foreground leading-relaxed">
-                Tap a verse while reading to save it here.
+                Tap the bookmark icon while reading to save chapters here.
               </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {favourites.slice(0, 3).map(fav => (
+              {bookmarks.slice(0, 3).map(bkm => (
+                <div
+                  key={bkm.id}
+                  className="p-4 rounded-xl border border-border bg-card space-y-1 cursor-pointer active:scale-[0.98] transition-transform"
+                  onClick={() => setLocation(`/bible/read/${bkm.bookId}/${bkm.chapter}`)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Bookmark size={12} className="text-primary fill-primary" />
+                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                      {bkm.bookName} {bkm.chapter}
+                    </div>
+                  </div>
+                  <p className="text-[14px] font-medium text-foreground">{bkm.chapterHeading}</p>
+                </div>
+              ))}
+              {favourites.slice(0, 2).map(fav => (
                 <div
                   key={fav.id}
-                  className="p-4 rounded-xl border border-border bg-card space-y-1.5 cursor-pointer"
+                  className="p-4 rounded-xl border border-border bg-card space-y-1.5 cursor-pointer active:scale-[0.98] transition-transform"
                   onClick={() => setLocation(`/bible/read/${fav.bookId}/${fav.chapter}`)}
                 >
-                  <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                    {fav.bookName} {fav.chapter}:{fav.verse}
+                  <div className="flex items-center gap-2">
+                    <Heart size={12} className="text-primary fill-primary" />
+                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                      {fav.bookName} {fav.chapter}:{fav.verse}
+                    </div>
                   </div>
                   <p className="text-[14px] font-serif leading-relaxed text-foreground italic line-clamp-2">
                     "{fav.verseText}"
                   </p>
                 </div>
               ))}
-              {favourites.length > 3 && (
+              {(bookmarks.length + favourites.length) > 5 && (
                 <button className="text-[13px] text-primary font-medium py-1 w-full text-center hover:underline">
-                  View all {favourites.length} saved verses
+                  View all saved passages
                 </button>
               )}
             </div>
           )}
         </section>
 
-        {/* Memory Verse */}
-        <section className="space-y-3 pb-4">
-          <SectionLabel>Memory Verse</SectionLabel>
-          <div className="p-5 rounded-2xl bg-primary/5 border border-primary/15 space-y-3">
-            <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              {WEEKLY_MEMORY_VERSE.weekOf}
-            </div>
-            <p className="font-serif text-[17px] leading-[1.65] text-foreground italic">
-              "{WEEKLY_MEMORY_VERSE.text}"
-            </p>
-            <div className="text-[13px] font-semibold text-primary">
-              — {WEEKLY_MEMORY_VERSE.reference}
-            </div>
-          </div>
+        {/* Future features — clean extension points */}
+        <section className="space-y-2 pb-4">
+          <SectionLabel>More</SectionLabel>
+          <FutureRow icon={<Search size={16} />} label="Search" />
+          <FutureRow icon={<ListChecks size={16} />} label="Reading Plans" />
+          <FutureRow icon={<Languages size={16} />} label="Translation" detail="King James Version" />
         </section>
 
       </main>
@@ -230,5 +166,30 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
       {children}
     </h2>
+  );
+}
+
+function FutureRow({
+  icon,
+  label,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  detail?: string;
+}) {
+  return (
+    <div className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 opacity-50 select-none">
+      <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
+        {icon}
+      </div>
+      <div className="flex-1">
+        <div className="text-[14px] font-medium text-foreground">{label}</div>
+        {detail && <div className="text-[12px] text-muted-foreground">{detail}</div>}
+      </div>
+      <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+        Coming soon
+      </div>
+    </div>
   );
 }
