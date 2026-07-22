@@ -1,0 +1,495 @@
+# PROJECT EMMAUS
+## AUTHORITATIVE BUILD PROMPT
+## Bible Engine v1.0 — Foundation
+
+This prompt supersedes every previous Bible build prompt.
+
+If any previous prompt conflicts with this one, this prompt takes precedence.
+
+=========================================================
+PROJECT CONTEXT
+=========================================================
+
+Continue building the EXISTING Project Emmaus application.
+
+This is NOT a new project.
+
+Inspect the existing repository before writing any code.
+
+Reuse existing architecture wherever possible.
+
+Do NOT redesign the application.
+
+Do NOT replace existing components.
+
+Do NOT duplicate services.
+
+Build on top of the current prototype.
+
+=========================================================
+CURRENT PROJECT
+=========================================================
+
+The following systems already exist and must continue working:
+
+✓ Authentication
+
+✓ Walk
+
+✓ Journeys
+
+✓ Personal
+
+✓ Emmaus Rooms
+
+✓ Sermon Companion
+
+✓ Timestamped YouTube links
+
+✓ Admin Portal
+
+✓ Companion Workflow
+
+✓ Media Studio prototype (currently paused)
+
+These systems are considered stable.
+
+Do not redesign them.
+
+=========================================================
+MISSION
+=========================================================
+
+Build the Emmaus Bible Engine.
+
+Emmaus is NOT trying to become another Bible app.
+
+Emmaus exists to help people meet Jesus every day through Scripture.
+
+The Bible is not another feature.
+
+The Bible is the heart of Emmaus.
+
+Everything else eventually grows from it.
+
+=========================================================
+FOUNDATIONAL PRINCIPLES
+=========================================================
+
+Scripture is the centre.
+
+Everything else supports Scripture.
+
+Nothing competes with Scripture.
+
+Nothing replaces Scripture.
+
+The Bible should feel peaceful.
+
+Beautiful.
+
+Simple.
+
+Unhurried.
+
+The user should feel invited into God's Word, not overwhelmed by features.
+
+=========================================================
+IMPORTANT CHANGE
+=========================================================
+
+Previous prototype planning used the Gospel of John.
+
+That decision has now changed.
+
+The Gospel of Luke becomes the official first Bible Journey.
+
+Remove any John-first prototype assumptions that exist purely for demonstration.
+
+Replace:
+
+Walk Through John
+
+with
+
+Walk Through Luke
+
+Replace:
+
+John 21 chapter prototype
+
+with
+
+Luke 24 chapter journey
+
+Luke is now the official first complete Bible Journey.
+
+The Bible Engine itself must support all 66 books equally.
+
+=========================================================
+THIS PHASE ONLY
+=========================================================
+
+This phase builds ONLY the Bible Engine.
+
+Do NOT build:
+
+Ask Emmaus
+
+Conversation Engine
+
+OpenAI
+
+AI integration
+
+Prayer assistant
+
+Search
+
+Audio Bible
+
+Preached Here
+
+Go Deeper
+
+These belong to future phases.
+
+=========================================================
+ARCHITECTURE
+=========================================================
+
+Create reusable architecture for:
+
+66 books
+
+Every chapter
+
+Multiple Bible translations
+
+Bible Journeys
+
+Reading Plans
+
+Bookmarks
+
+Highlights
+
+Personal Notes
+
+Reading Progress
+
+Verse metadata
+
+Future cross references
+
+Future sermon links
+
+Future audio Bible
+
+The architecture must be reusable.
+
+Future Bible translations should require configuration rather than UI changes.
+
+=========================================================
+BIBLE PROVIDER
+=========================================================
+
+Create a Bible Provider abstraction.
+
+The application must never depend directly on one Bible source.
+
+The provider should later support:
+
+Licensed Bible APIs
+
+Public-domain translations
+
+Offline databases
+
+Changing providers should never require rewriting the UI.
+
+=========================================================
+DATABASE
+=========================================================
+
+Inspect the existing Firebase architecture.
+
+Reuse existing collections wherever appropriate.
+
+Only create new collections where necessary.
+
+Support:
+
+Books
+
+Chapters
+
+Verses
+
+Translations
+
+Bible Journeys
+
+Reading Plans
+
+Reading Progress
+
+Bookmarks
+
+Highlights
+
+Personal Notes
+
+Scripture metadata
+
+=========================================================
+BIBLE HOME
+=========================================================
+
+The Bible tab becomes a welcoming home.
+
+Users should NEVER land in Genesis 1 by default.
+
+Instead present:
+
+------------------------------------------------
+
+Continue Reading
+
+Return exactly where the user previously stopped.
+
+------------------------------------------------
+
+Today's Reading
+
+One suggested chapter.
+
+Approximate reading time.
+
+------------------------------------------------
+
+Bible Journeys
+
+Large cards.
+
+Examples:
+
+Walk Through Luke
+
+Acts
+
+New to Jesus
+
+Foundations of Faith
+
+Through the Bible
+
+Psalms for Difficult Days
+
+Proverbs in a Year
+
+------------------------------------------------
+
+Browse Books
+
+Old Testament
+
+New Testament
+
+------------------------------------------------
+
+Bookmarks
+
+Quick access to saved passages.
+
+------------------------------------------------
+
+Keep this page clean.
+
+Minimal.
+
+Calm.
+
+No clutter.
+
+=========================================================
+BROWSE BOOKS
+=========================================================
+
+Display every biblical book.
+
+Grouped into:
+
+Old Testament
+
+New Testament
+
+Selecting a book displays:
+
+Book overview
+
+Chapter list
+
+Reading progress
+
+Luke becomes the first fully implemented book.
+
+=========================================================
+WALK THROUGH LUKE
+=========================================================
+
+Luke becomes the flagship Bible Journey.
+
+Title:
+
+Walk Through Luke
+
+Subtitle:
+
+Discover Jesus through the Gospel according to Luke.
+
+Length:
+
+24 chapters.
+
+Each chapter becomes one Journey step.
+
+Users should feel they are walking with Jesus through Luke's Gospel.
+
+=========================================================
+CHAPTER READER
+=========================================================
+
+The chapter reader should prioritise Scripture.
+
+Scripture occupies almost the entire screen.
+
+Very little chrome.
+
+Bottom actions only:
+
+Save
+
+Notes
+
+Bookmark
+
+Continue
+
+Nothing else.
+
+The reading experience must feel peaceful.
+
+=========================================================
+READING PROGRESS
+=========================================================
+
+Automatically remember:
+
+Current book
+
+Current chapter
+
+Current position
+
+Continue Reading always resumes exactly where the user left off.
+
+Use encouraging language.
+
+Celebrate faithfulness.
+
+Never shame missed days.
+
+=========================================================
+DESIGN PHILOSOPHY
+=========================================================
+
+The Bible experience should disappear into the background.
+
+The interface should never compete with Scripture.
+
+Avoid unnecessary animations.
+
+Avoid feature overload.
+
+The user should naturally lose awareness of the software and become absorbed in God's Word.
+
+=========================================================
+PREPARE FOR FUTURE PHASES
+=========================================================
+
+Without implementing them yet, ensure the architecture can later support:
+
+Ask Emmaus
+
+Preached Here
+
+Go Deeper
+
+Verse sharing
+
+Prayer links
+
+Cross references
+
+Audio Bible
+
+Personal Study Bible
+
+Sermon integration
+
+These should require extension rather than redesign.
+
+=========================================================
+SUCCESS CRITERIA
+=========================================================
+
+At the end of this phase a user can:
+
+Open Bible.
+
+See a welcoming Bible Home.
+
+Browse all 66 books.
+
+Open Luke.
+
+Begin Walk Through Luke.
+
+Read Luke 1.
+
+Bookmark the chapter.
+
+Create a note.
+
+Leave the app.
+
+Return later.
+
+Continue exactly where they stopped.
+
+All existing Emmaus features continue working.
+
+No regressions.
+
+=========================================================
+WHEN FINISHED
+=========================================================
+
+Before writing any additional code:
+
+Explain:
+
+1. What architecture was created.
+
+2. Which files were added.
+
+3. Which files were modified.
+
+4. Which existing components were reused.
+
+5. Any recommendations before beginning Phase 2.
+
+Then stop.
+
+Do not continue into Phase 2 until instructed.
