@@ -42,6 +42,29 @@ interface Message {
   isStreaming?: boolean;
 }
 
+// ─── Thinking indicator ───────────────────────────────────────────────────────
+
+/**
+ * Shown inside the streaming bubble while Emmaus hasn't sent any text yet.
+ * After 5 s, adds an elapsed-second counter so the user knows the request
+ * is still in-flight. Unmounts automatically when the first text chunk
+ * arrives (parent renders prose instead).
+ */
+function ThinkingIndicator() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <p className="text-[15px] text-muted-foreground/70 italic">
+      {elapsed < 5 ? 'Emmaus is thinking\u2026' : `Emmaus is thinking\u2026 ${elapsed} s`}
+    </p>
+  );
+}
+
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
 
 function renderProse(text: string) {
@@ -344,14 +367,18 @@ export default function AskEmmausConversation() {
                 ref={msg.isStreaming ? streamingMsgRef : undefined}
                 className="space-y-5"
               >
-                {/* Prose */}
+                {/* Prose / thinking indicator */}
                 <div
                   className={[
                     'transition-opacity duration-200',
                     msg.isStreaming ? 'opacity-90' : 'opacity-100',
                   ].join(' ')}
                 >
-                  {msg.content ? renderProse(msg.content) : null}
+                  {msg.content
+                    ? renderProse(msg.content)
+                    : msg.isStreaming
+                      ? <ThinkingIndicator />
+                      : null}
                 </div>
 
                 {/* Response cards — only after streaming completes */}
