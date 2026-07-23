@@ -237,9 +237,12 @@ METADATA RULES:
 - scripture: the primary Scripture you referenced. Use null if none.
 - nextStep: the ONE next step you recommended, with its button text and app path. Use null if no specific step.
 - recommendations: 0–3 resources from the church ecosystem. Only include genuine recommendations.
-  Types: "journey" | "sermon" | "bible" | "prayer" | "room" | "pastor"
-  For sermons, include "sermonId" and "timestampSeconds" if available.
-- followUpPrompts: 2–4 natural follow-up questions the user could ask.
+  Types: "journey" | "bible" | "prayer" | "room" | "pastor"
+  Do NOT include type "sermon" in this list — sermon results are provided by a verified retrieval
+  system and injected automatically. Never fabricate sermon titles, speakers, or timestamps.
+- followUpPrompts: 2–4 natural follow-up questions the user could ask. Ask questions that help
+  the person go deeper — not open-ended engagement prompts like "Anything else?" or "What more
+  can I help with?". Make each one specific and substantive.
 - handoffType: null | "pastoral" | "crisis"
   Use "pastoral" when recommending human pastoral contact.
   Use "crisis" only if the safety layer has not already intercepted (rare).

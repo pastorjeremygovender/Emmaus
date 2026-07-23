@@ -60,6 +60,10 @@ export interface Recommendation {
   path?: string;
   sermonId?: string;
   timestampSeconds?: number;
+  /** Custom badge label shown on the card (e.g. "Preached Here"). */
+  label?: string;
+  /** Verified speaker name — used on Preached Here sermon cards. */
+  speakerName?: string;
 }
 
 export interface EmmausMetadata {

@@ -1,0 +1,394 @@
+PROJECT EMMAUS — FAST RESPONSES AND VERIFIED SERMON RETRIEVAL
+
+Implement directly in the existing codebase.
+
+Do not redesign Ask Emmaus.
+Do not add waiting, thinking or typing indicators.
+Do not create a new sermon database.
+Do not fabricate sermon titles, speakers, quotations, dates, passages or timestamps.
+Do not propose unrelated features.
+Do not mark complete from compilation alone.
+
+==================================================
+GOAL
+==================================================
+
+Make Ask Emmaus fast enough to feel seamless and connect it to the existing verified sermon transcript and timestamped YouTube-link workflow.
+
+Two outcomes are required:
+
+1. Normal Ask Emmaus responses begin quickly.
+2. Relevant verified sermon moments can appear with working timestamped YouTube links.
+
+==================================================
+CURRENT VERIFIED STATE
+==================================================
+
+Ask Emmaus:
+
+- uses the real OpenAI provider
+- streams responses
+- supports multiple turns after recent lifecycle fixes
+- currently takes approximately 40 seconds before responding in some tests
+
+The project already contains:
+
+- Sermon Companion workflow
+- sermon transcripts
+- verified sermon records
+- timestamped YouTube links
+- approved sermon resources
+
+Reuse the existing storage and services.
+
+==================================================
+PART 1 — MEASURE LATENCY FIRST
+==================================================
+
+Instrument the server-side provider flow.
+
+Measure and log:
+
+- request received time
+- context-building duration
+- sermon retrieval duration
+- OpenAI request start time
+- time to first model text delta
+- total model duration
+- total request duration
+- input token count
+- cached input token count where available
+- reasoning token count where available
+- output token count
+
+Do not log:
+
+- API keys
+- complete private user conversations
+- highly sensitive personal content
+
+Use request IDs so one request can be traced safely.
+
+Determine whether the delay comes mainly from:
+
+- oversized system instructions
+- excessive conversation history
+- retrieval
+- model reasoning
+- model queueing
+- Replit proxy buffering
+- stream handling
+
+Do not guess.
+
+==================================================
+PART 2 — FAST DEFAULT GENERATION
+==================================================
+
+Optimise ordinary Ask Emmaus responses for speed.
+
+For normal pastoral, Bible and theological questions:
+
+- use minimal or low reasoning effort
+- use low or medium text verbosity
+- limit output to the established Emmaus response ranges
+- cap output tokens appropriately
+- begin forwarding text immediately on the first text delta
+- do not wait for the complete response before rendering
+- do not buffer multiple paragraphs before flushing
+- preserve proper spaces across chunks
+
+Keep model and generation settings server-configurable.
+
+Add environment configuration such as:
+
+EMMAUS_REASONING_EFFORT=low
+EMMAUS_TEXT_VERBOSITY=low
+EMMAUS_MAX_OUTPUT_TOKENS=900
+
+Use supported values for the configured model.
+
+If the selected model does not support one of these options, handle that cleanly rather than failing the request.
+
+==================================================
+PART 3 — MODEL ROUTING FOR SPEED
+==================================================
+
+Preserve provider neutrality.
+
+Add a simple internal model-selection policy:
+
+FAST PATH
+
+Use the configured fast general-purpose model/settings for:
+
+- greetings
+- simple Bible questions
+- personal encouragement
+- passage explanation
+- follow-up questions
+- contextual questions such as “What does this mean?”
+
+DEEP PATH
+
+Use stronger reasoning only when genuinely required, such as:
+
+- complex theological comparison
+- detailed doctrinal disagreement
+- difficult multi-source synthesis
+
+Do not send every question through high reasoning.
+
+Do not let the browser select models or reasoning effort.
+
+Keep routing inside the server-side Conversation Service.
+
+==================================================
+PART 4 — PROMPT AND HISTORY EFFICIENCY
+==================================================
+
+Reduce unnecessary input without weakening Emmaus identity.
+
+- keep one stable, versioned Emmaus instruction prefix
+- avoid repeating duplicated policy text
+- keep the stable instruction content at the beginning of the request
+- use a stable prompt cache key where appropriate
+- send only relevant recent conversation turns
+- summarise older conversation history when necessary
+- always preserve the newest user message
+- include current screen context only when relevant
+- do not send full sermon transcripts unless retrieval identifies a relevant segment
+- do not send the entire Bible or Journey database
+
+Preserve all locked Emmaus boundaries and safety rules.
+
+==================================================
+PART 5 — EXISTING SERMON RETRIEVAL
+==================================================
+
+Inspect and reuse the existing sermon storage and Sermon Companion workflow.
+
+Identify the existing data structures for:
+
+- sermon ID
+- title
+- speaker
+- date
+- YouTube video ID or URL
+- transcript
+- transcript chunks or segments
+- start timestamp
+- end timestamp
+- Scripture references
+- topic tags
+- approval or publication status
+
+Do not duplicate this data in a new collection unless a migration is technically necessary.
+
+Create or reuse one sermon-retrieval service that can search only verified and approved sermon records.
+
+Retrieval should consider:
+
+- user question
+- current Bible passage
+- current Journey Scripture
+- sermon topics
+- transcript segment text
+- Scripture references
+
+Return only the most relevant small number of segments.
+
+==================================================
+PART 6 — TIMESTAMPED YOUTUBE LINKS
+==================================================
+
+For each verified retrieved sermon segment, construct a working timestamped YouTube link using the stored video information and verified start time.
+
+Requirements:
+
+- use the real stored YouTube video
+- use the real stored timestamp
+- never let the language model invent the URL or timestamp
+- never claim Pastor Jeremy preached on a passage unless a verified record supports it
+- open directly at the relevant moment where YouTube supports it
+- preserve the existing timestamp-link format already used by Sermon Companion where possible
+
+The model may explain why a retrieved sermon moment is relevant, but the actual card data must come from deterministic retrieval.
+
+==================================================
+PART 7 — SERMON RESULT CARD
+==================================================
+
+When verified sermon retrieval finds a strong match, display an existing or compatible sermon card containing:
+
+- “Preached Here”
+- verified sermon title
+- verified speaker
+- concise verified segment description or approved excerpt
+- timestamp label
+- button such as “Watch from 18:42”
+
+The button must open the verified timestamped YouTube link.
+
+Do not display raw internal routes.
+
+Do not show a sermon card when confidence is weak.
+
+Do not fabricate a match merely to fill the response.
+
+Keep the previously approved public feature name:
+
+Preached Here
+
+Do not rename it.
+
+==================================================
+PART 8 — RESPONSE INTEGRATION
+==================================================
+
+The normal Emmaus answer should remain readable and restrained.
+
+Recommended flow:
+
+1. answer the person’s question
+2. use Scripture where genuinely relevant
+3. offer one next faithful step
+4. optionally show one verified Preached Here result
+
+Do not overwhelm the user with many sermon links.
+
+Normally show zero or one primary sermon result.
+
+At most show a very small number when multiple results are genuinely necessary.
+
+Do not end with open-ended engagement prompts such as:
+
+- Is there one piece you are most curious about?
+- Anything else?
+- What else can I help with?
+
+==================================================
+PART 9 — SAFETY AND PRIVACY
+==================================================
+
+Do not include sensitive private user content in sermon search logs.
+
+Do not use private Room messages for retrieval.
+
+Do not allow the model to modify verified sermon metadata.
+
+Urgent safety situations must continue to interrupt ordinary sermon recommendations.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test on the running mobile-sized application.
+
+LATENCY TEST 1
+
+Ask:
+
+I feel far from God
+
+Record:
+
+- total time
+- time to first visible text
+- total completion time
+
+Target:
+
+- first visible text should normally begin within a few seconds
+- it must not routinely take 40 seconds
+- no waiting indicator may appear
+
+LATENCY TEST 2
+
+Ask:
+
+What is the significance of the tabernacle furniture?
+
+Record the same metrics.
+
+LATENCY TEST 3
+
+Ask a simple follow-up:
+
+What Scripture did you just mention?
+
+Confirm the follow-up also begins quickly.
+
+SERMON TEST 1
+
+Ask a question known to be covered in an approved Pastor Jeremy sermon.
+
+Verify:
+
+- the relevant verified sermon segment is retrieved
+- a Preached Here card appears
+- title and speaker are correct
+- timestamp is correct
+- the link opens the correct YouTube video at the correct moment
+
+SERMON TEST 2
+
+Open Ask Emmaus from a Bible passage that has a verified sermon match.
+
+Ask:
+
+Was this preached about?
+
+Verify the passage context is used and only verified matches appear.
+
+SERMON TEST 3
+
+Ask about a topic with no verified sermon match.
+
+Verify:
+
+- no sermon card is fabricated
+- Emmaus still answers normally
+- it does not claim Pastor Jeremy preached about it
+
+MULTI-TURN TEST
+
+Complete five consecutive turns and verify:
+
+- every response begins promptly
+- conversation context persists
+- no stream remains stuck
+- no stale sermon result carries into an unrelated question
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+This task is complete only when:
+
+- latency instrumentation identifies where time is spent
+- normal generation uses fast reasoning settings
+- unnecessary prompt and history size are reduced
+- streaming text is flushed immediately
+- time to first visible text is substantially improved
+- existing sermon storage is reused
+- verified sermon segments can be retrieved
+- working timestamped YouTube links appear
+- Preached Here uses only verified records
+- no sermon metadata is fabricated
+- five-turn conversations remain reliable
+- running-app tests have been performed
+
+When finished, report only:
+
+- measured latency before and after
+- time-to-first-token before and after
+- model and reasoning settings used
+- prompt/history optimisation made
+- existing sermon data source reused
+- retrieval method implemented
+- timestamp-link construction used
+- sermon tests performed
+- any failed item and its exact cause
+
+Do not propose additional work.

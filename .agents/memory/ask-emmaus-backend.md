@@ -1,45 +1,88 @@
 ---
 name: Ask Emmaus backend
-description: Architecture decisions and extension points for the Ask Emmaus conversation service (api-server).
+description: Conversation service architecture, streaming, model routing, and sermon retrieval.
 ---
 
-## Overview
-The Emmaus conversation service lives entirely in `artifacts/api-server/src/emmaus/`. It streams pastoral AI responses via Server-Sent Events (SSE).
+## Conversation service
 
-## Files
-- `system-instructions.ts` — versioned system prompt (PROMPT_VERSION + buildSystemPrompt()); the SINGLE source of truth for all personality, tone, and structure rules.
-- `context-builder.ts` — assembles the dynamic context block injected into the system prompt (entry point, Bible/Journey/Sermon context, user memories).
-- `safety-layer.ts` — crisis keyword scanner; runs BEFORE the LLM; returns `safety_handover` response and logs a safety flag.
-- `llm-provider.ts` — LLMProvider interface + OpenAIProvider (gpt-4o, needs OPENAI_API_KEY starting with sk-) + MockProvider (deterministic canned responses per conversation type). Factory: `createLLMProvider()`.
-- `firestore-model.ts` — TypeScript interfaces for all Emmaus data types + InMemoryConversationStore (default) + ConversationStore interface.
-- `conversation-service.ts` — orchestrates the full pipeline; exports `handleConversation()`, `setSseHeaders()`, `listConversations()`, etc.
-- `routes/emmaus.ts` — Express route handlers; registered in `routes/index.ts`.
+POST `/api/emmaus/conversation` — starts or continues; streams SSE.
+POST `/api/emmaus/conversation/:id/message` — appends to existing; streams SSE.
 
-## SSE Event Format
+Route: `artifacts/api-server/src/emmaus/`
+
+Key files:
+- `conversation-service.ts` — route classification (fast/deep), token caps, EMMAUS_META parsing, sermon injection
+- `llm-provider.ts` — OpenAI streaming provider; `StreamOptions` carries `maxTokens`, `reasoningEffort`, `model`
+- `sermon-retrieval.ts` — verified sermon registry; keyword + scripture scoring; `retrieveSermon()`
+- `system-instructions.ts` — single source of truth for system prompt; `PROMPT_VERSION="1.0.0"`
+- `context-builder.ts` — assembles LLM message array from context input
+- `firestore-model.ts` — `Recommendation` includes `label?`, `speakerName?`
+
+## Streaming — critical
+
+`OpenAIProvider.streamCompletion` MUST use a typed `ChatCompletionCreateParamsStreaming` object (not `Record<string, any>`). The `as any` cast breaks the SDK's overload resolution and silently returns a non-streaming response, causing `chars=0` and no TTFT. Use:
+
+```typescript
+const streamParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+  model: opts.model ?? this.model,
+  messages,
+  stream: true,
+  max_completion_tokens: maxTokens,
+};
 ```
-data: {"type":"text","content":"..."}  ← streamed text
-data: {"type":"done","conversationId":"...","messageId":"...","metadata":{...},"promptVersion":"..."}
-data: {"type":"error","message":"..."}
-```
 
-## Response metadata
-After the pastoral text, the LLM appends a `<EMMAUS_META>{...}</EMMAUS_META>` JSON block.
-The service strips this before sending text events and sends it in the `done` event as `metadata`.
-Fields: `scripture`, `nextStep`, `recommendations`, `followUpPrompts`, `handoffType`.
+`reasoning_effort` is spread via `(streamParams as unknown as Record<string, unknown>).reasoning_effort` only for o1/o3/o4 models (detected by `isReasoningModel()` regex).
 
-## API Routes
-- `POST /api/emmaus/conversation` — new or continuing conversation (uses `context.conversationId` to continue)
-- `POST /api/emmaus/conversation/:id/message` — append to existing
-- `GET /api/emmaus/conversations?userId=` — list stubs
-- `GET /api/emmaus/conversation/:id/messages` — get messages
-- `POST /api/emmaus/memory` — save approved memory note
-- `DELETE /api/emmaus/memory/:id?userId=` — delete memory
+**Why:** gpt-5 with `stream: true` in a `Record<string, any>` cast silently returns a non-iterable result. The `for await` loop runs but `choices[0]?.delta?.content` is always `""`. TTFT never fires. Total time still ~7-30s but zero content emitted.
 
-## Env vars
-- `OPENAI_API_KEY` — starts with `sk-`; when present, uses OpenAIProvider; when absent, uses MockProvider. Never blocks startup.
-- `FIREBASE_PROJECT_ID` + credentials — for FirestoreConversationStore (not yet implemented; use InMemory).
+## Model routing
 
-## Why the orval types directory was removed
-The `schemas: { path: "generated/types", type: "typescript" }` option in `lib/api-spec/orval.config.ts` generated TypeScript types with the same PascalCase names as the Zod schemas in `generated/api.ts`. This caused TS2308 "already exported" errors. Fixed by removing the schemas option — Zod schemas are sufficient; TypeScript types can be inferred with `z.infer<>`.
+Two env vars control per-route model selection:
+- `EMMAUS_FAST_MODEL=gpt-4o` — fast-path questions (greetings, encouragement, Bible questions)
+- `EMMAUS_DEEP_MODEL=gpt-5` — deep-path questions (theological complexity, etc.)
 
-**How to apply:** If adding new API routes, run `pnpm --filter @workspace/api-spec run codegen` and check for naming conflicts. Do not re-add the schemas option.
+`routeSettings(route)` returns `{ maxTokens, historyTurns, reasoningEffort, model? }`.
+Model override is passed as `opts.model` to `streamCompletion`.
+
+**Why:** gpt-5 TTFT is ~30s baseline. gpt-4o TTFT is 370–700ms. Fast path MUST use a low-latency model.
+
+## Token caps
+
+- Fast path: `EMMAUS_MAX_OUTPUT_TOKENS` (default 900)
+- Deep path: `EMMAUS_DEEP_MAX_TOKENS` (default 1400)
+- History turns: fast=6, deep=10
+
+## Sermon retrieval
+
+`retrieveSermon(query, bibleBookId?, bibleChapter?)` — deterministic, never touches LLM.
+
+Scoring per verified sermon:
+- Bible book+chapter match: +12/+8 (strong)
+- Topic match: +4 each
+- Priority keyword match: +5 each (unique phrases like "born again", "nicodemus")
+- Standard keyword match: +3 each
+- Book name in query: +2 each
+
+Threshold: `EMMAUS_SERMON_MIN_SCORE` (default 5). A single priority keyword hit clears threshold.
+
+LLM-generated `type:"sermon"` recommendations are stripped after EMMAUS_META parse and replaced with the verified retrieval result. LLM is instructed not to fabricate sermon recs in system prompt.
+
+## Flat context shape
+
+Routes accept flat context (not nested). `toContextInput()` in `routes/emmaus.ts` maps:
+- `bookId`, `bookName`, `chapter`, `chapterHeading` → `bibleContext`
+- `journeyId`, `journeyTitle`, `currentDay` → `journeyContext`
+- `sermonId`, `sermonTitle`, `scriptureReference` → `sermonContext`
+
+Curl tests must use flat context: `{"context":{"entryPoint":"bible","bookId":"john","chapter":3}}`.
+
+## Known limitations
+
+- Both verified sermons have `PLACEHOLDER_VIDEO_ID` in their YouTube URLs. "Watch sermon" links open YouTube but won't resolve until real IDs are entered in admin.
+- Transcript segment timestamps are not yet stored; `timestampSeconds` is always `undefined`.
+
+## Performance results (post-optimization)
+
+Baseline (gpt-5 fast path): TTFT=30,249ms, Total=42,126ms
+After (gpt-4o fast path, 900 token cap): TTFT=370–691ms, Total=1.3–12.9s
+5-turn conversation: every response begins within 600ms.

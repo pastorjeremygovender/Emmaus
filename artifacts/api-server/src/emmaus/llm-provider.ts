@@ -28,6 +28,22 @@ export interface StreamChunk {
   done: boolean;
 }
 
+export interface StreamOptions {
+  maxTokens?: number;
+  /**
+   * Reasoning effort hint — only applied to o1/o3/o4 reasoning models.
+   * Ignored silently for standard models (gpt-4o, gpt-5, etc.).
+   */
+  reasoningEffort?: "low" | "medium" | "high";
+  /**
+   * Override the provider's default model for this request.
+   * Used by the conversation service to route fast-path vs deep-path requests
+   * to different models (e.g. gpt-4o for fast, gpt-5 for deep).
+   * When absent, the provider's configured model is used.
+   */
+  model?: string;
+}
+
 export interface LLMProvider {
   /**
    * Stream a completion. Yields text chunks as they arrive.
@@ -35,11 +51,17 @@ export interface LLMProvider {
    */
   streamCompletion(
     messages: LLMMessage[],
-    opts?: { maxTokens?: number }
+    opts?: StreamOptions
   ): AsyncGenerator<StreamChunk>;
 }
 
 // ─── OpenAI Implementation ────────────────────────────────────────────────────
+
+// Reasoning models support the reasoning_effort parameter; standard chat models do not.
+// Sending reasoning_effort to a non-reasoning model causes an API error.
+function isReasoningModel(model: string): boolean {
+  return /^o[1-9](-|$)|^o[1-9]mini/.test(model.toLowerCase());
+}
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
@@ -52,14 +74,34 @@ export class OpenAIProvider implements LLMProvider {
 
   async *streamCompletion(
     messages: LLMMessage[],
-    opts: { maxTokens?: number } = {}
+    opts: StreamOptions = {}
   ): AsyncGenerator<StreamChunk> {
-    const stream = await this.client.chat.completions.create({
-      model: this.model,
+    const defaultMaxTokens = parseInt(
+      process.env.EMMAUS_MAX_OUTPUT_TOKENS ?? "900",
+      10
+    );
+    const maxTokens = opts.maxTokens ?? defaultMaxTokens;
+
+    // Allow per-request model override (e.g. fast-path vs deep-path routing).
+    // Always use the stream: true overload so the return type is
+    // Stream<ChatCompletionChunk> (AsyncIterable). Never assign to a
+    // broader type — that breaks the TypeScript overload resolution.
+    const streamParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
+      model: opts.model ?? this.model,
       messages,
       stream: true,
-      max_completion_tokens: opts.maxTokens ?? 2000,
-    });
+      max_completion_tokens: maxTokens,
+    };
+
+    // reasoning_effort is only valid for o1/o3/o4 reasoning models.
+    // Spread it as an unknown extra field — the SDK ignores unknown params at
+    // runtime and TypeScript isn't aware of this field on standard models.
+    if (opts.reasoningEffort && isReasoningModel(this.model)) {
+      (streamParams as unknown as Record<string, unknown>).reasoning_effort =
+        opts.reasoningEffort;
+    }
+
+    const stream = await this.client.chat.completions.create(streamParams);
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content ?? "";

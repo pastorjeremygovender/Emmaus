@@ -1,9 +1,12 @@
 /**
  * ResourceCard — optional resource links (Journey, Sermon, Prayer, Room, Pastor).
  * Shows up to three per response, below the NextStepCard.
+ *
+ * When recommendation.label === "Preached Here", renders a dedicated Preached Here
+ * card layout with speaker, summary excerpt, and a Watch button.
  */
 
-import { Map, Mic2, HandIcon, Users, User } from 'lucide-react';
+import { Map, Mic2, HandIcon, Users, User, Play } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { Recommendation } from '@/lib/emmaus-client';
@@ -48,9 +51,16 @@ const TYPE_CONFIG: Record<
   },
 };
 
+function formatTimestamp(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function ResourceCard({ recommendation }: ResourceCardProps) {
   const [, setLocation] = useLocation();
   const config = TYPE_CONFIG[recommendation.type] ?? TYPE_CONFIG.bible;
+  const isPreachedHere = recommendation.label === 'Preached Here';
 
   function handleClick() {
     if (!recommendation.path) return;
@@ -61,6 +71,70 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
     }
   }
 
+  if (isPreachedHere) {
+    // ── Preached Here card ─────────────────────────────────────────────────
+    const watchLabel = recommendation.timestampSeconds
+      ? `Watch from ${formatTimestamp(recommendation.timestampSeconds)}`
+      : 'Watch sermon';
+
+    return (
+      <button
+        onClick={handleClick}
+        className="w-full text-left"
+        disabled={!recommendation.path}
+      >
+        <Card className="border-amber-200/60 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400/60 dark:hover:border-amber-600/50 transition-all">
+          <CardContent className="p-4 space-y-2">
+            {/* Badge row */}
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-5 h-5 rounded flex items-center justify-center bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                aria-hidden="true"
+              >
+                <Mic2 size={12} />
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                Preached Here
+              </p>
+            </div>
+
+            {/* Title */}
+            <p className="text-[14px] font-semibold text-foreground leading-snug">
+              {recommendation.title}
+            </p>
+
+            {/* Speaker */}
+            {recommendation.speakerName && (
+              <p className="text-[12px] text-muted-foreground">
+                {recommendation.speakerName}
+              </p>
+            )}
+
+            {/* Summary excerpt */}
+            {recommendation.description && (
+              <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
+                {recommendation.description}
+              </p>
+            )}
+
+            {/* Watch button */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <Play
+                size={11}
+                className="text-amber-700 dark:text-amber-400 fill-current"
+                aria-hidden="true"
+              />
+              <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
+                {watchLabel}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </button>
+    );
+  }
+
+  // ── Standard resource card ─────────────────────────────────────────────────
   return (
     <button
       onClick={handleClick}
@@ -77,7 +151,7 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
-              {config.label}
+              {recommendation.label ?? config.label}
             </p>
             <p className="text-[14px] font-medium text-foreground truncate">
               {recommendation.title}
