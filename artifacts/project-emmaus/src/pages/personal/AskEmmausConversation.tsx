@@ -14,9 +14,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
+import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import {
   startConversation,
   appendMessage,
@@ -84,7 +83,6 @@ export default function AskEmmausConversation() {
 
   const mainRef = useRef<HTMLElement>(null);
   const streamingMsgRef = useRef<HTMLDivElement>(null);
-  const followUpRef = useRef<HTMLTextAreaElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
   // ─── Scroll to top of new streaming message (once, on stream start) ─────────
@@ -278,13 +276,6 @@ export default function AskEmmausConversation() {
     streamResponse(trimmed, conversationId, history);
   }
 
-  function handleFollowUpKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleFollowUp();
-    }
-  }
-
   // ─── Memory consent ──────────────────────────────────────────────────────────
 
   function handleMemoryAccept() {
@@ -396,30 +387,25 @@ export default function AskEmmausConversation() {
         <div aria-hidden="true" className="h-1" />
       </main>
 
-      {/* Follow-up input */}
+      {/* Follow-up composer — hidden while streaming */}
       {!isStreaming && messages.length > 0 && (
-        <div className="border-t border-border/50 bg-background/95 backdrop-blur-sm safe-area-bottom">
-          <div className="px-5 py-3 max-w-[560px] mx-auto space-y-2">
+        <div
+          className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          <div className="px-4 py-3 max-w-[560px] mx-auto">
             <label htmlFor="follow-up-input" className="sr-only">
               Continue the conversation
             </label>
-            <Textarea
+            <EmmausComposer
               id="follow-up-input"
-              ref={followUpRef}
-              placeholder="Continue…"
               value={followUp}
-              onChange={(e) => setFollowUp(e.target.value)}
-              onKeyDown={handleFollowUpKeyDown}
-              className="resize-none bg-background border-border text-[15px] leading-relaxed rounded-xl min-h-[68px] max-h-[140px] focus-visible:ring-primary/30"
+              onChange={setFollowUp}
+              onSend={handleFollowUp}
+              placeholder="Continue…"
+              isLoading={isStreaming}
               aria-label="Follow-up message"
             />
-            <Button
-              className="w-full h-10 rounded-xl text-[14px]"
-              onClick={handleFollowUp}
-              disabled={!followUp.trim() || isStreaming}
-            >
-              Send
-            </Button>
           </div>
         </div>
       )}

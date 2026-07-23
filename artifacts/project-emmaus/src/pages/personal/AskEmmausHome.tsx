@@ -2,20 +2,18 @@
  * Ask Emmaus — Home Screen
  *
  * Entry point from Personal. Shows:
- * - Title + subtitle
- * - Multiline textarea for the user's question
+ * - Title + subtitle + optional FAB context label
+ * - EmmausComposer (inline-send textarea, no separate button)
  * - Six tappable suggested-prompt chips
- * - "Continue" primary button
  * - Small disclaimer
  * - Previous conversations list (if any)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, ChevronRight, Clock, MessageCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { ArrowLeft, Clock, MessageCircle, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import { useAuth } from '@/contexts/AuthContext';
 import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
 import { setPendingMessage, takePendingContext } from '@/lib/emmaus-pending';
@@ -67,7 +65,6 @@ export default function AskEmmausHome() {
   const [conversations, setConversations] = useState<ConversationStub[]>([]);
   const [fabContext, setFabContext] = useState<FlatContext | null>(null);
   const [returnPath, setReturnPath] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -82,8 +79,8 @@ export default function AskEmmausHome() {
   }, [user]);
 
   function handleChipClick(prompt: string) {
+    // Populate the composer; user taps the send icon to submit
     setMessage(prompt);
-    textareaRef.current?.focus();
   }
 
   function handleContinue() {
@@ -95,13 +92,6 @@ export default function AskEmmausHome() {
       : { entryPoint: 'personal', userName: user.preferredName };
     setPendingMessage(trimmed, context);
     setLocation('/personal/ask-emmaus/conversation');
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleContinue();
-    }
   }
 
   return (
@@ -148,21 +138,19 @@ export default function AskEmmausHome() {
           )}
         </div>
 
-        {/* Input */}
+        {/* Composer + chips */}
         <div className="space-y-3">
           <label htmlFor="emmaus-input" className="sr-only">
             What's on your mind?
           </label>
-          <Textarea
+          <EmmausComposer
             id="emmaus-input"
-            ref={textareaRef}
-            placeholder="What's on your mind?"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="resize-none bg-background border-border text-[16px] leading-relaxed rounded-xl min-h-[120px] focus-visible:ring-primary/30"
-            aria-label="Your message to Emmaus"
+            onChange={setMessage}
+            onSend={handleContinue}
+            placeholder="What's on your mind?"
             autoFocus
+            aria-label="Your message to Emmaus"
           />
 
           {/* Suggested prompts */}
@@ -188,17 +176,6 @@ export default function AskEmmausHome() {
             ))}
           </div>
         </div>
-
-        {/* Continue */}
-        <Button
-          className="w-full h-12 rounded-xl text-[16px] gap-1.5"
-          onClick={handleContinue}
-          disabled={!message.trim()}
-          aria-label="Continue to conversation"
-        >
-          Continue
-          <ChevronRight size={17} aria-hidden="true" />
-        </Button>
 
         {/* Disclaimer */}
         <p className="text-[12px] text-muted-foreground leading-relaxed text-center">

@@ -1,0 +1,167 @@
+PROJECT EMMAUS — MOBILE MESSAGE COMPOSER FIX
+
+Implement directly in the existing codebase.
+
+Do not redesign Ask Emmaus.
+Do not change the floating Ask Emmaus button.
+Do not alter response content, context handling, scrolling, typography, or the provider.
+Do not propose additional features.
+Do not mark complete from compilation alone.
+
+==================================================
+VERIFIED PROBLEM
+==================================================
+
+On mobile, when the user taps the Ask Emmaus message field, the virtual keyboard opens and obscures the separate Continue button.
+
+This makes the primary submission control difficult or impossible to reach.
+
+==================================================
+GOAL
+==================================================
+
+Replace the separate Continue button with a send icon inside the message composer.
+
+There must be only one visible submission control.
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. REMOVE THE SEPARATE BUTTON
+
+Remove the large Continue button beneath the message field.
+
+Do not leave a second send or continue action elsewhere on the screen.
+
+2. ADD SEND ICON INSIDE THE COMPOSER
+
+Place a send icon inside the lower-right area of the message box.
+
+Requirements:
+
+- use an existing approved icon from the project icon library
+- do not use a text label
+- provide accessible name: “Send message”
+- maintain a minimum 44 x 44 pixel touch target
+- ensure the icon remains visible on light backgrounds
+- use existing Emmaus colours
+- no animation, pulse, glow or bounce
+- position it without covering typed text
+
+Add enough internal right and bottom padding to the text area so content never appears underneath the icon.
+
+3. INPUT BEHAVIOUR
+
+The composer must:
+
+- support multiple lines
+- grow within a sensible maximum height
+- become internally scrollable after reaching that height
+- trim only for empty-message validation, not destructively alter meaningful spacing
+- disable the send icon when the message is empty or whitespace-only
+- prevent duplicate submissions while a message is already being sent
+- clear the field after successful submission
+- retain the message if submission fails
+- preserve the existing conversation thread and context
+
+Keyboard behaviour:
+
+- mobile Enter creates a new line
+- desktop Ctrl+Enter or Cmd+Enter sends
+- do not make ordinary Enter send if this prevents multiline writing
+- tapping the send icon always submits when valid
+
+4. MOBILE KEYBOARD SAFETY
+
+Ensure the full composer remains visible above the mobile virtual keyboard.
+
+Inspect whether the page uses:
+
+- fixed positioning
+- sticky positioning
+- safe-area insets
+- visual viewport height
+- an internal scroll container
+
+Implement the fix using the existing layout architecture.
+
+Requirements:
+
+- the composer must move or resize above the keyboard
+- the send icon must remain reachable
+- the composer must not be covered by bottom navigation
+- the composer must respect `env(safe-area-inset-bottom)` where supported
+- avoid hard-coded device-specific keyboard heights
+- closing the keyboard must restore the normal layout cleanly
+
+5. INITIAL ASK EMMAUS SCREEN
+
+Apply the same composer component to the initial Ask Emmaus screen shown before the first message.
+
+The separate Continue button must also be removed there.
+
+The prompt chips may remain.
+
+Tapping a prompt chip should populate or submit according to the current established behaviour, without reintroducing a separate Continue button.
+
+6. ACTIVE CONVERSATION SCREEN
+
+Use the same shared composer for follow-up messages.
+
+Do not maintain two different composer implementations for the initial and active conversation states unless technically unavoidable.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test in the narrow mobile preview and, where available, an actual mobile browser.
+
+1. Open Ask Emmaus.
+2. Tap the empty message field.
+3. Confirm the keyboard opens.
+4. Confirm the full composer and send icon remain visible above it.
+5. Confirm there is no separate Continue button.
+6. Confirm the send icon is disabled while the field is empty.
+7. Type:
+   Why are you called Emmaus?
+8. Confirm typed text does not sit underneath the icon.
+9. Tap the send icon.
+10. Confirm the message submits once.
+11. Confirm the field clears after success.
+12. Confirm the response appears in the same conversation.
+13. Type a multiline message using Enter.
+14. Confirm Enter creates new lines.
+15. Confirm the send icon still submits the multiline message.
+16. Test rapid repeated taps and confirm no duplicate messages are sent.
+17. Test a simulated failed request and confirm the typed message is not lost.
+18. Close the keyboard and confirm the normal layout restores correctly.
+19. Test the follow-up composer at the bottom of an existing conversation.
+20. Confirm it remains visible above the keyboard and sends to the same thread.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- the separate Continue button is removed
+- one send icon exists inside the composer
+- it is accessible and has an adequate touch target
+- empty messages cannot be sent
+- duplicate submissions are prevented
+- multiline input works
+- the composer stays above the mobile keyboard
+- the send icon remains reachable
+- initial and follow-up states use consistent composer behaviour
+- all behaviour has been verified in the running mobile-sized app
+
+When finished, report only:
+
+- files changed
+- shared composer component used or created
+- keyboard-safe technique implemented
+- keyboard and submission tests performed
+- any unsuccessful test and its exact cause
+
+Do not propose additional work.
