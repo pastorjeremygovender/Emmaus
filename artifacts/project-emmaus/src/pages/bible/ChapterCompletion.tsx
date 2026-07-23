@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
-import { Check, ArrowRight, PenLine, ChevronLeft } from 'lucide-react';
+import { Check, ArrowRight, PenLine, ChevronLeft, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { getChapter } from '@/lib/bible-provider';
 import { getBibleBook } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
+import { getChapterStudyPrompts } from '@/data/chapter-study-prompts';
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -27,6 +28,7 @@ export default function ChapterCompletion() {
 
   const [reflectOpen, setReflectOpen] = useState(false);
   const [prayOpen, setPrayOpen] = useState(false);
+  const [deeperOpen, setDeeperOpen] = useState(false);
 
   const [reflectionText, setReflectionText] = useState(getReflection(resolvedBookId, chapterNum)?.text ?? '');
   const [prayerText, setPrayerText] = useState(getPrayer(resolvedBookId, chapterNum)?.text ?? '');
@@ -34,6 +36,7 @@ export default function ChapterCompletion() {
   const [prayerSaved, setPrayerSaved] = useState(false);
 
   const nextChapter = book && chapterNum < book.chapters ? chapterNum + 1 : null;
+  const studyPrompts = getChapterStudyPrompts(resolvedBookId, chapterNum);
 
   function handleFinish() {
     setLocation('/bible');
@@ -106,7 +109,7 @@ export default function ChapterCompletion() {
           </p>
         </motion.div>
 
-        {/* Reflect & Pray cards */}
+        {/* Option cards */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -127,6 +130,17 @@ export default function ChapterCompletion() {
             done={prayerSaved || !!getPrayer(resolvedBookId, chapterNum)}
             onClick={() => setPrayOpen(true)}
           />
+          {studyPrompts.length > 0 && (
+            <OptionCard
+              icon={<BookOpen size={22} />}
+              label="Go Deeper"
+              description="Study questions"
+              done={false}
+              onClick={() => setDeeperOpen(true)}
+              className="col-span-2"
+              wide
+            />
+          )}
         </motion.div>
 
         {/* Navigation */}
@@ -223,6 +237,41 @@ export default function ChapterCompletion() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* ── Go Deeper Sheet ───────────────────────────────────────────────── */}
+      <Sheet open={deeperOpen} onOpenChange={setDeeperOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[90dvh] overflow-y-auto">
+          <div className="space-y-5 pb-6">
+            <SheetHeader>
+              <SheetTitle className="text-left">Go Deeper</SheetTitle>
+            </SheetHeader>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              Sit with one of these questions. There's no right answer — just an honest one.
+            </p>
+            <div className="space-y-3">
+              {studyPrompts.map((prompt, i) => (
+                <div
+                  key={prompt.id}
+                  className="p-4 bg-card rounded-2xl border border-border space-y-1"
+                >
+                  <p className="text-[11px] font-semibold text-primary/70 uppercase tracking-widest">
+                    Question {i + 1}
+                  </p>
+                  <p className="text-[16px] text-foreground leading-relaxed font-medium">
+                    {prompt.question}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-[12px] text-muted-foreground text-center">
+              You can reflect on these now, journal them later, or bring them to a conversation with Emmaus.
+            </p>
+            <Button className="w-full rounded-xl h-11" onClick={() => setDeeperOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -230,26 +279,41 @@ export default function ChapterCompletion() {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function OptionCard({
-  icon, label, description, done, onClick,
+  icon, label, description, done, onClick, className = '', wide = false,
 }: {
-  icon: React.ReactNode; label: string; description: string; done: boolean; onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  done: boolean;
+  onClick: () => void;
+  className?: string;
+  wide?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={[
-        'flex flex-col items-start gap-2 p-4 rounded-2xl border text-left transition-all active:scale-[0.97]',
+        'flex text-left transition-all active:scale-[0.97] rounded-2xl border',
+        wide
+          ? 'flex-row items-center gap-4 p-4'
+          : 'flex-col items-start gap-2 p-4',
         done ? 'bg-primary/8 border-primary/25' : 'bg-card border-border hover:border-primary/20',
+        className,
       ].join(' ')}
     >
-      <div className={`${done ? 'text-primary' : 'text-muted-foreground'}`}>{icon}</div>
-      <div>
+      <div className={`${done ? 'text-primary' : 'text-muted-foreground'} shrink-0`}>{icon}</div>
+      <div className={wide ? 'flex-1 min-w-0' : ''}>
         <div className="flex items-center gap-1.5">
           <span className="text-[15px] font-semibold text-foreground">{label}</span>
           {done && <Check size={13} className="text-primary" />}
         </div>
         <p className="text-[12px] text-muted-foreground leading-snug mt-0.5">{description}</p>
       </div>
+      {wide && (
+        <div className="shrink-0 text-[11px] font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full">
+          {done ? 'Viewed' : 'Open'}
+        </div>
+      )}
     </button>
   );
 }
