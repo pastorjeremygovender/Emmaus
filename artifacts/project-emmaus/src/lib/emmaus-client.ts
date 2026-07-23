@@ -5,10 +5,13 @@
  * Streaming uses the browser Fetch API and ReadableStream — never EventSource.
  *
  * Identity: passes X-User-Id header from the auth context (demo mode).
- * API base:  VITE_API_URL env var, defaulting to /api-server (Replit path routing).
+ * API base:  VITE_API_URL env var, defaulting to '' (empty string).
+ *            Empty string means requests go to /api/emmaus/… — the shared
+ *            Replit reverse proxy routes /api → API server on port 8080.
+ *            Never use '/api-server' as a prefix; that path is not registered.
  */
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? '/api-server') as string;
+const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
 
 // ─── Shared Types ─────────────────────────────────────────────────────────────
 

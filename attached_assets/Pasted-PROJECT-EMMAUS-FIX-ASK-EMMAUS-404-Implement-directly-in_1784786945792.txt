@@ -1,0 +1,117 @@
+PROJECT EMMAUS — FIX ASK EMMAUS 404
+
+Implement directly in the existing codebase.
+
+Do not create a plan.
+Do not create a new task.
+Do not propose follow-up features.
+Do not redesign the interface.
+Do not mark this complete until the running app has been tested successfully.
+
+CURRENT VERIFIED PROBLEM
+
+The Ask Emmaus page loads correctly and accepts user messages, but every submitted message displays:
+
+Server error: 404
+
+The frontend UI already exists.
+
+GOAL
+
+Repair the complete request path so that a submitted message receives and displays a successful response in the running app.
+
+SCOPE
+
+Only diagnose and repair the Ask Emmaus request-response connection.
+
+Do not connect a real language model yet.
+Do not modify the Bible Engine, navigation, Rooms, Journeys, Media Studio, authentication, or unrelated UI.
+
+IMPLEMENTATION STEPS
+
+1. Inspect the Ask Emmaus frontend code and identify:
+   - the exact URL being requested
+   - the HTTP method
+   - the request body
+   - how errors and responses are handled
+
+2. Inspect the server entry point and API route registration.
+
+3. Trace the full request path and identify the precise cause of the 404.
+
+4. Repair the mismatch by doing whichever is actually required:
+   - create the missing POST route
+   - correct the frontend URL
+   - correct the backend route path
+   - correct router mounting
+   - correct any API prefix
+   - correct development proxy or same-origin routing
+   - correct server middleware ordering
+
+Do not guess. Inspect the existing implementation first.
+
+WORKING ENDPOINT REQUIREMENTS
+
+Create or repair one canonical Ask Emmaus endpoint.
+
+It must:
+
+- accept POST requests
+- accept JSON
+- accept the user message and conversation context already supplied by the frontend
+- return JSON
+- return HTTP 200 for a valid request
+- never return an HTML error page
+- never expose stack traces to the client
+
+For this connection test, return this temporary response:
+
+Thank you for sharing that.
+
+The Ask Emmaus conversation service is now connected correctly. This temporary response confirms that your message reached the server and returned successfully.
+
+The response must use the data shape already expected by the frontend. If the frontend and backend currently expect different response shapes, standardise them cleanly and update both sides.
+
+ERROR HANDLING
+
+For invalid input, return structured JSON with HTTP 400.
+
+For unexpected internal errors, return structured JSON with HTTP 500.
+
+Use a neutral user-facing message such as:
+
+Ask Emmaus could not respond just now. Please try again.
+
+Do not display raw technical errors to the user.
+
+VERIFICATION
+
+After implementing the fix:
+
+1. Start or restart the required services.
+2. Open the running Ask Emmaus page.
+3. Submit:
+   I feel far from God
+4. Verify that:
+   - the request reaches the server
+   - the server returns HTTP 200
+   - the temporary response appears in the conversation
+   - no Server error: 404 appears
+   - the browser console has no relevant request error
+   - the server log confirms the correct route was called
+
+Do not merely run a typecheck.
+
+Do not declare success based only on compilation.
+
+Success requires a real message to complete the full request-response cycle in the running app.
+
+When finished, report only:
+
+- the exact cause of the 404
+- the files changed
+- the final endpoint path
+- the test performed
+- the observed result
+
+Do not propose additional work.
