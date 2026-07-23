@@ -43,9 +43,11 @@ export interface LLMProvider {
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model = "gpt-4o") {
     this.client = new OpenAI({ apiKey });
+    this.model = model;
   }
 
   async *streamCompletion(
@@ -53,10 +55,10 @@ export class OpenAIProvider implements LLMProvider {
     opts: { maxTokens?: number } = {}
   ): AsyncGenerator<StreamChunk> {
     const stream = await this.client.chat.completions.create({
-      model: "gpt-4o",
+      model: this.model,
       messages,
       stream: true,
-      max_tokens: opts.maxTokens ?? 2000,
+      max_completion_tokens: opts.maxTokens ?? 2000,
     });
 
     for await (const chunk of stream) {
@@ -491,9 +493,11 @@ export function createLLMProvider(): LLMProvider {
   if (_provider) return _provider;
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (apiKey && apiKey.startsWith("sk-")) {
-    console.log("[Emmaus] Using OpenAI provider (gpt-4o)");
-    _provider = new OpenAIProvider(apiKey);
+  const model = process.env.OPENAI_MODEL ?? "gpt-4o";
+
+  if (apiKey && apiKey.length > 10) {
+    console.log(`[Emmaus] Using OpenAI provider (model: ${model})`);
+    _provider = new OpenAIProvider(apiKey, model);
   } else {
     console.log("[Emmaus] OPENAI_API_KEY not set — using mock provider");
     _provider = new MockProvider();
