@@ -72,35 +72,138 @@ export class OpenAIProvider implements LLMProvider {
 
 /**
  * Classifies the user's message to pick the right canned response.
+ *
+ * Order matters — more specific intents must be checked first to prevent
+ * broad alternates (like a bare "why") from stealing matches.
+ * Order: name_identity → greeting → bible_understanding → personal_struggle
+ *        → practical_discipleship → resource_discovery → theological → unknown
  */
 function classifyMessage(message: string): keyof typeof MOCK_RESPONSES {
   const lc = message.toLowerCase();
 
-  // Bible understanding
-  if (/john|chapter|verse|bible|passage|scripture|mean|understand|explain/.test(lc)) {
+  // 1. Name / identity — must come before biblical and theological checks
+  //    so "Why is it called Emmaus?" doesn't fall into theological.
+  if (/emmaus|luke 24|road to emmaus|emmaus road/.test(lc)) {
+    return "name_identity";
+  }
+
+  // 2. Bare greetings — short messages that are just salutations
+  if (/^(hi|hello|hey)\b/.test(lc.trim())) {
+    return "greeting";
+  }
+
+  // 3. Bible understanding
+  if (/john|chapter|verse|bible|passage|scripture|understand|explain/.test(lc)) {
     return "bible_understanding";
   }
-  // Personal struggle
-  if (/far from god|distant|feel|lost|struggle|anxious|afraid|worry|doubt|alone|lonely|sad|depressed/.test(lc)) {
+
+  // 4. Personal struggle — require faith-distance or emotional-distress language;
+  //    avoid "feel" and "lost" alone which catch too many unrelated questions.
+  if (/far from god|god feels distant|distant from god|feel close to god|feel god|lonely|alone|depressed|anxious|afraid|sad|doubt|struggle/.test(lc)) {
     return "personal_struggle";
   }
-  // Practical discipleship
+
+  // 5. Practical discipleship
   if (/pray|prayer|how do i|quiet time|devotion|read the bible|discipline/.test(lc)) {
     return "practical_discipleship";
   }
-  // Resource discovery
+
+  // 6. Resource discovery
   if (/journey|sermon|room|community|group|where do i start|recommend|suggest/.test(lc)) {
     return "resource_discovery";
   }
-  // Theological question
-  if (/why|god allow|suffering|evil|grace|salvation|forgiven|forgive|heaven|hell|sin/.test(lc)) {
+
+  // 7. Theological / forgiveness — use specific forgiveness language rather than
+  //    a bare "why" which matches almost everything.
+  if (/forgiv|bitter|resent|how do i forgive|ephesians 4|god allow|suffering|evil|grace|salvation|heaven|hell|sin/.test(lc)) {
     return "theological";
   }
 
-  return "personal_struggle"; // default
+  // 8. Unknown — honest dev-provider fallback
+  return "unknown";
 }
 
 const MOCK_RESPONSES = {
+  name_identity: `The name comes from a road.
+
+In Luke 24, two disciples were walking from Jerusalem to a village called Emmaus — seven miles, heads down, conversation heavy. Everything they had hoped for had collapsed. Then a stranger came alongside them and walked with them. He listened. He opened the Scriptures. He explained what the prophets had said, and their hearts burned within them as he spoke.
+
+They did not recognise him until he sat at their table, took bread, and broke it. And then he was gone. They said to each other: "Were not our hearts burning within us while he talked with us on the road and opened the Scriptures to us?"
+
+That is the picture behind this platform. Emmaus exists because we believe technology can serve a faithful purpose when it is designed and used wisely to help people walk with Jesus Christ. Not to replace the church, or a pastor, or the Scriptures — but to come alongside, the way a fellow traveller does on a long road.
+
+The road to Emmaus is not a triumphant story. It is a story about confusion, loss, and a stranger who showed up anyway. That feels like an honest place to begin.
+
+<EMMAUS_META>
+{
+  "scripture": {
+    "reference": "Luke 24:32",
+    "book": "luke",
+    "chapter": 24,
+    "displayText": "Were not our hearts burning within us while he talked with us on the road and opened the Scriptures to us?"
+  },
+  "nextStep": {
+    "action": "Read the Emmaus road story in Luke 24:13–35. Notice what the disciples were carrying when the stranger appeared.",
+    "primaryButtonText": "Read Luke 24",
+    "path": "/bible/read/luke/24"
+  },
+  "recommendations": [
+    {
+      "type": "journey",
+      "title": "15 Minutes With Jesus",
+      "description": "A daily journey that builds a quiet rhythm with God — one step at a time.",
+      "path": "/journey/15-minutes-with-jesus/day/1"
+    }
+  ],
+  "followUpPrompts": [
+    "Why did the disciples not recognise Jesus on the road?",
+    "What does it mean that their hearts were burning?",
+    "How do I read the Bible the way Jesus opened the Scriptures?"
+  ],
+  "handoffType": null
+}
+</EMMAUS_META>`,
+
+  greeting: `Good to have you here.
+
+Emmaus is a place to bring whatever you are working through — a question about faith, something you have read in Scripture, a season that feels hard, or simply a desire to go deeper with God. There is no right or wrong way to begin.
+
+What is on your mind today?
+
+<EMMAUS_META>
+{
+  "scripture": null,
+  "nextStep": null,
+  "recommendations": [],
+  "followUpPrompts": [
+    "I feel far from God at the moment.",
+    "I have a question about something I read in the Bible.",
+    "I want to build a better rhythm of prayer."
+  ],
+  "handoffType": null
+}
+</EMMAUS_META>`,
+
+  unknown: `Ask Emmaus is currently using a limited development response provider. Your question was received correctly, but this test provider does not yet have a suitable response for it.
+
+If you are testing the platform, try one of the following prompts — each has a prepared response: "I feel far from God", "How do I pray?", "Why is this called Emmaus?", or "Where should I start in the Bible?"
+
+When the real OpenAI-backed provider is connected, Emmaus will be able to respond to any question naturally.
+
+<EMMAUS_META>
+{
+  "scripture": null,
+  "nextStep": null,
+  "recommendations": [],
+  "followUpPrompts": [
+    "I feel far from God at the moment.",
+    "How do I build a prayer habit?",
+    "Why is this called Emmaus?"
+  ],
+  "handoffType": null
+}
+</EMMAUS_META>`,
+
   bible_understanding: `That passage carries more than it first appears to.
 
 John's Gospel opens with the Greek word *Logos* — Word. Before anything else existed, the Word was already there, with God, and as God. John is making an enormous claim before a single miracle, a single healing, a single conversation has taken place.

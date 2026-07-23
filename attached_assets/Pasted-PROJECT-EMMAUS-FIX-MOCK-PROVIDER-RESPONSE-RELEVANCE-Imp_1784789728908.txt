@@ -1,0 +1,249 @@
+PROJECT EMMAUS — FIX MOCK PROVIDER RESPONSE RELEVANCE
+
+Implement directly in the existing codebase.
+
+Do not redesign the Ask Emmaus interface.
+Do not add the global floating button yet.
+Do not change typography, scrolling, navigation, or response-card design.
+Do not mark complete from TypeScript checks alone.
+
+==================================================
+VERIFIED PROBLEM
+==================================================
+
+Ask Emmaus successfully sends follow-up messages, but the response does not answer the submitted question.
+
+Verified example:
+
+User:
+Why are you called Emmaus?
+
+Incorrect Emmaus response:
+A long response about forgiveness, Matthew 6 and Ephesians 4.
+
+The response is unrelated to the user’s question.
+
+The current implementation appears to be using a MockProvider or fallback provider with preset responses.
+
+==================================================
+GOAL
+==================================================
+
+Make the development MockProvider respond meaningfully to the user’s actual latest message while preserving relevant conversation context.
+
+This remains a development provider.
+
+Do not pretend it is a real language model.
+
+==================================================
+DIAGNOSE FIRST
+==================================================
+
+Inspect the actual MockProvider implementation and determine:
+
+- how it chooses a response
+- whether it cycles through fixed responses by turn number
+- whether it ignores the latest user message
+- whether keyword detection is too broad or ordered incorrectly
+- whether it receives the full message history
+- whether it reads the wrong message from the history array
+- whether an old topic or default response overrides the newest question
+
+Identify the exact cause before changing code.
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. LATEST MESSAGE
+
+The MockProvider must identify the most recent user message correctly.
+
+It must not:
+
+- use the first user message as the current question
+- use the most recent assistant response as the user question
+- select a response only by conversation length
+- cycle through unrelated canned responses
+
+2. INTENT-BASED DEVELOPMENT RESPONSES
+
+Create a small, explicit development intent map for testing Ask Emmaus.
+
+At minimum, support:
+
+A. NAME / IDENTITY
+
+Questions such as:
+
+- Why are you called Emmaus?
+- Where does the name Emmaus come from?
+- What does Emmaus mean?
+
+Return a relevant response explaining:
+
+- the name comes from Luke 24
+- two disciples were walking on the road to Emmaus
+- Jesus came alongside them
+- He opened the Scriptures and helped them recognise Him
+- the platform name reflects helping people walk with Jesus
+- Emmaus is technology, not a human or spiritual being
+
+Use the official mission wording exactly:
+
+“Emmaus exists because we believe technology can serve a faithful purpose when it is designed and used wisely to help people walk with Jesus Christ.”
+
+Do not claim that Emmaus believes, loves, prays, feels, hears God, or possesses spiritual authority.
+
+B. FEELING FAR FROM GOD
+
+Questions such as:
+
+- I feel far from God
+- God feels distant
+- I do not feel close to God
+
+Return the existing appropriate Psalm 42 development response.
+
+C. FORGIVENESS
+
+Questions explicitly about:
+
+- forgiveness
+- bitterness
+- forgiving someone
+
+Return the forgiveness development response.
+
+D. GENERAL GREETING
+
+Questions such as:
+
+- Hi
+- Hello
+
+Return a brief, calm greeting that invites the person to share what they are working through without saying:
+
+- Anything else?
+- What else can I help with?
+
+E. UNKNOWN QUESTION
+
+For an unsupported development question, return an honest fallback:
+
+“Ask Emmaus is currently using a limited development response provider. Your question was received correctly, but this test provider does not yet have a suitable response for it.”
+
+Do not return an unrelated theological answer.
+
+3. MATCHING RULES
+
+Use clear, deterministic matching.
+
+- Normalise case.
+- Trim punctuation and whitespace where appropriate.
+- Prefer specific intent matches before general matches.
+- Do not match “forgiveness” unless forgiveness-related language is actually present.
+- Do not use loose matching that causes unrelated questions to trigger the wrong topic.
+- Keep the intent map separated from UI code.
+
+4. CONVERSATION CONTEXT
+
+Verify that the full conversation history reaches the provider.
+
+The latest user message must determine the immediate response.
+
+Earlier conversation content may provide context, but must not override a clear new question.
+
+Examples:
+
+Conversation:
+I feel far from God.
+Why are you called Emmaus?
+
+The second response must answer why the platform is called Emmaus.
+
+Conversation:
+I feel far from God.
+Can you explain Psalm 42 again?
+
+The second response may use the earlier Psalm 42 context.
+
+==================================================
+TEST IN THE RUNNING APP
+==================================================
+
+Test a fresh conversation with each of these:
+
+1.
+Why are you called Emmaus?
+
+Expected:
+A relevant explanation based on Luke 24 and the official mission wording.
+
+2.
+I feel far from God.
+
+Expected:
+The appropriate Psalm 42 response.
+
+3.
+How do I forgive someone who hurt me?
+
+Expected:
+The forgiveness response.
+
+4.
+Hi
+
+Expected:
+A brief relevant greeting.
+
+5.
+What is the significance of the tabernacle furniture?
+
+Expected:
+The honest limited-development-provider fallback, not an unrelated canned answer.
+
+Then test one continuous conversation:
+
+User:
+I feel far from God.
+
+User:
+Why are you called Emmaus?
+
+User:
+Can you explain Psalm 42 again?
+
+Verify:
+
+- turn two answers the name question
+- turn three correctly refers back to Psalm 42
+- no response is selected merely by turn number
+- no unrelated forgiveness response appears
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when the running application demonstrates:
+
+- the latest user message is correctly identified
+- name questions receive an Emmaus-name answer
+- distance-from-God questions receive the Psalm 42 answer
+- forgiveness questions receive the forgiveness answer
+- unsupported questions receive an honest development fallback
+- conversation history is preserved
+- a new clear question can change the topic
+- a contextual follow-up can refer back to an earlier topic
+
+When finished, report only:
+
+- the exact root cause
+- how the MockProvider previously chose responses
+- files changed
+- intent matching implemented
+- results of all running-app tests
+- any test that remains unsuccessful
+
+Do not propose further work.
