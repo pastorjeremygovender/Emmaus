@@ -1,0 +1,176 @@
+PROJECT EMMAUS — REPAIR FAILED ASK EMMAUS EXPERIENCE
+
+The previous task must not be treated as complete.
+
+Implement directly after inspecting the actual rendered DOM and scroll container.
+
+Do not propose new features.
+Do not redesign unrelated screens.
+Do not mark complete based on TypeScript or compilation.
+Test everything in the running application.
+
+CURRENT VERIFIED FAILURES
+
+1. After an Emmaus response renders, the viewport still lands at the bottom of the page.
+
+2. The main Emmaus response is using an unsuitable Times New Roman–style serif font.
+
+3. Words are visibly joined together in the rendered response, including examples such as:
+
+- “smallgroup”
+- “resonatesand”
+
+Inspect whether these are:
+- incorrect source strings
+- Markdown/rendering issues
+- CSS word-spacing or font issues
+- streamed text chunks being concatenated without spaces
+
+Do not merely patch the two examples. Fix the underlying cause.
+
+4. The “Continue…” input and Send button must be verified as a follow-up message mechanism within the same Ask Emmaus conversation.
+
+==================================================
+A. FIX THE SCROLL POSITION PROPERLY
+==================================================
+
+First inspect:
+
+- the actual element that scrolls
+- whether scrolling occurs on window, document, page wrapper, or an internal conversation container
+- existing scrollIntoView, scrollTop, bottomRef, focus, resize, streaming, and useEffect logic
+- whether focusing the Continue input causes the browser to jump to the bottom
+- whether the response cards expanding after render cause another downward scroll
+
+The previous ref-based fix did not work.
+
+Required result:
+
+- after the user submits a message, the beginning of the new Emmaus answer must be visible
+- the first sentence must appear beneath the fixed header
+- the response must not finish at the bottom
+- the Continue input must not automatically receive focus if that focus causes the page to jump downward
+- expanding cards or streamed content must not override the correct reading position
+- manual user scrolling must remain under user control
+
+Test on the actual mobile-sized preview, not only desktop layout.
+
+==================================================
+B. FIX TYPOGRAPHY
+==================================================
+
+Use the existing clean Emmaus sans-serif application font for:
+
+- Emmaus response paragraphs
+- Scripture card text
+- next-step text
+- Journey and Room card descriptions
+- memory prompt text
+- conversation input
+
+Do not use Times New Roman or a Times-style serif font for body copy.
+
+A restrained serif font may remain only for established display headings elsewhere in the application if already part of the design system.
+
+Do not introduce a new external font unless one is already approved and installed.
+
+Ensure:
+
+- readable mobile font size
+- comfortable line height
+- normal word spacing
+- clear paragraph spacing
+- no large walls of text
+
+==================================================
+C. FIX JOINED WORDS AND GRAMMAR
+==================================================
+
+Trace the exact cause of joined words in streamed and structured response content.
+
+Verify spacing at:
+
+- streamed chunk boundaries
+- Markdown text nodes
+- inline emphasis boundaries
+- punctuation boundaries
+- structured card fields
+- mock or fallback response strings
+
+Do not use broad string replacements that may damage valid words.
+
+Ensure the displayed response contains grammatically correct sentences and normal spacing.
+
+Correct the current visible content, including:
+
+“A small group of people walking the same journey — you do not have to do this alone.”
+
+and:
+
+“Read Psalm 42 slowly. Stop at any verse that resonates and turn it into a short prayer.”
+
+==================================================
+D. VERIFY CONTINUE AND SEND
+==================================================
+
+The Continue input must send a follow-up message into the same Ask Emmaus conversation.
+
+Verify:
+
+- the current conversation ID or thread is preserved
+- previous user and Emmaus messages remain in context
+- submitting adds the new user message to the same thread
+- Emmaus receives the earlier conversation context
+- pressing Send with an empty input does nothing
+- the input clears after successful submission
+- duplicate submissions are prevented
+- the response appears in the same conversation
+- no new unrelated conversation is silently created
+
+Do not rename the input unless required for clarity.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+1. Open Ask Emmaus on the mobile-sized preview.
+2. Submit:
+
+I feel far from God
+
+3. Confirm the screen stops at the beginning of the Emmaus answer.
+4. Confirm it does not jump to the bottom after the full response and cards render.
+5. Confirm the body text uses the approved clean sans-serif app font.
+6. Read the full response and confirm there are no joined words or obvious grammatical errors.
+7. In Continue, enter:
+
+Why does Psalm 42 describe this feeling?
+
+8. Press Send.
+9. Confirm it is added to the same conversation.
+10. Confirm the follow-up response uses the earlier conversation context.
+11. Confirm the new response also opens at its beginning rather than its bottom.
+12. Test the same flow in the narrow/mobile preview.
+
+COMPLETION STANDARD
+
+Do not mark complete unless all of these are visually verified:
+
+- first response opens at its beginning
+- follow-up response opens at its beginning
+- no automatic jump to the bottom
+- no Times New Roman–style body text
+- no joined words
+- grammar and spacing are normal
+- Continue sends into the same conversation
+- conversation context is retained
+
+Report only:
+
+- the actual root cause of the failed scroll fix
+- whether input autofocus contributed to the problem
+- the cause of joined words
+- files changed
+- typography applied
+- the exact Continue/Send behaviour verified
+- observed running-app test results

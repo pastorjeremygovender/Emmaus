@@ -49,7 +49,7 @@ function renderProse(text: string) {
   const paragraphs = text.split(/\n{2,}/).filter(Boolean);
   if (paragraphs.length <= 1) {
     return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-serif">
+      <p className="text-[16px] text-foreground leading-[1.75] font-sans">
         {text}
       </p>
     );
@@ -57,7 +57,7 @@ function renderProse(text: string) {
   return (
     <div className="space-y-4">
       {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-serif">
+        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
           {p}
         </p>
       ))}
@@ -86,20 +86,23 @@ export default function AskEmmausConversation() {
   const streamingIdRef = useRef<string | null>(null);
 
   // ─── Scroll to top of new streaming message (once, on stream start) ─────────
+  // Two-phase: wait 60 ms for the DOM to assign height to the new element,
+  // then measure and scroll. Never re-fires after that (guard: !isStreaming).
 
   const HEADER_HEIGHT = 56; // matches h-14 sticky header
 
   useEffect(() => {
-    if (!isStreaming) return; // only fire when streaming begins
-    requestAnimationFrame(() => {
+    if (!isStreaming) return;
+    const timer = setTimeout(() => {
       if (!streamingMsgRef.current || !mainRef.current) return;
       const main = mainRef.current;
       const msgEl = streamingMsgRef.current;
       const msgTop = msgEl.getBoundingClientRect().top;
       const mainTop = main.getBoundingClientRect().top;
-      const target = main.scrollTop + (msgTop - mainTop) - HEADER_HEIGHT;
+      const target = main.scrollTop + (msgTop - mainTop) - HEADER_HEIGHT - 12;
       main.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
-    });
+    }, 60);
+    return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Stream a response ──────────────────────────────────────────────────────
@@ -157,8 +160,9 @@ export default function AskEmmausConversation() {
           ) {
             setMemoryPrompt(payload.metadata.nextStep.action);
           }
-          // Focus follow-up after streaming
-          setTimeout(() => followUpRef.current?.focus(), 300);
+          // Do not programmatically focus the follow-up textarea — doing so
+          // causes the browser to scroll it into view, overriding the scroll
+          // position set above. Users tap the textarea themselves on mobile.
         },
         onError: (message: string) => {
           setIsStreaming(false);

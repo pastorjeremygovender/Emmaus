@@ -356,15 +356,18 @@ export class MockProvider implements LLMProvider {
       const words = para.split(" ");
       let buffer = "";
       for (const word of words) {
-        buffer += (buffer ? " " : "") + word;
+        buffer += (buffer.trimStart() ? " " : "") + word;
         if (buffer.length > 40) {
           yield { content: buffer, done: false };
-          buffer = "";
+          // Reset with a trailing space so the next word joins naturally.
+          // Trim the leading space if this is the very start of a new paragraph.
+          buffer = " ";
           // Small artificial delay for natural feel
           await new Promise<void>(resolve => setTimeout(resolve, 15));
         }
       }
-      if (buffer) yield { content: buffer, done: false };
+      // Flush remainder — trim any leading space left from the reset
+      if (buffer.trim()) yield { content: buffer.trimStart(), done: false };
 
       // Paragraph break
       if (i < paragraphs.length - 1) {
