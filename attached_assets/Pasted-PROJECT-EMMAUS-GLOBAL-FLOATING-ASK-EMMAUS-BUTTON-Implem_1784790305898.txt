@@ -1,0 +1,347 @@
+PROJECT EMMAUS — GLOBAL FLOATING ASK EMMAUS BUTTON
+
+Implement directly in the existing codebase.
+
+Do not redesign the application.
+Do not modify the bottom navigation.
+Do not connect the real language-model provider in this build.
+Do not change Ask Emmaus response content, typography, scrolling, or current interaction behaviour.
+Do not propose additional features.
+Do not mark complete from compilation alone.
+
+==================================================
+GOAL
+==================================================
+
+Make Ask Emmaus consistently available throughout the authenticated user app through one shared floating action button positioned at the bottom right.
+
+Ask Emmaus is not a fifth navigation tab.
+
+It is a companion layer woven through the platform.
+
+==================================================
+CURRENT VERIFIED STATE
+==================================================
+
+Ask Emmaus currently:
+
+- opens from Personal
+- accepts messages
+- returns development responses
+- supports follow-up messages
+- preserves the current conversation screen
+- renders Scripture, next-step, Journey, Room and memory cards
+- has working response positioning and readable typography
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. CREATE ONE SHARED COMPONENT
+
+Create one reusable floating Ask Emmaus button component.
+
+Do not copy and paste separate button implementations into each page.
+
+The component must:
+
+- use the existing Emmaus design tokens
+- be circular
+- be approximately 56–60 pixels
+- have a restrained soft shadow
+- remain clearly visible on light backgrounds
+- have an accessible label such as “Ask Emmaus”
+- support keyboard focus
+- have a sufficiently large touch target
+- contain no animation beyond an optional subtle initial fade
+- never bounce, pulse, glow or demand attention
+
+For the MVP, use a simple existing icon that communicates guidance or conversation without resembling a robot, AI sparkle or support-chat widget.
+
+Do not create the final custom Emmaus logo in this task.
+
+2. POSITION
+
+Place the button at the bottom right of the authenticated app shell.
+
+It must:
+
+- sit above the permanent bottom navigation
+- not overlap Walk, Bible, Journeys or Personal navigation items
+- respect mobile safe-area insets
+- remain visible while the main page content scrolls
+- not cover primary page buttons or reading controls
+- work correctly in narrow mobile layouts and desktop preview
+
+Use one shared authenticated layout or shell where possible.
+
+Do not add the component manually to every individual page when a common layout can provide it safely.
+
+3. SHOW ON THESE AREAS
+
+The floating button must appear on:
+
+- Walk
+- Bible Home
+- Browse Books
+- Bible chapter reader
+- Journeys library
+- individual Journey pages and steps
+- Personal
+- Rooms
+- Sermon-related authenticated user screens where the shared shell already applies
+
+4. HIDE ON THESE AREAS
+
+Do not show it on:
+
+- login
+- registration
+- onboarding
+- splash or loading screens
+- Admin Portal
+- the Ask Emmaus conversation screen itself
+- full-screen media or video playback
+- any screen where it would cover a critical full-screen control
+
+5. OPENING BEHAVIOUR
+
+Tapping the floating button must open the existing Ask Emmaus conversation experience.
+
+Do not create another Ask Emmaus page.
+
+Do not create separate conversation services.
+
+Use the existing route and existing conversation UI.
+
+When the user closes or navigates back from Ask Emmaus, return them to the screen from which they opened it.
+
+6. CONTEXT PAYLOAD
+
+Pass a small structured source context when opening Ask Emmaus.
+
+Use the existing Context Builder or a clean compatible interface.
+
+Do not insert page-specific context directly into the visible user message.
+
+Support these MVP context types:
+
+A. WALK
+
+Include when available:
+
+- source type: walk
+- active Journey ID
+- active Journey title
+- current step ID
+- current step title
+- current Scripture reference
+
+B. BIBLE
+
+Include when available:
+
+- source type: bible
+- Bible book ID/name
+- chapter
+- selected verse or verse range, only when one is actually selected
+- current translation/provider ID
+
+The floating button must remain available while reading a chapter without disrupting the focused Bible experience.
+
+C. JOURNEY
+
+Include when available:
+
+- source type: journey
+- Journey ID
+- Journey title
+- current step or lesson ID
+- current step or lesson title
+- completion state
+
+D. PERSONAL
+
+Include:
+
+- source type: personal
+
+Do not add invented spiritual or emotional context.
+
+E. ROOMS
+
+Include when available:
+
+- source type: room
+- Room ID
+- Room name
+
+Do not include private Room messages or member information automatically.
+
+F. SERMONS
+
+Include when available from the existing verified sermon data:
+
+- source type: sermon
+- sermon ID
+- verified sermon title
+- verified speaker
+- current timestamp only if the user opened Emmaus from a specific sermon moment
+
+Never fabricate sermon information.
+
+7. CONTEXT LABEL
+
+On the Ask Emmaus screen, show a subtle context label only when meaningful context exists.
+
+Examples:
+
+Discussing: Psalm 42
+
+Discussing: Walk Through Luke — Chapter 3
+
+Discussing: 15 Minutes with Jesus — Day 4
+
+Discussing: Emmaus Rooms
+
+Requirements:
+
+- place it beneath the Ask Emmaus header
+- keep it visually quiet
+- allow the user to dismiss or clear the context
+- hide it when opened generally from Personal
+- do not present technical IDs
+- do not treat the context label as a user message
+
+8. CONVERSATION RULES
+
+Opening Ask Emmaus from a context-aware screen must:
+
+- use the same conversation service
+- use the same fixed Emmaus personality
+- preserve current Ask Emmaus privacy behaviour
+- preserve user-approved memory rules
+- preserve safety and human-handover behaviour
+- not create duplicate messages
+- not automatically submit a question
+- allow the user to type naturally, including phrases such as:
+  - “What does this mean?”
+  - “How do I apply this?”
+  - “Why does this matter?”
+
+The attached screen context must make those questions understandable.
+
+9. ACCESSIBILITY AND MOBILE SAFETY
+
+Verify:
+
+- accessible button name
+- visible keyboard focus state
+- adequate contrast
+- minimum touch target
+- safe-area spacing
+- no overlap with the bottom navigation
+- no overlap with chapter-completion controls
+- no overlap with the Continue input on Ask Emmaus because the button must be hidden on that screen
+
+==================================================
+BOUNDARIES
+==================================================
+
+Do not:
+
+- add Emmaus as a fifth bottom-navigation tab
+- change existing bottom-navigation labels
+- redesign Ask Emmaus
+- add an AI avatar
+- add typing or waiting indicators
+- add animation beyond a restrained fade
+- connect OpenAI or another real provider
+- alter Bible content
+- alter Journey content
+- expose private Room content
+- add new sermon records
+- change Admin Portal
+- create the final Emmaus logo
+- modify unrelated functionality
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test in the running application using the mobile-sized preview.
+
+1. Open Walk.
+2. Confirm the floating button appears at bottom right above the navigation.
+3. Confirm it does not cover the current Journey card or Continue control.
+4. Tap it.
+5. Confirm the existing Ask Emmaus screen opens.
+6. Confirm a subtle Walk context label is shown when Walk data exists.
+7. Navigate back and confirm Walk is restored.
+
+8. Open Bible Home.
+9. Confirm the button appears.
+10. Open Psalm 42 or another available chapter.
+11. Confirm the button remains available without obscuring reading controls.
+12. Tap it.
+13. Confirm the context label identifies the correct passage and translation.
+14. Enter:
+    What does this mean?
+15. Confirm the submitted request carries Bible context to the conversation service.
+
+16. Open Journeys.
+17. Open an active Journey step.
+18. Confirm the button appears.
+19. Tap it.
+20. Confirm the correct Journey and step context appears.
+
+21. Open Personal.
+22. Confirm the button appears.
+23. Tap it.
+24. Confirm Ask Emmaus opens without an unnecessary context label.
+
+25. Open Rooms.
+26. Confirm the button appears where appropriate.
+27. Confirm no private Room messages are automatically attached.
+
+28. Open the Ask Emmaus screen.
+29. Confirm the floating button is hidden there.
+
+30. Open Admin Portal.
+31. Confirm the floating button is not shown.
+
+32. Test on narrow mobile preview.
+33. Confirm safe-area spacing and no overlap with bottom navigation.
+34. Check browser console and server logs for relevant errors.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+This task is complete only when:
+
+- one shared floating component is implemented
+- it appears consistently throughout the authenticated user app
+- it is hidden on excluded screens
+- it opens the existing Ask Emmaus screen
+- returning restores the source screen
+- Walk context is passed correctly
+- Bible context is passed correctly
+- Journey context is passed correctly
+- Personal opens without unnecessary context
+- private Room content is not automatically included
+- no bottom-navigation or primary-control overlap occurs
+- mobile safe-area behaviour is verified
+- all behaviour is tested in the running application
+
+When finished, report only:
+
+- the shared component created
+- the layout or shell where it was mounted
+- routes where it appears
+- routes where it is hidden
+- context fields passed from each area
+- running-app test results
+- any item that remains unsuccessful and its exact reason
+
+Do not propose additional work.

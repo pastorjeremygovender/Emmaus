@@ -75,6 +75,8 @@ export default function AskEmmausConversation() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(params.id ?? null);
   const [isStreaming, setIsStreaming] = useState(false);
+  // Context from AskEmmausHome (may include Bible/Walk/Journey entry point from FAB)
+  const [initialContext, setInitialContext] = useState<import('@/lib/emmaus-client').FlatContext | null>(null);
   const [followUp, setFollowUp] = useState('');
   const [isCrisisMode, setIsCrisisMode] = useState(false);
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
@@ -108,7 +110,14 @@ export default function AskEmmausConversation() {
   // ─── Stream a response ──────────────────────────────────────────────────────
 
   const streamResponse = useCallback(
-    (text: string, convId: string | null, history: HistoryItem[]) => {
+    (
+      text: string,
+      convId: string | null,
+      history: HistoryItem[],
+      /** Optional context override — used for the first message when the FAB
+       *  supplied Bible/Walk/Journey context from the originating screen. */
+      contextOverride?: import('@/lib/emmaus-client').FlatContext,
+    ) => {
       if (!user) return;
 
       const streamingMsgId = `streaming-${Date.now()}`;
@@ -181,10 +190,14 @@ export default function AskEmmausConversation() {
       };
 
       if (!convId) {
+        // Use FAB-supplied context when available; fall back to personal.
+        const ctx = contextOverride
+          ? { ...contextOverride, userName: user.preferredName }
+          : { entryPoint: 'personal' as const, userName: user.preferredName };
         startConversation({
           userId: user.id,
           message: text,
-          context: { entryPoint: 'personal', userName: user.preferredName },
+          context: ctx,
           history,
           callbacks,
         });
@@ -231,12 +244,16 @@ export default function AskEmmausConversation() {
       return;
     }
 
+    // Capture context supplied by the FAB / AskEmmausHome for the first request
+    setInitialContext(pending.context ?? null);
+
     // Add the user message to the UI
     const userMsgId = `user-${Date.now()}`;
     setMessages([{ id: userMsgId, role: 'user', content: pending.message }]);
 
-    // Start streaming
-    streamResponse(pending.message, null, []);
+    // Start streaming — pass the pending context so the backend knows the
+    // originating area (Bible book+chapter, Walk, Journey, etc.)
+    streamResponse(pending.message, null, [], pending.context);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Follow-up submit ───────────────────────────────────────────────────────

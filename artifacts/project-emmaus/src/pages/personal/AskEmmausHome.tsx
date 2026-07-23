@@ -17,8 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { listConversations, type ConversationStub } from '@/lib/emmaus-client';
-import { setPendingMessage } from '@/lib/emmaus-pending';
+import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
+import { setPendingMessage, takePendingContext } from '@/lib/emmaus-pending';
 
 const SUGGESTED_PROMPTS = [
   'I feel far from God',
@@ -48,15 +48,35 @@ const ENTRY_POINT_LABELS: Record<string, string> = {
   standalone: 'Ask Emmaus',
 };
 
+/** Build a short human-readable label from a FlatContext, or null if generic. */
+function buildContextLabel(ctx: FlatContext): string | null {
+  if (!ctx.entryPoint || ctx.entryPoint === 'personal' || ctx.entryPoint === 'standalone') {
+    return null;
+  }
+  if (ctx.bookName && ctx.chapter) return `${ctx.bookName} ${ctx.chapter}`;
+  if (ctx.journeyTitle && ctx.currentDay) return `${ctx.journeyTitle} — Day ${ctx.currentDay}`;
+  if (ctx.journeyTitle) return ctx.journeyTitle;
+  if (ctx.chapterHeading) return ctx.chapterHeading; // room name passed via this field
+  return null;
+}
+
 export default function AskEmmausHome() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [message, setMessage] = useState('');
   const [conversations, setConversations] = useState<ConversationStub[]>([]);
+  const [fabContext, setFabContext] = useState<FlatContext | null>(null);
+  const [returnPath, setReturnPath] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    // Pick up any context set by FloatingEmmausButton
+    const pending = takePendingContext();
+    if (pending) {
+      setFabContext(pending.context);
+      setReturnPath(pending.returnPath);
+    }
     if (!user) return;
     listConversations(user.id).then(setConversations);
   }, [user]);
@@ -69,7 +89,11 @@ export default function AskEmmausHome() {
   function handleContinue() {
     const trimmed = message.trim();
     if (!trimmed || !user) return;
-    setPendingMessage(trimmed, { entryPoint: 'personal', userName: user.preferredName });
+    // Merge FAB context with user identity; fall back to personal entry point
+    const context: FlatContext = fabContext
+      ? { ...fabContext, userName: user.preferredName }
+      : { entryPoint: 'personal', userName: user.preferredName };
+    setPendingMessage(trimmed, context);
     setLocation('/personal/ask-emmaus/conversation');
   }
 
@@ -86,9 +110,9 @@ export default function AskEmmausHome() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={() => setLocation('/personal')}
+            onClick={() => setLocation(returnPath ?? '/personal')}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back to Personal"
+            aria-label={returnPath ? 'Back' : 'Back to Personal'}
           >
             <ArrowLeft size={22} aria-hidden="true" />
           </button>
@@ -106,6 +130,22 @@ export default function AskEmmausHome() {
           <p className="text-[15px] text-muted-foreground leading-relaxed">
             Bring your questions, doubts, and moments — Emmaus walks alongside you.
           </p>
+
+          {/* Context label — shown when arriving via the floating button */}
+          {fabContext && buildContextLabel(fabContext) && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[13px] text-primary/80 bg-primary/8 border border-primary/15 rounded-full px-3 py-1 leading-snug">
+                Discussing: {buildContextLabel(fabContext)}
+              </span>
+              <button
+                onClick={() => setFabContext(null)}
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear context"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Input */}

@@ -6,6 +6,7 @@ import { RoomsProvider } from './contexts/RoomsContext';
 import { BibleProvider } from './contexts/BibleContext';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { FloatingEmmausButton } from '@/components/FloatingEmmausButton';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -92,6 +93,7 @@ function App() {
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
                 <Router />
+                <FloatingEmmausButton />
               </WouterRouter>
               <Toaster />
             </TooltipProvider>
