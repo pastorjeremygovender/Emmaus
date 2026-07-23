@@ -1,0 +1,182 @@
+PROJECT EMMAUS — ASK EMMAUS MVP INTERACTION COMPLETION
+
+Implement directly in the existing codebase.
+
+Do not create a new planning discussion.
+Do not redesign Ask Emmaus.
+Do not add new features.
+Do not propose follow-up work.
+Do not mark this task complete until the running application has been tested successfully.
+
+CURRENT VERIFIED STATE
+
+Ask Emmaus is now working end to end.
+
+A user can submit a message and receive a full Emmaus response containing:
+
+- pastoral response text
+- Scripture card
+- one next step
+- Journey recommendation
+- Room recommendation
+- memory permission controls
+
+The previous 404 has been fixed.
+
+CURRENT VERIFIED UX PROBLEM
+
+After the response loads, the screen opens or remains at the bottom of the response.
+
+The user must manually scroll upward to begin reading the response from its first sentence.
+
+This is incorrect for the Emmaus reading experience.
+
+PRIMARY GOAL
+
+When a new Emmaus response begins or finishes rendering, position the viewport at the beginning of that new Emmaus response so the user can read naturally from the top.
+
+REQUIRED SCROLL BEHAVIOUR
+
+1. Identify the DOM element or component that represents the beginning of each Emmaus assistant response.
+
+2. Give each assistant response a stable reference, element ID, or React ref.
+
+3. When a response begins rendering, scroll the conversation container so that the top of the new assistant response is visible beneath the fixed Ask Emmaus header.
+
+4. Do not scroll to the bottom of the entire conversation after the response completes.
+
+5. Do not repeatedly force-scroll while content is streaming or expanding.
+
+6. The user must remain able to scroll normally.
+
+7. Once the user manually scrolls away from the response start, do not fight the user or keep resetting the position.
+
+8. Account for the fixed header so the first line of the response is not hidden behind it.
+
+9. Use smooth scrolling only if it does not delay or interfere with reading. Prefer reliable positioning over animation.
+
+10. Preserve the user's submitted message above the response where practical, but prioritise making the first sentence of the Emmaus response immediately visible.
+
+INTERACTION VERIFICATION
+
+After fixing the scrolling behaviour, test the existing response cards without redesigning them.
+
+Verify the following:
+
+A. SCRIPTURE CARD
+
+- “Open in Bible” navigates to the exact referenced Bible book and chapter.
+- For the current test response, Psalm 42 must open Psalm 42.
+- It must not open Bible Home, the wrong chapter, or an unrelated Journey.
+
+B. ONE NEXT STEP
+
+- “Open Psalm 42” opens the exact referenced chapter.
+- Reuse the same canonical Bible navigation method as the Scripture card.
+- Do not create duplicate routing logic if a shared Bible-navigation utility already exists.
+
+C. JOURNEY CARD
+
+- The recommended Journey card opens the actual published Journey shown on the card.
+- For the current response, “15 Minutes with Jesus” must open that Journey.
+- Do not navigate to a placeholder or generic Journeys page unless the referenced Journey cannot be resolved.
+- If it cannot be resolved, fail gracefully and do not fabricate a Journey.
+
+D. ROOM CARD
+
+- The Emmaus Rooms recommendation opens the existing Rooms area or the appropriate existing Room entry flow.
+- Do not create a new Room automatically.
+- Do not allow entry into private Rooms without invitation, access code, or approval.
+
+E. MEMORY PERMISSION
+
+- “Yes, remember this” must save only the proposed memory item through the existing memory system.
+- It must visibly confirm that the item was remembered.
+- It must not silently store the entire private conversation as long-term memory.
+- “Not now” must dismiss or resolve the memory prompt without saving the proposed memory.
+- The two actions must not produce the same result.
+
+BOUNDARIES
+
+Do not:
+
+- connect or change the language-model provider
+- alter the Emmaus system prompt
+- rewrite the pastoral response
+- change response length
+- add waiting indicators
+- add typing indicators
+- add animated dots
+- add an AI avatar
+- change navigation
+- modify the Bible text provider
+- modify unrelated Bible Engine functionality
+- modify Walk, Rooms, Journeys, Personal, Sermons, Admin Portal, or Media Studio except where necessary to make the existing links work
+- mark the feature complete based only on typechecking
+
+ERROR HANDLING
+
+If a linked resource cannot be found:
+
+- show a calm, concise user-facing message
+- do not display a raw technical error
+- do not fabricate the resource
+- keep the user on a stable screen
+
+Examples:
+
+“This passage could not be opened just now.”
+
+“This Journey is not currently available.”
+
+“This Room could not be opened just now.”
+
+TEST PROCEDURE
+
+Use the running application.
+
+1. Open Personal.
+2. Open Ask Emmaus.
+3. Submit:
+   I feel far from God
+4. Verify that the first line of the new Emmaus response is immediately visible without manually scrolling upward.
+5. Allow the complete response to render.
+6. Verify that the screen does not jump to the bottom.
+7. Manually scroll during or after the response and confirm the app does not fight the user.
+8. Test “Open in Bible.”
+9. Confirm Psalm 42 opens.
+10. Return to Ask Emmaus.
+11. Test “Open Psalm 42.”
+12. Confirm Psalm 42 opens.
+13. Return and test the “15 Minutes with Jesus” Journey card.
+14. Return and test the Emmaus Rooms card.
+15. Test “Not now” and verify no memory is saved.
+16. Generate another suitable memory prompt or reset the test state.
+17. Test “Yes, remember this” and verify only the proposed memory is saved.
+18. Check the browser console and server logs for relevant errors.
+
+COMPLETION STANDARD
+
+This task is complete only when:
+
+- a new response starts at the top of the Emmaus answer
+- the user does not need to scroll upward to begin reading
+- the viewport does not jump to the bottom after rendering
+- manual scrolling remains under user control
+- Scripture navigation opens the correct passage
+- the next-step button opens the correct passage
+- the Journey recommendation opens the real Journey
+- the Room recommendation opens the existing Rooms flow
+- “Yes, remember this” saves the proposed memory
+- “Not now” does not save it
+- all behaviour has been tested in the running app
+
+When finished, report only:
+
+- the cause of the incorrect scroll position
+- the files changed
+- the scroll behaviour implemented
+- the result of each interaction test
+- any interaction that could not be completed and the exact reason
+
+Do not propose additional features.

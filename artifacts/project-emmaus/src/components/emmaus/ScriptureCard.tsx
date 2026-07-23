@@ -2,13 +2,17 @@
  * ScriptureCard — displays a Bible reference surfaced by Emmaus.
  * Shows the reference, an optional display text, and an "Open in Bible" link
  * that navigates into the existing Bible reader at the correct chapter.
+ * If the book is not available in the current provider, shows a calm inline
+ * message instead of navigating to a broken view.
  */
 
+import { useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { ScriptureRef } from '@/lib/emmaus-client';
+import { bibleProvider } from '@/lib/bible-provider';
 
 interface ScriptureCardProps {
   scripture: ScriptureRef;
@@ -16,9 +20,14 @@ interface ScriptureCardProps {
 
 export function ScriptureCard({ scripture }: ScriptureCardProps) {
   const [, setLocation] = useLocation();
+  const [unavailable, setUnavailable] = useState(false);
 
   function handleOpen() {
     const bookId = scripture.book.toLowerCase().replace(/\s+/g, '-');
+    if (!bibleProvider.supportsBook(bookId)) {
+      setUnavailable(true);
+      return;
+    }
     setLocation(`/bible/read/${bookId}/${scripture.chapter}`);
   }
 
@@ -43,14 +52,20 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
               {scripture.displayText}
             </p>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2 -ml-2 h-8 text-primary text-[13px] font-medium hover:bg-primary/10 px-2"
-            onClick={handleOpen}
-          >
-            Open in Bible
-          </Button>
+          {unavailable ? (
+            <p className="mt-2 text-[13px] text-muted-foreground italic">
+              This passage could not be opened just now.
+            </p>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 -ml-2 h-8 text-primary text-[13px] font-medium hover:bg-primary/10 px-2"
+              onClick={handleOpen}
+            >
+              Open in Bible
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

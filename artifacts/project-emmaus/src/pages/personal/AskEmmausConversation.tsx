@@ -80,15 +80,27 @@ export default function AskEmmausConversation() {
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
   const [memoryDecided, setMemoryDecided] = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const streamingMsgRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef<HTMLTextAreaElement>(null);
   const streamingIdRef = useRef<string | null>(null);
 
-  // ─── Scroll to bottom on new content ───────────────────────────────────────
+  // ─── Scroll to top of new streaming message (once, on stream start) ─────────
+
+  const HEADER_HEIGHT = 56; // matches h-14 sticky header
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!isStreaming) return; // only fire when streaming begins
+    requestAnimationFrame(() => {
+      if (!streamingMsgRef.current || !mainRef.current) return;
+      const main = mainRef.current;
+      const msgEl = streamingMsgRef.current;
+      const msgTop = msgEl.getBoundingClientRect().top;
+      const mainTop = main.getBoundingClientRect().top;
+      const target = main.scrollTop + (msgTop - mainTop) - HEADER_HEIGHT;
+      main.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    });
+  }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
@@ -297,6 +309,7 @@ export default function AskEmmausConversation() {
 
       {/* Conversation */}
       <main
+        ref={mainRef}
         className="flex-1 overflow-y-auto px-5 pt-6 pb-4 max-w-[560px] mx-auto w-full space-y-8"
         aria-live="polite"
         aria-label="Conversation"
@@ -315,7 +328,10 @@ export default function AskEmmausConversation() {
               </div>
             ) : (
               /* ── Emmaus response ── */
-              <div className="space-y-5">
+              <div
+                ref={msg.isStreaming ? streamingMsgRef : undefined}
+                className="space-y-5"
+              >
                 {/* Prose */}
                 <div
                   className={[
@@ -356,7 +372,7 @@ export default function AskEmmausConversation() {
           </div>
         ))}
 
-        <div ref={bottomRef} aria-hidden="true" />
+        <div aria-hidden="true" className="h-1" />
       </main>
 
       {/* Follow-up input */}
