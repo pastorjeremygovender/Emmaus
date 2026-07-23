@@ -1,0 +1,246 @@
+PROJECT EMMAUS — FIX REAL PROVIDER MULTI-TURN REQUESTS
+
+Implement directly in the existing codebase.
+
+Do not redesign the UI.
+Do not change the language model or system instructions in this task.
+Do not add new features.
+Do not mark complete from TypeScript checks alone.
+
+==================================================
+VERIFIED FAILURE
+==================================================
+
+The first real OpenAI-backed Ask Emmaus request completes successfully.
+
+A follow-up user message is then added visibly to the conversation, but no second Emmaus response appears.
+
+Verified sequence:
+
+1. User asks:
+   What is the significance of the tabernacle furniture?
+
+2. Emmaus returns a real streamed response.
+
+3. User submits:
+   I feel far from God
+
+4. The second user message appears, but no new response starts or completes.
+
+==================================================
+GOAL
+==================================================
+
+Make real OpenAI-backed Ask Emmaus conversations work reliably for repeated sequential turns in the same conversation.
+
+Each submitted message must trigger exactly one new server request and one streamed Emmaus response.
+
+==================================================
+DIAGNOSE FIRST
+==================================================
+
+Trace the complete lifecycle of the first and second requests.
+
+Inspect:
+
+- composer submit handler
+- isSubmitting state
+- isStreaming state
+- pending request state
+- stream reader
+- AbortController
+- request timeout
+- current conversation ID
+- message-history construction
+- API route lifecycle
+- server response completion
+- client stream completion handlers
+- cleanup in success, error, abort and timeout paths
+
+Use temporary development logging where necessary.
+
+Confirm whether the second message:
+
+- calls the submit handler
+- triggers fetch
+- reaches the API route
+- reaches OpenAIProvider
+- receives streaming events
+- completes or errors
+
+Do not guess.
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+1. REQUEST STATE RESET
+
+After every completed, failed, aborted or timed-out request:
+
+- isSubmitting must reset
+- isStreaming must reset
+- pending request state must clear
+- the stream reader must be released
+- the response body must be closed appropriately
+- the current AbortController must be cleared
+
+Use finally blocks or equivalent reliable cleanup.
+
+2. NEW ABORT CONTROLLER PER TURN
+
+Create a fresh AbortController for every submitted message.
+
+Do not reuse an aborted or completed controller.
+
+Do not allow the previous request timeout to abort a later request.
+
+Clear each request’s timeout after that request completes.
+
+3. SEQUENTIAL TURNS
+
+Allow a new message after the previous response has fully completed.
+
+While a response is actively streaming:
+
+- prevent duplicate submissions
+- do not silently discard messages
+- keep the send control visibly disabled if submission is unavailable
+
+After completion:
+
+- re-enable the composer immediately
+- allow the next valid message to submit
+
+4. CONVERSATION HISTORY
+
+For each follow-up request, send:
+
+- the existing conversation ID
+- prior user messages
+- prior Emmaus responses
+- the newest user message
+- existing current-screen context
+
+The newest user message must appear once and only once.
+
+Do not create a new unrelated conversation for every follow-up.
+
+5. ERROR VISIBILITY
+
+If a follow-up request fails, show the existing calm user-facing error:
+
+“Ask Emmaus could not respond just now. Please try again.”
+
+Do not leave the user message displayed indefinitely with no response and no error.
+
+Log the server-side category without exposing secrets:
+
+- timeout
+- provider error
+- aborted request
+- malformed history
+- client disconnect
+- rate limit
+- authentication
+- unknown error
+
+6. STREAM COMPLETION
+
+Confirm that the OpenAI stream:
+
+- emits its final completion event
+- closes the server response
+- allows the next request on the same session
+- does not leave an unresolved promise or locked reader
+- does not retain a stale pending response reference
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test one continuous real-provider conversation.
+
+TURN 1
+
+User:
+What is the significance of the tabernacle furniture?
+
+Verify:
+- response starts
+- response completes
+- composer becomes available again
+
+TURN 2
+
+User:
+I feel far from God
+
+Verify:
+- a second API request begins
+- a second response streams and completes
+- it answers the latest message
+- it does not remain silent
+
+TURN 3
+
+User:
+What Scripture did you just mention?
+
+Verify:
+- a third request completes
+- earlier conversation context is available
+
+TURN 4
+
+User:
+Who built the ark?
+
+Verify:
+- a fourth request completes
+- Emmaus changes topic appropriately
+
+TURN 5
+
+User:
+Why are you called Emmaus?
+
+Verify:
+- a fifth request completes
+- no stale request state blocks it
+
+Also test:
+
+- one provider timeout
+- one aborted request
+- one simulated provider error
+
+After each, confirm the next message can still be submitted successfully.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- five consecutive real-provider turns complete
+- every turn triggers exactly one request
+- no message remains unanswered without an error
+- submission state resets after success
+- submission state resets after failure
+- a fresh AbortController is used for every turn
+- conversation history is retained
+- the newest message is answered directly
+- the composer is usable after each completed turn
+
+When finished, report only:
+
+- exact root cause
+- files changed
+- request-state cleanup implemented
+- AbortController and timeout lifecycle implemented
+- five-turn running-app test results
+- failure-recovery test results
+- any unsuccessful item and its exact cause
+
+Do not propose additional work.

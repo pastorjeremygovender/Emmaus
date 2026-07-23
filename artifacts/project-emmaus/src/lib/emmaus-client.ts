@@ -117,6 +117,9 @@ export type StreamCallbacks = {
 /**
  * Parse and dispatch SSE events from a fetch response stream.
  * Handles line-buffered `data: {...}` format.
+ *
+ * Guarantees: exactly one of `onDone` or `onError` is called before returning,
+ * even if the stream closes without a proper `done` event (proxy timeout, etc.).
  */
 async function consumeStream(
   response: Response,
@@ -130,6 +133,15 @@ async function consumeStream(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let lineBuffer = '';
+  // Track whether a terminal callback was already dispatched so we never
+  // call onDone/onError twice.
+  let terminated = false;
+
+  const terminate = (fn: () => void) => {
+    if (terminated) return;
+    terminated = true;
+    fn();
+  };
 
   try {
     while (true) {
@@ -150,15 +162,21 @@ async function consumeStream(
           if (event.type === 'text') {
             callbacks.onText(event.content);
           } else if (event.type === 'done') {
-            callbacks.onDone(event as SseDoneEvent);
+            terminate(() => callbacks.onDone(event as SseDoneEvent));
           } else if (event.type === 'error') {
-            callbacks.onError((event as SseErrorEvent).message);
+            terminate(() => callbacks.onError((event as SseErrorEvent).message));
           }
         } catch {
           // Malformed line — skip
         }
       }
     }
+
+    // Stream closed without a done/error event (proxy timeout, server crash, etc.)
+    // Always surface an error so the component can reset isStreaming.
+    terminate(() =>
+      callbacks.onError('Emmaus didn\'t complete a response. Please try again.')
+    );
   } finally {
     reader.releaseLock();
   }
@@ -173,10 +191,27 @@ function headers(userId: string): Record<string, string> {
   };
 }
 
+// How long to wait for a complete SSE response before timing out.
+// Long enough for a full gpt-5 pastoral response; short enough that a frozen
+// connection surfaces a visible error rather than an infinite spinner.
+const REQUEST_TIMEOUT_MS = 90_000;
+
 /**
- * Start or continue an Ask Emmaus conversation.
+ * Wire an optional parent AbortSignal into our controller and return a cleanup
+ * function that removes the listener. Always use `controller.signal` for the
+ * fetch — the returned { abort } function reliably aborts the correct signal.
+ */
+function chainSignal(controller: AbortController, parentSignal?: AbortSignal) {
+  if (!parentSignal) return () => undefined;
+  const handler = () => controller.abort();
+  parentSignal.addEventListener('abort', handler, { once: true });
+  return () => parentSignal.removeEventListener('abort', handler);
+}
+
+/**
+ * Start a new Ask Emmaus conversation.
  * Streams SSE events into the provided callbacks.
- * Returns an AbortController so callers can cancel.
+ * Returns an { abort } handle so callers can cancel early.
  */
 export function startConversation(opts: {
   userId: string;
@@ -187,13 +222,15 @@ export function startConversation(opts: {
   signal?: AbortSignal;
 }): { abort: () => void } {
   const controller = new AbortController();
-  // If a parent signal is provided, abort our controller when it fires
-  if (opts.signal) {
-    opts.signal.addEventListener('abort', () => controller.abort(), { once: true });
-  }
-  const signal = controller.signal;
+  const unlinkParent = chainSignal(controller, opts.signal);
 
   (async () => {
+    // Per-request timeout: abort after 90 s so isStreaming always resets.
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      opts.callbacks.onError('Emmaus took too long to respond. Please try again.');
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       const res = await fetch(`${API_BASE}/api/emmaus/conversation`, {
         method: 'POST',
@@ -203,7 +240,7 @@ export function startConversation(opts: {
           context: opts.context,
           history: opts.history,
         }),
-        signal,
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -213,8 +250,13 @@ export function startConversation(opts: {
 
       await consumeStream(res, opts.callbacks);
     } catch (err: unknown) {
+      // AbortError: either user navigated away (no callback needed — onError was
+      // already called by the timeout handler) or cancelled intentionally.
       if (err instanceof Error && err.name === 'AbortError') return;
       opts.callbacks.onError('Connection lost. Please try again.');
+    } finally {
+      clearTimeout(timeoutId);
+      unlinkParent();
     }
   })();
 
@@ -222,7 +264,9 @@ export function startConversation(opts: {
 }
 
 /**
- * Append a message to an existing conversation (SSE stream).
+ * Append a follow-up message to an existing conversation (SSE stream).
+ * Signal wiring: always uses controller.signal for fetch; chains an optional
+ * parent signal so both abort paths reliably cancel the same request.
  */
 export function appendMessage(opts: {
   userId: string;
@@ -234,9 +278,16 @@ export function appendMessage(opts: {
   signal?: AbortSignal;
 }): { abort: () => void } {
   const controller = new AbortController();
-  const signal = opts.signal ?? controller.signal;
+  // Always use controller.signal — not opts.signal directly — so that
+  // { abort: () => controller.abort() } reliably cancels the fetch.
+  const unlinkParent = chainSignal(controller, opts.signal);
 
   (async () => {
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      opts.callbacks.onError('Emmaus took too long to respond. Please try again.');
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       const res = await fetch(
         `${API_BASE}/api/emmaus/conversation/${opts.conversationId}/message`,
@@ -248,7 +299,7 @@ export function appendMessage(opts: {
             context: opts.context,
             history: opts.history,
           }),
-          signal,
+          signal: controller.signal,
         }
       );
 
@@ -261,6 +312,9 @@ export function appendMessage(opts: {
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       opts.callbacks.onError('Connection lost. Please try again.');
+    } finally {
+      clearTimeout(timeoutId);
+      unlinkParent();
     }
   })();
 
