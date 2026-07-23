@@ -1,0 +1,627 @@
+PROJECT EMMAUS — COMPLETE BIBLE MVP WITH MULTIPLE TRANSLATIONS
+
+Implement directly in the existing Project Emmaus codebase.
+
+This is a major completion build, not a conceptual redesign.
+
+Do not modify Ask Emmaus, Rooms, Media Studio, Sermon Companion, authentication, Admin Portal or unrelated Journey functionality.
+
+Do not use copyrighted NIV, GNT, ESV, NLT, NKJV or other restricted Bible text without an authorised licence and approved source.
+
+Do not fabricate or paraphrase Bible verses.
+
+Do not mark this task complete based only on TypeScript checks or the existence of files. Test the complete reading experience in the running application.
+
+==================================================
+GOAL
+==================================================
+
+Deliver a complete, demonstrable Bible MVP containing:
+
+- all 66 canonical books
+- every chapter of every book
+- at least two complete, legally usable public-domain English translations
+- a functioning translation selector
+- working book and chapter navigation
+- continuous chapter reading
+- bookmarks
+- notes
+- reading progress
+- reading history
+- Bible search
+- preserved Walk Through Luke Journey integration
+
+The result must be something Jeremy can demonstrate as a functioning complete Bible, not a partial Luke prototype.
+
+==================================================
+CURRENT VERIFIED FOUNDATION
+==================================================
+
+The project already contains or substantially contains:
+
+- Bible Provider abstraction
+- 66-book canon structure
+- Bible Home
+- Browse Books
+- Luke chapter reader
+- Walk Through Luke
+- reading progress
+- bookmarks
+- notes
+- continuous chapter reading
+- chapter-completion controls
+
+Do not discard this architecture.
+
+Inspect the existing implementation and extend it cleanly.
+
+Do not rebuild the Bible module from scratch unless a specific current implementation is unusable.
+
+==================================================
+1. LEGAL TRANSLATION SOURCES
+==================================================
+
+Use only verified public-domain or explicitly authorised development Bible data.
+
+For this MVP, provide at least two complete English translations from legally usable sources, preferably:
+
+- World English Bible (WEB)
+- American Standard Version (ASV)
+
+KJV may also be included only when sourced and labelled appropriately for the territories and development use involved.
+
+Before importing any text:
+
+- verify the source licence or public-domain declaration
+- record source attribution and licence information in project documentation
+- do not scrape copyrighted Bible websites
+- do not copy text from BibleGateway, YouVersion or other services without explicit API or content permission
+- do not represent public-domain development translations as NIV, GNT or ESV
+
+Display translation names and abbreviations accurately.
+
+Add unavailable future translations to architecture/configuration only, not as selectable empty or misleading options.
+
+NIV remains the intended preferred future translation after proper licensing.
+
+==================================================
+2. PROVIDER ARCHITECTURE
+==================================================
+
+Preserve and complete the existing Bible Provider abstraction.
+
+The Bible UI must not be coupled directly to one translation dataset.
+
+The provider contract should support:
+
+- list translations
+- retrieve book metadata
+- retrieve chapter text
+- retrieve verse range
+- search
+- attribution and licence metadata
+- optional audio availability
+- optional offline availability
+
+Each translation should have stable identifiers.
+
+The active translation must be resolved through the provider/service layer.
+
+Do not scatter translation-specific conditions throughout React components.
+
+==================================================
+3. COMPLETE 66-BOOK CANON
+==================================================
+
+Ensure the canonical Protestant 66-book structure is complete and ordered correctly:
+
+- 39 Old Testament books
+- 27 New Testament books
+
+For every book, provide:
+
+- stable book ID
+- common English name
+- abbreviation
+- testament
+- canonical order
+- number of chapters
+
+Verify chapter counts.
+
+Do not create fake placeholder chapters.
+
+Every listed chapter must contain real text from the selected translation.
+
+==================================================
+4. COMPLETE BIBLE DATA
+==================================================
+
+Import or connect the full text for every chapter of every book for each included public-domain translation.
+
+Requirements:
+
+- text must be stored or retrieved through the Bible Provider layer
+- verse numbers must be preserved
+- chapter boundaries must be accurate
+- book names must map consistently across translations
+- text must not be held in one enormous frontend bundle
+- do not make the browser download the entire Bible at startup
+- load chapter data on demand
+- support reasonable caching
+- avoid repeatedly downloading the same chapter during one session
+
+If data is imported into the database:
+
+- use an idempotent import or seed process
+- do not create duplicates when the import runs again
+- include translation, book, chapter and verse indexes
+- report how many translations, books, chapters and verses were imported
+
+If a trusted public-domain Bible API is used:
+
+- isolate it behind the provider abstraction
+- handle network failure gracefully
+- do not expose private API credentials
+- document rate and availability limitations
+- retain the ability to migrate to locally hosted or licensed data later
+
+==================================================
+5. BIBLE HOME
+==================================================
+
+Bible Home must remain calm and uncluttered.
+
+It should include functioning access to:
+
+- Continue Reading
+- Browse Books
+- Search
+- Bookmarks
+- Translation
+- Reading Plans
+- Reading History
+
+Do not place multiple active Journey cards on Bible Home.
+
+Journey-specific Scripture belongs in Walk or within the Journey.
+
+==================================================
+6. BROWSE BOOKS
+==================================================
+
+Complete Browse Books for the full canon.
+
+Requirements:
+
+- Old Testament and New Testament sections
+- all 66 books
+- selecting a book opens its chapter selector or first chapter according to the existing design
+- chapter selection works for every book
+- no Luke-only assumptions
+- no hard-coded John or Luke fallback
+- current translation is preserved when navigating
+
+==================================================
+7. CHAPTER READER
+==================================================
+
+The chapter reader must work for every book and chapter.
+
+Display:
+
+- book name
+- chapter number
+- active translation
+- verse numbers
+- readable Scripture text
+
+Reading experience:
+
+- calm
+- focused
+- uncluttered
+- suitable for mobile
+- no Times New Roman-style body font unless it is an explicitly approved Bible-reading font
+- good line height and paragraph spacing
+- no joined words
+- no raw data structures or technical IDs
+
+Support:
+
+- previous chapter
+- next chapter
+- translation switching
+- bookmarking
+- notes
+- reading progress
+- continuous reading
+
+When changing translation:
+
+- remain on the same book and chapter
+- load the corresponding text
+- preserve the user’s bookmark and note associations appropriately
+- do not reset reading progress
+
+==================================================
+8. CONTINUOUS CHAPTER COMPLETION
+==================================================
+
+Preserve the locked chapter-completion behaviour.
+
+At the end of a chapter, show inline ordinary page content only:
+
+[Book] [Chapter] Complete
+
+Continue to [Book] [Next Chapter]
+
+Finish for today
+
+Examples:
+
+Luke 1 Complete
+
+Continue to Luke 2
+
+Finish for today
+
+Requirements:
+
+- no modal
+- no bottom sheet
+- no dark overlay
+- no close button
+- no interruption during reading
+- Continue opens the next chapter immediately
+- Finish for today saves progress and returns to Walk
+
+For the last chapter of a book:
+
+- provide a calm option to continue to the next canonical book
+- clearly identify the new book
+- do not fabricate an additional chapter
+
+For Revelation 22:
+
+- show completion without routing to a nonexistent next book
+
+==================================================
+9. TRANSLATION SELECTOR
+==================================================
+
+Provide one consistent translation selector.
+
+Requirements:
+
+- display only actually available complete translations
+- show full name and abbreviation
+- show attribution or licence information accessibly
+- persist the user’s preferred translation
+- preserve the current book and chapter when switching
+- support future licensed providers without UI redesign
+
+Do not display NIV, GNT or ESV as available until real authorised content is connected.
+
+A future/coming-soon label may be used only if clearly non-selectable and not misleading.
+
+==================================================
+10. SEARCH
+==================================================
+
+Implement functioning Bible search across the included translations.
+
+Support at minimum:
+
+- word search
+- phrase search
+- reference search such as:
+  - Luke 24
+  - Psalm 42:1
+  - John 3:16
+- results showing book, chapter, verse and a short text excerpt
+- opening the exact result in the chapter reader
+- respecting or clearly displaying the selected translation
+
+Requirements:
+
+- debounce ordinary text search
+- do not freeze the mobile interface
+- do not return fabricated matches
+- handle no-results states calmly
+
+If full-text indexing cannot be completed safely in one build, implement a working indexed solution for the included translations rather than a fake search interface.
+
+==================================================
+11. BOOKMARKS AND NOTES
+==================================================
+
+Verify bookmarks and notes work across the complete Bible.
+
+Bookmarks:
+
+- support verse or passage references
+- store translation, book, chapter and verse/range
+- open the exact location
+- allow removal
+
+Notes:
+
+- attach to a verse or passage
+- save through the existing database or persistence service
+- allow editing and deletion
+- remain private by default
+- do not silently send private notes to Ask Emmaus
+
+Do not keep these only in temporary component state.
+
+==================================================
+12. READING PROGRESS AND HISTORY
+==================================================
+
+Complete database-backed reading progress and history.
+
+Track:
+
+- latest translation
+- latest book
+- latest chapter
+- optional last visible verse where current architecture supports it
+- last-read timestamp
+
+Continue Reading must reopen the correct location.
+
+Reading History must show recent Bible reading entries and open them correctly.
+
+Avoid using browser localStorage as the authoritative long-term store when authenticated database persistence already exists or is part of the current migration.
+
+Support a sensible guest/development fallback only where necessary.
+
+==================================================
+13. WALK THROUGH LUKE
+==================================================
+
+Preserve Luke as the flagship Bible Journey.
+
+Official title:
+
+Walk Through Luke
+
+Subtitle:
+
+Discover Jesus through the Gospel according to Luke.
+
+Length:
+
+24 chapters.
+
+Requirements:
+
+- all 24 Luke chapters open through the complete Bible Engine
+- the current preferred translation is used
+- Journey progress remains distinct from general Bible reading progress where required
+- completing a Luke chapter through the Journey updates the correct Journey state
+- ordinary Bible reading of Luke must still work independently
+- John remains an ordinary Bible book
+- do not replace Luke with John anywhere
+
+==================================================
+14. ASK EMMAUS CONTEXT COMPATIBILITY
+==================================================
+
+Do not rebuild Ask Emmaus in this task.
+
+Verify only that the existing floating Ask Emmaus entry point can receive correct Bible context from any chapter:
+
+- translation ID
+- book ID/name
+- chapter
+- selected verse or range if selected
+
+Do not send entire chapters automatically when a small structured reference is sufficient.
+
+Do not break the currently working real language-model provider.
+
+==================================================
+15. ERROR AND EMPTY STATES
+==================================================
+
+Handle failures calmly.
+
+Examples:
+
+“This chapter could not be loaded just now.”
+
+“This translation is not currently available.”
+
+“No matching verses were found.”
+
+Do not:
+
+- show raw API errors
+- show stack traces
+- silently substitute a different translation
+- fabricate missing Bible text
+- route every error back to Luke
+
+Provide a retry action where appropriate.
+
+==================================================
+16. PERFORMANCE
+==================================================
+
+The complete Bible must remain usable on mobile.
+
+Requirements:
+
+- do not bundle every Bible translation into the initial frontend JavaScript
+- lazy-load chapter data
+- cache recently read chapters sensibly
+- avoid rendering thousands of verses at once
+- index search appropriately
+- preserve smooth chapter scrolling
+- prevent duplicate network requests
+- avoid loading a second translation until requested
+
+Record approximate:
+
+- initial Bible Home load time
+- chapter load time
+- translation-switch time
+- search response time
+
+==================================================
+17. ADMIN AND IMPORT DOCUMENTATION
+==================================================
+
+Create or update actual project documentation files explaining:
+
+- Bible Provider architecture
+- included translations
+- source and licence attribution
+- import or seed process
+- database schema
+- how to add a future authorised translation
+- how NIV, GNT or ESV could be connected after licensing
+- verification counts for imported data
+
+Do not claim documentation was updated unless files were actually modified.
+
+Do not interrupt the build with philosophical documentation.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test the actual running application, not only isolated functions.
+
+A. CANON
+
+1. Open Browse Books.
+2. Confirm all 66 books are present.
+3. Confirm correct Old and New Testament grouping.
+4. Open:
+   - Genesis 1
+   - Psalm 42
+   - Isaiah 53
+   - Matthew 1
+   - Luke 24
+   - Acts 1
+   - Romans 8
+   - Revelation 22
+5. Confirm real text loads for each.
+
+B. TRANSLATIONS
+
+1. Open Luke 24 in translation one.
+2. Switch to translation two.
+3. Confirm Luke 24 remains open.
+4. Confirm the text changes to the selected translation.
+5. Refresh the app.
+6. Confirm the preference persists.
+
+C. NAVIGATION
+
+1. Move from Luke 1 to Luke 2.
+2. Move backward.
+3. Test the final chapter of a book.
+4. Test Revelation 22.
+5. Confirm there are no invalid chapter routes.
+
+D. CONTINUOUS COMPLETION
+
+1. Reach the end of a chapter.
+2. Confirm only inline completion content appears.
+3. Confirm no modal, sheet or overlay appears.
+4. Test Continue.
+5. Test Finish for today.
+6. Confirm progress is saved.
+
+E. SEARCH
+
+Search:
+
+- Jesus
+- “fear not”
+- Luke 24
+- Psalm 42:1
+- John 3:16
+- a term with no results
+
+Confirm exact results open correctly.
+
+F. BOOKMARKS AND NOTES
+
+1. Bookmark Psalm 42:1.
+2. Add a private note.
+3. Leave the page.
+4. Return through Bookmarks.
+5. Confirm the exact passage and note remain.
+6. Edit and delete the note.
+7. Remove the bookmark.
+
+G. PROGRESS AND HISTORY
+
+1. Read Genesis 1.
+2. Read Luke 24.
+3. Open Continue Reading.
+4. Confirm the latest position is restored.
+5. Confirm Reading History contains real recent entries.
+
+H. LUKE JOURNEY
+
+1. Open Walk Through Luke.
+2. Open multiple chapters.
+3. Confirm all 24 chapters are available.
+4. Confirm Journey progress works.
+5. Confirm Luke also remains accessible through ordinary Bible browsing.
+
+I. MOBILE
+
+Test in narrow mobile preview.
+
+Confirm:
+
+- readable text
+- no horizontal scrolling
+- no controls obscured by bottom navigation
+- floating Ask Emmaus button does not cover chapter controls
+- acceptable chapter loading speed
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+This task is complete only when:
+
+- all 66 books are present
+- every chapter contains real Bible text
+- at least two complete legal public-domain translations work
+- translation switching works
+- Browse Books works for the entire canon
+- chapter navigation works
+- continuous completion works without a modal
+- search works
+- bookmarks work
+- private notes work
+- reading progress works
+- reading history works
+- Walk Through Luke works across all 24 chapters
+- Bible context remains compatible with Ask Emmaus
+- mobile performance is acceptable
+- source and licence documentation files exist
+- all running-app tests have been performed
+
+When finished, report only:
+
+- translations included
+- verified source and licence for each translation
+- number of books, chapters and verses imported per translation
+- data storage or provider approach used
+- files and database structures changed
+- performance measurements
+- running-app test results
+- any incomplete requirement and its exact reason
+
+Do not propose additional features.
+Do not replace this task with another planning exercise.
