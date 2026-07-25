@@ -1,0 +1,619 @@
+You are continuing work on the existing Emmaus production application.
+
+This is NOT a new project.
+
+Do NOT rebuild the application.
+
+Do NOT redesign unrelated areas.
+
+Inspect the current implementation first and improve only the Journey authoring experience while preserving all existing functionality.
+
+=====================================================
+SPRINT NAME
+
+The Writing Experience
+
+=====================================================
+
+SPRINT GOAL
+
+Transform the current Journey editor into a beautiful writing environment.
+
+The experience should feel closer to writing in Notion than completing a database form.
+
+When a pastor, ministry leader or Bible study leader sits down to create a Journey, the interface should disappear into the background so they can focus on discipleship rather than administration.
+
+Everything in this sprint should answer one question:
+
+"Does this make writing a Journey more enjoyable?"
+
+If not, it does not belong.
+
+=====================================================
+NON-NEGOTIABLE DESIGN PRINCIPLES
+
+Follow these principles throughout this sprint.
+
+1. One primary action per screen.
+
+2. White space is better than another button.
+
+3. Consistency is more valuable than cleverness.
+
+4. Every screen should help someone take the next step with Jesus.
+
+5. Writing must feel creative rather than administrative.
+
+6. The interface should feel calm.
+
+7. The interface should never feel like database software.
+
+8. AI remains in the background.
+
+9. Scripture remains central.
+
+10. Simplicity always wins.
+
+=====================================================
+DO NOT CHANGE
+
+Do not redesign:
+
+Ask Emmaus
+
+Bible retrieval
+
+Sermon archive
+
+Media Studio
+
+Prayer Requests
+
+Rooms
+
+Authentication
+
+Publishing workflow
+
+Analytics
+
+Database architecture unless absolutely necessary.
+
+This sprint is purely about improving the content authoring experience.
+
+=====================================================
+PRIMARY OBJECTIVE
+
+Replace the current Journey Details form with a modern writing workspace.
+
+The current screen still looks like a CRUD form.
+
+It should instead feel like writing a document.
+
+=====================================================
+NEW LAYOUT
+
+Desktop layout:
+
+------------------------------------------------
+
+LEFT SIDEBAR
+
+------------------------------------------------
+
+Journey
+
+Cover Image
+
+Overview
+
+Journey Settings
+
+--------------------
+
+Steps
+
+Day 1
+
+Day 2
+
+Day 3
+
+Day 4
+
+...
+
++ Add Step
+
+------------------------------------------------
+
+CENTRE
+
+------------------------------------------------
+
+The writing canvas.
+
+This is where the creator spends almost all of their time.
+
+------------------------------------------------
+
+RIGHT PANEL
+
+------------------------------------------------
+
+Preview
+
+Journey Settings
+
+Step Settings
+
+Version History
+
+This panel should collapse.
+
+The left sidebar should also collapse.
+
+=====================================================
+JOURNEY HEADER
+
+Replace the large admin form with a writing header.
+
+Instead of showing a form immediately, show:
+
+------------------------------------------------
+
+Cover Image
+
+Journey Title
+
+Subtitle
+
+Journey Description
+
+Estimated Duration
+
+Tags
+
+------------------------------------------------
+
+Only show editing controls when the user interacts.
+
+Avoid exposing unnecessary fields immediately.
+
+=====================================================
+WRITING CANVAS
+
+The centre panel becomes the primary workspace.
+
+The canvas should be clean.
+
+Large margins.
+
+Comfortable reading width.
+
+Excellent typography.
+
+The feeling should be:
+
+"I'm writing."
+
+Not
+
+"I'm configuring."
+
+=====================================================
+STEP NAVIGATION
+
+The step list should feel lightweight.
+
+Each step displays:
+
+Step number
+
+Title
+
+Completion indicator
+
+Estimated time
+
+Drag handle
+
+Status icon
+
+Current step highlight
+
+Hover actions only when necessary.
+
+=====================================================
+ADD STEP
+
+The Add Step button should immediately create
+
+Untitled Step
+
+and place the cursor in the title.
+
+No popup.
+
+No dialog.
+
+No unnecessary questions.
+
+=====================================================
+BLOCK EDITOR
+
+The block editor becomes the heart of Emmaus.
+
+Improve the visual design.
+
+Blocks should have generous spacing.
+
+Minimal borders.
+
+Subtle hover state.
+
+Soft shadows only if needed.
+
+Selected blocks should feel obvious without becoming visually heavy.
+
+=====================================================
+BLOCK INSERTION
+
+Support both:
+
+/
+
+slash command
+
+AND
+
++ Add Block
+
+between blocks.
+
+The + button should appear naturally between blocks as the cursor moves.
+
+=====================================================
+TYPOGRAPHY
+
+Improve typography throughout the editor.
+
+Use the existing design system.
+
+Avoid Times New Roman.
+
+Prefer modern readable fonts already available in the project.
+
+Increase line spacing.
+
+Increase paragraph spacing.
+
+Create a calm reading experience.
+
+Titles should feel strong without being oversized.
+
+=====================================================
+WHITE SPACE
+
+Increase spacing throughout the editor.
+
+Reduce visual density.
+
+Avoid stacking controls tightly.
+
+Give each block room to breathe.
+
+=====================================================
+JOURNEY LIST
+
+Improve visual scanning.
+
+Each Journey should display:
+
+Cover image placeholder
+
+Journey title
+
+Journey type
+
+Status
+
+Last edited
+
+Collection
+
+Tags
+
+Small icon representing the Journey type.
+
+Examples:
+
+Bible Study
+
+Prayer
+
+Marriage
+
+Youth
+
+Serving
+
+Made Free
+
+Devotional
+
+Volunteer
+
+Parenting
+
+Membership
+
+Icons should remain simple and consistent.
+
+=====================================================
+CONTENT STUDIO OVERVIEW
+
+Replace management language with creation language.
+
+Instead of
+
+Manage Journeys
+
+Use
+
+Journeys
+
+Instead of
+
+Manage Collections
+
+Use
+
+Collections
+
+Primary quick actions:
+
+New Journey
+
+New Collection
+
+Templates
+
+Continue Editing
+
+Import
+
+Recent Drafts
+
+The overview should inspire creation rather than administration.
+
+=====================================================
+AI LANGUAGE
+
+Never make AI the focus.
+
+Replace wording such as:
+
+AI Journey
+
+AI Generator
+
+AI Drafting
+
+with warmer language such as:
+
+Help me draft
+
+Suggest a reflection
+
+Suggest a prayer
+
+Improve wording
+
+Find Scripture
+
+Find a sermon
+
+The Journey remains the focus.
+
+AI is only an assistant.
+
+=====================================================
+JOURNEY EDITOR FLOW
+
+Creating a Journey should feel like this:
+
+Click New Journey
+
+↓
+
+Enter title
+
+↓
+
+Editor opens immediately
+
+↓
+
+Begin writing
+
+No long setup process.
+
+=====================================================
+MICROINTERACTIONS
+
+Improve small interactions.
+
+Smooth transitions.
+
+Soft hover animations.
+
+Subtle loading indicators.
+
+Autosave indicator:
+
+Saving...
+
+Saved
+
+Could not save
+
+Never interrupt writing.
+
+=====================================================
+EMPTY STATES
+
+Create warm empty states.
+
+Example:
+
+No Steps Yet
+
+"This Journey is ready for its first step."
+
+Button:
+
+Add Step
+
+Example:
+
+No Blocks Yet
+
+"Start writing below."
+
+=====================================================
+PREVIEW PANEL
+
+Improve the preview.
+
+The preview should look almost identical to the member experience.
+
+Do not create a fake preview.
+
+Support:
+
+Phone
+
+Tablet
+
+Desktop
+
+Remember the selected preview.
+
+=====================================================
+VISUAL CONSISTENCY
+
+Review every screen in Content Studio.
+
+Ensure:
+
+consistent spacing
+
+consistent button sizes
+
+consistent icons
+
+consistent typography
+
+consistent colours
+
+consistent card styling
+
+consistent border radius
+
+consistent shadows
+
+=====================================================
+ACCESSIBILITY
+
+Maintain:
+
+Keyboard navigation
+
+Visible focus
+
+Screen reader labels
+
+Accessible drag alternatives
+
+Proper contrast
+
+=====================================================
+PERFORMANCE
+
+The editor must remain responsive with:
+
+large Journeys
+
+many Steps
+
+many Blocks
+
+large sermon library
+
+Do not introduce lag.
+
+=====================================================
+DO NOT
+
+Do not add more settings.
+
+Do not expose database fields.
+
+Do not create additional side panels.
+
+Do not add unnecessary modals.
+
+Do not increase complexity.
+
+Whenever choosing between two options,
+
+choose the simpler one.
+
+=====================================================
+TESTING
+
+After implementation verify:
+
+Existing Journeys still open.
+
+Existing Steps still open.
+
+Autosave still works.
+
+Preview still works.
+
+Block editing still works.
+
+Drag-and-drop still works.
+
+Scripture block still works.
+
+Sermon Clip still works.
+
+Publishing still works.
+
+No existing Journey data has been lost.
+
+=====================================================
+FINAL REVIEW
+
+When complete provide:
+
+1. Summary of UX improvements
+
+2. Screens that changed
+
+3. Any database changes
+
+4. Any migration performed
+
+5. Performance considerations
+
+6. Manual testing recommendations
+
+7. Remaining UX improvements that could be made in a future sprint
+
+Do not begin another sprint.
+
+Stop after presenting the improved writing experience.

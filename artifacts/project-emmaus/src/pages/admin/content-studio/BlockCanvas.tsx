@@ -1,19 +1,16 @@
 /**
  * BlockCanvas — The central block-based editing surface.
  *
- * Handles:
- * - Rendering all block components for the current step
- * - Drag-and-drop reordering (HTML5 native)
- * - Slash command menu
- * - Adding/removing blocks
- * - Keyboard shortcuts (Enter = new paragraph, Backspace on empty = delete)
- * - Add-block-between button (+) on hover
+ * Design principles:
+ *   - Generous spacing: blocks breathe
+ *   - Minimal chrome: no heavy borders unless focused/hovered
+ *   - Controls appear on hover, disappear when writing
  */
 
 import React, { useState, useCallback, useRef } from 'react';
 import { Plus, GripVertical, Trash2, Copy } from 'lucide-react';
 import {
-  Block, BlockType, createBlock, getBlockMeta, blocksToCanonical,
+  Block, BlockType, createBlock, getBlockMeta,
 } from '@/lib/blocks';
 import SlashMenu from './SlashMenu';
 import HeadingBlock from './blocks/HeadingBlock';
@@ -51,38 +48,23 @@ function renderBlockContent(
   onEnter: () => void,
   autoFocus: boolean,
 ) {
-  const up = (content: unknown) =>
-    onChange({ ...block, content } as Block);
+  const up = (content: unknown) => onChange({ ...block, content } as Block);
 
   switch (block.type) {
-    case 'heading':
-      return <HeadingBlock content={block.content} onChange={up} onSlash={onSlash} onBackspaceEmpty={onBackspaceEmpty} onEnter={onEnter} autoFocus={autoFocus} />;
-    case 'paragraph':
-      return <ParagraphBlock content={block.content} onChange={up} onSlash={onSlash} onBackspaceEmpty={onBackspaceEmpty} onEnter={onEnter} autoFocus={autoFocus} />;
-    case 'scripture':
-      return <ScriptureBlock content={block.content} onChange={up} />;
-    case 'reflection':
-      return <ReflectionBlock content={block.content} onChange={up} autoFocus={autoFocus} />;
-    case 'prayer':
-      return <PrayerBlock content={block.content} onChange={up} autoFocus={autoFocus} />;
-    case 'action':
-      return <ActionBlock content={block.content} onChange={up} autoFocus={autoFocus} />;
-    case 'question':
-      return <QuestionBlock content={block.content} onChange={up} autoFocus={autoFocus} />;
-    case 'sermon-clip':
-      return <SermonClipBlock content={block.content} onChange={up} />;
-    case 'completion':
-      return <CompletionBlock content={block.content} onChange={up} />;
-    case 'divider':
-      return <DividerBlock content={block.content} onChange={up} />;
-    case 'quote':
-      return <QuoteBlock content={block.content} onChange={up} />;
-    case 'callout':
-      return <CalloutBlock content={block.content} onChange={up} />;
-    case 'memory-verse':
-      return <MemoryVerseBlock content={block.content} onChange={up} />;
-    default:
-      return <div className="text-xs text-gray-400 italic">Unknown block type</div>;
+    case 'heading':      return <HeadingBlock      content={block.content} onChange={up} onSlash={onSlash} onBackspaceEmpty={onBackspaceEmpty} onEnter={onEnter} autoFocus={autoFocus} />;
+    case 'paragraph':    return <ParagraphBlock    content={block.content} onChange={up} onSlash={onSlash} onBackspaceEmpty={onBackspaceEmpty} onEnter={onEnter} autoFocus={autoFocus} />;
+    case 'scripture':    return <ScriptureBlock    content={block.content} onChange={up} />;
+    case 'reflection':   return <ReflectionBlock   content={block.content} onChange={up} autoFocus={autoFocus} />;
+    case 'prayer':       return <PrayerBlock       content={block.content} onChange={up} autoFocus={autoFocus} />;
+    case 'action':       return <ActionBlock       content={block.content} onChange={up} autoFocus={autoFocus} />;
+    case 'question':     return <QuestionBlock     content={block.content} onChange={up} autoFocus={autoFocus} />;
+    case 'sermon-clip':  return <SermonClipBlock   content={block.content} onChange={up} />;
+    case 'completion':   return <CompletionBlock   content={block.content} onChange={up} />;
+    case 'divider':      return <DividerBlock      content={block.content} onChange={up} />;
+    case 'quote':        return <QuoteBlock        content={block.content} onChange={up} />;
+    case 'callout':      return <CalloutBlock      content={block.content} onChange={up} />;
+    case 'memory-verse': return <MemoryVerseBlock  content={block.content} onChange={up} />;
+    default:             return <div className="text-xs text-gray-400 italic">Unknown block type</div>;
   }
 }
 
@@ -90,17 +72,35 @@ function renderBlockContent(
 
 function AddBetweenBtn({ onClick }: { onClick: () => void }) {
   return (
-    <div className="relative flex items-center justify-center h-5 group/add">
-      <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-200 opacity-0 group-hover/add:opacity-100 transition-opacity" />
+    <div className="relative flex items-center justify-center h-6 group/add">
+      <div className="absolute inset-x-0 top-1/2 h-px bg-teal-200 opacity-0 group-hover/add:opacity-100 transition-opacity" />
       <button
         onClick={onClick}
         className="relative z-10 flex items-center justify-center w-5 h-5 rounded-full bg-white border border-gray-200 text-gray-400 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50 transition-all opacity-0 group-hover/add:opacity-100 shadow-sm"
+        title="Add block"
       >
         <Plus size={11} />
       </button>
     </div>
   );
 }
+
+// ─── Type label ───────────────────────────────────────────────────────────────
+
+const LABEL_COLORS: Partial<Record<BlockType, string>> = {
+  scripture:    'text-teal-600',
+  reflection:   'text-amber-600',
+  prayer:       'text-indigo-600',
+  action:       'text-emerald-600',
+  question:     'text-blue-600',
+  'sermon-clip':'text-purple-600',
+  completion:   'text-emerald-600',
+  quote:        'text-gray-500',
+  callout:      'text-teal-600',
+  'memory-verse':'text-yellow-700',
+  heading:      'text-gray-500',
+  divider:      'text-gray-400',
+};
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -110,11 +110,10 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [newBlockId, setNewBlockId] = useState<string | null>(null);
 
-  // Drag state
   const dragIdx = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   const updateBlock = useCallback((id: string, b: Block) => {
     onChange(blocks.map(bl => bl.id === id ? b : bl));
@@ -150,23 +149,20 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
 
   const replaceWithType = useCallback((id: string, type: BlockType) => {
     const b = createBlock(type);
-    b.id = id; // keep same id so focus tracking works
+    b.id = id;
     setNewBlockId(id);
     onChange(blocks.map(bl => bl.id === id ? b : bl));
   }, [blocks, onChange]);
 
-  // ─── Slash menu ────────────────────────────────────────────────────────────
+  // ─── Slash menu ─────────────────────────────────────────────────────────
 
-  const openSlash = useCallback((blockId: string, e?: React.KeyboardEvent) => {
+  const openSlash = useCallback((blockId: string) => {
     const el = document.getElementById(`block-${blockId}`);
     const rect = el?.getBoundingClientRect() ?? { top: 200, left: 200, height: 0 };
     setSlashState({
       blockId,
       query: '',
-      anchor: {
-        top: rect.top + rect.height + 4,
-        left: rect.left,
-      },
+      anchor: { top: rect.top + rect.height + 4, left: rect.left },
     });
     setFocusedId(blockId);
   }, []);
@@ -177,19 +173,17 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
     setSlashState(null);
   }, [slashState, replaceWithType]);
 
-  // ─── Drag and drop ─────────────────────────────────────────────────────────
+  // ─── Drag and drop ───────────────────────────────────────────────────────
 
   const handleDragStart = (idx: number) => (e: React.DragEvent) => {
     dragIdx.current = idx;
     e.dataTransfer.effectAllowed = 'move';
   };
-
   const handleDragOver = (idx: number) => (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverIdx(idx);
   };
-
   const handleDrop = (idx: number) => (e: React.DragEvent) => {
     e.preventDefault();
     if (dragIdx.current === null || dragIdx.current === idx) return;
@@ -200,29 +194,30 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
     dragIdx.current = null;
     setDragOverIdx(null);
   };
-
   const handleDragEnd = () => {
     dragIdx.current = null;
     setDragOverIdx(null);
   };
 
-  // ─── Empty state ───────────────────────────────────────────────────────────
+  // ─── Empty state ─────────────────────────────────────────────────────────
 
   if (blocks.length === 0) {
     return (
       <div
-        className="flex flex-col items-center justify-center h-48 text-center border-2 border-dashed border-gray-200 rounded-xl cursor-text"
+        className="flex flex-col items-center justify-center min-h-48 text-center rounded-2xl border-2 border-dashed border-gray-100 cursor-text py-12 hover:border-teal-100 transition-colors"
         onClick={() => { const b = createBlock('paragraph'); setNewBlockId(b.id); onChange([b]); }}
       >
-        <Plus size={20} className="text-gray-300 mb-2" />
-        <p className="text-sm text-gray-400">Click to start writing, or type <code className="bg-gray-100 px-1 rounded">/</code> to insert a block</p>
+        <p className="text-sm text-gray-400 font-medium">Start writing below.</p>
+        <p className="text-xs text-gray-300 mt-1.5">
+          Type <kbd className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-mono">/</kbd> to insert a block
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="relative space-y-0.5">
-      {/* Top add button */}
+    <div className="relative">
+      {/* Top add zone */}
       <AddBetweenBtn onClick={() => insertAfter(null)} />
 
       {blocks.map((block, idx) => {
@@ -230,14 +225,16 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
         const isHovered = hoveredId === block.id;
         const isFocused = focusedId === block.id;
         const isDragTarget = dragOverIdx === idx;
+        const showChrome = isHovered || isFocused;
+        const labelColor = LABEL_COLORS[block.type] ?? 'text-gray-400';
 
         return (
           <div key={block.id}>
             <div
               id={`block-${block.id}`}
-              className={`relative group flex items-start gap-2 rounded-lg p-3 transition-colors ${
-                isFocused ? 'bg-gray-50/80' : isHovered ? 'bg-gray-50/40' : ''
-              } ${isDragTarget ? 'ring-2 ring-teal-400/50' : ''}`}
+              className={`relative group flex items-start gap-1.5 rounded-xl py-2 px-1 transition-colors ${
+                isFocused ? 'bg-gray-50/70' : isHovered ? 'bg-gray-50/40' : ''
+              } ${isDragTarget ? 'ring-2 ring-teal-300/50' : ''}`}
               onMouseEnter={() => setHoveredId(block.id)}
               onMouseLeave={() => setHoveredId(null)}
               onFocus={() => setFocusedId(block.id)}
@@ -248,22 +245,24 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
               onDrop={handleDrop(idx)}
               onDragEnd={handleDragEnd}
             >
-              {/* Drag handle + block actions */}
-              <div className={`flex flex-col items-center gap-0.5 flex-shrink-0 mt-0.5 transition-opacity ${isHovered || isFocused ? 'opacity-100' : 'opacity-0'}`}>
+              {/* Drag handle */}
+              <div className={`flex flex-col items-center gap-0.5 flex-shrink-0 pt-1 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
                 <button
-                  className="cursor-grab active:cursor-grabbing p-1 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100"
+                  className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
                   onMouseDown={e => e.stopPropagation()}
+                  title="Drag to reorder"
                 >
-                  <GripVertical size={14} />
+                  <GripVertical size={13} />
                 </button>
               </div>
 
               {/* Block content */}
               <div className="flex-1 min-w-0">
-                {/* Type badge */}
-                {block.type !== 'paragraph' && (
-                  <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium mb-1">
-                    {meta.icon} {meta.label}
+                {/* Type label (not for paragraph/heading) */}
+                {block.type !== 'paragraph' && block.type !== 'heading' && block.type !== 'divider' && (
+                  <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1 ${labelColor}`}>
+                    <span>{meta.icon}</span>
+                    <span>{meta.label}</span>
                   </div>
                 )}
                 {renderBlockContent(
@@ -276,32 +275,32 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
                 )}
               </div>
 
-              {/* Right-side actions */}
-              <div className={`flex flex-col gap-1 flex-shrink-0 transition-opacity ${isHovered || isFocused ? 'opacity-100' : 'opacity-0'}`}>
+              {/* Right actions */}
+              <div className={`flex flex-col gap-0.5 flex-shrink-0 pt-0.5 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
                 <button
                   onClick={() => duplicateBlock(block.id)}
-                  title="Duplicate block"
-                  className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                  title="Duplicate"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-gray-500 transition-colors"
                 >
-                  <Copy size={13} />
+                  <Copy size={12} />
                 </button>
                 <button
                   onClick={() => deleteBlock(block.id)}
-                  title="Delete block"
-                  className="p-1.5 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"
+                  title="Delete"
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={12} />
                 </button>
               </div>
             </div>
 
-            {/* Add-between button */}
+            {/* Between-block add button */}
             <AddBetweenBtn onClick={() => insertAfter(block.id)} />
           </div>
         );
       })}
 
-      {/* Slash menu portal */}
+      {/* Slash menu */}
       {slashState && (
         <SlashMenu
           query={slashState.query}

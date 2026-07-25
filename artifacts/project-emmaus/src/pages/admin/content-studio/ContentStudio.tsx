@@ -22,7 +22,7 @@ type StudioView =
   | { id: 'overview' }
   | { id: 'collections' }
   | { id: 'collection-editor'; collectionId?: string }
-  | { id: 'journeys'; collectionId?: string }
+  | { id: 'journeys'; collectionId?: string; openNew?: boolean }
   | { id: 'journey-editor'; journeyId: string; collectionId?: string };
 
 type NavItem = { id: string; label: string; Icon: React.ElementType };
@@ -82,6 +82,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId, onOpen
             onNavigateCollections={() => navigate({ id: 'collections' })}
             onNavigateJourneys={() => navigate({ id: 'journeys' })}
             onOpenJourney={(id) => navigate({ id: 'journey-editor', journeyId: id })}
+            onNewJourney={() => navigate({ id: 'journeys', openNew: true })}
           />
         );
       case 'collections':
@@ -104,6 +105,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId, onOpen
         return (
           <StudioJourneyList
             collectionId={view.collectionId}
+            autoOpenNew={view.openNew}
             onEdit={(id) => navigate({ id: 'journey-editor', journeyId: id })}
             onLegacyEdit={onOpenLegacyEditor}
           />
