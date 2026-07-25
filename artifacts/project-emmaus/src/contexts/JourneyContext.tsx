@@ -34,6 +34,7 @@ export type Journey = {
   collectionId?: string;
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
+  requiresDailyGate?: boolean;  // default true — set false to bypass daily gate for pastoral journeys
 };
 
 export type Step = {

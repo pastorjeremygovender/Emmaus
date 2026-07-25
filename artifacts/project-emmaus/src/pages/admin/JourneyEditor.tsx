@@ -271,7 +271,7 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
             </Field>
           </div>
 
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input type="checkbox" checked={!!form.churchWide} onChange={e => patch('churchWide', e.target.checked)} className="rounded" />
               Church-wide journey
@@ -282,6 +282,15 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
                 Exempt from overload rules
               </label>
             )}
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer" title="When ON (default), members must complete today's 15 Minutes with Jesus before accessing this journey. Turn OFF for pastoral journeys like Crisis Care or Grief Support.">
+              <input
+                type="checkbox"
+                checked={(form as any).requiresDailyGate !== false}
+                onChange={e => patch('requiresDailyGate' as any, e.target.checked)}
+                className="rounded"
+              />
+              Requires daily 15 Min gate
+            </label>
           </div>
 
           {form.journeyType === 'companion' && (

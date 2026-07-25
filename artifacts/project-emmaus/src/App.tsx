@@ -10,6 +10,7 @@ import { FloatingEmmausButton } from '@/components/FloatingEmmausButton';
 
 // Pages
 import Welcome from '@/pages/Welcome';
+import Onboarding from '@/pages/Onboarding';
 import Auth from '@/pages/Auth';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
@@ -51,6 +52,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Welcome} />
+      <Route path="/onboarding" component={Onboarding} />
       <Route path="/auth" component={Auth} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />

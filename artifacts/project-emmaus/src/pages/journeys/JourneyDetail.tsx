@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
+import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import { getCollection } from '@/lib/collections-api';
@@ -156,6 +157,7 @@ export default function JourneyDetail() {
   const { journeys, progress, startJourney, getStepsForJourney, loading } = useJourney();
   const { user } = useAuth();
   const { getState, saveForLater, resumeJourney, canActivateMore } = useEnrollment();
+  const { gateClear, coreJourney: coreJ } = useDailyGate();
   const { startSharedJourney } = useRooms();
 
   const [pendingStart, setPendingStart]       = useState(false);
@@ -227,8 +229,20 @@ export default function JourneyDetail() {
     );
   }
 
+  // Daily gate — applies to non-exempt, non-override growth journeys
+  const isGated = !gateClear && isGatedByDailyGate(journey ?? { journeyType: '' } as any);
+
+  function openCore() {
+    if (!coreJ) { setLocation('/walk'); return; }
+    if (!progress[coreJ.id]) startJourney(coreJ.id);
+    const p = progress[coreJ.id];
+    setLocation(`/journey/${coreJ.id}/day/${p?.currentDay ?? 1}`);
+  }
+
   function handlePrimaryAction() {
     if (!journey) return;
+    // Gate check — before core is done, redirect non-exempt journeys to core
+    if (isGated && !isCompleted) { openCore(); return; }
     if (isActive) { setLocation(`/journey/${journey.id}/day/${prog!.currentDay}`); return; }
     if (isPaused) {
       if (canActivateMore(journeys, startedIds)) {
@@ -266,10 +280,11 @@ export default function JourneyDetail() {
   }
 
   const primaryLabel =
-    isActive    ? 'Continue'       :
-    isPaused    ? 'Resume'         :
-    isCompleted ? 'Review Journey' :
-                  'Start Journey';
+    (isGated && !isCompleted) ? 'Complete today\'s 15 Minutes with Jesus' :
+    isActive                   ? 'Continue'       :
+    isPaused                   ? 'Resume'         :
+    isCompleted                ? 'Review Journey' :
+                                 'Start Journey';
 
   const rhythm = rhythmLabel(journey);
   const time   = timeLabel(journey);
@@ -416,22 +431,31 @@ export default function JourneyDetail() {
         {showLimitMsg && (
           <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
             <p className="text-[14px] text-amber-900 leading-relaxed">
-              You already have two Journeys underway. Pause one in the Journeys tab before beginning another.
+              You're already walking through five journeys. To begin another one, pause or complete one of your current journeys.
             </p>
             <button
               className="mt-2 text-[13px] text-amber-700 font-medium hover:underline"
               onClick={() => { setShowLimitMsg(false); setLocation('/journeys'); }}
             >
-              Review my Journeys →
+              Manage My Journeys →
             </button>
           </div>
         )}
 
         {/* ── Primary action + save ─────────────────────────────────── */}
         <div className="space-y-2.5">
-          <Button className="w-full h-12 rounded-xl text-[16px] font-medium" onClick={handlePrimaryAction}>
+          <Button
+            className="w-full h-12 rounded-xl font-medium"
+            style={{ fontSize: isGated && !isCompleted ? '14px' : '16px' }}
+            onClick={handlePrimaryAction}
+          >
             {primaryLabel}
           </Button>
+          {isGated && !isCompleted && (
+            <p className="text-[12px] text-muted-foreground text-center leading-snug">
+              Begin with today's time with Jesus. Your Journey will be ready afterwards.
+            </p>
+          )}
           {!isStarted && (
             <button
               onClick={toggleSave}

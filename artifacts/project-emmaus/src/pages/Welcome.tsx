@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { isOnboarded } from '@/lib/onboarding';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves faster
@@ -38,7 +39,13 @@ export default function Welcome() {
     if (loading) return;
     // Skip straight to destination without showing splash.
     if (user) {
-      setLocation(user.role === 'admin' ? '/admin' : '/walk');
+      if (user.role === 'admin') {
+        setLocation('/admin');
+      } else if (!isOnboarded()) {
+        setLocation('/onboarding');
+      } else {
+        setLocation('/walk');
+      }
     } else {
       setLocation('/auth');
     }
@@ -61,7 +68,13 @@ export default function Welcome() {
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
     if (user) {
-      setLocation(user.role === 'admin' ? '/admin' : '/walk');
+      if (user.role === 'admin') {
+        setLocation('/admin');
+      } else if (!isOnboarded()) {
+        setLocation('/onboarding');
+      } else {
+        setLocation('/walk');
+      }
     } else {
       setLocation('/auth');
     }

@@ -482,34 +482,34 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. This Week's Sermon Devotional ───────────────────────────────── */}
-        {companionJourney && (
+        {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
+        {devotionalJourney && (
           <motion.section
             className="space-y-3"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.10 }}
           >
-            <SermonDevotionalCard
-              journey={companionJourney}
-              prog={companionProg}
-              onContinue={() => goToJourney(companionJourney.id, companionProg)}
+            <DailyDevotionalCard
+              journey={devotionalJourney}
+              prog={devotionalProg}
+              onContinue={() => goToJourney(devotionalJourney.id, devotionalProg)}
             />
           </motion.section>
         )}
 
-        {/* ── 3. Daily Devotional ────────────────────────────────────────────── */}
-        {devotionalJourney && (
+        {/* ── 3. This Week's Sermon Companion ────────────────────────────────── */}
+        {companionJourney && (
           <motion.section
             className="space-y-3"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
           >
-            <DailyDevotionalCard
-              journey={devotionalJourney}
-              prog={devotionalProg}
-              onContinue={() => goToJourney(devotionalJourney.id, devotionalProg)}
+            <SermonDevotionalCard
+              journey={companionJourney}
+              prog={companionProg}
+              onContinue={() => goToJourney(companionJourney.id, companionProg)}
             />
           </motion.section>
         )}

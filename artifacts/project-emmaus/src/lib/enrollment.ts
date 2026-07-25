@@ -5,9 +5,10 @@
  * Components use the useEnrollment() hook; all calls share the same storage key
  * so state is consistent across the app without a new context.
  *
- * Exempt journey types do NOT count toward the two-active-Journey limit:
+ * Exempt journey types do NOT count toward the five-active-Journey limit:
  *   - 'core'      (15 Minutes with Jesus)
  *   - 'companion' (This Week's Sermon companion)
+ *   - 'devotional' (Daily Devotional)
  *   - journey.overloadExempt === true (admin-marked)
  */
 
@@ -18,7 +19,7 @@ export type EnrollmentState = 'active' | 'paused' | 'saved';
 export type EnrollmentMap = Record<string, EnrollmentState>;
 
 const STORAGE_KEY = 'emmaus_enrollment';
-const MAX_ACTIVE_GROWTH = 2;
+export const MAX_ACTIVE_JOURNEYS = 5;
 
 /** Types that are always exempt from the active-Journey limit. */
 const EXEMPT_TYPES = new Set(['core', 'companion', 'devotional']);
@@ -93,7 +94,7 @@ export function useEnrollment() {
    * Returns true if the user can start or mark a new growth journey active.
    */
   function canActivateMore(journeys: Journey[], startedIds: Set<string>): boolean {
-    return activeGrowthCount(journeys, startedIds) < MAX_ACTIVE_GROWTH;
+    return activeGrowthCount(journeys, startedIds) < MAX_ACTIVE_JOURNEYS;
   }
 
   return {
@@ -104,6 +105,6 @@ export function useEnrollment() {
     saveForLater,
     activeGrowthCount,
     canActivateMore,
-    MAX_ACTIVE_GROWTH,
+    MAX_ACTIVE_JOURNEYS,
   };
 }

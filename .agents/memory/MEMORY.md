@@ -5,3 +5,4 @@
 - [Ask Emmaus backend](ask-emmaus-backend.md) — conversation service at POST /api/emmaus/conversation; SSE streaming; mock+OpenAI providers; safety layer; in-memory store; system-instructions.ts is the single source of truth.
 - [YouTube Sermon Archive](youtube-archive.md) — file-based import pipeline; YouTube Data API v3 working; ICC channel 375 videos; caption search needs OAuth; req.params quirk requires String() cast; route mounted bare (no /api prefix).
 - [Ask Emmaus spec implementation](ask-emmaus-spec.md) — full spec landed: parallel Bible+sermon search, nextSteps array, listen step injection, no-section-headers prompt, Preached Here chapter badge, searchByScripture with text fallback.
+- [Daily Discipleship Rhythm sprint](daily-rhythm-sprint.md) — enrollment limit 5, daily gate, onboarding, metadata JSONB pattern for journey extras; no DB migrations needed.

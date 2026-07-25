@@ -1,0 +1,446 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is a member experience sprint.
+
+Do not redesign the Admin Portal.
+
+Do not redesign Content Studio.
+
+Do not redesign Ask Emmaus.
+
+Do not redesign Rooms.
+
+Do not redesign Voice.
+
+Preserve all existing authentication, Journey data, progress tracking, Bible functionality, sermon functionality, Collections and publishing workflows.
+
+=====================================================
+
+SPRINT NAME
+
+Daily Discipleship Rhythm
+
+=====================================================
+
+VISION
+
+Emmaus should never feel like a content library.
+
+It should feel like a wise companion that always knows the member's next faithful step.
+
+Members should never wonder:
+
+"What should I do next?"
+
+Emmaus should already have the answer ready.
+
+=====================================================
+
+CORE DAILY RHYTHM
+
+Every day follows this order:
+
+1. 15 Minutes with Jesus
+
+↓
+
+2. Daily Devotional
+
+↓
+
+3. This Week's Sermon Companion
+
+↓
+
+4. Continue Active Journeys
+
+Scripture comes first.
+
+Everything else grows from that rhythm.
+
+=====================================================
+
+FIRST-TIME EXPERIENCE
+
+Fresh install / first sign-in flow:
+
+Splash
+
+Emmaus
+
+Walk with Jesus
+
+↓
+
+Welcome, {First Name}
+
+↓
+
+What would you like to begin with?
+
+☑ 15 Minutes with Jesus
+
+A simple daily rhythm of Scripture, reflection and prayer.
+
+Button:
+
+Explore Journeys
+
+Selecting this opens the Journey Discovery page (Collections).
+
+Members may optionally choose additional Journeys.
+
+↓
+
+Welcome.
+
+Let's begin.
+
+Primary button:
+
+Begin 15 Minutes with Jesus
+
+Do not ask:
+
+Walk alone
+
+Walk with others
+
+How are you feeling today?
+
+Those belong elsewhere.
+
+=====================================================
+
+ACTIVE JOURNEY LIMIT
+
+Increase the Active Journey limit.
+
+Old:
+
+2
+
+New:
+
+5
+
+Members may actively walk through up to five Journeys simultaneously.
+
+=====================================================
+
+THE FOLLOWING NEVER COUNT TOWARD THE LIMIT
+
+15 Minutes with Jesus
+
+Daily Devotional
+
+This Week's Sermon Companion
+
+Bible
+
+Ask Emmaus
+
+These are always available.
+
+=====================================================
+
+DAILY GATE
+
+Before today's 15 Minutes with Jesus has been completed:
+
+Normal Journeys remain visible.
+
+Do NOT hide them.
+
+Do NOT disable them harshly.
+
+Instead the primary action becomes:
+
+Complete today's 15 Minutes with Jesus
+
+Supporting text:
+
+Begin with today's time with Jesus.
+
+Your Journey will be ready afterwards.
+
+Selecting this simply opens today's 15 Minutes with Jesus.
+
+Never display an error.
+
+Never use guilt language.
+
+=====================================================
+
+AFTER COMPLETION
+
+As soon as today's 15 Minutes with Jesus is completed:
+
+All eligible Journeys immediately unlock.
+
+No refresh.
+
+No reload.
+
+No logout/login.
+
+=====================================================
+
+ADMIN OVERRIDE
+
+Add a Journey setting:
+
+Requires today's 15 Minutes with Jesus
+
+Default:
+
+ON
+
+If OFF
+
+Journey ignores the daily gate.
+
+Examples:
+
+Made Free
+
+Crisis Care
+
+Grief Support
+
+Emergency Prayer
+
+New Believer Essentials
+
+Future pastoral Journeys
+
+Reuse existing Journey metadata.
+
+Do not create a separate permissions system.
+
+=====================================================
+
+ACTIVE JOURNEY MESSAGE
+
+Do NOT display:
+
+5 / 5
+
+Limit reached
+
+Maximum active Journeys
+
+Instead display:
+
+You're currently walking through five journeys.
+
+If a member attempts to start a sixth Journey show:
+
+You're already walking through five journeys.
+
+To begin another one, pause or complete one of your current journeys.
+
+Buttons:
+
+Manage My Journeys
+
+Cancel
+
+Warm.
+
+Pastoral.
+
+Never technical.
+
+=====================================================
+
+WALK SCREEN ORDER
+
+The Walk screen should always present content in this order:
+
+Today's 15 Minutes with Jesus
+
+↓
+
+Today's Daily Devotional
+
+↓
+
+This Week's Sermon Companion
+
+↓
+
+Continue Your Journeys
+
+↓
+
+This Week
+
+No other content should interrupt this rhythm.
+
+=====================================================
+
+JOURNEYS SCREEN
+
+The Journeys screen remains focused on discipleship pathways.
+
+Continue Your Journeys
+
+↓
+
+Explore Journeys
+
+↓
+
+Saved Journeys
+
+↓
+
+Completed Journeys
+
+Do not duplicate discovery sections.
+
+=====================================================
+
+PROGRESS
+
+Daily completion resets at the next local calendar day.
+
+Members may revisit previous 15 Minutes with Jesus sessions.
+
+Progress to the next daily session only becomes available the following day.
+
+The same applies to Daily Devotionals.
+
+=====================================================
+
+NOTIFICATIONS
+
+Prepare the system for notifications using this wording style.
+
+Good morning.
+
+Today's Journey is ready.
+
+Examples:
+
+Your time with Jesus is ready.
+
+Today's devotional is waiting for you.
+
+Continue your Journey whenever you're ready.
+
+Never use:
+
+You missed yesterday.
+
+You're behind.
+
+Don't break your streak.
+
+You haven't opened Emmaus.
+
+Encouragement only.
+
+=====================================================
+
+TYPOGRAPHY
+
+Continue using the Emmaus typography system.
+
+No Times New Roman.
+
+No browser default serif fonts.
+
+=====================================================
+
+TRANSITIONS
+
+Unlocking Journeys after completing today's 15 Minutes with Jesus should feel immediate and smooth.
+
+Use existing transition styles.
+
+No heavy animations.
+
+=====================================================
+
+TESTS
+
+Verify:
+
+Fresh user onboarding
+
+Splash appears
+
+Welcome screen
+
+Explore Journeys opens Collections
+
+15 Minutes with Jesus begins
+
+Member selects Journeys
+
+Five active Journey limit works
+
+Exempt Journeys do not count
+
+Daily gate works
+
+Admin override works
+
+Journeys unlock after completion
+
+Progress preserved
+
+Daily reset works
+
+Notifications use correct wording
+
+No TypeScript errors
+
+No lint errors
+
+No runtime errors
+
+=====================================================
+
+DEFINITION OF DONE
+
+Complete only when Emmaus naturally guides every member through this rhythm:
+
+15 Minutes with Jesus
+
+↓
+
+Daily Devotional
+
+↓
+
+This Week's Sermon Companion
+
+↓
+
+Active Journeys
+
+without the member ever wondering what to do next.
+
+Emmaus should feel calm, intentional, pastoral and always one step ahead.
+
+=====================================================
+
+FINAL REVIEW
+
+Provide:
+
+1. Onboarding flow implemented
+2. Five Journey limit implementation
+3. Daily gate implementation
+4. Admin override implementation
+5. Exempt Journey handling
+6. Walk screen ordering
+7. Notification wording
+8. Daily reset behaviour
+9. Tests completed
+10. Known limitations
+
+Stop after presenting the completed Daily Discipleship Rhythm.

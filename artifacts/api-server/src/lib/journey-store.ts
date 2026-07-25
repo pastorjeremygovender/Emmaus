@@ -108,6 +108,7 @@ export interface FrontendJourney {
   // Stored in metadata JSONB — no DB migration required
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
+  requiresDailyGate?: boolean;  // default true — false bypasses the daily 15-min gate
 }
 
 export interface FrontendProgress {
@@ -149,6 +150,7 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     collectionId: row.collectionId ?? undefined,
     scriptureReference: (meta.scriptureReference as string) || undefined,
     nextJourneyId: (meta.nextJourneyId as string) || undefined,
+    requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
   };
 }
 
@@ -385,6 +387,7 @@ export async function updateJourney(
       ...rawMeta,
       ...(data.scriptureReference !== undefined ? { scriptureReference: data.scriptureReference || null } : {}),
       ...(data.nextJourneyId !== undefined ? { nextJourneyId: data.nextJourneyId || null } : {}),
+      ...(data.requiresDailyGate !== undefined ? { requiresDailyGate: data.requiresDailyGate } : {}),
     };
     void currentMeta; // suppress unused warning
   }
