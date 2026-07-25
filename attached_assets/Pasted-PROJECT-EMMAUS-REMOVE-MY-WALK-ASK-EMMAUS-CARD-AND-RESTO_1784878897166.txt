@@ -1,0 +1,172 @@
+PROJECT EMMAUS — REMOVE MY WALK ASK EMMAUS CARD AND RESTORE FLOATING BUTTON
+
+Implement directly in the existing Project Emmaus codebase.
+
+Do not redesign My Walk.
+Do not change the floating Ask Emmaus button design.
+Do not change Ask Emmaus routing, context handling, response behaviour or provider configuration.
+Do not modify unrelated My Walk features.
+Do not mark complete from compilation alone.
+
+==================================================
+VERIFIED PROBLEM
+==================================================
+
+On the My Walk page, Ask Emmaus is currently displayed as a large embedded card near the top of the page.
+
+This is inconsistent with the rest of the application.
+
+The global floating Ask Emmaus button is the correct entry point and must be used here as it is on the other authenticated user screens.
+
+==================================================
+GOAL
+==================================================
+
+Remove the embedded Ask Emmaus card from My Walk.
+
+Show the same shared floating Ask Emmaus button used on Today’s Steps, Next Steps and My Bible.
+
+==================================================
+1. REMOVE THE EMBEDDED CARD
+==================================================
+
+Remove the full My Walk card containing:
+
+- Ask Emmaus
+- Bring your questions, doubts, and moments
+- speech-bubble icon
+- chevron
+
+Remove the card completely.
+
+Do not leave:
+
+- empty space
+- a placeholder
+- a divider
+- a hidden but focusable element
+- duplicate Ask Emmaus entry points
+
+After removal, the Prayer Requests section should move upward naturally.
+
+Preserve appropriate spacing between:
+
+- the profile summary
+- Prayer Requests
+- Saved Reflections
+- the rest of My Walk
+
+==================================================
+2. SHOW THE SHARED FLOATING BUTTON
+==================================================
+
+Enable the existing shared global Ask Emmaus floating button on My Walk.
+
+Use exactly the same shared component and visual design already approved for the other pages:
+
+- visible text: Ask Emmaus
+- transparent or lightly translucent interior
+- animated blue-to-green border highlight
+- highlight moving slowly around the entire perimeter
+- positioned above the bottom navigation
+- accessible touch target
+- responsive mobile placement
+
+Do not create a second My Walk-specific floating button.
+
+Do not copy and paste the component into the page.
+
+Use the shared authenticated app-shell implementation.
+
+==================================================
+3. MY WALK CONTEXT
+==================================================
+
+When opened from My Walk, pass only appropriate general source context:
+
+- source type: personal or my-walk
+- source route for returning
+- no automatic emotional assumptions
+- no private prayer request text
+- no saved reflection content
+- no personal note content
+
+Do not automatically submit a question.
+
+Do not silently send private My Walk content to the language model.
+
+==================================================
+4. RETURN BEHAVIOUR
+==================================================
+
+When Ask Emmaus is opened from My Walk:
+
+- one press of the Ask Emmaus back arrow must return directly to My Walk
+- preserve the approximate My Walk scroll position
+- keep My Walk highlighted in the bottom navigation
+
+Do not route through Today’s Steps or another page.
+
+==================================================
+5. LAYOUT SAFETY
+==================================================
+
+Ensure the floating button:
+
+- does not cover the prayer-request text area
+- does not cover Save Prayer Request
+- does not cover Saved Reflections
+- does not overlap the permanent bottom navigation
+- respects mobile safe-area insets
+- remains reachable while the page scrolls
+
+Add sufficient bottom content padding so the last My Walk content can scroll above both the button and navigation.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test in the actual narrow mobile application.
+
+1. Open My Walk.
+2. Confirm the large embedded Ask Emmaus card is gone.
+3. Confirm Prayer Requests moves upward naturally.
+4. Confirm Saved Reflections remains correctly positioned.
+5. Confirm the shared floating Ask Emmaus button appears.
+6. Confirm its design matches the button on Today’s Steps, Next Steps and My Bible.
+7. Confirm the animated blue-green highlight moves around the full border.
+8. Confirm the button does not cover the prayer form or saved content.
+9. Tap Ask Emmaus.
+10. Confirm the existing Ask Emmaus experience opens.
+11. Confirm no prayer request or private reflection is automatically attached.
+12. Press Back once.
+13. Confirm My Walk returns directly.
+14. Confirm the prior scroll position is approximately restored.
+15. Confirm My Walk remains highlighted in the bottom navigation.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- the embedded Ask Emmaus card is removed from My Walk
+- no empty placeholder remains
+- the shared floating Ask Emmaus button appears on My Walk
+- only one Ask Emmaus entry point is visible
+- private My Walk content is not automatically passed
+- one Back press returns directly to My Walk
+- the button does not overlap page controls or navigation
+- mobile testing has been completed
+
+When finished, report only:
+
+- files changed
+- embedded card removed
+- shared floating component enabled
+- My Walk context passed
+- return behaviour verified
+- mobile layout test results
+- any incomplete item and exact reason
+
+Do not propose additional features.

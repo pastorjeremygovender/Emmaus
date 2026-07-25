@@ -59,6 +59,27 @@ export interface NextStep {
   path: string;                // e.g. "/bible/read/psalms/42"
 }
 
+/** One item in the practical next-steps footer (📖 🙏 🎧 🚶) */
+export interface NextStepItem {
+  /** "read" | "pray" | "listen" | "continue"
+   *  "listen" is ALWAYS injected by the service from verified sermon data.
+   *  The LLM must never generate a "listen" item. */
+  type: "read" | "pray" | "listen" | "continue";
+  /** Human-readable label — e.g. "Romans 8" / "Father, help me trust you…" */
+  text: string;
+  /** Optional navigation target — for listen: YouTube timestamped URL (Watch) */
+  path?: string;
+  /** For "listen" items: absolute YouTube timestamp seconds */
+  timestampSeconds?: number;
+  /** For "listen" items: verified speaker name */
+  speakerName?: string;
+  // Audio player fields (populated when a trimmed audio asset is ready)
+  audioUrl?: string;                // in-app audio URL
+  relativeStartSeconds?: number;    // position within trimmed audio
+  absoluteStartSeconds?: number;    // same as timestampSeconds (YouTube anchor)
+  watchUrl?: string;                // explicit Watch URL (YouTube at absolute time)
+}
+
 export interface Recommendation {
   type: RecommendationType;
   title: string;
@@ -75,6 +96,10 @@ export interface Recommendation {
 export interface EmmausResponseMetadata {
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
+  /** Practical next-steps footer rendered with emoji icons (📖 🙏 🎧 🚶).
+   *  The LLM generates "read", "pray", and "continue" items.
+   *  The conversation service appends the "listen" item from verified sermon data. */
+  nextSteps: NextStepItem[];
   recommendations: Recommendation[];
   followUpPrompts: string[];
   handoffType: HandoffType;

@@ -1,0 +1,237 @@
+We are at the point where the Journey Content Management system has been built.
+
+Before we begin creating real content, we need to finalise the database structure so that Emmaus can scale to thousands of pieces of content without redesigning it later.
+
+DO NOT change the current UI unnecessarily.
+DO NOT remove any existing functionality.
+This is a structural improvement only.
+
+==================================================
+1. CHANGE "DAY" TO "STEP"
+==================================================
+
+Internally replace every "Day" with "Step".
+
+This allows Emmaus to support:
+
+• Daily devotionals
+• Bible studies
+• Courses
+• Reading plans
+• Marriage journeys
+• Volunteer training
+• Leadership training
+• Children's journeys
+
+The user interface may still display "Day 1" where appropriate, but the database entity should always be Step.
+
+==================================================
+2. EXPAND JOURNEY METADATA
+==================================================
+
+Journey should contain:
+
+Title
+Subtitle
+Description
+Cover Image
+Journey Type
+Category
+Difficulty
+Estimated Duration
+XP Reward
+Prerequisites
+Tags
+Church-wide
+Status
+Draft / Review / Published
+
+==================================================
+3. EVERY STEP SHOULD CONTAIN
+==================================================
+
+Each Step should have editable fields for:
+
+Step Title
+Scripture Reference(s)
+Preferred Bible Translation
+Estimated Reading Time
+Teaching Content
+Reflection Question
+Prayer
+Today's Action
+Memory Verse (optional)
+XP Reward
+Suggested Sermons
+Suggested Ask Emmaus Follow-up Questions
+Unlock Conditions (optional)
+
+This is the canonical discipleship structure.
+
+==================================================
+4. KEEP STEPS AS SEPARATE DATABASE RECORDS
+==================================================
+
+Each Step must be stored independently.
+
+Journey
+   ↓
+Step 1
+Step 2
+Step 3
+...
+
+NOT one giant JSON document.
+
+This is required for:
+
+future CSV import
+editing individual steps
+progress tracking
+analytics
+AI retrieval
+
+==================================================
+5. PREPARE FOR CSV IMPORT
+==================================================
+
+Do NOT build the importer yet.
+
+Instead create the backend architecture that expects imports.
+
+Design it so later we can upload:
+
+365 Proverbs.csv
+Luke.csv
+Acts.csv
+Marriage.csv
+
+and automatically generate all Journey Steps.
+
+==================================================
+6. ASK EMMAUS INTEGRATION
+==================================================
+
+Every Step should automatically expose:
+
+Scripture references
+
+Teaching
+
+Reflection
+
+Prayer
+
+Action
+
+Suggested sermons
+
+so Ask Emmaus can retrieve them without additional work.
+
+==================================================
+7. SERMON REFERENCES
+==================================================
+
+Each Step should optionally store:
+
+Sermon ID
+
+Timestamp
+
+Topic
+
+This allows:
+
+"You are reading John 3.
+
+Pastor Jeremy preached on this.
+
+Watch from 34:18."
+
+==================================================
+8. PREPARE FOR FUTURE ANNOTATIONS
+==================================================
+
+Add support for Bible annotations.
+
+Annotations should support:
+
+Book
+
+Chapter
+
+Verse Start
+
+Verse End
+
+Title
+
+Teaching
+
+Application
+
+Related Journey Steps
+
+Related Sermons
+
+Related Topics
+
+These annotations are NOT displayed yet.
+
+Simply prepare the schema.
+
+==================================================
+9. DO NOT IMPLEMENT CSV IMPORT YET
+==================================================
+
+Only prepare the architecture.
+
+CSV uploading will be the next task.
+
+==================================================
+10. MAINTAIN BACKWARDS COMPATIBILITY
+==================================================
+
+Do not break existing:
+
+Journey pages
+
+Bible
+
+Ask Emmaus
+
+Rooms
+
+YouTube archive
+
+Progress tracking
+
+Everything currently working must continue working.
+
+==================================================
+GOAL
+==================================================
+
+When this task is complete, Emmaus should have a scalable discipleship database capable of powering:
+
+Daily devotionals
+
+Bible studies
+
+Courses
+
+Reading plans
+
+Volunteer training
+
+Leadership development
+
+Future AI retrieval
+
+Bible annotations
+
+CSV importing
+
+without requiring another database redesign.
+
+Implement the database, models and admin UI changes now.

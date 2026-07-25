@@ -79,7 +79,7 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
   };
 
   const handleSave = useCallback(
-    (overrideStatus?: string) => {
+    async (overrideStatus?: string) => {
       if (!form.title.trim()) {
         setErrors(['Title is required.']);
         return;
@@ -89,25 +89,31 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
       const ts = new Date().toISOString();
       const status = overrideStatus ?? form.status;
 
-      if (isNew) {
-        const id = slugify(form.title) || `journey-${Date.now()}`;
-        const newJ: Journey = { ...form, id, status, updatedAt: ts, durationDays: steps.length || form.durationDays };
-        addJourney(newJ);
-        setResolvedId(id);
-      } else if (resolvedId) {
-        const updated: Journey = {
-          ...form,
-          id: resolvedId,
-          status,
-          updatedAt: ts,
-          durationDays: steps.length || form.durationDays,
-        };
-        updateJourney(updated);
-        setForm(updated);
+      try {
+        if (isNew) {
+          const id = slugify(form.title) || `journey-${Date.now()}`;
+          const newJ: Journey = { ...form, id, status, updatedAt: ts, durationDays: steps.length || form.durationDays };
+          const created = await addJourney(newJ);
+          setResolvedId(created.id);
+        } else if (resolvedId) {
+          const updated: Journey = {
+            ...form,
+            id: resolvedId,
+            status,
+            updatedAt: ts,
+            durationDays: steps.length || form.durationDays,
+          };
+          const saved = await updateJourney(updated);
+          setForm(saved);
+        }
+        setIsDirty(false);
+        setSaveState('saved');
+        setTimeout(() => setSaveState('idle'), 2500);
+      } catch (err) {
+        console.error('Journey save failed:', err);
+        setSaveState('error');
+        setTimeout(() => setSaveState('idle'), 3000);
       }
-      setIsDirty(false);
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2500);
     },
     [form, isNew, resolvedId, steps.length, addJourney, updateJourney]
   );
@@ -135,17 +141,25 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
     setConfirmPublish(true);
   };
 
-  const handleDeleteStep = (s: Step) => {
-    deleteStep(s.journeyId, s.day);
+  const handleDeleteStep = async (s: Step) => {
+    try {
+      await deleteStep(s.journeyId, s.day);
+    } catch (err) {
+      console.error('Delete step failed:', err);
+    }
     setDeleteTarget(null);
   };
 
   // Day reordering is handled via the DayEditor (change the day number field directly).
 
-  const handleDuplicateStep = (s: Step) => {
+  const handleDuplicateStep = async (s: Step) => {
     if (!resolvedId) return;
     const maxDay = steps.reduce((m, x) => Math.max(m, x.day), 0);
-    addStep({ ...s, day: maxDay + 1, journeyId: resolvedId });
+    try {
+      await addStep({ ...s, day: maxDay + 1, journeyId: resolvedId });
+    } catch (err) {
+      console.error('Duplicate step failed:', err);
+    }
   };
 
   const handleAddDay = () => {

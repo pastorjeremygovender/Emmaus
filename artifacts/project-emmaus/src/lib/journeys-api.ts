@@ -1,0 +1,358 @@
+/**
+ * Journeys API client
+ * Thin wrappers around the server-side journeys routes.
+ *
+ * Admin mutation calls accept an optional `userId` that is sent as the
+ * X-User-Id header — the server uses this (or the session cookie) to verify
+ * the caller. Pass `user.id` from AuthContext when calling admin functions.
+ */
+
+import { getApiUrl } from './api';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type SermonRef = {
+  sermonId?: string;
+  timestamp?: number;
+  topic?: string;
+  link?: string;
+  contextualSentence?: string;
+};
+
+export type Journey = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description: string;
+  journeyType: string;
+  category?: string;
+  difficulty?: string;
+  estimatedDuration?: string;
+  tags?: string[];
+  prerequisites?: string[];
+  durationDays: number;
+  status: string;
+  coverImageUrl?: string;
+  churchWide?: boolean;
+  startDate?: string;
+  endDate?: string;
+  linkedSermonId?: string;
+  xpReward?: number;
+  overloadExempt?: boolean;
+  pastorEdited?: boolean;
+  publishedAt?: string;
+  updatedAt?: string;
+  createdAt?: string;
+  collectionId?: string;
+};
+
+export type Step = {
+  journeyId: string;
+  day: number;
+  title: string;
+
+  // Canonical discipleship fields
+  mentorIntro: string;
+  scripture: string;
+  devotional: string;
+  reflectionQuestion: string;
+  prayerPrompt: string;
+  actionStep: string;
+  memoryVerse?: string;
+
+  // Extended
+  preferredTranslation?: string;
+  estimatedReadingTime?: number;
+  xpReward?: number;
+
+  // JSONB arrays
+  scriptureReferences?: Array<{ reference: string; translation?: string; verseText?: string }>;
+  suggestedSermons?: SermonRef[];
+  suggestedFollowUpQuestions?: string[];
+  unlockConditions?: Record<string, unknown> | null;
+
+  // Legacy sermon fields (mapped from suggestedSermons[0] on the server)
+  sermonTimestampSeconds?: number;
+  sermonLink?: string;
+  sermonContextualSentence?: string;
+
+  order?: number;
+};
+
+export type Progress = {
+  journeyId: string;
+  currentDay: number;
+  completedDays: number[];
+  startedAt: string;
+  lastCompletedAt: string | null;
+};
+
+export type SearchResult = {
+  journeys: Journey[];
+  stepMatches: Array<{
+    journeyId: string;
+    day: number;
+    title: string;
+    matchedField: string;
+    excerpt: string;
+  }>;
+};
+
+export type ImportResult = {
+  imported: number;
+  journeyIds: string[];
+  warnings: Array<{ row: number; column: string; message: string }>;
+  totalRows: number;
+};
+
+export type ImportValidationError = {
+  row: number;
+  column: string;
+  message: string;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(
+  path: string,
+  options?: RequestInit & { userId?: string }
+): Promise<T> {
+  const { userId, ...fetchOptions } = options ?? {};
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(fetchOptions.headers as Record<string, string> ?? {}),
+  };
+  if (userId) {
+    headers['X-User-Id'] = userId;
+  }
+  const res = await fetch(getApiUrl(path), {
+    ...fetchOptions,
+    headers,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`API error ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+// ─── Journey endpoints ────────────────────────────────────────────────────────
+
+export async function listJourneys(): Promise<Journey[]> {
+  const data = await apiFetch<{ journeys: Journey[] }>('/api/journeys');
+  return data.journeys;
+}
+
+export async function listPublishedJourneys(): Promise<Journey[]> {
+  const data = await apiFetch<{ journeys: Journey[] }>('/api/journeys/published');
+  return data.journeys;
+}
+
+export async function getJourney(id: string): Promise<Journey> {
+  return apiFetch<Journey>(`/api/journeys/${encodeURIComponent(id)}`);
+}
+
+export async function createJourney(
+  data: Omit<Journey, 'id' | 'durationDays'> & { id?: string; durationDays?: number },
+  userId?: string
+): Promise<Journey> {
+  return apiFetch<Journey>('/api/journeys', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    userId,
+  });
+}
+
+export async function updateJourney(
+  id: string,
+  data: Partial<Journey>,
+  userId?: string
+): Promise<Journey> {
+  return apiFetch<Journey>(`/api/journeys/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+    userId,
+  });
+}
+
+export async function deleteJourney(id: string, userId?: string): Promise<void> {
+  await apiFetch<void>(`/api/journeys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    userId,
+  });
+}
+
+export async function publishJourney(id: string, userId?: string): Promise<Journey> {
+  return apiFetch<Journey>(`/api/journeys/${encodeURIComponent(id)}/publish`, {
+    method: 'POST',
+    userId,
+  });
+}
+
+export async function archiveJourney(id: string, userId?: string): Promise<Journey> {
+  return apiFetch<Journey>(`/api/journeys/${encodeURIComponent(id)}/archive`, {
+    method: 'POST',
+    userId,
+  });
+}
+
+export async function duplicateJourney(id: string, userId?: string): Promise<Journey> {
+  return apiFetch<Journey>(`/api/journeys/${encodeURIComponent(id)}/duplicate`, {
+    method: 'POST',
+    userId,
+  });
+}
+
+// ─── Step endpoints ───────────────────────────────────────────────────────────
+
+export async function listSteps(journeyId: string): Promise<Step[]> {
+  const data = await apiFetch<{ steps: Step[] }>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/steps`
+  );
+  return data.steps;
+}
+
+export async function createStep(
+  journeyId: string,
+  data: Partial<Step> & { day: number },
+  userId?: string
+): Promise<Step> {
+  return apiFetch<Step>(`/api/journeys/${encodeURIComponent(journeyId)}/steps`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+    userId,
+  });
+}
+
+export async function updateStep(
+  journeyId: string,
+  day: number,
+  data: Partial<Step>,
+  userId?: string
+): Promise<Step> {
+  return apiFetch<Step>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/steps/${day}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+      userId,
+    }
+  );
+}
+
+export async function deleteStep(
+  journeyId: string,
+  day: number,
+  userId?: string
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/steps/${day}`,
+    { method: 'DELETE', userId }
+  );
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+export async function searchJourneys(q: string, tags?: string[]): Promise<SearchResult> {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (tags?.length) params.set('tags', tags.join(','));
+  return apiFetch<SearchResult>(`/api/journeys/search?${params.toString()}`);
+}
+
+// ─── CSV Import / Export ──────────────────────────────────────────────────────
+
+/** Validate a CSV string without importing — returns errors only */
+export async function validateImportCsv(
+  csv: string,
+  userId?: string
+): Promise<{ errors: ImportValidationError[]; journeys: never[]; imported: 0 } | ImportResult> {
+  const res = await fetch(getApiUrl('/api/journeys/import'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(userId ? { 'X-User-Id': userId } : {}),
+    },
+    body: JSON.stringify({ csv, dryRun: true }),
+  });
+  return res.json() as Promise<ImportResult>;
+}
+
+export async function importJourneys(csv: string, userId?: string): Promise<ImportResult> {
+  return apiFetch<ImportResult>('/api/journeys/import', {
+    method: 'POST',
+    body: JSON.stringify({ csv }),
+    userId,
+  });
+}
+
+/** Download a CSV export.  Returns raw CSV text. */
+export async function exportJourneysAsCsv(ids?: string[], userId?: string): Promise<string> {
+  const params = ids?.length ? `?ids=${ids.join(',')}` : '';
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (userId) headers['X-User-Id'] = userId;
+  const res = await fetch(getApiUrl(`/api/journeys/export${params}`), { headers });
+  if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+  return res.text();
+}
+
+// ─── AI Journey Generator ─────────────────────────────────────────────────────
+
+export async function generateJourneyWithAI(
+  prompt: string,
+  userId?: string
+): Promise<{ journeyId: string; title: string; stepCount: number }> {
+  return apiFetch('/api/journeys/generate', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+    userId,
+  });
+}
+
+// ─── Progress endpoints ───────────────────────────────────────────────────────
+
+export async function getAllProgress(userId: string): Promise<Record<string, Progress>> {
+  const data = await apiFetch<{ progress: Record<string, Progress> }>(
+    `/api/journeys/progress?userId=${encodeURIComponent(userId)}`
+  );
+  return data.progress;
+}
+
+export async function startJourney(journeyId: string, userId: string): Promise<Progress> {
+  return apiFetch<Progress>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/start`,
+    { method: 'POST', body: JSON.stringify({ userId }) }
+  );
+}
+
+export async function completeStep(
+  journeyId: string,
+  userId: string,
+  day: number,
+  reflectionText?: string
+): Promise<Progress> {
+  return apiFetch<Progress>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/complete-step`,
+    { method: 'POST', body: JSON.stringify({ userId, day, reflectionText }) }
+  );
+}
+
+export async function getReflections(
+  journeyId: string,
+  userId: string
+): Promise<Record<string, string>> {
+  const data = await apiFetch<{ reflections: Record<string, string> }>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/reflections?userId=${encodeURIComponent(userId)}`
+  );
+  return data.reflections;
+}
+
+export async function importLocalProgress(
+  userId: string,
+  progress: Record<string, Progress>
+): Promise<void> {
+  await apiFetch<void>('/api/journeys/progress/import', {
+    method: 'POST',
+    body: JSON.stringify({ userId, progress }),
+  });
+}

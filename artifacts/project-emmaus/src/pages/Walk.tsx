@@ -9,10 +9,21 @@ import { differenceInDays } from 'date-fns';
 
 export default function Walk() {
   const { user } = useAuth();
-  const { journeys, progress, getStep } = useJourney();
+  const { journeys, progress, getStep, loading } = useJourney();
   const [, setLocation] = useLocation();
 
   if (!user) return null;
+
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-7 h-7 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <span className="text-[14px]">Loading your walk…</span>
+        </div>
+      </div>
+    );
+  }
 
   const hour = new Date().getHours();
   const greeting =
@@ -88,19 +99,23 @@ export default function Walk() {
           </motion.div>
         )}
 
-        {/* Primary Journey */}
-        {coreJourney && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Your Journey
-            </h2>
+        {/* TODAY'S STEPS */}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Today's Steps
+          </h2>
+
+          {coreJourney ? (
             <Card className="overflow-hidden border-border bg-card shadow-sm">
               <CardContent className="p-6 space-y-5">
                 <div>
-                  <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-2">
+                  <div className="text-[12px] font-semibold text-primary uppercase tracking-widest mb-1">
+                    {coreJourney.title}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mb-2">
                     Day {currentDay} of {coreJourney.durationDays}
                   </div>
-                  <h3 className="text-[24px] font-serif font-semibold leading-snug">
+                  <h3 className="text-[22px] font-serif font-semibold leading-snug">
                     {todayStep?.title || coreJourney.title}
                   </h3>
                   {todayStep?.mentorIntro && (
@@ -130,8 +145,12 @@ export default function Walk() {
                 </div>
               </CardContent>
             </Card>
-          </section>
-        )}
+          ) : (
+            <div className="p-6 rounded-2xl border border-dashed border-border text-center">
+              <p className="text-[15px] text-muted-foreground">No active journey yet.</p>
+            </div>
+          )}
+        </section>
 
         {/* Sermon Companion — This Week at Church */}
         {companionJourney && (

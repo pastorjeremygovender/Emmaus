@@ -11,7 +11,7 @@
  *   - Follow-up textarea for continued conversation
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, type RefObject } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,9 +25,10 @@ import {
   type SseDoneEvent,
   type HistoryItem,
 } from '@/lib/emmaus-client';
-import { takePendingMessage } from '@/lib/emmaus-pending';
+import { takePendingMessage, getReturnDestination, clearReturnDestination } from '@/lib/emmaus-pending';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
+import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
 import { SafetyHandoverCard } from '@/components/emmaus/SafetyHandoverCard';
 import { MemoryConsentBar } from '@/components/emmaus/MemoryConsentBar';
@@ -40,6 +41,80 @@ interface Message {
   content: string;
   metadata?: EmmausMetadata;
   isStreaming?: boolean;
+}
+
+// ─── Thinking bubble ─────────────────────────────────────────────────────────
+//
+// Animated three-dot ellipsis matching the assistant message style.
+// Cycles •  ••  •••  •  … every 400 ms.
+// When `slow` is true, shows the long-wait reassurance text instead.
+
+const ThinkingBubble = memo(function ThinkingBubble({ slow }: { slow: boolean }) {
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    if (slow) return;
+    const id = setInterval(() => setDotCount((d) => (d === 3 ? 1 : d + 1)), 400);
+    return () => clearInterval(id);
+  }, [slow]);
+
+  if (slow) {
+    return (
+      <p className="text-[16px] text-foreground/70 leading-[1.75] font-sans italic">
+        I'm still searching Scripture and relevant teaching to give you the best answer.
+      </p>
+    );
+  }
+
+  return (
+    // Fixed-height container prevents the bubble from resizing as dots appear/disappear
+    <span className="inline-flex items-center gap-[5px] h-6" aria-label="Thinking">
+      {[1, 2, 3].map((i) => (
+        <span
+          key={i}
+          className="w-[7px] h-[7px] rounded-full bg-foreground/40 transition-opacity duration-300"
+          style={{ opacity: dotCount >= i ? 1 : 0.15 }}
+        />
+      ))}
+    </span>
+  );
+});
+
+// ─── Visual Viewport hook ────────────────────────────────────────────────────
+//
+// Syncs the outer container's height to window.visualViewport.height so the
+// flex layout is always bounded by the *visible* area (excluding the software
+// keyboard). This is the most reliable cross-browser approach:
+//
+//  • Modern iOS 15.4+ / Chrome Android  → dvh already tracks the keyboard, but
+//    the imperative update provides an additional safety net.
+//  • Older iOS Safari (< 15.4) / WebView → dvh isn't supported or doesn't
+//    shrink with the keyboard; the hook is the only reliable fix.
+//
+// We manipulate the DOM directly (no setState) so the update runs synchronously
+// during the keyboard animation without causing a React render.
+
+function useVisualViewportHeight(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv || !ref.current) return;
+
+    function sync() {
+      if (ref.current) {
+        // Set explicit pixel height; overrides the CSS h-[100dvh] baseline
+        ref.current.style.height = `${vv!.height}px`;
+      }
+    }
+
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    sync(); // set immediately
+
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+    };
+  }, [ref]);
 }
 
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
@@ -74,6 +149,8 @@ export default function AskEmmausConversation() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(params.id ?? null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [thinkingPhase, setThinkingPhase] = useState<'dots' | 'slow'>('dots');
+  const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Context from AskEmmausHome (may include Bible/Walk/Journey entry point from FAB)
   const [initialContext, setInitialContext] = useState<import('@/lib/emmaus-client').FlatContext | null>(null);
   const [followUp, setFollowUp] = useState('');
@@ -81,9 +158,27 @@ export default function AskEmmausConversation() {
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
   const [memoryDecided, setMemoryDecided] = useState(false);
 
+  // ─── 20-second slow-response timer ─────────────────────────────────────────
+  useEffect(() => {
+    if (isStreaming) {
+      setThinkingPhase('dots');
+      thinkingTimerRef.current = setTimeout(() => setThinkingPhase('slow'), 20_000);
+    } else {
+      if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
+      setThinkingPhase('dots');
+    }
+    return () => {
+      if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
+    };
+  }, [isStreaming]);
+
+  const rootRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const streamingMsgRef = useRef<HTMLDivElement>(null);
   const streamingIdRef = useRef<string | null>(null);
+
+  // Keep the outer container height equal to the visual viewport (keyboard-aware)
+  useVisualViewportHeight(rootRef);
 
   // ─── Scroll to top of new streaming message (once, on stream start) ─────────
   // Two-phase: wait 60 ms for the DOM to assign height to the new element,
@@ -299,14 +394,25 @@ export default function AskEmmausConversation() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
+    <div ref={rootRef} className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
-            onClick={() => setLocation('/personal/ask-emmaus')}
+            onClick={() => {
+              // Navigate directly to the originating page — no two-press required.
+              const dest = getReturnDestination();
+              clearReturnDestination();
+              const target = dest?.pathname ?? '/walk';
+              setLocation(target);
+              if (dest?.scrollY) {
+                requestAnimationFrame(() => {
+                  setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
+                });
+              }
+            }}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back to Ask Emmaus"
+            aria-label="Back"
           >
             <ArrowLeft size={22} aria-hidden="true" />
           </button>
@@ -322,7 +428,7 @@ export default function AskEmmausConversation() {
       {/* Conversation */}
       <main
         ref={mainRef}
-        className="flex-1 overflow-y-auto px-5 pt-6 pb-4 max-w-[560px] mx-auto w-full space-y-8"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-4 max-w-[560px] mx-auto w-full space-y-8"
         aria-live="polite"
         aria-label="Conversation"
       >
@@ -344,14 +450,16 @@ export default function AskEmmausConversation() {
                 ref={msg.isStreaming ? streamingMsgRef : undefined}
                 className="space-y-5"
               >
-                {/* Prose */}
+                {/* Prose or thinking bubble */}
                 <div
                   className={[
                     'transition-opacity duration-200',
-                    msg.isStreaming ? 'opacity-90' : 'opacity-100',
+                    msg.isStreaming && msg.content ? 'opacity-90' : 'opacity-100',
                   ].join(' ')}
                 >
-                  {msg.content ? renderProse(msg.content) : null}
+                  {msg.isStreaming && !msg.content
+                    ? <ThinkingBubble slow={thinkingPhase === 'slow'} />
+                    : msg.content ? renderProse(msg.content) : null}
                 </div>
 
                 {/* Response cards — only after streaming completes */}
@@ -366,6 +474,9 @@ export default function AskEmmausConversation() {
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
                       <ResourceCard key={i} recommendation={rec} />
                     ))}
+                    {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
+                      <NextStepsCard steps={msg.metadata.nextSteps} />
+                    )}
                   </div>
                 )}
 

@@ -1,29 +1,56 @@
 /**
- * FloatingEmmausButton — global FAB that surfaces Ask Emmaus from any screen.
+ * FloatingEmmausButton — premium transparent pill FAB with animated blue-green border trace.
  *
- * Hides itself on: /, /auth, /checkin, /join-room/*, /admin, /admin/*,
- * /personal/ask-emmaus, /personal/ask-emmaus/*
+ * Hidden on: /, /auth, /checkin, /join-room/*, /admin, /admin/*,
+ *            /personal/ask-emmaus, /personal/ask-emmaus/*,
+ *            /personal (My Walk) and all /personal/* child screens.
  *
- * Gathers lightweight context from the active route and passes it via
- * setPendingContext() before navigating to /personal/ask-emmaus, so
- * AskEmmausHome can show a "Discussing: …" label.
+ * Before navigating to Ask Emmaus the FAB writes a ReturnDestination to
+ * sessionStorage (via setReturnDestination) so that both AskEmmausHome and
+ * AskEmmausConversation can return directly to the originating page in one tap.
  *
- * Positioned fixed bottom-right, above BottomNav, with safe-area-inset support.
+ * Border technique: rotating conic-gradient inside a pill-shaped clip container.
+ * Duration: 6 s per full circuit. Reduced-motion: static gradient border.
  */
 
-import { MessageCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
+import { ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useBible } from '@/contexts/BibleContext';
 import { useRooms } from '@/contexts/RoomsContext';
-import { setPendingContext } from '@/lib/emmaus-pending';
+import {
+  setPendingContext,
+  setReturnDestination,
+  sourceSectionFromPath,
+} from '@/lib/emmaus-pending';
 import type { FlatContext } from '@/lib/emmaus-client';
 
-// ─── Paths on which the FAB must not appear ───────────────────────────────────
+// ─── Gradient palette ─────────────────────────────────────────────────────────
+
+const BLUE  = '#258CFF';
+const TEAL  = '#21C7C7';
+const GREEN = '#2ED47A';
+
+const CONIC = `conic-gradient(
+  from 0deg,
+  rgba(46,212,122,0.20)  0deg,
+  ${GREEN}               35deg,
+  ${TEAL}                95deg,
+  ${BLUE}               155deg,
+  ${TEAL}               205deg,
+  rgba(46,212,122,0.30) 265deg,
+  rgba(46,212,122,0.15) 330deg,
+  rgba(46,212,122,0.20) 360deg
+)`;
+
+const STATIC_GRADIENT = `linear-gradient(135deg, ${BLUE} 0%, ${TEAL} 50%, ${GREEN} 100%)`;
+
+// ─── Routing helpers ──────────────────────────────────────────────────────────
 
 const HIDDEN_PREFIXES = [
-  '/personal/ask-emmaus',
+  '/personal/ask-emmaus',  // Ask Emmaus screens themselves
   '/admin',
   '/join-room',
 ];
@@ -32,20 +59,19 @@ const HIDDEN_EXACT = new Set(['/', '/auth', '/checkin']);
 
 function isHidden(path: string): boolean {
   if (HIDDEN_EXACT.has(path)) return true;
-  return HIDDEN_PREFIXES.some((prefix) => path.startsWith(prefix));
+  return HIDDEN_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix + '/'));
 }
-
-// ─── Capitalise a bookId like "john" → "John" ─────────────────────────────────
 
 function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// ─── Build FlatContext from the active route ──────────────────────────────────
+// ─── Context builder ──────────────────────────────────────────────────────────
 
 function buildContext(
   path: string,
-  readingHistory: ReturnType<typeof useBible>['readingHistory'],
+  lastRead: ReturnType<typeof useBible>['lastRead'],
+  translationId: string,
   journeys: ReturnType<typeof useJourney>['journeys'],
   progress: ReturnType<typeof useJourney>['progress'],
   getStep: ReturnType<typeof useJourney>['getStep'],
@@ -57,18 +83,17 @@ function buildContext(
   if (bibleReadMatch) {
     const bookId = bibleReadMatch[1];
     const chapter = parseInt(bibleReadMatch[2], 10);
-    // Prefer readingHistory for the human-readable bookName
-    const bookName = readingHistory?.bookId === bookId
-      ? readingHistory.bookName
-      : cap(bookId);
+    const bookName = lastRead?.bookId === bookId ? lastRead.bookName : cap(bookId);
+    const heading = lastRead?.bookId === bookId && lastRead.chapter === chapter
+      ? lastRead.chapterHeading : undefined;
     return {
       entryPoint: 'bible',
       bookId,
       bookName,
       chapter,
-      chapterHeading: readingHistory?.bookId === bookId && readingHistory.chapter === chapter
-        ? readingHistory.chapterHeading
-        : undefined,
+      chapterHeading: heading
+        ? `${heading} · ${translationId.toUpperCase()}`
+        : `${translationId.toUpperCase()}`,
     };
   }
 
@@ -88,7 +113,7 @@ function buildContext(
     };
   }
 
-  // Walk
+  // Walk / Today's Steps
   if (path === '/walk') {
     const coreJourney = journeys.find((j) => j.journeyType === 'core');
     if (coreJourney) {
@@ -112,39 +137,29 @@ function buildContext(
     const roomId = roomMatch[1];
     const rooms = userId ? getMyRooms(userId) : [];
     const room = rooms.find((r) => r.id === roomId);
-    return {
-      entryPoint: 'personal',
-      conversationId: undefined,
-      // pass roomId via chapterHeading field as a hint — we only surface it in the label
-      chapterHeading: room?.name,
-    };
+    return { entryPoint: 'personal', conversationId: undefined, chapterHeading: room?.name };
   }
 
   // Bible hub / sub-pages
   if (path.startsWith('/bible')) {
-    if (readingHistory) {
+    if (lastRead) {
       return {
         entryPoint: 'bible',
-        bookId: readingHistory.bookId,
-        bookName: readingHistory.bookName,
-        chapter: readingHistory.chapter,
-        chapterHeading: readingHistory.chapterHeading,
+        bookId: lastRead.bookId,
+        bookName: lastRead.bookName,
+        chapter: lastRead.chapter,
+        chapterHeading: lastRead.chapterHeading,
       };
     }
     return { entryPoint: 'bible' };
   }
 
-  // Journeys hub
-  if (path === '/journeys') {
-    return { entryPoint: 'journeys' };
-  }
+  // Journeys hub / Next Steps
+  if (path === '/journeys') return { entryPoint: 'journeys' };
 
   // Rooms hub
-  if (path === '/rooms') {
-    return { entryPoint: 'personal' };
-  }
+  if (path === '/rooms') return { entryPoint: 'personal' };
 
-  // Personal (default)
   return { entryPoint: 'personal' };
 }
 
@@ -154,47 +169,156 @@ export function FloatingEmmausButton() {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
   const { journeys, progress, getStep } = useJourney();
-  const { readingHistory } = useBible();
+  const { lastRead, translationId } = useBible();
   const { getMyRooms } = useRooms();
 
-  // Hide on excluded routes or when unauthenticated
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   if (!user || isHidden(location)) return null;
 
   function handlePress() {
+    // 1. Persist the return destination in sessionStorage so both AskEmmausHome
+    //    and AskEmmausConversation can return in one tap without losing state.
+    setReturnDestination({
+      pathname: location,
+      scrollY: Math.round(window.scrollY),
+      sourceSection: sourceSectionFromPath(location),
+    });
+
+    // 2. Save scroll position per-page key (Bible chapter restoration).
+    const scrollKey = buildScrollKey(location);
+    if (scrollKey) sessionStorage.setItem(scrollKey, String(Math.round(window.scrollY)));
+
+    // 3. Build and store the conversation context label shown on AskEmmausHome.
     const ctx = buildContext(
-      location,
-      readingHistory,
-      journeys,
-      progress,
-      getStep,
-      getMyRooms,
-      user?.id,
+      location, lastRead, translationId,
+      journeys, progress, getStep, getMyRooms, user?.id,
     );
-    // Pass current path as return target so AskEmmausHome's back button can
-    // return the user to the screen they came from rather than /personal.
-    setPendingContext(ctx, location);
+    setPendingContext(ctx);
+
     navigate('/personal/ask-emmaus');
   }
 
-  return (
-    <button
-      onClick={handlePress}
-      aria-label="Ask Emmaus"
-      className={[
-        // Size & shape
-        'w-14 h-14 rounded-full',
-        // Colour — primary teal, matching design tokens
-        'bg-primary text-primary-foreground',
-        // Position — above BottomNav with safe-area offset
-        'fixed right-4 z-40',
-        // Interaction
-        'flex items-center justify-center',
-        'shadow-md hover:shadow-lg active:scale-95 transition-all duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-      ].join(' ')}
-      style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}
-    >
-      <MessageCircle size={24} aria-hidden="true" strokeWidth={2} />
-    </button>
+  // ── Shared inner button label ──────────────────────────────────────────────
+  const label = (
+    <>
+      <span style={{ letterSpacing: '0.01em' }}>Ask Emmaus</span>
+      <ChevronRight size={13} strokeWidth={2.5} style={{ color: BLUE, flexShrink: 0 }} />
+    </>
   );
+
+  // ── Shared inner button styles ─────────────────────────────────────────────
+  const innerStyle: React.CSSProperties = {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    padding: '0 20px',
+    height: '44px',
+    borderRadius: '9999px',
+    minHeight: '44px',
+    background: 'hsl(var(--background) / 0.88)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    color: 'hsl(var(--foreground))',
+    fontSize: '14px',
+    fontWeight: '600',
+    border: 'none',
+    cursor: 'pointer',
+    userSelect: 'none',
+    WebkitTapHighlightColor: 'transparent',
+  };
+
+  return (
+    <div
+      className="fixed z-40"
+      style={{
+        bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))',
+        right: '16px',
+      }}
+    >
+      {reducedMotion ? (
+        // ── Reduced-motion: static gradient border ───────────────────────────
+        <button
+          onClick={handlePress}
+          aria-label="Ask Emmaus"
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          style={{
+            ...innerStyle,
+            background: `hsl(var(--background) / 0.88) padding-box, ${STATIC_GRADIENT} border-box`,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            border: '2px solid transparent',
+            boxShadow: `0 0 10px rgba(37,140,255,0.20)`,
+          }}
+        >
+          {label}
+        </button>
+      ) : (
+        // ── Animated: rotating conic-gradient clipped to pill perimeter ───────
+        <div
+          style={{
+            position: 'relative',
+            borderRadius: '9999px',
+            padding: '2px',
+            boxShadow: `
+              0 0 12px rgba(37,140,255,0.28),
+              0 0 24px rgba(46,212,122,0.14),
+              0 2px 8px rgba(0,0,0,0.12)
+            `,
+          }}
+        >
+          {/* Clip container */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 'inherit',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Spinning conic-gradient square */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                width: '200%',
+                height: '200%',
+                transform: 'translate(-50%, -50%) rotate(0deg)',
+                background: CONIC,
+                animation: 'border-trace 6s linear infinite',
+              }}
+            />
+          </div>
+
+          {/* Inner button */}
+          <button
+            onClick={handlePress}
+            aria-label="Ask Emmaus"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#258CFF]"
+            style={innerStyle}
+          >
+            {label}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildScrollKey(path: string): string | null {
+  const m = path.match(/^\/bible\/read\/([^/]+)\/(\d+)/);
+  if (m) return `emmaus_scroll_${m[1]}_${m[2]}`;
+  return null;
 }

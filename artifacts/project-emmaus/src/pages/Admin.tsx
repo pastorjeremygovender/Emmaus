@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Menu,
   DoorOpen,
+  PenSquare,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -31,11 +32,13 @@ import MediaStudioDashboard from './admin/media-studio/MediaStudioDashboard';
 import MediaKitWizard from './admin/media-studio/MediaKitWizard';
 import MediaKitEditor from './admin/media-studio/MediaKitEditor';
 import AdminRooms from './admin/AdminRooms';
+import YoutubeArchive from './admin/YoutubeArchive';
+import ContentStudio from './admin/content-studio/ContentStudio';
 
-export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings' | 'rooms';
+export type AdminSection = 'dashboard' | 'journeys' | 'sermons' | 'media-studio' | 'prayers' | 'users' | 'settings' | 'rooms' | 'youtube-archive' | 'content-studio';
 export type AdminNav = {
   section: AdminSection;
-  subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard';
+  subView?: 'editor' | 'day-editor' | 'preview' | 'kit-editor' | 'kit-wizard' | 'studio-editor';
   journeyId?: string;
   day?: number;
   sermonId?: string;
@@ -44,14 +47,16 @@ export type AdminNav = {
 };
 
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
-  { id: 'dashboard',    label: 'Dashboard',       Icon: LayoutDashboard },
-  { id: 'journeys',     label: 'Journeys',         Icon: BookOpen },
-  { id: 'sermons',      label: 'Sermons',          Icon: Video },
-  { id: 'media-studio', label: 'Media Studio',     Icon: Clapperboard },
-  { id: 'prayers',      label: 'Prayer Requests',  Icon: HeartHandshake },
-  { id: 'users',        label: 'Users',            Icon: Users },
-  { id: 'rooms',        label: 'Rooms',            Icon: DoorOpen },
-  { id: 'settings',     label: 'Settings',         Icon: Settings2 },
+  { id: 'dashboard',        label: 'Dashboard',         Icon: LayoutDashboard },
+  { id: 'content-studio',   label: 'Content Studio',    Icon: PenSquare },
+  { id: 'journeys',         label: 'Journeys',           Icon: BookOpen },
+  { id: 'sermons',          label: 'Sermons',            Icon: Video },
+  { id: 'youtube-archive',  label: 'YouTube Archive',    Icon: Clapperboard },
+  { id: 'media-studio',     label: 'Media Studio',       Icon: Clapperboard },
+  { id: 'prayers',          label: 'Prayer Requests',    Icon: HeartHandshake },
+  { id: 'users',            label: 'Users',              Icon: Users },
+  { id: 'rooms',            label: 'Rooms',              Icon: DoorOpen },
+  { id: 'settings',         label: 'Settings',           Icon: Settings2 },
 ];
 
 export default function Admin() {
@@ -157,6 +162,16 @@ export default function Admin() {
         />
       );
     }
+    if (section === 'content-studio') {
+      return (
+        <ContentStudio
+          initialSubView={nav.subView === 'studio-editor' ? 'studio-editor' : undefined}
+          initialJourneyId={nav.journeyId}
+          onOpenLegacyEditor={(jId) => navigate({ section: 'journeys', subView: 'editor', journeyId: jId })}
+        />
+      );
+    }
+    if (section === 'youtube-archive') return <YoutubeArchive />;
     if (section === 'prayers') return <PrayerRequests />;
     if (section === 'users') return <AdminUsers />;
     if (section === 'rooms') return <AdminRooms />;

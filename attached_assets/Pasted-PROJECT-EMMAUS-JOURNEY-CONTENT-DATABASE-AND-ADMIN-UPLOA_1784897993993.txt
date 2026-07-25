@@ -1,0 +1,1053 @@
+PROJECT EMMAUS — JOURNEY CONTENT DATABASE AND ADMIN UPLOAD SYSTEM
+
+Implement directly in the existing Project Emmaus codebase.
+
+This is a feature-completion build.
+
+Do not redesign unrelated user screens.
+Do not replace the existing database unless it is technically unusable.
+Do not build a second parallel Journey system.
+Do not hard-code new Journey content in frontend components.
+Do not modify Ask Emmaus, the Bible Engine, sermon retrieval, Rooms or authentication except where integration is explicitly required below.
+Do not mark complete from compilation alone.
+Do not propose additional features after completing this task.
+
+==================================================
+GOAL
+==================================================
+
+Create a complete database-backed Journey Content Management System inside the existing Emmaus Admin Portal.
+
+An authorised administrator must be able to:
+
+- create a Journey
+- upload or enter Journey material
+- organise it into days, chapters, lessons or steps
+- add Scripture references
+- add written content
+- add reflection and prayer prompts
+- add actions and completion requirements
+- add images, audio, video and downloadable files
+- preview the Journey
+- save it as a draft
+- publish it
+- edit it later
+- unpublish or archive it
+- assign it to users, Rooms or church groups where current architecture supports this
+- make it appear automatically in Next Steps and Today’s Steps without changing code
+
+The user-facing app must retrieve Journey content from the database rather than from hard-coded sample objects.
+
+==================================================
+CURRENT PROJECT CONTEXT
+==================================================
+
+The project already contains or substantially contains:
+
+- authentication
+- user roles
+- Admin Portal
+- Journeys
+- Next Steps
+- Today’s Steps
+- Walk Through Luke
+- 15 Minutes with Jesus
+- Rooms
+- Bible Provider abstraction
+- Scripture reader
+- Ask Emmaus
+- database infrastructure
+- existing Journey routes, cards and progress foundations
+
+Inspect and reuse the current Journey data models, routes, services and persistence.
+
+Do not discard working Journey progress.
+
+Do not replace Luke with John.
+
+The official flagship Bible Journey remains:
+
+Walk Through Luke
+
+Subtitle:
+
+Discover Jesus through the Gospel according to Luke.
+
+Length:
+
+24 chapters.
+
+==================================================
+1. DATABASE ARCHITECTURE
+==================================================
+
+Create or complete a normalized Journey content schema.
+
+Use the project’s existing database technology and conventions.
+
+Do not store an entire Journey as one unstructured text blob.
+
+The schema must support at minimum:
+
+JOURNEY
+
+- id
+- slug
+- title
+- subtitle
+- shortDescription
+- fullDescription
+- coverImage
+- icon
+- category
+- journeyType
+- format
+- audience
+- difficulty
+- estimatedDuration
+- totalSteps
+- author
+- churchId or owner organisation where applicable
+- status
+- visibility
+- featured
+- sortOrder
+- version
+- publishedAt
+- createdAt
+- updatedAt
+- createdBy
+- updatedBy
+
+JOURNEY STEP
+
+- id
+- journeyId
+- position
+- stepNumber
+- title
+- subtitle
+- shortDescription
+- estimatedMinutes
+- stepType
+- completionMode
+- availableFrom or releaseOffset where applicable
+- status
+- createdAt
+- updatedAt
+
+CONTENT BLOCK
+
+- id
+- stepId
+- position
+- blockType
+- content
+- metadata
+- required
+- createdAt
+- updatedAt
+
+SCRIPTURE REFERENCE
+
+- id
+- journeyId or stepId
+- bookId
+- bookName
+- chapterStart
+- verseStart
+- chapterEnd
+- verseEnd
+- translationPreference where appropriate
+- position
+- purpose
+- verified
+
+MEDIA ASSET
+
+- id
+- journeyId or stepId
+- assetType
+- title
+- description
+- storageReference or authorised URL
+- mimeType
+- fileSize
+- duration
+- thumbnail
+- captions or transcript reference where applicable
+- status
+- createdAt
+- updatedAt
+
+JOURNEY ASSIGNMENT
+
+- id
+- journeyId
+- assignmentType
+- targetUserId
+- targetRoomId
+- targetGroupId
+- assignedBy
+- startsAt
+- endsAt
+- required
+- status
+
+USER JOURNEY PROGRESS
+
+Preserve or complete existing fields for:
+
+- userId
+- journeyId
+- currentStepId
+- startedAt
+- lastAccessedAt
+- completedAt
+- status
+- percentComplete or completedStepCount
+- private/shared mode
+- Room association where applicable
+
+STEP PROGRESS
+
+- userId
+- journeyId
+- stepId
+- status
+- startedAt
+- completedAt
+- response data where permitted
+- reflection reference where applicable
+
+Use stable IDs and indexes.
+
+Do not use Journey titles as relational keys.
+
+==================================================
+2. JOURNEY TYPES AND FORMATS
+==================================================
+
+Support at minimum:
+
+Journey types:
+
+- Bible Journey
+- devotional
+- discipleship course
+- prayer Journey
+- serving Journey
+- marriage/family Journey
+- new believer Journey
+- church-assigned Journey
+- custom Journey
+
+Journey formats:
+
+- day-based
+- chapter-based
+- lesson-based
+- step-based
+- self-paced
+- scheduled
+
+The data model must not assume every Journey lasts seven days.
+
+Support:
+
+- 7-day Journey
+- 24-chapter Walk Through Luke
+- multi-week course
+- single-session Journey
+- future 365-day Journey
+
+==================================================
+3. CONTENT BLOCK TYPES
+==================================================
+
+Implement a reusable block-based Journey editor.
+
+Support at minimum:
+
+- heading
+- rich text
+- Scripture reference
+- Scripture reading
+- quotation
+- reflection question
+- prayer prompt
+- action step
+- checklist
+- multiple-choice question
+- short-answer question
+- information card
+- image
+- audio
+- video
+- YouTube link
+- sermon moment
+- downloadable file
+- divider
+- callout
+- Ask Emmaus prompt
+- Journey completion message
+
+Each block must support:
+
+- position/order
+- required or optional
+- editing
+- duplication
+- deletion
+- preview
+- drag-and-drop or reliable move-up/move-down ordering
+
+Store structured content safely.
+
+Do not store executable HTML or unsafe scripts.
+
+Sanitize rich text.
+
+==================================================
+4. ADMIN JOURNEY LIBRARY
+==================================================
+
+Add or complete:
+
+Admin Portal → Journeys
+
+Display a searchable and filterable Journey library.
+
+Show:
+
+- title
+- subtitle
+- category
+- type
+- number of steps
+- status
+- visibility
+- author
+- last updated
+- published date
+- active user count where available
+
+Filters:
+
+- draft
+- published
+- archived
+- category
+- type
+- audience
+- author
+
+Actions:
+
+- Create Journey
+- Edit
+- Preview
+- Duplicate
+- Publish
+- Unpublish
+- Archive
+- Delete where safe
+- Assign
+- Export
+- Import
+
+Do not permanently delete a Journey that has user progress without a clear warning and safe archival alternative.
+
+==================================================
+5. CREATE JOURNEY FLOW
+==================================================
+
+Provide a clean guided creation flow.
+
+STEP A — BASICS
+
+Fields:
+
+- title
+- subtitle
+- short description
+- full description
+- category
+- Journey type
+- format
+- audience
+- difficulty
+- estimated duration
+- cover image
+- icon
+- author
+- visibility
+
+STEP B — STRUCTURE
+
+Administrator chooses:
+
+- number of days/chapters/lessons/steps
+- or creates steps individually
+
+Allow:
+
+- add step
+- duplicate step
+- reorder steps
+- rename step
+- delete step with confirmation
+
+STEP C — CONTENT
+
+Open the block editor for each step.
+
+STEP D — SETTINGS
+
+Include:
+
+- self-selected or assigned
+- private or shareable
+- Room-compatible
+- completion rules
+- release schedule
+- prerequisites
+- featured status
+- sort order
+
+STEP E — REVIEW
+
+Show a complete mobile preview.
+
+STEP F — PUBLISH
+
+Validate required fields before publishing.
+
+==================================================
+6. FILE AND MEDIA UPLOADS
+==================================================
+
+Allow authorised Admin users to upload:
+
+- images
+- PDFs
+- documents
+- MP3 audio
+- supported video files
+- thumbnails
+
+Use the existing storage service or implement a secure provider abstraction.
+
+Requirements:
+
+- server-side upload authorisation
+- file-type validation
+- file-size limits
+- safe generated filenames
+- no executable uploads
+- upload progress
+- failure and retry handling
+- asset deletion safeguards
+- media metadata stored in the database
+- private/admin-only state before publication
+
+Do not store large binary files directly inside ordinary Journey database rows.
+
+Do not expose storage credentials.
+
+For YouTube content, store the verified video ID and timestamp rather than copying the video.
+
+==================================================
+7. BULK CONTENT IMPORT
+==================================================
+
+Provide a practical way to upload Journey material in bulk.
+
+Support at minimum:
+
+- CSV import for structured steps
+- JSON import/export using the Journey schema
+- Markdown or plain-text assisted import for long-form Journey content
+
+CSV template must support fields such as:
+
+- journeySlug
+- stepNumber
+- stepTitle
+- blockPosition
+- blockType
+- content
+- ScriptureReference
+- required
+
+Requirements:
+
+- downloadable template
+- preview before import
+- validation report
+- row-level error messages
+- do not partially publish invalid imports
+- idempotent handling where stable IDs or slugs exist
+- imported material remains editable in Admin
+
+For Markdown/plain text:
+
+- allow an Admin to paste or upload content
+- parse proposed headings and blocks
+- show a preview
+- require confirmation before saving
+- do not silently publish AI-parsed material
+
+==================================================
+8. SCRIPTURE INTEGRATION
+==================================================
+
+Journey Scripture must use the existing Bible Engine.
+
+Administrators should enter references such as:
+
+- Luke 1
+- Psalm 42:1–5
+- John 3:16
+- Romans 8:31–39
+
+The editor must:
+
+- parse the reference
+- validate the book and chapter
+- store a structured canonical reference
+- preview the passage using an authorised available translation
+- preserve the user’s preferred translation in the user app where possible
+
+Do not duplicate or hard-code copyrighted Bible text inside the Journey content unless licensing permits it.
+
+Prefer storing structured references and retrieving text through the Bible Provider.
+
+Do not fabricate invalid passages.
+
+==================================================
+9. SERMON INTEGRATION
+==================================================
+
+Allow an Admin to attach a verified sermon moment as a Journey content block.
+
+Use the existing approved sermon archive.
+
+The Admin should be able to search by:
+
+- title
+- speaker
+- date
+- Scripture
+- topic
+- transcript content
+
+Store:
+
+- sermonId
+- segmentId
+- videoId
+- absolute YouTube timestamp
+- audio position where available
+- verified title
+- verified speaker
+
+Do not copy editable sermon metadata into Journey content as the source of truth.
+
+Link to the canonical sermon record.
+
+==================================================
+10. ASK EMMAUS INTEGRATION
+==================================================
+
+Allow a Journey step to include an optional contextual Ask Emmaus block.
+
+Examples:
+
+- Ask Emmaus about this passage
+- Ask Emmaus to help me understand this step
+- Ask Emmaus about what I am struggling with
+
+When opened from a Journey, pass:
+
+- Journey ID
+- Journey title
+- current step ID
+- current step title
+- current Scripture references
+- source route
+
+Do not automatically send private user reflections or answers.
+
+Do not automatically submit a message.
+
+==================================================
+11. USER-FACING NEXT STEPS
+==================================================
+
+Next Steps must retrieve the Journey catalogue from the database.
+
+Show appropriate sections such as:
+
+- Continue
+- Recommended
+- Bible Journeys
+- Prayer
+- Relationships
+- Serving
+- New Believers
+- Completed
+
+Only show Journeys that are:
+
+- published
+- visible to the user
+- valid for the user’s church/assignment
+- not archived
+
+Journey cards should use database values for:
+
+- title
+- subtitle
+- image
+- length
+- category
+- progress
+- assignment status
+
+Remove reliance on hard-coded demo Journey cards where production database records exist.
+
+==================================================
+12. USER-FACING TODAY’S STEPS
+==================================================
+
+Today’s Steps must load current Journey steps from the database.
+
+For each active Journey show:
+
+- Journey title
+- current day/chapter/lesson/step
+- current step title
+- current Scripture
+- estimated time where available
+- Continue action
+
+Support multiple active Journeys.
+
+Do not show unpublished Admin changes to users.
+
+If a published Journey is edited:
+
+- preserve existing user progress
+- apply compatible content updates
+- use Journey versioning where structural changes could break progress
+
+==================================================
+13. JOURNEY STEP PLAYER
+==================================================
+
+Create or complete the user-facing renderer for all supported content blocks.
+
+Requirements:
+
+- mobile-first
+- calm and uncluttered
+- one coherent step experience
+- preserve block order
+- no unsafe HTML
+- media controls work
+- Scripture opens through My Bible
+- sermon Watch and Listen actions use canonical sermon data
+- Ask Emmaus receives Journey context
+- required blocks are handled correctly
+- completion is explicit and reliable
+
+Do not turn the Journey player into a generic LMS interface.
+
+==================================================
+14. COMPLETION RULES
+==================================================
+
+Support step completion modes such as:
+
+- user taps Complete
+- Scripture read
+- audio/video reached a reasonable threshold
+- checklist completed
+- question answered
+- action acknowledged
+- Admin/manual completion where appropriate
+
+Do not claim real-world spiritual or ministry competence purely from app completion.
+
+For serving or deployment-related Journeys, distinguish:
+
+- content completed
+- leader review required
+- approved for service
+
+Do not automatically approve ministry placement merely because a Journey was viewed.
+
+==================================================
+15. DRAFTS, PUBLISHING AND VERSIONING
+==================================================
+
+Journey statuses:
+
+- draft
+- scheduled
+- published
+- unpublished
+- archived
+
+Draft changes must not appear in the user app.
+
+Publishing must create or increment a Journey version.
+
+For safe text/media corrections:
+
+- update the current published version where compatible
+
+For structural changes affecting active users:
+
+- warn the Admin
+- preserve the old version for existing progress where necessary
+- allow new users to begin the new version
+
+Record:
+
+- who published
+- when
+- version notes
+- major structural changes
+
+==================================================
+16. PERMISSIONS
+==================================================
+
+Use existing role-based access control.
+
+At minimum:
+
+- Super Admin: full access
+- Church Admin: manage Journeys for their church
+- Content Editor: create/edit drafts
+- Reviewer: preview and approve where configured
+- ordinary users: read only published authorised content
+
+Do not allow ordinary users to access Admin Journey endpoints.
+
+Do not rely only on hidden UI controls.
+
+Enforce permissions server-side.
+
+==================================================
+17. VALIDATION AND SAFETY
+==================================================
+
+Before publication validate:
+
+- Journey title exists
+- at least one step exists
+- each step has usable content
+- Scripture references are valid
+- required media assets are available
+- linked sermons are approved
+- no broken file links
+- no unsupported block types
+- no unsafe HTML/scripts
+
+Provide clear Admin validation errors.
+
+Do not fabricate missing material.
+
+==================================================
+18. MIGRATE EXISTING JOURNEYS
+==================================================
+
+Migrate existing working Journey content into the database without breaking current users.
+
+At minimum inspect and migrate:
+
+- Walk Through Luke
+- 15 Minutes with Jesus
+- any current demo or published Journeys used by Today’s Steps and Next Steps
+
+Requirements:
+
+- preserve stable slugs/routes where possible
+- preserve current user progress
+- do not duplicate Journey records
+- compare migrated content to the existing user experience
+- remove hard-coded fallback only after database retrieval is verified
+
+John remains an ordinary Bible book.
+
+Do not recreate “Walk Through John” as the flagship Journey.
+
+==================================================
+19. ADMIN PREVIEW
+==================================================
+
+Provide a mobile preview from the Journey editor.
+
+Preview must show:
+
+- Journey card
+- Journey details
+- step list
+- selected step
+- content blocks
+- media
+- Scripture links
+- completion controls
+
+Preview must use draft data without making it public.
+
+==================================================
+20. SEARCH AND FILTERING
+==================================================
+
+Admin search must find Journeys by:
+
+- title
+- subtitle
+- author
+- category
+- Scripture reference
+- status
+
+User search in Next Steps should find published Journeys by:
+
+- title
+- description
+- category
+- audience
+
+Do not expose draft records through user search.
+
+==================================================
+21. PERFORMANCE
+==================================================
+
+Requirements:
+
+- paginate large Admin lists
+- lazy-load media
+- avoid loading every Journey and every step at app startup
+- cache published catalogue metadata appropriately
+- fetch detailed content only when opening a Journey
+- prevent duplicate requests
+- index common query fields
+
+Do not bundle Journey content into the frontend build.
+
+==================================================
+22. DOCUMENTATION
+==================================================
+
+Create or update actual project documentation files covering:
+
+- Journey database schema
+- content block definitions
+- publishing workflow
+- file upload limits and supported formats
+- CSV import format
+- JSON import/export format
+- permissions
+- versioning
+- migration of existing Journeys
+- how to add Journey material without code changes
+
+Do not claim documentation was updated unless files were modified.
+
+==================================================
+RUNNING-APP TESTS
+==================================================
+
+A. CREATE A JOURNEY
+
+Create a draft Journey:
+
+Title:
+Test Journey
+
+Subtitle:
+A database-backed Emmaus Journey.
+
+Format:
+7-day
+
+Add seven steps.
+
+Confirm the Journey is stored in the database.
+
+B. CONTENT BLOCKS
+
+In Day 1 add:
+
+- heading
+- rich text
+- Luke 24:13–35 Scripture reference
+- reflection question
+- prayer prompt
+- action step
+- image
+- audio or file asset
+- sermon moment
+- Ask Emmaus prompt
+
+Preview the step.
+
+Confirm every block renders correctly.
+
+C. DRAFT PRIVACY
+
+Confirm the draft is visible in Admin preview.
+
+Confirm it does not appear in Next Steps or Today’s Steps.
+
+D. PUBLISH
+
+Publish the Test Journey.
+
+Confirm it appears in Next Steps without rebuilding or redeploying the app.
+
+Start the Journey as a test user.
+
+Confirm it appears in Today’s Steps.
+
+E. PROGRESS
+
+Complete Day 1.
+
+Refresh and sign out/in.
+
+Confirm progress persists and Day 2 is current.
+
+F. EDIT
+
+Correct text in Day 2.
+
+Publish the compatible update.
+
+Confirm user progress remains intact.
+
+G. SCRIPTURE
+
+Open Luke 24:13–35 from the Journey.
+
+Confirm it uses My Bible and preserves the preferred translation.
+
+H. SERMON
+
+Open the attached sermon moment.
+
+Confirm:
+
+- Watch opens the correct absolute YouTube timestamp
+- Listen opens in-app audio where available
+
+I. ASK EMMAUS
+
+Open Ask Emmaus from the Journey step.
+
+Confirm Journey and Scripture context are passed.
+
+Press Back once.
+
+Confirm the exact Journey step returns.
+
+J. BULK IMPORT
+
+Download the CSV template.
+
+Import a small multi-step Journey.
+
+Confirm:
+
+- validation preview
+- correct ordering
+- editable imported content
+- no duplicate publication
+
+K. FILE UPLOAD
+
+Upload:
+
+- image
+- PDF
+- MP3
+
+Confirm:
+
+- validation
+- storage
+- preview
+- user access after publication
+- no credentials exposed
+
+L. PERMISSIONS
+
+Test:
+
+- Super Admin
+- Content Editor
+- ordinary user
+
+Confirm server-side access control.
+
+M. MIGRATION
+
+Open:
+
+- Walk Through Luke
+- 15 Minutes with Jesus
+
+Confirm they load from the database and existing progress still works.
+
+N. MOBILE
+
+Test Admin and user Journey flows in narrow mobile preview.
+
+Confirm no clipped controls or broken layouts.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- Journey content is database-backed
+- Admin can create a complete Journey without code changes
+- Admin can upload files and media
+- block-based step editing works
+- Scripture references use the Bible Engine
+- verified sermon moments can be attached
+- Ask Emmaus receives Journey context
+- drafts remain private
+- publishing makes a Journey appear without redeployment
+- Today’s Steps loads active database Journey steps
+- Next Steps loads the published database catalogue
+- progress persists
+- compatible edits preserve progress
+- bulk CSV/JSON import and export work
+- role-based permissions are enforced server-side
+- Walk Through Luke and 15 Minutes with Jesus are migrated safely
+- mobile tests pass
+- documentation files exist
+
+When finished, report only:
+
+- database technology and tables/collections used
+- schema created or changed
+- Admin screens created or changed
+- supported content blocks
+- supported upload formats and limits
+- existing Journeys migrated
+- CSV/JSON import results
+- permissions implemented
+- running-app test results
+- any incomplete requirement and its exact reason
+
+Do not propose additional features.

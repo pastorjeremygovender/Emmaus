@@ -1,0 +1,201 @@
+PROJECT EMMAUS — INTRO BRANDING + ASK EMMAUS THINKING INDICATOR
+
+Implement the following changes in the existing Project Emmaus codebase.
+
+Do not redesign any screens beyond the changes below.
+Do not change navigation.
+Do not change existing functionality.
+Do not modify the Ask Emmaus response pipeline.
+
+==================================================
+1. INTRO SCREEN BRANDING
+==================================================
+
+Change the app branding on the welcome screen.
+
+Current:
+
+Emmaus Road
+
+Walk with Jesus.
+
+Change to:
+
+Emmaus
+
+Walk with Jesus.
+
+Only change the title.
+
+Keep:
+
+- typography
+- spacing
+- colours
+- buttons
+- animation
+
+exactly as they currently are.
+
+==================================================
+2. ASK EMMAUS THINKING EXPERIENCE
+==================================================
+
+We have decided to intentionally keep a visible thinking indicator.
+
+Reason:
+
+Ask Emmaus performs several operations before responding:
+
+• Scripture retrieval
+• ICC sermon retrieval
+• semantic search
+• response synthesis
+
+This can legitimately take several seconds.
+
+Instead of appearing frozen, the interface should reassure the user that Emmaus is actively working.
+
+==================================================
+3. THINKING INDICATOR
+==================================================
+
+Whenever Ask Emmaus is preparing a response:
+
+Immediately replace the send button with a thinking state.
+
+Display a small assistant message bubble.
+
+The bubble should contain only an animated ellipsis.
+
+Example:
+
+•••
+
+The animation should smoothly cycle
+
+• → •• → ••• → • → ...
+
+every few hundred milliseconds.
+
+Do NOT use a spinning wheel.
+
+Do NOT use a loading bar.
+
+Do NOT use "Typing..."
+
+Do NOT use "Thinking..."
+
+Only the animated ellipsis.
+
+==================================================
+4. MESSAGE FLOW
+==================================================
+
+User sends message.
+
+↓
+
+Animated ellipsis appears immediately.
+
+↓
+
+Scripture search begins.
+
+↓
+
+Sermon search begins.
+
+↓
+
+Response generation.
+
+↓
+
+Replace the ellipsis bubble with the completed Emmaus response.
+
+There should never be both visible simultaneously.
+
+==================================================
+5. TIMEOUTS
+==================================================
+
+If processing exceeds approximately 20 seconds,
+
+replace the ellipsis with:
+
+"I'm still searching Scripture and relevant teaching to give you the best answer."
+
+Continue processing.
+
+Do NOT cancel automatically.
+
+If the response later completes,
+
+replace this message with the actual answer.
+
+==================================================
+6. FAILURE
+==================================================
+
+If processing genuinely fails,
+
+replace the ellipsis with a friendly retry message.
+
+Never leave the ellipsis on screen forever.
+
+==================================================
+7. VISUAL STYLE
+==================================================
+
+The ellipsis bubble should:
+
+• match existing Emmaus chat styling
+
+• appear from the assistant side
+
+• use the existing colours
+
+• animate smoothly
+
+• not jump or resize
+
+The animation should feel calm rather than busy.
+
+==================================================
+8. PERFORMANCE
+==================================================
+
+The ellipsis must appear instantly.
+
+It should not wait for:
+
+- Bible search
+- sermon search
+- OpenAI
+
+The user should receive immediate visual feedback after pressing Send.
+
+==================================================
+9. TESTS
+==================================================
+
+Verify:
+
+✓ Intro screen now reads:
+
+Emmaus
+
+Walk with Jesus.
+
+✓ Every Ask Emmaus message immediately shows the animated ellipsis.
+
+✓ The ellipsis disappears as soon as the response is ready.
+
+✓ Long searches show the reassurance message after ~20 seconds.
+
+✓ Failed requests never leave the ellipsis permanently visible.
+
+✓ Existing Ask Emmaus functionality remains unchanged.
+
+Do not implement any other UI or behavioural changes.

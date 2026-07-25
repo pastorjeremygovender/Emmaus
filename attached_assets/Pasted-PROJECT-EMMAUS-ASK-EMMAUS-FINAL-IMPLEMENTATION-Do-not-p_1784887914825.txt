@@ -1,0 +1,337 @@
+PROJECT EMMAUS — ASK EMMAUS FINAL IMPLEMENTATION
+
+Do not partially implement this. Complete the entire feature as one coherent system.
+
+====================================================
+GOAL
+====================================================
+
+Ask Emmaus is the heart of the Emmaus Road app.
+
+It is NOT a generic chatbot.
+
+Its purpose is to help people walk with Jesus by combining:
+
+1. Scripture
+2. ICC sermons
+3. Wise pastoral guidance
+4. Practical next steps
+
+Every interaction should leave the user one step closer to Jesus.
+
+====================================================
+SOURCE PRIORITY
+====================================================
+
+Every Ask Emmaus response MUST follow this pipeline.
+
+STEP 1
+
+Search Scripture FIRST.
+
+Search the Bible semantically, not just keyword matching.
+
+Identify the passages that most directly answer the user's question.
+
+Scripture is ALWAYS the primary authority.
+
+Never skip this step.
+
+----------------------------------------------------
+
+STEP 2
+
+Search the ICC sermon archive.
+
+Use semantic/embedding search.
+
+Do NOT use keyword search.
+
+Retrieve the most relevant sermon segments even if the wording differs.
+
+Return:
+
+• sermon title
+• speaker
+• timestamp
+• direct YouTube link beginning at the timestamp
+• transcript excerpt used for retrieval
+
+Only include sermons with a high confidence score.
+
+Never invent sermon references.
+
+----------------------------------------------------
+
+STEP 3
+
+Compose ONE natural response.
+
+Do NOT produce sections called
+
+Bible:
+Sermons:
+
+Instead write naturally like a pastor speaking.
+
+Blend together
+
+• Scripture
+• ICC sermon insight
+• encouragement
+• application
+
+The user should not feel like they are reading search results.
+
+====================================================
+ENDING
+====================================================
+
+Finish EVERY response with practical next steps.
+
+Choose whichever are appropriate.
+
+Examples
+
+📖 Read:
+Romans 8
+
+🙏 Pray:
+A short practical prayer.
+
+🎧 Listen:
+Pastor Jeremy Govender
+"Finding Hope Again"
+22:31
+
+🚶 Continue:
+15 Minutes with Jesus
+Day 4
+
+If no sermon exists,
+
+omit the sermon recommendation.
+
+====================================================
+SERMON LINKS
+====================================================
+
+When recommending a sermon include
+
+Title
+
+Speaker
+
+Timestamp
+
+Clickable YouTube URL
+
+Example
+
+Listen:
+Pastor Jeremy Govender
+"Hope in Difficult Times"
+
+Start at 18:42
+
+https://youtube.com/watch?v=XXXXXXXX&t=1122s
+
+====================================================
+WHEN THERE IS NO MATCH
+====================================================
+
+If no ICC sermon is relevant
+
+Answer using
+
+Bible
+
+LLM
+
+Do NOT invent sermons.
+
+====================================================
+SEARCH QUALITY
+====================================================
+
+Always search
+
+Bible
+
+Sermons
+
+at the same time.
+
+Never wait for one before beginning the other.
+
+====================================================
+SERMON INDEX
+====================================================
+
+Search ONLY approved sermons.
+
+Ignore
+
+pending
+
+draft
+
+failed
+
+duplicate
+
+videos.
+
+====================================================
+ANSWER STYLE
+====================================================
+
+Tone:
+
+Warm
+
+Pastoral
+
+Encouraging
+
+Simple English
+
+Never preach at the user.
+
+Never lecture.
+
+Never sound academic.
+
+Respond like a trusted pastor sitting across the table.
+
+====================================================
+MEMORY
+====================================================
+
+Remember conversation context.
+
+If the user asks follow-up questions,
+
+continue naturally.
+
+Do not repeat yourself.
+
+====================================================
+FUTURE DISCIPLESHIP
+====================================================
+
+If Emmaus detects repeated themes
+
+fear
+
+anxiety
+
+marriage
+
+prayer
+
+forgiveness
+
+grief
+
+etc.
+
+begin quietly recommending appropriate Journeys over time.
+
+Do NOT pressure users.
+
+====================================================
+BIBLE ANNOTATIONS
+====================================================
+
+When a verse or chapter has relevant ICC sermons,
+
+show a small unobtrusive indicator.
+
+Example
+
+🎧 Preached Here
+
+Tapping it opens
+
+Title
+
+Speaker
+
+Date
+
+Timestamp list
+
+Jump directly into YouTube.
+
+Never interrupt Bible reading.
+
+====================================================
+YOUTUBE SYSTEM
+====================================================
+
+Use the existing indexed transcript database.
+
+Do NOT call YouTube live for every question.
+
+Search the local embeddings.
+
+====================================================
+PERFORMANCE
+====================================================
+
+Run
+
+Bible search
+
+and
+
+Sermon search
+
+concurrently.
+
+Only after BOTH complete
+
+generate the final answer.
+
+====================================================
+FAILURE HANDLING
+====================================================
+
+If sermon search fails
+
+continue with Scripture.
+
+If Bible search fails
+
+show an error.
+
+Never answer without Scripture.
+
+====================================================
+FINAL PRINCIPLE
+====================================================
+
+Emmaus is not trying to answer questions.
+
+Emmaus exists to help people walk with Jesus Christ.
+
+Every Ask Emmaus response should help someone take one faithful next step.
+
+====================================================
+VERIFICATION
+====================================================
+
+After implementation, verify all of the following:
+
+✓ Scripture search always runs first in the pipeline.
+✓ Sermon semantic search runs concurrently.
+✓ ICC sermon references include timestamped YouTube links.
+✓ Responses naturally weave Scripture and sermon content into one answer.
+✓ Every response ends with an appropriate next step.
+✓ Bible chapter pages display a "🎧 Preached Here" indicator whenever relevant ICC sermons exist.
+✓ Clicking "Preached Here" opens the sermon list with timestamps.
+✓ Ask Emmaus never invents sermon references.
+✓ If no sermon matches, Scripture-only responses still work correctly.
+✓ Existing Ask Emmaus conversations continue functioning without regression.
+✓ The implementation is production-ready, performant, and maintainable.

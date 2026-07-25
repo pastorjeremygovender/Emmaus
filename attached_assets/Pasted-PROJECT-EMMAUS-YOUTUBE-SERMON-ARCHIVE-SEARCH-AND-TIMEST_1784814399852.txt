@@ -1,0 +1,704 @@
+PROJECT EMMAUS — YOUTUBE SERMON ARCHIVE, SEARCH AND TIMESTAMPED LINKS
+
+Implement directly in the existing Project Emmaus codebase.
+
+This is a working proof-of-concept build for the church’s existing YouTube sermon archive.
+
+Do not redesign Ask Emmaus.
+Do not create a separate sermon database if the project already has sermon storage.
+Do not fabricate sermon titles, speakers, quotations, Bible references, descriptions or timestamps.
+Do not scrape YouTube webpages.
+Do not rely on unofficial transcript services as the primary architecture.
+Do not mark this task complete based only on compilation.
+
+==================================================
+GOAL
+==================================================
+
+Connect Emmaus to the Isipingo Community Church YouTube channel so that the existing sermon archive can be imported, transcribed or captioned, divided into timestamped segments, indexed, searched and surfaced inside Ask Emmaus.
+
+The system must support approximately 15 years of sermon videos without requiring Jeremy to catalogue every sermon manually.
+
+A user should eventually be able to ask:
+
+“I feel far from God.”
+
+and receive:
+
+- an appropriate Scripture-centred Emmaus response
+- optionally one highly relevant verified sermon moment
+- a working YouTube link opening at the exact relevant timestamp
+
+Use the approved feature name:
+
+Preached Here
+
+==================================================
+CURRENT VERIFIED FOUNDATION
+==================================================
+
+The project already contains or substantially contains:
+
+- Ask Emmaus
+- OpenAI provider abstraction
+- streamed responses
+- Sermon Companion workflow
+- sermon records
+- sermon transcripts or transcript foundations
+- timestamped YouTube link support
+- Admin Portal
+- database infrastructure
+
+Inspect and reuse all existing sermon storage and services.
+
+Do not duplicate data or build a parallel sermon system unless a migration is genuinely necessary.
+
+==================================================
+ARCHITECTURE
+==================================================
+
+Implement this flow:
+
+YouTube channel
+↓
+Channel and uploads discovery
+↓
+Video metadata import
+↓
+Owner-authorised captions download where available
+↓
+Speech-to-text fallback where permitted and configured
+↓
+Timestamp-preserving transcript normalisation
+↓
+Transcript segmentation
+↓
+Scripture/topic metadata extraction
+↓
+Embedding and keyword index
+↓
+Verified sermon database
+↓
+Ask Emmaus retrieval
+↓
+Preached Here card
+↓
+Exact timestamped YouTube link
+
+YouTube is the source media archive.
+
+Emmaus’s database is the searchable index.
+
+Do not query the entire live YouTube channel on every user question.
+
+==================================================
+1. CONFIGURATION
+==================================================
+
+Support server-side environment configuration:
+
+YOUTUBE_API_KEY
+YOUTUBE_CHANNEL_ID
+
+For owner-authorised caption access also support OAuth configuration:
+
+YOUTUBE_CLIENT_ID
+YOUTUBE_CLIENT_SECRET
+YOUTUBE_REDIRECT_URI
+
+Store OAuth refresh tokens securely using the existing secret or encrypted credential storage.
+
+Never expose API keys, client secrets, access tokens or refresh tokens to the browser.
+
+Do not paste credentials into source code.
+
+If OAuth has not yet been configured, implement the connection status and import architecture, then clearly report which caption-dependent steps remain unavailable.
+
+==================================================
+2. CHANNEL AND UPLOAD DISCOVERY
+==================================================
+
+Use the official YouTube Data API.
+
+Retrieve the configured channel’s uploads playlist.
+
+Enumerate every video from that playlist using pagination until all uploads are discovered.
+
+For each video, store or update:
+
+- YouTube video ID
+- canonical YouTube URL
+- title
+- description
+- published date
+- duration
+- thumbnail URL
+- channel ID
+- privacy or availability status where accessible
+- import timestamp
+- last sync timestamp
+- raw metadata version where useful
+
+Use idempotent upserts keyed by YouTube video ID.
+
+Running the import repeatedly must not create duplicate sermons.
+
+Do not assume every channel upload is a sermon.
+
+==================================================
+3. SERMON CANDIDATE CLASSIFICATION
+==================================================
+
+Create a classification stage to distinguish likely sermons from:
+
+- worship-only videos
+- announcements
+- trailers
+- shorts
+- children’s content
+- livestream tests
+- unrelated uploads
+
+Use deterministic metadata rules first:
+
+- title
+- description
+- duration
+- playlist membership if available
+
+AI may assist classification, but must not silently publish uncertain videos as sermons.
+
+Store:
+
+- content type
+- sermon likelihood/confidence
+- classification reason
+- review status
+
+Allow Admin Portal review:
+
+- approve as sermon
+- reject as sermon
+- edit title
+- set verified speaker
+- set service date
+- correct Scripture references
+- republish or unpublish
+
+Only approved or confidently verified sermon records may appear in Ask Emmaus.
+
+==================================================
+4. CAPTION AND TRANSCRIPT IMPORT
+==================================================
+
+For videos owned or managed by the connected YouTube account:
+
+- list available caption tracks
+- prefer the appropriate English track
+- record whether the track is manually uploaded or automatically generated when available
+- download captions using the owner-authorised YouTube captions workflow
+- preserve timing information
+
+Do not assume that captions.list contains the actual transcript text.
+
+Use captions.download for the transcript file.
+
+Caption access must use OAuth authorisation when required.
+
+For videos without usable captions:
+
+- support a configurable speech-to-text fallback
+- do not automatically incur large transcription costs without an explicit import action or approved batch setting
+- preserve video-relative timestamps
+- record transcription provider and confidence
+- mark uncertain transcripts for review
+
+Do not silently invent missing transcript text.
+
+==================================================
+5. TRANSCRIPT NORMALISATION
+==================================================
+
+Normalise imported caption or transcription data while preserving exact timing.
+
+For each caption cue or transcript unit, retain:
+
+- video ID
+- start time in seconds
+- end time in seconds
+- original text
+- cleaned text
+- source type
+- confidence where available
+
+Cleaning may address:
+
+- punctuation
+- line breaks
+- duplicate caption fragments
+- obvious spacing errors
+- repeated words caused by captions
+
+Do not materially rewrite the sermon.
+
+Do not replace uncertain names or Scripture references with guessed content.
+
+Store the original transcript alongside the cleaned transcript.
+
+==================================================
+6. TIMESTAMPED SEGMENTATION
+==================================================
+
+Divide each sermon into searchable segments.
+
+Target segment length:
+
+- approximately 30–90 seconds
+- or a coherent passage of approximately 100–300 words
+
+Use natural boundaries where possible:
+
+- topic shifts
+- paragraph pauses
+- Scripture reading
+- illustration
+- application point
+- prayer or conclusion
+
+Each segment must contain:
+
+- stable segment ID
+- sermon/video ID
+- start time
+- end time
+- original transcript text
+- cleaned transcript text
+- sequence number
+
+Segment overlap may be used modestly to preserve context.
+
+Never lose the original timestamp mapping.
+
+==================================================
+7. SERMON METADATA ENRICHMENT
+==================================================
+
+Use AI as an offline indexing assistant, not as the source of truth.
+
+For approved sermons and segments, derive candidate metadata:
+
+- primary themes
+- secondary themes
+- Bible books mentioned
+- Scripture references mentioned
+- people or stories from Scripture
+- pastoral needs addressed
+- suggested short segment summary
+- keywords
+
+Examples of pastoral themes:
+
+- grief
+- fear
+- prayer
+- forgiveness
+- marriage
+- serving
+- faith
+- anxiety
+- temptation
+- disappointment
+- addiction
+- spiritual distance
+- generosity
+- the local church
+
+Store AI-derived metadata separately from verified metadata.
+
+Allow Admin Portal approval or correction.
+
+Do not present AI-extracted Scripture references as verified until validated against transcript evidence.
+
+==================================================
+8. SEARCH INDEX
+==================================================
+
+Create one hybrid sermon-search service using:
+
+- semantic/vector similarity
+- keyword or full-text search
+- Scripture-reference matching
+- verified topic tags
+- sermon metadata
+
+Use the project’s existing database and vector capabilities where appropriate.
+
+If the existing database lacks vector support, implement a clean replaceable search abstraction.
+
+Do not tightly couple Ask Emmaus directly to one vector vendor.
+
+Index only:
+
+- approved sermon records
+- approved or usable transcript segments
+- verified or appropriately flagged metadata
+
+The search result must include deterministic source data:
+
+- sermon ID
+- segment ID
+- verified title
+- verified speaker
+- video ID
+- start time
+- end time
+- transcript evidence
+- relevance score
+
+==================================================
+9. RETRIEVAL QUALITY
+==================================================
+
+Ask Emmaus retrieval should combine:
+
+- the user’s latest question
+- relevant recent conversation context
+- current Bible passage context
+- current Journey context
+- verified sermon segment index
+
+Return only a small number of candidates.
+
+Normally:
+
+- retrieve several candidates internally
+- rerank them
+- display zero or one primary Preached Here result
+
+Show no sermon card when confidence is low.
+
+Do not return a weak or generic sermon simply to fill the interface.
+
+Do not carry an old sermon result into an unrelated follow-up question.
+
+==================================================
+10. TIMESTAMPED YOUTUBE LINKS
+==================================================
+
+Construct timestamped YouTube links deterministically from:
+
+- stored YouTube video ID
+- verified segment start time
+
+Use a standard YouTube timestamp format such as a start-time query parameter supported by the existing project workflow.
+
+Do not let the language model write or modify the URL.
+
+Do not let the language model invent the timestamp.
+
+Validate:
+
+- video ID format
+- non-negative start time
+- available video record
+
+The link must open the correct video at or very near the stored start time.
+
+==================================================
+11. PREACHED HERE CARD
+==================================================
+
+Reuse or create a compatible response card named:
+
+Preached Here
+
+Display:
+
+- verified sermon title
+- verified speaker
+- optional service date
+- concise segment summary grounded in transcript evidence
+- timestamp label
+- action such as:
+  Watch from 18:42
+
+Optional secondary information:
+
+- relevant Scripture reference
+- why this moment is relevant
+
+Do not show raw internal IDs or routes.
+
+Do not quote long transcript passages.
+
+Do not state that Pastor Jeremy preached on a topic unless the verified record and transcript segment support it.
+
+==================================================
+12. ASK EMMAUS INTEGRATION
+==================================================
+
+Integrate sermon retrieval into the existing Emmaus Conversation Service.
+
+Recommended sequence:
+
+1. receive user question
+2. build current context
+3. apply safety classification
+4. retrieve relevant Scripture and app resources
+5. search approved sermon segments
+6. generate the pastoral answer
+7. attach deterministic verified cards
+
+The language model may:
+
+- explain why a retrieved sermon moment may help
+- summarise the verified segment conservatively
+
+The language model may not:
+
+- fabricate sermon metadata
+- fabricate timestamps
+- fabricate quotes
+- invent a match
+- invent a YouTube URL
+
+Urgent safety flows must not be delayed by sermon retrieval.
+
+==================================================
+13. ADMIN PORTAL — YOUTUBE ARCHIVE
+==================================================
+
+Add an Admin Portal area for the sermon archive.
+
+Include:
+
+- YouTube connection status
+- configured channel
+- Sync Channel action
+- Import New Videos action
+- Process Selected Videos action
+- pause/resume batch processing
+- import progress
+- API quota or failure reporting
+- videos discovered
+- likely sermons
+- approved sermons
+- transcripts available
+- transcripts missing
+- segments created
+- items requiring review
+- failed imports with retry
+
+For each sermon allow viewing:
+
+- video metadata
+- embedded or linked YouTube video
+- transcript
+- timestamped segments
+- extracted themes
+- detected Scripture references
+- approval status
+
+Do not require Jeremy to review every segment before any search can work.
+
+Use sensible confidence and approval rules, while making uncertain records easy to review.
+
+==================================================
+14. INITIAL BACKFILL
+==================================================
+
+The 15-year archive may be large.
+
+Implement the importer as a resumable batch process.
+
+Requirements:
+
+- checkpoints
+- retryable jobs
+- idempotent upserts
+- quota awareness
+- bounded concurrency
+- pause/resume
+- do not restart from the beginning after failure
+- do not block the web server for the full archive
+- record progress persistently
+
+Allow a limited proof-of-concept import first:
+
+- latest 10–20 likely sermon videos
+- or a selected date range
+
+After verification, support the full archive backfill.
+
+Do not process all videos in one synchronous request.
+
+==================================================
+15. ONGOING SYNC
+==================================================
+
+After the initial archive import, support a lightweight incremental sync.
+
+It should:
+
+- check the uploads playlist
+- find new video IDs
+- import only new or changed records
+- avoid duplicate processing
+- leave approved historical records intact
+
+Do not require a live YouTube query during each Ask Emmaus response.
+
+==================================================
+16. PRIVACY, RIGHTS AND SAFETY
+==================================================
+
+Process only the configured church channel or explicitly authorised channels.
+
+Respect deleted, private or unavailable videos.
+
+Do not expose OAuth credentials.
+
+Do not expose unpublished sermon records to users.
+
+Do not send whole transcripts unnecessarily to the language model.
+
+Do not include private user conversation content in routine indexing logs.
+
+==================================================
+17. PERFORMANCE
+==================================================
+
+Sermon search must not add major delay to Ask Emmaus.
+
+Requirements:
+
+- search the local/indexed sermon database, not YouTube live
+- retrieve only a few short relevant segments
+- run retrieval within a bounded timeout
+- if sermon retrieval is slow or unavailable, continue the normal Emmaus response without a sermon card
+- cache appropriate non-sensitive metadata
+- log sermon retrieval duration separately from model latency
+
+Target:
+
+- sermon retrieval should normally complete in well under a few seconds
+- it must not cause 40-second responses
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+A. CONNECTION
+
+1. Configure the church YouTube channel.
+2. Authenticate the owner account for captions.
+3. Confirm connection without exposing credentials.
+
+B. DISCOVERY
+
+1. Run a limited import.
+2. Confirm channel uploads are discovered across pagination.
+3. Confirm duplicate sync creates no duplicate records.
+
+C. CAPTIONS
+
+1. Import a video with captions.
+2. Confirm transcript text and timestamps are preserved.
+3. Open multiple timestamped cues and compare them to the video.
+
+D. FALLBACK
+
+1. Select a video without usable captions.
+2. Confirm it is marked for speech-to-text or review.
+3. Confirm no transcript is fabricated.
+
+E. SEGMENTS
+
+1. Process at least three sermons.
+2. Confirm searchable timestamped segments are created.
+3. Confirm segment links open the correct video moments.
+
+F. ASK EMMAUS — MATCH
+
+Ask a question known to be covered by one imported approved sermon.
+
+Verify:
+
+- the normal Emmaus answer appears
+- one relevant Preached Here card appears
+- title is correct
+- speaker is correct
+- timestamp is correct
+- link opens at the correct moment
+
+G. ASK EMMAUS — NO MATCH
+
+Ask a question not covered by the imported sermons.
+
+Verify:
+
+- Emmaus answers normally
+- no false Preached Here card appears
+- no claim is made that Pastor Jeremy preached on it
+
+H. BIBLE CONTEXT
+
+Open Ask Emmaus from a Bible passage that has a verified sermon match.
+
+Ask:
+
+Was this preached about?
+
+Verify the current passage is used in retrieval.
+
+I. MULTI-TURN
+
+Ask one sermon-related question and then switch to an unrelated topic.
+
+Confirm the old sermon card does not carry over.
+
+J. PERFORMANCE
+
+Measure:
+
+- sermon retrieval duration
+- Ask Emmaus time to first visible text
+- total response time with and without sermon retrieval
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+This proof-of-concept task is complete only when:
+
+- the configured YouTube channel can be connected
+- uploads are discovered through the official API
+- imports are idempotent and resumable
+- owner-authorised captions can be imported where available
+- caption timestamps are preserved
+- missing-caption videos are handled honestly
+- sermons can be approved and reviewed
+- transcripts are split into timestamped searchable segments
+- hybrid sermon search works
+- Ask Emmaus retrieves only verified sermon moments
+- Preached Here displays correct deterministic metadata
+- timestamped YouTube links open correctly
+- no sermon or timestamp is fabricated
+- retrieval does not block normal Ask Emmaus responses
+- a limited real archive sample has been tested end to end
+
+When finished, report only:
+
+- existing sermon storage reused
+- YouTube connection method implemented
+- number of videos discovered
+- number classified as likely sermons
+- transcripts imported
+- segments created
+- search/index approach used
+- Ask Emmaus retrieval tests
+- timestamp accuracy tests
+- performance measurements
+- remaining OAuth, caption, quota or archive-backfill limitations
+
+Do not propose unrelated features.

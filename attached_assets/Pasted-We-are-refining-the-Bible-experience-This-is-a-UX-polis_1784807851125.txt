@@ -1,0 +1,90 @@
+We are refining the Bible experience. This is a UX polish task only. Do not redesign the architecture or add unrelated features.
+
+OBJECTIVE
+The Bible should feel like a premium reading experience. Ask Emmaus should feel like a natural companion to Scripture, not a separate feature.
+
+TASKS
+
+1. Floating Ask Emmaus Button
+- Keep the floating Ask Emmaus button on every Bible screen.
+- Add a gentle continuous breathing animation (100% → 108% → 100%).
+- Repeat every 2–3 seconds forever.
+- Keep it subtle, not distracting.
+
+2. Translation Selector
+- Replace the current translation badge with a proper dropdown.
+- Display: 📖 BSB ▼
+- Preserve the current book, chapter and scroll position when changing translations.
+- Do not reset reading progress.
+
+3. Bible Navigation
+- Remove the current "Back" and "Continue" navigation.
+- Replace it with permanent chapter navigation.
+
+Example:
+
+◀ Joshua 2        Joshua 3        Joshua 4 ▶
+
+- Navigation should be immediate.
+- No completion screens between chapters.
+
+4. Remove Completion Screen
+Delete the current completion page entirely, including:
+- Reflect
+- Pray
+- Continue
+- Finish for today
+
+Those belong to Walk, not Bible reading.
+
+5. Continuous Reading
+Reading should flow naturally from one chapter to the next.
+The Bible reader should behave like a normal Bible app rather than a lesson.
+
+6. Context-aware Ask Emmaus
+When Ask Emmaus is opened from inside the Bible automatically send:
+
+Book
+Chapter
+Translation
+
+Example:
+Book: Joshua
+Chapter: 3
+Translation: BSB
+
+The user should simply be able to ask:
+"Why did they cross the Jordan?"
+
+without explaining which chapter they are reading.
+
+7. Chapter Shortcut
+Replace the Reflect/Pray section with a single action:
+
+💬 Ask Emmaus about Joshua 3
+
+Opening this should preload the current Bible context.
+
+8. Preserve Reading Position
+When Ask Emmaus closes, return the user to the exact chapter and approximately the same scroll position.
+
+9. Mobile UX
+Verify:
+- Floating button never blocks text.
+- Controls remain accessible.
+- Navigation is thumb-friendly.
+- Keyboard never hides important controls.
+
+DEFINITION OF DONE
+
+Before marking complete verify:
+
+✅ Floating Ask Emmaus button pulses continuously.
+✅ Translation dropdown works correctly.
+✅ Previous/Next chapter navigation replaces completion flow.
+✅ Completion screen removed.
+✅ Ask Emmaus automatically receives current Bible context.
+✅ Reading position preserved after Ask Emmaus closes.
+✅ Mobile UX tested.
+
+Do not add any additional features. Keep the implementation clean, polished and production-ready.

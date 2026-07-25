@@ -1,0 +1,181 @@
+PROJECT EMMAUS — FIX CHAPTER READER TRANSLATION DROPDOWN
+
+Implement directly in the existing codebase.
+
+Do not redesign the Bible reader.
+Do not change chapter navigation.
+Do not change Ask Emmaus.
+Do not change the translation selector on Bible Home, because it already works.
+Do not add new translations.
+Do not modify unrelated features.
+Do not mark complete from compilation alone.
+
+==================================================
+VERIFIED PROBLEM
+==================================================
+
+The translation selector works correctly from the main Bible page.
+
+Inside the Bible chapter reader, the translation dropdown opens or appears, but selecting another translation does not actually change the displayed chapter text.
+
+==================================================
+GOAL
+==================================================
+
+Make the chapter-reader translation dropdown use the same active translation state and switching behaviour as the working selector on Bible Home.
+
+A user must be able to switch translations while remaining on the same book and chapter.
+
+==================================================
+DIAGNOSE FIRST
+==================================================
+
+Inspect and compare:
+
+- the working Bible Home translation selector
+- the chapter-reader translation selector
+- selected translation state
+- persisted preferred translation
+- Bible Provider calls
+- route parameters and query parameters
+- chapter-fetch cache keys
+- React effect dependencies
+- dropdown item click/change handlers
+
+Determine exactly why the chapter-reader selector does not update the text.
+
+Check whether:
+
+- the dropdown is only visual and has no change handler
+- it updates local state but not the shared Bible preference
+- the chapter-fetch effect does not depend on translation
+- cached chapter data is keyed only by book and chapter
+- route state overrides the new selection
+- the provider receives the old translation ID
+- the selected item is disabled or the menu closes without applying it
+
+Do not guess.
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. SHARED TRANSLATION STATE
+
+Reuse the same canonical translation state/service used by Bible Home.
+
+Do not maintain an unrelated chapter-reader-only preference.
+
+When the user selects a translation:
+
+- update the shared active translation
+- persist the preferred translation using the existing persistence mechanism
+- request the same book and chapter from the newly selected provider/translation
+- update the visible translation label
+
+2. PRESERVE READING LOCATION
+
+When switching translation:
+
+- remain on the current book
+- remain on the current chapter
+- preserve the current verse or approximate scroll position where practical
+- do not route to Bible Home
+- do not reset to Genesis
+- do not advance to another chapter
+- do not reset reading progress
+
+3. CACHE CORRECTNESS
+
+Ensure chapter cache keys include:
+
+- translation ID
+- book ID
+- chapter number
+
+Do not reuse BSB text after selecting a different translation.
+
+Do not clear the entire Bible cache unnecessarily.
+
+4. LOADING AND FAILURE
+
+While the new translation loads:
+
+- retain a stable reader layout
+- use the existing chapter-loading behaviour
+- do not display the old translation as if it were the new one
+
+If loading fails:
+
+- keep the previous working translation and text
+- show:
+  “This translation could not be loaded just now.”
+- do not silently substitute another translation
+
+5. AVAILABLE TRANSLATIONS
+
+Populate the chapter-reader dropdown from the same provider list as Bible Home.
+
+Display only translations that are genuinely available and complete.
+
+Do not add NIV, GNT, ESV or other licensed translations unless authorised content is already connected.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Test in the actual running mobile-sized application.
+
+1. Open Bible Home.
+2. Note the available translation list.
+3. Open Joshua 3 in BSB.
+4. Open the chapter-reader translation dropdown.
+5. Select another available translation.
+6. Confirm:
+   - Joshua 3 remains open
+   - the visible translation label changes
+   - the verse text changes to the selected translation
+   - no completion page opens
+   - reading progress is preserved
+
+7. Switch back to BSB.
+8. Confirm the BSB text returns.
+
+9. Refresh the application.
+10. Confirm the most recently selected preferred translation persists.
+
+11. Open another chapter.
+12. Confirm that chapter loads in the preferred translation.
+
+13. Test rapidly switching between available translations.
+14. Confirm stale requests do not overwrite the final selection.
+
+15. Test a simulated translation-load failure.
+16. Confirm the previous working text remains visible and the calm error appears.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- the chapter-reader dropdown changes the active translation
+- the same book and chapter remain open
+- the displayed Bible text genuinely changes
+- the selected label updates
+- the preference persists
+- cache keys distinguish translations
+- stale requests do not overwrite the latest selection
+- failure preserves the previous working text
+- the running mobile app has been tested
+
+When finished, report only:
+
+- exact root cause
+- files changed
+- shared translation state used
+- cache-key correction made
+- running-app test results
+- any unsuccessful test and its exact cause
+
+Do not propose additional features.

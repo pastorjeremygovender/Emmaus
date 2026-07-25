@@ -3,11 +3,17 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, ListChecks, Languages } from 'lucide-react';
+import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, History, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslations } from '@/hooks/useTranslations';
 
 export default function Bible() {
   const [, setLocation] = useLocation();
-  const { readingHistory, favourites, bookmarks } = useBible();
+  const { lastRead, favourites, bookmarks, translationId, setTranslation } = useBible();
+  const [showTranslations, setShowTranslations] = useState(false);
+  const { translations } = useTranslations();
+
+  const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -17,17 +23,17 @@ export default function Bible() {
         <header className="space-y-1">
           <h1 className="text-[30px] font-serif font-medium tracking-tight">Bible</h1>
           <p className="text-[13px] text-muted-foreground">
-            King James Version · Public Domain
+            {currentTranslation.name} · {currentTranslation.copyright}
           </p>
         </header>
 
-        {/* Single smart reading card */}
-        {readingHistory ? (
+        {/* Continue / Begin Reading */}
+        {lastRead ? (
           <section className="space-y-3">
             <SectionLabel>Continue Reading</SectionLabel>
             <Card
               className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
-              onClick={() => setLocation(`/bible/read/${readingHistory.bookId}/${readingHistory.chapter}`)}
+              onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
             >
               <CardContent className="p-5 flex items-center gap-4">
                 <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
@@ -35,15 +41,13 @@ export default function Bible() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                    {readingHistory.bookName} {readingHistory.chapter}
+                    {lastRead.bookName} {lastRead.chapter}
                   </div>
                   <div className="text-[16px] font-medium text-foreground truncate">
-                    {readingHistory.chapterHeading}
+                    {lastRead.chapterHeading}
                   </div>
                 </div>
-                <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">
-                  Continue
-                </Button>
+                <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Continue</Button>
               </CardContent>
             </Card>
           </section>
@@ -66,9 +70,7 @@ export default function Bible() {
                     The Birth of John the Baptist Foretold
                   </div>
                 </div>
-                <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">
-                  Read
-                </Button>
+                <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Read</Button>
               </CardContent>
             </Card>
           </section>
@@ -85,7 +87,7 @@ export default function Bible() {
               <BookMarked size={17} className="text-primary" />
               <div>
                 <div className="text-[15px] font-medium text-foreground">Old Testament · New Testament</div>
-                <div className="text-[12px] text-muted-foreground">66 books · Luke available now</div>
+                <div className="text-[12px] text-muted-foreground">66 books</div>
               </div>
             </div>
             <ChevronRight size={17} className="text-muted-foreground" />
@@ -147,12 +149,87 @@ export default function Bible() {
           )}
         </section>
 
-        {/* Future features — clean extension points */}
+        {/* Tools section */}
         <section className="space-y-2 pb-4">
-          <SectionLabel>More</SectionLabel>
-          <FutureRow icon={<Search size={16} />} label="Search" />
-          <FutureRow icon={<ListChecks size={16} />} label="Reading Plans" />
-          <FutureRow icon={<Languages size={16} />} label="Translation" detail="King James Version" />
+          <SectionLabel>Tools</SectionLabel>
+
+          {/* Search */}
+          <div
+            className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
+            onClick={() => setLocation('/bible/search')}
+          >
+            <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary shrink-0">
+              <Search size={16} />
+            </div>
+            <div className="flex-1">
+              <div className="text-[14px] font-medium text-foreground">Search</div>
+              <div className="text-[12px] text-muted-foreground">Search by word, phrase, or reference</div>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </div>
+
+          {/* Reading History */}
+          <div
+            className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
+            onClick={() => setLocation('/bible/history')}
+          >
+            <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
+              <History size={16} />
+            </div>
+            <div className="flex-1">
+              <div className="text-[14px] font-medium text-foreground">Reading History</div>
+              <div className="text-[12px] text-muted-foreground">Recently opened chapters</div>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </div>
+
+          {/* Translation selector */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <button
+              className="w-full p-4 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+              onClick={() => setShowTranslations(v => !v)}
+            >
+              <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
+                <span className="text-[10px] font-bold">{currentTranslation.abbreviation}</span>
+              </div>
+              <div className="flex-1 text-left">
+                <div className="text-[14px] font-medium text-foreground">Translation</div>
+                <div className="text-[12px] text-muted-foreground">{currentTranslation.name}</div>
+              </div>
+              <ChevronDown
+                size={16}
+                className={['text-muted-foreground transition-transform', showTranslations ? 'rotate-180' : ''].join(' ')}
+              />
+            </button>
+
+            {showTranslations && (
+              <div className="border-t border-border divide-y divide-border/60">
+                {translations.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setTranslation(t.id); setShowTranslations(false); }}
+                    className={[
+                      'w-full p-4 flex items-center gap-3 text-left transition-colors',
+                      t.id === translationId ? 'bg-primary/5' : 'hover:bg-muted/40',
+                    ].join(' ')}
+                  >
+                    <div className={['w-8 h-8 rounded-full flex items-center justify-center shrink-0', t.id === translationId ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'].join(' ')}>
+                      <span className="text-[10px] font-bold">{t.abbreviation}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={['text-[14px] font-medium', t.id === translationId ? 'text-primary' : 'text-foreground'].join(' ')}>
+                        {t.name}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">{t.copyright}</div>
+                    </div>
+                    {t.id === translationId && (
+                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">Active</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
       </main>
@@ -166,30 +243,5 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
       {children}
     </h2>
-  );
-}
-
-function FutureRow({
-  icon,
-  label,
-  detail,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  detail?: string;
-}) {
-  return (
-    <div className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 opacity-50 select-none">
-      <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
-        {icon}
-      </div>
-      <div className="flex-1">
-        <div className="text-[14px] font-medium text-foreground">{label}</div>
-        {detail && <div className="text-[12px] text-muted-foreground">{detail}</div>}
-      </div>
-      <div className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
-        Coming soon
-      </div>
-    </div>
   );
 }

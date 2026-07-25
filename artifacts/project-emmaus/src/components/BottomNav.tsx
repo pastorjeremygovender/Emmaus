@@ -1,41 +1,78 @@
 import { Link, useLocation } from 'wouter';
 import { Compass, BookHeart, Map, User } from 'lucide-react';
+import { getReturnDestination } from '@/lib/emmaus-pending';
+
+// Navigation order (locked):
+// 1. Today's Steps  /walk
+// 2. Next Steps     /journeys
+// 3. My Bible       /bible
+// 4. My Walk        /personal
 
 export function BottomNav() {
   const [location] = useLocation();
 
   const navItems = [
-    { path: '/walk', label: 'Walk', icon: Compass },
-    { path: '/bible', label: 'Bible', icon: BookHeart },
-    { path: '/journeys', label: 'Journeys', icon: Map },
-    { path: '/personal', label: 'Personal', icon: User },
+    { path: '/walk',      label: "Today's Steps", icon: Compass },
+    { path: '/journeys',  label: 'Next Steps',    icon: Map },
+    { path: '/bible',     label: 'My Bible',      icon: BookHeart },
+    { path: '/personal',  label: 'My Walk',       icon: User },
   ];
+
+  function isActive(path: string): boolean {
+    // While Ask Emmaus is open, highlight the section the user came from
+    // rather than falsely highlighting My Walk.
+    if (location.startsWith('/personal/ask-emmaus')) {
+      const dest = getReturnDestination();
+      if (dest) {
+        const sectionPath: Record<string, string> = {
+          walk: '/walk',
+          bible: '/bible',
+          journeys: '/journeys',
+          personal: '/personal',
+        };
+        return path === sectionPath[dest.sourceSection];
+      }
+      // No stored destination — suppress highlighting entirely on Ask Emmaus screens.
+      return false;
+    }
+
+    if (path === '/walk')     return location === '/walk';
+    if (path === '/bible')    return location === '/bible' || location.startsWith('/bible/');
+    if (path === '/journeys') return location === '/journeys' || location.startsWith('/journey/');
+    if (path === '/personal') {
+      return (
+        location === '/personal' ||
+        (location.startsWith('/personal/') && !location.startsWith('/personal/ask-emmaus'))
+      );
+    }
+    return false;
+  }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-area-bottom">
       <nav className="flex justify-around items-center h-16" aria-label="Main navigation">
         {navItems.map(({ path, label, icon: Icon }) => {
-          const isActive = location === path;
+          const active = isActive(path);
           return (
             <Link
               key={path}
               href={path}
-              data-testid={`nav-${label.toLowerCase()}`}
-              className="flex-1 flex flex-col items-center justify-center h-full gap-1 min-h-[44px] relative"
-              aria-current={isActive ? 'page' : undefined}
+              data-testid={`nav-${path.slice(1)}`}
+              className="flex-1 flex flex-col items-center justify-center h-full gap-1 min-h-[44px] relative px-1"
+              aria-current={active ? 'page' : undefined}
             >
-              {isActive && (
+              {active && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
               )}
               <Icon
-                size={22}
-                className={`transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
-                strokeWidth={isActive ? 2.5 : 1.8}
+                size={21}
+                className={`transition-colors shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`}
+                strokeWidth={active ? 2.5 : 1.8}
                 aria-hidden="true"
               />
               <span
-                className={`text-xs font-medium tracking-tight transition-colors ${
-                  isActive ? 'text-primary' : 'text-muted-foreground'
+                className={`text-[10px] font-medium tracking-tight transition-colors text-center leading-tight ${
+                  active ? 'text-primary' : 'text-muted-foreground'
                 }`}
               >
                 {label}

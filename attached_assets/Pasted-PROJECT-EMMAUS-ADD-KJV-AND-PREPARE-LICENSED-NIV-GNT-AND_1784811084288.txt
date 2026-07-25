@@ -1,0 +1,301 @@
+PROJECT EMMAUS — ADD KJV AND PREPARE LICENSED NIV, GNT AND NKJV
+
+Implement directly in the existing codebase.
+
+Do not download, scrape, copy or embed unauthorised NIV, GNT or NKJV Bible text.
+Do not add translation names to the selector unless real text is available from an authorised source.
+Do not label substitute text as NIV, GNT or NKJV.
+Do not modify unrelated Bible UX or Ask Emmaus behaviour.
+Do not mark complete from compilation alone.
+
+==================================================
+GOAL
+==================================================
+
+Make these the minimum intended Emmaus translation set:
+
+- NIV
+- GNT
+- KJV
+- NKJV
+
+Implement KJV now through a legally verified public-domain source.
+
+Prepare and connect the Bible Provider architecture for authorised NIV, GNT and NKJV access through API.Bible or another approved licensed provider.
+
+Only display translations that can actually load real authorised text.
+
+==================================================
+CURRENT STATE
+==================================================
+
+The Bible Engine already has:
+
+- complete 66-book support
+- Bible Provider abstraction
+- working chapter reader
+- working translation selection from Bible Home
+- a chapter-reader translation dropdown that is being repaired
+- one or more current development translations
+
+Preserve this architecture.
+
+==================================================
+1. KJV
+==================================================
+
+Add the complete King James Version as an available translation.
+
+Requirements:
+
+- use a verified public-domain KJV source appropriate for distribution in South Africa
+- preserve all 66 books, chapters and verse numbers
+- record the precise source and attribution
+- import through an idempotent process
+- do not bundle the entire text into the initial frontend JavaScript
+- load chapters through the existing Bible Provider abstraction
+- add KJV to both Bible Home and chapter-reader selectors
+- verify chapter switching and search
+
+Use a stable translation ID such as:
+
+kjv
+
+Display:
+
+King James Version
+KJV
+
+==================================================
+2. LICENSED PROVIDER
+==================================================
+
+Create or complete an API.Bible provider behind the existing Bible Provider interface.
+
+The provider must support:
+
+- listing authorised translations available to the configured API key
+- book metadata
+- chapter retrieval
+- verse-range retrieval
+- search where supported
+- attribution and copyright metadata
+- graceful provider errors
+
+Read credentials only from server-side environment variables.
+
+Expected secret:
+
+API_BIBLE_KEY
+
+Never expose this key to the browser, logs or client responses.
+
+Do not call API.Bible directly from React.
+
+==================================================
+3. NIV, GNT AND NKJV
+==================================================
+
+Treat these as licensed translations:
+
+- New International Version — NIV
+- Good News Translation — GNT
+- New King James Version — NKJV
+
+At runtime:
+
+- query the authorised provider catalogue
+- determine whether each requested translation is available to Emmaus under the configured account
+- map each authorised provider Bible ID to the stable internal translation ID
+- show it in selectors only when authorised and functional
+- retrieve all text from the authorised provider
+- preserve required copyright notices and attribution
+
+Do not assume provider Bible IDs.
+Do not hard-code an ID copied from another account.
+Discover or configure the IDs for the actual Emmaus API account.
+
+If one of these translations is not authorised:
+
+- do not show it as selectable
+- do not show an empty entry
+- do not silently substitute another translation
+- record it in an admin diagnostics view or server log as “licence/access required”
+
+==================================================
+4. PROVIDER PRIORITY
+==================================================
+
+Support multiple provider types cleanly:
+
+- local public-domain provider for KJV and other legal development texts
+- licensed remote provider for NIV, GNT and NKJV
+
+The UI must remain provider-neutral.
+
+Selecting a translation must resolve the correct provider automatically.
+
+Do not scatter translation-provider conditions throughout UI components.
+
+==================================================
+5. SELECTOR BEHAVIOUR
+==================================================
+
+Both Bible Home and the chapter reader must use the same available-translation catalogue.
+
+The dropdown must:
+
+- list only working translations
+- show full name and abbreviation
+- keep the current book and chapter when switching
+- load real text from the selected translation
+- update the displayed label
+- persist the user preference
+- include attribution access
+- handle remote loading safely
+
+Do not show:
+
+NIV
+GNT
+NKJV
+
+until each one successfully returns authorised chapter text.
+
+==================================================
+6. COPYRIGHT AND ATTRIBUTION
+==================================================
+
+Store and display required attribution metadata per translation.
+
+Include:
+
+- translation name
+- abbreviation
+- copyright holder
+- copyright notice
+- provider
+- licence/source URL or internal reference
+- terms or attribution link where required
+
+Create or update a real documentation file describing:
+
+- KJV source and public-domain basis
+- API.Bible integration
+- NIV licensing status
+- GNT licensing status
+- NKJV licensing status
+- how authorised translation IDs are configured
+- restrictions on offline storage, caching and redistribution
+
+Do not claim a licence has been granted unless the configured provider account confirms access or written permission exists.
+
+==================================================
+7. CACHING RESTRICTIONS
+==================================================
+
+For licensed translations:
+
+- obey provider and licence caching restrictions
+- do not permanently export or redistribute the full translation unless explicitly authorised
+- do not create an unrestricted downloadable Bible database
+- use only permitted short-term caching
+- keep attribution attached
+
+For KJV:
+
+- normal local storage and offline support may be used.
+
+==================================================
+8. ERROR HANDLING
+==================================================
+
+Use calm errors:
+
+“This translation is not currently available.”
+
+“This chapter could not be loaded in the selected translation just now.”
+
+Do not expose:
+
+- provider keys
+- raw provider payloads
+- licensing internals
+- stack traces
+
+If a licensed provider is unavailable, retain the previous working translation and text.
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+KJV
+
+1. Open Genesis 1 in KJV.
+2. Open Psalm 23 in KJV.
+3. Open John 3 in KJV.
+4. Open Revelation 22 in KJV.
+5. Confirm real text and correct verse numbering.
+6. Switch between KJV and the existing development translation.
+7. Confirm the same chapter remains open.
+
+LICENSED CATALOGUE
+
+1. Configure API_BIBLE_KEY.
+2. Retrieve the actual authorised translation catalogue.
+3. Verify whether NIV is available.
+4. Verify whether GNT is available.
+5. Verify whether NKJV is available.
+6. Display only those confirmed available.
+
+LICENSED TEXT
+
+For each authorised translation:
+
+1. Open Luke 24.
+2. Confirm the correct translation label.
+3. Confirm text genuinely differs from KJV and other translations.
+4. Confirm copyright attribution is accessible.
+5. Switch to another translation without leaving Luke 24.
+
+UNAUTHORISED STATE
+
+Temporarily test with a provider account lacking one requested translation.
+
+Confirm:
+
+- it is not selectable
+- no fake or empty text appears
+- no substitute translation is presented under the wrong label
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- complete KJV text works
+- KJV source and attribution are documented
+- API.Bible provider exists server-side
+- authorised translation catalogue is retrieved
+- NIV appears only if licensed and functional
+- GNT appears only if licensed and functional
+- NKJV appears only if licensed and functional
+- both translation selectors share one catalogue
+- chapter switching preserves location
+- copyright notices are available
+- no unauthorised text is stored or displayed
+- running-app tests have been performed
+
+When finished, report only:
+
+- KJV source used
+- API.Bible provider files created or changed
+- authorised translations returned by the configured account
+- working translations displayed
+- translations still awaiting access
+- attribution implemented
+- running-app test results
+- any incomplete item and exact reason
+
+Do not propose unrelated features.

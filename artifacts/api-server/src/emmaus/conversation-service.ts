@@ -32,12 +32,14 @@ import { createLLMProvider, type LLMMessage } from "./llm-provider.js";
 import {
   getConversationStore,
   type EmmausResponseMetadata,
+  type NextStepItem,
   type EntryPoint,
 } from "./firestore-model.js";
 import {
   retrieveSermon,
   type SermonRetrievalResult,
 } from "./sermon-retrieval.js";
+import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
 import { logger } from "../lib/logger.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -145,6 +147,7 @@ function defaultMetadata(): EmmausResponseMetadata {
   return {
     scripture: null,
     nextStep: null,
+    nextSteps: [],
     recommendations: [],
     followUpPrompts: [
       "Help me pray through this.",
@@ -202,18 +205,23 @@ export async function handleConversation(
 
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
-  // ── 3. Sermon retrieval (deterministic — verified records only) ────────────
-  const tSermon = Date.now();
+  // ── 3. Parallel: Bible verse search + Sermon retrieval ───────────────────
+  //
+  // Both run concurrently — Bible search injects relevant BSB passages into
+  // the system context; sermon retrieval finds a verified timestamped match.
+  const tSearch = Date.now();
   const bibleBookId = contextInput.bibleContext?.bookId;
   const bibleChapter = contextInput.bibleContext?.chapter;
-  const sermonResult: SermonRetrievalResult | null = retrieveSermon(
-    req.message,
-    bibleBookId,
-    bibleChapter
-  );
+
+  const [biblePassages, sermonResult] = await Promise.all([
+    Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
+    retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
+  ]);
 
   logger.info(
-    `[emmaus:${reqId}] sermon_retrieval ms=${Date.now() - tSermon} found=${!!sermonResult}${sermonResult ? ` id=${sermonResult.sermonId}` : ""}`
+    `[emmaus:${reqId}] parallel_search ms=${Date.now() - tSearch} ` +
+    `bible=${biblePassages.length} sermon=${!!sermonResult}` +
+    (sermonResult ? ` sermon_id=${sermonResult.sermonId} src=${sermonResult.source}` : "")
   );
 
   // ── 4. Get or create conversation ─────────────────────────────────────────
@@ -297,16 +305,30 @@ export async function handleConversation(
   // Inject verified sermon info into the context block so the model can
   // reference it naturally in prose — but card data comes from retrieval only.
   let contextBlock = builtCtx.systemContextBlock;
+
+  // Inject relevant BSB passages — gives the LLM exact verse text to quote
+  if (biblePassages.length > 0) {
+    contextBlock += "\n\nRelevant Scripture passages (BSB translation) for this question:\n";
+    for (const p of biblePassages.slice(0, 5)) {
+      contextBlock += `  ${p.reference} — "${p.text}"\n`;
+    }
+  }
+
+  // Inject verified sermon context — do NOT include the timestamped URL in the
+  // prose (the Preached Here card handles that); just let the model know the
+  // sermon exists so it can reference the insight naturally.
   if (sermonResult) {
     contextBlock +=
-      `\n\nVerified sermon match for this conversation:\n` +
+      `\n\nVerified ICC sermon matching this conversation:\n` +
       `  Title: "${sermonResult.title}"\n` +
       `  Speaker: ${sermonResult.speaker}\n` +
       `  Scripture: ${sermonResult.scriptureReference}\n` +
       `  Preached: ${sermonResult.sermonDate}\n` +
       `  Summary: ${sermonResult.summary}\n` +
-      `\nYou may reference this sermon naturally in your prose response if it adds genuine value.` +
-      ` Do not fabricate any detail not listed above. The Preached Here card is added automatically — do not include it in metadata.`;
+      `\nYou may weave this sermon's insight naturally into your prose` +
+      ` (e.g. "Pastor ${sermonResult.speaker.split(" ").at(-1)} preached on this — …").` +
+      ` Do not fabricate any detail. The Preached Here card and listen step are added` +
+      ` automatically — do NOT generate a "listen" nextStep or a sermon recommendation in metadata.`;
   }
 
   const systemPrompt = buildSystemPrompt(contextBlock);
@@ -405,11 +427,15 @@ export async function handleConversation(
   //
   // The LLM is instructed not to include sermon recommendations in metadata,
   // but strip any that appear anyway to prevent fabricated data reaching the UI.
-  finalMeta.recommendations = finalMeta.recommendations.filter(
+  finalMeta.recommendations = (finalMeta.recommendations ?? []).filter(
     (r) => r.type !== "sermon"
   );
 
+  // Ensure nextSteps is always an array (LLM may omit it)
+  if (!finalMeta.nextSteps) finalMeta.nextSteps = [];
+
   if (sermonResult) {
+    // ── Preached Here card ──────────────────────────────────────────────────
     finalMeta.recommendations.unshift({
       type: "sermon",
       label: "Preached Here",
@@ -420,6 +446,26 @@ export async function handleConversation(
       sermonId: sermonResult.sermonId,
       timestampSeconds: sermonResult.timestampSeconds,
     });
+
+    // ── Listen step (always verified — never LLM-generated) ────────────────
+    const hasListen = finalMeta.nextSteps.some((s) => s.type === "listen");
+    if (!hasListen) {
+      const titleShort = sermonResult.title.replace(/\s*[|–—]\s*.*/u, "").trim();
+      const timeLabel = sermonResult.timestampLabel
+        ? `, ${sermonResult.timestampLabel}`
+        : "";
+      finalMeta.nextSteps.push({
+        type: "listen",
+        text: `"${titleShort}" — ${sermonResult.speaker}${timeLabel}`,
+        path: sermonResult.timestampedUrl,
+        watchUrl: sermonResult.timestampedUrl,
+        timestampSeconds: sermonResult.timestampSeconds,
+        absoluteStartSeconds: sermonResult.timestampSeconds,
+        speakerName: sermonResult.speaker,
+        audioUrl: sermonResult.audioUrl,
+        relativeStartSeconds: sermonResult.relativeStartSeconds,
+      } satisfies NextStepItem);
+    }
   }
 
   // ── 12. Persist assistant message ─────────────────────────────────────────

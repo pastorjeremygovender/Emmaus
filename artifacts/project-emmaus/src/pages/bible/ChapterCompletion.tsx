@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { motion } from 'framer-motion';
-import { getChapter } from '@/lib/bible-provider';
-import { getBibleBook } from '@/lib/bible-data';
+import { getBibleBook, getNextBook } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
+import { useChapter } from '@/hooks/useChapter';
 import { getChapterStudyPrompts } from '@/data/chapter-study-prompts';
-
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ChapterCompletion() {
   const { bookId, chapter: chapterStr } = useParams<{ bookId: string; chapter: string }>();
@@ -22,42 +20,51 @@ export default function ChapterCompletion() {
 
   const resolvedBookId = bookId || 'luke';
   const book = getBibleBook(resolvedBookId);
-  const chapterData = getChapter(resolvedBookId, chapterNum);
+  const { saveReflection, getReflection, savePrayer, getPrayer, markJourneyChapterComplete, translationId } = useBible();
 
-  const { saveReflection, getReflection, savePrayer, getPrayer, markJourneyChapterComplete } = useBible();
+  // Load chapter data async for heading + reading minutes
+  const { chapter: chapterData } = useChapter(resolvedBookId, chapterNum, translationId);
 
   const [reflectOpen, setReflectOpen] = useState(false);
   const [prayOpen, setPrayOpen] = useState(false);
   const [deeperOpen, setDeeperOpen] = useState(false);
-
   const [reflectionText, setReflectionText] = useState(getReflection(resolvedBookId, chapterNum)?.text ?? '');
   const [prayerText, setPrayerText] = useState(getPrayer(resolvedBookId, chapterNum)?.text ?? '');
   const [reflectionSaved, setReflectionSaved] = useState(false);
   const [prayerSaved, setPrayerSaved] = useState(false);
 
-  const nextChapter = book && chapterNum < book.chapters ? chapterNum + 1 : null;
+  const isLastChapterOfBook = !book ? false : chapterNum >= book.chapters;
+  const nextChapterNum = isLastChapterOfBook ? null : chapterNum + 1;
+  const nextBook = isLastChapterOfBook ? getNextBook(resolvedBookId) : null;
+  const isLastBookAndChapter = isLastChapterOfBook && !nextBook; // Revelation 22
   const studyPrompts = getChapterStudyPrompts(resolvedBookId, chapterNum);
 
-  function handleFinish() {
-    setLocation('/bible');
+  const heading = chapterData?.heading ?? `Chapter ${chapterNum}`;
+  const readingMinutes = chapterData?.readingMinutes ?? 5;
+
+  function handleFinishForToday() {
+    setLocation('/walk');
   }
 
   function handleNextChapter() {
     if (!book) return;
     if (journeyId) {
       markJourneyChapterComplete(journeyId, chapterNum);
-      if (nextChapter) {
-        setLocation(`/bible/read/${book.id}/${nextChapter}?journey=${journeyId}`);
+      if (nextChapterNum) {
+        setLocation(`/bible/read/${book.id}/${nextChapterNum}?journey=${journeyId}`);
       } else {
         setLocation(`/bible/journey/${journeyId}`);
       }
     } else {
-      if (nextChapter) {
-        setLocation(`/bible/read/${book.id}/${nextChapter}`);
-      } else {
-        setLocation(`/bible/books/${book.id}`);
+      if (nextChapterNum) {
+        setLocation(`/bible/read/${book.id}/${nextChapterNum}`);
       }
     }
+  }
+
+  function handleNextBook() {
+    if (!nextBook) return;
+    setLocation(`/bible/read/${nextBook.id}/1`);
   }
 
   function handleSaveReflection() {
@@ -98,11 +105,9 @@ export default function ChapterCompletion() {
           </div>
           <div className="space-y-1">
             <p className="text-[13px] font-semibold text-primary uppercase tracking-widest">
-              {book?.name ?? 'Luke'} {chapterNum} · {chapterData?.readingMinutes ?? 5} min
+              {book?.name ?? 'Luke'} {chapterNum} · {readingMinutes} min
             </p>
-            <h1 className="text-[24px] font-serif font-semibold">
-              {chapterData?.heading ?? `Chapter ${chapterNum}`}
-            </h1>
+            <h1 className="text-[24px] font-serif font-semibold">{heading}</h1>
           </div>
           <p className="text-[15px] text-muted-foreground leading-relaxed max-w-[280px] mx-auto">
             Well done. Take a moment to reflect before you move on.
@@ -150,25 +155,43 @@ export default function ChapterCompletion() {
           transition={{ duration: 0.4, delay: 0.2 }}
           className="flex flex-col gap-2.5"
         >
-          {nextChapter && (
-            <Button
-              className="h-12 rounded-xl text-[16px]"
-              onClick={handleNextChapter}
-            >
-              Continue to {book?.name ?? 'Luke'} {nextChapter}
+          {/* Revelation 22 — completed the whole Bible */}
+          {isLastBookAndChapter && (
+            <div className="p-5 bg-primary/8 border border-primary/20 rounded-xl text-center space-y-2">
+              <div className="text-[28px]">🎉</div>
+              <p className="text-[17px] font-serif font-semibold text-foreground">You've completed the Bible</p>
+              <p className="text-[14px] text-muted-foreground">From Genesis to Revelation — well done.</p>
+            </div>
+          )}
+
+          {/* Next chapter */}
+          {nextChapterNum && (
+            <Button className="h-12 rounded-xl text-[16px]" onClick={handleNextChapter}>
+              Continue to {book?.name ?? 'Luke'} {nextChapterNum}
               <ArrowRight size={17} className="ml-2" />
             </Button>
           )}
-          {!nextChapter && book && (
-            <Button
-              className="h-12 rounded-xl text-[16px]"
-              onClick={handleFinish}
-            >
-              You've finished {book.name}!
-              <Check size={17} className="ml-2" />
+
+          {/* Last chapter of this book → next book */}
+          {isLastChapterOfBook && nextBook && (
+            <Button className="h-12 rounded-xl text-[16px]" onClick={handleNextBook}>
+              Continue to {nextBook.name} 1
+              <ArrowRight size={17} className="ml-2" />
             </Button>
           )}
-          <Button variant="ghost" className="h-11 text-muted-foreground" onClick={handleFinish}>
+
+          {/* Journey completion path */}
+          {journeyId && isLastChapterOfBook && !nextBook && (
+            <Button variant="outline" className="h-11 rounded-xl" onClick={() => setLocation(`/bible/journey/${journeyId}`)}>
+              Back to Journey
+            </Button>
+          )}
+
+          <Button
+            variant="ghost"
+            className="h-11 text-muted-foreground"
+            onClick={handleFinishForToday}
+          >
             Finish for today
           </Button>
         </motion.div>
@@ -199,9 +222,7 @@ export default function ChapterCompletion() {
               <Button onClick={handleSaveReflection} className="flex-1 rounded-xl" disabled={!reflectionText.trim()}>
                 {reflectionSaved ? <><Check size={15} className="mr-1.5" /> Saved</> : 'Save reflection'}
               </Button>
-              <Button variant="ghost" onClick={() => setReflectOpen(false)} className="rounded-xl">
-                Skip
-              </Button>
+              <Button variant="ghost" onClick={() => setReflectOpen(false)} className="rounded-xl">Skip</Button>
             </div>
           </div>
         </SheetContent>
@@ -214,25 +235,19 @@ export default function ChapterCompletion() {
             <SheetHeader>
               <SheetTitle className="text-left">Pray</SheetTitle>
             </SheetHeader>
-            <p className="text-[14px] text-muted-foreground">
-              Use your own words, or write freely:
-            </p>
+            <p className="text-[14px] text-muted-foreground">Use your own words, or write freely:</p>
             <Textarea
               value={prayerText}
               onChange={e => setPrayerText(e.target.value)}
               placeholder="A prayer for this chapter..."
               className="min-h-[160px] resize-none text-[16px] font-serif italic rounded-xl"
             />
-            <p className="text-[12px] text-muted-foreground">
-              Saving keeps it in your personal prayer notes.
-            </p>
+            <p className="text-[12px] text-muted-foreground">Saving keeps it in your personal prayer notes.</p>
             <div className="flex gap-2">
               <Button onClick={handleSavePrayer} className="flex-1 rounded-xl" disabled={!prayerText.trim()}>
                 {prayerSaved ? <><Check size={15} className="mr-1.5" /> Saved</> : 'Save as personal prayer'}
               </Button>
-              <Button variant="ghost" onClick={() => setPrayOpen(false)} className="rounded-xl">
-                Finish
-              </Button>
+              <Button variant="ghost" onClick={() => setPrayOpen(false)} className="rounded-xl">Finish</Button>
             </div>
           </div>
         </SheetContent>
@@ -250,33 +265,19 @@ export default function ChapterCompletion() {
             </p>
             <div className="space-y-3">
               {studyPrompts.map((prompt, i) => (
-                <div
-                  key={prompt.id}
-                  className="p-4 bg-card rounded-2xl border border-border space-y-1"
-                >
-                  <p className="text-[11px] font-semibold text-primary/70 uppercase tracking-widest">
-                    Question {i + 1}
-                  </p>
-                  <p className="text-[16px] text-foreground leading-relaxed font-medium">
-                    {prompt.question}
-                  </p>
+                <div key={prompt.id} className="p-4 bg-card rounded-2xl border border-border space-y-1">
+                  <p className="text-[11px] font-semibold text-primary/70 uppercase tracking-widest">Question {i + 1}</p>
+                  <p className="text-[16px] text-foreground leading-relaxed font-medium">{prompt.question}</p>
                 </div>
               ))}
             </div>
-            <p className="text-[12px] text-muted-foreground text-center">
-              You can reflect on these now, journal them later, or bring them to a conversation with Emmaus.
-            </p>
-            <Button className="w-full rounded-xl h-11" onClick={() => setDeeperOpen(false)}>
-              Done
-            </Button>
+            <Button className="w-full rounded-xl h-11" onClick={() => setDeeperOpen(false)}>Done</Button>
           </div>
         </SheetContent>
       </Sheet>
     </div>
   );
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function OptionCard({
   icon, label, description, done, onClick, className = '', wide = false,
@@ -294,9 +295,7 @@ function OptionCard({
       onClick={onClick}
       className={[
         'flex text-left transition-all active:scale-[0.97] rounded-2xl border',
-        wide
-          ? 'flex-row items-center gap-4 p-4'
-          : 'flex-col items-start gap-2 p-4',
+        wide ? 'flex-row items-center gap-4 p-4' : 'flex-col items-start gap-2 p-4',
         done ? 'bg-primary/8 border-primary/25' : 'bg-card border-border hover:border-primary/20',
         className,
       ].join(' ')}

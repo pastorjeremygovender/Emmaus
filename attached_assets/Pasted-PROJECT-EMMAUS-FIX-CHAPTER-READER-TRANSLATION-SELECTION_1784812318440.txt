@@ -1,0 +1,215 @@
+PROJECT EMMAUS — FIX CHAPTER READER TRANSLATION SELECTION
+
+Implement directly in the existing codebase.
+
+Do not redesign the Bible reader.
+Do not change the Bible Home translation selector.
+Do not add new translations in this task.
+Do not modify Ask Emmaus, chapter navigation, notes, bookmarks, or unrelated features.
+Do not mark complete from TypeScript checks alone.
+
+==================================================
+VERIFIED PROBLEM
+==================================================
+
+Inside the Bible chapter reader:
+
+- the translation dropdown opens correctly
+- available translations are visible
+- the current translation is marked
+- clicking another translation does not change the selected translation or the displayed Bible text
+
+Verified example:
+
+Joshua 4 is open in BSB.
+
+The dropdown shows:
+
+- BSB
+- ASV
+- KJV
+
+Selecting ASV or KJV does not apply the change.
+
+==================================================
+GOAL
+==================================================
+
+Make each translation option in the chapter-reader dropdown selectable and functional.
+
+Selecting ASV or KJV must:
+
+- close the dropdown
+- update the active translation
+- update the visible label
+- reload the same book and chapter in the selected translation
+- preserve the current reading location as closely as possible
+
+==================================================
+DIAGNOSE FIRST
+==================================================
+
+Inspect the actual dropdown component and interaction path.
+
+Check:
+
+- whether menu items are buttons or non-interactive elements
+- whether an overlay, parent element, or pointer-events rule blocks clicks
+- whether the click handler is attached to the wrong element
+- whether event propagation closes the menu before the selection callback runs
+- whether the current item is the only enabled option
+- whether every item has the same stale translation value
+- whether the selection callback receives the wrong translation ID
+- whether the translation state changes but the chapter fetch does not rerun
+- whether the dropdown is rendered inside a form and triggers unintended submit behaviour
+- whether mobile/touch events are handled correctly
+- whether a z-index or transparent layer intercepts taps
+
+Use the actual running mobile preview to identify the exact failure.
+
+Do not guess.
+
+==================================================
+IMPLEMENTATION
+==================================================
+
+1. MAKE EVERY AVAILABLE OPTION INTERACTIVE
+
+Each available translation option must be a real accessible button or menu item.
+
+Requirements:
+
+- full row is clickable/tappable
+- minimum 44px touch height
+- keyboard-selectable
+- accessible role and label
+- current translation may be marked selected, but other options must remain enabled
+- no invisible overlay may intercept taps
+
+2. SELECTION HANDLER
+
+On selecting a translation:
+
+- capture the selected translation ID explicitly
+- call the same canonical translation-selection service/state used by Bible Home
+- update the shared preferred translation
+- close the dropdown only after the selection callback has run
+- trigger a chapter reload for the same book and chapter
+- update the visible translation badge
+
+Do not rely on stale closure state.
+
+3. CHAPTER RELOAD
+
+The chapter query/fetch must depend on:
+
+- translation ID
+- book ID
+- chapter number
+
+The cache key must include all three.
+
+Selecting:
+
+- ASV must load ASV Joshua 4
+- KJV must load KJV Joshua 4
+- BSB must restore BSB Joshua 4
+
+Do not reuse the old BSB response after another option is selected.
+
+4. TOUCH AND MOBILE EVENTS
+
+Test actual tap behaviour in narrow/mobile preview.
+
+Ensure:
+
+- touchstart/pointerdown does not dismiss the menu before click
+- the menu does not close without applying selection
+- the floating Ask Emmaus button does not overlap or intercept the menu
+- the dropdown remains above Bible text and other controls
+- scrolling the page does not prevent tapping menu items
+
+5. STALE REQUEST PROTECTION
+
+If the user selects translations quickly:
+
+- abort or ignore stale requests
+- the final selected translation must win
+- an earlier slower request must not overwrite the latest selection
+
+6. FAILURE HANDLING
+
+If the selected translation fails to load:
+
+- keep the previous working translation and text
+- restore the previous visible label
+- show:
+  “This translation could not be loaded just now.”
+- do not leave the reader blank
+- do not silently display the wrong translation under the new label
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+Use the actual running mobile-sized preview.
+
+1. Open Joshua 4 in BSB.
+2. Open the translation dropdown.
+3. Tap ASV.
+4. Confirm:
+   - the dropdown closes
+   - the badge changes to ASV
+   - Joshua 4 remains open
+   - the verse text changes to ASV
+
+5. Open the dropdown again.
+6. Tap KJV.
+7. Confirm:
+   - the badge changes to KJV
+   - Joshua 4 remains open
+   - the verse text changes to KJV
+
+8. Switch back to BSB.
+9. Confirm BSB text returns.
+
+10. Refresh the page.
+11. Confirm the most recently selected translation persists.
+
+12. Rapidly tap ASV and then KJV.
+13. Confirm KJV remains the final selected translation and stale ASV data does not overwrite it.
+
+14. Test keyboard selection on desktop preview.
+
+15. Test a simulated provider failure.
+16. Confirm the previous working translation remains visible with a calm error.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- ASV can be selected from the chapter-reader dropdown
+- KJV can be selected from the chapter-reader dropdown
+- BSB can be selected again
+- the visible badge changes
+- the actual verse text changes
+- the same book and chapter remain open
+- the preference persists
+- rapid switching is safe
+- mobile taps work reliably
+- failure preserves the previous working translation
+- all tests are performed in the running application
+
+When finished, report only:
+
+- exact root cause
+- files changed
+- interaction fix implemented
+- shared translation state used
+- chapter-fetch/cache correction made
+- running-app test results
+- any remaining unsuccessful item and exact reason
+
+Do not propose additional features.

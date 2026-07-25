@@ -53,6 +53,21 @@ export interface NextStep {
   path: string;
 }
 
+/** One item in the practical next-steps footer (📖 🙏 🎧 🚶).
+ *  "listen" steps are always injected from verified server-side data. */
+export interface NextStepItem {
+  type: 'read' | 'pray' | 'listen' | 'continue';
+  text: string;
+  path?: string;                    // for listen: YouTube timestamped URL (Watch)
+  timestampSeconds?: number;        // absolute YouTube timestamp (for Watch)
+  speakerName?: string;
+  // Audio player fields (populated when a trimmed audio asset is ready)
+  audioUrl?: string;                // local audio file URL for in-app player
+  relativeStartSeconds?: number;    // position within the trimmed audio (Listen)
+  absoluteStartSeconds?: number;    // same as timestampSeconds (YouTube anchor)
+  watchUrl?: string;                // explicit Watch URL (YouTube at absolute time)
+}
+
 export interface Recommendation {
   type: 'journey' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor';
   title: string;
@@ -69,6 +84,8 @@ export interface Recommendation {
 export interface EmmausMetadata {
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
+  /** Practical next-steps footer (📖 🙏 🎧 🚶). */
+  nextSteps: NextStepItem[];
   recommendations: Recommendation[];
   followUpPrompts: string[];
   handoffType: 'pastoral' | 'crisis' | null;

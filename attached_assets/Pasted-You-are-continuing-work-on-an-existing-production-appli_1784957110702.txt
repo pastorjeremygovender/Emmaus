@@ -1,0 +1,1687 @@
+You are continuing work on an existing production application called Project Emmaus.
+
+Do not create a new project.
+
+Do not replace the existing application.
+
+Do not remove or rewrite working features unnecessarily.
+
+Inspect the existing codebase first, understand the current architecture, and then implement this sprint carefully within the existing system.
+
+# PROJECT EMMAUS
+
+Emmaus is a Scripture-based digital discipleship platform built around the ministry of Isipingo Community Church.
+
+Emmaus exists because we believe technology can serve a faithful purpose when it is designed and used wisely to help people walk with Jesus Christ.
+
+Emmaus is not a general AI chatbot.
+
+Its purpose is to help people:
+
+* Know Jesus
+* Read Scripture
+* Pray
+* Grow as disciples
+* Participate in church
+* Serve others
+
+The order of priority is:
+
+1. Jesus
+2. Scripture
+3. Discipleship
+4. Church
+5. Technology
+
+Technology exists to serve discipleship, not the other way around.
+
+# NON-NEGOTIABLE AI CONSTITUTION
+
+These are product rules, not suggestions.
+
+Emmaus must always:
+
+* Treat Scripture as the primary authority.
+* Search Scripture first.
+* Search Pastor Jeremy Govender’s sermons second.
+* Use AI only to weave those sources together naturally.
+* Remain discipleship-focused.
+* Never replace Scripture.
+* Never replace the Holy Spirit.
+* Never replace the local church.
+* Never pretend certainty where Scripture is silent.
+* Never become a branded version of ChatGPT.
+* Never answer simply because it can.
+* Always guide people toward following Jesus.
+
+The standard Ask Emmaus response flow is:
+
+Scripture
+
+↓
+
+ICC sermon archive
+
+↓
+
+Emmaus synthesis
+
+↓
+
+Practical next step
+
+Possible practical next steps include:
+
+* Read a Bible passage
+* Continue today’s Journey
+* Pray
+* Attend church
+* Join a Room
+* Listen to a sermon
+* Serve someone
+
+Do not modify this existing theological logic during this sprint.
+
+# CURRENT SYSTEM
+
+The existing application already includes:
+
+## Ask Emmaus
+
+* Bible retrieval
+* Bible annotations
+* Sermon search
+* Timestamp references
+* Journey recommendations
+* Room recommendations
+* Thinking animation
+* Emmaus branding
+* Intro screen named “Emmaus”
+* A floating Ask Emmaus button intended to appear throughout the user experience
+
+## YouTube and sermons
+
+* YouTube OAuth is complete
+* The full ICC YouTube channel is connected
+* Hundreds of sermon segments have been indexed
+* Sermon search and timestamp links work
+
+Known issue:
+
+Sermon timestamps may need an offset of approximately 30 minutes to account for worship before the sermon begins.
+
+Do not solve this issue unless it is directly necessary for the Content Studio sprint.
+
+## Admin Portal
+
+The existing Admin Portal includes:
+
+* Dashboard
+* Journeys
+* Prayer Requests
+* Rooms
+* Media Studio
+* Sermons
+* YouTube Archive
+* Journey editor
+* Step editor
+* AI generation
+* Draft, Review and Publish states
+* Progress tracking
+* Autosave
+* Journey duplication
+* Early CSV import and export work
+
+Preserve all working functionality.
+
+# SPRINT NAME
+
+Emmaus Content Studio
+
+# PRIMARY GOAL
+
+Transform the current Journey and Step editing experience into a polished, modern Content Studio that feels as easy and natural as writing in Notion.
+
+The editor must remain simpler than Notion.
+
+This is not a general document editor.
+
+It is a discipleship content builder.
+
+A church leader with limited technical ability should be able to create a Journey without training.
+
+The experience must feel:
+
+* Calm
+* Clean
+* Modern
+* Warm
+* Simple
+* Fast
+* Intentional
+* Uncluttered
+
+Avoid:
+
+* Corporate language
+* AI buzzwords
+* Excessive menus
+* Dense control panels
+* Technical database terminology
+* Confusing modal windows
+* Unnecessary clicks
+
+# ARCHITECTURAL MODEL
+
+Implement the following content structure:
+
+Content Studio
+
+* Collections
+
+  * Journeys
+
+    * Steps
+
+      * Blocks
+* Templates
+* Saved Blocks
+* Media
+* Drafts
+* Published
+* Archive
+* Version History
+
+The core hierarchy must be:
+
+Collection → Journey → Step → Block
+
+However:
+
+* A Journey must still be allowed to exist without belonging to a Collection.
+* Existing Journeys must continue to work.
+* Existing Journey and Step records must not be broken.
+* Migrate or adapt existing content safely.
+* Prefer backward-compatible schema changes.
+* Do not destructively rewrite existing data.
+
+# COLLECTIONS
+
+Add Collections as an optional organisational layer.
+
+A Collection groups related Journeys into a clear pathway or series.
+
+Examples:
+
+* Made Free
+* 15 Minutes with Jesus
+* Romans
+* New Believer Pathway
+* Marriage Journey
+* Volunteer Training
+* Easter
+* Christmas
+* Prayer School
+
+Each Collection should support:
+
+* Title
+* Short description
+* Cover image
+* Status
+* Tags
+* Journey count
+* Display order
+* Created date
+* Updated date
+* Created by
+* Optional publish date
+
+Users must be able to:
+
+* Create a Collection
+* Edit a Collection
+* Duplicate a Collection
+* Archive a Collection
+* Delete a Collection with confirmation
+* Add existing Journeys to a Collection
+* Create a new Journey inside a Collection
+* Reorder Journeys inside a Collection
+* Remove a Journey from a Collection without deleting the Journey
+* Preview a Collection
+* Publish or unpublish a Collection
+
+The Collection editor should feel simple and visual.
+
+Do not make it feel like folder management software.
+
+# CONTENT STUDIO NAVIGATION
+
+Replace the old fragmented editing experience with a unified Content Studio section.
+
+The left-side Content Studio navigation should contain:
+
+* Overview
+* Collections
+* Journeys
+* Templates
+* Saved Blocks
+* Media
+* Drafts
+* Published
+* Archive
+
+Version History should appear within the relevant Journey or Step editor rather than as a primary navigation item.
+
+Keep existing admin navigation outside Content Studio intact.
+
+# CONTENT STUDIO OVERVIEW
+
+Create a welcoming overview screen.
+
+It should show:
+
+* Continue editing
+* Recently edited
+* Drafts needing attention
+* Recently published
+* Quick creation options
+* Content totals
+* Search
+
+Quick creation buttons:
+
+* New Journey
+* New Collection
+* Use Template
+* Import CSV
+
+Do not create a complicated analytics dashboard.
+
+The purpose of this screen is to help a content creator continue working quickly.
+
+# JOURNEY LIST
+
+Redesign the Journey list to be clean, searchable and easy to scan.
+
+Each Journey row or card should show:
+
+* Journey title
+* Collection, if assigned
+* Status
+* Number of steps
+* Tags
+* Last updated
+* Author
+* Publish state
+* More actions menu
+
+Provide:
+
+* Search
+* Filters
+* Sort
+* Bulk selection
+* Grid and list view if both can be implemented cleanly
+
+Filters should include:
+
+* Status
+* Collection
+* Tag
+* Author
+* Draft
+* Review
+* Published
+* Archived
+
+Sort options:
+
+* Recently updated
+* Recently created
+* Alphabetical
+* Publish date
+* Number of steps
+
+Bulk actions:
+
+* Publish
+* Move to Review
+* Return to Draft
+* Archive
+* Restore
+* Add tags
+* Remove tags
+* Add to Collection
+* Remove from Collection
+* Duplicate
+* Delete with confirmation
+
+Do not make destructive bulk actions too easy to trigger accidentally.
+
+# JOURNEY CREATION FLOW
+
+When selecting New Journey, open a simple creation choice:
+
+* Start from scratch
+* Use a template
+* Duplicate an existing Journey
+* Import from CSV
+
+The user should not need to fill in a long form before beginning.
+
+For a new blank Journey, ask only for:
+
+* Journey title
+* Optional Collection
+
+Then open the Journey editor immediately.
+
+# JOURNEY EDITOR
+
+The Journey editor should use a clean three-area layout on desktop:
+
+## Left panel
+
+Journey structure:
+
+* Journey details
+* Step list
+* Add Step button
+* Drag handles for reordering
+* Step status
+* Step action menu
+
+The left panel should be collapsible.
+
+## Centre panel
+
+The primary content editor.
+
+This should contain the selected Step’s block canvas.
+
+## Right panel
+
+Preview or settings.
+
+Allow the right panel to switch between:
+
+* Preview
+* Step settings
+* Journey settings
+* Version history
+
+The right panel should be collapsible.
+
+On smaller screens, panels should become drawers or tabs.
+
+Do not squeeze three columns onto a narrow screen.
+
+# JOURNEY DETAILS
+
+Journey-level settings should include:
+
+* Title
+* Short description
+* Cover image
+* Collection
+* Tags
+* Author
+* Estimated duration
+* Audience
+* Difficulty or stage
+* Status
+* Visibility
+* Publish date
+* Featured state
+* Allow individual participation
+* Allow Room participation
+* Completion message
+* Optional next Journey recommendation
+
+Use natural user-facing wording.
+
+Do not expose raw database fields or IDs.
+
+# STEP LIST
+
+Each Journey contains Steps.
+
+Each Step item in the list should show:
+
+* Step number
+* Step title
+* Status
+* Optional duration
+* Warning if incomplete
+* Drag handle
+* More actions menu
+
+Step actions:
+
+* Rename
+* Duplicate
+* Move
+* Save as template
+* Archive
+* Delete
+
+Allow drag-and-drop Step reordering.
+
+Also provide keyboard-accessible move up and move down actions.
+
+Add a clear “Add Step” button.
+
+When adding a Step, create it immediately with a temporary title such as “Untitled Step” and place focus in the title field.
+
+# STEP EDITOR
+
+Each Step must become a block-based canvas.
+
+At the top of the Step editor show:
+
+* Step title
+* Optional short introduction
+* Status
+* Saved state
+* Preview button
+* More actions
+
+Below that, show the block canvas.
+
+The editing experience should feel like writing a document rather than completing a form.
+
+Do not place every possible field on screen at once.
+
+# BLOCK SYSTEM
+
+A Step consists of ordered content blocks.
+
+Each block must have:
+
+* Unique ID
+* Block type
+* Content data
+* Display order
+* Created date
+* Updated date
+* Created by
+* Optional reusable block source
+* Optional visibility conditions
+* Optional internal label
+
+Supported block types for this sprint:
+
+1. Heading
+2. Paragraph
+3. Scripture
+4. Reflection
+5. Prayer
+6. Question
+7. Multiple Choice
+8. Journal
+9. Action Step
+10. Checklist
+11. Quote
+12. Callout
+13. Image
+14. Video
+15. Audio
+16. Sermon Clip
+17. Bible Passage
+18. Divider
+19. Button
+20. Completion
+21. Spacer
+22. Embed
+23. File
+24. AI Draft placeholder or command
+
+Build the block architecture so more block types can be added later without redesigning the editor.
+
+# BLOCK EDITING BEHAVIOUR
+
+Each block should appear as a clean content section.
+
+When not selected, controls should remain minimal.
+
+When selected or hovered, show:
+
+* Drag handle
+* Block type icon
+* Duplicate
+* Save as reusable block
+* More actions
+
+More actions:
+
+* Move up
+* Move down
+* Duplicate
+* Convert block type where appropriate
+* Save as reusable block
+* Hide
+* Delete
+
+Blocks must support drag-and-drop reordering.
+
+Also support keyboard-accessible ordering.
+
+Allow insertion between blocks with a subtle plus button.
+
+Deleting a block should support undo.
+
+Avoid unnecessary confirmation modals for deleting a single block if undo is available.
+
+# SLASH COMMANDS
+
+Typing “/” on an empty line must open a slash-command menu.
+
+The slash menu should be searchable.
+
+Commands should include:
+
+* Text
+* Heading
+* Scripture
+* Bible Passage
+* Reflection
+* Prayer
+* Question
+* Multiple Choice
+* Journal
+* Action Step
+* Checklist
+* Quote
+* Callout
+* Image
+* Video
+* Audio
+* Sermon Clip
+* Divider
+* Button
+* Completion
+* File
+* Embed
+* AI Draft
+* Saved Block
+
+The slash menu must support:
+
+* Keyboard navigation
+* Arrow keys
+* Enter to select
+* Escape to close
+* Search by typing
+* Mouse selection
+
+Selecting a block type inserts the block at the current position.
+
+# INLINE BLOCK ADDER
+
+In addition to slash commands, provide an “Add block” button.
+
+This is important for users who do not know slash commands.
+
+The button should open the same searchable block menu.
+
+Do not make slash commands the only way to add content.
+
+# TEXT EDITING
+
+Use a reliable rich-text editing solution already compatible with the project’s current framework.
+
+Do not build a fragile rich-text editor from scratch.
+
+Text blocks should support:
+
+* Bold
+* Italic
+* Underline only if already supported cleanly
+* Links
+* Bulleted list
+* Numbered list
+* Block quote
+* Inline Scripture reference
+* Clear formatting
+
+Keep the toolbar small.
+
+Show it contextually rather than permanently occupying space.
+
+Do not add excessive font or colour controls.
+
+The Content Studio should use the Emmaus design system.
+
+# SCRIPTURE BLOCK
+
+The Scripture block should support:
+
+* Scripture reference
+* Bible translation
+* Retrieved Scripture text
+* Optional display of reference
+* Optional display of translation
+* Optional annotation
+* Optional application note
+
+Allow the user to type a reference such as:
+
+John 3:16–17
+
+Then retrieve the passage using the existing Bible retrieval system.
+
+Provide:
+
+* Search Scripture
+* Insert passage
+* Refresh passage
+* Change translation
+* Edit display options
+
+Do not allow AI to silently invent Scripture text.
+
+All Scripture text must come from the existing Bible retrieval source.
+
+# BIBLE PASSAGE BLOCK
+
+The Bible Passage block may contain a larger reading.
+
+It should support:
+
+* Passage title
+* Reference
+* Translation
+* Retrieved text
+* Reading instruction
+* Optional “Open Bible” action
+
+Keep Scripture retrieval connected to the existing system.
+
+# REFLECTION BLOCK
+
+The Reflection block should contain:
+
+* Optional title
+* Reflection text
+* Optional highlighted sentence
+* Optional estimated reading time
+
+The visual design should distinguish Reflection from ordinary text without becoming decorative or distracting.
+
+# PRAYER BLOCK
+
+The Prayer block should contain:
+
+* Optional title
+* Prayer text
+* Optional guided prayer points
+* Optional pause for personal prayer
+
+The user-facing preview should feel pastoral and calm.
+
+# QUESTION BLOCK
+
+The Question block should support:
+
+* Question text
+* Optional helper text
+* Response type
+* Required or optional
+* Save response setting
+
+Response types:
+
+* Short text
+* Long text
+* Private reflection
+* Room discussion prompt
+* No saved response
+
+# MULTIPLE CHOICE BLOCK
+
+Support:
+
+* Question
+* Options
+* Single-select or multi-select
+* Correct answer, optional
+* Explanation, optional
+* Required or optional
+
+This should be suitable for reflection, learning or assessment.
+
+Do not make every multiple-choice question feel like a school exam.
+
+# JOURNAL BLOCK
+
+Support:
+
+* Journal prompt
+* Optional helper text
+* Private by default
+* Optional sharing permission
+* Optional minimum response length
+
+Clearly communicate to members when a journal entry is private.
+
+# ACTION STEP BLOCK
+
+Support:
+
+* Action title
+* Clear instruction
+* Optional due date or recommended timing
+* Completion checkbox
+* Optional evidence or reflection field
+* Optional link to service, Room, event or Journey
+
+The Action Step block is important because Emmaus must guide people into real discipleship rather than endless reading.
+
+# CHECKLIST BLOCK
+
+Support:
+
+* Checklist title
+* Multiple checklist items
+* Reordering items
+* Required or optional items
+* Completion tracking
+
+# SERMON CLIP BLOCK
+
+Use the existing sermon archive and search system.
+
+Support:
+
+* Search sermon archive
+* Select sermon
+* Select sermon segment
+* Timestamp
+* Speaker
+* Sermon title
+* Date
+* Optional introduction
+* Listen or Watch action
+
+Do not duplicate the sermon search pipeline.
+
+Reuse existing functionality.
+
+Allow the creator to manually adjust the timestamp because current timestamps may need correction.
+
+# MEDIA BLOCKS
+
+Image, video, audio, file and embed blocks should use the existing Media Studio where possible.
+
+Support:
+
+* Upload
+* Select existing media
+* Drag and drop
+* Caption
+* Alt text
+* Display size
+* Alignment where appropriate
+* Replace
+* Remove
+
+Do not create a second disconnected media library.
+
+All uploaded media should be stored through the existing media architecture.
+
+# COMPLETION BLOCK
+
+The Completion block should support:
+
+* Completion message
+* Optional prayer
+* Optional celebration text
+* Mark Step complete action
+* Continue to next Step
+* Recommended next Journey
+* Optional Room action
+* Optional sermon action
+* Optional church action
+
+The language should remain warm and pastoral.
+
+Avoid exaggerated gamification.
+
+# DRAG AND DROP
+
+Implement reliable drag-and-drop for:
+
+* Reordering blocks
+* Reordering Steps
+* Reordering Journeys inside Collections
+* Adding supported media files to the editor
+
+Drag-and-drop must not be the only available method.
+
+Provide accessible alternatives.
+
+Show clear insertion positions during dragging.
+
+Persist order immediately through autosave.
+
+# AUTOSAVE
+
+Autosave must work quietly and reliably.
+
+Show a small status indicator:
+
+* Saving…
+* Saved
+* Couldn’t save
+* Offline changes
+
+Autosave should:
+
+* Debounce rapid edits
+* Avoid unnecessary server calls
+* Save block edits
+* Save order changes
+* Save titles
+* Save settings
+* Recover unsaved local changes where possible
+
+Do not show disruptive save popups.
+
+Retain a manual Save option in the more-actions menu as a fallback.
+
+# VERSION HISTORY
+
+Implement version history for Journeys and Steps.
+
+Create versions:
+
+* At meaningful autosave intervals
+* Before publishing
+* After restoring
+* Before major destructive changes
+* When manually selected by the user
+
+Do not create a full database snapshot for every keystroke.
+
+Each version should show:
+
+* Date and time
+* User
+* Summary of change
+* Status at that time
+* Restore action
+* Preview action
+
+Allow restoration of:
+
+* Entire Journey
+* Individual Step where practical
+
+Restoring must create a new current version rather than deleting history.
+
+# TEMPLATES
+
+Create a Template library.
+
+Initial template types:
+
+* 15 Minutes with Jesus
+* New Believer
+* Daily Devotional
+* Bible Study
+* Made Free
+* Marriage
+* Parenting
+* Youth
+* Volunteer Training
+* Prayer Journey
+* Easter
+* Christmas
+* Baptism
+* Membership
+* Custom
+
+Each Template may define:
+
+* Default Journey settings
+* Default Step structure
+* Default block structure
+* Suggested tags
+* Suggested audience
+* Suggested completion flow
+
+Allow users to:
+
+* Preview Template
+* Use Template
+* Duplicate Template
+* Create Template from Journey
+* Edit custom Template
+* Archive custom Template
+
+System Templates should not be permanently deleted.
+
+# SAVED BLOCKS
+
+Allow any block or selected group of blocks to be saved for reuse.
+
+Saved Blocks should support:
+
+* Name
+* Description
+* Category
+* Tags
+* Preview
+* Last updated
+* Created by
+
+Users can:
+
+* Insert Saved Block
+* Edit Saved Block
+* Duplicate Saved Block
+* Archive Saved Block
+* Delete custom Saved Block
+* Update all linked instances only when explicitly chosen
+* Insert as an independent copy by default
+
+Examples:
+
+* Salvation Prayer
+* Communion Reflection
+* Offering Prayer
+* Benediction
+* 15 Minutes Introduction
+* Memory Verse Layout
+* Small Group Questions
+* Made Free Closing Prayer
+
+Do not unexpectedly update existing Journeys when a Saved Block changes.
+
+# AI DRAFTING
+
+Use existing AI generation capability.
+
+Do not create an unrestricted chatbot inside the editor.
+
+AI must operate as a focused writing assistant for discipleship content.
+
+AI drafting actions may include:
+
+* Draft reflection
+* Draft prayer
+* Draft discussion questions
+* Draft action step
+* Draft introduction
+* Simplify wording
+* Shorten
+* Expand
+* Make warmer
+* Make suitable for new believers
+* Suggest Scripture
+* Suggest sermon references
+* Create Step outline
+* Create Journey outline
+
+The AI drafting interface should ask for only the information necessary.
+
+AI-generated content must always appear as a draft.
+
+Never publish AI-generated content automatically.
+
+The user must review and approve it.
+
+Scripture must be verified through the existing Bible retrieval system before insertion.
+
+Sermon references must come from the existing sermon archive.
+
+Show a simple source summary when AI used Scripture or sermon material.
+
+Do not use corporate wording such as:
+
+* AI-powered
+* Intelligent generation
+* Leverage AI
+* Optimise content
+* Generate at scale
+
+Use wording such as:
+
+* Help me draft
+* Suggest a reflection
+* Find a Scripture
+* Find a sermon
+* Improve this wording
+
+# PREVIEW
+
+Provide a live preview of the current Step and full Journey.
+
+Preview options:
+
+* Phone
+* Tablet
+* Desktop
+
+Phone preview should be the default.
+
+The preview must use the same rendering components as the member-facing experience wherever possible.
+
+Do not create a fake preview that differs from the real Journey display.
+
+Provide:
+
+* Current Step preview
+* Full Journey preview
+* Preview from beginning
+* Preview next and previous Steps
+
+The preview should update without requiring a full page refresh.
+
+# MOBILE ADMIN EXPERIENCE
+
+The Content Studio must remain usable on tablets and reasonably usable on mobile.
+
+On mobile:
+
+* Use tabs or drawers
+* Keep editing focused
+* Avoid tiny side-by-side panels
+* Provide large touch targets
+* Preserve access to preview
+* Preserve access to block insertion
+* Preserve autosave feedback
+
+Desktop remains the primary authoring experience.
+
+# SEARCH
+
+Implement global Content Studio search.
+
+Search across:
+
+* Journey title
+* Collection title
+* Step title
+* Block content
+* Scripture references
+* Tags
+* Author
+* Status
+* Saved Blocks
+* Templates
+
+Search results should be grouped clearly.
+
+Selecting a result should open the relevant Journey, Step or item.
+
+If possible, highlight the matching content.
+
+# TAGGING
+
+Add reusable tags.
+
+Tags may be applied to:
+
+* Collections
+* Journeys
+* Templates
+* Saved Blocks
+* Media
+
+Example tags:
+
+* Faith
+* Prayer
+* Anxiety
+* Hope
+* Marriage
+* Youth
+* Giving
+* Christmas
+* Easter
+* Acts
+* Romans
+* Serving
+* Addiction
+* New Believer
+* Leadership
+
+Support:
+
+* Create tag
+* Rename tag
+* Merge tag
+* Delete tag
+* Filter by tag
+* Bulk apply tag
+* Tag autocomplete
+
+Prevent duplicate tags caused only by capitalisation.
+
+# CSV IMPORT AND EXPORT
+
+Complete the existing CSV import and export workflow.
+
+Support CSV import for:
+
+* Journeys
+* Steps
+* Basic block content
+* Tags
+* Collection assignment
+
+Provide downloadable sample CSV files.
+
+Before import, show:
+
+* File validation
+* Column mapping
+* Preview
+* Errors
+* Warnings
+* Number of items to create
+* Number of items to update
+
+Do not import invalid rows silently.
+
+Allow the user to download an error report.
+
+CSV export options:
+
+* Selected Journeys
+* Entire Collection
+* Filtered results
+* Journey with Steps
+* Journey with block content
+
+Use stable IDs where necessary for re-import, but do not expose unnecessary technical complexity to normal users.
+
+# DUPLICATION
+
+Support:
+
+* Duplicate Collection
+* Duplicate Journey
+* Duplicate Step
+* Duplicate Block
+* Duplicate Template
+* Duplicate Saved Block
+
+When duplicating:
+
+* Add “Copy” to the title only when needed
+* Create new IDs
+* Preserve structure
+* Preserve tags
+* Preserve media references safely
+* Reset publish state to Draft
+* Do not duplicate member progress
+* Do not duplicate analytics
+* Do not duplicate member responses
+
+# PUBLISHING WORKFLOW
+
+Preserve and improve the existing workflow:
+
+Draft → Review → Published → Archived
+
+Support:
+
+* Submit for Review
+* Return to Draft
+* Publish
+* Schedule publish
+* Unpublish
+* Archive
+* Restore
+
+Before publishing, run a content readiness check.
+
+Check for:
+
+* Missing Journey title
+* Missing Step title
+* Empty Steps
+* Broken media
+* Missing Scripture reference
+* Scripture retrieval errors
+* Missing required block content
+* Missing completion action
+* Invalid sermon reference
+
+Show warnings without becoming overly restrictive.
+
+Publishing should require explicit confirmation.
+
+# CONTENT READINESS INDICATOR
+
+Show a simple readiness status:
+
+* Needs attention
+* Ready for review
+* Ready to publish
+* Published
+
+Do not use a numerical spirituality score or content score.
+
+The readiness status should reflect technical completeness only.
+
+# MEDIA STUDIO INTEGRATION
+
+Preserve the existing Media Studio.
+
+Enhance integration so media can be selected directly from a block.
+
+Media Studio should support:
+
+* Search
+* Filter by type
+* Tags
+* Upload date
+* Used in
+* File size
+* Replace
+* Archive
+* Delete protection if currently in use
+
+Do not duplicate uploaded files unnecessarily.
+
+# PERMISSIONS
+
+Respect the application’s existing authentication and roles.
+
+Add or preserve role-based abilities such as:
+
+* View content
+* Create content
+* Edit own content
+* Edit all content
+* Review content
+* Publish content
+* Manage Templates
+* Manage Saved Blocks
+* Manage Media
+* Manage tags
+* Restore versions
+* Delete content
+
+Do not expose publishing or deletion controls to unauthorised users.
+
+# DATA SAFETY
+
+This is an existing application with real content.
+
+Before changing schema:
+
+* Inspect current database models
+* Identify existing relationships
+* Create safe migrations
+* Preserve current IDs
+* Preserve member progress
+* Preserve published Journey links
+* Preserve existing URLs where possible
+* Preserve existing Step order
+* Preserve analytics
+* Preserve Journey recommendations
+* Preserve Room connections
+
+Do not delete old fields until the new system is proven to work.
+
+Use adapters or compatibility layers where necessary.
+
+# PERFORMANCE
+
+The Content Studio must remain responsive with:
+
+* Hundreds of Journeys
+* Thousands of Steps
+* Many blocks
+* Large sermon archive
+* Large media library
+
+Use:
+
+* Pagination or virtualisation where appropriate
+* Debounced search
+* Lazy loading
+* Efficient autosave
+* Optimistic UI updates
+* Proper database indexes
+* Cached previews where appropriate
+
+Do not load the entire content library into the browser at once.
+
+# ACCESSIBILITY
+
+Support:
+
+* Keyboard navigation
+* Visible focus states
+* Screen-reader labels
+* Sufficient contrast
+* Accessible drag-and-drop alternatives
+* Buttons with clear labels
+* Proper form labels
+* Error messages that explain how to fix the issue
+
+Do not rely on colour alone to communicate status.
+
+# VISUAL DESIGN
+
+Use the existing Emmaus design language.
+
+The editor should feel:
+
+* Spacious
+* Gentle
+* Clean
+* Modern
+* Pastoral
+* Professional
+
+Avoid:
+
+* Times New Roman
+* Heavy borders
+* Excessive shadows
+* Bright gradients
+* Dense dashboards
+* Tiny text
+* Overly rounded cartoon interfaces
+* Generic admin templates
+* Corporate SaaS appearance
+
+Use:
+
+* Clear hierarchy
+* Calm neutral backgrounds
+* Warm accent colours already present in Emmaus
+* Modern readable typography
+* Consistent spacing
+* Soft dividers
+* Subtle shadows only where needed
+* Clear primary actions
+
+# COPY STYLE
+
+All interface wording must be:
+
+* Warm
+* Clear
+* Pastoral
+* Simple
+* Modern
+* Natural
+
+Examples:
+
+Use:
+
+* New Journey
+* Add Step
+* Add block
+* Help me draft
+* Ready for review
+* Continue editing
+* Saved
+* Preview
+* Publish Journey
+
+Avoid:
+
+* Instantiate content
+* Execute workflow
+* AI generation engine
+* Optimise asset
+* Content orchestration
+* Leverage automation
+* Deploy learning object
+
+# EMPTY STATES
+
+Create helpful empty states.
+
+Examples:
+
+## No Journeys
+
+“You haven’t created a Journey yet.”
+
+Button:
+
+“Create your first Journey”
+
+## No Collections
+
+“Collections help you organise related Journeys into a clear pathway.”
+
+Button:
+
+“Create a Collection”
+
+## No Saved Blocks
+
+“Save content you use often, then add it to any Journey.”
+
+## No search results
+
+“We couldn’t find anything matching your search.”
+
+Provide a clear option to remove filters.
+
+# ERROR HANDLING
+
+Handle errors gracefully.
+
+Never show raw technical errors to users.
+
+Use messages such as:
+
+“We couldn’t save your changes. Your work is still available on this device.”
+
+“We couldn’t load this Scripture passage. Check the reference and try again.”
+
+“This media file could not be uploaded.”
+
+“This Journey could not be published because a few items still need attention.”
+
+Log technical errors appropriately for developers.
+
+# UNDO AND RECOVERY
+
+Support undo for:
+
+* Delete block
+* Delete Step where practical
+* Reorder block
+* Reorder Step
+* Remove from Collection
+* Archive
+
+Autosaved local recovery should restore work after an accidental refresh or short connection failure.
+
+# TESTING REQUIREMENTS
+
+Before considering the sprint complete, test all of the following:
+
+## Existing functionality
+
+* Existing Journeys still open
+* Existing Steps still open
+* Existing published Journeys remain available
+* Member progress remains intact
+* Ask Emmaus still works
+* Bible retrieval still works
+* Sermon search still works
+* Journey recommendations still work
+* Room recommendations still work
+* Admin navigation still works
+* Existing authentication still works
+
+## Content Studio
+
+* Create Collection
+* Edit Collection
+* Reorder Journeys in Collection
+* Create Journey from scratch
+* Create Journey from Template
+* Duplicate Journey
+* Import Journey from CSV
+* Create Step
+* Duplicate Step
+* Delete Step
+* Undo Step deletion where implemented
+* Reorder Steps
+* Add every supported block type
+* Reorder blocks
+* Duplicate block
+* Delete block
+* Undo block deletion
+* Use slash commands
+* Use Add block menu
+* Save reusable block
+* Insert reusable block
+* Use AI drafting
+* Retrieve Scripture
+* Insert sermon clip
+* Upload media
+* Select existing media
+* Preview phone
+* Preview tablet
+* Preview desktop
+* Autosave edits
+* Recover after refresh
+* Create version
+* Restore version
+* Submit for Review
+* Publish
+* Unpublish
+* Archive
+* Restore archived content
+* Search
+* Filter
+* Tag
+* Bulk edit
+* Export CSV
+
+## Responsive testing
+
+Test at:
+
+* Large desktop
+* Standard laptop
+* Tablet
+* Mobile
+
+## Accessibility testing
+
+Test:
+
+* Keyboard-only use
+* Focus states
+* Block insertion
+* Reordering alternatives
+* Form labels
+* Error announcements
+* Colour contrast
+
+# IMPLEMENTATION PROCESS
+
+Follow this sequence:
+
+1. Inspect the existing codebase.
+2. Document the current content models and editor architecture internally.
+3. Identify what can be reused.
+4. Create a backward-compatible data model.
+5. Implement safe database migrations.
+6. Build shared block rendering components.
+7. Build the block editor.
+8. Build slash commands.
+9. Build Journey and Step structure navigation.
+10. Build Collections.
+11. Build Templates.
+12. Build Saved Blocks.
+13. Complete CSV import and export.
+14. Build search, tags and bulk actions.
+15. Build preview modes.
+16. Build version history.
+17. Integrate AI drafting.
+18. Integrate Scripture retrieval.
+19. Integrate sermon clips.
+20. Integrate Media Studio.
+21. Test all existing functionality.
+22. Test the complete Content Studio.
+23. Fix all visible errors, broken states and layout issues.
+24. Present the completed sprint for review.
+
+# IMPORTANT DEVELOPMENT RULES
+
+* Do not start the Voice Integration sprint.
+* Do not start Church Attendance.
+* Do not redesign Ask Emmaus.
+* Do not redesign the member-facing Journey experience unless required for shared preview rendering.
+* Do not remove working features.
+* Do not replace the existing database without a compelling technical reason.
+* Do not create duplicate systems for media, sermons, Bible retrieval or AI.
+* Reuse existing services and components wherever appropriate.
+* Do not leave placeholder buttons that do nothing.
+* Do not present incomplete features as finished.
+* Do not use mock data when existing real data is available.
+* Do not add unnecessary packages.
+* Do not expose secrets or API keys.
+* Do not modify production data destructively.
+* Do not ask the user to manually edit code unless absolutely unavoidable.
+* Resolve build errors before stopping.
+* Resolve TypeScript, linting and runtime errors introduced by this sprint.
+* Keep the project runnable throughout the migration.
+
+# DEFINITION OF DONE
+
+This sprint is complete only when:
+
+* The existing Journey editor has evolved into a unified Content Studio.
+* Existing content remains intact.
+* Collections work.
+* Journeys contain reorderable Steps.
+* Steps contain reorderable Blocks.
+* Slash commands work.
+* The Add block menu works.
+* Autosave works.
+* Preview works.
+* Templates work.
+* Saved Blocks work.
+* Search works.
+* Tags work.
+* Duplicate actions work.
+* Bulk actions work.
+* CSV import and export work.
+* Version history works.
+* AI drafting works within the editor.
+* Scripture retrieval works inside Scripture blocks.
+* Sermon search works inside Sermon Clip blocks.
+* Existing Media Studio is integrated.
+* Draft, Review, Publish and Archive states work.
+* Desktop, tablet and mobile layouts are usable.
+* Existing Ask Emmaus functionality still works.
+* Existing member progress is not damaged.
+* There are no visible placeholder controls.
+* There are no unresolved errors introduced by the sprint.
+
+# FINAL REVIEW OUTPUT
+
+After completing the work, provide a clear summary inside Replit explaining:
+
+1. What was changed
+2. What existing functionality was preserved
+3. What database changes were made
+4. What migrations were applied
+5. What tests were completed
+6. Any known limitations
+7. Any areas that should be tested manually
+8. The recommended next action
+
+Do not begin another sprint after finishing this one.
+
+Stop after presenting the completed Emmaus Content Studio for review.

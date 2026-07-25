@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Users, ChevronRight, MessageCircle } from 'lucide-react';
+import { LogOut, Users, ChevronRight } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -88,39 +88,6 @@ export default function Personal() {
             </p>
           </div>
         </header>
-
-        {/* Ask Emmaus */}
-        <section>
-          <button
-            onClick={() => setLocation('/personal/ask-emmaus')}
-            className="w-full text-left"
-            aria-label="Ask Emmaus — bring your questions and doubts"
-          >
-            <Card className="border-primary/20 bg-primary/5 hover:border-primary/40 transition-all">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div
-                  className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"
-                  aria-hidden="true"
-                >
-                  <MessageCircle size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[16px] font-serif font-medium text-foreground">
-                    Ask Emmaus
-                  </p>
-                  <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
-                    Bring your questions, doubts, and moments
-                  </p>
-                </div>
-                <ChevronRight
-                  size={17}
-                  className="text-primary shrink-0"
-                  aria-hidden="true"
-                />
-              </CardContent>
-            </Card>
-          </button>
-        </section>
 
         {/* Prayer Requests */}
         <section className="space-y-3">

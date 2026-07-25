@@ -1,0 +1,202 @@
+[
+  {
+    "id": "e3e8cc75-5a93-47be-ab6f-a824140d7583",
+    "type": "sync",
+    "status": "failed",
+    "createdAt": "2026-07-24T05:57:10.936Z",
+    "updatedAt": "2026-07-24T05:57:10.979Z",
+    "progress": {
+      "total": 0,
+      "done": 0,
+      "failed": 0
+    },
+    "options": {
+      "maxVideos": 20
+    },
+    "error": "Error: YouTube API 400 for /channels: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"API key not valid. Please pass a valid API key.\",\n    \"errors\": [\n      {\n        \"message\": \"API key not valid. Please pass a valid API key.\",\n        \"domain\": \"global\",\n        \"reason\": \"badRequest\"\n      }\n    ],\n    \"status\": \"INVALID_ARGUMENT\",\n"
+  },
+  {
+    "id": "5a16aad3-ac63-40ef-8fce-6d8fe4dee734",
+    "type": "sync",
+    "status": "completed",
+    "createdAt": "2026-07-24T06:10:21.875Z",
+    "updatedAt": "2026-07-24T06:10:22.632Z",
+    "progress": {
+      "total": 20,
+      "done": 20,
+      "failed": 0
+    },
+    "options": {
+      "maxVideos": 20
+    }
+  },
+  {
+    "id": "d3e02d76-bb31-4231-bfbd-b57a9ec06832",
+    "type": "sync",
+    "status": "completed",
+    "createdAt": "2026-07-24T09:07:01.284Z",
+    "updatedAt": "2026-07-24T09:07:02.042Z",
+    "progress": {
+      "total": 20,
+      "done": 20,
+      "failed": 0
+    },
+    "options": {
+      "maxVideos": 20
+    }
+  },
+  {
+    "id": "c7f72cb5-f75c-4881-a339-e594c48ee425",
+    "type": "pipeline-run",
+    "status": "completed",
+    "createdAt": "2026-07-24T09:17:49.827Z",
+    "updatedAt": "2026-07-24T09:27:38.853Z",
+    "progress": {
+      "total": 19,
+      "done": 19,
+      "failed": 0,
+      "currentItem": "19 approved · 19 indexed · 2179 segments"
+    },
+    "options": {}
+  },
+  {
+    "id": "ed42d76c-a22e-493a-a944-72c599f8177e",
+    "type": "enrich",
+    "status": "failed",
+    "createdAt": "2026-07-24T09:29:48.230Z",
+    "updatedAt": "2026-07-24T09:29:48.237Z",
+    "progress": {
+      "total": 0,
+      "done": 0,
+      "failed": 0
+    },
+    "options": {},
+    "error": "ReferenceError: getAllSegments is not defined"
+  },
+  {
+    "id": "91ed738c-85b4-483a-b6a3-b856b9a8e2a2",
+    "type": "enrich",
+    "status": "completed",
+    "createdAt": "2026-07-24T09:31:08.882Z",
+    "updatedAt": "2026-07-24T09:42:17.520Z",
+    "progress": {
+      "total": 2179,
+      "done": 2179,
+      "failed": 0,
+      "currentItem": "2179 segments enriched · 0 failed"
+    },
+    "options": {}
+  },
+  {
+    "id": "aada6cff-2e74-4fdd-a66a-c93e8d7d1a54",
+    "type": "enrich",
+    "status": "running",
+    "createdAt": "2026-07-24T09:43:38.797Z",
+    "updatedAt": "2026-07-24T09:53:49.443Z",
+    "progress": {
+      "total": 2179,
+      "done": 2040,
+      "failed": 0,
+      "currentItem": "2040/2179 enriched"
+    },
+    "options": {}
+  },
+  {
+    "id": "c28c72ae-31f0-43c5-a844-2286fb7a214f",
+    "type": "enrich",
+    "status": "running",
+    "createdAt": "2026-07-24T09:54:16.606Z",
+    "updatedAt": "2026-07-24T10:34:26.879Z",
+    "progress": {
+      "total": 2179,
+      "done": 1080,
+      "failed": 0,
+      "currentItem": "1080/2179 enriched"
+    },
+    "options": {}
+  },
+  {
+    "id": "94ab2eba-3a3c-4f6b-b0b5-161e1bf60dd1",
+    "type": "embed",
+    "status": "running",
+    "createdAt": "2026-07-24T10:37:06.472Z",
+    "updatedAt": "2026-07-24T10:38:17.845Z",
+    "progress": {
+      "total": 2179,
+      "done": 1760,
+      "failed": 0
+    },
+    "options": {}
+  },
+  {
+    "id": "15c702be-43fa-4964-b6d0-801d8242a1bc",
+    "type": "detect-sermon-starts",
+    "status": "completed",
+    "createdAt": "2026-07-24T13:05:59.656Z",
+    "updatedAt": "2026-07-24T13:06:02.209Z",
+    "progress": {
+      "total": 19,
+      "done": 19,
+      "failed": 0,
+      "currentItem": "19 detected · 0 failed"
+    },
+    "options": {}
+  },
+  {
+    "id": "ad474625-f336-4655-99ef-e1382c496b41",
+    "type": "detect-sermon-starts",
+    "status": "completed",
+    "createdAt": "2026-07-24T13:06:08.107Z",
+    "updatedAt": "2026-07-24T13:06:08.840Z",
+    "progress": {
+      "total": 5,
+      "done": 5,
+      "failed": 0,
+      "currentItem": "5 detected · 0 failed"
+    },
+    "options": {}
+  },
+  {
+    "id": "ed5c2aca-287b-4226-8959-ee6f9f1657e5",
+    "type": "repair-timestamps",
+    "status": "completed",
+    "createdAt": "2026-07-24T13:06:14.640Z",
+    "updatedAt": "2026-07-24T13:06:14.780Z",
+    "progress": {
+      "total": 2179,
+      "done": 2179,
+      "failed": 0,
+      "currentItem": "2179 segments repaired"
+    },
+    "options": {}
+  },
+  {
+    "id": "2d0fe07e-809b-4128-96f4-7b15bcb99abe",
+    "type": "pipeline-run",
+    "status": "completed",
+    "createdAt": "2026-07-24T13:06:27.354Z",
+    "updatedAt": "2026-07-24T13:06:27.462Z",
+    "progress": {
+      "total": 0,
+      "done": 0,
+      "failed": 0,
+      "currentItem": "0 approved · 0 indexed · 0 segments"
+    },
+    "options": {}
+  },
+  {
+    "id": "5fdb9ee7-9d2e-4dc3-9b26-72f4066866bc",
+    "type": "sync",
+    "status": "completed",
+    "createdAt": "2026-07-24T13:06:45.731Z",
+    "updatedAt": "2026-07-24T13:07:19.629Z",
+    "progress": {
+      "total": 377,
+      "done": 377,
+      "failed": 0
+    },
+    "options": {
+      "maxVideos": 500
+    }
+  }
+]

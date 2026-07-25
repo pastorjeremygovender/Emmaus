@@ -10,7 +10,7 @@ import { Users, ChevronRight } from 'lucide-react';
 import JourneyStartModal from '@/components/JourneyStartModal';
 
 export default function Journeys() {
-  const { journeys, progress, startJourney } = useJourney();
+  const { journeys, progress, startJourney, loading } = useJourney();
   const { user } = useAuth();
   const { getMyRooms, getJourneyInvitations, startSharedJourney } = useRooms();
   const [, setLocation] = useLocation();
@@ -57,12 +57,26 @@ export default function Journeys() {
 
   const pendingJourney = pendingJourneyId ? journeys.find(j => j.id === pendingJourneyId) : null;
 
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-7 h-7 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <span className="text-[14px]">Loading journeys…</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
       <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-10">
 
-        <header>
-          <h1 className="text-[30px] font-serif font-medium tracking-tight">Journeys</h1>
+        <header className="space-y-1.5">
+          <h1 className="text-[30px] font-serif font-medium tracking-tight">Next Steps</h1>
+          <p className="text-[14px] text-muted-foreground leading-relaxed">
+            Discover new Journeys, continue active ones, and review completed walks.
+          </p>
         </header>
 
         {/* My Rooms — compact section at top */}

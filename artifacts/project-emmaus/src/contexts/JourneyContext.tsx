@@ -1,40 +1,78 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { DEMO_JOURNEYS, DEMO_STEPS, DEMO_PROGRESS } from '../lib/demo-data';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import * as api from '@/lib/journeys-api';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Journey = {
   id: string;
   title: string;
+  subtitle?: string;
   description: string;
   journeyType: string;
+  category?: string;
+  difficulty?: string;
+  estimatedDuration?: string;
+  tags?: string[];
+  prerequisites?: string[];
   durationDays: number;
   status: string;
+  // Legacy field — retained for backward compatibility with existing components
   sermon?: any;
-  // Admin metadata fields
+  // Admin / metadata fields
   coverImageUrl?: string;
   churchWide?: boolean;
   startDate?: string;
   endDate?: string;
   linkedSermonId?: string;
+  xpReward?: number;
   overloadExempt?: boolean;
   pastorEdited?: boolean;
   publishedAt?: string;
   updatedAt?: string;
+  createdAt?: string;
+  collectionId?: string;
 };
 
 export type Step = {
   journeyId: string;
   day: number;
   title: string;
+
+  // Canonical discipleship fields
   mentorIntro: string;
   scripture: string;
   devotional: string;
   reflectionQuestion: string;
   prayerPrompt: string;
   actionStep: string;
+  memoryVerse?: string;
+
+  // Extended metadata
+  preferredTranslation?: string;
+  estimatedReadingTime?: number;
+  xpReward?: number;
+
+  // JSONB arrays
+  scriptureReferences?: Array<{ reference: string; translation?: string; verseText?: string }>;
+  suggestedSermons?: Array<{
+    sermonId?: string;
+    timestamp?: number;
+    topic?: string;
+    link?: string;
+    contextualSentence?: string;
+  }>;
+  suggestedFollowUpQuestions?: string[];
+  unlockConditions?: Record<string, unknown> | null;
+
+  // Legacy sermon fields (backward compat)
   sermonTimestampSeconds?: number;
   sermonLink?: string;
   sermonContextualSentence?: string;
   order?: number;
+
+  // Block-based content (Content Studio)
+  blocks?: Array<Record<string, unknown>> | null;
 };
 
 export type Progress = {
@@ -50,17 +88,23 @@ type JourneyContextType = {
   steps: Step[];
   progress: Record<string, Progress>;
   reflections: Record<string, string>;
+  loading: boolean;
   getJourney: (id: string) => Journey | undefined;
   getStep: (journeyId: string, day: number) => Step | undefined;
   getStepsForJourney: (journeyId: string) => Step[];
   completeStep: (journeyId: string, day: number, reflectionText: string) => void;
   startJourney: (journeyId: string) => void;
-  updateJourney: (journey: Journey) => void;
-  addJourney: (journey: Journey) => void;
-  deleteJourney: (journeyId: string) => void;
-  updateStep: (step: Step) => void;
-  addStep: (step: Step) => void;
-  deleteStep: (journeyId: string, day: number) => void;
+  // Admin mutations — return promises so callers can await and handle errors
+  updateJourney: (journey: Journey) => Promise<Journey>;
+  addJourney: (journey: Journey) => Promise<Journey>;
+  deleteJourney: (journeyId: string) => Promise<void>;
+  duplicateJourney: (journeyId: string) => Promise<Journey>;
+  // originalDay: the day number used to look up the existing row (before any renumbering)
+  updateStep: (step: Step, originalDay?: number) => Promise<Step>;
+  addStep: (step: Step) => Promise<Step>;
+  deleteStep: (journeyId: string, day: number) => Promise<void>;
+  refreshJourneys: () => Promise<void>;
+  refreshSteps: (journeyId: string) => Promise<void>;
 };
 
 const JourneyContext = createContext<JourneyContextType | null>(null);
@@ -70,100 +114,259 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const [steps, setSteps] = useState<Step[]>([]);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [reflections, setReflections] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  // ─── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const sJourneys = localStorage.getItem('emmaus_journeys');
-    setJourneys(sJourneys ? JSON.parse(sJourneys) : DEMO_JOURNEYS);
-    if (!sJourneys) localStorage.setItem('emmaus_journeys', JSON.stringify(DEMO_JOURNEYS));
+    let cancelled = false;
 
-    const sSteps = localStorage.getItem('emmaus_steps');
-    setSteps(sSteps ? JSON.parse(sSteps) : DEMO_STEPS);
-    if (!sSteps) localStorage.setItem('emmaus_steps', JSON.stringify(DEMO_STEPS));
+    async function init() {
+      setLoading(true);
+      try {
+        // Admins get all journeys (any status); users get published only
+        const jList = user?.role === 'admin'
+          ? await api.listJourneys()
+          : await api.listPublishedJourneys();
 
-    const sProgress = localStorage.getItem('emmaus_progress');
-    setProgress(sProgress ? JSON.parse(sProgress) : DEMO_PROGRESS);
-    if (!sProgress) localStorage.setItem('emmaus_progress', JSON.stringify(DEMO_PROGRESS));
+        if (cancelled) return;
+        setJourneys(jList);
 
-    const sReflections = localStorage.getItem('emmaus_reflections');
-    if (sReflections) setReflections(JSON.parse(sReflections));
-  }, []);
+        // Fetch steps for all journeys
+        const allSteps: Step[] = [];
+        for (const j of jList) {
+          try {
+            const jSteps = await api.listSteps(j.id);
+            allSteps.push(...jSteps);
+          } catch {
+            // ignore per-journey step errors
+          }
+        }
+        if (cancelled) return;
+        setSteps(allSteps);
 
-  const getJourney = (id: string) => journeys.find(j => j.id === id);
-  const getStep = (journeyId: string, day: number) =>
-    steps.find(s => s.journeyId === journeyId && s.day === day);
-  const getStepsForJourney = (journeyId: string) =>
-    steps.filter(s => s.journeyId === journeyId).sort((a, b) => a.day - b.day);
+        // Fetch progress for logged-in users
+        if (user?.id) {
+          // One-time migration from localStorage
+          const localProg = localStorage.getItem('emmaus_progress');
+          if (localProg) {
+            try {
+              await api.importLocalProgress(user.id, JSON.parse(localProg));
+              localStorage.removeItem('emmaus_progress');
+            } catch {
+              // keep in localStorage so it can be retried
+            }
+          }
 
-  const completeStep = (journeyId: string, day: number, reflectionText: string) => {
-    const curProg = progress[journeyId] || {
-      journeyId,
-      currentDay: 1,
-      completedDays: [],
-      startedAt: new Date().toISOString(),
-      lastCompletedAt: null,
-    };
-    const completedDays = [...new Set([...curProg.completedDays, day])];
-    const newProg = {
-      ...curProg,
-      completedDays,
-      currentDay: Math.max(curProg.currentDay, day + 1),
-      lastCompletedAt: new Date().toISOString(),
-    };
-    const nextProgress = { ...progress, [journeyId]: newProg };
-    setProgress(nextProgress);
-    localStorage.setItem('emmaus_progress', JSON.stringify(nextProgress));
+          try {
+            const prog = await api.getAllProgress(user.id);
+            if (!cancelled) setProgress(prog);
+          } catch {
+            // ignore progress fetch errors
+          }
 
-    if (reflectionText.trim()) {
-      const key = `${journeyId}-${day}`;
-      const nextRef = { ...reflections, [key]: reflectionText };
-      setReflections(nextRef);
-      localStorage.setItem('emmaus_reflections', JSON.stringify(nextRef));
+          // Load reflections from localStorage (local cache)
+          const localRef = localStorage.getItem('emmaus_reflections');
+          if (localRef && !cancelled) {
+            try {
+              setReflections(JSON.parse(localRef));
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load journeys:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  };
 
-  const startJourney = (journeyId: string) => {
-    if (!progress[journeyId]) {
-      const newProg = {
+    init();
+    return () => { cancelled = true; };
+  }, [user?.id, user?.role]);
+
+  // ─── Getters ───────────────────────────────────────────────────────────────
+
+  const getJourney = useCallback(
+    (id: string) => journeys.find(j => j.id === id),
+    [journeys]
+  );
+
+  const getStep = useCallback(
+    (journeyId: string, day: number) =>
+      steps.find(s => s.journeyId === journeyId && s.day === day),
+    [steps]
+  );
+
+  const getStepsForJourney = useCallback(
+    (journeyId: string) =>
+      steps.filter(s => s.journeyId === journeyId).sort((a, b) => a.day - b.day),
+    [steps]
+  );
+
+  // ─── User operations (fire-and-forget, optimistic) ─────────────────────────
+
+  const startJourney = useCallback(
+    (journeyId: string) => {
+      if (!user?.id || progress[journeyId]) return;
+      const optimistic: Progress = {
         journeyId,
         currentDay: 1,
         completedDays: [],
         startedAt: new Date().toISOString(),
         lastCompletedAt: null,
       };
-      const nextProgress = { ...progress, [journeyId]: newProg };
-      setProgress(nextProgress);
-      localStorage.setItem('emmaus_progress', JSON.stringify(nextProgress));
+      setProgress(p => ({ ...p, [journeyId]: optimistic }));
+      api.startJourney(journeyId, user.id)
+        .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
+        .catch(() => { /* ignore */ });
+    },
+    [user?.id, progress]
+  );
+
+  const completeStep = useCallback(
+    (journeyId: string, day: number, reflectionText: string) => {
+      if (!user?.id) return;
+
+      // Optimistic update
+      setProgress(p => {
+        const existing = p[journeyId];
+        if (!existing) return p;
+        const completedDays = [...new Set([...existing.completedDays, day])];
+        return {
+          ...p,
+          [journeyId]: {
+            ...existing,
+            completedDays,
+            currentDay: Math.max(existing.currentDay, day + 1),
+            lastCompletedAt: new Date().toISOString(),
+          },
+        };
+      });
+
+      // Save reflection locally
+      if (reflectionText.trim()) {
+        const key = `${journeyId}-${day}`;
+        setReflections(r => {
+          const updated = { ...r, [key]: reflectionText };
+          localStorage.setItem('emmaus_reflections', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      // Sync to API
+      api.completeStep(journeyId, user.id, day, reflectionText)
+        .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
+        .catch(() => { /* ignore */ });
+    },
+    [user?.id]
+  );
+
+  // ─── Admin mutations — await API, then update local state ──────────────────
+
+  const addJourney = useCallback(
+    async (journey: Journey): Promise<Journey> => {
+      const created = await api.createJourney(journey, user?.id);
+      setJourneys(js => [...js, created]);
+      return created;
+    },
+    [user?.id]
+  );
+
+  const updateJourney = useCallback(
+    async (journey: Journey): Promise<Journey> => {
+      const updated = await api.updateJourney(journey.id, journey, user?.id);
+      setJourneys(js => js.map(j => j.id === updated.id ? updated : j));
+      return updated;
+    },
+    [user?.id]
+  );
+
+  const deleteJourney = useCallback(
+    async (journeyId: string): Promise<void> => {
+      await api.deleteJourney(journeyId, user?.id);
+      setJourneys(js => js.filter(j => j.id !== journeyId));
+      setSteps(ss => ss.filter(s => s.journeyId !== journeyId));
+    },
+    [user?.id]
+  );
+
+  const duplicateJourney = useCallback(
+    async (journeyId: string): Promise<Journey> => {
+      const copy = await api.duplicateJourney(journeyId, user?.id);
+      setJourneys(js => [...js, copy]);
+      // Fetch steps for the new copy
+      try {
+        const copySteps = await api.listSteps(copy.id);
+        setSteps(ss => [...ss, ...copySteps]);
+      } catch { /* ignore */ }
+      return copy;
+    },
+    [user?.id]
+  );
+
+  const addStep = useCallback(
+    async (step: Step): Promise<Step> => {
+      const created = await api.createStep(step.journeyId, step, user?.id);
+      setSteps(ss => [...ss.filter(s => !(s.journeyId === created.journeyId && s.day === created.day)), created]);
+      // Refresh journey to get updated durationDays
+      try {
+        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        setJourneys(jList);
+      } catch { /* ignore */ }
+      return created;
+    },
+    [user?.id, user?.role]
+  );
+
+  const updateStep = useCallback(
+    async (step: Step, originalDay?: number): Promise<Step> => {
+      // Use originalDay to target the correct row when the user renumbers a step
+      const targetDay = originalDay ?? step.day;
+      const updated = await api.updateStep(step.journeyId, targetDay, step, user?.id);
+      setSteps(ss => ss.map(s =>
+        s.journeyId === updated.journeyId && s.day === (originalDay ?? updated.day) ? updated : s
+      ));
+      return updated;
+    },
+    [user?.id]
+  );
+
+  const deleteStep = useCallback(
+    async (journeyId: string, day: number): Promise<void> => {
+      await api.deleteStep(journeyId, day, user?.id);
+      setSteps(ss => ss.filter(s => !(s.journeyId === journeyId && s.day === day)));
+      try {
+        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        setJourneys(jList);
+      } catch { /* ignore */ }
+    },
+    [user?.id, user?.role]
+  );
+
+  // ─── Refresh helpers ───────────────────────────────────────────────────────
+
+  const refreshJourneys = useCallback(async () => {
+    try {
+      const jList = user?.role === 'admin'
+        ? await api.listJourneys()
+        : await api.listPublishedJourneys();
+      setJourneys(jList);
+    } catch {
+      // ignore
     }
-  };
+  }, [user?.role]);
 
-  const _saveJourneys = (next: Journey[]) => {
-    setJourneys(next);
-    localStorage.setItem('emmaus_journeys', JSON.stringify(next));
-  };
-
-  const _saveSteps = (next: Step[]) => {
-    setSteps(next);
-    localStorage.setItem('emmaus_steps', JSON.stringify(next));
-  };
-
-  const updateJourney = (journey: Journey) =>
-    _saveJourneys(journeys.map(j => (j.id === journey.id ? journey : j)));
-
-  const addJourney = (journey: Journey) =>
-    _saveJourneys([...journeys, { ...journey, updatedAt: new Date().toISOString() }]);
-
-  const deleteJourney = (journeyId: string) => {
-    _saveJourneys(journeys.filter(j => j.id !== journeyId));
-    _saveSteps(steps.filter(s => s.journeyId !== journeyId));
-  };
-
-  const updateStep = (step: Step) =>
-    _saveSteps(steps.map(s => (s.journeyId === step.journeyId && s.day === step.day ? step : s)));
-
-  const addStep = (step: Step) => _saveSteps([...steps, step]);
-
-  const deleteStep = (journeyId: string, day: number) =>
-    _saveSteps(steps.filter(s => !(s.journeyId === journeyId && s.day === day)));
+  const refreshSteps = useCallback(async (journeyId: string) => {
+    try {
+      const jSteps = await api.listSteps(journeyId);
+      setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...jSteps]);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   return (
     <JourneyContext.Provider
@@ -172,6 +375,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         steps,
         progress,
         reflections,
+        loading,
         getJourney,
         getStep,
         getStepsForJourney,
@@ -180,9 +384,12 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         updateJourney,
         addJourney,
         deleteJourney,
+        duplicateJourney,
         updateStep,
         addStep,
         deleteStep,
+        refreshJourneys,
+        refreshSteps,
       }}
     >
       {children}

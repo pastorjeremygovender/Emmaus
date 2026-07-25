@@ -10,7 +10,7 @@ import {
 
 type Props = {
   journeyId: string;
-  day: number | null;   // null = new day
+  day: number | null;   // null = new step
   onBack: () => void;
 };
 
@@ -26,6 +26,8 @@ const EMPTY_STEP = (journeyId: string, day: number): Step => ({
   reflectionQuestion: '',
   prayerPrompt: '',
   actionStep: '',
+  memoryVerse: '',
+  suggestedFollowUpQuestions: [],
 });
 
 // ─── Validation checklist ─────────────────────────────────────────────────────
@@ -36,7 +38,7 @@ function buildChecklist(form: Step): CheckItem[] {
   return [
     { label: 'Title', ok: !!form.title.trim() },
     { label: 'Scripture', ok: !!form.scripture.trim() },
-    { label: 'Reflection', ok: !!form.devotional.trim() },
+    { label: 'Teaching', ok: !!form.devotional.trim() },
     { label: 'Prayer', ok: !!form.prayerPrompt.trim() },
     { label: "Today's Step", ok: !!form.actionStep.trim() },
   ];
@@ -102,7 +104,7 @@ function PhonePreview({ step, journeyTitle, durationDays }: {
           {/* Devotional */}
           {step.devotional && (
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">Reflection</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">Teaching</p>
               <p className="text-[12px] leading-relaxed">{step.devotional}</p>
             </div>
           )}
@@ -171,14 +173,18 @@ function ValidationChecklist({ items }: { items: CheckItem[] }) {
 export default function DayEditor({ journeyId, day, onBack }: Props) {
   const { getStep, getStepsForJourney, addStep, updateStep, deleteStep, getJourney } = useJourney();
   const journey = getJourney(journeyId);
-  const isCompanion = journey?.journeyType === 'companion';
 
   const nextDay = day ?? (getStepsForJourney(journeyId).reduce((m, s) => Math.max(m, s.day), 0) + 1);
   const existing = day !== null ? getStep(journeyId, day) : undefined;
 
+  // Track the original step number so PATCH always targets the correct DB row,
+  // even when the user edits the step-number field.
+  const originalDay = useRef<number>(existing?.day ?? nextDay);
+
   const [form, setForm] = useState<Step>(() => existing ? { ...existing } : EMPTY_STEP(journeyId, nextDay));
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [dayConflict, setDayConflict] = useState(false);
   const [confirmBack, setConfirmBack] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -189,30 +195,62 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
   const patch = (k: keyof Step, v: unknown) => {
     setForm(f => ({ ...f, [k]: v }));
     setIsDirty(true);
+    if (k === 'day') setDayConflict(false);
   };
 
-  const handleSave = useCallback(() => {
+  // Properly awaits the API call — errors surface to the UI.
+  // Uses originalDay.current as the PATCH key so renumbering targets the right row.
+  const handleSave = useCallback(async () => {
     setSaveState('saving');
-    if (existing) {
-      updateStep(form);
-    } else {
-      addStep(form);
+    setDayConflict(false);
+    try {
+      if (existing) {
+        const isDayChange = form.day !== originalDay.current;
+        if (isDayChange) {
+          // Check for collision before patching
+          const allSteps = getStepsForJourney(journeyId);
+          const collision = allSteps.find(s => s.day === form.day && s.day !== originalDay.current);
+          if (collision) {
+            setDayConflict(true);
+            setSaveState('error');
+            setTimeout(() => setSaveState('idle'), 3000);
+            return;
+          }
+        }
+        await updateStep(form, originalDay.current);
+        originalDay.current = form.day;  // update ref after successful save
+      } else {
+        const saved = await addStep(form);
+        originalDay.current = saved.day;
+      }
+      setIsDirty(false);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2500);
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 3000);
     }
-    setIsDirty(false);
-    setSaveState('saved');
-    setTimeout(() => setSaveState('idle'), 2500);
-  }, [form, existing, addStep, updateStep]);
+  }, [form, existing, addStep, updateStep, getStepsForJourney, journeyId]);
 
-  const handleDuplicate = () => {
-    const all = getStepsForJourney(journeyId);
-    const maxDay = all.reduce((m, s) => Math.max(m, s.day), 0);
-    addStep({ ...form, day: maxDay + 1 });
-    onBack();
+  const handleDuplicate = async () => {
+    try {
+      const all = getStepsForJourney(journeyId);
+      const maxDay = all.reduce((m, s) => Math.max(m, s.day), 0);
+      await addStep({ ...form, day: maxDay + 1 });
+      onBack();
+    } catch (err) {
+      console.error('Duplicate failed:', err);
+    }
   };
 
-  const handleDelete = () => {
-    deleteStep(journeyId, form.day);
-    onBack();
+  const handleDelete = async () => {
+    try {
+      await deleteStep(journeyId, originalDay.current);
+      onBack();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
   };
 
   const handleBackClick = () => {
@@ -259,6 +297,11 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
 
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <SaveMessage state={saveState} />
+          {dayConflict && saveState === 'error' && (
+            <span className="text-xs text-red-500 font-medium">
+              Day {form.day} already exists — choose a different number
+            </span>
+          )}
 
           {/* AI button — disabled */}
           <div className="relative">
@@ -300,8 +343,8 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
             </AdminBtn>
           )}
 
-          <AdminBtn size="sm" variant="primary" onClick={handleSave}>
-            <Save size={12} /> Save Draft
+          <AdminBtn size="sm" variant="primary" onClick={handleSave} disabled={saveState === 'saving'}>
+            <Save size={12} /> {saveState === 'saving' ? 'Saving…' : 'Save Draft'}
           </AdminBtn>
         </div>
       </div>
@@ -330,12 +373,31 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
             {/* Card 1 — Today's Theme */}
             <CollapsibleCard title="Today's Theme" defaultOpen>
               <div className="grid grid-cols-3 gap-4 pt-2">
-                <Field label="Day number" required>
+                <Field label="Step number" required>
                   <TextInput
                     type="number"
                     min={1}
                     value={form.day}
                     onChange={e => patch('day', parseInt(e.target.value, 10) || 1)}
+                  />
+                </Field>
+                <Field label="Est. reading time (min)">
+                  <TextInput
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={form.estimatedReadingTime ?? ''}
+                    onChange={e => patch('estimatedReadingTime', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                    placeholder="15"
+                  />
+                </Field>
+                <Field label="XP reward">
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={form.xpReward ?? ''}
+                    onChange={e => patch('xpReward', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                    placeholder="5"
                   />
                 </Field>
               </div>
@@ -360,49 +422,45 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
                   error={!form.mentorIntro.trim() && isDirty}
                 />
               </Field>
-              <Field label="Today's encouragement" required={false}>
-                <TextArea
-                  rows={2}
-                  value={''}
-                  disabled
-                  placeholder="Coming in a future update…"
-                  className="opacity-50 cursor-not-allowed"
-                  onChange={() => {}}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">This field will be available in a later release.</p>
-              </Field>
             </CollapsibleCard>
 
             {/* Card 3 — The Word */}
             <CollapsibleCard title="The Word" defaultOpen>
-              <Field label="Scripture reference" required error={!form.scripture.trim() && isDirty ? 'Required' : undefined}>
+              <div className="grid grid-cols-[1fr_auto] gap-4 items-end">
+                <Field label="Scripture reference" required error={!form.scripture.trim() && isDirty ? 'Required' : undefined}>
+                  <TextInput
+                    value={form.scripture}
+                    onChange={e => patch('scripture', e.target.value)}
+                    placeholder="e.g. John 1:14"
+                    error={!form.scripture.trim() && isDirty}
+                  />
+                </Field>
+                <Field label="Translation">
+                  <TextInput
+                    value={form.preferredTranslation ?? ''}
+                    onChange={e => patch('preferredTranslation', e.target.value || undefined)}
+                    placeholder="NIV"
+                    className="w-20"
+                  />
+                </Field>
+              </div>
+              <Field label="Memory verse (optional)">
                 <TextInput
-                  value={form.scripture}
-                  onChange={e => patch('scripture', e.target.value)}
-                  placeholder="e.g. John 1:14 — 'The Word became flesh…'"
-                  error={!form.scripture.trim() && isDirty}
-                />
-              </Field>
-              <Field label="Scripture text (full verse)" required={false}>
-                <TextArea
-                  rows={3}
-                  value={''}
-                  disabled
-                  placeholder="Optional full verse text — coming in a future update…"
-                  className="opacity-50 cursor-not-allowed"
-                  onChange={() => {}}
+                  value={form.memoryVerse ?? ''}
+                  onChange={e => patch('memoryVerse', e.target.value || undefined)}
+                  placeholder="A short verse for the reader to memorise"
                 />
               </Field>
             </CollapsibleCard>
 
-            {/* Card 4 — Reflection */}
-            <CollapsibleCard title="Reflection" defaultOpen>
-              <Field label="Devotional reflection" required error={!form.devotional.trim() && isDirty ? 'Required' : undefined}>
+            {/* Card 4 — Teaching */}
+            <CollapsibleCard title="Teaching" defaultOpen>
+              <Field label="Teaching content" required error={!form.devotional.trim() && isDirty ? 'Required' : undefined}>
                 <TextArea
                   rows={9}
                   value={form.devotional}
                   onChange={e => patch('devotional', e.target.value)}
-                  placeholder="Write the devotional body here. This is the main reading for the day."
+                  placeholder="Write the teaching body here. This is the main reading for the step."
                   error={!form.devotional.trim() && isDirty}
                 />
               </Field>
@@ -446,10 +504,61 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
               </Field>
             </CollapsibleCard>
 
-            {/* Card 8 — Completion */}
+            {/* Card 8 — Ask Emmaus — Suggested follow-up questions */}
+            <CollapsibleCard title="Ask Emmaus" defaultOpen={false}>
+              <p className="text-xs text-gray-500 mb-3">
+                These questions are surfaced when a user asks Emmaus about this step. Add the most useful follow-up prompts — one per line.
+              </p>
+              <Field label="Suggested follow-up questions">
+                <TextArea
+                  rows={4}
+                  value={(form.suggestedFollowUpQuestions ?? []).join('\n')}
+                  onChange={e => {
+                    const lines = e.target.value.split('\n').map(l => l.trim()).filter(Boolean);
+                    patch('suggestedFollowUpQuestions', lines);
+                  }}
+                  placeholder={"What does it mean to trust God?\nHow do I know God is present?\nWhat if I don't feel anything?"}
+                />
+              </Field>
+              <p className="text-[11px] text-gray-400 mt-1">Enter one question per line.</p>
+            </CollapsibleCard>
+
+            {/* Card 9 — Sermon Reference (all journey types) */}
+            <CollapsibleCard title="Sermon Reference" defaultOpen={false}>
+              <p className="text-xs text-gray-400 pb-1">
+                Link this step to a specific sermon moment. Visible to users as a "Pastor preached on this" prompt.
+              </p>
+              <Field label="Contextual sentence">
+                <TextInput
+                  value={form.sermonContextualSentence ?? ''}
+                  onChange={e => patch('sermonContextualSentence', e.target.value)}
+                  placeholder="e.g. Pastor Jeremy preached on this passage on Sunday."
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Timestamp (seconds)">
+                  <TextInput
+                    type="number"
+                    min={0}
+                    value={form.sermonTimestampSeconds ?? ''}
+                    onChange={e => patch('sermonTimestampSeconds', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                    placeholder="736"
+                  />
+                </Field>
+                <Field label="YouTube link with timestamp">
+                  <TextInput
+                    value={form.sermonLink ?? ''}
+                    onChange={e => patch('sermonLink', e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=…&t=736s"
+                  />
+                </Field>
+              </div>
+            </CollapsibleCard>
+
+            {/* Card 10 — Completion */}
             <CollapsibleCard title="Completion" defaultOpen={false}>
               <p className="text-xs text-gray-500 mb-3">
-                This message is shown when the reader completes the day. It cannot be changed per-day at this time.
+                This message is shown when the reader completes the step.
               </p>
               <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 text-center space-y-1">
                 <p className="text-base font-serif font-medium text-gray-800">Great job.</p>
@@ -457,45 +566,11 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
               </div>
             </CollapsibleCard>
 
-            {/* Companion sermon fields */}
-            {isCompanion && (
-              <CollapsibleCard title="Sermon Moment" defaultOpen={false}>
-                <p className="text-xs text-gray-400 pb-1">
-                  Fill these in to add a timestamped sermon link to this day.
-                </p>
-                <Field label="Contextual sentence">
-                  <TextInput
-                    value={form.sermonContextualSentence ?? ''}
-                    onChange={e => patch('sermonContextualSentence', e.target.value)}
-                    placeholder="e.g. This moment connects directly with today's reflection."
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Timestamp (seconds)">
-                    <TextInput
-                      type="number"
-                      min={0}
-                      value={form.sermonTimestampSeconds ?? ''}
-                      onChange={e => patch('sermonTimestampSeconds', e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                      placeholder="736"
-                    />
-                  </Field>
-                  <Field label="YouTube link with timestamp">
-                    <TextInput
-                      value={form.sermonLink ?? ''}
-                      onChange={e => patch('sermonLink', e.target.value)}
-                      placeholder="https://www.youtube.com/watch?v=…&t=736s"
-                    />
-                  </Field>
-                </div>
-              </CollapsibleCard>
-            )}
-
             {/* Bottom save */}
             <div className="flex justify-end gap-3 pt-2 pb-8">
               <AdminBtn variant="secondary" onClick={handleBackClick}>Cancel</AdminBtn>
-              <AdminBtn variant="primary" onClick={handleSave}>
-                <Save size={13} /> Save Draft
+              <AdminBtn variant="primary" onClick={handleSave} disabled={saveState === 'saving'}>
+                <Save size={13} /> {saveState === 'saving' ? 'Saving…' : 'Save Draft'}
               </AdminBtn>
             </div>
           </div>
@@ -526,11 +601,11 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
         />
       )}
 
-      {/* ── Confirm: delete day ── */}
+      {/* ── Confirm: delete step ── */}
       {confirmDelete && (
         <ConfirmDialog
           title={`Delete Day ${form.day}`}
-          message={`Delete "${form.title || 'this day'}"? This cannot be undone.`}
+          message={`Delete "${form.title || 'this step'}"? This cannot be undone.`}
           confirmLabel="Delete"
           danger
           onConfirm={handleDelete}

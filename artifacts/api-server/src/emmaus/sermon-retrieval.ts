@@ -1,27 +1,31 @@
 /**
  * Emmaus Sermon Retrieval — Verified Record Search
  *
- * Provides deterministic keyword + scripture matching against the verified
- * published sermon registry. Never fabricates titles, speakers, timestamps,
- * or YouTube links — all data comes from the admin-approved record set.
+ * Priority order:
+ *   1. YouTube Archive search (approved sermon segments from sermon-store)
+ *   2. Hard-coded VERIFIED_SERMONS registry (demo/fallback — for records not yet
+ *      imported into the archive but already manually curated)
  *
- * Retrieval is score-based with a minimum threshold so weak matches are
- * suppressed rather than shown. When no verified match clears the threshold,
- * returns null and no sermon card is shown.
+ * The YouTube archive search is preferred when segments exist. The hardcoded
+ * registry provides a fallback so existing curated sermons still surface.
  *
- * YouTube link construction uses the stored URL only. When the stored URL
- * contains a placeholder video ID, the link still opens YouTube but will not
- * resolve to the correct video until a real ID is stored.
+ * Retrieval runs with a bounded timeout so it never delays Ask Emmaus.
+ * When no verified match clears the minimum threshold, returns null and
+ * no sermon card is shown.
+ *
+ * YouTube link construction is deterministic — the LLM never writes URLs.
  *
  * Optional env:
  *   EMMAUS_SERMON_MIN_SCORE — minimum retrieval score (default: 5)
  */
 
-// ─── Verified Sermon Registry ─────────────────────────────────────────────────
+import { searchSermons } from "../lib/sermon-search.js";
+import { logger } from "../lib/logger.js";
+
+// ─── Verified Sermon Registry (hardcoded demo fallback) ───────────────────────
 //
-// Mirrors the published sermons from admin-demo-data.ts on the frontend.
-// Only sermons with status: "published" and pastorEdited: true appear here.
-// Do not add entries without a corresponding verified admin record.
+// These records back-fill the search when the YouTube archive has no
+// approved segments. Only add entries with a corresponding admin record.
 
 interface VerifiedSermon {
   id: string;
@@ -29,20 +33,14 @@ interface VerifiedSermon {
   speaker: string;
   sermonDate: string;    // ISO date "YYYY-MM-DD"
   series?: string;
-  scriptureReference: string;  // display label, e.g. "John 3:1–21"
-  scriptureBookIds: string[];  // normalised lowercase book ids for matching
-  scriptureChapters: number[]; // chapters covered
-  youtubeUrl: string;          // stored URL — may contain PLACEHOLDER_VIDEO_ID
+  scriptureReference: string;
+  scriptureBookIds: string[];
+  scriptureChapters: number[];
+  youtubeUrl: string;
   summary: string;
-  topics: string[];    // lowercase topic tags — score 4 each
-  /**
-   * High-specificity phrases that uniquely identify this sermon.
-   * Each match scores 5 points — enough to clear the default threshold alone.
-   * Use for proper nouns, rare phrases, or exact scripture references that
-   * cannot reasonably appear in an unrelated conversation.
-   */
+  topics: string[];
   priorityKeywords: string[];
-  keywords: string[];  // lowercase keyword phrases — score 3 each
+  keywords: string[];
 }
 
 const VERIFIED_SERMONS: VerifiedSermon[] = [
@@ -58,30 +56,9 @@ const VERIFIED_SERMONS: VerifiedSermon[] = [
     youtubeUrl: "https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID",
     summary:
       'Jesus tells Nicodemus something that changes everything: "You must be born again." What does it mean, and why does it matter for you today?',
-    topics: [
-      "salvation",
-      "rebirth",
-      "holy spirit",
-      "new birth",
-      "eternal life",
-      "regeneration",
-    ],
-    // Phrases unique enough to this sermon that a single match clears threshold
-    priorityKeywords: [
-      "nicodemus",
-      "born again",
-      "john 3:16",
-      "born of water",
-      "born of spirit",
-    ],
-    keywords: [
-      "john 3",
-      "spirit",
-      "eternal life",
-      "darkness and light",
-      "believe",
-      "perish",
-    ],
+    topics: ["salvation", "rebirth", "holy spirit", "new birth", "eternal life", "regeneration"],
+    priorityKeywords: ["nicodemus", "born again", "john 3:16", "born of water", "born of spirit"],
+    keywords: ["john 3", "spirit", "eternal life", "darkness and light", "believe", "perish"],
   },
   {
     id: "sermon-2-samuel-9",
@@ -95,39 +72,15 @@ const VERIFIED_SERMONS: VerifiedSermon[] = [
     youtubeUrl: "https://www.youtube.com/watch?v=PLACEHOLDER_VIDEO_ID",
     summary:
       "Exploring how God's covenant kindness reaches those who feel most broken and unworthy, through the story of Mephibosheth.",
-    topics: [
-      "grace",
-      "restoration",
-      "identity",
-      "belonging",
-      "covenant kindness",
-      "worth",
-      "brokenness",
-    ],
-    // Phrases unique enough to this sermon that a single match clears threshold
-    priorityKeywords: [
-      "mephibosheth",
-      "lo debar",
-      "hesed",
-      "2 samuel 9",
-    ],
-    keywords: [
-      "david",
-      "covenant",
-      "kindness",
-      "broken",
-      "restore",
-      "worthy",
-      "unworthy",
-      "2 samuel",
-      "table",
-    ],
+    topics: ["grace", "restoration", "identity", "belonging", "covenant kindness", "worth", "brokenness"],
+    priorityKeywords: ["mephibosheth", "lo debar", "hesed", "2 samuel 9"],
+    keywords: ["david", "covenant", "kindness", "broken", "restore", "worthy", "unworthy", "2 samuel", "table"],
   },
 ];
 
-// ─── Scoring ──────────────────────────────────────────────────────────────────
+// ─── Scoring (hardcoded registry) ─────────────────────────────────────────────
 
-function scoreSermon(
+function scoreVerifiedSermon(
   sermon: VerifiedSermon,
   query: string,
   bibleBookId?: string,
@@ -136,37 +89,19 @@ function scoreSermon(
   let score = 0;
   const q = query.toLowerCase();
 
-  // Strong signal: the user's current Bible passage matches the sermon scripture.
-  // A Bible-context match on both book + chapter is the highest-confidence signal.
   if (bibleBookId) {
     const bookIdNorm = bibleBookId.toLowerCase();
     if (sermon.scriptureBookIds.includes(bookIdNorm)) {
       score += 12;
       if (bibleChapter != null && sermon.scriptureChapters.includes(bibleChapter)) {
-        score += 8; // exact chapter match
+        score += 8;
       }
     }
   }
-
-  // Topic match — medium signal
-  for (const topic of sermon.topics) {
-    if (q.includes(topic)) score += 4;
-  }
-
-  // Priority keyword match — high signal; unique phrases that identify this sermon
-  for (const kw of sermon.priorityKeywords) {
-    if (q.includes(kw)) score += 5;
-  }
-
-  // Standard keyword match — medium signal
-  for (const kw of sermon.keywords) {
-    if (q.includes(kw)) score += 3;
-  }
-
-  // Book name mentioned in query
-  for (const bookId of sermon.scriptureBookIds) {
-    if (q.includes(bookId)) score += 2;
-  }
+  for (const topic of sermon.topics) { if (q.includes(topic)) score += 4; }
+  for (const kw of sermon.priorityKeywords) { if (q.includes(kw)) score += 5; }
+  for (const kw of sermon.keywords) { if (q.includes(kw)) score += 3; }
+  for (const bookId of sermon.scriptureBookIds) { if (q.includes(bookId)) score += 2; }
 
   return score;
 }
@@ -175,38 +110,88 @@ function scoreSermon(
 
 export interface SermonRetrievalResult {
   sermonId: string;
+  segmentId?: string;
   title: string;
   speaker: string;
   sermonDate: string;
   series?: string;
   scriptureReference: string;
   youtubeUrl: string;
-  timestampedUrl: string;     // same as youtubeUrl when no segment timestamp
+  timestampedUrl: string;
   summary: string;
-  timestampSeconds?: number;  // present only when a segment-level timestamp is stored
+  timestampSeconds?: number;         // absolute YouTube timestamp (Watch)
+  timestampLabel?: string;
+  transcriptEvidence?: string;
+  source: "archive" | "registry";
+  audioUrl?: string;                 // in-app audio URL (Listen)
+  relativeStartSeconds?: number;     // position within trimmed audio
+  relativeTimestampLabel?: string;
 }
 
 // ─── Retrieval ────────────────────────────────────────────────────────────────
 
+const RETRIEVAL_TIMEOUT_MS = 2500;
+
 /**
  * Find the strongest verified sermon match for this query.
  *
- * Returns null when:
- *  - No sermon clears the minimum score threshold (weak / no match)
- *  - No verified sermons exist in the registry
- *
+ * Returns null when no match clears the minimum score threshold.
  * The caller must not show a sermon card when this returns null.
  */
-export function retrieveSermon(
+export async function retrieveSermon(
   query: string,
   bibleBookId?: string,
   bibleChapter?: number
-): SermonRetrievalResult | null {
+): Promise<SermonRetrievalResult | null> {
   const minScore = parseInt(process.env.EMMAUS_SERMON_MIN_SCORE ?? "5", 10);
-  let best: { sermon: VerifiedSermon; score: number } | null = null;
+  const tStart = Date.now();
 
+  // ── 1. YouTube Archive search (primary) ──────────────────────────────────
+
+  try {
+    const archiveResults = await Promise.race([
+      searchSermons(query, { bibleBookId, bibleChapter, maxResults: 1 }),
+      new Promise<null>((r) => setTimeout(() => r(null), RETRIEVAL_TIMEOUT_MS)),
+    ]);
+
+    if (archiveResults && archiveResults.length > 0) {
+      const best = archiveResults[0];
+      // Use archive MIN threshold: relevance score ≥ minScore (search uses its own threshold)
+      logger.info(
+        { source: "archive", score: best.relevanceScore, ms: Date.now() - tStart },
+        "Sermon retrieved from archive"
+      );
+      return {
+        sermonId: best.sermonId,
+        segmentId: best.segmentId,
+        title: best.title,
+        speaker: best.speaker,
+        sermonDate: best.sermonDate,
+        series: best.series,
+        scriptureReference: best.scriptureReference,
+        youtubeUrl: best.youtubeUrl,
+        timestampedUrl: best.timestampedUrl,
+        summary: best.summary ?? best.transcriptEvidence,
+        timestampSeconds: best.absoluteStartSeconds ?? best.startTimeSeconds,
+        timestampLabel: best.timestampLabel,
+        transcriptEvidence: best.transcriptEvidence,
+        source: "archive",
+        audioUrl: best.audioUrl,
+        relativeStartSeconds: best.relativeStartSeconds,
+        relativeTimestampLabel: best.relativeStartSeconds !== undefined
+          ? formatTimestampLabel(best.relativeStartSeconds)
+          : undefined,
+      };
+    }
+  } catch (err) {
+    logger.warn({ err: String(err) }, "Archive search failed — falling back to registry");
+  }
+
+  // ── 2. Hardcoded registry fallback ───────────────────────────────────────
+
+  let best: { sermon: VerifiedSermon; score: number } | null = null;
   for (const sermon of VERIFIED_SERMONS) {
-    const score = scoreSermon(sermon, query, bibleBookId, bibleChapter);
+    const score = scoreVerifiedSermon(sermon, query, bibleBookId, bibleChapter);
     if (score >= minScore && (!best || score > best.score)) {
       best = { sermon, score };
     }
@@ -215,9 +200,7 @@ export function retrieveSermon(
   if (!best) return null;
 
   const { sermon } = best;
-  // No transcript segments exist yet — timestamp is omitted until segment data is stored
-  const timestampSeconds: number | undefined = undefined;
-  const timestampedUrl = buildTimestampedUrl(sermon.youtubeUrl, timestampSeconds);
+  const timestampedUrl = buildTimestampedUrl(sermon.youtubeUrl, undefined);
 
   return {
     sermonId: sermon.id,
@@ -229,7 +212,7 @@ export function retrieveSermon(
     youtubeUrl: sermon.youtubeUrl,
     timestampedUrl,
     summary: sermon.summary,
-    timestampSeconds,
+    source: "registry",
   };
 }
 
@@ -240,14 +223,11 @@ export function retrieveSermon(
  * Falls back to the base URL when no timestamp is provided or the URL is invalid.
  * Never fabricates a video ID or timestamp.
  */
-export function buildTimestampedUrl(
-  youtubeUrl: string,
-  timestampSeconds?: number
-): string {
+export function buildTimestampedUrl(youtubeUrl: string, timestampSeconds?: number): string {
   if (!timestampSeconds || timestampSeconds <= 0) return youtubeUrl;
   try {
     const url = new URL(youtubeUrl);
-    url.searchParams.set("t", `${timestampSeconds}s`);
+    url.searchParams.set("t", `${Math.round(timestampSeconds)}s`);
     return url.toString();
   } catch {
     return youtubeUrl;
@@ -259,6 +239,6 @@ export function buildTimestampedUrl(
  */
 export function formatTimestampLabel(seconds: number): string {
   const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const s = Math.round(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }

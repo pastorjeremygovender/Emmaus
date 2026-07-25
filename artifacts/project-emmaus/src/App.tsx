@@ -29,8 +29,9 @@ import AskEmmausHistory from '@/pages/personal/AskEmmausHistory';
 import BrowseBooks from '@/pages/bible/BrowseBooks';
 import BookDetail from '@/pages/bible/BookDetail';
 import ChapterReader from '@/pages/bible/ChapterReader';
-import ChapterCompletion from '@/pages/bible/ChapterCompletion';
 import BibleJourneyDetail from '@/pages/bible/BibleJourneyDetail';
+import BibleSearch from '@/pages/bible/BibleSearch';
+import ReadingHistory from '@/pages/bible/ReadingHistory';
 
 // Rooms
 import Rooms from '@/pages/rooms/Rooms';
@@ -55,9 +56,10 @@ function Router() {
       {/* Bible */}
       <Route path="/bible" component={Bible} />
       <Route path="/bible/books" component={BrowseBooks} />
+      <Route path="/bible/search" component={BibleSearch} />
+      <Route path="/bible/history" component={ReadingHistory} />
       <Route path="/bible/books/:bookId" component={BookDetail} />
       <Route path="/bible/read/:bookId/:chapter" component={ChapterReader} />
-      <Route path="/bible/complete/:bookId/:chapter" component={ChapterCompletion} />
       <Route path="/bible/journey/:journeyId" component={BibleJourneyDetail} />
 
       <Route path="/journeys" component={Journeys} />

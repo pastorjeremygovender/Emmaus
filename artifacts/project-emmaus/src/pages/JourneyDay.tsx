@@ -22,7 +22,7 @@ export default function JourneyDay() {
   const { journeyId, day: dayStr } = useParams<{ journeyId: string; day: string }>();
   const day = parseInt(dayStr || '1', 10);
   const [, setLocation] = useLocation();
-  const { getStep, completeStep, startJourney, getJourney } = useJourney();
+  const { getStep, completeStep, startJourney, getJourney, loading } = useJourney();
   const { user } = useAuth();
   const {
     getMyRooms,
@@ -45,6 +45,17 @@ export default function JourneyDay() {
     if (journeyId) startJourney(journeyId);
     window.scrollTo(0, 0);
   }, [journeyId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="w-7 h-7 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <span className="text-[14px]">Loading…</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!step || !journey) {
     return (

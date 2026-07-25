@@ -1,5 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400..700;1,400..700&family=Inter:wght@300..700&display=swap');
 @import 'tailwindcss';
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  50% { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
+}
+
+/* Ask Emmaus button — animated border trace (translate must be included so
+   the animation does not override the centering transform) */
+@keyframes border-trace {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 

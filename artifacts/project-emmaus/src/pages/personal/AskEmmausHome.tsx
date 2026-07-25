@@ -1,12 +1,14 @@
 /**
  * Ask Emmaus — Home Screen
  *
- * Entry point from Personal. Shows:
- * - Title + subtitle + optional FAB context label
- * - EmmausComposer (inline-send textarea, no separate button)
- * - Six tappable suggested-prompt chips
- * - Small disclaimer
- * - Previous conversations list (if any)
+ * Entry point from the floating Ask Emmaus button or the My Walk card.
+ *
+ * Back-button behaviour:
+ *   - Reads the ReturnDestination from sessionStorage (written by FloatingEmmausButton).
+ *   - Navigates directly to the source page and attempts scroll restoration.
+ *   - Clears the stored destination after navigating so the nav highlighting
+ *     returns to normal.
+ *   - Safe fallback when no destination is stored: /walk (Today's Steps).
  */
 
 import { useState, useEffect } from 'react';
@@ -16,7 +18,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import { useAuth } from '@/contexts/AuthContext';
 import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
-import { setPendingMessage, takePendingContext } from '@/lib/emmaus-pending';
+import {
+  setPendingMessage,
+  takePendingContext,
+  getReturnDestination,
+  clearReturnDestination,
+} from '@/lib/emmaus-pending';
 
 const SUGGESTED_PROMPTS = [
   'I feel far from God',
@@ -54,7 +61,7 @@ function buildContextLabel(ctx: FlatContext): string | null {
   if (ctx.bookName && ctx.chapter) return `${ctx.bookName} ${ctx.chapter}`;
   if (ctx.journeyTitle && ctx.currentDay) return `${ctx.journeyTitle} — Day ${ctx.currentDay}`;
   if (ctx.journeyTitle) return ctx.journeyTitle;
-  if (ctx.chapterHeading) return ctx.chapterHeading; // room name passed via this field
+  if (ctx.chapterHeading) return ctx.chapterHeading;
   return null;
 }
 
@@ -64,29 +71,36 @@ export default function AskEmmausHome() {
   const [message, setMessage] = useState('');
   const [conversations, setConversations] = useState<ConversationStub[]>([]);
   const [fabContext, setFabContext] = useState<FlatContext | null>(null);
-  const [returnPath, setReturnPath] = useState<string | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    // Pick up any context set by FloatingEmmausButton
+    // Pick up the conversation context label set by FloatingEmmausButton.
     const pending = takePendingContext();
-    if (pending) {
-      setFabContext(pending.context);
-      setReturnPath(pending.returnPath);
-    }
+    if (pending) setFabContext(pending.context);
     if (!user) return;
     listConversations(user.id).then(setConversations);
   }, [user]);
 
+  function handleBack() {
+    const dest = getReturnDestination();
+    clearReturnDestination();
+    const target = dest?.pathname ?? '/walk';
+    setLocation(target);
+    // Attempt scroll restoration after the new route mounts.
+    if (dest?.scrollY) {
+      requestAnimationFrame(() => {
+        setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
+      });
+    }
+  }
+
   function handleChipClick(prompt: string) {
-    // Populate the composer; user taps the send icon to submit
     setMessage(prompt);
   }
 
   function handleContinue() {
     const trimmed = message.trim();
     if (!trimmed || !user) return;
-    // Merge FAB context with user identity; fall back to personal entry point
     const context: FlatContext = fabContext
       ? { ...fabContext, userName: user.preferredName }
       : { entryPoint: 'personal', userName: user.preferredName };
@@ -100,9 +114,9 @@ export default function AskEmmausHome() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={() => setLocation(returnPath ?? '/personal')}
+            onClick={handleBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={returnPath ? 'Back' : 'Back to Personal'}
+            aria-label="Back"
           >
             <ArrowLeft size={22} aria-hidden="true" />
           </button>
@@ -121,7 +135,6 @@ export default function AskEmmausHome() {
             Bring your questions, doubts, and moments — Emmaus walks alongside you.
           </p>
 
-          {/* Context label — shown when arriving via the floating button */}
           {fabContext && buildContextLabel(fabContext) && (
             <div className="flex items-center gap-2 mt-1">
               <span className="text-[13px] text-primary/80 bg-primary/8 border border-primary/15 rounded-full px-3 py-1 leading-snug">
@@ -153,7 +166,6 @@ export default function AskEmmausHome() {
             aria-label="Your message to Emmaus"
           />
 
-          {/* Suggested prompts */}
           <div
             className="flex flex-wrap gap-2"
             role="group"

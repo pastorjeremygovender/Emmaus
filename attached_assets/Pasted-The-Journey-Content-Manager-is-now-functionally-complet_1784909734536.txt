@@ -1,0 +1,343 @@
+The Journey Content Manager is now functionally complete. Do NOT redesign the existing UI unless required for the features below. Preserve the current layout, styling, API contracts and database structure wherever possible.
+
+The goal of this phase is to make content creation at least 10x faster.
+
+Implement the following features:
+
+====================================================
+1. CSV IMPORT
+====================================================
+
+Add an "Import Journey" button to the Journey Manager.
+
+Allow uploading a CSV containing either:
+
+• One complete journey
+• Multiple journeys
+
+Support importing:
+
+Journey
+- Title
+- Description
+- Type
+- Status
+
+Step
+- Step Number
+- Theme
+- Mentor Introduction
+- Scripture Reference
+- Translation
+- Memory Verse
+- Teaching
+- Reflection Questions
+- Prayer
+- Today's Response
+- Ask Emmaus Prompt
+- Sermon Reference
+- Completion Text
+- Estimated Time
+
+Validate every row before importing.
+
+If errors exist:
+
+• show the row number
+• explain the error
+• allow fixing without cancelling the whole import
+
+Show progress while importing.
+
+====================================================
+2. CSV EXPORT
+====================================================
+
+Allow exporting any journey back into CSV.
+
+Allow exporting:
+
+• one journey
+• selected journeys
+• all journeys
+
+The exported CSV must be compatible with the Import function.
+
+====================================================
+3. DUPLICATE
+====================================================
+
+Add:
+
+Duplicate Journey
+
+which copies
+
+• metadata
+• every step
+• settings
+
+with "(Copy)" appended.
+
+Also add
+
+Duplicate Step
+
+inside the editor.
+
+====================================================
+4. BULK EDIT
+====================================================
+
+Allow selecting multiple steps.
+
+Support:
+
+• Delete
+• Renumber
+• Move
+• Duplicate
+• Publish
+• Draft
+
+====================================================
+5. AI JOURNEY GENERATOR
+====================================================
+
+Keep the existing "Generate with Emmaus AI" button.
+
+Expand it into a complete workflow.
+
+The administrator types:
+
+"Create a 7-step journey on prayer."
+
+or
+
+"Create a 30-day Proverbs journey."
+
+or
+
+"Create a discipleship course on serving."
+
+Emmaus should generate:
+
+Journey Title
+
+Journey Description
+
+Every Step
+
+Theme
+
+Mentor Introduction
+
+Scripture
+
+Teaching
+
+Reflection Questions
+
+Prayer
+
+Today's Response
+
+Suggested Sermon Reference
+
+Suggested Ask Emmaus Prompt
+
+Completion Prompt
+
+The generated journey opens immediately in the editor for review before saving.
+
+Nothing publishes automatically.
+
+====================================================
+6. CONTENT LIBRARY
+====================================================
+
+Create reusable libraries for:
+
+Prayers
+
+Reflection Questions
+
+Memory Verses
+
+Mentor Introductions
+
+Completion Messages
+
+Ask Emmaus Prompts
+
+Allow inserting library items into any step.
+
+Allow creating new reusable templates.
+
+====================================================
+7. SEARCH
+====================================================
+
+Global search across all journeys.
+
+Search:
+
+Journey titles
+
+Step titles
+
+Scripture references
+
+Teaching text
+
+Prayer text
+
+Reflection questions
+
+Return results instantly.
+
+====================================================
+8. TAGGING
+====================================================
+
+Allow tagging journeys.
+
+Examples:
+
+New Believer
+
+Prayer
+
+Bible Study
+
+Marriage
+
+Youth
+
+Children
+
+Leadership
+
+Service
+
+Hope
+
+Faith
+
+Search must support tags.
+
+====================================================
+9. PREVIEW
+====================================================
+
+Improve Preview mode.
+
+Preview exactly as it appears inside the Emmaus app.
+
+Render:
+
+Mentor
+
+Scripture
+
+Teaching
+
+Prayer
+
+Action
+
+Reflection
+
+Ask Emmaus
+
+Completion
+
+Use the actual mobile layout.
+
+====================================================
+10. VERSION HISTORY
+====================================================
+
+Keep previous versions.
+
+Allow:
+
+Restore
+
+Compare
+
+Duplicate from previous version
+
+Show editor name and timestamp.
+
+====================================================
+11. MEDIA SUPPORT
+====================================================
+
+Allow attaching:
+
+Images
+
+Audio
+
+PDF
+
+Video
+
+YouTube links
+
+Sermon references
+
+Bible references
+
+without affecting the current editor.
+
+====================================================
+12. FUTURE IMPORT COMPATIBILITY
+====================================================
+
+Design the import system so future imports can include:
+
+Daily devotionals
+
+Academy courses
+
+Bible studies
+
+Sunday School lessons
+
+Small Group studies
+
+Leadership material
+
+without changing the schema.
+
+====================================================
+13. PERFORMANCE
+====================================================
+
+Large imports (1000+ steps) must remain responsive.
+
+Use batching.
+
+Background jobs.
+
+Progress indicators.
+
+Rollback on failure.
+
+====================================================
+14. PRESERVE EVERYTHING
+====================================================
+
+Do NOT remove any current functionality.
+
+Do NOT redesign the UI.
+
+Do NOT change navigation.
+
+Do NOT change API endpoints unless absolutely necessary.
+
+Everything currently working must continue working.
+
+The objective is to transform Emmaus into a scalable content management system capable of managing thousands of journeys while dramatically reducing content creation time.

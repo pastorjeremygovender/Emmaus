@@ -1,0 +1,724 @@
+PROJECT EMMAUS — COMPLETE SERMON ARCHIVE, CORRECT TIMECODES AND AUDIO LISTENING
+
+Implement directly in the existing Project Emmaus codebase.
+
+This is one complete feature-completion task.
+
+Do not redesign Ask Emmaus.
+Do not change the approved Emmaus personality or conversation principles.
+Do not replace Scripture as the primary authority.
+Do not fabricate sermon titles, speakers, quotations, dates, Scripture references or timestamps.
+Do not mark complete from compilation alone.
+Do not propose additional work after completing this task.
+
+==================================================
+GOAL
+==================================================
+
+Complete the ICC sermon knowledge system so that:
+
+1. The entire YouTube archive is assessed and all genuine sermons are processed.
+2. Ask Emmaus searches Scripture first and the complete approved sermon archive second.
+3. All displayed sermon timestamps point to the actual sermon moment inside the full service video.
+4. Worship, announcements and other material before the sermon are correctly included in the absolute YouTube timestamp.
+5. “Preached Here” continues to open the correct YouTube video at the correct absolute timestamp.
+6. “Listen” opens a real in-app audio sermon file/player rather than linking to YouTube.
+7. Bible passages can show verified “Preached Here” annotations from the indexed sermon archive.
+
+==================================================
+CURRENT VERIFIED STATE
+==================================================
+
+The project currently has:
+
+- YouTube Data API connected
+- Owner OAuth connected
+- approximately 376 channel videos discovered
+- a test batch of 20 videos imported
+- 19 likely/approved sermons
+- 19 transcripts ready
+- approximately 2,179 timestamped segments indexed
+- Ask Emmaus returning a verified “Preached Here” result
+- timestamped YouTube links
+- a “Listen” next step that currently opens YouTube
+- an enrichment/indexing pipeline
+- an Admin YouTube Archive area
+
+Current verified problems:
+
+1. Only the initial test batch has been processed rather than the complete archive.
+2. Displayed timestamps appear to be relative to the sermon portion rather than absolute to the full service video.
+3. Services normally contain approximately 30 minutes of worship or other material before the sermon.
+4. A displayed timestamp such as 4:14 may therefore open worship rather than the sermon content.
+5. The “Listen” action currently opens the YouTube video rather than an audio sermon experience.
+6. The previous enrichment process exposed concurrency/race-condition risks when updating many segments.
+
+==================================================
+PART 1 — PROCESS THE COMPLETE YOUTUBE ARCHIVE
+==================================================
+
+Run a full channel sync across all discovered YouTube uploads.
+
+Do not stop after the latest 20 videos.
+
+Requirements:
+
+- enumerate the complete uploads playlist using pagination
+- upsert every discovered video by YouTube video ID
+- do not create duplicates
+- preserve already approved, reviewed and indexed records
+- process new or previously unprocessed videos
+- classify every upload as:
+  - sermon
+  - worship/service-only
+  - announcement
+  - trailer
+  - short
+  - children/youth content
+  - test/unrelated
+  - uncertain/review required
+
+Use deterministic metadata first:
+
+- title
+- description
+- duration
+- playlist
+- speaker naming patterns
+- known service naming patterns
+
+AI may assist classification.
+
+Automatically approve only videos that satisfy strong sermon-confidence rules.
+
+Examples of strong evidence:
+
+- Pastor Jeremy Govender identified as speaker
+- sermon-style title
+- substantial duration
+- service or preaching metadata
+- usable captions
+- transcript contains sustained preaching rather than only music
+
+Do not automatically publish uncertain records.
+
+Process the archive in resumable batches with:
+
+- persistent checkpoints
+- bounded concurrency
+- retry support
+- pause/resume
+- idempotent jobs
+- no restart from zero after failure
+
+The full archive must be capable of completing without keeping one browser request open.
+
+==================================================
+PART 2 — IDENTIFY THE TRUE SERMON START
+==================================================
+
+For every full-service video, determine where the sermon actually begins.
+
+Do not assume:
+
+- the sermon begins at video time 0
+- the first transcript segment is the sermon
+- a transcript-relative timestamp is a valid YouTube timestamp
+- the sermon always begins at exactly 30 minutes
+
+Use multiple signals:
+
+- caption text
+- extended music-only sections
+- applause and transitions
+- welcome and announcements
+- speaker introduction
+- phrases such as:
+  - “Let us turn in our Bibles”
+  - “This morning I want to speak”
+  - “The title of my message”
+  - Scripture reading
+- sustained speech by the verified preacher
+- audio/speech activity where available
+- existing metadata or manually verified start points
+
+Store:
+
+- videoStartSeconds = 0
+- detectedSermonStartSeconds
+- sermonStartConfidence
+- sermonStartMethod
+- manuallyVerifiedSermonStartSeconds where supplied
+- finalSermonStartSeconds used by the system
+
+Allow an Admin user to:
+
+- preview the detected sermon start
+- play the video from that point
+- correct it manually
+- mark it verified
+
+Manual verification must override automatic detection.
+
+Do not apply one universal 30-minute offset to every service.
+
+==================================================
+PART 3 — CORRECT TIMESTAMP MODEL
+==================================================
+
+Audit the entire timestamp pipeline.
+
+Each sermon segment must distinguish between:
+
+1. sermon-relative time
+2. absolute full-video time
+
+Store both explicitly:
+
+- relativeStartSeconds
+- relativeEndSeconds
+- absoluteStartSeconds
+- absoluteEndSeconds
+
+For full-service videos:
+
+absoluteStartSeconds =
+finalSermonStartSeconds + relativeStartSeconds
+
+absoluteEndSeconds =
+finalSermonStartSeconds + relativeEndSeconds
+
+However, if downloaded YouTube captions already contain absolute video timestamps, do not add the sermon offset a second time.
+
+Determine and store the transcript timing basis:
+
+- absolute_video
+- sermon_relative
+- trimmed_audio_relative
+- unknown
+
+The system must normalise every segment exactly once.
+
+Do not guess.
+
+==================================================
+PART 4 — FIX EXISTING INDEXED SEGMENTS
+==================================================
+
+Repair the existing approximately 2,179 indexed segments.
+
+Requirements:
+
+- inspect how their timestamps were created
+- determine whether they are absolute or sermon-relative
+- recalculate incorrect timestamps
+- preserve transcript text and enrichment metadata
+- rebuild deterministic YouTube links
+- do not duplicate segments
+- do not lose approved sermon associations
+- mark uncertain timing records for review
+
+The previous enrichment implementation exposed a race condition where concurrent read-modify-write operations overwrote one another.
+
+Fix this permanently.
+
+Requirements:
+
+- do not read and rewrite an entire shared segment file for every parallel segment
+- collect enrichment results safely
+- use atomic database updates, transactions, batch writes or one controlled final write
+- prevent one parallel job from overwriting another
+- make re-enrichment idempotent
+- verify every expected result survives
+
+==================================================
+PART 5 — VERIFY YOUTUBE TIMESTAMP LINKS
+==================================================
+
+All “Preached Here” YouTube links must use:
+
+- verified YouTube video ID
+- verified absoluteStartSeconds
+
+Construct the link deterministically.
+
+The language model must never create or modify the URL or timestamp.
+
+Example:
+
+https://www.youtube.com/watch?v=VIDEO_ID&t=2054s
+
+If a segment occurs 4 minutes and 14 seconds into the sermon, but the sermon begins 30 minutes into the service, the displayed YouTube start must be approximately 34:14, not 4:14.
+
+Display the actual full-video timestamp to the user.
+
+Example:
+
+Watch from 34:14
+
+Do not display the sermon-relative timestamp as the YouTube start time.
+
+==================================================
+PART 6 — COMPLETE SERMON TRANSCRIPT PIPELINE
+==================================================
+
+For every approved sermon:
+
+1. retrieve owner-authorised captions where available
+2. preserve original caption timing
+3. normalise transcript text
+4. identify sermon start
+5. split sermon content into coherent timestamped segments
+6. extract candidate:
+   - Scripture references
+   - themes
+   - pastoral needs
+   - applications
+   - illustrations
+7. generate semantic embeddings
+8. add segments to the searchable sermon index
+
+For videos without usable captions:
+
+- mark as transcript missing
+- support speech-to-text processing from the authorised source media
+- do not fabricate transcript content
+- expose clear Admin status and retry actions
+
+==================================================
+PART 7 — ASK EMMAUS RESPONSE PIPELINE
+==================================================
+
+Every meaningful Ask Emmaus response must use this order:
+
+1. Search Scripture.
+2. Search approved ICC sermon segments.
+3. Use the LLM to weave the verified information into one natural response.
+4. Offer one primary faithful next step and only a small number of optional pathways.
+
+Scripture remains the primary authority.
+
+Run Scripture and sermon retrieval concurrently for performance, but preserve the authority order in the final answer.
+
+The final response should naturally combine:
+
+- relevant Scripture in context
+- clear explanation
+- verified ICC pastoral application where available
+- one practical next step
+
+Do not produce a generic search-results dump.
+
+Do not fabricate sermon matches.
+
+If no strong sermon match exists:
+
+- answer normally from Scripture
+- omit “Preached Here”
+
+If sermon retrieval fails:
+
+- continue the Scripture-centred response
+- do not fail the entire Ask Emmaus request
+
+==================================================
+PART 8 — PREACHED HERE CARD
+==================================================
+
+When a strong verified sermon match exists, display one primary card:
+
+Preached Here
+
+Include:
+
+- verified sermon title
+- verified speaker
+- verified date where available
+- concise transcript-grounded relevance summary
+- actual absolute full-video timestamp
+- action:
+  Watch from HH:MM:SS
+  or
+  Watch from MM:SS
+
+The card must open YouTube at the correct full-service time.
+
+Do not duplicate the same recommendation again in the Next Steps area unless the second action serves a genuinely different purpose.
+
+==================================================
+PART 9 — REAL AUDIO SERMON ASSETS
+==================================================
+
+The “Listen” next step must no longer open YouTube.
+
+Create a proper sermon-audio pipeline for approved sermons.
+
+Use only media from the connected and authorised ICC YouTube channel or an approved uploaded master file.
+
+For each approved sermon:
+
+- obtain the authorised audio source
+- trim the audio to begin at finalSermonStartSeconds
+- remove worship, announcements and other pre-sermon content
+- optionally end at the detected sermon conclusion
+- encode a web-compatible audio file
+- preserve reasonable spoken-word quality
+- store the file through the existing authorised media/storage system
+- save:
+  - audioAssetId
+  - audioUrl or protected storage reference
+  - audioDuration
+  - audioFormat
+  - audioGeneratedAt
+  - sourceVideoId
+  - sourceStartSeconds
+  - processing status
+
+Preferred delivery format:
+
+- MP3 or another widely supported web audio format
+- spoken-word bitrate suitable for mobile streaming
+- do not create unnecessarily large files
+
+Do not expose private storage credentials.
+
+Do not download or process unrelated third-party content.
+
+==================================================
+PART 10 — IN-APP AUDIO PLAYER
+==================================================
+
+When the user selects:
+
+Listen
+
+open an Emmaus in-app audio sermon player.
+
+Do not open YouTube.
+
+The player must include:
+
+- sermon title
+- speaker
+- date where available
+- play/pause
+- seek bar
+- elapsed time
+- duration
+- 15-second rewind
+- 15-second forward
+- playback speed
+- close/back
+- resume position
+
+The player should begin at the start of the trimmed sermon audio.
+
+If launched from a specific sermon segment, begin at the corresponding sermon-relative audio position:
+
+audioPositionSeconds = relativeStartSeconds
+
+Do not use absolute full-service video time inside the trimmed audio asset.
+
+Preserve listening progress per user where the existing database supports it.
+
+==================================================
+PART 11 — SEPARATE WATCH AND LISTEN ACTIONS
+==================================================
+
+These actions must remain distinct:
+
+WATCH
+
+- opens the verified YouTube video
+- uses absoluteStartSeconds
+- includes worship/service offset
+- label:
+  Watch from 34:14
+
+LISTEN
+
+- opens the in-app audio file
+- uses the trimmed sermon audio
+- uses sermon-relative audio time
+- does not open YouTube
+- label:
+  Listen from 4:14
+  where appropriate
+
+Do not use the same URL for both actions.
+
+Do not label a YouTube link as “Listen”.
+
+==================================================
+PART 12 — BIBLE PREACHED HERE ANNOTATIONS
+==================================================
+
+Connect verified sermon Scripture references to the Bible reader.
+
+Only create annotations from:
+
+- transcript evidence
+- verified Scripture metadata
+- approved sermon records
+- reliable passage mapping
+
+The Bible may show a subtle:
+
+Preached Here
+
+indicator for:
+
+- a verse
+- a passage
+- a chapter
+
+Do not interrupt Bible reading.
+
+When tapped, show:
+
+- sermon title
+- speaker
+- date
+- relevant segment summary
+- Watch action with correct absolute YouTube timestamp
+- Listen action with the real audio asset and correct sermon-relative position
+
+Do not create annotations based only on model speculation.
+
+Do not claim a passage was preached where transcript evidence does not support it.
+
+==================================================
+PART 13 — COMPLETE ARCHIVE ADMIN CONTROLS
+==================================================
+
+In Admin → YouTube Archive, show:
+
+- total channel videos discovered
+- total classified sermons
+- total approved sermons
+- transcripts ready
+- transcripts missing
+- sermon starts detected
+- sermon starts needing review
+- timestamped segments
+- embeddings/indexed segments
+- audio assets ready
+- audio processing failures
+- import/index failures
+
+Provide actions:
+
+- Full Channel Sync
+- Process Unprocessed Sermons
+- Re-detect Sermon Starts
+- Rebuild Timestamp Mapping
+- Re-run AI Enrichment
+- Rebuild Search Index
+- Generate Missing Audio
+- Retry Failed Jobs
+- Pause/Resume Processing
+
+For each sermon provide:
+
+- video preview
+- detected sermon start
+- manual start correction
+- transcript
+- segments
+- Scripture references
+- themes
+- YouTube timestamp test
+- audio-generation status
+- in-app audio preview
+- approval/publication state
+
+==================================================
+PART 14 — PERFORMANCE AND COST CONTROL
+==================================================
+
+The complete archive may be large.
+
+Requirements:
+
+- process in bounded batches
+- persist progress
+- avoid duplicate OpenAI enrichment
+- skip already completed work unless data changed
+- reuse existing embeddings where valid
+- do not block the interactive API server
+- report job progress
+- safely recover after interruption
+- do not start the entire archive again after one failure
+
+Ask Emmaus must search the local indexed sermon database.
+
+Do not query YouTube live for every user question.
+
+==================================================
+PART 15 — SAFETY AND ACCURACY
+==================================================
+
+Never fabricate:
+
+- sermon titles
+- speakers
+- dates
+- transcript quotations
+- Scripture references
+- timestamps
+- video IDs
+- audio assets
+
+Only approved sermon records may appear in user-facing retrieval.
+
+Do not expose:
+
+- OAuth tokens
+- API keys
+- private storage URLs
+- unapproved transcripts
+- Admin-only metadata
+
+==================================================
+RUNNING-APP TESTS
+==================================================
+
+A. FULL ARCHIVE
+
+1. Run full channel sync.
+2. Confirm all channel videos are discovered.
+3. Confirm processing is not limited to the latest 20.
+4. Confirm genuine sermons are classified.
+5. Confirm uncertain videos remain reviewable.
+
+B. SERMON START
+
+For at least five full-service videos:
+
+1. Verify worship or announcements occur before the sermon.
+2. Check the detected sermon start.
+3. Compare it with the actual video.
+4. Correct one manually.
+5. Confirm the manual value overrides detection.
+
+C. TIMESTAMP CORRECTION
+
+Use a sermon segment that is 4:14 into the sermon.
+
+If the sermon begins around 30:00:
+
+1. Confirm the YouTube card displays approximately 34:14.
+2. Tap Watch.
+3. Confirm the video opens at the actual sermon statement.
+4. Confirm it does not open worship music.
+
+D. EXISTING SEGMENTS
+
+1. Rebuild timestamp mapping for the existing approximately 2,179 segments.
+2. Confirm no duplicate segments are created.
+3. Confirm no enrichment metadata is lost.
+4. Confirm race-condition fixes preserve every update.
+
+E. ASK EMMAUS
+
+Test:
+
+- How do I forgive someone?
+- I feel far from God.
+- I am anxious.
+- What does the Bible say about prayer?
+- How do I find hope?
+- What does the Holy Spirit do?
+
+For each:
+
+- confirm Scripture is used appropriately
+- confirm a strong real sermon match appears where available
+- confirm no weak match is forced
+- confirm the YouTube timestamp opens the correct sermon moment
+- confirm the response ends with one primary faithful next step
+
+F. AUDIO
+
+For at least three approved sermons:
+
+1. Generate the trimmed audio asset.
+2. Confirm the audio begins with the sermon, not worship.
+3. Tap Listen.
+4. Confirm the in-app audio player opens.
+5. Confirm YouTube does not open.
+6. Test play, pause, seek, skip and playback speed.
+7. Launch Listen from a timestamped segment.
+8. Confirm playback begins at the corresponding sermon-relative moment.
+
+G. WATCH VS LISTEN
+
+For one segment:
+
+- Watch must open YouTube at the absolute full-video time.
+- Listen must open audio at the relative trimmed-sermon time.
+
+Confirm both reach the same spoken content.
+
+H. BIBLE ANNOTATION
+
+1. Open a Bible passage with verified sermon evidence.
+2. Confirm Preached Here appears subtly.
+3. Open it.
+4. Confirm Watch and Listen actions work.
+5. Open a passage without verified evidence.
+6. Confirm no annotation is fabricated.
+
+I. FAILURE RECOVERY
+
+Test:
+
+- missing captions
+- failed audio generation
+- interrupted archive job
+- failed embedding request
+- unavailable YouTube video
+
+Confirm processing can resume and Ask Emmaus continues working from Scripture.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- the full channel archive is synchronised
+- processing is no longer limited to 20 videos
+- all high-confidence sermons can be processed
+- sermon starts are detected and reviewable
+- transcript timing basis is explicitly stored
+- absolute and relative timestamps are separated
+- existing incorrect timestamps are repaired
+- YouTube links open the correct sermon statements
+- the existing race condition is permanently fixed
+- Ask Emmaus searches Scripture and approved sermons
+- Preached Here uses verified absolute YouTube timestamps
+- Listen uses a real in-app audio asset
+- Listen never opens YouTube
+- Bible Preached Here annotations use verified evidence
+- archive processing is resumable
+- running-app tests pass
+
+When finished, report only:
+
+- total videos discovered
+- total sermons classified
+- total sermons approved
+- transcripts processed
+- sermon starts detected and manually verified
+- segments indexed
+- timestamp records repaired
+- audio assets generated
+- search/index approach
+- Ask Emmaus retrieval tests
+- Watch timestamp tests
+- Listen audio tests
+- Bible annotation tests
+- any incomplete requirement and its exact cause
+
+Do not propose additional features.

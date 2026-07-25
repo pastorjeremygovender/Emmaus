@@ -1,5 +1,5 @@
 import { useLocation } from 'wouter';
-import { ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
@@ -21,7 +21,6 @@ export default function BrowseBooks() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
-      {/* Header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
@@ -31,65 +30,45 @@ export default function BrowseBooks() {
           >
             <ArrowLeft size={22} />
           </button>
-          <h1 className="flex-1 text-center text-[17px] font-semibold text-foreground">
-            Browse Books
-          </h1>
+          <h1 className="flex-1 text-center text-[17px] font-semibold text-foreground">Browse Books</h1>
           <div className="min-w-[44px]" />
         </div>
       </header>
 
       <main className="px-5 pt-6 max-w-[520px] mx-auto space-y-8 pb-8">
-
-        {/* Old Testament */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Old Testament
-            </h2>
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Old Testament</h2>
             <span className="text-[11px] text-muted-foreground">{OT_BOOKS.length} books</span>
           </div>
           <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
-            {OT_BOOKS.map(book => {
-              const progress = book.available ? progressForBook(book.id, book.chapters) : 0;
-              return (
-                <BookRow
-                  key={book.id}
-                  book={book}
-                  progress={progress}
-                  onTap={() => book.available && setLocation(`/bible/books/${book.id}`)}
-                />
-              );
-            })}
+            {OT_BOOKS.map(book => (
+              <BookRow
+                key={book.id}
+                book={book}
+                progress={progressForBook(book.id, book.chapters)}
+                onTap={() => setLocation(`/bible/books/${book.id}`)}
+              />
+            ))}
           </div>
         </section>
 
-        {/* New Testament */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              New Testament
-            </h2>
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">New Testament</h2>
             <span className="text-[11px] text-muted-foreground">{NT_BOOKS.length} books</span>
           </div>
           <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
-            {NT_BOOKS.map(book => {
-              const progress = book.available ? progressForBook(book.id, book.chapters) : 0;
-              return (
-                <BookRow
-                  key={book.id}
-                  book={book}
-                  progress={progress}
-                  onTap={() => book.available && setLocation(`/bible/books/${book.id}`)}
-                />
-              );
-            })}
+            {NT_BOOKS.map(book => (
+              <BookRow
+                key={book.id}
+                book={book}
+                progress={progressForBook(book.id, book.chapters)}
+                onTap={() => setLocation(`/bible/books/${book.id}`)}
+              />
+            ))}
           </div>
         </section>
-
-        <p className="text-center text-[12px] text-muted-foreground pb-4">
-          The complete Bible is coming. Luke is available now.
-        </p>
-
       </main>
       <BottomNav />
     </div>
@@ -105,50 +84,34 @@ function BookRow({
   progress: number;
   onTap: () => void;
 }) {
-  const pct = book.available ? Math.round((progress / book.chapters) * 100) : 0;
+  const pct = Math.round((progress / book.chapters) * 100);
 
   return (
     <div
       onClick={onTap}
-      className={[
-        'flex items-center gap-3 px-4 py-3 bg-card transition-colors',
-        book.available ? 'cursor-pointer hover:bg-muted/40 active:bg-muted/60' : 'opacity-50',
-      ].join(' ')}
+      className="flex items-center gap-3 px-4 py-3 bg-card cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
     >
-      {/* Shortname */}
       <div className="w-10 text-right shrink-0">
         <span className="text-[12px] font-semibold text-muted-foreground">{book.shortName}</span>
       </div>
-
-      {/* Name + chapters */}
       <div className="flex-1 min-w-0">
         <div className="text-[15px] font-medium text-foreground leading-tight">{book.name}</div>
         <div className="text-[11px] text-muted-foreground mt-0.5">
           {book.chapters} {book.chapters === 1 ? 'chapter' : 'chapters'}
           {book.genre ? ` · ${book.genre}` : ''}
         </div>
-        {book.available && progress > 0 && (
+        {progress > 0 && (
           <div className="mt-1.5 h-1 w-full max-w-[120px] bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
         )}
       </div>
-
-      {/* Status */}
       <div className="shrink-0">
-        {book.available ? (
-          progress === book.chapters ? (
-            <CheckCircle2 size={17} className="text-primary" />
-          ) : progress > 0 ? (
-            <span className="text-[11px] font-medium text-primary">{pct}%</span>
-          ) : (
-            <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              Available
-            </span>
-          )
-        ) : (
-          <Lock size={15} className="text-muted-foreground/60" />
-        )}
+        {progress === book.chapters ? (
+          <CheckCircle2 size={17} className="text-primary" />
+        ) : progress > 0 ? (
+          <span className="text-[11px] font-medium text-primary">{pct}%</span>
+        ) : null}
       </div>
     </div>
   );

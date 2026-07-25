@@ -27,6 +27,10 @@ node_modules
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Runtime credential/token files — never commit
+artifacts/api-server/data/sermons/oauth.json
+artifacts/api-server/data/**/*.token.json
+
 # misc
 /.sass-cache
 /connect.lock

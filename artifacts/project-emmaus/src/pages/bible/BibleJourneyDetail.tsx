@@ -3,22 +3,39 @@ import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight, Clock } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { getBibleJourney } from '@/lib/bible-data';
-import { getChapter } from '@/lib/bible-provider';
-import { LUKE_HEADINGS, LUKE_READING_MINUTES } from '@/data/kjv-luke';
+import { LUKE_CHAPTER_HEADINGS } from '@/lib/bible-provider';
+import { LUKE_READING_MINUTES } from '@/data/kjv-luke';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
+
+const JOHN_HEADINGS: Record<number, string> = {
+  1: 'The Word Became Flesh', 2: 'The Wedding at Cana', 3: 'Jesus and Nicodemus',
+  4: 'The Woman at the Well', 5: 'The Healing at the Pool', 6: 'The Bread of Life',
+  7: 'Jesus at the Feast', 8: 'The Light of the World', 9: 'The Man Born Blind',
+  10: 'The Good Shepherd', 11: 'The Raising of Lazarus', 12: 'The Triumphal Entry',
+  13: 'The Washing of Feet', 14: 'The Way, the Truth, the Life',
+  15: 'The True Vine', 16: 'The Work of the Spirit', 17: 'The High Priestly Prayer',
+  18: 'The Arrest of Jesus', 19: 'The Crucifixion of Jesus',
+  20: 'The Resurrection', 21: 'The Appearance by the Sea',
+};
+
+function getHeadingForJourney(bookId: string, ch: number): string {
+  if (bookId === 'luke') return LUKE_CHAPTER_HEADINGS[ch] ?? `Chapter ${ch}`;
+  if (bookId === 'john') return JOHN_HEADINGS[ch] ?? `Chapter ${ch}`;
+  return `Chapter ${ch}`;
+}
+
+function getMinutesForJourney(bookId: string, ch: number): number {
+  if (bookId === 'luke') return LUKE_READING_MINUTES[ch] ?? 5;
+  return 5;
+}
 
 export default function BibleJourneyDetail() {
   const { journeyId } = useParams<{ journeyId: string }>();
   const [, setLocation] = useLocation();
   const journey = getBibleJourney(journeyId || 'walk-through-luke');
 
-  const {
-    startBibleJourney,
-    getJourneyProgress,
-    isChapterComplete,
-  } = useBible();
-
+  const { startBibleJourney, getJourneyProgress, isChapterComplete } = useBible();
   const progress = getJourneyProgress(journeyId || 'walk-through-luke');
 
   if (!journey) {
@@ -45,18 +62,6 @@ export default function BibleJourneyDetail() {
     );
   }
 
-  function getHeading(ch: number): string {
-    if (journey!.bookId === 'luke') return LUKE_HEADINGS[ch] ?? `Chapter ${ch}`;
-    const data = getChapter(journey!.bookId, ch);
-    return data?.heading ?? `Chapter ${ch}`;
-  }
-
-  function getMinutes(ch: number): number {
-    if (journey!.bookId === 'luke') return LUKE_READING_MINUTES[ch] ?? 5;
-    const data = getChapter(journey!.bookId, ch);
-    return data?.readingMinutes ?? 5;
-  }
-
   function handleStart() {
     startBibleJourney(journey!.id);
     setLocation(`/bible/read/${journey!.bookId}/1?journey=${journey!.id}`);
@@ -69,15 +74,12 @@ export default function BibleJourneyDetail() {
 
   const completedCount = progress?.completedChapters.length ?? 0;
   const pct = Math.round((completedCount / journey.chapterCount) * 100);
-
-  // Total reading time estimate
   const totalMinutes = journey.bookId === 'luke'
     ? Object.values(LUKE_READING_MINUTES).reduce((a, b) => a + b, 0)
     : journey.chapterCount * 5;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
-      {/* Header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
@@ -86,21 +88,13 @@ export default function BibleJourneyDetail() {
           >
             <ArrowLeft size={22} />
           </button>
-          <h1 className="flex-1 text-center text-[17px] font-semibold text-foreground">
-            Bible Journey
-          </h1>
+          <h1 className="flex-1 text-center text-[17px] font-semibold text-foreground">Bible Journey</h1>
           <div className="min-w-[44px]" />
         </div>
       </header>
 
       <main className="px-5 pt-6 max-w-[520px] mx-auto space-y-7">
-
-        {/* Journey hero */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-3"
-        >
+        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
           <div className="space-y-1">
             <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
               Bible Journey · {journey.coverLabel}
@@ -110,33 +104,21 @@ export default function BibleJourneyDetail() {
           </div>
 
           <div className="flex items-center gap-4 text-[13px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <BookOpen size={14} />
-              {journey.chapterCount} chapters
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} />
-              ~{totalMinutes} min total
-            </span>
+            <span className="flex items-center gap-1.5"><BookOpen size={14} />{journey.chapterCount} chapters</span>
+            <span className="flex items-center gap-1.5"><Clock size={14} />~{totalMinutes} min total</span>
           </div>
 
-          {/* Progress bar */}
           {progress && (
             <div className="space-y-1.5">
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${pct}%` }}
-                />
+                <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
               </div>
               <p className="text-[12px] text-muted-foreground">
-                {completedCount} of {journey.chapterCount} chapters completed
-                {completedCount > 0 && ` · ${pct}%`}
+                {completedCount} of {journey.chapterCount} chapters completed{completedCount > 0 && ` · ${pct}%`}
               </p>
             </div>
           )}
 
-          {/* CTA */}
           {!progress ? (
             <Button className="w-full h-12 rounded-xl text-[16px]" onClick={handleStart}>
               <BookOpen size={17} className="mr-2" />
@@ -145,9 +127,7 @@ export default function BibleJourneyDetail() {
           ) : completedCount === journey.chapterCount ? (
             <div className="flex items-center gap-2.5 p-4 bg-primary/8 border border-primary/20 rounded-xl">
               <CheckCircle2 size={20} className="text-primary shrink-0" />
-              <p className="text-[15px] font-medium text-primary">
-                You have completed {journey.title}. Well done.
-              </p>
+              <p className="text-[15px] font-medium text-primary">You have completed {journey.title}. Well done.</p>
             </div>
           ) : (
             <Button className="w-full h-12 rounded-xl text-[16px]" onClick={handleContinue}>
@@ -157,11 +137,8 @@ export default function BibleJourneyDetail() {
           )}
         </motion.section>
 
-        {/* Chapter list */}
         <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Chapters
-          </h2>
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Chapters</h2>
           <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
             {Array.from({ length: journey.chapterCount }, (_, i) => i + 1).map(ch => {
               const completedViaJourney = progress?.completedChapters.includes(ch);
@@ -169,14 +146,14 @@ export default function BibleJourneyDetail() {
               const done = completedViaJourney || completedStandalone;
               const isCurrent = progress?.currentChapter === ch && !done;
               const isLocked = progress ? ch > (progress.currentChapter) && !done : ch > 1;
-              const heading = getHeading(ch);
-              const mins = getMinutes(ch);
+              const heading = getHeadingForJourney(journey.bookId, ch);
+              const mins = getMinutesForJourney(journey.bookId, ch);
 
               return (
                 <div
                   key={ch}
                   onClick={() => {
-                    if (!progress) { startBibleJourney(journey.id); }
+                    if (!progress) startBibleJourney(journey.id);
                     setLocation(`/bible/read/${journey.bookId}/${ch}?journey=${journey.id}`);
                   }}
                   className={[
@@ -184,7 +161,6 @@ export default function BibleJourneyDetail() {
                     !isLocked || done ? 'hover:bg-muted/40 active:bg-muted/60' : 'opacity-50',
                   ].join(' ')}
                 >
-                  {/* Status indicator */}
                   <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0">
                     {done ? (
                       <CheckCircle2 size={20} className="text-primary" />
@@ -198,17 +174,12 @@ export default function BibleJourneyDetail() {
                       </div>
                     )}
                   </div>
-
-                  {/* Chapter info */}
                   <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-medium text-foreground leading-tight">{heading}</div>
                     <div className="text-[12px] text-muted-foreground mt-0.5">{mins} min</div>
                   </div>
-
                   {isCurrent && !done && (
-                    <span className="shrink-0 text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                      Next
-                    </span>
+                    <span className="shrink-0 text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Next</span>
                   )}
                   {!isCurrent && !done && !isLocked && (
                     <ChevronRight size={16} className="text-muted-foreground shrink-0" />
@@ -218,7 +189,6 @@ export default function BibleJourneyDetail() {
             })}
           </div>
         </section>
-
       </main>
       <BottomNav />
     </div>

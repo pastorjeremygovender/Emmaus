@@ -14,10 +14,10 @@ export default function Welcome() {
         {/* Title block */}
         <div className="space-y-5 mb-16">
           <h1 className="text-[38px] leading-tight font-serif font-medium text-foreground tracking-tight">
-            Project Emmaus
+            Emmaus
           </h1>
           <p className="text-lg text-muted-foreground font-serif italic leading-relaxed">
-            Walk with Jesus, one step at a time.
+            Walk with Jesus.
           </p>
         </div>
 

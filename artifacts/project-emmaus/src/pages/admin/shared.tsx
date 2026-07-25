@@ -214,6 +214,7 @@ export function AdminBtn({
   size = 'md',
   disabled,
   type = 'button',
+  title,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -221,6 +222,7 @@ export function AdminBtn({
   size?: 'sm' | 'md';
   disabled?: boolean;
   type?: 'button' | 'submit';
+  title?: string;
 }) {
   const base = `inline-flex items-center gap-1.5 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none`;
   const sizes = { sm: 'px-3 py-1.5 text-[13px]', md: 'px-4 py-2 text-sm' };
@@ -231,7 +233,7 @@ export function AdminBtn({
     ghost: 'text-gray-500 hover:text-gray-800 hover:bg-gray-100',
   };
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]}`}>
+    <button type={type} onClick={onClick} disabled={disabled} title={title} className={`${base} ${sizes[size]} ${variants[variant]}`}>
       {children}
     </button>
   );

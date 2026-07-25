@@ -1,0 +1,585 @@
+PROJECT EMMAUS — MOBILE NAVIGATION, BIBLE READER AND ASK EMMAUS UX REFINEMENT
+
+Implement directly in the existing Project Emmaus codebase.
+
+This is a coordinated mobile UX refinement based on testing the real application on a phone.
+
+Do not redesign unrelated features.
+Do not change the Bible Provider architecture.
+Do not change Bible text, translation licensing or current database structures.
+Do not modify Ask Emmaus response behaviour or the language-model provider.
+Do not add new features beyond the requirements below.
+Do not mark complete from compilation alone.
+
+==================================================
+GOAL
+==================================================
+
+Make the mobile app identity, discipleship journey structure, Bible navigation and Ask Emmaus access clearer and easier to understand.
+
+The user must immediately recognise:
+
+- that Emmaus is about walking with Jesus
+- what today’s discipleship steps are
+- where to read the Bible
+- where to discover future Journeys
+- where to see their personal walk
+- that Ask Emmaus is an in-app Emmaus feature, not WhatsApp
+
+==================================================
+1. OPENING IDENTITY
+==================================================
+
+On the application opening/home experience, replace:
+
+Project Emmaus
+
+with:
+
+Emmaus Road
+
+Replace the subtitle:
+
+Walk with Jesus. One step at a time.
+
+with:
+
+Walk with Jesus.
+
+Do not change the platform’s underlying public identity or technical project name.
+
+This is the user-facing opening title and subtitle.
+
+Ensure the title is visually prominent but calm.
+
+==================================================
+2. PERMANENT BOTTOM NAVIGATION
+==================================================
+
+Change the bottom-navigation labels as follows:
+
+Walk
+→
+Today’s Steps
+
+Bible
+→
+My Bible
+
+Journeys
+→
+Next Steps
+
+Personal
+→
+My Walk
+
+These labels are now locked for the mobile user interface.
+
+Keep the permanent bottom navigation visible on all authenticated user screens, including:
+
+- Today’s Steps
+- My Bible home
+- Browse Books
+- Bible chapter reader
+- Next Steps library
+- individual Journey pages
+- Journey steps
+- My Walk
+- Rooms
+- sermon-related user screens
+- Ask Emmaus conversation screen
+
+Do not show it on:
+
+- login
+- registration
+- onboarding
+- splash/loading screen
+- Admin Portal
+- true full-screen media playback
+
+Requirements:
+
+- navigation remains fixed at the bottom
+- respect mobile safe-area insets
+- do not overlap page content
+- highlight the currently active section
+- preserve navigation state
+- use the existing icons unless a label change requires accessibility updates
+- ensure longer labels fit without clipping or overlapping
+
+If necessary, slightly reduce navigation label font size while preserving readability.
+
+Do not abbreviate the new labels.
+
+==================================================
+3. MAKE THE JOURNEY STRUCTURE CLEARER
+==================================================
+
+The current journey aspect is not sufficiently obvious on mobile.
+
+On the Today’s Steps screen, clearly distinguish:
+
+- today’s active steps
+- the Journey each step belongs to
+- current day, chapter or lesson
+- what the user should do next
+
+Use clear headings such as:
+
+TODAY’S STEPS
+
+and, within each active item, display:
+
+- Journey title
+- current step/day/chapter
+- short step title
+- primary action
+
+Examples:
+
+15 Minutes with Jesus
+Day 4 of 7
+Listening to Jesus
+
+Walk Through Luke
+Luke 3 of 24
+Jesus Begins His Ministry
+
+Do not add unnecessary explanation or clutter.
+
+On Next Steps, clearly communicate that this is where users:
+
+- discover new Journeys
+- continue active Journeys
+- review completed Journeys
+
+Do not turn Next Steps into a social feed or generic course catalogue.
+
+==================================================
+4. REMOVE REDUNDANT BIBLE ASK CONTROLS
+==================================================
+
+In the Bible chapter reader, remove the redundant bottom-row Ask control and any duplicate Ask Emmaus links that sit alongside:
+
+- Notes
+- Save/Bookmark
+- chapter navigation
+
+There must be only one primary Ask Emmaus entry point: the redesigned global Ask Emmaus button described below.
+
+Do not remove:
+
+- Notes
+- Save/Bookmark
+- previous chapter
+- next chapter
+- translation selector
+- book/chapter selector
+
+Ensure removing the redundant Ask item does not leave uneven spacing or a broken toolbar.
+
+==================================================
+5. BIBLE BACK BUTTON
+==================================================
+
+Simplify the Bible reader back behaviour.
+
+The back arrow in the Bible chapter reader must always return directly to the My Bible home screen.
+
+It must not:
+
+- open a complicated history stack
+- return to an intermediate completion page
+- return to Browse Books unless that is explicitly opened by the user
+- return to an unrelated Journey
+- depend on the browser’s previous route
+
+Use a deterministic route to My Bible home.
+
+Preserve reading progress before navigating back.
+
+==================================================
+6. COMBINED BOOK AND TRANSLATION SELECTOR
+==================================================
+
+Redesign the top Bible reader selector using the attached Bible-app examples as interaction inspiration, without copying their branding or exact visual style.
+
+At the top of the chapter reader, provide a combined segmented selector containing:
+
+LEFT SECTION:
+Current book and chapter
+
+Example:
+
+Joshua 4
+
+RIGHT SECTION:
+Current translation
+
+Example:
+
+BSB
+
+The two sections must appear visually connected as one control.
+
+The current book/chapter side must be clearly tappable.
+
+The translation side must be clearly tappable.
+
+Do not make users guess that either is interactive.
+
+==================================================
+7. BOOK AND CHAPTER PICKER
+==================================================
+
+When the user taps the book/chapter section, open a dedicated Bible reference picker.
+
+The reference picker must include:
+
+- a clear Back action
+- title: References
+- search field
+- Old Testament and New Testament grouping
+- all 66 books
+- chapter buttons for the selected book
+- current book and chapter highlighted
+- easy mobile scrolling
+
+Recommended flow:
+
+1. User taps “Joshua 4”.
+2. Reference picker opens.
+3. User sees all Bible books.
+4. User selects a book.
+5. Chapters for that book are displayed.
+6. User selects a chapter.
+7. The selected chapter opens immediately.
+8. The current translation is preserved.
+
+The user must be able to move quickly between books and chapters without returning to My Bible home.
+
+Do not include an “Intro” chapter unless genuine introduction content exists.
+
+Do not display fake chapter numbers or placeholders.
+
+==================================================
+8. TRANSLATION PICKER
+==================================================
+
+When the user taps the translation section, open the existing working translation menu.
+
+Requirements:
+
+- show only available functional translations
+- selecting a translation changes the current chapter text
+- preserve the current book and chapter
+- preserve reading position as closely as possible
+- update the selector label
+- persist the preference
+- close the menu after selection
+
+Do not mix book selection and translation selection into one confusing long list.
+
+The visual control may be combined, but the two tap targets must open their respective pickers.
+
+==================================================
+9. BIBLE CHAPTER NAVIGATION
+==================================================
+
+Keep simple previous and next chapter navigation at the bottom of the Bible reader.
+
+Example:
+
+‹ Joshua 3
+
+Joshua 4
+
+Joshua 5 ›
+
+Requirements:
+
+- previous chapter opens immediately
+- next chapter opens immediately
+- no completion screen
+- no Reflect prompt
+- no Pray prompt
+- no Finish for today prompt
+- no modal
+- no bottom sheet
+- no interruption
+
+For the first chapter of a book:
+
+- previous moves to the last chapter of the previous canonical book where appropriate
+
+For the last chapter of a book:
+
+- next moves to chapter 1 of the next canonical book
+
+For Genesis 1 and Revelation 22:
+
+- handle the canonical boundary cleanly
+- do not navigate to nonexistent books or chapters
+
+==================================================
+10. REDESIGN GLOBAL ASK EMMAUS CONTROL
+==================================================
+
+The current circular speech-bubble icon resembles WhatsApp and may cause users to misunderstand or avoid the feature.
+
+Replace it with a clearly labelled floating button:
+
+Ask Emmaus
+
+Requirements:
+
+- pill-shaped or rounded rectangular button
+- display the words “Ask Emmaus”
+- may include a small simple icon, but the text label must remain visible
+- use the existing Emmaus green
+- sufficient contrast
+- accessible label: Ask Emmaus
+- large mobile touch target
+- fixed above the bottom navigation
+- bottom-right placement where possible
+- never obscure Bible text, chapter navigation or important controls
+
+Do not use:
+
+- a WhatsApp-style speech bubble as the primary visual
+- a robot head
+- AI sparkle branding
+- an avatar
+- a notification badge
+- bouncing
+- shaking
+- colour flashing
+
+==================================================
+11. ANIMATED BORDER HIGHLIGHT
+==================================================
+
+Add an animated green highlight that travels continuously around the border of the Ask Emmaus button.
+
+The effect should clearly draw attention without making the button look broken or aggressive.
+
+Requirements:
+
+- continuous animated border-tracing effect
+- movement circles the full border
+- use a brighter or lighter Emmaus green highlight
+- maintain a stable solid button background
+- approximately 2–3 second loop
+- smooth linear or gentle motion
+- no full-button flashing
+- no size pulsing unless the existing pulse is removed
+- no glow that obscures the label
+- label must remain readable throughout
+- animation must run smoothly on mobile
+- respect reduced-motion accessibility preferences
+
+For users with prefers-reduced-motion:
+
+- disable continuous movement
+- show a clear static highlighted border instead
+
+Do not run both the previous pulse and the new animated border simultaneously if that becomes visually excessive.
+
+The animated border is now the primary attention mechanism.
+
+==================================================
+12. ASK EMMAUS CONTEXT
+==================================================
+
+Preserve existing contextual Ask Emmaus behaviour.
+
+When opened from a Bible chapter, continue passing:
+
+- book
+- chapter
+- translation
+- selected verse/range where applicable
+
+When opened from Today’s Steps, pass:
+
+- Journey
+- current step
+- current Scripture
+
+When opened from Next Steps, pass:
+
+- relevant Journey or step
+
+When opened from My Walk, use general personal context only.
+
+Do not automatically submit a message.
+
+Do not expose technical IDs in the visible context label.
+
+==================================================
+13. ASK EMMAUS RETURN BEHAVIOUR
+==================================================
+
+Because the bottom navigation now remains visible on the Ask Emmaus screen:
+
+- the user may move to any main section directly
+- using the Ask Emmaus back arrow should still return to the source screen
+- preserve the source screen’s scroll position
+- preserve the Bible chapter and approximate reading position
+- do not create duplicate Ask Emmaus pages or conversations
+
+==================================================
+14. MOBILE LAYOUT
+==================================================
+
+Test carefully on a real narrow mobile viewport.
+
+Verify:
+
+- Emmaus Road title fits
+- “Walk with Jesus.” is readable
+- all four new navigation labels fit
+- Ask Emmaus button remains above the bottom navigation
+- animated border remains visible
+- button does not cover Bible navigation
+- combined book/translation selector fits
+- reference picker is easy to use with one hand
+- chapter buttons have adequate touch targets
+- no horizontal scrolling
+- no controls overlap system safe areas
+
+==================================================
+BOUNDARIES
+==================================================
+
+Do not:
+
+- change the actual Bible translation content
+- add new translations
+- change Ask Emmaus response instructions
+- change language-model providers
+- change database schemas unless needed to preserve navigation state
+- add Reflect or Pray prompts to Bible reading
+- reintroduce a chapter completion screen
+- create a fifth bottom-navigation tab for Ask Emmaus
+- change Admin Portal
+- change YouTube sermon retrieval
+- redesign unrelated Journey content
+
+==================================================
+RUNNING-APP TEST
+==================================================
+
+A. OPENING IDENTITY
+
+1. Open the app.
+2. Confirm the title shows:
+   Emmaus Road
+3. Confirm the subtitle shows:
+   Walk with Jesus.
+
+B. BOTTOM NAVIGATION
+
+1. Verify the labels:
+   - Today’s Steps
+   - My Bible
+   - Next Steps
+   - My Walk
+2. Open multiple authenticated screens.
+3. Confirm the navigation remains visible.
+4. Confirm the correct section remains highlighted.
+5. Confirm the navigation is hidden from Admin and authentication screens.
+
+C. JOURNEY CLARITY
+
+1. Open Today’s Steps.
+2. Confirm each active step clearly identifies its Journey and current position.
+3. Open Next Steps.
+4. Confirm it clearly functions as the Journey discovery and management area.
+
+D. BIBLE BACK
+
+1. Open Joshua 4.
+2. Tap Back.
+3. Confirm it always opens My Bible home.
+
+E. BOOK/CHAPTER PICKER
+
+1. Open Joshua 4.
+2. Tap the “Joshua 4” section.
+3. Confirm References opens.
+4. Select Ezekiel.
+5. Select Ezekiel 5.
+6. Confirm Ezekiel 5 opens in the current translation.
+7. Reopen and select another book and chapter.
+8. Confirm navigation remains reliable.
+
+F. TRANSLATION PICKER
+
+1. Tap the translation section.
+2. Select another available translation.
+3. Confirm the same book/chapter remains open.
+4. Confirm the displayed text changes.
+5. Confirm the preference persists.
+
+G. BIBLE CONTROLS
+
+1. Confirm the redundant bottom Ask control is removed.
+2. Confirm Notes and Save/Bookmark remain.
+3. Confirm previous/next chapter navigation works directly.
+4. Confirm no completion or Reflect/Pray screen appears.
+
+H. ASK EMMAUS BUTTON
+
+1. Confirm the control says:
+   Ask Emmaus
+2. Confirm it does not resemble a WhatsApp-only icon.
+3. Confirm the animated green highlight continuously circles the border.
+4. Confirm the animation remains smooth.
+5. Confirm the text remains legible.
+6. Confirm reduced-motion preference produces a static highlighted border.
+7. Tap it from a Bible chapter.
+8. Confirm correct Bible context is passed.
+9. Return and confirm the reading position is preserved.
+
+I. MOBILE NAVIGATION
+
+Test all requirements in the narrow mobile preview and, where possible, on the actual phone preview.
+
+==================================================
+COMPLETION STANDARD
+==================================================
+
+Complete only when:
+
+- opening title says Emmaus Road
+- subtitle says Walk with Jesus.
+- navigation labels use the new locked wording
+- bottom navigation remains on all authenticated user screens
+- Today’s Steps clearly shows Journey context
+- Bible reader Back always returns to My Bible home
+- book/chapter selector works
+- translation selector works
+- redundant Bible Ask icon/control is removed
+- chapter navigation remains continuous
+- no Bible completion or Reflect/Pray flow appears
+- global control clearly says Ask Emmaus
+- animated green border travels continuously around the button
+- Bible context still reaches Ask Emmaus
+- all mobile tests have been performed
+
+When finished, report only:
+
+- files changed
+- navigation labels updated
+- screens using persistent navigation
+- book/chapter picker implemented
+- translation picker behaviour
+- redundant Bible controls removed
+- Ask Emmaus button design and animation values
+- mobile test results
+- any incomplete item and exact reason
+
+Do not propose unrelated features.
