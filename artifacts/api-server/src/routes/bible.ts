@@ -3,6 +3,9 @@ import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { logger } from "../lib/logger";
 import { apiBibleProvider } from "../lib/api-bible-provider";
+import { type Request, type Response } from "express";
+import { requireAuth } from "../emmaus/auth.js";
+import { getBibleData, patchBibleData, type UserBibleData } from "../bible/store.js";
 
 // process.cwd() is always artifacts/api-server/ at runtime (dev or dist)
 const DATA_DIR = join(process.cwd(), "data/bible");
@@ -372,6 +375,54 @@ router.post("/bible/search", (req, res) => {
   }
 
   res.json({ query: q, translation, results });
+});
+
+// ─── User Reading Data Routes ──────────────────────────────────────────────────
+//
+// GET  /api/bible/data   — load all Bible reading data for the authenticated user
+// PATCH /api/bible/data  — merge a partial update into the user's stored data
+//
+// Identity: X-User-Id header (demo mode) or signed session cookie.
+
+// GET /api/bible/data — returns full Bible data for the caller
+router.get("/bible/data", (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const data = getBibleData(userId);
+  res.json(data);
+});
+
+// PATCH /api/bible/data — merges provided fields into the caller's stored data
+router.patch("/bible/data", (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const patch = req.body as Partial<UserBibleData>;
+
+  // Only allow known fields to prevent injection of arbitrary data
+  const allowed: (keyof UserBibleData)[] = [
+    "history",
+    "completed",
+    "journeyProgress",
+    "highlights",
+    "favourites",
+    "bookmarks",
+    "notes",
+    "reflections",
+    "prayers",
+  ];
+
+  const sanitized: Partial<UserBibleData> = {};
+  for (const key of allowed) {
+    if (key in patch) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sanitized as any)[key] = (patch as any)[key];
+    }
+  }
+
+  const updated = patchBibleData(userId, sanitized);
+  res.json(updated);
 });
 
 export default router;

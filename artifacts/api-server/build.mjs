@@ -96,6 +96,8 @@ async function buildAll() {
       "wrangler",
       "zeromq",
       "zeromq-prebuilt",
+      "fluent-ffmpeg",
+      "@distube/ytdl-core",
       "playwright",
       "puppeteer",
       "puppeteer-core",

@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from './AuthContext';
+import { loadBibleData, patchBibleData } from '../lib/bible-api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -28,10 +30,10 @@ export type BibleJourneyProgress = {
 export type ChapterReflection = { id: string; bookId: string; chapter: number; text: string; createdAt: string };
 export type PersonalPrayer = { id: string; bookId: string; chapter: number; text: string; savedAt: string };
 
-// ─── Storage keys ─────────────────────────────────────────────────────────────
+// ─── localStorage keys (unauthenticated fallback) ─────────────────────────────
 
 const LS = {
-  history:           'emmaus_bible_history_v2',    // now an array
+  history:           'emmaus_bible_history_v2',    // array, newest-first
   completed:         'emmaus_bible_completed',
   journeyProgress:   'emmaus_bible_journey_progress',
   highlights:        'emmaus_bible_highlights',
@@ -132,6 +134,9 @@ export function useBible(): BibleContextType {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function BibleProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userIdRef = useRef<string | null>(null);
+
   const [translationId, setTranslationIdState] = useState<string>('bsb');
   const [readingHistory, setReadingHistory] = useState<ReadingHistoryEntry[]>([]);
   const [completedChapters, setCompletedChapters] = useState<Set<string>>(new Set());
@@ -143,29 +148,103 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
   const [reflections, setReflections] = useState<ChapterReflection[]>([]);
   const [prayers, setPrayers] = useState<PersonalPrayer[]>([]);
 
-  useEffect(() => {
-    setTranslationIdState(load(LS.translation, 'bsb'));
-    // Migrate old single-entry history to array
-    const rawHistory = localStorage.getItem(LS.history);
-    const oldHistory = localStorage.getItem('emmaus_bible_history');
-    if (rawHistory) {
-      setReadingHistory(load(LS.history, []));
-    } else if (oldHistory) {
-      try {
-        const old = JSON.parse(oldHistory) as ReadingHistoryEntry | null;
-        if (old && old.bookId) setReadingHistory([old]);
-      } catch { /* ignore */ }
+  // ─── Storage helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Persist a partial update — always writes to localStorage,
+   * and also fires a cloud PATCH when the user is authenticated.
+   */
+  const persist = useCallback((patch: Parameters<typeof patchBibleData>[1]) => {
+    const uid = userIdRef.current;
+    if (uid) {
+      // Fire-and-forget cloud write; localStorage remains the immediate fallback
+      patchBibleData(uid, patch);
     }
-    const completed: string[] = load(LS.completed, []);
-    setCompletedChapters(new Set(completed));
-    setJourneyProgress(load(LS.journeyProgress, {}));
-    setHighlights(load(LS.highlights, []));
-    setFavourites(load(LS.favourites, []));
-    setBookmarks(load(LS.bookmarks, []));
-    setNotes(load(LS.notes, []));
-    setReflections(load(LS.reflections, []));
-    setPrayers(load(LS.prayers, []));
+    // Always mirror to localStorage so unauthenticated sessions and cloud
+    // fallback work seamlessly
+    if ('history' in patch)         save(LS.history,         patch.history);
+    if ('completed' in patch)       save(LS.completed,       patch.completed);
+    if ('journeyProgress' in patch) save(LS.journeyProgress, patch.journeyProgress);
+    if ('highlights' in patch)      save(LS.highlights,      patch.highlights);
+    if ('favourites' in patch)      save(LS.favourites,      patch.favourites);
+    if ('bookmarks' in patch)       save(LS.bookmarks,       patch.bookmarks);
+    if ('notes' in patch)           save(LS.notes,           patch.notes);
+    if ('reflections' in patch)     save(LS.reflections,     patch.reflections);
+    if ('prayers' in patch)         save(LS.prayers,         patch.prayers);
   }, []);
+
+  // ─── Load data ──────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+
+    // Translation preference is always local — not synced to cloud
+    setTranslationIdState(load(LS.translation, 'bsb'));
+
+    async function loadData() {
+      let history: ReadingHistoryEntry[] = [];
+      let completed: string[] = [];
+      let journeyProg: Record<string, BibleJourneyProgress> = {};
+      let hlights: VerseHighlight[] = [];
+      let favs: VerseFavourite[] = [];
+      let bkms: ChapterBookmark[] = [];
+      let nts: VerseNote[] = [];
+      let refls: ChapterReflection[] = [];
+      let prays: PersonalPrayer[] = [];
+
+      if (user) {
+        // Try cloud first
+        const cloud = await loadBibleData(user.id);
+        if (cloud) {
+          history    = cloud.history ?? [];
+          completed  = cloud.completed;
+          journeyProg = cloud.journeyProgress;
+          hlights    = cloud.highlights;
+          favs       = cloud.favourites;
+          bkms       = cloud.bookmarks;
+          nts        = cloud.notes;
+          refls      = cloud.reflections;
+          prays      = cloud.prayers;
+        } else {
+          // Cloud unavailable — fall back to localStorage
+          history    = loadFromLocalStorage();
+          completed  = load(LS.completed, []);
+          journeyProg = load(LS.journeyProgress, {});
+          hlights    = load(LS.highlights, []);
+          favs       = load(LS.favourites, []);
+          bkms       = load(LS.bookmarks, []);
+          nts        = load(LS.notes, []);
+          refls      = load(LS.reflections, []);
+          prays      = load(LS.prayers, []);
+        }
+      } else {
+        // Unauthenticated — localStorage only
+        history    = loadFromLocalStorage();
+        completed  = load(LS.completed, []);
+        journeyProg = load(LS.journeyProgress, {});
+        hlights    = load(LS.highlights, []);
+        favs       = load(LS.favourites, []);
+        bkms       = load(LS.bookmarks, []);
+        nts        = load(LS.notes, []);
+        refls      = load(LS.reflections, []);
+        prays      = load(LS.prayers, []);
+      }
+
+      setReadingHistory(history);
+      setCompletedChapters(new Set(completed));
+      setJourneyProgress(journeyProg);
+      setHighlights(hlights);
+      setFavourites(favs);
+      setBookmarks(bkms);
+      setNotes(nts);
+      setReflections(refls);
+      setPrayers(prays);
+    }
+
+    loadData();
+  }, [user]);
+
+  // ─── Reading history ────────────────────────────────────────────────────────
 
   const setTranslation = useCallback((id: string) => {
     setTranslationIdState(id);
@@ -177,32 +256,36 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       // Remove existing entry for same book+chapter, prepend new one, cap at HISTORY_MAX
       const filtered = prev.filter(e => !(e.bookId === entry.bookId && e.chapter === entry.chapter));
       const next = [{ ...entry, openedAt: new Date().toISOString() }, ...filtered].slice(0, HISTORY_MAX);
-      save(LS.history, next);
+      persist({ history: next });
       return next;
     });
-  }, []);
+  }, [persist]);
+
+  // ─── Completed chapters ─────────────────────────────────────────────────────
 
   const markChapterComplete = useCallback((bookId: string, chapter: number) => {
     setCompletedChapters(prev => {
       const next = new Set(prev);
       next.add(chapterKey(bookId, chapter));
-      save(LS.completed, Array.from(next));
+      persist({ completed: Array.from(next) });
       return next;
     });
-  }, []);
+  }, [persist]);
 
   const isChapterComplete = useCallback((bookId: string, chapter: number) => {
     return completedChapters.has(chapterKey(bookId, chapter));
   }, [completedChapters]);
 
+  // ─── Bible Journey progress ─────────────────────────────────────────────────
+
   const startBibleJourney = useCallback((journeyId: string) => {
     setJourneyProgress(prev => {
       if (prev[journeyId]) return prev;
       const next = { ...prev, [journeyId]: { journeyId, currentChapter: 1, completedChapters: [], startedAt: new Date().toISOString(), lastCompletedAt: null } };
-      save(LS.journeyProgress, next);
+      persist({ journeyProgress: next });
       return next;
     });
-  }, []);
+  }, [persist]);
 
   const markJourneyChapterComplete = useCallback((journeyId: string, chapter: number) => {
     setJourneyProgress(prev => {
@@ -210,54 +293,65 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       if (!existing) return prev;
       const completedChaps = existing.completedChapters.includes(chapter) ? existing.completedChapters : [...existing.completedChapters, chapter];
       const next = { ...prev, [journeyId]: { ...existing, completedChapters: completedChaps, currentChapter: Math.max(existing.currentChapter, chapter + 1), lastCompletedAt: new Date().toISOString() } };
-      save(LS.journeyProgress, next);
+      persist({ journeyProgress: next });
       return next;
     });
-  }, []);
+  }, [persist]);
 
   const getJourneyProgress = useCallback((journeyId: string) => journeyProgress[journeyId] ?? null, [journeyProgress]);
+
+  // ─── Highlights ─────────────────────────────────────────────────────────────
 
   const addHighlight = useCallback((bookId: string, chapter: number, verse: number, color: HighlightColor) => {
     setHighlights(prev => {
       const filtered = prev.filter(h => !(h.bookId === bookId && h.chapter === chapter && h.verse === verse));
       const next = [...filtered, { bookId, chapter, verse, color }];
-      save(LS.highlights, next); return next;
+      persist({ highlights: next });
+      return next;
     });
-  }, []);
+  }, [persist]);
 
   const removeHighlight = useCallback((bookId: string, chapter: number, verse: number) => {
-    setHighlights(prev => { const next = prev.filter(h => !(h.bookId === bookId && h.chapter === chapter && h.verse === verse)); save(LS.highlights, next); return next; });
-  }, []);
+    setHighlights(prev => { const next = prev.filter(h => !(h.bookId === bookId && h.chapter === chapter && h.verse === verse)); persist({ highlights: next }); return next; });
+  }, [persist]);
 
   const getHighlight = useCallback((bookId: string, chapter: number, verse: number) => highlights.find(h => h.bookId === bookId && h.chapter === chapter && h.verse === verse), [highlights]);
+
+  // ─── Favourites ─────────────────────────────────────────────────────────────
 
   const addFavourite = useCallback((fav: Omit<VerseFavourite, 'id' | 'savedAt'>) => {
     setFavourites(prev => {
       if (prev.some(f => f.bookId === fav.bookId && f.chapter === fav.chapter && f.verse === fav.verse)) return prev;
       const next = [...prev, { ...fav, id: genId('fav'), savedAt: new Date().toISOString() }];
-      save(LS.favourites, next); return next;
+      persist({ favourites: next });
+      return next;
     });
-  }, []);
+  }, [persist]);
 
   const removeFavourite = useCallback((bookId: string, chapter: number, verse: number) => {
-    setFavourites(prev => { const next = prev.filter(f => !(f.bookId === bookId && f.chapter === chapter && f.verse === verse)); save(LS.favourites, next); return next; });
-  }, []);
+    setFavourites(prev => { const next = prev.filter(f => !(f.bookId === bookId && f.chapter === chapter && f.verse === verse)); persist({ favourites: next }); return next; });
+  }, [persist]);
 
   const isFavourite = useCallback((bookId: string, chapter: number, verse: number) => favourites.some(f => f.bookId === bookId && f.chapter === chapter && f.verse === verse), [favourites]);
+
+  // ─── Chapter bookmarks ──────────────────────────────────────────────────────
 
   const addBookmark = useCallback((entry: Omit<ChapterBookmark, 'id' | 'savedAt'>) => {
     setBookmarks(prev => {
       if (prev.some(b => b.bookId === entry.bookId && b.chapter === entry.chapter)) return prev;
       const next = [...prev, { ...entry, id: genId('bkm'), savedAt: new Date().toISOString() }];
-      save(LS.bookmarks, next); return next;
+      persist({ bookmarks: next });
+      return next;
     });
-  }, []);
+  }, [persist]);
 
   const removeBookmark = useCallback((bookId: string, chapter: number) => {
-    setBookmarks(prev => { const next = prev.filter(b => !(b.bookId === bookId && b.chapter === chapter)); save(LS.bookmarks, next); return next; });
-  }, []);
+    setBookmarks(prev => { const next = prev.filter(b => !(b.bookId === bookId && b.chapter === chapter)); persist({ bookmarks: next }); return next; });
+  }, [persist]);
 
   const isBookmarked = useCallback((bookId: string, chapter: number) => bookmarks.some(b => b.bookId === bookId && b.chapter === chapter), [bookmarks]);
+
+  // ─── Notes ──────────────────────────────────────────────────────────────────
 
   const saveNote = useCallback((bookId: string, chapter: number, verse: number, verseText: string, text: string) => {
     setNotes(prev => {
@@ -268,16 +362,18 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       } else {
         next = [...prev, { id: genId('note'), bookId, chapter, verse, verseText, text, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
       }
-      save(LS.notes, next); return next;
+      persist({ notes: next }); return next;
     });
-  }, []);
+  }, [persist]);
 
   const deleteNote = useCallback((noteId: string) => {
-    setNotes(prev => { const next = prev.filter(n => n.id !== noteId); save(LS.notes, next); return next; });
-  }, []);
+    setNotes(prev => { const next = prev.filter(n => n.id !== noteId); persist({ notes: next }); return next; });
+  }, [persist]);
 
   const getNote = useCallback((bookId: string, chapter: number, verse: number) => notes.find(n => n.bookId === bookId && n.chapter === chapter && n.verse === verse), [notes]);
   const getChapterNotes = useCallback((bookId: string, chapter: number) => notes.filter(n => n.bookId === bookId && n.chapter === chapter).sort((a, b) => a.verse - b.verse), [notes]);
+
+  // ─── Reflections ────────────────────────────────────────────────────────────
 
   const saveReflection = useCallback((bookId: string, chapter: number, text: string) => {
     setReflections(prev => {
@@ -285,11 +381,13 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       let next: ChapterReflection[];
       if (existing) { next = prev.map(r => r.id === existing.id ? { ...r, text } : r); }
       else { next = [...prev, { id: genId('refl'), bookId, chapter, text, createdAt: new Date().toISOString() }]; }
-      save(LS.reflections, next); return next;
+      persist({ reflections: next }); return next;
     });
-  }, []);
+  }, [persist]);
 
   const getReflection = useCallback((bookId: string, chapter: number) => reflections.find(r => r.bookId === bookId && r.chapter === chapter), [reflections]);
+
+  // ─── Prayers ────────────────────────────────────────────────────────────────
 
   const savePrayer = useCallback((bookId: string, chapter: number, text: string) => {
     setPrayers(prev => {
@@ -297,9 +395,9 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       let next: PersonalPrayer[];
       if (existing) { next = prev.map(p => p.id === existing.id ? { ...p, text, savedAt: new Date().toISOString() } : p); }
       else { next = [...prev, { id: genId('pray'), bookId, chapter, text, savedAt: new Date().toISOString() }]; }
-      save(LS.prayers, next); return next;
+      persist({ prayers: next }); return next;
     });
-  }, []);
+  }, [persist]);
 
   const getPrayer = useCallback((bookId: string, chapter: number) => prayers.find(p => p.bookId === bookId && p.chapter === chapter), [prayers]);
 
@@ -321,4 +419,22 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       {children}
     </BibleContext.Provider>
   );
+}
+
+// ─── localStorage history loader (handles v2 array + v1 migration) ────────────
+
+function loadFromLocalStorage(): ReadingHistoryEntry[] {
+  const rawV2 = localStorage.getItem('emmaus_bible_history_v2');
+  if (rawV2) {
+    try { return JSON.parse(rawV2) as ReadingHistoryEntry[]; } catch { /* ignore */ }
+  }
+  // Migrate v1 single-entry key
+  const rawV1 = localStorage.getItem('emmaus_bible_history');
+  if (rawV1) {
+    try {
+      const old = JSON.parse(rawV1) as ReadingHistoryEntry | null;
+      if (old && old.bookId) return [old];
+    } catch { /* ignore */ }
+  }
+  return [];
 }
