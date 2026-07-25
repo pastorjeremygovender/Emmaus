@@ -1,64 +1,94 @@
-import { useEffect } from 'react';
-import { Link, useLocation } from 'wouter';
-import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
+/**
+ * Welcome — Emmaus splash screen.
+ *
+ * Shows on every fresh launch (new tab, full reload, new browser session).
+ * Does NOT repeat during ordinary in-app SPA navigation (tracked via sessionStorage).
+ *
+ * Flow:
+ *   1. Splash appears immediately.
+ *   2. Auth state resolves behind the splash.
+ *   3. After ~2 s AND auth resolved → navigate:
+ *        authenticated  → /walk
+ *        unauthenticated → /auth
+ *   4. Subsequent in-app visits to "/" skip the splash and redirect instantly.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'wouter';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+
+const SPLASH_KEY   = 'emmaus_splash_shown';
+const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves faster
 
 export default function Welcome() {
   const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
 
-  // If the user already has a session, skip the splash and go directly to their home.
+  // Has this splash already been shown in the current browser session?
+  const alreadyShown = sessionStorage.getItem(SPLASH_KEY) === 'true';
+
+  // Track whether the minimum display time has elapsed.
+  const [timerDone, setTimerDone]   = useState(false);
+  const navigatedRef                 = useRef(false);
+
+  // ── Fast path: splash already shown this session ──────────────────────────
   useEffect(() => {
-    if (!loading && user) {
+    if (!alreadyShown) return;
+    if (loading) return;
+    // Skip straight to destination without showing splash.
+    if (user) {
       setLocation(user.role === 'admin' ? '/admin' : '/walk');
+    } else {
+      setLocation('/auth');
     }
-  }, [user, loading]);
+  }, [alreadyShown, loading, user]);
 
-  // Show nothing while checking session to avoid a flash of the splash for returning users.
-  if (loading || user) return null;
+  // ── Minimum display timer ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (alreadyShown) return;
+    const id = setTimeout(() => setTimerDone(true), MIN_DURATION);
+    return () => clearTimeout(id);
+  }, [alreadyShown]);
 
+  // ── Navigate once both conditions are met ─────────────────────────────────
+  useEffect(() => {
+    if (alreadyShown) return;
+    if (!timerDone || loading) return;
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+
+    sessionStorage.setItem(SPLASH_KEY, 'true');
+
+    if (user) {
+      setLocation(user.role === 'admin' ? '/admin' : '/walk');
+    } else {
+      setLocation('/auth');
+    }
+  }, [alreadyShown, timerDone, loading, user]);
+
+  // ── If already shown, render nothing while redirecting ───────────────────
+  if (alreadyShown) return null;
+
+  // ── Splash ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16 bg-background">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9, ease: 'easeOut' }}
-        className="flex flex-col items-center w-full max-w-[360px] text-center"
-      >
-        {/* Title block */}
-        <div className="space-y-4 mb-16">
-          <h1 className="text-[40px] leading-tight font-sans font-medium text-foreground tracking-tight">
+    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background">
+      <AnimatePresence>
+        <motion.div
+          key="splash"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          className="flex flex-col items-center gap-4 text-center select-none"
+        >
+          <h1 className="text-[42px] leading-none font-sans font-medium tracking-tight text-foreground">
             Emmaus
           </h1>
-          <p className="text-lg text-muted-foreground leading-relaxed">
-            Walk with Jesus.
+          <p className="text-[18px] text-muted-foreground font-sans font-normal leading-relaxed">
+            Walk with Jesus
           </p>
-        </div>
-
-        {/* Actions */}
-        <div className="w-full space-y-3 flex flex-col">
-          <Link href="/auth?mode=register" className="w-full">
-            <Button
-              size="lg"
-              className="w-full h-14 rounded-2xl text-[17px] font-medium shadow-sm"
-              data-testid="button-get-started"
-            >
-              Get Started
-            </Button>
-          </Link>
-          <Link href="/auth?mode=login" className="w-full">
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full h-14 rounded-2xl text-[17px] font-medium bg-transparent"
-              data-testid="button-sign-in"
-            >
-              Sign In
-            </Button>
-          </Link>
-        </div>
-      </motion.div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

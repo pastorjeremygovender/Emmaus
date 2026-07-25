@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'wouter';
-import { Footprints, BookOpen, Library, User } from 'lucide-react';
+import { Footprints, BookOpen, Compass, User } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
 
 // Navigation order (locked):
@@ -13,7 +13,7 @@ export function BottomNav() {
 
   const navItems = [
     { path: '/walk',      label: 'Walk',      icon: Footprints },
-    { path: '/journeys',  label: 'Journeys',  icon: Library },
+    { path: '/journeys',  label: 'Journeys',  icon: Compass },
     { path: '/bible',     label: 'Bible',     icon: BookOpen },
     { path: '/personal',  label: 'Personal',  icon: User },
   ];

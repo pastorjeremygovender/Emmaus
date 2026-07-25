@@ -37,6 +37,19 @@ Enforced in `Journeys.tsx` via `canActivateMore(journeys, startedIds)`. When blo
 - User pauses one → `handlePauseFromLimit` → immediately opens the start modal for the blocked journey
 - Pausing calls `pauseJourney(id)` from `useEnrollment` → sets enrollment state to `'paused'`
 
-## Welcome/splash
+## Walk screen fixed section order (correction sprint)
 
-`Welcome.tsx` now auto-redirects authenticated users to `/walk` (or `/admin`) via `useEffect` on `user`. Shows `null` while checking session to prevent splash flash for returning users.
+Order is now FIXED — the next-step engine may not rearrange it:
+1. 15 Minutes with Jesus (always first, most prominent, `bg-primary/5` treatment)
+2. This Week's Sermon Devotional (companion journey type)
+3. Daily Devotional (devotional journey type — hidden cleanly if none published)
+4. Continue Your Journeys (active non-exempt growth journeys only)
+5. This Week (weekly progress)
+
+Removed from Walk: "Ready for you" card, Ask Emmaus inline card, Browse Journeys link/section.
+
+## Splash screen
+
+`Welcome.tsx` is a pure auto-transitioning splash (no buttons). Uses sessionStorage key `emmaus_splash_shown` to skip during in-app SPA navigation but show on fresh load/reload. Waits for `max(2s, auth resolved)` then navigates: authenticated → `/walk`, unauthenticated → `/auth`. The old Welcome page had buttons — that pattern is replaced by the pure splash; unauthenticated users land on /auth directly.
+
+**Why:** Spec requires splash on every fresh launch without skipping for authenticated users, but no repeat during tab navigation.

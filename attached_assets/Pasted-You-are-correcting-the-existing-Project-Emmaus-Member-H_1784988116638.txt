@@ -1,0 +1,889 @@
+You are correcting the existing Project Emmaus Member Home and Next-Step Engine implementation.
+
+Do not create a new project.
+
+Do not rebuild unrelated areas.
+
+Do not redesign Rooms.
+
+Do not change the existing Ask Emmaus experience or remove its floating access button.
+
+Preserve all existing data, authentication, progress, Bible functionality, sermon functionality, Journeys, admin tools and publishing workflows.
+
+This is a focused correction sprint based on direct product review.
+
+=====================================================
+CORRECTION GOAL
+
+Correct the hierarchy and opening flow of the Walk with Jesus member experience.
+
+The current implementation incorrectly allows another recommendation, such as this week’s sermon, to appear above 15 Minutes with Jesus.
+
+This must change.
+
+15 Minutes with Jesus is the heartbeat of Emmaus.
+
+It must always appear first on the Walk with Jesus screen.
+
+The member home screen must follow a fixed, trustworthy discipleship rhythm rather than allowing a recommendation engine to rearrange the primary content hierarchy.
+
+=====================================================
+FIXED CONTENT ORDER
+
+The Walk with Jesus home screen must always use this order:
+
+1. 15 Minutes with Jesus
+2. This Week’s Sermon Devotional
+3. Daily Devotional
+4. Continue Your Journeys
+5. This Week progress
+
+This order is fixed.
+
+Do not place any other content above 15 Minutes with Jesus.
+
+Do not add a Browse Journeys button or Browse Journeys section to the Walk screen.
+
+Users can browse and manage Journeys through the existing Journeys tab in the bottom navigation.
+
+Do not duplicate Journey discovery on the Walk screen.
+
+=====================================================
+SPLASH SCREEN
+
+The splash screen must display every time the member application is freshly opened or launched.
+
+It must not be skipped because the user is already authenticated.
+
+Display only:
+
+Emmaus
+
+Walk with Jesus
+
+Then transition automatically to the correct destination.
+
+Required flow:
+
+1. Application launches or receives a full page load.
+2. Splash screen appears.
+3. Authentication state is resolved behind the splash screen.
+4. An authenticated user goes directly to Walk with Jesus.
+5. An unauthenticated user goes to login after the splash.
+6. After successful login, the user goes directly to Walk with Jesus.
+7. Do not show the splash repeatedly during ordinary in-app navigation.
+
+The splash should appear:
+
+- After a fresh app launch
+- After opening the installed app
+- After beginning a new browser session
+- After a full page reload of the member application
+- Before the member home screen following login, when it has not already appeared for that launch
+
+Do not show a blank white screen before or after it.
+
+=====================================================
+SPLASH DESIGN
+
+The splash must remain minimal.
+
+Show only:
+
+Emmaus
+
+Walk with Jesus
+
+Use:
+
+- Existing Emmaus colours
+- Modern sans-serif typography
+- Generous white space
+- A calm transition
+- No marketing copy
+- No feature carousel
+- No buttons
+- No loading percentage
+- No dashboard content
+
+Suggested display duration:
+
+Approximately 1.5 to 2.5 seconds.
+
+Respect reduced-motion accessibility preferences.
+
+=====================================================
+WALK WITH JESUS SCREEN
+
+The Walk tab must open the Walk with Jesus member home screen.
+
+It should not feel like a traditional dashboard.
+
+It should feel like Emmaus has prepared the user’s next steps and placed them in a clear daily rhythm.
+
+The screen structure must be:
+
+Greeting
+
+15 Minutes with Jesus
+
+This Week’s Sermon Devotional
+
+Daily Devotional
+
+Continue Your Journeys
+
+This Week
+
+Do not add a generic Ready for you section above these items.
+
+=====================================================
+GREETING
+
+Use a simple greeting based on local time.
+
+Examples:
+
+Good morning, Jeremy.
+
+Good afternoon, Jeremy.
+
+Good evening, Jeremy.
+
+Use the user’s preferred display name where available.
+
+Do not add unnecessary motivational text before the first card.
+
+=====================================================
+15 MINUTES WITH JESUS
+
+15 Minutes with Jesus must always be the first and most prominent card.
+
+It must appear directly beneath the greeting.
+
+It is not one optional recommendation among many.
+
+It is the central daily rhythm of Emmaus.
+
+Possible states:
+
+- Begin Day 1
+- Ready for today
+- Continue today
+- Completed today
+- Available tomorrow
+
+If the current day is unfinished, the main action should be:
+
+Begin
+
+or
+
+Continue
+
+If today’s session has been completed, the card must remain first and display:
+
+Today’s time with Jesus is complete.
+
+Come back tomorrow for the next step.
+
+Allow the user to review today’s session again.
+
+Do not hide the card after completion.
+
+Do not replace it with a sermon, devotional or ordinary Journey.
+
+A user may complete only one new Day of 15 Minutes with Jesus per local calendar day.
+
+The user may:
+
+- Reopen today’s completed Day
+- Review any previous Day
+- Reread Scripture
+- Repeat the reflection
+- Repeat the prayer
+- Review their own responses
+- Listen again where audio exists
+
+The user may not:
+
+- Unlock the next new Day on the same local date
+- Bypass the limit by refreshing
+- Bypass the limit from another device
+- Bypass the limit through client-side clock manipulation where server validation is available
+
+The next Day becomes available on the next local calendar date, not after a rolling 24-hour timer.
+
+Do not show a countdown clock.
+
+=====================================================
+REMOVE GENERIC READY FOR YOU CARD
+
+Remove the generic Ready for you card as a separate top-level recommendation container.
+
+The current implementation allows a sermon or other content to become the first large card.
+
+That is incorrect.
+
+The first 15 Minutes with Jesus card itself is the user’s primary next step.
+
+The recommendation system may determine the correct state and position within each section, but it may not alter the fixed section order.
+
+=====================================================
+THIS WEEK’S SERMON DEVOTIONAL
+
+The second section must be:
+
+This Week’s Sermon Devotional
+
+This refers to the devotional Journey created from the current week’s sermon.
+
+It is not merely a sermon playback card.
+
+Display:
+
+- Journey or sermon title
+- Current devotional Day or Step
+- Short description
+- Progress where useful
+- Continue button
+- Sermon listening option where available
+
+Example:
+
+This Week’s Sermon Devotional
+
+God’s Kindness Restores the Broken
+
+Day 2 of 5
+
+Continue
+
+Use the existing Journey and sermon systems.
+
+Do not rebuild the sermon archive.
+
+Do not place this section above 15 Minutes with Jesus.
+
+If no sermon devotional is currently available, hide the section cleanly rather than showing an empty card.
+
+=====================================================
+DAILY DEVOTIONAL
+
+The third section must be:
+
+Daily Devotional
+
+Display today’s devotional.
+
+Possible states:
+
+- Ready for today
+- Continue reading
+- Completed today
+- Available tomorrow
+
+Users may:
+
+- Read today’s devotional
+- Reopen today’s devotional
+- Revisit previously unlocked devotionals
+
+Users may not:
+
+- Open tomorrow’s devotional early
+- Unlock several new devotional entries on the same day
+- Unlock future entries by rereading old content
+
+Use local-calendar-day rules.
+
+If the user misses several days, calmly present the next intended devotional.
+
+Do not show:
+
+- Missed-day counts
+- Broken streaks
+- Catch-up pressure
+- Overdue language
+
+If no daily devotional is currently assigned or published, hide the section cleanly.
+
+=====================================================
+CONTINUE YOUR JOURNEYS
+
+After the three core rhythm sections, display:
+
+Continue Your Journeys
+
+Only show this section when the user has active non-exempt Journeys.
+
+Examples:
+
+- Made Free
+- Marriage
+- Parenting
+- Volunteer Training
+- Membership
+- Bible Study
+- Prayer Journey
+- Youth Journey
+- Leadership Journey
+
+Each Journey card should show:
+
+- Journey title
+- Cover image or appropriate placeholder
+- Current Step
+- Short next-step description
+- Progress where useful
+- Estimated time where available
+- Continue button
+- Pause option in a secondary menu
+
+The system may decide which active Journey appears first within this section.
+
+It may not move any active Journey above:
+
+- 15 Minutes with Jesus
+- This Week’s Sermon Devotional
+- Daily Devotional
+
+Do not add a Browse Journeys button beneath this section.
+
+Journey browsing belongs exclusively in the existing Journeys navigation tab.
+
+=====================================================
+ACTIVE JOURNEY LIMIT
+
+Preserve the maximum of two active non-exempt growth Journeys per user.
+
+These do not count toward the limit:
+
+- Walk with Jesus
+- 15 Minutes with Jesus
+- Daily Devotional
+- This Week’s Sermon Devotional
+- This Week’s Sermon
+
+All other long-form Journeys count toward the two active Journey limit.
+
+A user may still:
+
+- Browse unlimited Journeys in the Journeys tab
+- Preview unlimited Journeys
+- Save unlimited Journeys for later
+- Revisit completed Journeys
+- Revisit paused Journeys
+
+A user may only have two non-exempt Journeys marked active.
+
+=====================================================
+STARTING A THIRD JOURNEY
+
+When a user attempts to begin a third active non-exempt Journey, show a warm dialog:
+
+You already have two Journeys underway.
+
+To help you focus and finish well, pause one before beginning another.
+
+Buttons:
+
+Review my Journeys
+
+Not now
+
+Review my Journeys should open the appropriate Journey-management view in the Journeys tab.
+
+The user should be able to:
+
+- View both active Journeys
+- See current progress
+- Continue either Journey
+- Pause one Journey
+- Cancel starting the new Journey
+
+After pausing one, allow the new Journey to begin.
+
+Pausing must preserve all progress, responses and completion data.
+
+=====================================================
+PAUSED JOURNEYS
+
+Paused Journeys should:
+
+- Retain all progress
+- Retain responses
+- Retain completion records
+- Remain available through the Journeys tab
+- Not appear under Continue Your Journeys
+- Not appear in the daily recommendation rotation
+- Be resumable when active capacity is available
+
+Use the state label:
+
+Paused
+
+Do not use language suggesting failure or abandonment.
+
+=====================================================
+THIS WEEK PROGRESS
+
+Keep the existing This Week progress card.
+
+This part of the current implementation is approved.
+
+Show real participation rhythms such as:
+
+- Read Scripture 1 day this week
+- Prayed 2 days this week
+- Continued a Journey 1 day this week
+- Listened to this week’s sermon
+
+Only display activity that is genuinely recorded.
+
+Do not count simply opening a screen as completing prayer unless prayer completion is explicitly tracked.
+
+Use one gentle sentence below the progress summary.
+
+Examples:
+
+You’ve made space to walk with Jesus. Keep it up.
+
+You’re building a steady rhythm, one step at a time.
+
+Every small step matters.
+
+Do not add:
+
+- XP
+- Points
+- Levels
+- Scores
+- Rankings
+- Leaderboards
+- Competitive streaks
+- Spirituality ratings
+- Missed-day warnings
+- Comparison between members
+
+=====================================================
+ASK EMMAUS
+
+Remove the separate Ask Emmaus content card from the Walk with Jesus screen.
+
+The floating Ask Emmaus button already provides access and is sufficient.
+
+Do not display both:
+
+- A floating Ask Emmaus button
+- A full Ask Emmaus card
+
+Keep the existing floating Ask Emmaus button.
+
+It should remain visible and usable throughout the member experience.
+
+Do not redesign the Ask Emmaus conversation flow in this correction sprint.
+
+=====================================================
+BOTTOM NAVIGATION
+
+Preserve the existing bottom member navigation.
+
+Recommended destinations remain:
+
+- Walk
+- Journeys
+- Bible
+- Personal
+
+Ask Emmaus remains accessible through the floating button.
+
+The Journeys tab is the only place needed for:
+
+- Browsing Journeys
+- Starting new Journeys
+- Viewing active Journeys
+- Viewing paused Journeys
+- Viewing completed Journeys
+- Viewing saved Journeys
+- Pausing and resuming Journeys
+
+Do not add Journey discovery links to the Walk screen.
+
+=====================================================
+NEXT-STEP ENGINE RESPONSIBILITIES
+
+Keep the next-step engine, but restrict its responsibilities.
+
+It may determine:
+
+- The correct current Day in 15 Minutes with Jesus
+- Whether the user should Begin, Continue, Review or wait until tomorrow
+- The exact next Step in This Week’s Sermon Devotional
+- The current Daily Devotional state
+- Which active Journey appears first in Continue Your Journeys
+- The exact Step and saved position when continuing
+- The correct button wording for each card
+- Whether an optional section should be hidden because no content is available
+
+It may not determine:
+
+- Whether 15 Minutes with Jesus appears first
+- Whether another content type replaces the first card
+- Whether the fixed section order changes
+- Whether a generic recommendation container appears above the core rhythm
+
+=====================================================
+VISUAL HIERARCHY
+
+15 Minutes with Jesus must visually communicate that it is the central daily rhythm.
+
+It should be:
+
+- First
+- Most prominent
+- Easy to recognise
+- Easy to begin
+- Calm rather than flashy
+
+This Week’s Sermon Devotional should be clearly secondary.
+
+Daily Devotional should be clearly third.
+
+Continue Your Journeys should be less visually dominant than the three core rhythm sections.
+
+The This Week progress card should remain calm and supportive.
+
+Do not make every card equally prominent.
+
+=====================================================
+CARD LANGUAGE
+
+Use:
+
+- 15 Minutes with Jesus
+- This Week’s Sermon Devotional
+- Daily Devotional
+- Continue Your Journeys
+- This Week
+- Ready for today
+- Continue
+- Completed today
+- Available tomorrow
+- Review today
+- Paused
+
+Avoid:
+
+- Ready for you as a top-level container
+- Recommended content
+- AI recommendation
+- Optimised next action
+- Engagement task
+- Overdue
+- Failed
+- Missed
+- Falling behind
+- Content priority
+
+=====================================================
+TYPOGRAPHY
+
+Preserve the removal of Times New Roman throughout the app.
+
+Verify again that Times New Roman and browser-default serif styling do not appear in:
+
+- Splash screen
+- Walk with Jesus
+- 15 Minutes with Jesus
+- Daily Devotional
+- Sermon Devotional
+- Journey screens
+- Bible reading
+- Ask Emmaus
+- Admin screens
+- Rich-text content
+- Pasted content
+- Retrieved Bible HTML
+
+Use the existing modern Emmaus sans-serif typography system.
+
+Bible text should use:
+
+- Comfortable line height
+- Clear verse numbers
+- Good contrast
+- Sensible reading width
+- Generous paragraph spacing
+- Modern sans-serif typography
+
+=====================================================
+MOBILE-FIRST REQUIREMENT
+
+The corrected Walk with Jesus screen is primarily a mobile experience.
+
+On mobile:
+
+- The greeting and 15 Minutes with Jesus card should appear near the top
+- The first card should be visible without excessive scrolling
+- Cards should stack cleanly
+- Buttons should be easy to tap
+- The floating Ask Emmaus button must not obscure important controls
+- Bottom navigation must remain reachable
+- No horizontal overflow
+- No tiny text or controls
+- No desktop-style multi-column layout
+
+Also verify tablet and desktop layouts.
+
+=====================================================
+DATA SAFETY
+
+Inspect the existing implementation before changing it.
+
+Reuse current:
+
+- User progress
+- Journey enrolment
+- Step completion
+- Daily locking
+- Local timezone logic
+- Sermon Journey assignments
+- Active Journey records
+- Paused Journey records
+- Weekly progress
+- Notification settings
+
+Do not create duplicate systems.
+
+Do not reset existing progress.
+
+Do not alter published Journey IDs.
+
+Do not break existing links.
+
+Use backward-compatible changes only.
+
+=====================================================
+SERVER-SIDE VALIDATION
+
+Preserve or implement server-side validation for:
+
+- One new 15 Minutes with Jesus Day per local calendar date
+- One new Daily Devotional entry per local calendar date
+- Maximum of two active non-exempt Journeys
+- Pause and resume behaviour
+- Progress transitions
+
+Do not rely only on disabled client buttons.
+
+=====================================================
+ERROR AND LOADING STATES
+
+Do not show blank white sections while content loads.
+
+Use calm loading placeholders.
+
+If next content cannot load, say:
+
+We couldn’t load this step. Please try again.
+
+If progress cannot save, say:
+
+We couldn’t save your progress yet. Your place is still available on this device.
+
+If daily availability cannot be confirmed, do not incorrectly unlock future content.
+
+Do not expose raw technical errors to users.
+
+=====================================================
+TESTING REQUIREMENTS
+
+Test these flows before completion.
+
+TEST 1: Splash for authenticated user
+
+- Fully reload or relaunch the member app
+- Splash appears
+- Shows Emmaus and Walk with Jesus
+- Authenticated user goes to Walk with Jesus
+- Splash does not repeat during tab navigation
+
+TEST 2: Splash for unauthenticated user
+
+- Fresh launch shows splash
+- User then reaches login
+- Successful login opens Walk with Jesus
+
+TEST 3: Home hierarchy
+
+Confirm the visible order is:
+
+1. 15 Minutes with Jesus
+2. This Week’s Sermon Devotional
+3. Daily Devotional
+4. Continue Your Journeys
+5. This Week
+
+TEST 4: 15 Minutes with Jesus unfinished
+
+- Appears first
+- Shows Begin or Continue
+- Opens the exact correct Day and position
+
+TEST 5: 15 Minutes with Jesus completed
+
+- Remains first
+- Shows Completed today
+- Allows review
+- Does not unlock the next Day on the same date
+- Does not get replaced by another card
+
+TEST 6: Sermon Devotional
+
+- Appears second
+- Shows the correct current Day or Step
+- Continue opens the correct place
+- Sermon playback remains available where supported
+
+TEST 7: Daily Devotional
+
+- Appears third
+- Future devotional remains unavailable
+- Previous entries may be revisited
+
+TEST 8: Active Journeys
+
+- Appear only under Continue Your Journeys
+- Do not appear above the three core rhythm sections
+- Continue opens the correct Step
+- Pause preserves progress
+
+TEST 9: No active Journeys
+
+- Continue Your Journeys section is hidden
+- No Browse Journeys button appears
+- User can still browse through the Journeys navigation tab
+
+TEST 10: Ask Emmaus
+
+- Separate Ask Emmaus card is gone
+- Floating Ask Emmaus button remains
+- Floating button works
+
+TEST 11: This Week
+
+- Existing progress card remains
+- Values are based on real activity
+- No XP, ranking or guilt language appears
+
+TEST 12: Two-Journey limit
+
+- Two active non-exempt Journeys are allowed
+- Attempting a third shows the warm pause-one message
+- Pausing one allows the new Journey to begin
+- Existing progress remains intact
+
+TEST 13: Typography
+
+- No Times New Roman appears
+- Bible reading remains modern and readable
+- Rich-text content does not reintroduce serif fonts
+
+TEST 14: Existing functionality
+
+- Ask Emmaus still works
+- Bible retrieval still works
+- Sermon archive still works
+- Admin Content Studio still works
+- Publishing still works
+- Authentication still works
+- Rooms still work in their existing form
+- Existing progress remains intact
+
+=====================================================
+DO NOT
+
+Do not redesign Rooms.
+
+Do not begin Voice Integration.
+
+Do not begin Attendance.
+
+Do not add Browse Journeys to the Walk screen.
+
+Do not add an Ask Emmaus card.
+
+Do not add a generic Ready for you card.
+
+Do not allow a sermon to appear above 15 Minutes with Jesus.
+
+Do not add XP.
+
+Do not add levels.
+
+Do not add achievements.
+
+Do not add leaderboards.
+
+Do not add guilt-based streaks.
+
+Do not add a spirituality score.
+
+Do not reset progress.
+
+Do not rebuild the sermon archive.
+
+Do not replace the existing Bible system.
+
+Do not change unrelated admin architecture.
+
+Do not start another sprint after completing this correction.
+
+=====================================================
+DEFINITION OF DONE
+
+This correction is complete only when:
+
+- Splash appears on every fresh member-app launch or full session load.
+- Splash shows Emmaus and Walk with Jesus.
+- Authenticated users proceed from splash to Walk with Jesus.
+- 15 Minutes with Jesus always appears first.
+- This Week’s Sermon Devotional appears second when available.
+- Daily Devotional appears third when available.
+- Continue Your Journeys appears below the core rhythm.
+- This Week progress remains beneath the Journey section.
+- No generic Ready for you card remains.
+- No Browse Journeys button or section appears on Walk.
+- No separate Ask Emmaus card appears.
+- Floating Ask Emmaus access remains.
+- Daily locking still works.
+- The two-active-Journey limit still works.
+- Paused Journey progress is preserved.
+- Times New Roman remains removed.
+- Existing data and functionality remain intact.
+- Mobile, tablet and desktop layouts are usable.
+- No visible placeholder controls remain.
+- No new TypeScript, lint, build or runtime errors remain.
+
+=====================================================
+FINAL REVIEW OUTPUT
+
+When complete, provide a clear summary inside Replit covering:
+
+1. What hierarchy was corrected
+2. How the splash launch flow now works
+3. How 15 Minutes with Jesus is kept first
+4. How the Sermon Devotional and Daily Devotional are ordered
+5. How Continue Your Journeys works
+6. Confirmation that Browse Journeys was removed from Walk
+7. Confirmation that the Ask Emmaus card was removed
+8. Confirmation that the floating Ask Emmaus button remains
+9. Any data or routing changes
+10. Tests completed
+11. Known limitations
+12. What should be tested manually
+
+Do not begin the Rooms sprint.
+
+Stop after presenting the corrected Walk with Jesus experience for review.
