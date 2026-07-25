@@ -1,0 +1,510 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is a focused architecture and UX sprint.
+
+Do not redesign Walk with Jesus.
+
+Do not redesign Rooms.
+
+Do not redesign Ask Emmaus.
+
+Do not redesign the Admin Portal.
+
+Preserve all existing authentication, Journey data, progress, Collections, Bible functionality, sermon functionality and publishing workflows.
+
+=====================================================
+SPRINT NAME
+
+Journey Discovery Experience
+
+=====================================================
+
+GOAL
+
+Replace the unfinished "Explore Journeys" implementation with a complete member discovery experience.
+
+Currently the Explore Journeys button routes to:
+
+/journeys/explore
+
+which returns a framework 404 page.
+
+This is not acceptable.
+
+The user should never encounter a raw framework 404 inside Emmaus.
+
+Instead, build a proper Journey Discovery flow that feels like part of the Emmaus experience.
+
+=====================================================
+DESIGN PRINCIPLE
+
+The Walk screen answers:
+
+"What should I do today?"
+
+The Journeys screen answers:
+
+"What am I currently walking through?"
+
+The Journey Discovery screen answers:
+
+"What could help me grow next?"
+
+Each screen has one clear purpose.
+
+=====================================================
+NAVIGATION FLOW
+
+Current:
+
+Journeys
+
+↓
+
+Explore Journeys
+
+↓
+
+404
+
+Replace this with:
+
+Journeys
+
+↓
+
+Explore Journeys
+
+↓
+
+Journey Discovery
+
+This should be a real Emmaus screen.
+
+It should feel like the next page in the app, not a different website.
+
+=====================================================
+PAGE TITLE
+
+Explore Journeys
+
+Supporting text:
+
+Discover guided pathways to help you grow with Jesus.
+
+Keep wording calm and pastoral.
+
+=====================================================
+TOP OF PAGE
+
+Show:
+
+Back button
+
+Explore Journeys
+
+Search bar
+
+Use placeholder:
+
+Search journeys...
+
+Do not autofocus.
+
+=====================================================
+SEARCH
+
+Search should work across:
+
+Journey title
+
+Journey description
+
+Collection
+
+Keywords
+
+Relevant Scripture tags
+
+Existing Journey metadata
+
+Use debounced search.
+
+Show results immediately below.
+
+If no results:
+
+We couldn't find a Journey matching your search.
+
+Button:
+
+Clear search
+
+=====================================================
+PRIMARY DISCOVERY METHOD
+
+Collections
+
+Collections are now the primary discovery experience for members.
+
+Do not expose technical categories.
+
+Do not show database terminology.
+
+Collections should feel curated.
+
+=====================================================
+INITIAL COLLECTIONS
+
+Support:
+
+Starting with Jesus
+
+Growing in Faith
+
+Freedom
+
+Prayer
+
+Bible
+
+Family
+
+Marriage
+
+Serving
+
+Leadership
+
+Young People
+
+Church Life
+
+Reuse existing Collection architecture from Content Studio.
+
+Do not build a second Collection system.
+
+=====================================================
+COLLECTION CARD
+
+Each Collection card shows:
+
+Cover image
+
+Collection title
+
+One-line description
+
+Number of Journeys
+
+View Collection →
+
+Example
+
+Freedom
+
+Walk through addiction, forgiveness, anxiety and healing with Scripture.
+
+4 Journeys
+
+View Collection
+
+=====================================================
+COLLECTION PAGE
+
+Opening a Collection displays:
+
+Collection title
+
+Description
+
+Journey list
+
+Each Journey card includes:
+
+Cover image
+
+Title
+
+Purpose
+
+Length
+
+Estimated time
+
+Rhythm
+
+Start / Continue button
+
+Save for Later
+
+View Details
+
+=====================================================
+FEATURED SECTION
+
+Below Collections show:
+
+Featured Journeys
+
+Maximum:
+
+5 Journeys
+
+These should come from existing admin curation.
+
+Do not randomly choose Journeys.
+
+=====================================================
+JOURNEY DETAILS
+
+Preserve the existing Journey Details page.
+
+Improve it if needed.
+
+Show:
+
+Cover
+
+Title
+
+Purpose
+
+Description
+
+Who it's for
+
+Length
+
+Rhythm
+
+Estimated time
+
+Collection
+
+Start Journey
+
+Save for Later
+
+=====================================================
+NO DUPLICATION
+
+Remove duplication.
+
+Currently:
+
+Ready to begin a Journey?
+
+↓
+
+Explore Journeys button
+
+↓
+
+Explore Journeys section
+
+This repeats the same action.
+
+Instead:
+
+Journeys page
+
+↓
+
+Ready to begin a Journey?
+
+↓
+
+Explore Journeys button
+
+↓
+
+Journey Discovery screen
+
+No second Explore section on the Journeys landing page.
+
+=====================================================
+EMPTY STATE
+
+If user has no active Journeys:
+
+Continue Your Journeys
+
+Ready to begin a Journey?
+
+Every Journey helps you grow in a different area of your walk with Jesus.
+
+Explore Journeys
+
+Nothing more.
+
+No duplicate discovery panel.
+
+=====================================================
+ROUTING
+
+Replace the broken route.
+
+Either:
+
+Create a proper
+
+/journeys/explore
+
+screen
+
+or
+
+Update routing to whatever Journey Discovery route best matches the project.
+
+The important requirement:
+
+The button must never produce a framework 404.
+
+=====================================================
+404 HANDLING
+
+Emmaus should never expose framework 404 pages to members.
+
+Create an Emmaus Not Found screen.
+
+Use:
+
+We couldn't find what you were looking for.
+
+Buttons:
+
+Back
+
+Go to Walk
+
+Go to Journeys
+
+Go to Bible
+
+Keep the Emmaus style.
+
+Never expose raw framework errors.
+
+=====================================================
+ANIMATIONS
+
+Navigation should feel native.
+
+Use existing transition style.
+
+Avoid long fades.
+
+Keep movement subtle.
+
+=====================================================
+TYPOGRAPHY
+
+Maintain the Emmaus typography system.
+
+No Times New Roman.
+
+No browser default serif.
+
+=====================================================
+PERFORMANCE
+
+Collections should lazy-load.
+
+Search should debounce.
+
+Images should be optimized.
+
+Avoid loading every Journey immediately.
+
+=====================================================
+ACCESSIBILITY
+
+Maintain:
+
+Keyboard support
+
+Screen reader labels
+
+Large touch targets
+
+Proper heading hierarchy
+
+Accessible search
+
+Accessible buttons
+
+=====================================================
+TESTS
+
+Test:
+
+Explore Journeys button
+
+Journey Discovery opens
+
+No framework 404
+
+Collections load
+
+Search works
+
+Collection opens
+
+Journey opens
+
+Back button works
+
+Save for Later works
+
+Start Journey works
+
+Continue works
+
+Compass navigation remains correct
+
+Floating Ask Emmaus remains
+
+Walk screen unchanged
+
+Rooms unchanged
+
+Admin unchanged
+
+Bible unchanged
+
+=====================================================
+DEFINITION OF DONE
+
+Complete only when:
+
+The Explore Journeys button opens a real Emmaus discovery experience.
+
+Collections are the primary discovery method.
+
+The duplicate Explore section is removed from the Journeys landing page.
+
+No member can reach a framework 404.
+
+Journey Discovery feels like a natural continuation of the app.
+
+All existing functionality remains intact.
+
+No TypeScript, lint, build or runtime errors remain.
+
+=====================================================
+FINAL REVIEW
+
+When complete provide:
+
+1. Routing changes made
+2. New Journey Discovery structure
+3. Collections implementation
+4. Search behaviour
+5. Featured Journey behaviour
+6. 404 handling improvements
+7. Tests completed
+8. Known limitations
+9. Recommended next sprint
+
+Stop after presenting the completed Journey Discovery experience for review.

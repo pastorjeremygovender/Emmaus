@@ -1,0 +1,455 @@
+You are correcting the existing Project Emmaus Bible “Preached Here” feature.
+
+This is a focused bug fix.
+
+Do not rebuild the Bible reader.
+
+Do not redesign the sermon archive.
+
+Do not change the current Bible layout, navigation, typography, annotations, saved notes or Ask Emmaus access.
+
+Preserve all existing sermon indexing, YouTube integration, timestamp handling, Bible retrieval and chapter navigation.
+
+=====================================================
+BUG
+
+The “Preached Here” feature currently returns the same sermon results for every chapter in a Bible book.
+
+Example:
+
+Luke 1, Luke 2, Luke 3 and other chapters may all display the same sermons because the search appears to match only the book name “Luke.”
+
+This is incorrect.
+
+The results must be specific to the chapter currently open.
+
+=====================================================
+EXPECTED BEHAVIOUR
+
+When the user opens:
+
+Luke 1
+
+and selects:
+
+Preached Here
+
+show only sermon references that genuinely relate to Luke chapter 1.
+
+Valid matches include:
+
+- Luke 1
+- Luke chapter 1
+- Luke 1:1
+- Luke 1:1–4
+- Luke 1:26–38
+- Any verse range wholly or partly within Luke 1
+- Structured sermon metadata explicitly linked to Luke 1
+- Indexed transcript segments explicitly associated with Luke 1
+
+Do not include a sermon merely because it mentions the book of Luke somewhere.
+
+Do not include sermons associated only with:
+
+- Luke 2
+- Luke 3
+- Luke 4
+- Luke 15
+- Another chapter in Luke
+- The book of Luke generally without any chapter-level reference
+
+=====================================================
+MATCHING PRIORITY
+
+Use this matching order:
+
+1. Exact structured chapter reference
+2. Verse reference within the current chapter
+3. Explicit transcript mention of the current book and chapter
+4. Explicit sermon metadata associated with the current chapter
+5. Broader book-level result only as an optional fallback when there are no chapter-specific results
+
+Do not mix broad book-level matches into the main chapter-specific results.
+
+=====================================================
+REFERENCE NORMALISATION
+
+Normalise Scripture references before matching.
+
+Support common forms such as:
+
+- Luke 1
+- Luke 1:1
+- Luke 1:1-4
+- Luke 1:1–4
+- Luke chapter 1
+- Lk 1
+- Lk. 1
+- Gospel of Luke 1
+- Luke 1 v 1
+- Luke 1 verses 1 to 4
+
+Where existing Bible book aliases already exist, reuse them.
+
+Do not build a second conflicting Scripture parser if the project already has one.
+
+Normalise:
+
+- Book name
+- Book abbreviation
+- Chapter number
+- Starting verse
+- Ending verse
+
+=====================================================
+CHAPTER MATCHING RULE
+
+A result is chapter-specific only when the normalised reference has:
+
+- The same Bible book as the open chapter
+- The same chapter number as the open chapter
+
+For example:
+
+Open chapter:
+
+Luke 1
+
+Include:
+
+Luke 1
+Luke 1:1
+Luke 1:26–38
+
+Exclude:
+
+Luke 2
+Luke 10
+Luke 11
+Luke generally with no chapter reference
+
+Be careful not to use naïve substring matching.
+
+For example:
+
+Searching for “Luke 1” must not incorrectly match:
+
+- Luke 10
+- Luke 11
+- Luke 12
+- Luke 15
+
+Use parsed numeric chapter comparison or safe reference boundaries.
+
+=====================================================
+SERMON SEGMENT MATCHING
+
+Where sermons are divided into indexed transcript segments, return the specific segment that references the current chapter.
+
+Each result should include where available:
+
+- Sermon title
+- Speaker
+- Sermon date
+- Exact timestamp
+- Matching Scripture reference
+- Short matching excerpt or context
+- Watch or Listen action
+
+Do not return the entire sermon merely because another segment elsewhere mentions the book.
+
+If multiple segments in the same sermon reference the same chapter:
+
+- Group them under one sermon where practical
+- Show the most relevant timestamp first
+- Optionally show additional references
+- Do not create confusing duplicate sermon cards
+
+=====================================================
+STRUCTURED METADATA
+
+Inspect the existing sermon index.
+
+Prefer structured fields where available, such as:
+
+- scriptureReferences
+- bibleBook
+- bibleChapter
+- startVerse
+- endVerse
+- transcriptSegment
+- sermonId
+- timestampSeconds
+
+Use the actual existing field names.
+
+If the current index stores only raw text, add a backward-compatible normalisation layer.
+
+Do not destructively rewrite the sermon archive.
+
+Do not remove current indexed content.
+
+=====================================================
+FALLBACK BEHAVIOUR
+
+If chapter-specific sermon references exist:
+
+Show only:
+
+Preached from this chapter
+
+Do not show broader book-level matches.
+
+If no chapter-specific references exist but broader book-level references exist, optionally show a separate secondary section:
+
+Other sermons from Luke
+
+Include a clear explanation:
+
+We found sermons from the book of Luke, but none linked specifically to this chapter yet.
+
+This fallback section must be visually and logically separate.
+
+Do not repeat the same broad results for every chapter as though they were chapter-specific.
+
+If there are no results at all, show:
+
+No sermons linked to this chapter yet.
+
+Keep the empty state warm and brief.
+
+=====================================================
+PREACHED HERE BADGE
+
+Only show the “Preached Here” badge for a chapter when at least one true chapter-specific sermon reference exists.
+
+Do not show the badge simply because the wider Bible book has sermon references.
+
+If only broad book-level references exist, do not use the same “Preached Here” badge.
+
+If a fallback indicator is needed, use distinct wording such as:
+
+Sermons from this book
+
+However, prefer keeping the chapter screen uncluttered.
+
+=====================================================
+API BEHAVIOUR
+
+Inspect the existing endpoint used by the Bible reader.
+
+It may currently resemble a query by book name only.
+
+Correct it so the request includes:
+
+- Bible book
+- Chapter number
+- Optional verse range where applicable
+
+Example conceptual request:
+
+GET /api/sermons/scripture?book=Luke&chapter=1
+
+Use the project’s current routing conventions.
+
+Do not expose internal implementation details to the member.
+
+The server must perform chapter-specific filtering.
+
+Do not rely only on client-side filtering if broad search results are returned from the API.
+
+=====================================================
+SEARCH INDEX IMPROVEMENT
+
+If the current sermon index does not store parsed chapter references, add a safe backward-compatible enhancement.
+
+For each sermon segment, derive and store or calculate:
+
+- Normalised Bible book
+- Chapter number
+- Optional starting verse
+- Optional ending verse
+- Confidence or source where useful
+
+Use deterministic parsing for explicit Scripture references.
+
+Do not allow an AI model to invent references.
+
+AI may not infer that a sermon is about Luke 1 merely from a general theme unless an explicit reference exists.
+
+=====================================================
+TIMESTAMP BEHAVIOUR
+
+Preserve current timestamp functionality.
+
+Do not change the existing worship-offset correction in this sprint unless required for accurate playback.
+
+The chapter-specific fix should affect which sermon segments appear, not silently alter existing timestamps.
+
+=====================================================
+UI COPY
+
+Modal heading:
+
+Luke 1 — Preached at ICC
+
+This heading may remain.
+
+Each result should show the exact matching reference where available.
+
+Example:
+
+Luke 1:26–38
+
+Watch from 40:17
+
+Avoid showing only:
+
+Watch from 40:17
+
+without explaining why the sermon matched the current chapter.
+
+=====================================================
+SORTING
+
+Sort chapter-specific results by:
+
+1. Strongest exact Scripture match
+2. Most relevant verse-level match
+3. Most recent sermon date
+
+Do not sort only by recency if a less relevant result would appear above an exact chapter match.
+
+=====================================================
+DEDUPLICATION
+
+Prevent duplicate results caused by:
+
+- Multiple equivalent reference formats
+- Repeated transcript mentions in the same nearby segment
+- The same sermon being indexed more than once
+- Book-level and chapter-level matches both returning the same sermon
+
+Use stable sermon and segment identifiers.
+
+=====================================================
+TESTING
+
+Test at least the following.
+
+TEST 1: Luke 1
+
+Open Luke 1.
+
+Select Preached Here.
+
+Confirm only Luke 1 references appear.
+
+Confirm Luke 10, Luke 11, Luke 12 and Luke 15 do not match because of substring logic.
+
+TEST 2: Luke 2
+
+Open Luke 2.
+
+Confirm the result list differs from Luke 1 unless the same sermon genuinely references both chapters.
+
+TEST 3: Chapter with verse range
+
+A sermon tagged Luke 1:26–38 must appear for Luke 1.
+
+It must not appear for Luke 2.
+
+TEST 4: Book-only sermon
+
+A sermon referencing only “the Gospel of Luke” without a chapter must not appear as a chapter-specific Luke 1 result.
+
+If fallback is implemented, it may appear under:
+
+Other sermons from Luke
+
+TEST 5: No chapter results
+
+Open a chapter with no linked sermon references.
+
+Confirm:
+
+- No incorrect repeated sermon list appears
+- The badge is hidden
+- The empty state is correct if the modal is accessible another way
+
+TEST 6: Multiple chapters in one sermon
+
+A sermon that genuinely references Luke 1 and Luke 2 may appear in both chapters, but each chapter must show the correct relevant timestamp or segment.
+
+TEST 7: Abbreviations
+
+Confirm these can be parsed correctly where present:
+
+- Lk 1
+- Lk. 1
+- Luke chapter 1
+- Luke 1:1–4
+
+TEST 8: Existing functionality
+
+Confirm:
+
+- Bible chapter navigation still works
+- Translation selection still works
+- Notes still work
+- Save still works
+- Ask Emmaus still works
+- Sermon playback still works
+- Timestamps still work
+- Bible typography remains unchanged
+- No new TypeScript, build, lint or runtime errors appear
+
+=====================================================
+DATA SAFETY
+
+Do not delete existing sermon records.
+
+Do not reset the sermon index.
+
+Do not remove transcript segments.
+
+Do not alter published sermon URLs.
+
+Use backward-compatible parsing or indexing changes.
+
+If a reindex is necessary, make it idempotent and preserve current records.
+
+=====================================================
+DEFINITION OF DONE
+
+This fix is complete only when:
+
+- “Preached Here” results are specific to the current Bible chapter.
+- Luke 1 no longer receives all sermons associated with the whole book of Luke.
+- Exact chapter and verse matches work.
+- Naïve substring matching no longer causes Luke 1 to match Luke 10 or Luke 11.
+- Book-only matches are excluded from chapter-specific results.
+- Optional book-level fallbacks are clearly separated.
+- The badge only appears when the current chapter has a genuine chapter-specific match.
+- Matching timestamps and Scripture references are displayed.
+- Duplicate sermon cards are prevented.
+- Existing Bible and sermon functionality remains intact.
+- No new errors are introduced.
+
+=====================================================
+FINAL REVIEW OUTPUT
+
+When complete, report:
+
+1. The original cause of the bug
+2. The matching logic that was changed
+3. How Scripture references are normalised
+4. How exact chapter filtering works
+5. How book-level fallbacks work
+6. Whether the sermon index changed
+7. Whether any reindex was required
+8. Tests completed
+9. Known limitations
+10. What should be tested manually
+
+Stop after completing this focused Bible chapter-reference correction.

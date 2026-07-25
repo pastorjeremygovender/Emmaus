@@ -77,6 +77,7 @@ export interface SermonSearchResult {
   sermonDate: string;
   series?: string;
   scriptureReference: string;
+  matchingReference?: string;        // the specific segment ref that matched the requested chapter
   youtubeUrl: string;
   timestampedUrl: string;
   startTimeSeconds: number;
@@ -499,25 +500,109 @@ export async function searchSermons(
 // ─── Preached Here — Scripture-based lookup ───────────────────────────────────
 
 /**
- * Return sermons that reference a specific Bible book (and optionally chapter).
- * Used by GET /api/youtube-archive/preached-here for the chapter badge in the
- * Bible reader. Runs synchronously from the current in-memory index.
+ * Classify whether a segment specifically and accurately references the target
+ * Bible book and chapter.
+ *
+ * Returns one of three tiers:
+ *   'exact'     — segment has a parsed scriptureRef that resolves to (book, chapter)
+ *   'book-only' — segment belongs to a video tagged to the book, but no
+ *                 segment-level ref confirms the chapter
+ *   'none'      — segment refs exist for this book but all resolve to different
+ *                 chapters, so it is a false positive and must be excluded
+ *
+ * The key correctness rule: use extractScriptureRefs() (numeric comparison) rather
+ * than naïve string includes(), which would match "Luke 1" inside "Luke 10"/"Luke 11".
+ */
+function classifySegmentForChapter(
+  seg: IndexedSegment,
+  lowerBookId: string,
+  chapter: number,
+): { tier: "exact" | "book-only" | "none"; matchingRef: string | null } {
+  // Segment-level scriptureRefs are the most reliable (AI-enriched, segment-scoped).
+  if (seg.scriptureRefs.length > 0) {
+    let mentionsThisBook = false;
+    for (const ref of seg.scriptureRefs) {
+      const parsed = extractScriptureRefs(ref);
+      for (const p of parsed) {
+        if (p.bookId === lowerBookId) {
+          mentionsThisBook = true;
+          if (p.chapter === chapter) {
+            // Exact numeric match — not a substring match
+            return { tier: "exact", matchingRef: ref };
+          }
+        }
+      }
+    }
+    if (mentionsThisBook) {
+      // Segment refs exist for this book but all resolve to different chapters.
+      // Exclude to prevent Luke 10 bleeding into Luke 1 results.
+      return { tier: "none", matchingRef: null };
+    }
+    // scriptureRefs are for other books — fall through to video-level check below
+  }
+
+  // Video-level scriptureBookIds covers the whole sermon (not this segment specifically).
+  // Reliable for confirming book identity; not reliable for per-segment chapter attribution.
+  if (seg.scriptureBookIds.includes(lowerBookId)) {
+    return { tier: "book-only", matchingRef: null };
+  }
+
+  // Came here via term/text index — book name appears in transcript text.
+  // Treat as book-level only; no chapter evidence.
+  return { tier: "book-only", matchingRef: null };
+}
+
+/**
+ * Relevance score for sorting chapter-specific results.
+ * Verse-level matches score higher than chapter-only.
+ */
+function computeRefMatchScore(
+  seg: IndexedSegment,
+  lowerBookId: string,
+  chapter: number,
+): number {
+  let best = 0;
+  for (const ref of seg.scriptureRefs) {
+    for (const p of extractScriptureRefs(ref)) {
+      if (p.bookId === lowerBookId && p.chapter === chapter) {
+        best = Math.max(best, p.verse !== undefined ? 2 : 1);
+      }
+    }
+  }
+  return best;
+}
+
+/** Structured return type for the Preached Here endpoint. */
+export interface PreachedHereResult {
+  /** Sermons with segment-level refs confirmed for the requested chapter. */
+  chapterSermons: SermonSearchResult[];
+  /**
+   * Sermons associated with the book at video level only — shown as a
+   * secondary fallback when no chapter-specific results exist.
+   */
+  bookSermons: SermonSearchResult[];
+}
+
+/**
+ * Return sermons that reference a specific Bible chapter.
+ * Used by GET /api/youtube-archive/preached-here.
+ *
+ * Returns { chapterSermons, bookSermons } so the caller can distinguish
+ * chapter-specific results from broader book-level fallbacks.
  */
 export async function searchByScripture(
   bookId: string,
   chapter?: number,
   maxResults = 10,
-): Promise<SermonSearchResult[]> {
-  // Build the index if it hasn't been built yet (mirrors searchSermons behaviour)
+): Promise<PreachedHereResult> {
   const index = _index ?? await buildIndex().catch(() => null);
-  if (!index) return [];
-  // Point _index to the built index for the synchronous logic below
+  if (!index) return { chapterSermons: [], bookSermons: [] };
   _index = index;
 
   const lowerBookId = bookId.toLowerCase();
   const candidateIndices = new Set<number>();
 
-  // ── Primary: walk the bookIndex (pre-tagged scriptureBookIds) ────────────
+  // ── Primary: bookIndex (pre-tagged scriptureBookIds + segment scriptureRefs) ─
   for (const [key, indices] of _index.bookIndex) {
     const keyNorm = key.replace(/\s+/g, "").toLowerCase();
     if (keyNorm === lowerBookId || keyNorm.startsWith(lowerBookId)) {
@@ -525,16 +610,11 @@ export async function searchByScripture(
     }
   }
 
-  // ── Fallback: search the term index for the book name ────────────────────
-  // Handles sermons whose segments weren't tagged with scriptureBookIds but
-  // whose transcript text or AI keywords mention the book (e.g. "John 3:16").
-  // We limit fallback candidates to avoid returning unrelated results.
+  // ── Fallback: term index when no structured data exists ───────────────────
   if (candidateIndices.size === 0) {
-    // Short book names like "john", "acts", "mark" appear as terms
     for (const idx of _index.termIndex.get(lowerBookId) ?? []) {
       candidateIndices.add(idx);
     }
-    // Also try without the number prefix (e.g. "1corinthians" → "corinthians")
     const strippedId = lowerBookId.replace(/^\d/, "");
     if (strippedId !== lowerBookId) {
       for (const idx of _index.termIndex.get(strippedId) ?? []) {
@@ -543,42 +623,78 @@ export async function searchByScripture(
     }
   }
 
-  const seenVideos = new Set<string>();
-  const results: SermonSearchResult[] = [];
+  // ── Classify candidates into chapter-specific vs. book-level ─────────────
+  const chapterCandidates: Array<{
+    seg: IndexedSegment;
+    matchingRef: string | null;
+    score: number;
+  }> = [];
+  const bookCandidates: Array<{ seg: IndexedSegment }> = [];
+  const seenChapterVideos = new Set<string>();
+  const seenBookVideos = new Set<string>();
 
   for (const idx of candidateIndices) {
     const seg = _index.segments[idx];
     if (!seg) continue;
 
-    // Chapter filter — only applied when the segment has actual scripture metadata.
-    // When both arrays are empty (text-based fallback), we lack reliable chapter
-    // data so we include the result rather than filtering it out.
     if (chapter !== undefined) {
-      const hasScriptureMetadata =
-        seg.scriptureChapters.length > 0 || seg.scriptureRefs.length > 0;
-      if (hasScriptureMetadata) {
-        const hasChapter =
-          seg.scriptureChapters.includes(chapter) ||
-          seg.scriptureRefs.some((ref) => {
-            const norm = ref.toLowerCase().replace(/\s+/g, "");
-            return norm.includes(lowerBookId) && norm.includes(String(chapter));
+      const { tier, matchingRef } = classifySegmentForChapter(seg, lowerBookId, chapter);
+
+      if (tier === "exact") {
+        if (!seenChapterVideos.has(seg.videoId)) {
+          seenChapterVideos.add(seg.videoId);
+          chapterCandidates.push({
+            seg,
+            matchingRef,
+            score: computeRefMatchScore(seg, lowerBookId, chapter),
           });
-        if (!hasChapter) continue;
+        }
+      } else if (tier === "book-only") {
+        if (!seenBookVideos.has(seg.videoId)) {
+          seenBookVideos.add(seg.videoId);
+          bookCandidates.push({ seg });
+        }
       }
-      // Else: no scripture metadata → include (trust the book-name text match)
+      // tier === 'none' → skip (wrong chapter)
+    } else {
+      // No chapter filter — return all book matches
+      if (!seenChapterVideos.has(seg.videoId)) {
+        seenChapterVideos.add(seg.videoId);
+        chapterCandidates.push({ seg, matchingRef: null, score: 0 });
+      }
     }
+  }
 
-    if (seenVideos.has(seg.videoId)) continue;
-    seenVideos.add(seg.videoId);
+  // Sort chapter results: strongest ref match first, then most recent date
+  chapterCandidates.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (b.seg.sermonDate > a.seg.sermonDate
+        ? 1
+        : b.seg.sermonDate < a.seg.sermonDate
+        ? -1
+        : 0),
+  );
 
+  // Remove from bookCandidates any sermon already confirmed chapter-specific
+  const chapterVideoIds = new Set(chapterCandidates.map((c) => c.seg.videoId));
+  const filteredBookCandidates = bookCandidates.filter(
+    (b) => !chapterVideoIds.has(b.seg.videoId),
+  );
+
+  // ── Build result objects ───────────────────────────────────────────────────
+  function buildSegResult(
+    seg: IndexedSegment,
+    matchingRef: string | null,
+  ): SermonSearchResult {
     const timestampedUrl = buildTimestampedUrl(seg.youtubeUrl, seg.absoluteStartSeconds);
     const timestampLabel = formatTimestampLabel(seg.absoluteStartSeconds);
     const relativeTimestampLabel = seg.audioUrl
       ? formatTimestampLabel(seg.relativeStartSeconds)
       : undefined;
-    const evidence = seg.cleanedText.slice(0, 200) + (seg.cleanedText.length > 200 ? "…" : "");
-
-    results.push({
+    const evidence =
+      seg.cleanedText.slice(0, 200) + (seg.cleanedText.length > 200 ? "…" : "");
+    return {
       sermonId: seg.videoId,
       segmentId: seg.segmentId,
       title: seg.videoTitle,
@@ -586,6 +702,7 @@ export async function searchByScripture(
       sermonDate: seg.sermonDate,
       series: seg.series,
       scriptureReference: seg.scriptureReference,
+      matchingReference: matchingRef ?? undefined,
       youtubeUrl: seg.youtubeUrl,
       timestampedUrl,
       startTimeSeconds: seg.startTimeSeconds,
@@ -598,10 +715,16 @@ export async function searchByScripture(
       relativeStartSeconds: seg.relativeStartSeconds,
       relativeTimestampLabel,
       audioUrl: seg.audioUrl,
-    });
-
-    if (results.length >= maxResults) break;
+    };
   }
 
-  return results;
+  const chapterSermons = chapterCandidates
+    .slice(0, maxResults)
+    .map((c) => buildSegResult(c.seg, c.matchingRef));
+
+  const bookSermons = filteredBookCandidates
+    .slice(0, maxResults)
+    .map((b) => buildSegResult(b.seg, null));
+
+  return { chapterSermons, bookSermons };
 }

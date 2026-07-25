@@ -1,25 +1,98 @@
-import { useState, useMemo } from 'react';
-import { BottomNav } from '@/components/BottomNav';
-import { useJourney } from '@/contexts/JourneyContext';
-import { useRooms } from '@/contexts/RoomsContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+/**
+ * Journeys — member-facing landing page.
+ *
+ * Fixed section order:
+ *   1. Continue Your Journeys  (active non-exempt growth journeys)
+ *   2. Suggested for You       (up to 5 curated unstarted journeys)
+ *   3. Manage Journeys         (paused / completed / saved — collapsible)
+ *
+ * Discovery lives at /journeys/explore, not on this page.
+ *
+ * Not on this page:
+ *   - 15 Minutes with Jesus (handled on Walk)
+ *   - This Week's Sermon Devotional (handled on Walk)
+ *   - Daily Devotional (handled on Walk)
+ *   - My Rooms / Walk with others
+ *   - Ask Emmaus card (floating button handles it globally)
+ */
+
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Users, ChevronRight, BookOpen, Pause, Play, X } from 'lucide-react';
-import JourneyStartModal from '@/components/JourneyStartModal';
+import { BottomNav } from '@/components/BottomNav';
+import { Button } from '@/components/ui/button';
+import { useJourney } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
+import JourneyStartModal from '@/components/JourneyStartModal';
+import { useRooms } from '@/contexts/RoomsContext';
+import {
+  X, Pause, Play, MoreHorizontal, Bookmark, BookmarkCheck,
+  ChevronDown, ChevronUp,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { Journey } from '@/contexts/JourneyContext';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function rhythmLabel(j: Journey): string {
+  const dur = (j.estimatedDuration ?? '').toLowerCase();
+  if (dur.includes('daily') || dur.includes('per day')) return 'Daily';
+  if (dur.includes('weekly') || dur.includes('per week')) return 'Weekly';
+  if (dur.includes('guided')) return 'Guided';
+  return 'Self-paced';
+}
+
+function durationLabel(j: Journey): string | null {
+  if (!j.durationDays || j.durationDays <= 0) return null;
+  return `${j.durationDays} ${j.durationDays === 1 ? 'Day' : 'Days'}`;
+}
+
+function timeLabel(j: Journey): string | null {
+  if (!j.estimatedDuration) return null;
+  const m = j.estimatedDuration.match(/(\d+)\s*(min|minute|hour)/i);
+  if (!m) return null;
+  const n = parseInt(m[1]);
+  const unit = m[2].toLowerCase().startsWith('h') ? 'hour' : 'minute';
+  return `About ${n} ${unit}${n !== 1 ? 's' : ''} per day`;
+}
+
+// ─── Cover image ──────────────────────────────────────────────────────────────
+
+function CoverThumb({
+  url, title, className = '',
+}: { url?: string; title: string; className?: string }) {
+  const [err, setErr] = useState(false);
+  const initials = title.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase();
+  if (!url || err) {
+    return (
+      <div className={`bg-primary/8 flex items-center justify-center ${className}`}>
+        <span className="text-primary/30 text-[18px] font-medium select-none">{initials}</span>
+      </div>
+    );
+  }
+  return (
+    <img src={url} alt="" className={`object-cover ${className}`} onError={() => setErr(true)} />
+  );
+}
+
+// ─── Skeleton card ────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="bg-card rounded-2xl border border-border p-5 space-y-3 animate-pulse">
+      <div className="h-3 w-20 rounded bg-muted" />
+      <div className="h-5 w-2/3 rounded bg-muted" />
+      <div className="h-3 w-1/2 rounded bg-muted" />
+      <div className="h-10 rounded-xl bg-muted mt-1" />
+    </div>
+  );
+}
 
 // ─── Pause confirmation dialog ────────────────────────────────────────────────
+
 function PauseDialog({
-  journeyTitle,
-  onPause,
-  onCancel,
-}: {
-  journeyTitle: string;
-  onPause: () => void;
-  onCancel: () => void;
-}) {
+  journeyTitle, onPause, onCancel,
+}: { journeyTitle: string; onPause: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
       <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
@@ -27,7 +100,7 @@ function PauseDialog({
           <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
             Pause {journeyTitle}?
           </h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -35,25 +108,20 @@ function PauseDialog({
           Your progress and responses will be kept exactly as they are. You can resume whenever you're ready.
         </p>
         <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>
-            Pause Journey
-          </Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>
-            Not now
-          </Button>
+          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause Journey</Button>
+          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Third-Journey limit dialog ───────────────────────────────────────────────
+// ─── Two-Journey limit dialog ─────────────────────────────────────────────────
+
 function JourneyLimitDialog({
-  activeJourneys,
-  onPause,
-  onCancel,
+  activeJourneys, onPause, onCancel,
 }: {
-  activeJourneys: Array<{ id: string; title: string; progress: number }>;
+  activeJourneys: Array<{ id: string; title: string; currentDay: number; durationDays: number }>;
   onPause: (id: string) => void;
   onCancel: () => void;
 }) {
@@ -64,7 +132,7 @@ function JourneyLimitDialog({
           <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
             You already have two Journeys underway.
           </h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -73,17 +141,13 @@ function JourneyLimitDialog({
         </p>
         <div className="space-y-2.5">
           {activeJourneys.map(j => (
-            <div
-              key={j.id}
-              className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3"
-            >
+            <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
-                <p className="text-[12px] text-muted-foreground">{j.progress}% complete</p>
+                <p className="text-[12px] text-muted-foreground">Step {j.currentDay} of {j.durationDays}</p>
               </div>
               <Button
-                variant="outline"
-                size="sm"
+                variant="outline" size="sm"
                 className="h-9 rounded-xl text-[13px] shrink-0 flex items-center gap-1.5"
                 onClick={() => onPause(j.id)}
               >
@@ -100,429 +164,557 @@ function JourneyLimitDialog({
   );
 }
 
+// ─── More actions menu ────────────────────────────────────────────────────────
+
+function MoreMenu({
+  onPause, onDetails,
+}: { onPause: () => void; onDetails: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+        aria-label="More actions"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={17} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-48"
+            role="menu"
+          >
+            <button
+              role="menuitem"
+              onClick={() => { setOpen(false); onPause(); }}
+              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
+            >
+              <Pause size={14} className="text-muted-foreground" /> Pause Journey
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => { setOpen(false); onDetails(); }}
+              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors"
+            >
+              View Journey Details
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Active Journey card ──────────────────────────────────────────────────────
+
+function ActiveJourneyCard({
+  journey, prog, onContinue, onPause, onDetails,
+}: {
+  journey: Journey;
+  prog: { currentDay: number; completedDays: number[] };
+  onContinue: () => void;
+  onPause: () => void;
+  onDetails: () => void;
+}) {
+  const rhythm = rhythmLabel(journey);
+  const dur    = durationLabel(journey);
+  const time   = timeLabel(journey);
+
+  return (
+    <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="flex">
+        <div className="w-16 shrink-0 min-h-[80px]">
+          <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full rounded-l-2xl" />
+        </div>
+        <div className="flex-1 min-w-0 px-4 pt-4 pb-3 space-y-0.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-primary uppercase tracking-widest leading-none mb-1">
+                Step {prog.currentDay} of {journey.durationDays}
+              </p>
+              <h3 className="text-[16px] font-medium text-foreground leading-snug truncate">
+                {journey.title}
+              </h3>
+            </div>
+            <MoreMenu onPause={onPause} onDetails={onDetails} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
+            <span>{rhythm}</span>
+            {dur && <><span className="opacity-30">·</span><span>{dur}</span></>}
+            {time && <><span className="opacity-30">·</span><span>{time}</span></>}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {prog.completedDays.length > 0 && (
+        <div className="mx-4 mb-0 mt-1">
+          <div className="h-1 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${Math.round((prog.completedDays.length / (journey.durationDays || 1)) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="px-4 pb-4 pt-3">
+        <Button className="w-full h-11 rounded-xl text-[15px]" onClick={onContinue}>
+          Continue
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Suggested Journey card ───────────────────────────────────────────────────
+
+function SuggestedCard({
+  journey, isSaved, onStart, onSave, onDetails,
+}: {
+  journey: Journey;
+  isSaved: boolean;
+  onStart: () => void;
+  onSave: () => void;
+  onDetails: () => void;
+}) {
+  const dur    = durationLabel(journey);
+  const rhythm = rhythmLabel(journey);
+  const time   = timeLabel(journey);
+
+  return (
+    <div className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="flex">
+        <div className="w-16 shrink-0 min-h-[88px]">
+          <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full rounded-l-2xl" />
+        </div>
+        <div className="flex-1 min-w-0 px-4 py-4 space-y-1">
+          <button onClick={onDetails} className="text-left w-full">
+            <h3 className="text-[16px] font-medium text-foreground leading-snug line-clamp-2">
+              {journey.title}
+            </h3>
+          </button>
+          {journey.description && (
+            <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
+              {journey.description}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
+            {dur && <span>{dur}</span>}
+            {rhythm && <><span className="opacity-30">·</span><span>{rhythm}</span></>}
+            {time && <><span className="opacity-30">·</span><span>{time}</span></>}
+          </div>
+        </div>
+      </div>
+      <div className="px-4 pb-4 pt-1 flex gap-2">
+        <Button
+          className="flex-1 h-10 rounded-xl text-[14px]"
+          variant="outline"
+          onClick={onStart}
+        >
+          Start Journey
+        </Button>
+        <button
+          onClick={onSave}
+          className="h-10 w-10 flex items-center justify-center rounded-xl border border-border hover:border-primary/30 transition-colors text-muted-foreground hover:text-primary shrink-0"
+          aria-label={isSaved ? 'Remove from saved' : 'Save for later'}
+        >
+          {isSaved
+            ? <BookmarkCheck size={16} className="text-primary" />
+            : <Bookmark size={16} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Manage section (paused / completed / saved) ──────────────────────────────
+
+function ManageSection({
+  pausedJourneys, completedJourneys, savedJourneys, progress, journeys: allJourneys,
+  onResume, onReview, onBegin, onPauseTarget,
+  canActivateMore, startedIds,
+}: {
+  pausedJourneys: Journey[];
+  completedJourneys: Journey[];
+  savedJourneys: Journey[];
+  progress: Record<string, import('@/contexts/JourneyContext').Progress>;
+  journeys: Journey[];
+  onResume: (id: string) => void;
+  onReview: (id: string) => void;
+  onBegin: (j: Journey) => void;
+  onPauseTarget: (id: string) => void;
+  canActivateMore: (j: Journey[], s: Set<string>) => boolean;
+  startedIds: Set<string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const total = pausedJourneys.length + completedJourneys.length + savedJourneys.length;
+  if (total === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
+        aria-expanded={open}
+      >
+        <span>Manage Journeys</span>
+        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden space-y-6"
+          >
+            {/* Paused */}
+            {pausedJourneys.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Paused</p>
+                {pausedJourneys.map(j => {
+                  const prog = progress[j.id]!;
+                  return (
+                    <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
+                        <p className="text-[12px] text-muted-foreground">
+                          Step {prog.currentDay} of {j.durationDays} · Paused
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline" size="sm"
+                        className="h-9 rounded-xl text-[13px] flex items-center gap-1.5 shrink-0"
+                        onClick={() => onResume(j.id)}
+                      >
+                        <Play size={12} /> Resume
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Completed */}
+            {completedJourneys.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Completed</p>
+                {completedJourneys.map(j => (
+                  <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
+                      <p className="text-[12px] text-muted-foreground">
+                        {j.durationDays} steps · Complete
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-9 rounded-xl text-[13px] shrink-0"
+                      onClick={() => onReview(j.id)}
+                    >
+                      Review
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Saved */}
+            {savedJourneys.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Saved</p>
+                {savedJourneys.map(j => (
+                  <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
+                      {j.durationDays > 0 && (
+                        <p className="text-[12px] text-muted-foreground">{j.durationDays} Days</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-9 rounded-xl text-[13px] shrink-0"
+                      onClick={() => onBegin(j)}
+                    >
+                      Begin
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function Journeys() {
   const { journeys, progress, startJourney, loading } = useJourney();
   const { user } = useAuth();
-  const { getMyRooms, getJourneyInvitations, startSharedJourney } = useRooms();
+  const { startSharedJourney } = useRooms();
   const [, setLocation] = useLocation();
-  const { getState, pauseJourney, resumeJourney, canActivateMore, activeGrowthCount } = useEnrollment();
+  const {
+    enrollment, getState, pauseJourney, resumeJourney,
+    saveForLater, canActivateMore, activeGrowthCount,
+  } = useEnrollment();
 
-  // Journey start modal state
+  // Dialogs
   const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
-  // Pause confirmation
-  const [pauseTargetId, setPauseTargetId] = useState<string | null>(null);
-  // Limit dialog
-  const [showLimitDialog, setShowLimitDialog] = useState(false);
+  const [pauseTargetId, setPauseTargetId]       = useState<string | null>(null);
+  const [showLimitDialog, setShowLimitDialog]   = useState(false);
   const [blockedJourneyId, setBlockedJourneyId] = useState<string | null>(null);
 
-  const publishedJourneys = journeys.filter(j => j.status === 'Published');
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const publishedJourneys = useMemo(
+    () => journeys.filter(j => j.status === 'Published'),
+    [journeys]
+  );
 
   const startedIds = useMemo(() => new Set(Object.keys(progress)), [progress]);
 
-  const coreJourneys = publishedJourneys.filter(j => j.journeyType === 'core');
-  const companionJourneys = publishedJourneys.filter(j => j.journeyType === 'companion');
-
-  // Growth journeys by enrollment state
-  const growthJourneys = publishedJourneys.filter(j => !isExemptJourney(j));
-  const activeGrowth = growthJourneys.filter(j => startedIds.has(j.id) && getState(j.id) === 'active');
-  const pausedGrowth = growthJourneys.filter(j => startedIds.has(j.id) && getState(j.id) === 'paused');
-  const savedGrowth = growthJourneys.filter(j => !startedIds.has(j.id) && getState(j.id) === 'saved');
-  const completedGrowth = growthJourneys.filter(j => {
-    const p = progress[j.id];
-    return p && p.completedDays.length >= j.durationDays;
-  });
-
-  // Available to browse (not started, not saved, not completed)
-  const browseable = growthJourneys.filter(
-    j => !startedIds.has(j.id) && getState(j.id) !== 'saved'
+  const growthJourneys = useMemo(
+    () => publishedJourneys.filter(j => !isExemptJourney(j)),
+    [publishedJourneys]
   );
 
-  const myRooms = user ? getMyRooms(user.id) : [];
+  // 1. Active non-exempt growth journeys
+  const activeGrowth = useMemo(
+    () => growthJourneys.filter(j => startedIds.has(j.id) && getState(j.id) === 'active'),
+    [growthJourneys, startedIds, getState]
+  );
+
+  // Secondary states (for Manage section)
+  const pausedGrowth = useMemo(
+    () => growthJourneys.filter(j => startedIds.has(j.id) && getState(j.id) === 'paused'),
+    [growthJourneys, startedIds, getState]
+  );
+  const completedGrowth = useMemo(
+    () => growthJourneys.filter(j => {
+      const p = progress[j.id];
+      return p && p.completedDays.length >= j.durationDays;
+    }),
+    [growthJourneys, progress]
+  );
+  const savedGrowth = useMemo(
+    () => growthJourneys.filter(j => !startedIds.has(j.id) && getState(j.id) === 'saved'),
+    [growthJourneys, startedIds, getState]
+  );
+
+  // 2. Suggested for You — up to 5; churchWide first; filter out active/paused/completed/saved
+  const suggested = useMemo(() => {
+    const notInProgress = growthJourneys.filter(j => {
+      if (startedIds.has(j.id)) return false;
+      if (getState(j.id) === 'saved') return false;
+      return true;
+    });
+    const churchWide = notInProgress.filter(j => j.churchWide);
+    const rest       = notInProgress.filter(j => !j.churchWide);
+    return [...churchWide, ...rest].slice(0, 5);
+  }, [growthJourneys, startedIds, getState]);
+
   const activeCount = activeGrowthCount(journeys, startedIds);
 
-  const handleStartJourney = (journeyId: string, alreadyStarted: boolean) => {
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  function handleStartJourney(journeyId: string, alreadyStarted: boolean) {
     const j = journeys.find(x => x.id === journeyId);
     if (!j) return;
-
     if (alreadyStarted) {
-      const day = progress[journeyId]?.currentDay ?? 1;
-      setLocation(`/journey/${journeyId}/day/${day}`);
+      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
       return;
     }
-
-    // Non-exempt journey — check 2-active limit
     if (!isExemptJourney(j) && !canActivateMore(journeys, startedIds)) {
       setBlockedJourneyId(journeyId);
       setShowLimitDialog(true);
       return;
     }
-
     setPendingJourneyId(journeyId);
-  };
+  }
 
-  const handleStartAlone = () => {
+  function handleStartAlone() {
     if (!pendingJourneyId) return;
     startJourney(pendingJourneyId);
     setLocation(`/journey/${pendingJourneyId}/day/1`);
     setPendingJourneyId(null);
-  };
+  }
 
-  const handleStartWithRoom = (roomId: string) => {
+  function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
     startJourney(pendingJourneyId);
     startSharedJourney(roomId, pendingJourneyId, user.id);
     setLocation(`/journey/${pendingJourneyId}/day/1`);
     setPendingJourneyId(null);
-  };
+  }
 
-  const handlePauseFromLimit = (id: string) => {
+  function handlePauseFromLimit(id: string) {
     pauseJourney(id);
     setShowLimitDialog(false);
     if (blockedJourneyId) {
-      // Now the user has capacity — open the start modal
       setPendingJourneyId(blockedJourneyId);
       setBlockedJourneyId(null);
     }
-  };
+  }
+
+  function handleResume(id: string) {
+    if (canActivateMore(journeys, startedIds)) {
+      resumeJourney(id);
+    } else {
+      setBlockedJourneyId(id);
+      setShowLimitDialog(true);
+    }
+  }
 
   const pendingJourney = pendingJourneyId ? journeys.find(j => j.id === pendingJourneyId) : null;
-  const pauseTarget = pauseTargetId ? journeys.find(j => j.id === pauseTargetId) : null;
+  const pauseTarget    = pauseTargetId    ? journeys.find(j => j.id === pauseTargetId)    : null;
+
+  // ── Loading state ──────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-muted-foreground">
-          <div className="w-7 h-7 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <span className="text-[14px]">Loading journeys…</span>
-        </div>
+      <div className="min-h-[100dvh] bg-background pb-24">
+        <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
+          <div className="space-y-1.5">
+            <div className="h-8 w-32 rounded-lg bg-muted animate-pulse" />
+            <div className="h-4 w-48 rounded bg-muted animate-pulse" />
+          </div>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </main>
+        <BottomNav />
       </div>
     );
   }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
       <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-10">
 
-        <header className="space-y-1.5">
-          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">Journeys</h1>
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <header className="space-y-1">
+          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+            Journeys
+          </h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Continue active walks, revisit completed ones, and explore what's next.
+            Grow through guided discipleship.
           </p>
           {activeGrowth.length > 0 && (
-            <p className="text-[12px] text-muted-foreground">
-              {activeCount} of 2 active Journeys
+            <p className="text-[12px] text-muted-foreground pt-0.5">
+              {activeCount} of 2 active {activeCount === 1 ? 'Journey' : 'Journeys'}
             </p>
           )}
         </header>
 
-        {/* My Rooms — compact section at top */}
-        {myRooms.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                My Rooms
-              </h2>
-              <button
-                onClick={() => setLocation('/rooms')}
-                className="text-[13px] text-primary font-medium hover:underline flex items-center gap-1"
+        {/* ── 1. Continue Your Journeys ──────────────────────────────────────── */}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Continue Your Journeys
+          </h2>
+
+          {activeGrowth.length === 0 ? (
+            /* Warm empty state */
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-2xl border border-dashed border-border p-8 text-center space-y-3"
+            >
+              <p className="text-[16px] font-medium text-foreground">Ready to begin a Journey?</p>
+              <p className="text-[14px] text-muted-foreground leading-relaxed">
+                Every Journey helps you grow in a different area of your walk with Jesus.
+              </p>
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl px-6 text-[14px] mt-1"
+                onClick={() => setLocation('/journeys/explore')}
               >
-                View all <ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {myRooms.slice(0, 2).map(room => {
-                const activeJourneys = getJourneyInvitations(room.id).filter(ji => ji.status === 'open').length;
+                Explore Journeys
+              </Button>
+            </motion.div>
+          ) : (
+            <div className="space-y-3">
+              {activeGrowth.map(j => {
+                const prog = progress[j.id]!;
                 return (
-                  <button
-                    key={room.id}
-                    onClick={() => setLocation(`/rooms/${room.id}`)}
-                    className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <Users size={17} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-foreground truncate">{room.name}</div>
-                      <div className="text-[12px] text-muted-foreground">
-                        {room.type}{activeJourneys > 0 ? ` · ${activeJourneys} active journey${activeJourneys !== 1 ? 's' : ''}` : ''}
-                      </div>
-                    </div>
-                    <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                  </button>
+                  <ActiveJourneyCard
+                    key={j.id}
+                    journey={j}
+                    prog={prog}
+                    onContinue={() => handleStartJourney(j.id, true)}
+                    onPause={() => setPauseTargetId(j.id)}
+                    onDetails={() => setLocation(`/journeys/${j.id}`)}
+                  />
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
-        {/* Core (15 Min) */}
-        {coreJourneys.length > 0 && (
+        {/* ── 2. Suggested for You ───────────────────────────────────────────── */}
+        {suggested.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              15 Minutes with Jesus
+              Suggested for You
             </h2>
-            {coreJourneys.map(j => {
-              const prog = progress[j.id];
-              const currentDay = prog?.currentDay ?? 1;
-              const completedCount = prog?.completedDays.length ?? 0;
-              return (
-                <Card key={j.id} className="border-border bg-card shadow-sm">
-                  <CardContent className="p-6 space-y-4">
-                    <div>
-                      {prog && (
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1.5">
-                          Day {currentDay} of {j.durationDays}
-                        </div>
-                      )}
-                      <h3 className="text-[20px] font-sans font-medium leading-snug">{j.title}</h3>
-                      <p className="text-[14px] text-muted-foreground mt-1.5 leading-relaxed">{j.description}</p>
-                      {completedCount > 0 && (
-                        <p className="text-[13px] text-muted-foreground mt-1">
-                          {completedCount} day{completedCount !== 1 ? 's' : ''} completed
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      className="w-full h-11 rounded-xl"
-                      onClick={() => handleStartJourney(j.id, !!prog)}
-                    >
-                      {prog ? 'Continue Journey' : 'Start Journey'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </section>
-        )}
-
-        {/* Companion (Sermon) */}
-        {companionJourneys.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              This Week
-            </h2>
-            {companionJourneys.map(j => {
-              const prog = progress[j.id];
-              const currentDay = prog?.currentDay ?? 1;
-              const started = prog && prog.completedDays.length > 0;
-              return (
-                <Card key={j.id} className="border border-primary/15 bg-background shadow-sm">
-                  <CardContent className="p-6 space-y-4">
-                    <div>
-                      <span className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1.5 block">
-                        Sermon Companion
-                      </span>
-                      <h3 className="text-[20px] font-sans font-medium leading-snug">{j.title}</h3>
-                      <p className="text-[14px] text-muted-foreground mt-1.5 leading-relaxed">{j.description}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="w-full h-11 rounded-xl"
-                      onClick={() => handleStartJourney(j.id, !!prog)}
-                    >
-                      {started ? 'Continue' : 'Start Monday'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </section>
-        )}
-
-        {/* Active growth journeys */}
-        {activeGrowth.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Active Journeys
-            </h2>
-            {activeGrowth.map(j => {
-              const prog = progress[j.id]!;
-              const pct = Math.round((prog.completedDays.length / (j.durationDays || 1)) * 100);
-              return (
-                <Card key={j.id} className="border-border bg-card shadow-sm">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
-                          Step {prog.currentDay} of {j.durationDays}
-                        </div>
-                        <h3 className="text-[18px] font-sans font-medium leading-snug">{j.title}</h3>
-                        {pct > 0 && (
-                          <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => setPauseTargetId(j.id)}
-                        className="text-[12px] text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1 flex items-center gap-1"
-                      >
-                        <Pause size={12} /> Pause
-                      </button>
-                    </div>
-                    <Button
-                      className="w-full h-11 rounded-xl"
-                      onClick={() => handleStartJourney(j.id, true)}
-                    >
-                      Continue
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </section>
-        )}
-
-        {/* Paused journeys */}
-        {pausedGrowth.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Paused
-            </h2>
-            {pausedGrowth.map(j => {
-              const prog = progress[j.id]!;
-              return (
-                <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
-                    <p className="text-[12px] text-muted-foreground">
-                      Step {prog.currentDay} of {j.durationDays} · Paused
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-xl text-[13px] flex items-center gap-1.5"
-                    onClick={() => {
-                      if (canActivateMore(journeys, startedIds)) {
-                        resumeJourney(j.id);
-                      } else {
-                        setBlockedJourneyId(j.id);
-                        setShowLimitDialog(true);
-                      }
-                    }}
-                  >
-                    <Play size={13} /> Resume
-                  </Button>
-                </div>
-              );
-            })}
-          </section>
-        )}
-
-        {/* Completed journeys */}
-        {completedGrowth.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Completed Journeys
-            </h2>
-            {completedGrowth.map(j => (
-              <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
-                  <p className="text-[12px] text-muted-foreground">Completed · {j.durationDays} days</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 rounded-xl text-[13px]"
-                  onClick={() => setLocation(`/journey/${j.id}/day/1`)}
-                >
-                  Review
-                </Button>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {/* Saved for later */}
-        {savedGrowth.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Saved for Later
-            </h2>
-            {savedGrowth.map(j => (
-              <div key={j.id} className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
-                  <p className="text-[12px] text-muted-foreground">{j.durationDays} days</p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 rounded-xl text-[13px]"
-                  onClick={() => handleStartJourney(j.id, false)}
-                >
-                  Begin
-                </Button>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {/* Browse Journeys */}
-        {browseable.length > 0 && (
-          <section className="space-y-3 pb-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                Browse Journeys
-              </h2>
-            </div>
-            <div className="space-y-2.5">
-              {browseable.map(j => (
-                <button
+            <div className="space-y-3">
+              {suggested.map(j => (
+                <SuggestedCard
                   key={j.id}
-                  onClick={() => handleStartJourney(j.id, false)}
-                  className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-                >
-                  <div className="w-9 h-9 rounded-full bg-primary/8 text-primary flex items-center justify-center shrink-0">
-                    <BookOpen size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-medium text-foreground truncate">{j.title}</p>
-                    <p className="text-[12px] text-muted-foreground">{j.durationDays} days</p>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                </button>
+                  journey={j}
+                  isSaved={getState(j.id) === 'saved'}
+                  onStart={() => handleStartJourney(j.id, false)}
+                  onSave={() => {
+                    if (getState(j.id) === 'saved') resumeJourney(j.id);
+                    else saveForLater(j.id);
+                  }}
+                  onDetails={() => setLocation(`/journeys/${j.id}`)}
+                />
               ))}
             </div>
           </section>
         )}
 
-        {/* Empty if no active, no browseable */}
-        {activeGrowth.length === 0 && browseable.length === 0 && growthJourneys.length === 0 && (
-          <div className="p-8 border border-dashed border-border rounded-2xl text-center">
-            <p className="text-[15px] font-medium text-foreground mb-1">No active Journeys</p>
-            <p className="text-[14px] text-muted-foreground">
-              You don't have another Journey underway right now.
-            </p>
-          </div>
-        )}
-
-        {/* Rooms entry if no rooms */}
-        {myRooms.length === 0 && (
-          <section className="space-y-3 pb-4">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              My Rooms
-            </h2>
-            <button
-              onClick={() => setLocation('/rooms')}
-              className="w-full text-left p-5 rounded-2xl border border-dashed border-border bg-background hover:border-primary/30 transition-all"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <Users size={19} className="text-muted-foreground" />
-                </div>
-                <div>
-                  <div className="text-[15px] font-medium text-foreground">Walk with others</div>
-                  <div className="text-[13px] text-muted-foreground mt-0.5">
-                    Create or join a Room to do journeys together.
-                  </div>
-                </div>
-              </div>
-            </button>
-          </section>
-        )}
+        {/* ── 3. Manage Journeys (secondary — paused / completed / saved) ────── */}
+        <ManageSection
+          pausedJourneys={pausedGrowth}
+          completedJourneys={completedGrowth}
+          savedJourneys={savedGrowth}
+          progress={progress}
+          journeys={journeys}
+          onResume={handleResume}
+          onReview={(id) => setLocation(`/journey/${id}/day/1`)}
+          onBegin={(j) => handleStartJourney(j.id, false)}
+          onPauseTarget={(id) => setPauseTargetId(id)}
+          canActivateMore={canActivateMore}
+          startedIds={startedIds}
+        />
 
       </main>
 
@@ -543,10 +735,7 @@ export default function Journeys() {
       {pauseTargetId && pauseTarget && (
         <PauseDialog
           journeyTitle={pauseTarget.title}
-          onPause={() => {
-            pauseJourney(pauseTargetId);
-            setPauseTargetId(null);
-          }}
+          onPause={() => { pauseJourney(pauseTargetId); setPauseTargetId(null); }}
           onCancel={() => setPauseTargetId(null)}
         />
       )}
@@ -557,7 +746,8 @@ export default function Journeys() {
           activeJourneys={activeGrowth.map(j => ({
             id: j.id,
             title: j.title,
-            progress: Math.round((progress[j.id]?.completedDays.length ?? 0) / (j.durationDays || 1) * 100),
+            currentDay: progress[j.id]?.currentDay ?? 1,
+            durationDays: j.durationDays,
           }))}
           onPause={handlePauseFromLimit}
           onCancel={() => { setShowLimitDialog(false); setBlockedJourneyId(null); }}

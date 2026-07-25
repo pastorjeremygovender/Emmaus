@@ -743,8 +743,9 @@ router.get("/youtube-archive/preached-here", async (req: Request, res: Response)
     return;
   }
 
-  const results = await searchByScripture(bookId, chapter, 10);
-  res.json({ sermons: results });
+  const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
+  // `sermons` kept for backward compatibility (chapter-specific only)
+  res.json({ sermons: chapterSermons, chapterSermons, bookSermons });
 });
 
 // ─── Embedding Generation ─────────────────────────────────────────────────────

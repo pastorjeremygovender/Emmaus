@@ -1,0 +1,1121 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+Do not rebuild the application.
+
+Do not redesign Rooms in this sprint.
+
+Do not redesign the Walk with Jesus screen in this sprint.
+
+Do not change Ask Emmaus.
+
+Preserve all existing data, authentication, progress, Bible functionality, sermon functionality, admin tools, Journey content and publishing workflows.
+
+This is a focused redesign of the member-facing Journeys page.
+
+=====================================================
+SPRINT NAME
+
+Member Journeys Experience
+
+=====================================================
+SPRINT GOAL
+
+Redesign the member-facing Journeys page so it feels calm, pastoral and easy to understand.
+
+The page should answer one question:
+
+“What Journeys am I walking through, and what could help me grow next?”
+
+The page must not feel like a generic content library, admin list or dashboard.
+
+It should help users:
+
+- Continue active Journeys
+- Discover a small number of relevant Journeys
+- Explore the wider Journey catalogue when they choose
+- Understand the commitment and rhythm of each Journey
+- Start, pause and resume Journeys clearly
+- Stay within the existing two-active-Journey limit
+
+=====================================================
+CORE PRODUCT PRINCIPLE
+
+The Walk screen guides the user through today.
+
+The Journeys screen helps the user manage and discover longer discipleship pathways.
+
+Do not duplicate content already featured on the Walk screen.
+
+Do not place This Week’s Sermon Devotional on the Journeys page.
+
+Do not place Daily Devotional on the Journeys page.
+
+Do not place 15 Minutes with Jesus on the Journeys page as a normal Journey card.
+
+Do not place Rooms on the Journeys page.
+
+=====================================================
+REMOVE FROM CURRENT PAGE
+
+Remove the following from the member-facing Journeys page:
+
+- This Week section
+- This Week’s Sermon or Sermon Companion card
+- My Rooms section
+- Walk with others card
+- Any duplicate Ask Emmaus card
+- Any duplicated progress summary already shown on Walk
+- Any generic “No active Journeys” block that leaves the screen feeling empty
+
+Keep the floating Ask Emmaus button if it already appears globally.
+
+Do not remove Rooms functionality from the application.
+
+Simply remove Rooms content from this page.
+
+=====================================================
+PAGE TITLE
+
+Use:
+
+Journeys
+
+Supporting line:
+
+Grow through guided discipleship.
+
+Keep the introduction short.
+
+Do not use:
+
+Continue active walks, revisit completed ones, and explore what’s next.
+
+The new wording should feel simpler and warmer.
+
+=====================================================
+PAGE STRUCTURE
+
+The main Journeys page must use this order:
+
+1. Continue Your Journeys
+2. Suggested for You
+3. Explore Journeys
+
+This order is fixed.
+
+=====================================================
+CONTINUE YOUR JOURNEYS
+
+The first section should be:
+
+Continue Your Journeys
+
+Show only active non-exempt Journeys.
+
+Examples:
+
+- Made Free
+- Marriage
+- Parenting
+- Volunteer Training
+- Membership
+- Bible Study
+- Prayer Journey
+- Youth Journey
+- Leadership Journey
+
+Do not include:
+
+- 15 Minutes with Jesus
+- Daily Devotional
+- This Week’s Sermon Devotional
+- This Week’s Sermon
+- Walk with Jesus
+
+Each active Journey card should show:
+
+- Cover image or calm placeholder
+- Journey title
+- One-line purpose
+- Current Step
+- Progress context
+- Journey rhythm
+- Estimated time
+- Continue button
+- More actions menu
+
+Example:
+
+Made Free
+
+Break free from addiction through Scripture, prayer and practical daily steps.
+
+Step 4 of 21
+
+Self-paced
+
+About 15 minutes
+
+Continue
+
+More actions:
+
+- Pause Journey
+- View Journey Details
+- Restart only if existing product rules allow it
+- Remove only if existing product rules allow it safely
+
+Do not display raw percentages unless they are useful.
+
+Prefer:
+
+Step 4 of 21
+
+or
+
+Day 4 of 21
+
+over:
+
+19% complete
+
+=====================================================
+NO ACTIVE JOURNEYS STATE
+
+When the user has no active non-exempt Journeys, do not show:
+
+No active Journeys
+
+You don’t have another Journey underway right now.
+
+Instead show:
+
+Ready to begin a Journey?
+
+Every Journey helps you grow in a different area of your walk with Jesus.
+
+Button:
+
+Explore Journeys
+
+This button should scroll to or open the Explore Journeys catalogue.
+
+Do not add guilt or pressure.
+
+=====================================================
+ACTIVE JOURNEY LIMIT
+
+Preserve the maximum of two active non-exempt Journeys per user.
+
+Show the active capacity gently where useful.
+
+Example:
+
+1 of 2 active Journeys
+
+or
+
+2 active Journeys
+
+Avoid making it feel like a storage quota.
+
+Do not show the limit prominently when the user has no reason to think about it.
+
+When the user tries to begin a third active Journey, preserve the warm dialog:
+
+You already have two Journeys underway.
+
+To help you focus and finish well, pause one before beginning another.
+
+Buttons:
+
+Review my Journeys
+
+Not now
+
+Review my Journeys should keep the user within the Journeys experience and allow them to pause one active Journey.
+
+Pausing must preserve all progress.
+
+=====================================================
+PAUSED JOURNEYS
+
+Paused Journeys should not appear in Continue Your Journeys.
+
+They should be accessible through a secondary filter or tab in the wider Journeys area.
+
+Use a simple view structure such as:
+
+- Active
+- Paused
+- Completed
+- Saved
+
+Do not make these the first thing users see unless they actively open the management view.
+
+Paused Journey cards should show:
+
+- Journey title
+- Last Step reached
+- Paused label
+- Resume button
+- View details
+
+Resuming must return the user to the exact correct Step.
+
+=====================================================
+SUGGESTED FOR YOU
+
+The second section should be:
+
+Suggested for You
+
+Show a small curated set of Journeys.
+
+Show no more than 3 to 5 Journeys at one time.
+
+Do not show the entire library here.
+
+Recommendations may be based on:
+
+- Church-wide recommendations
+- Pastor or admin curation
+- User profile
+- Completed Journeys
+- Active Journey capacity
+- New believer status
+- Relevant themes
+- Current church emphasis
+- Room assignment where appropriate
+- Ask Emmaus recommendations already saved to the user’s profile
+
+Do not use random suggestions.
+
+Do not require unrestricted AI to choose the visible list.
+
+Prefer curated and deterministic rules.
+
+Do not recommend a Journey the user has already completed unless it is explicitly suitable for repeating.
+
+Do not recommend a Journey already active or paused as though it is new.
+
+=====================================================
+SUGGESTED JOURNEY CARDS
+
+Each Suggested Journey card should show:
+
+- Cover image
+- Journey title
+- One-line purpose
+- Journey length
+- Estimated time per Step
+- Rhythm
+- Start Journey button
+- Save for Later option
+- View Details option
+
+Example:
+
+Made Free
+
+Break free from addiction through Scripture, prayer and practical daily steps.
+
+21 Days
+
+About 15 minutes per day
+
+Daily
+
+Start Journey
+
+=====================================================
+EXPLORE JOURNEYS
+
+The third section should be:
+
+Explore Journeys
+
+This should lead into the full Journey catalogue.
+
+The main page may show a simple button or compact preview.
+
+Use:
+
+Explore all Journeys
+
+The full catalogue should support:
+
+- Search
+- Collections
+- Filters
+- Saved Journeys
+- Active status
+- Paused status
+- Completed status
+
+Do not show the complete catalogue directly on the main Journeys landing page if that creates visual clutter.
+
+=====================================================
+MEMBER-FACING COLLECTIONS
+
+Use Collections as the primary discovery structure for members.
+
+Do not expose Collections as an admin or technical concept.
+
+Present them as curated discipleship pathways.
+
+Examples:
+
+Starting with Jesus
+
+- Who is Jesus?
+- Prayer Basics
+- Reading the Bible
+- Following Jesus
+
+Growing in Faith
+
+- Worship
+- Obedience
+- Faith
+- Prayer
+
+Freedom
+
+- Made Free
+- Forgiveness
+- Anxiety
+- Healing from the Past
+
+Family and Relationships
+
+- Marriage
+- Parenting
+- Family Prayer
+
+Serving Others
+
+- Volunteering
+- Hospitality
+- Evangelism
+- Leadership
+
+Church Life
+
+- Membership
+- Baptism
+- Giving
+- Serving at ICC
+
+Young People
+
+- Teen Faith
+- Identity
+- Purpose
+- Relationships
+
+Use the existing Collection architecture from Content Studio where possible.
+
+Do not create a separate member category system if Collections already support the need.
+
+=====================================================
+COLLECTION CARDS
+
+Each Collection card should show:
+
+- Cover image or calm visual
+- Collection title
+- One-line description
+- Number of Journeys
+- View Collection action
+
+Example:
+
+Freedom
+
+Journeys to help you walk through addiction, anxiety, forgiveness and healing.
+
+4 Journeys
+
+View Collection
+
+Keep the visual design calm and book-like.
+
+Avoid bright marketplace styling.
+
+=====================================================
+FULL CATALOGUE
+
+The Explore all Journeys screen should support:
+
+Search field:
+
+Search Journeys
+
+Search across:
+
+- Journey title
+- Description
+- Scripture references where practical
+- Tags
+- Collection
+- Theme
+
+Filters may include:
+
+- Collection
+- Journey rhythm
+- Length
+- Audience
+- Status
+- Saved
+- Completed
+
+Keep filters simple.
+
+Do not expose technical content types or database fields.
+
+=====================================================
+JOURNEY RHYTHM
+
+Every Journey should communicate its expected rhythm.
+
+Supported member-facing rhythm labels:
+
+Daily
+
+A new Step is intended each day.
+
+Self-paced
+
+Continue whenever you are ready.
+
+Weekly
+
+A new Step is intended each week.
+
+Guided
+
+The Journey follows a scheduled church or Room rhythm.
+
+Do not use technical schedule language.
+
+Display the rhythm clearly on Journey cards and details.
+
+Use words rather than relying only on icons or colours.
+
+=====================================================
+JOURNEY LENGTH AND TIME
+
+Each Journey card and details screen should show useful commitment information where available.
+
+Examples:
+
+7 Days
+
+21 Days
+
+5 Steps
+
+8 Weeks
+
+About 10 minutes per day
+
+About 15 minutes per Step
+
+Self-paced
+
+Do not fabricate durations.
+
+If no estimate exists, omit it cleanly.
+
+Do not display:
+
+0 days
+
+0 minutes
+
+Unknown duration
+
+=====================================================
+JOURNEY CARD DESIGN
+
+Journey cards should feel like calm book covers or guided pathways.
+
+Use:
+
+- Cover image
+- Strong title
+- Brief purpose
+- Rhythm
+- Length
+- Estimated time
+- Clear action
+
+Avoid:
+
+- Dense metadata
+- Multiple equal-weight buttons
+- Raw tags everywhere
+- Progress bars on Journeys not yet started
+- Bright gradients
+- Generic admin cards
+- Excessive shadows
+- Times New Roman
+- Decorative icons that do not add meaning
+
+=====================================================
+COVER IMAGES
+
+Support cover images from the existing Content Studio and Media Studio.
+
+Do not create a separate member cover-image system.
+
+If a Journey has no cover image, use a calm consistent placeholder based on:
+
+- Collection
+- Journey theme
+- Existing Emmaus colour palette
+
+Do not use random images.
+
+Do not duplicate uploaded files.
+
+=====================================================
+JOURNEY DETAILS SCREEN
+
+When the user opens a Journey, show a clean member-facing details screen.
+
+The screen should include:
+
+- Cover image
+- Journey title
+- One-line purpose
+- Full description
+- Who it is for
+- Journey rhythm
+- Length
+- Estimated time
+- Number of Steps
+- Optional Scripture theme
+- Optional author or church source
+- Start, Continue, Resume or Review action
+- Save for Later
+- Step overview
+- Related Collection
+- Relevant disclaimer where needed
+
+Do not show admin fields.
+
+Do not show raw tags unless they help the user.
+
+=====================================================
+START JOURNEY FLOW
+
+Starting a Journey should require minimal friction.
+
+Flow:
+
+Open Journey
+
+↓
+
+Review Journey details
+
+↓
+
+Start Journey
+
+↓
+
+Journey becomes active
+
+↓
+
+Open Step 1
+
+Do not require a long setup form.
+
+If active capacity is available, begin immediately.
+
+If the user is already active in the Journey, show Continue instead of Start.
+
+If paused, show Resume.
+
+If completed, show Review Journey or Begin Again only where appropriate.
+
+=====================================================
+SAVE FOR LATER
+
+Allow users to save Journeys for later without making them active.
+
+Saved Journeys should:
+
+- Not count toward the active Journey limit
+- Appear in the Saved view
+- Remain easy to begin later
+- Preserve no progress until actually started unless an existing preview action creates progress
+
+Use wording:
+
+Save for later
+
+Saved
+
+Remove from saved
+
+=====================================================
+COMPLETED JOURNEYS
+
+Completed Journeys should remain accessible.
+
+The Completed view should show:
+
+- Journey title
+- Completion date
+- Review Journey
+- Repeat Journey only if allowed
+- Related next Journey where available
+
+Do not turn completion into gamification.
+
+No badges, trophies, XP or rankings.
+
+A quiet completion indicator is sufficient.
+
+=====================================================
+JOURNEY RECOMMENDATIONS
+
+Suggested Journeys should support the existing Emmaus discipleship philosophy.
+
+Recommendations should help users move toward:
+
+- Knowing Jesus
+- Reading Scripture
+- Prayer
+- Growth
+- Church participation
+- Serving others
+
+Avoid recommending Journeys merely because they are new or popular.
+
+Where possible, use a pastoral progression.
+
+Examples:
+
+After 15 Minutes with Jesus:
+
+- Prayer Basics
+- Who is Jesus?
+- Reading the Bible
+
+After Made Free:
+
+- Renewing the Mind
+- Prayer and Accountability
+- Serving Others
+
+After Membership:
+
+- Baptism
+- Serving at ICC
+- Giving
+- Joining a Room
+
+Do not implement complex recommendation intelligence if the existing data does not support it.
+
+Prefer clear admin curation first.
+
+=====================================================
+ROOMS
+
+Do not redesign Rooms.
+
+Do not show My Rooms on the Journeys page.
+
+Do not show Walk with others on the Journeys page.
+
+Preserve existing Room functionality and routes.
+
+We will review Rooms in a later sprint.
+
+=====================================================
+ASK EMMAUS
+
+Do not add an Ask Emmaus card to the Journeys page.
+
+Keep the existing floating Ask Emmaus button if it is globally present.
+
+Do not redesign Ask Emmaus.
+
+=====================================================
+BOTTOM NAVIGATION
+
+Preserve the compass icon for Journeys.
+
+Keep the label:
+
+Journeys
+
+Use the existing active and inactive navigation styles.
+
+Do not change routes or navigation behaviour.
+
+=====================================================
+TYPOGRAPHY
+
+Preserve the modern sans-serif typography already applied across Emmaus.
+
+Do not reintroduce Times New Roman or browser-default serif styles.
+
+Verify the Journeys page, Journey cards, Collections and details screens use the existing Emmaus typography system.
+
+=====================================================
+EMPTY STATES
+
+Use warm, useful empty states.
+
+No active Journeys:
+
+Ready to begin a Journey?
+
+Every Journey helps you grow in a different area of your walk with Jesus.
+
+Explore Journeys
+
+No paused Journeys:
+
+You don’t have any paused Journeys.
+
+No completed Journeys:
+
+Completed Journeys will appear here as you finish them.
+
+No saved Journeys:
+
+Save Journeys you would like to begin later.
+
+No search results:
+
+We couldn’t find a Journey matching your search.
+
+Clear filters
+
+Keep empty states brief.
+
+=====================================================
+LOADING AND ERROR STATES
+
+Avoid blank screens.
+
+Use calm loading placeholders for:
+
+- Active Journeys
+- Suggested Journeys
+- Collections
+- Search results
+- Journey details
+
+If content cannot load, say:
+
+We couldn’t load these Journeys. Please try again.
+
+If a Journey cannot start, say:
+
+We couldn’t start this Journey. Please try again.
+
+If progress cannot load, say:
+
+We couldn’t find your saved place. Please try again.
+
+Do not expose raw technical errors.
+
+=====================================================
+MOBILE-FIRST DESIGN
+
+The Journeys page is primarily a mobile experience.
+
+On mobile:
+
+- Page title and first active Journey should appear near the top
+- Cards should stack cleanly
+- Cover images should not dominate the screen
+- Primary actions should be easy to tap
+- Filters should open in a simple drawer or sheet
+- Search should remain easy to use
+- No horizontal overflow
+- No tiny metadata
+- Bottom navigation must remain reachable
+- Floating Ask Emmaus must not obscure primary buttons
+
+Also test tablet and desktop.
+
+=====================================================
+ACCESSIBILITY
+
+Maintain:
+
+- Keyboard navigation
+- Screen-reader labels
+- Visible focus states
+- Proper heading order
+- Sufficient contrast
+- Large touch targets
+- Accessible filter controls
+- Accessible dialogs
+- Text alternatives for cover images
+- Non-colour status indicators
+
+=====================================================
+DATA AND ARCHITECTURE
+
+Inspect existing Journey, Collection, enrolment and progress models before implementation.
+
+Reuse:
+
+- Existing Journeys
+- Existing Collections
+- Existing cover images
+- Existing Media Studio
+- Existing active status
+- Existing paused status
+- Existing completed status
+- Existing saved or bookmark data
+- Existing progress
+- Existing two-active-Journey limit
+- Existing recommendations where appropriate
+
+Add only minimal backward-compatible fields where required.
+
+Do not create duplicate Journey catalogue systems.
+
+Do not reset progress.
+
+Do not alter published Journey IDs.
+
+Do not break deep links.
+
+Do not change admin Collections architecture unnecessarily.
+
+=====================================================
+PERFORMANCE
+
+The Journeys experience must remain responsive with:
+
+- Hundreds of Journeys
+- Many Collections
+- Large cover image libraries
+- Many saved or completed Journeys
+
+Use:
+
+- Pagination
+- Lazy loading
+- Debounced search
+- Optimised images
+- Efficient filters
+- Cached Collection summaries where appropriate
+
+Do not load the entire catalogue at once.
+
+=====================================================
+TESTING REQUIREMENTS
+
+Test all of the following.
+
+TEST 1: Page structure
+
+Confirm the main page order is:
+
+1. Continue Your Journeys
+2. Suggested for You
+3. Explore Journeys
+
+Confirm there is no:
+
+- This Week’s Sermon card
+- My Rooms section
+- Walk with others card
+- Ask Emmaus card
+- This Week progress card
+
+TEST 2: No active Journeys
+
+- Warm empty state appears
+- Explore Journeys action works
+- No harsh or empty-looking block remains
+
+TEST 3: One active Journey
+
+- Journey appears under Continue Your Journeys
+- Correct Step is shown
+- Continue opens the correct Step
+- Rhythm and time are displayed correctly
+
+TEST 4: Two active Journeys
+
+- Both appear
+- Neither is duplicated
+- Active capacity rules remain correct
+
+TEST 5: Starting a third Journey
+
+- Warm limit dialog appears
+- User can pause one
+- Progress is preserved
+- New Journey starts successfully
+
+TEST 6: Paused Journeys
+
+- Do not appear under Continue Your Journeys
+- Appear in Paused view
+- Resume opens the exact correct Step
+
+TEST 7: Suggested for You
+
+- Shows no more than 3 to 5 Journeys
+- Does not include active, paused or completed Journeys incorrectly
+- Start Journey works
+- Save for Later works
+
+TEST 8: Explore Journeys
+
+- Opens the full catalogue
+- Search works
+- Collections work
+- Filters work
+- Saved view works
+- Completed view works
+
+TEST 9: Collections
+
+- Member-facing Collection cards load
+- Collection opens
+- Journeys within Collection load
+- Admin terminology is not exposed
+
+TEST 10: Journey details
+
+- Cover image loads
+- Purpose and description display
+- Rhythm and duration display
+- Start, Continue, Resume and Review states work
+- Save for Later works
+
+TEST 11: Cover images
+
+- Existing Media Studio images are reused
+- Missing images show calm placeholders
+- No broken image icons appear
+
+TEST 12: Typography
+
+- No Times New Roman appears
+- Text remains readable on mobile
+- No default serif styling appears
+
+TEST 13: Existing functionality
+
+- Walk with Jesus still works
+- Ask Emmaus still works
+- Bible still works
+- Journey progress remains intact
+- Admin Content Studio still works
+- Collections remain editable in admin
+- Publishing still works
+- Rooms still work in their existing location
+- Authentication still works
+
+=====================================================
+DO NOT
+
+Do not redesign Rooms.
+
+Do not redesign Walk with Jesus.
+
+Do not add This Week’s Sermon to Journeys.
+
+Do not add Daily Devotional to Journeys.
+
+Do not add 15 Minutes with Jesus as a normal catalogue Journey.
+
+Do not add My Rooms.
+
+Do not add Walk with others.
+
+Do not add an Ask Emmaus card.
+
+Do not add XP.
+
+Do not add levels.
+
+Do not add achievements.
+
+Do not add leaderboards.
+
+Do not create a marketplace-style experience.
+
+Do not expose admin categories or raw tags.
+
+Do not reset user progress.
+
+Do not replace existing Collections.
+
+Do not begin Voice Integration.
+
+Do not begin Attendance.
+
+Do not start another sprint after this one.
+
+=====================================================
+DEFINITION OF DONE
+
+This sprint is complete only when:
+
+- The Journeys page contains Continue Your Journeys, Suggested for You and Explore Journeys.
+- This Week’s Sermon is removed from the page.
+- My Rooms is removed from the page.
+- Walk with others is removed from the page.
+- The empty state is warm and useful.
+- Active Journeys show meaningful progress and commitment information.
+- Suggested for You shows a small curated list.
+- The full catalogue opens separately.
+- Member-facing Collections work.
+- Search and filters work.
+- Journey rhythm is visible.
+- Journey length and estimated time are visible where available.
+- Journey details are clear and member-friendly.
+- Start, Continue, Pause, Resume and Save for Later work.
+- The two-active-Journey limit still works.
+- Cover images use the existing media system.
+- Compass navigation remains correct.
+- Times New Roman is not reintroduced.
+- Existing data and functionality remain intact.
+- Mobile, tablet and desktop layouts are usable.
+- There are no visible placeholder controls.
+- There are no new TypeScript, lint, build or runtime errors.
+
+=====================================================
+FINAL REVIEW OUTPUT
+
+When complete, provide a clear summary inside Replit covering:
+
+1. What was removed from the Journeys page
+2. The new page structure
+3. How active Journeys work
+4. How Suggested for You works
+5. How Explore Journeys works
+6. How member-facing Collections work
+7. How Journey rhythm and commitment are displayed
+8. How the two-active-Journey limit is preserved
+9. Any data model changes
+10. Any migrations applied
+11. Tests completed
+12. Known limitations
+13. What should be tested manually
+
+Do not begin the Rooms sprint.
+
+Stop after presenting the completed member-facing Journeys experience for review.

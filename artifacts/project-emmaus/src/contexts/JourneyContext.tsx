@@ -32,6 +32,8 @@ export type Journey = {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  scriptureReference?: string;  // e.g. "John 3:16-17"
+  nextJourneyId?: string;       // slug of recommended next journey after completion
 };
 
 export type Step = {

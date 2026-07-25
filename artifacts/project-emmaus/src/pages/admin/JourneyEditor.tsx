@@ -289,6 +289,22 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
               <TextInput value={form.linkedSermonId ?? ''} onChange={e => patch('linkedSermonId', e.target.value)} placeholder="sermon-2-samuel-9" />
             </Field>
           )}
+
+          <Field label="Key Scripture">
+            <TextInput
+              value={(form as any).scriptureReference ?? ''}
+              onChange={e => patch('scriptureReference' as any, e.target.value)}
+              placeholder="e.g. John 3:16-17 — shown on detail screen, links to Bible reader"
+            />
+          </Field>
+
+          <Field label="Next Journey (after completion)">
+            <TextInput
+              value={(form as any).nextJourneyId ?? ''}
+              onChange={e => patch('nextJourneyId' as any, e.target.value)}
+              placeholder="journey slug, e.g. prayer-basics — shown when this journey is completed"
+            />
+          </Field>
         </div>
 
         {/* Days list */}

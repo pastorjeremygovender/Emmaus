@@ -60,7 +60,14 @@ export default function ChapterReader() {
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [preachedHereSermons, setPreachedHereSermons] = useState<Array<{
-    sermonId: string; title: string; speaker: string;
+    sermonId: string; title: string; speaker: string; sermonDate?: string;
+    timestampedUrl: string; timestampLabel: string; matchingReference?: string;
+    audioUrl?: string; relativeStartSeconds?: number; relativeTimestampLabel?: string;
+    youtubeUrl?: string;
+  }>>([]);
+  // Book-level fallback sermons — shown only when no chapter-specific results exist
+  const [preachedHereBookSermons, setPreachedHereBookSermons] = useState<Array<{
+    sermonId: string; title: string; speaker: string; sermonDate?: string;
     timestampedUrl: string; timestampLabel: string;
     audioUrl?: string; relativeStartSeconds?: number; relativeTimestampLabel?: string;
     youtubeUrl?: string;
@@ -146,13 +153,20 @@ export default function ChapterReader() {
   // Fetch Preached Here sermons when book/chapter changes (non-critical)
   useEffect(() => {
     setPreachedHereSermons([]);
+    setPreachedHereBookSermons([]);
     const url = getApiUrl(
       `/api/youtube-archive/preached-here?bookId=${encodeURIComponent(resolvedBookId)}&chapter=${chapterNum}`
     );
     fetch(url)
-      .then(r => r.ok ? r.json() : { sermons: [] })
-      .then((data: { sermons: typeof preachedHereSermons }) => {
-        setPreachedHereSermons(data.sermons ?? []);
+      .then(r => r.ok ? r.json() : { chapterSermons: [], bookSermons: [] })
+      .then((data: {
+        sermons?: typeof preachedHereSermons;
+        chapterSermons?: typeof preachedHereSermons;
+        bookSermons?: typeof preachedHereBookSermons;
+      }) => {
+        // chapterSermons is the new field; fall back to legacy `sermons` key
+        setPreachedHereSermons(data.chapterSermons ?? data.sermons ?? []);
+        setPreachedHereBookSermons(data.bookSermons ?? []);
       })
       .catch(() => {/* Preached Here is non-critical */});
   }, [resolvedBookId, chapterNum]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -624,49 +638,65 @@ export default function ChapterReader() {
             <SheetHeader>
               <SheetTitle className="text-left">{book.name} {chapterNum} — Preached at ICC</SheetTitle>
             </SheetHeader>
-            <div className="space-y-2.5">
-              {preachedHereSermons.map((sermon, i) => (
-                <div
-                  key={sermon.sermonId ?? i}
-                  className="flex items-start gap-3 p-3.5 rounded-xl border border-border"
-                >
-                  <span className="text-[22px] leading-none mt-0.5 shrink-0" aria-hidden="true">🎧</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-semibold text-foreground line-clamp-2">{sermon.title}</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">{sermon.speaker}</p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {/* Listen button (in-app player) */}
-                      {sermon.audioUrl && (
-                        <button
-                          onClick={() => {
-                            setPreachedHereOpen(false);
-                            setPreachedHerePlayer({
-                              audioUrl: sermon.audioUrl!,
-                              startSeconds: sermon.relativeStartSeconds ?? 0,
-                              title: sermon.title,
-                              speaker: sermon.speaker,
-                              watchUrl: sermon.timestampedUrl,
-                            });
-                          }}
-                          className="flex items-center gap-1 text-[12px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors"
-                        >
-                          🎧 {sermon.relativeTimestampLabel ? `Listen from ${sermon.relativeTimestampLabel}` : 'Listen'}
-                        </button>
-                      )}
-                      {/* Watch button (YouTube) */}
-                      <a
-                        href={sermon.timestampedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        ▶ {sermon.timestampLabel ? `Watch from ${sermon.timestampLabel}` : 'Watch on YouTube'}
-                      </a>
-                    </div>
-                  </div>
+
+            {preachedHereSermons.length > 0 ? (
+              /* Chapter-specific results — confirmed references to this chapter */
+              <div className="space-y-2.5">
+                {preachedHereSermons.map((sermon, i) => (
+                  <PreachedHereCard
+                    key={sermon.sermonId ?? i}
+                    sermon={sermon}
+                    onListen={sermon.audioUrl ? () => {
+                      setPreachedHereOpen(false);
+                      setPreachedHerePlayer({
+                        audioUrl: sermon.audioUrl!,
+                        startSeconds: sermon.relativeStartSeconds ?? 0,
+                        title: sermon.title,
+                        speaker: sermon.speaker,
+                        watchUrl: sermon.timestampedUrl,
+                      });
+                    } : undefined}
+                  />
+                ))}
+              </div>
+            ) : preachedHereBookSermons.length > 0 ? (
+              /* Book-level fallback — shown only when no chapter-specific results exist */
+              <div className="space-y-3">
+                <div className="px-3 py-2.5 rounded-xl bg-muted/50 border border-border">
+                  <p className="text-[13px] text-muted-foreground leading-relaxed">
+                    We found sermons from the book of {book.name}, but none linked specifically to this chapter yet.
+                  </p>
                 </div>
-              ))}
-            </div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest pt-1">
+                  Other sermons from {book.name}
+                </p>
+                <div className="space-y-2.5">
+                  {preachedHereBookSermons.map((sermon, i) => (
+                    <PreachedHereCard
+                      key={sermon.sermonId ?? i}
+                      sermon={sermon}
+                      onListen={sermon.audioUrl ? () => {
+                        setPreachedHereOpen(false);
+                        setPreachedHerePlayer({
+                          audioUrl: sermon.audioUrl!,
+                          startSeconds: sermon.relativeStartSeconds ?? 0,
+                          title: sermon.title,
+                          speaker: sermon.speaker,
+                          watchUrl: sermon.timestampedUrl,
+                        });
+                      } : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Empty state */
+              <div className="py-8 text-center">
+                <p className="text-[14px] text-muted-foreground">
+                  No sermons linked to this chapter yet.
+                </p>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
@@ -687,6 +717,55 @@ export default function ChapterReader() {
     </div>
   );
 }
+
+// ─── Preached Here card ───────────────────────────────────────────────────────
+
+interface PHSSermon {
+  sermonId: string; title: string; speaker: string; sermonDate?: string;
+  timestampedUrl: string; timestampLabel: string; matchingReference?: string;
+  audioUrl?: string; relativeStartSeconds?: number; relativeTimestampLabel?: string;
+}
+
+function PreachedHereCard({
+  sermon, onListen,
+}: { sermon: PHSSermon; onListen?: () => void }) {
+  return (
+    <div className="flex items-start gap-3 p-3.5 rounded-xl border border-border">
+      <span className="text-[22px] leading-none mt-0.5 shrink-0" aria-hidden="true">🎧</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[14px] font-semibold text-foreground line-clamp-2">{sermon.title}</p>
+        <p className="text-[12px] text-muted-foreground mt-0.5">
+          {sermon.speaker}
+          {sermon.sermonDate && ` · ${formatDate(sermon.sermonDate)}`}
+        </p>
+        {/* Matching scripture reference — explains why this sermon appeared */}
+        {sermon.matchingReference && (
+          <p className="text-[11px] font-medium text-primary mt-1">{sermon.matchingReference}</p>
+        )}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {onListen && (
+            <button
+              onClick={onListen}
+              className="flex items-center gap-1 text-[12px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors"
+            >
+              🎧 {sermon.relativeTimestampLabel ? `Listen from ${sermon.relativeTimestampLabel}` : 'Listen'}
+            </button>
+          )}
+          <a
+            href={sermon.timestampedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ▶ {sermon.timestampLabel ? `Watch from ${sermon.timestampLabel}` : 'Watch on YouTube'}
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
   try {

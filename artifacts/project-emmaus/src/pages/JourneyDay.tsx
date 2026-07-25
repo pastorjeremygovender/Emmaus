@@ -79,10 +79,11 @@ export default function JourneyDay() {
 
   const reflectionKey = `${journeyId}-${day}`;
 
+  const isFinalStep = journey.durationDays > 0 && day >= journey.durationDays;
+
   const handleComplete = () => {
     completeStep(journey.id, day, reflection);
     if (reflection.trim() && activeRoomsForJourney.length > 0) {
-      // Show share prompt
       setShowSharePrompt(true);
       setIsCompleting(true);
     } else {
@@ -163,8 +164,72 @@ export default function JourneyDay() {
     );
   }
 
-  // Final completion screen
+  // Completion screens
   if (isCompleting) {
+    // ── Journey complete — final step ──────────────────────────────────────
+    if (isFinalStep) {
+      const nextJourney = journey.nextJourneyId ? (getJourney(journey.nextJourneyId) ?? null) : null;
+
+      return (
+        <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="text-center space-y-4 max-w-[340px] w-full"
+          >
+            <div className="w-20 h-20 bg-primary/15 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check size={36} strokeWidth={2.5} />
+            </div>
+            <h2 className="text-[28px] font-serif font-medium leading-snug">Journey Complete.</h2>
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
+              You've finished <strong>{journey.title}</strong>. Well done.
+            </p>
+            {sharedRoomId && (
+              <p className="text-[13px] text-primary">Your reflection has been shared with your Room.</p>
+            )}
+            {/* Next journey recommendation */}
+            {nextJourney && (
+              <div className="mt-2 p-4 rounded-2xl border border-border bg-card text-left">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                  Up Next
+                </p>
+                <p className="text-[15px] font-medium text-foreground">{nextJourney.title}</p>
+                {nextJourney.description && (
+                  <p className="text-[13px] text-muted-foreground mt-1 leading-snug line-clamp-2">
+                    {nextJourney.description}
+                  </p>
+                )}
+                <Button
+                  className="w-full mt-3 rounded-xl h-10 text-[14px]"
+                  onClick={() => setLocation(`/journeys/${nextJourney.id}`)}
+                >
+                  View Journey
+                </Button>
+              </div>
+            )}
+            <div className="pt-2 flex flex-col gap-2.5">
+              <Button
+                variant="outline"
+                className="rounded-xl px-8 w-full"
+                onClick={() => setLocation('/journeys')}
+              >
+                My Journeys
+              </Button>
+              <Button
+                variant="ghost"
+                className="rounded-xl px-8 w-full text-muted-foreground"
+                onClick={() => setLocation('/walk')}
+              >
+                Back to Walk
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      );
+    }
+
+    // ── Regular step completed — "See you tomorrow" ────────────────────────
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
         <motion.div
@@ -179,16 +244,10 @@ export default function JourneyDay() {
           <h2 className="text-[26px] font-serif font-medium">Great job.</h2>
           <p className="text-base text-muted-foreground">See you tomorrow.</p>
           {sharedRoomId && (
-            <p className="text-[13px] text-primary">
-              Your reflection has been shared with your Room.
-            </p>
+            <p className="text-[13px] text-primary">Your reflection has been shared with your Room.</p>
           )}
           <div className="pt-6">
-            <Button
-              variant="outline"
-              className="rounded-xl px-8"
-              onClick={() => setLocation('/walk')}
-            >
+            <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
               Back to Walk
             </Button>
           </div>

@@ -1,0 +1,634 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is a focused integration sprint.
+
+Do not redesign Walk with Jesus.
+
+Do not redesign Rooms.
+
+Do not redesign Voice.
+
+Do not redesign Attendance.
+
+Do not redesign Ask Emmaus.
+
+Preserve all existing authentication, Bible functionality, sermon functionality, Collections, Content Studio, Journey editor and publishing workflows.
+
+=====================================================
+
+SPRINT NAME
+
+Complete Journey Publishing Pipeline
+
+=====================================================
+
+GOAL
+
+The complete Journey lifecycle must work from beginning to end.
+
+A Journey created inside Content Studio should naturally become available to members after publication without manual intervention.
+
+We are validating the entire Emmaus discipleship pipeline.
+
+=====================================================
+
+THE COMPLETE FLOW
+
+The finished experience must be:
+
+Administrator
+
+↓
+
+Create Journey
+
+↓
+
+Create Steps
+
+↓
+
+Save Draft
+
+↓
+
+Submit for Review
+
+↓
+
+Approve
+
+↓
+
+Publish
+
+↓
+
+Journey automatically appears in the member Journey Discovery experience
+
+↓
+
+Member opens Journey
+
+↓
+
+Reads Journey details
+
+↓
+
+Starts Journey
+
+↓
+
+Journey becomes Active
+
+↓
+
+Appears under Continue Your Journeys
+
+↓
+
+Progress saves automatically
+
+↓
+
+Journey completes
+
+↓
+
+Journey moves to Completed Journeys
+
+↓
+
+Related Journey recommendations become available
+
+Every transition must happen automatically.
+
+=====================================================
+
+PUBLICATION
+
+Publishing a Journey must immediately make it available to eligible members.
+
+No refresh of admin data should be required.
+
+No manual synchronisation.
+
+No duplicated publishing process.
+
+Inspect the existing publication pipeline.
+
+Reuse existing publication status.
+
+Do not build a second publishing system.
+
+=====================================================
+
+VISIBILITY
+
+Only Published Journeys appear to members.
+
+Draft
+
+Hidden
+
+Review
+
+Archived
+
+must never appear inside member Journey Discovery.
+
+=====================================================
+
+EXPLORE JOURNEYS
+
+When an administrator publishes a Journey it must automatically become available inside:
+
+Explore Journeys
+
+subject to:
+
+publication status
+
+visibility rules
+
+Collection assignment
+
+audience rules
+
+existing permissions
+
+Do not require another manual step.
+
+=====================================================
+
+JOURNEY DETAILS
+
+Every published Journey should automatically display:
+
+Cover image
+
+Journey title
+
+Purpose
+
+Description
+
+Who it is for
+
+Collection
+
+Journey rhythm
+
+Estimated duration
+
+Estimated daily time
+
+Step count
+
+Key Scripture
+
+Related Sermons
+
+Start Journey
+
+Save for Later
+
+Do not require editors to duplicate existing information.
+
+Reuse metadata already stored in Content Studio.
+
+=====================================================
+
+KEY SCRIPTURE
+
+Every Journey should support:
+
+Key Scripture
+
+This section is primary.
+
+Scripture always comes before sermons.
+
+Display:
+
+Book
+
+Chapter
+
+Verse
+
+Short reference list
+
+Allow users to open the passage directly inside Emmaus Bible.
+
+Do not open an external Bible website.
+
+Reuse the existing Bible reader.
+
+=====================================================
+
+RELATED SERMONS
+
+Below Key Scripture display:
+
+Related Sermons
+
+Only display sermons genuinely connected to the Journey.
+
+Prefer:
+
+explicit Journey references
+
+explicit Scripture references
+
+admin curation
+
+existing sermon metadata
+
+Do not simply show the newest sermons.
+
+Each sermon card should include:
+
+Title
+
+Speaker
+
+Date
+
+Scripture reference
+
+Estimated listening time
+
+Continue Listening
+
+Open Sermon
+
+If timestamps already exist, preserve them.
+
+=====================================================
+
+START JOURNEY
+
+When a member taps:
+
+Start Journey
+
+The Journey immediately becomes Active.
+
+It appears inside:
+
+Continue Your Journeys
+
+without requiring refresh.
+
+Open Step 1 immediately.
+
+=====================================================
+
+SAVE FOR LATER
+
+Saved Journeys:
+
+Do not count toward the active Journey limit.
+
+Remain visible inside Saved.
+
+Can later be started normally.
+
+=====================================================
+
+PROGRESS
+
+Progress must save automatically.
+
+Leaving the app
+
+Closing browser
+
+Refreshing page
+
+Changing device
+
+must preserve:
+
+Current Step
+
+Reflection answers
+
+Prayer responses
+
+Notes
+
+Completion state
+
+Resume should always return to the exact place.
+
+=====================================================
+
+COMPLETION
+
+Completing the final Step automatically:
+
+marks Journey Complete
+
+records completion date
+
+moves Journey into Completed
+
+removes it from Active
+
+updates recommendations
+
+preserves all responses
+
+Do not delete history.
+
+=====================================================
+
+RELATED JOURNEY RECOMMENDATIONS
+
+After completion recommend the next logical Journey.
+
+Example
+
+15 Minutes with Jesus
+
+↓
+
+Prayer Basics
+
+↓
+
+Reading the Bible
+
+↓
+
+Following Jesus
+
+Example
+
+Membership
+
+↓
+
+Serving
+
+↓
+
+Leadership
+
+↓
+
+Mentoring
+
+Recommendations should be:
+
+pastoral
+
+Scripture-based
+
+admin-curated where possible
+
+Do not use random AI recommendations.
+
+=====================================================
+
+SCRIPTURE FIRST
+
+Journey Details order:
+
+Cover
+
+Title
+
+Purpose
+
+Description
+
+Key Scripture
+
+Related Sermons
+
+Journey Information
+
+Start Journey
+
+Save for Later
+
+Scripture must always appear before sermons.
+
+=====================================================
+
+COLLECTIONS
+
+If a Journey belongs to a Collection:
+
+display it
+
+link to Collection
+
+allow navigation back to Collection
+
+Reuse the existing Collection system.
+
+=====================================================
+
+ERROR STATES
+
+Never expose technical errors.
+
+If publishing fails:
+
+We couldn't publish this Journey.
+
+Please try again.
+
+If Journey unavailable:
+
+This Journey isn't available yet.
+
+If metadata missing:
+
+Some Journey information is still being prepared.
+
+=====================================================
+
+NO DUPLICATION
+
+Do not duplicate:
+
+Journey metadata
+
+Scripture
+
+Collection information
+
+Publishing logic
+
+Recommendation logic
+
+Reuse existing systems.
+
+=====================================================
+
+ADMIN VALIDATION
+
+Confirm that:
+
+Publishing changes status
+
+Published Journey immediately becomes visible
+
+Archive hides Journey
+
+Unpublish removes Journey from member discovery
+
+Draft remains hidden
+
+=====================================================
+
+MEMBER VALIDATION
+
+Confirm:
+
+Published Journey visible
+
+Journey details correct
+
+Scripture opens Bible
+
+Related sermons open correctly
+
+Journey starts
+
+Progress saves
+
+Journey resumes correctly
+
+Journey completes
+
+Completed Journey moves automatically
+
+Recommendation appears
+
+=====================================================
+
+TESTS
+
+Test the complete pipeline.
+
+Create Journey
+
+Publish Journey
+
+Journey appears
+
+Open Journey
+
+Scripture opens
+
+Sermons open
+
+Start Journey
+
+Complete Step
+
+Resume
+
+Complete Journey
+
+Journey moves to Completed
+
+Recommendation appears
+
+Archive Journey
+
+Journey disappears from Discovery
+
+No progress lost
+
+=====================================================
+
+DO NOT
+
+Do not redesign Walk.
+
+Do not redesign Rooms.
+
+Do not redesign Voice.
+
+Do not redesign Attendance.
+
+Do not redesign Ask Emmaus.
+
+Do not add XP.
+
+Do not add achievements.
+
+Do not add leaderboards.
+
+Do not expose unpublished Journeys.
+
+Do not duplicate metadata.
+
+=====================================================
+
+DEFINITION OF DONE
+
+Complete only when the entire Journey lifecycle works seamlessly from:
+
+Content Studio
+
+↓
+
+Publication
+
+↓
+
+Member Discovery
+
+↓
+
+Journey Details
+
+↓
+
+Start Journey
+
+↓
+
+Progress
+
+↓
+
+Completion
+
+↓
+
+Recommendation
+
+with no manual intervention and no broken links.
+
+=====================================================
+
+FINAL REVIEW
+
+Provide:
+
+1. Publishing pipeline
+2. Visibility pipeline
+3. Discovery pipeline
+4. Journey Details improvements
+5. Scripture integration
+6. Sermon integration
+7. Progress persistence
+8. Completion workflow
+9. Recommendation workflow
+10. Tests completed
+11. Known limitations
+12. Manual testing required
+
+Stop after presenting the completed Journey lifecycle.
+
+Do not begin another sprint.

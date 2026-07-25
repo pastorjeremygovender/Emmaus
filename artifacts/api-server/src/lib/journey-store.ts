@@ -105,6 +105,9 @@ export interface FrontendJourney {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  // Stored in metadata JSONB — no DB migration required
+  scriptureReference?: string;  // e.g. "John 3:16-17"
+  nextJourneyId?: string;       // slug of recommended next journey after completion
 }
 
 export interface FrontendProgress {
@@ -118,6 +121,7 @@ export interface FrontendProgress {
 // ─── Converters ───────────────────────────────────────────────────────────────
 
 function toFrontendJourney(row: DbJourney): FrontendJourney {
+  const meta = (row.metadata ?? {}) as Record<string, unknown>;
   return {
     id: row.id,
     title: row.title,
@@ -143,6 +147,8 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     collectionId: row.collectionId ?? undefined,
+    scriptureReference: (meta.scriptureReference as string) || undefined,
+    nextJourneyId: (meta.nextJourneyId as string) || undefined,
   };
 }
 
@@ -310,7 +316,10 @@ export async function createJourney(data: Partial<FrontendJourney> & { id: strin
       pastorEdited: data.pastorEdited,
       publishedAt: data.status === "Published" ? now : undefined,
       collectionId: data.collectionId ?? null,
-      metadata: {},
+      metadata: {
+        ...(data.scriptureReference ? { scriptureReference: data.scriptureReference } : {}),
+        ...(data.nextJourneyId ? { nextJourneyId: data.nextJourneyId } : {}),
+      },
       createdAt: now,
       updatedAt: now,
     }).returning();
@@ -364,6 +373,21 @@ export async function updateJourney(
   if (data.overloadExempt !== undefined)   updateFields.overloadExempt   = data.overloadExempt;
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
+
+  // scriptureReference and nextJourneyId live in the metadata JSONB column
+  if (data.scriptureReference !== undefined || data.nextJourneyId !== undefined) {
+    const existing = await getJourney(id);
+    const currentMeta = ((existing as any)?._rawMeta ?? {}) as Record<string, unknown>;
+    // Re-fetch raw metadata from DB since FrontendJourney doesn't carry it fully
+    const rawRows = await db.select({ metadata: journeysTable.metadata }).from(journeysTable).where(eq(journeysTable.id, id));
+    const rawMeta = (rawRows[0]?.metadata ?? {}) as Record<string, unknown>;
+    updateFields.metadata = {
+      ...rawMeta,
+      ...(data.scriptureReference !== undefined ? { scriptureReference: data.scriptureReference || null } : {}),
+      ...(data.nextJourneyId !== undefined ? { nextJourneyId: data.nextJourneyId || null } : {}),
+    };
+    void currentMeta; // suppress unused warning
+  }
 
   const rows = await db
     .update(journeysTable)

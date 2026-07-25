@@ -16,6 +16,9 @@ import Walk from '@/pages/Walk';
 import JourneyDay from '@/pages/JourneyDay';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
+import JourneyDetail from '@/pages/journeys/JourneyDetail';
+import ExploreJourneys from '@/pages/journeys/ExploreJourneys';
+import CollectionPage from '@/pages/journeys/CollectionPage';
 import Personal from '@/pages/Personal';
 import Admin from '@/pages/Admin';
 import NotFound from '@/pages/not-found';
@@ -63,6 +66,9 @@ function Router() {
       <Route path="/bible/journey/:journeyId" component={BibleJourneyDetail} />
 
       <Route path="/journeys" component={Journeys} />
+      <Route path="/journeys/explore" component={ExploreJourneys} />
+      <Route path="/journeys/collections/:id" component={CollectionPage} />
+      <Route path="/journeys/:id" component={JourneyDetail} />
       <Route path="/personal" component={Personal} />
       <Route path="/personal/ask-emmaus" component={AskEmmausHome} />
       <Route path="/personal/ask-emmaus/conversation" component={AskEmmausConversation} />
