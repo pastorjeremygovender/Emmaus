@@ -403,7 +403,7 @@ export default function ChapterReader() {
                   ].join(' ')}
                 >
                   <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
-                  <span className="font-serif text-[19px] text-foreground">{v.text}</span>
+                  <span className="font-sans text-[19px] text-foreground">{v.text}</span>
                   {(fav || note) && (
                     <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
                       {fav && <Heart size={10} className="text-primary fill-primary" />}
@@ -498,7 +498,7 @@ export default function ChapterReader() {
                     {book.name} {chapterNum}:{verseSheet.verse}
                   </SheetTitle>
                 </SheetHeader>
-                <p className="font-serif text-[17px] leading-[1.65] text-foreground italic">"{verseSheet.text}"</p>
+                <p className="font-sans text-[17px] leading-[1.65] text-foreground italic">"{verseSheet.text}"</p>
 
                 <div className="grid grid-cols-2 gap-2.5">
                   <button

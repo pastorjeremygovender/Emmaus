@@ -90,7 +90,7 @@ export default function CreateRoom() {
             <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check size={30} className="text-primary" strokeWidth={2.5} />
             </div>
-            <h1 className="text-[26px] font-serif font-semibold">{createdRoom.name}</h1>
+            <h1 className="text-[26px] font-sans font-semibold">{createdRoom.name}</h1>
             <p className="text-[15px] text-muted-foreground">{createdRoom.type} Room</p>
           </div>
 
@@ -171,7 +171,7 @@ export default function CreateRoom() {
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-8 pb-8">
         <div className="space-y-1">
-          <h1 className="text-[26px] font-serif font-semibold">Create a Room</h1>
+          <h1 className="text-[26px] font-sans font-semibold">Create a Room</h1>
           <p className="text-[15px] text-muted-foreground">
             Rooms let you do journeys with family, friends or a group.
           </p>

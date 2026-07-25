@@ -71,13 +71,13 @@ export default function Personal() {
         {/* Profile header */}
         <header className="flex items-center gap-5">
           <div
-            className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-serif font-semibold shrink-0"
+            className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
             aria-hidden="true"
           >
             {initials}
           </div>
           <div>
-            <h1 className="text-[26px] font-serif font-medium leading-tight">
+            <h1 className="text-[26px] font-sans font-medium leading-tight">
               {user.preferredName}
             </h1>
             <p

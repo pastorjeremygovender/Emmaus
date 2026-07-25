@@ -85,9 +85,9 @@ export default function SharedJourneyView() {
         {/* Completion milestone */}
         {allCompleted && (
           <div className="p-7 bg-primary/5 border border-primary/20 rounded-2xl text-center space-y-3">
-            <h2 className="text-[22px] font-serif font-semibold text-foreground">Congratulations!</h2>
+            <h2 className="text-[22px] font-sans font-semibold text-foreground">Congratulations!</h2>
             <p className="text-[15px] text-muted-foreground">Your Room completed:</p>
-            <p className="text-[18px] font-serif font-medium text-foreground">{journey.title}</p>
+            <p className="text-[18px] font-sans font-medium text-foreground">{journey.title}</p>
             <div className="flex gap-2 mt-4">
               <Button variant="outline" size="sm" className="flex-1 rounded-xl" onClick={() => setLocation('/journeys')}>
                 Browse another journey

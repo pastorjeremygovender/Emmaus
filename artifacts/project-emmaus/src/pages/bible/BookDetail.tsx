@@ -58,7 +58,7 @@ export default function BookDetail() {
         <section className="space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-[26px] font-serif font-semibold leading-tight">{bookDisplayName}</h1>
+              <h1 className="text-[26px] font-sans font-semibold leading-tight">{bookDisplayName}</h1>
               <p className="text-[13px] text-muted-foreground mt-1">{book.chapters} chapters · {book.genre}</p>
             </div>
             {completedCount > 0 && (

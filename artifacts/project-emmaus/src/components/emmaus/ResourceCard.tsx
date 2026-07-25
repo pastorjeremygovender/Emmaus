@@ -31,7 +31,7 @@ const TYPE_CONFIG: Record<
   },
   bible: {
     label: 'Scripture',
-    icon: <span className="text-[13px] font-serif font-bold">B</span>,
+    icon: <span className="text-[13px] font-sans font-bold">B</span>,
     color: 'bg-primary/10 text-primary',
   },
   prayer: {

@@ -45,7 +45,7 @@ export default function CheckIn() {
           transition={{ duration: prefersReduced ? 0 : 0.4, ease: 'easeOut' }}
           className="text-center space-y-4 max-w-[320px]"
         >
-          <p className="text-xl font-serif text-foreground">Thanks for sharing that.</p>
+          <p className="text-xl font-sans text-foreground">Thanks for sharing that.</p>
           <p className="text-base text-muted-foreground">Let's spend some time with Jesus.</p>
         </motion.div>
       </div>
@@ -61,7 +61,7 @@ export default function CheckIn() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2 mb-10"
         >
-          <h1 className="text-[30px] font-serif font-medium text-foreground tracking-tight leading-tight">
+          <h1 className="text-[30px] font-sans font-medium text-foreground tracking-tight leading-tight">
             How are you feeling today?
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed">
@@ -109,7 +109,7 @@ export default function CheckIn() {
               className="mt-8 space-y-5"
             >
               <div className="p-6 rounded-2xl bg-accent/10 border border-accent/20">
-                <p className="font-serif text-[19px] leading-[1.6] text-foreground">
+                <p className="font-sans text-[19px] leading-[1.6] text-foreground">
                   {responses[selected]}
                 </p>
               </div>

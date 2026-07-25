@@ -128,7 +128,7 @@ export default function AskEmmausHome() {
 
         {/* Heading */}
         <div className="space-y-2">
-          <h1 className="text-[28px] font-serif font-medium text-foreground leading-tight">
+          <h1 className="text-[28px] font-sans font-medium text-foreground leading-tight">
             Ask Emmaus
           </h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">

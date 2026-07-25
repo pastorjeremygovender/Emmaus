@@ -44,7 +44,7 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
           <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
             Scripture
           </p>
-          <p className="text-[16px] font-serif font-medium text-foreground">
+          <p className="text-[16px] font-sans font-medium text-foreground">
             {scripture.reference}
           </p>
           {scripture.displayText && (

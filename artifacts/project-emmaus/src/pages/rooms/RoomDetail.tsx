@@ -94,7 +94,7 @@ export default function RoomDetail() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex-1 min-w-0">
-            <div className="font-serif font-semibold text-[17px] truncate">{room.name}</div>
+            <div className="font-sans font-semibold text-[17px] truncate">{room.name}</div>
             <div className="text-[12px] text-muted-foreground">{room.type} · {myMembership.role}</div>
           </div>
           {isLeaderOrOwner && (
@@ -126,7 +126,7 @@ export default function RoomDetail() {
                     <p className="text-[13px] text-muted-foreground">
                       {inviterName} has invited {room.name} to begin:
                     </p>
-                    <h3 className="text-[18px] font-serif font-semibold text-foreground mt-1">
+                    <h3 className="text-[18px] font-sans font-semibold text-foreground mt-1">
                       {journey?.title ?? ji.journeyId}
                     </h3>
                   </div>
@@ -344,7 +344,7 @@ function SharedJourneyCard({ ji, roomId, userId, onClick }: { ji: RoomJourneyInv
       className="w-full text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all space-y-3"
     >
       <div>
-        <h3 className="text-[17px] font-serif font-semibold text-foreground">{journey?.title ?? ji.journeyId}</h3>
+        <h3 className="text-[17px] font-sans font-semibold text-foreground">{journey?.title ?? ji.journeyId}</h3>
         <p className="text-[13px] text-muted-foreground mt-1">
           {joinedCount} {joinedCount === 1 ? 'person' : 'people'} walking this journey
           {myParticipation?.participationStatus === 'joined' ? " · You're in" : ''}

@@ -1,26 +1,26 @@
 import { Link, useLocation } from 'wouter';
-import { Compass, BookHeart, Map, User } from 'lucide-react';
+import { Footprints, BookOpen, Library, User } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
 
 // Navigation order (locked):
-// 1. Today's Steps  /walk
-// 2. Next Steps     /journeys
-// 3. My Bible       /bible
-// 4. My Walk        /personal
+// 1. Walk        /walk
+// 2. Journeys    /journeys
+// 3. Bible       /bible
+// 4. Personal    /personal
 
 export function BottomNav() {
   const [location] = useLocation();
 
   const navItems = [
-    { path: '/walk',      label: "Today's Steps", icon: Compass },
-    { path: '/journeys',  label: 'Next Steps',    icon: Map },
-    { path: '/bible',     label: 'My Bible',      icon: BookHeart },
-    { path: '/personal',  label: 'My Walk',       icon: User },
+    { path: '/walk',      label: 'Walk',      icon: Footprints },
+    { path: '/journeys',  label: 'Journeys',  icon: Library },
+    { path: '/bible',     label: 'Bible',     icon: BookOpen },
+    { path: '/personal',  label: 'Personal',  icon: User },
   ];
 
   function isActive(path: string): boolean {
     // While Ask Emmaus is open, highlight the section the user came from
-    // rather than falsely highlighting My Walk.
+    // rather than falsely highlighting Personal.
     if (location.startsWith('/personal/ask-emmaus')) {
       const dest = getReturnDestination();
       if (dest) {

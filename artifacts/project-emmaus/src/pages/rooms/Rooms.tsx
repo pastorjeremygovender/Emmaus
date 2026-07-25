@@ -32,7 +32,7 @@ export default function Rooms() {
 
         {/* Header */}
         <header className="flex items-center justify-between">
-          <h1 className="text-[30px] font-serif font-medium tracking-tight">My Rooms</h1>
+          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Rooms</h1>
           {unread > 0 && (
             <button
               onClick={() => markAllNotificationsRead(user.id)}
@@ -185,7 +185,7 @@ function RoomCard({
             <span className="text-[11px] text-muted-foreground">·</span>
             <span className="text-[11px] text-muted-foreground">{myRole}</span>
           </div>
-          <h3 className="text-[18px] font-serif font-semibold text-foreground truncate">{room.name}</h3>
+          <h3 className="text-[18px] font-sans font-semibold text-foreground truncate">{room.name}</h3>
           <div className="flex items-center gap-3 mt-2 text-[13px] text-muted-foreground">
             <span>{memberCount} {memberCount === 1 ? 'member' : 'members'}</span>
             {activeJourneys > 0 && (

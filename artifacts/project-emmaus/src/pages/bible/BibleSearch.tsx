@@ -155,7 +155,7 @@ export default function BibleSearch() {
                       {r.bookName} {r.chapter}:{r.verse}
                     </span>
                   </div>
-                  <p className="text-[14px] text-foreground leading-relaxed font-serif">
+                  <p className="text-[14px] text-foreground leading-relaxed font-sans">
                     {r.isReference ? r.text : highlightMatch(r.text, query)}
                   </p>
                 </button>

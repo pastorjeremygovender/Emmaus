@@ -1,8 +1,23 @@
-import { Link } from 'wouter';
+import { useEffect } from 'react';
+import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Welcome() {
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // If the user already has a session, skip the splash and go directly to their home.
+  useEffect(() => {
+    if (!loading && user) {
+      setLocation(user.role === 'admin' ? '/admin' : '/walk');
+    }
+  }, [user, loading]);
+
+  // Show nothing while checking session to avoid a flash of the splash for returning users.
+  if (loading || user) return null;
+
   return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center px-6 py-16 bg-background">
       <motion.div
@@ -12,11 +27,11 @@ export default function Welcome() {
         className="flex flex-col items-center w-full max-w-[360px] text-center"
       >
         {/* Title block */}
-        <div className="space-y-5 mb-16">
-          <h1 className="text-[38px] leading-tight font-serif font-medium text-foreground tracking-tight">
+        <div className="space-y-4 mb-16">
+          <h1 className="text-[40px] leading-tight font-sans font-medium text-foreground tracking-tight">
             Emmaus
           </h1>
-          <p className="text-lg text-muted-foreground font-serif italic leading-relaxed">
+          <p className="text-lg text-muted-foreground leading-relaxed">
             Walk with Jesus.
           </p>
         </div>

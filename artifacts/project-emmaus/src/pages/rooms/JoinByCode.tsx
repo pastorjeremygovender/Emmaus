@@ -64,7 +64,7 @@ export default function JoinByCode() {
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
             <Users size={30} className="text-primary" />
           </div>
-          <h1 className="text-[24px] font-serif font-semibold">You've joined!</h1>
+          <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
           <p className="text-[16px] text-foreground font-medium">{preview.room.name}</p>
           <p className="text-[14px] text-muted-foreground">
             Welcome to the Room. Your personal journey progress and private content remain yours alone.
@@ -103,7 +103,7 @@ export default function JoinByCode() {
               <Users size={26} className="text-primary" />
             </div>
             <p className="text-[14px] text-muted-foreground">You've been invited to join</p>
-            <h1 className="text-[26px] font-serif font-bold text-foreground">{preview.room.name}</h1>
+            <h1 className="text-[26px] font-sans font-bold text-foreground">{preview.room.name}</h1>
           </div>
 
           <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
@@ -162,7 +162,7 @@ export default function JoinByCode() {
 
       <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-7">
         <div className="space-y-1.5">
-          <h1 className="text-[26px] font-serif font-semibold">Join a Room</h1>
+          <h1 className="text-[26px] font-sans font-semibold">Join a Room</h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">
             Enter the access code shared by a Room owner or leader.
           </p>

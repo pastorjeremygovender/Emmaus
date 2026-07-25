@@ -33,7 +33,7 @@ export function SafetyHandoverCard({ onReturn }: SafetyHandoverCardProps) {
           >
             <Phone size={19} />
           </div>
-          <h1 className="text-[24px] font-serif font-medium text-foreground leading-tight">
+          <h1 className="text-[24px] font-sans font-medium text-foreground leading-tight">
             You don't have to face this alone.
           </h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">

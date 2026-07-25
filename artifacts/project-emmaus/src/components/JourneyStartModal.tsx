@@ -84,7 +84,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
         {step === 'choice' && (
           <div className="px-6 pb-8 space-y-6">
             <div className="space-y-1 text-center">
-              <h2 className="text-[22px] font-serif font-semibold leading-snug">
+              <h2 className="text-[22px] font-sans font-semibold leading-snug">
                 How would you like to do this journey?
               </h2>
             </div>
@@ -156,7 +156,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
         {step === 'room-select' && (
           <div className="px-6 pb-8 space-y-5">
             <div className="space-y-1">
-              <h2 className="text-[20px] font-serif font-semibold">Who would you like to walk with?</h2>
+              <h2 className="text-[20px] font-sans font-semibold">Who would you like to walk with?</h2>
               <p className="text-[14px] text-muted-foreground">Choose a Room to walk this journey together.</p>
             </div>
 

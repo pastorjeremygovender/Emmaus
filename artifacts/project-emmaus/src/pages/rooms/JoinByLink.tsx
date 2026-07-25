@@ -73,7 +73,7 @@ export default function JoinByLink() {
           <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
             <AlertCircle size={26} className="text-destructive" />
           </div>
-          <h1 className="text-[22px] font-serif font-semibold">Invalid Invitation</h1>
+          <h1 className="text-[22px] font-sans font-semibold">Invalid Invitation</h1>
           <p className="text-[15px] text-muted-foreground">{error}</p>
           <Button className="w-full rounded-2xl" onClick={() => setLocation('/rooms')}>
             Back to Rooms
@@ -90,7 +90,7 @@ export default function JoinByLink() {
           <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
             <Users size={26} className="text-primary" />
           </div>
-          <h1 className="text-[22px] font-serif font-semibold">You're already in this Room</h1>
+          <h1 className="text-[22px] font-sans font-semibold">You're already in this Room</h1>
           <p className="text-[16px] font-medium text-foreground">{preview.room.name}</p>
           <Button className="w-full rounded-2xl" onClick={() => setLocation(`/rooms/${preview.room.id}`)}>
             Open Room
@@ -107,7 +107,7 @@ export default function JoinByLink() {
           <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
             <Users size={30} className="text-primary" />
           </div>
-          <h1 className="text-[24px] font-serif font-semibold">You've joined!</h1>
+          <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
           <p className="text-[16px] font-medium text-foreground">{preview.room.name}</p>
           <p className="text-[14px] text-muted-foreground">
             Your personal journey progress and private content remain yours alone.
@@ -133,7 +133,7 @@ export default function JoinByLink() {
             <Users size={26} className="text-primary" />
           </div>
           <p className="text-[14px] text-muted-foreground">You've been invited to join</p>
-          <h1 className="text-[28px] font-serif font-bold text-foreground">{preview.room.name}</h1>
+          <h1 className="text-[28px] font-sans font-bold text-foreground">{preview.room.name}</h1>
         </div>
 
         <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">

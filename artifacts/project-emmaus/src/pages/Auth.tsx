@@ -91,7 +91,7 @@ export default function Auth() {
       >
         <div className="w-full max-w-[400px]">
           <div className="space-y-2 text-center mb-10">
-            <h1 className="text-[32px] font-serif font-medium tracking-tight leading-tight">
+            <h1 className="text-[32px] font-sans font-medium tracking-tight leading-tight">
               {mode === 'login' ? 'Welcome back' : 'Begin your journey'}
             </h1>
             <p className="text-base text-muted-foreground">

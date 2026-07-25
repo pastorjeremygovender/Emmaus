@@ -1,0 +1,1222 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+Do not rebuild the application.
+
+Do not redesign Rooms in this sprint.
+
+Do not change Ask Emmaus unless a small adjustment is required to integrate it into the new member home screen.
+
+Preserve all existing working functionality, data, progress, authentication, Journeys, Bible retrieval, sermon archive, admin tools and publishing workflows.
+
+=====================================================
+SPRINT NAME
+
+Member Home and Next-Step Engine
+
+=====================================================
+SPRINT GOAL
+
+Create a calm, trustworthy member experience centred on “Walk with Jesus.”
+
+The user should never need to wonder:
+
+“What do I do next?”
+
+Emmaus should remember where the user stopped, understand what is available today, and present the most appropriate next step clearly.
+
+The experience should feel like Emmaus is always one step ahead, ready for the user’s next need, without becoming controlling, demanding or guilt-driven.
+
+This sprint is for testing the member experience.
+
+Do not begin the Rooms redesign after completing it.
+
+=====================================================
+PROJECT PURPOSE
+
+Emmaus exists because we believe technology can serve a faithful purpose when it is designed and used wisely to help people walk with Jesus Christ.
+
+Emmaus is not a general AI chatbot.
+
+Its purpose is to help people:
+
+- Know Jesus
+- Read Scripture
+- Pray
+- Grow as disciples
+- Participate in church
+- Serve others
+
+The order of priority is:
+
+1. Jesus
+2. Scripture
+3. Discipleship
+4. Church
+5. Technology
+
+Technology exists to serve discipleship, not the other way around.
+
+=====================================================
+NON-NEGOTIABLE MEMBER EXPERIENCE PRINCIPLES
+
+1. The app should always make the next meaningful step clear.
+
+2. The user should trust that Emmaus remembers where they stopped.
+
+3. Progress should encourage, never shame.
+
+4. No XP.
+
+5. No levels.
+
+6. No leaderboards.
+
+7. No competition.
+
+8. No spirituality score.
+
+9. No guilt-based streak language.
+
+10. No “overdue” discipleship language.
+
+11. No unnecessary decisions before the user reaches today’s content.
+
+12. Scripture must remain central.
+
+13. Ask Emmaus remains available but does not replace real discipleship.
+
+14. Daily content should feel steady, calm and trustworthy.
+
+15. The interface should feel simple, warm, modern and uncluttered.
+
+=====================================================
+TYPOGRAPHY REQUIREMENT
+
+Remove Times New Roman from the entire Emmaus application.
+
+This includes:
+
+- Member screens
+- Admin screens
+- Bible reading
+- Scripture blocks
+- Devotionals
+- Journey content
+- Ask Emmaus
+- Rooms
+- Prayer Requests
+- Sermon screens
+- Content Studio
+- Forms
+- Empty states
+- Modals
+- Buttons
+- Headings
+- Paragraphs
+- Fallback font stacks
+
+Search the complete codebase for:
+
+- Times New Roman
+- Times
+- serif font declarations
+- browser-default serif fallbacks
+- inline font-family styles
+- component-level serif classes
+- typography rules inherited from rich-text content
+- rendered Bible passage HTML that may be applying serif styles
+
+Replace Times New Roman and formal serif styling with the existing modern Emmaus typography system.
+
+Use a clean, highly readable modern sans-serif font already available in the project.
+
+If the project does not yet have a clear typography standard, use a safe modern system stack such as:
+
+Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+
+Do not introduce a font dependency unless necessary.
+
+Bible text should remain highly readable and reverent, but not formal or old-fashioned.
+
+For Bible reading, use:
+
+- Comfortable line height
+- Generous paragraph spacing
+- Clear verse numbers
+- Sensible content width
+- Strong contrast
+- Modern sans-serif typography
+- No Times New Roman
+- No browser-default serif fallback
+
+Verify that user-generated rich text and retrieved Bible content cannot reintroduce Times New Roman through pasted HTML or inline styles.
+
+Sanitise or override unsupported font-family styles where appropriate.
+
+=====================================================
+SPLASH SCREEN
+
+Replace the current opening experience with a simple splash screen.
+
+Display:
+
+Emmaus
+
+Walk with Jesus
+
+That is all.
+
+Design requirements:
+
+- Calm
+- Minimal
+- Beautiful
+- Generous white space
+- Existing Emmaus branding
+- No long introduction
+- No feature carousel
+- No marketing copy
+- No extra buttons unless technically required
+- No visible admin or technical language
+
+After the splash screen, go directly to the new Walk with Jesus home screen.
+
+Do not place an unnecessary welcome screen between the splash screen and the member home screen.
+
+=====================================================
+MEMBER HOME SCREEN
+
+The main member screen should be called:
+
+Walk with Jesus
+
+This should replace the feeling of a traditional dashboard.
+
+It should not show a large grid of unrelated features.
+
+It should answer one question:
+
+“What is my next step?”
+
+The screen should contain:
+
+1. A warm greeting
+2. One prominent “Ready for you” card
+3. Separate cards for daily and active content
+4. Gentle weekly progress
+5. Ask Emmaus access
+6. Relevant secondary navigation
+
+The page must remain calm and easy to scan.
+
+=====================================================
+GREETING
+
+Use a natural greeting such as:
+
+Good morning, Jeremy.
+
+or
+
+Good afternoon, Jeremy.
+
+or
+
+Good evening, Jeremy.
+
+Use the user’s preferred display name where available.
+
+Do not make the greeting overly enthusiastic.
+
+Do not add unnecessary motivational copy above the main next step.
+
+=====================================================
+READY FOR YOU CARD
+
+At the top of the Walk with Jesus screen, display one prominent card titled:
+
+Ready for you
+
+This card shows the single best next step for the user.
+
+Examples:
+
+- Begin today’s 15 Minutes with Jesus
+- Read today’s devotional
+- Continue Made Free
+- Continue Day 4
+- Listen to this week’s sermon
+- Return to your prayer reflection
+- Continue where you stopped
+
+The card should include:
+
+- Content type
+- Title
+- Short warm description
+- Estimated time where available
+- One clear primary button
+- Progress context where helpful
+
+Examples of buttons:
+
+- Begin
+- Continue
+- Read today’s devotional
+- Listen
+- Pray now
+- Return to Step 3
+
+Do not show multiple competing primary buttons.
+
+=====================================================
+NEXT-STEP ENGINE
+
+Implement a reliable next-step recommendation engine.
+
+It must be deterministic and understandable.
+
+Do not use random recommendations.
+
+Do not require unrestricted AI decision-making for the primary recommendation.
+
+Use stored user progress, date availability, Journey status and assignments.
+
+Recommended priority order:
+
+1. Today’s unfinished 15 Minutes with Jesus session, especially for new users.
+
+2. Today’s unfinished devotional.
+
+3. The next unfinished step in the active Journey the user most recently continued.
+
+4. A newly assigned church or Room Journey.
+
+5. This week’s sermon if not yet listened to or opened.
+
+6. An incomplete prayer, journal reflection or action step from recent content.
+
+7. Another active Journey that has not been continued recently.
+
+8. A suitable recommendation to begin a new Journey only when the user has available active-Journey capacity.
+
+If a higher-priority item is unavailable or already complete, proceed to the next valid option.
+
+Only one item should occupy the main Ready for you card.
+
+Other available content should remain accessible below it.
+
+The engine must remember:
+
+- Exact Journey
+- Exact Step
+- Exact block or position where practical
+- Completion status
+- Last opened date
+- Last continued date
+- Daily content availability
+- Paused or active state
+- Room or church assignment
+
+When the user taps Continue, take them directly to the correct next step rather than the Journey beginning or a generic overview screen.
+
+=====================================================
+HOME CONTENT CARDS
+
+Below Ready for you, show separate cards where relevant for:
+
+- 15 Minutes with Jesus
+- Today’s Devotional
+- This Week’s Sermon
+- Active Journeys
+- Ask Emmaus
+
+Only show cards relevant to the user.
+
+Do not fill the screen with empty modules.
+
+=====================================================
+15 MINUTES WITH JESUS CARD
+
+Display:
+
+15 Minutes with Jesus
+
+Possible states:
+
+- Ready for today
+- Continue today
+- Completed today
+- Available tomorrow
+- Start Day 1
+
+Show the current Day number where appropriate.
+
+If today’s session is complete, allow the user to open and review it again.
+
+Do not allow progress into the next new day until the next local calendar day.
+
+=====================================================
+DAILY DEVOTIONAL CARD
+
+Display:
+
+Today’s Devotional
+
+Possible states:
+
+- Ready for today
+- Continue reading
+- Completed today
+- Available tomorrow
+
+Allow today’s devotional and all previously available devotionals to be revisited.
+
+Do not allow access to future devotionals.
+
+=====================================================
+THIS WEEK’S SERMON CARD
+
+Display:
+
+This Week’s Sermon
+
+Show:
+
+- Sermon title
+- Speaker
+- Date
+- Optional short description
+- Continue or Listen button
+- Listening position where available
+
+This week’s sermon does not count toward the active-Journey limit.
+
+It should remain available throughout the week.
+
+Use the existing sermon system.
+
+Do not rebuild the sermon archive.
+
+=====================================================
+ACTIVE JOURNEYS
+
+Display active Journeys as separate cards below the daily content.
+
+Each active Journey card should show:
+
+- Journey title
+- Cover image or appropriate placeholder
+- Current Step
+- Short next-step description
+- Last continued
+- Estimated time where available
+- Continue button
+- Pause option in a secondary menu
+
+Do not overwhelm the home screen with the complete Journey library.
+
+Only show current active Journeys.
+
+Provide a separate Browse Journeys action away from the main Ready for you card.
+
+=====================================================
+ACTIVE JOURNEY LIMIT
+
+Limit users to two active growth Journeys at one time.
+
+These do not count toward the limit:
+
+- Walk with Jesus
+- 15 Minutes with Jesus
+- Daily devotionals
+- This week’s sermon
+
+All other Journeys count toward the two active Journey limit.
+
+This includes:
+
+- Made Free
+- Marriage
+- Parenting
+- Volunteer Training
+- Membership
+- Bible Studies
+- Prayer Journeys
+- Youth Journeys
+- Leadership Journeys
+- Other long-form discipleship Journeys
+
+A user may still:
+
+- Browse unlimited Journeys
+- Preview unlimited Journeys
+- Save unlimited Journeys for later
+- Revisit completed Journeys
+- Revisit paused Journeys
+
+A user may only have two non-exempt Journeys marked active.
+
+=====================================================
+STARTING A THIRD JOURNEY
+
+When a user tries to begin a third active growth Journey, do not block them with a harsh error.
+
+Show a warm dialog:
+
+You already have two Journeys underway.
+
+To help you focus and finish well, pause one before beginning another.
+
+Buttons:
+
+Review my Journeys
+
+Not now
+
+The Review my Journeys screen should allow the user to:
+
+- See both active Journeys
+- See current progress
+- Pause one
+- Continue one
+- Cancel the new Journey request
+
+After pausing a Journey, allow the new Journey to begin.
+
+Pausing must preserve all progress.
+
+=====================================================
+PAUSED JOURNEYS
+
+Paused Journeys should:
+
+- Retain all progress
+- Retain responses
+- Retain completion data
+- Be available from My Journeys
+- Not appear in the daily next-step rotation
+- Be resumable whenever active capacity is available
+
+Possible state label:
+
+Paused
+
+Avoid language implying failure or abandonment.
+
+=====================================================
+DAILY CONTENT RULES
+
+15 Minutes with Jesus and daily devotionals must follow local-calendar-day rules.
+
+Use the user’s timezone where available.
+
+Do not use a strict rolling 24-hour timer.
+
+A new daily item becomes available on the next local calendar day.
+
+Example:
+
+If the user completes Day 1 at 10:00 PM, Day 2 becomes available after midnight in their timezone.
+
+=====================================================
+15 MINUTES WITH JESUS RULES
+
+A user may progress through only one new Day of 15 Minutes with Jesus per local calendar day.
+
+They may:
+
+- Reopen today’s completed Day
+- Review any previous Day
+- Reread Scripture
+- Repeat the reflection
+- Repeat the prayer
+- Review their own responses
+- Listen again where audio exists
+
+They may not:
+
+- Unlock the following new Day on the same date
+- Bypass the daily limit by reopening or refreshing
+- Bypass the limit on another device
+- Bypass the limit by changing the client-side clock where server-side validation is available
+
+The server should validate daily progression where possible.
+
+When complete, show:
+
+Today’s time with Jesus is complete.
+
+Come back tomorrow for the next step.
+
+Do not use a countdown timer.
+
+Do not show urgency.
+
+=====================================================
+DEVOTIONAL RULES
+
+Daily devotionals use the same one-new-entry-per-local-day principle.
+
+Users may:
+
+- Read today’s devotional
+- Reopen today’s devotional
+- Revisit any previously unlocked devotional
+
+Users may not:
+
+- Open tomorrow’s devotional early
+- Unlock future devotionals by rereading old entries
+- Unlock several new devotional days at once
+
+If users miss several days, present the next intended devotional calmly.
+
+Do not show:
+
+- Missed days
+- Broken streaks
+- Catch-up pressure
+- Overdue devotional counts
+
+=====================================================
+OTHER JOURNEY PACING
+
+Other Journeys are self-paced.
+
+Users may:
+
+- Complete several Steps in one day
+- Complete one Step per day
+- Pause for several days
+- Revisit previous Steps
+- Continue at their own pace
+
+Do not impose daily locks on ordinary Journeys.
+
+Emmaus may gently recommend that the user continue each day.
+
+Examples:
+
+Your next step in Made Free is ready.
+
+Continue your Marriage Journey when you’re ready.
+
+You can pick up where you stopped.
+
+Never say:
+
+You are behind.
+
+You missed four days.
+
+You have overdue Steps.
+
+Your progress is too slow.
+
+=====================================================
+DAILY PROMPTING
+
+Active Journeys should be gently surfaced every day.
+
+Use the next-step engine and optional notifications.
+
+Do not show every active Journey as equally urgent.
+
+Prefer the Journey the user most recently continued, unless there is a more important assigned item.
+
+Do not pressure users to complete multiple Journeys in one day.
+
+=====================================================
+WEEKLY PROGRESS
+
+Add a calm section titled:
+
+This week
+
+Show participation rhythms such as:
+
+✓ Read Scripture 5 days
+
+✓ Prayed 4 days
+
+✓ Continued a Journey 3 days
+
+✓ Listened to this week’s sermon
+
+Only show metrics supported by real user activity.
+
+Do not fabricate prayer completion from simply opening a screen unless the existing content explicitly records that action.
+
+Add one gentle sentence below the summary.
+
+Example:
+
+You’ve made space to walk with Jesus throughout the week. Keep going, one day at a time.
+
+Other acceptable language:
+
+You’re building a steady rhythm. Keep taking the next step.
+
+Every small step matters.
+
+Do not use:
+
+- Score
+- Level
+- Rank
+- XP
+- Points
+- Streak warning
+- Performance
+- Spiritual maturity percentage
+- Comparison with other members
+
+=====================================================
+PROGRESS PRIVACY
+
+Weekly progress is primarily for the individual user.
+
+Do not automatically expose personal prayer, journal or discipleship behaviour to other members.
+
+Preserve existing admin and pastoral permissions.
+
+Do not redesign pastoral reporting in this sprint.
+
+=====================================================
+NOTIFICATIONS
+
+Implement or prepare gentle notification logic for:
+
+- Today’s 15 Minutes with Jesus
+- Today’s devotional
+- Next Step in an active Journey
+- This week’s sermon
+- Newly assigned church or Room Journey
+
+Examples:
+
+Good morning. Today’s time with Jesus is ready.
+
+Take a quiet moment with today’s Scripture.
+
+Your next step in Made Free is ready whenever you are.
+
+This week’s sermon is now available.
+
+Never use:
+
+- You missed a day
+- Your streak is about to end
+- You are falling behind
+- Complete this now
+- You have overdue Steps
+- Don’t lose your progress
+- Last chance
+- Urgent
+
+Users should be able to:
+
+- Set a preferred reminder time
+- Disable daily reminders
+- Disable reminders for an individual Journey
+- Keep church assignment notifications enabled or disable them according to existing permission rules
+
+Do not create repeated or excessive notifications.
+
+One relevant daily reminder is better than several competing reminders.
+
+=====================================================
+ASK EMMAUS
+
+Keep Ask Emmaus available.
+
+Do not redesign its core experience.
+
+Add a clear Ask Emmaus card or floating access point on the Walk with Jesus home screen.
+
+Ask Emmaus should remain secondary to the Ready for you next step.
+
+Where existing Ask Emmaus answers already provide practical next steps, preserve that behaviour.
+
+Do not turn the member home screen into a chatbot.
+
+=====================================================
+NAVIGATION
+
+The main member navigation should remain simple.
+
+Recommended primary destinations:
+
+- Walk
+- Bible
+- Journeys
+- Ask Emmaus
+- Personal
+
+Use the existing navigation structure where possible.
+
+Do not redesign Rooms in this sprint.
+
+Rooms may remain accessible from the existing location or under Personal/Journeys according to the current architecture.
+
+Do not perform a Rooms UX overhaul.
+
+=====================================================
+WALK TAB
+
+The Walk tab should open the new Walk with Jesus home screen.
+
+This should become the member’s default signed-in landing page.
+
+=====================================================
+BIBLE TAB
+
+Keep the existing Bible functionality.
+
+Apply the new typography standard.
+
+Remove Times New Roman.
+
+Ensure:
+
+- Modern sans-serif font
+- Comfortable reading width
+- Clear verse numbers
+- Good line height
+- No overly formal appearance
+- No broken Scripture formatting
+
+Do not change Bible retrieval or translation rules.
+
+=====================================================
+JOURNEYS TAB
+
+The Journeys tab should contain:
+
+- Active Journeys
+- Paused Journeys
+- Completed Journeys
+- Saved for Later
+- Browse Journeys
+
+Show active capacity clearly but gently.
+
+Example:
+
+2 of 2 active Journeys
+
+Avoid making it feel like a storage quota.
+
+Use explanatory text only when needed.
+
+=====================================================
+PERSONAL TAB
+
+Preserve current Personal/Profile functions.
+
+Weekly progress may also be available here.
+
+Do not move all progress away from Walk with Jesus.
+
+The home screen should still show the simple weekly summary.
+
+=====================================================
+CARD LANGUAGE
+
+Use natural card states:
+
+- Ready for today
+- Continue
+- Completed today
+- Available tomorrow
+- Listen this week
+- Paused
+- Saved for later
+- Begin Journey
+- Continue where you stopped
+
+Avoid:
+
+- Incomplete task
+- Overdue
+- Failed
+- Locked due to inactivity
+- Requirement not met
+- Pending compliance
+- Workflow state
+
+=====================================================
+EMPTY STATES
+
+Examples:
+
+No active Journeys
+
+You don’t have another Journey underway right now.
+
+Browse Journeys
+
+No daily content available
+
+You’re all caught up for today.
+
+You can revisit today’s Scripture or continue another Journey.
+
+No weekly progress yet
+
+Your weekly rhythm will appear here as you begin.
+
+Keep empty states warm and brief.
+
+=====================================================
+LOADING STATES
+
+Avoid blank white screens while content loads.
+
+Use calm skeleton states or small loading indicators for:
+
+- Ready for you
+- Daily content
+- Active Journeys
+- Weekly progress
+- Sermon details
+
+Do not use large spinners that block the entire app unless technically necessary.
+
+=====================================================
+OFFLINE AND ERROR HANDLING
+
+If progress cannot be saved, say:
+
+We couldn’t save your progress yet. Your place is still available on this device.
+
+If the next step cannot load, say:
+
+We couldn’t load your next step. Please try again.
+
+If daily availability cannot be confirmed, do not incorrectly unlock future content.
+
+Log technical details for developers without exposing them to users.
+
+=====================================================
+DATA AND ARCHITECTURE
+
+Inspect the current data model before implementation.
+
+Reuse existing:
+
+- User progress
+- Journey enrolment
+- Step completion
+- Daily content
+- Sermon engagement
+- Notifications
+- Timezone or profile data
+- Room assignments
+- Church assignments
+
+Add only the minimum backward-compatible fields needed.
+
+Possible fields may include:
+
+- activeJourneyIds
+- pausedJourneyIds
+- lastContinuedJourneyId
+- lastContinuedStepId
+- lastContinuedBlockId
+- lastActivityAt
+- localDateKey
+- dailyContentCompletionDate
+- reminderPreferences
+
+Do not use these exact field names if the project already has an appropriate model.
+
+Do not create duplicate progress systems.
+
+Do not delete or reset existing progress.
+
+Do not change published Journey identifiers.
+
+Do not break existing deep links.
+
+=====================================================
+SERVER-SIDE VALIDATION
+
+Where the application has a server or API layer, validate:
+
+- Maximum of two active non-exempt Journeys
+- One new 15 Minutes with Jesus Day per local calendar date
+- One new devotional entry per local calendar date
+- Progress transitions
+- Pause and resume behaviour
+
+Do not rely only on disabled buttons in the client.
+
+=====================================================
+EXEMPT JOURNEY CLASSIFICATION
+
+Create a reliable way to identify content exempt from the active Journey limit.
+
+Exempt categories:
+
+- Walk with Jesus
+- 15 Minutes with Jesus
+- Daily devotional
+- This week’s sermon
+
+Use existing content types, tags or system identifiers where possible.
+
+Do not classify exempt content using title text alone unless no safer option exists.
+
+Prefer a stable content classification field.
+
+=====================================================
+DESIGN
+
+The member home screen should feel:
+
+- Calm
+- Warm
+- Clear
+- Spacious
+- Personal
+- Modern
+- Trustworthy
+
+Avoid:
+
+- Dense dashboards
+- Analytics-style widgets
+- Excessive borders
+- Bright gradients
+- Corporate admin styling
+- Formal serif typography
+- Times New Roman
+- Too many simultaneous actions
+- Gamification visuals
+- Competitive progress
+- Red warning language for missed activity
+
+Use:
+
+- Existing Emmaus colour palette
+- Modern sans-serif typography
+- Generous white space
+- Clear content hierarchy
+- Soft cards
+- Consistent spacing
+- Large touch targets
+- One obvious next action
+
+=====================================================
+MOBILE-FIRST REQUIREMENT
+
+The Walk with Jesus screen is primarily a mobile experience.
+
+Design and test mobile first.
+
+On mobile:
+
+- Ready for you should appear near the top without scrolling
+- Cards should stack cleanly
+- Primary buttons should be easy to tap
+- Text must remain readable
+- Navigation should remain reachable
+- Weekly progress should remain simple
+- No horizontal overflow
+- No tiny controls
+- No desktop-style three-column layout
+
+Also test tablet and desktop.
+
+=====================================================
+ACCESSIBILITY
+
+Maintain:
+
+- Keyboard navigation
+- Screen-reader labels
+- Visible focus states
+- Sufficient contrast
+- Meaningful button labels
+- Accessible dialog behaviour
+- Proper heading order
+- Reduced-motion support where applicable
+- Large touch targets
+
+Do not rely on colour alone to communicate availability or completion.
+
+=====================================================
+TESTING REQUIREMENTS
+
+Test the complete flow with several user states.
+
+USER STATE 1: New user
+
+- Opens splash screen
+- Sees Emmaus / Walk with Jesus
+- Lands on Walk with Jesus
+- Sees Day 1 of 15 Minutes with Jesus as Ready for you
+- Starts Day 1
+- Completes it
+- Cannot unlock Day 2 on the same local date
+- Can reopen Day 1
+
+USER STATE 2: Returning user with unfinished daily content
+
+- Opens app
+- Sees unfinished daily content as Ready for you
+- Continues at the correct place
+- Completion is saved
+
+USER STATE 3: Returning user with completed daily content
+
+- Sees another valid next step
+- Can still revisit today’s completed content
+- Future daily content remains unavailable
+
+USER STATE 4: One active growth Journey
+
+- Can begin a second growth Journey
+- Both appear under Active Journeys
+- Next-step engine selects a sensible next Step
+
+USER STATE 5: Two active growth Journeys
+
+- Cannot begin a third without pausing one
+- Receives the warm focus message
+- Can pause one
+- Progress is preserved
+- New Journey begins successfully
+
+USER STATE 6: Paused Journey
+
+- Does not appear in the daily recommendation rotation
+- Appears under Paused Journeys
+- Can be resumed if capacity is available
+- Resumes at the exact correct Step
+
+USER STATE 7: Missed several days
+
+- Receives no guilt language
+- Sees the next appropriate daily item
+- Is not forced to catch up several entries
+- Does not lose progress
+
+USER STATE 8: Weekly progress
+
+- Shows only real recorded rhythms
+- Does not show XP, scores or comparison
+- Uses warm encouragement
+
+USER STATE 9: Typography
+
+- No Times New Roman appears anywhere
+- Bible reading uses the modern typography standard
+- Rich-text content cannot reintroduce Times New Roman
+- Member and admin screens remain readable
+
+USER STATE 10: Existing functionality
+
+- Ask Emmaus still works
+- Bible retrieval still works
+- Sermon archive still works
+- Journey progress still works
+- Admin Content Studio still works
+- Publishing still works
+- Rooms still work in their existing form
+- Authentication still works
+- Existing users retain their data
+
+=====================================================
+DO NOT
+
+Do not redesign Rooms.
+
+Do not begin Voice Integration.
+
+Do not begin Attendance.
+
+Do not add XP.
+
+Do not add levels.
+
+Do not add achievements.
+
+Do not add competitive streaks.
+
+Do not add leaderboards.
+
+Do not add a spirituality score.
+
+Do not make the home screen a large dashboard.
+
+Do not show all available content at once.
+
+Do not use Times New Roman.
+
+Do not expose database terminology.
+
+Do not create a new progress system if one already exists.
+
+Do not reset existing user progress.
+
+Do not publish automatically.
+
+Do not change unrelated admin architecture.
+
+Do not start another sprint when this one is complete.
+
+=====================================================
+DEFINITION OF DONE
+
+This sprint is complete when:
+
+- Splash displays Emmaus and Walk with Jesus.
+- Users go directly from splash to the Walk with Jesus home screen.
+- Walk with Jesus is the default signed-in member landing page.
+- Ready for you shows one reliable next step.
+- The next-step engine remembers exact progress.
+- 15 Minutes with Jesus allows only one new Day per local calendar day.
+- Daily devotionals allow only one new entry per local calendar day.
+- Previous daily content can be revisited.
+- Future daily content cannot be opened early.
+- Other Journeys remain self-paced.
+- Users may have no more than two active non-exempt growth Journeys.
+- Pausing preserves progress.
+- Exempt content does not count toward the limit.
+- Weekly progress is gentle and non-competitive.
+- Notification copy contains no guilt language.
+- Ask Emmaus remains available.
+- Times New Roman is removed from the whole application.
+- Bible reading uses modern, readable typography.
+- Existing features and data remain intact.
+- Rooms have not been redesigned.
+- Mobile, tablet and desktop layouts work.
+- There are no visible placeholder controls.
+- There are no new TypeScript, build, lint or runtime errors.
+
+=====================================================
+FINAL REVIEW OUTPUT
+
+When complete, provide a clear summary inside Replit covering:
+
+1. What changed
+2. How the next-step engine works
+3. How daily locking works
+4. How the two-active-Journey limit works
+5. Which content is exempt
+6. What typography changes were made
+7. How Times New Roman was removed
+8. Any data model changes
+9. Any migrations applied
+10. Tests completed
+11. Known limitations
+12. What should be tested manually
+
+Do not begin the Rooms sprint.
+
+Stop after presenting the completed Member Home and Next-Step Engine for review.

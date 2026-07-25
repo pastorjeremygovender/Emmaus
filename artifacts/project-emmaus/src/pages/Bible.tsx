@@ -21,7 +21,7 @@ export default function Bible() {
 
         {/* Header */}
         <header className="space-y-1">
-          <h1 className="text-[30px] font-serif font-medium tracking-tight">Bible</h1>
+          <h1 className="text-[30px] font-sans font-medium tracking-tight">Bible</h1>
           <p className="text-[13px] text-muted-foreground">
             {currentTranslation.name} · {currentTranslation.copyright}
           </p>
@@ -135,7 +135,7 @@ export default function Bible() {
                       {fav.bookName} {fav.chapter}:{fav.verse}
                     </div>
                   </div>
-                  <p className="text-[14px] font-serif leading-relaxed text-foreground italic line-clamp-2">
+                  <p className="text-[14px] font-sans leading-relaxed text-foreground italic line-clamp-2">
                     "{fav.verseText}"
                   </p>
                 </div>

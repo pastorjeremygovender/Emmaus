@@ -18,13 +18,13 @@ function renderProse(text: string) {
   const paragraphs = text.split(/\n{2,}/).filter(Boolean);
   if (paragraphs.length <= 1) {
     return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-serif">{text}</p>
+      <p className="text-[16px] text-foreground leading-[1.75] font-sans">{text}</p>
     );
   }
   return (
     <div className="space-y-4">
       {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-serif">
+        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
           {p}
         </p>
       ))}

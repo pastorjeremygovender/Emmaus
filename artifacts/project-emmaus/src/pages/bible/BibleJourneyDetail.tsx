@@ -53,7 +53,7 @@ export default function BibleJourneyDetail() {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center p-8 bg-background">
         <div className="text-center space-y-4 max-w-[300px]">
-          <h2 className="text-[22px] font-serif font-semibold">{journey.title}</h2>
+          <h2 className="text-[22px] font-sans font-semibold">{journey.title}</h2>
           <p className="text-[15px] text-muted-foreground">{journey.description}</p>
           <p className="text-[14px] text-primary font-medium">Coming soon</p>
           <Button variant="outline" onClick={() => setLocation('/bible')}>Back to Bible</Button>
@@ -99,7 +99,7 @@ export default function BibleJourneyDetail() {
             <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
               Bible Journey · {journey.coverLabel}
             </div>
-            <h2 className="text-[28px] font-serif font-semibold leading-tight">{journey.title}</h2>
+            <h2 className="text-[28px] font-sans font-semibold leading-tight">{journey.title}</h2>
             <p className="text-[15px] text-muted-foreground leading-relaxed">{journey.description}</p>
           </div>
 
