@@ -23,8 +23,7 @@ import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import {
-  X, Pause, Play, MoreHorizontal, Bookmark, BookmarkCheck,
-  ChevronRight, Compass,
+  X, Pause, Play, MoreHorizontal, BookmarkCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
@@ -516,27 +515,7 @@ export default function Journeys() {
           )}
         </section>
 
-        {/* ── 2. Explore Journeys ────────────────────────────────────────────── */}
-        <section>
-          <button
-            onClick={() => setLocation('/journeys/explore')}
-            className="w-full flex items-center justify-between p-5 rounded-2xl border border-border bg-card hover:border-primary/30 hover:bg-primary/3 transition-all group"
-            aria-label="Explore Journeys"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-primary/8 flex items-center justify-center shrink-0">
-                <Compass size={18} className="text-primary/70" />
-              </div>
-              <div className="text-left">
-                <p className="text-[16px] font-medium text-foreground">Explore Journeys</p>
-                <p className="text-[13px] text-muted-foreground mt-0.5">Browse collections and themed pathways</p>
-              </div>
-            </div>
-            <ChevronRight size={18} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-          </button>
-        </section>
-
-        {/* ── 3. Saved Journeys ──────────────────────────────────────────────── */}
+        {/* ── 2. Saved Journeys ──────────────────────────────────────────────── */}
         {savedGrowth.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Saved</h2>
@@ -553,7 +532,7 @@ export default function Journeys() {
           </section>
         )}
 
-        {/* ── 4. Completed Journeys ──────────────────────────────────────────── */}
+        {/* ── 3. Completed Journeys ──────────────────────────────────────────── */}
         {completedGrowth.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Completed</h2>

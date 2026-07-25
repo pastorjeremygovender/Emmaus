@@ -1,0 +1,268 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is a UX refinement sprint.
+
+Do not redesign Walk.
+
+Do not redesign Bible.
+
+Do not redesign Ask Emmaus.
+
+Do not redesign Rooms.
+
+Do not redesign the Admin Portal.
+
+Preserve all existing routing, authentication, Journey data, Collections, publishing workflow and progress tracking.
+
+=====================================================
+
+SPRINT NAME
+
+Simplify the Journeys Screen
+
+=====================================================
+
+GOAL
+
+The Journeys screen currently presents the same action twice.
+
+This creates unnecessary duplication.
+
+The screen should have one clear purpose:
+
+Continue the Journeys you are already walking through.
+
+Discovering new Journeys should only appear when appropriate.
+
+=====================================================
+
+CURRENT PROBLEM
+
+The screen currently displays:
+
+Ready to begin a Journey?
+
+↓
+
+Explore Journeys button
+
+↓
+
+Explore Journeys card
+
+These are two different UI elements that perform the exact same action.
+
+Remove the duplication.
+
+=====================================================
+
+NEW LAYOUT
+
+CASE 1
+
+Member has NO active Journeys.
+
+Display:
+
+Journeys
+
+Grow through guided discipleship.
+
+↓
+
+Ready to begin a Journey?
+
+Every Journey helps you grow in a different area of your walk with Jesus.
+
+Button:
+
+Explore Journeys
+
+Nothing else related to Journey discovery should appear below.
+
+Remove the duplicate Explore Journeys card completely.
+
+=====================================================
+
+CASE 2
+
+Member HAS one or more active Journeys.
+
+Hide the entire:
+
+Ready to begin a Journey
+
+section.
+
+Instead display:
+
+Continue Your Journeys
+
+↓
+
+Active Journey cards
+
+↓
+
+Saved Journeys (only if any exist)
+
+↓
+
+Completed Journeys (only if any exist)
+
+Do not display any Explore Journey section.
+
+If members want another Journey they can use the existing navigation inside the Journeys experience.
+
+=====================================================
+
+DISCOVERY
+
+There should only ever be ONE entry point into Journey Discovery from this screen.
+
+Never duplicate it.
+
+One action.
+
+One location.
+
+=====================================================
+
+EMPTY STATES
+
+No Active Journeys
+
+Show:
+
+Ready to begin a Journey?
+
+Every Journey helps you grow in a different area of your walk with Jesus.
+
+Button:
+
+Explore Journeys
+
+No second discovery card.
+
+=====================================================
+
+SAVED JOURNEYS
+
+Only render the Saved Journeys section if at least one Journey has been saved.
+
+Otherwise hide the section completely.
+
+=====================================================
+
+COMPLETED JOURNEYS
+
+Only render Completed Journeys if at least one Journey has been completed.
+
+Otherwise hide the section completely.
+
+=====================================================
+
+ACTIVE JOURNEYS
+
+Continue Your Journeys should always appear first whenever active Journeys exist.
+
+This remains the primary focus of the screen.
+
+=====================================================
+
+DESIGN PRINCIPLE
+
+This screen answers only one question:
+
+"What am I currently walking through?"
+
+It should not repeatedly advertise discovery.
+
+Journey Discovery already has its own dedicated experience.
+
+=====================================================
+
+ANIMATIONS
+
+Maintain existing Emmaus transitions.
+
+Do not add heavy animations.
+
+=====================================================
+
+TYPOGRAPHY
+
+Maintain the Emmaus typography system.
+
+No Times New Roman.
+
+No browser serif fonts.
+
+=====================================================
+
+TESTS
+
+Verify:
+
+No active Journeys
+
+One Explore Journeys button only
+
+No duplicate Explore card
+
+One active Journey
+
+Ready to begin section hidden
+
+Continue Your Journeys visible
+
+Saved section hidden when empty
+
+Completed section hidden when empty
+
+Saved section appears when required
+
+Completed section appears when required
+
+Explore routing still works
+
+No broken links
+
+No TypeScript errors
+
+No runtime errors
+
+=====================================================
+
+DEFINITION OF DONE
+
+The Journeys screen should feel calm and intentional.
+
+There must never be two different UI elements performing the same Explore Journeys action.
+
+Members should immediately understand whether they are:
+
+Beginning a Journey
+
+or
+
+Continuing a Journey
+
+without unnecessary repetition.
+
+=====================================================
+
+FINAL REVIEW
+
+Provide:
+
+1. Updated Journeys screen layout
+2. Empty state behaviour
+3. Active Journey behaviour
+4. Saved Journey behaviour
+5. Completed Journey behaviour
+6. Duplicate UI removed
+7. Tests completed
+8. Known limitations
+
+Stop after presenting the completed Journeys screen for review.
