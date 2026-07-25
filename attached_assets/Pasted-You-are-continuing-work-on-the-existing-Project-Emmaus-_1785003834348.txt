@@ -1,0 +1,597 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+Do not rebuild the application.
+
+Inspect the existing Admin Portal, navigation, permissions, routing, Content Studio, Prayer Requests, Rooms, Users, Attendance and related components before making changes.
+
+Preserve all existing functionality, data and permissions.
+
+This is an Admin Portal information architecture sprint.
+
+Do not begin another sprint after completing this one.
+
+=====================================================
+SPRINT NAME
+
+Admin Portal Reorganisation
+
+=====================================================
+
+VISION
+
+The Admin Portal should be organised around the way a church thinks and works.
+
+Not around software features.
+
+Administrators should immediately understand where to go without learning technical terminology.
+
+The navigation should answer four questions:
+
+Dashboard
+
+"What is happening?"
+
+Content Studio
+
+"What are we creating?"
+
+People
+
+"Who are we discipling?"
+
+Settings
+
+"How is Emmaus configured?"
+
+Everything else belongs naturally under one of these four areas.
+
+=====================================================
+NEW ADMIN SIDEBAR
+
+Replace the current top-level navigation with:
+
+Dashboard
+
+Content Studio
+
+People
+
+Settings
+
+Nothing else should exist as a permanent top-level sidebar item unless absolutely required in the future.
+
+=====================================================
+CONTENT STUDIO
+
+Content Studio remains the complete publishing and discipleship content workspace.
+
+Content Studio contains:
+
+Overview
+
+Journeys
+
+Collections
+
+Sermons
+
+YouTube Archive
+
+Media
+
+Templates
+
+Saved Blocks
+
+Drafts
+
+Published
+
+Archive
+
+Reuse all existing functionality.
+
+Do not create duplicate management screens.
+
+=====================================================
+PEOPLE
+
+Create a new top-level section:
+
+People
+
+Purpose:
+
+Everything related to caring for, discipling and following up people.
+
+=====================================================
+PEOPLE SUBSECTIONS
+
+Inside People provide:
+
+Members
+
+Rooms
+
+Prayer
+
+Attendance
+
+Care
+
+Use the existing tab or subsection style.
+
+Do not create another permanent sidebar.
+
+=====================================================
+MEMBERS
+
+Move the existing Users functionality here.
+
+Rename:
+
+Users
+
+↓
+
+Members
+
+This language is more natural for churches.
+
+Members should include:
+
+Search
+
+Profiles
+
+Journey progress
+
+Roles
+
+Serving
+
+Journey history
+
+Notes
+
+Pastoral notes
+
+Follow-up
+
+Room membership
+
+Attendance summary
+
+Permissions where appropriate
+
+Reuse the existing user system.
+
+Do not create a second member database.
+
+=====================================================
+ROOMS
+
+Move existing Room management here.
+
+Preserve:
+
+Room list
+
+Invitations
+
+Membership
+
+Journey assignment
+
+Room settings
+
+Room leaders
+
+Room activity
+
+Do not redesign Rooms.
+
+Only relocate them.
+
+=====================================================
+PRAYER
+
+Move Prayer Requests here.
+
+Rename the subsection simply:
+
+Prayer
+
+Preserve:
+
+Prayer requests
+
+Categories
+
+Status
+
+Answered prayers
+
+Assignment
+
+Follow-up
+
+Prayer teams
+
+Pastoral workflow
+
+Do not redesign prayer functionality.
+
+=====================================================
+ATTENDANCE
+
+Prepare a subsection.
+
+Attendance
+
+If Attendance has not yet been built:
+
+Create a placeholder subsection using Emmaus styling.
+
+Display:
+
+Attendance is coming soon.
+
+QR Check-in, guests, households and attendance reports will appear here.
+
+Do not expose unfinished controls.
+
+If Attendance already exists, simply relocate it.
+
+=====================================================
+CARE
+
+Create a new Care subsection.
+
+Purpose:
+
+Provide one place for pastoral follow-up.
+
+Initially this can display:
+
+Coming soon
+
+Future features may include:
+
+People requesting follow-up
+
+People asking for prayer
+
+Journey inactivity
+
+Recent guests
+
+Pastoral notes
+
+Follow-up reminders
+
+Do not implement Care functionality yet.
+
+Simply prepare the navigation architecture.
+
+=====================================================
+REMOVE DUPLICATION
+
+Remove the separate top-level items:
+
+Users
+
+Rooms
+
+Prayer Requests
+
+Attendance (if already top-level)
+
+Replace them with:
+
+People
+
+Do not remove functionality.
+
+Only reorganise navigation.
+
+=====================================================
+ROUTING
+
+Create clear canonical routes consistent with the existing project.
+
+Example:
+
+/admin/people
+
+/admin/people/members
+
+/admin/people/rooms
+
+/admin/people/prayer
+
+/admin/people/attendance
+
+/admin/people/care
+
+Use the project's existing routing conventions.
+
+=====================================================
+REDIRECTS
+
+Existing routes should continue working.
+
+Old routes should safely redirect.
+
+Examples:
+
+Users
+
+↓
+
+People → Members
+
+Prayer Requests
+
+↓
+
+People → Prayer
+
+Rooms
+
+↓
+
+People → Rooms
+
+Attendance
+
+↓
+
+People → Attendance
+
+Never produce a framework 404.
+
+=====================================================
+MEMBER PROFILES
+
+The Member profile becomes the centre of discipleship information.
+
+Prepare the layout to accommodate:
+
+Profile
+
+Journey progress
+
+Prayer requests
+
+Attendance
+
+Serving
+
+Rooms
+
+Notes
+
+Pastoral follow-up
+
+Weekly rhythm
+
+This Week
+
+Read Scripture
+
+Prayed
+
+Journey continued
+
+Do not implement new ministry features.
+
+Simply prepare the profile architecture.
+
+=====================================================
+DASHBOARD
+
+Update Dashboard cards.
+
+Examples:
+
+Recent Members
+
+Open People → Members
+
+Prayer Requests
+
+Open People → Prayer
+
+Rooms
+
+Open People → Rooms
+
+Attendance
+
+Open People → Attendance
+
+Content cards should continue opening Content Studio.
+
+=====================================================
+ACTIVE NAVIGATION
+
+When viewing:
+
+Members
+
+Rooms
+
+Prayer
+
+Attendance
+
+Care
+
+the sidebar should highlight:
+
+People
+
+The appropriate subsection should also be highlighted.
+
+=====================================================
+PERMISSIONS
+
+Preserve all current permissions.
+
+Do not broaden access.
+
+Moving a screen must not change who can use it.
+
+=====================================================
+SEARCH
+
+If a global admin search exists:
+
+Update search destinations to the new locations.
+
+Users
+
+should become
+
+Members.
+
+=====================================================
+TYPOGRAPHY
+
+Continue using Emmaus typography.
+
+No Times New Roman.
+
+No browser serif fonts.
+
+=====================================================
+RESPONSIVE DESIGN
+
+Maintain clean navigation on:
+
+Desktop
+
+Tablet
+
+Laptop
+
+Do not create multiple sidebars.
+
+=====================================================
+ACCESSIBILITY
+
+Preserve:
+
+Keyboard navigation
+
+Screen readers
+
+Focus states
+
+Heading hierarchy
+
+Accessible tabs
+
+=====================================================
+TESTS
+
+Verify:
+
+Dashboard works
+
+Content Studio works
+
+People works
+
+Settings works
+
+Members opens correctly
+
+Rooms opens correctly
+
+Prayer opens correctly
+
+Attendance opens correctly
+
+Care placeholder appears
+
+Old routes redirect
+
+Dashboard links updated
+
+Permissions unchanged
+
+Search updated
+
+No duplicate sidebar items
+
+No TypeScript errors
+
+No runtime errors
+
+=====================================================
+DEFINITION OF DONE
+
+Complete only when:
+
+The Admin Portal contains only four primary destinations:
+
+Dashboard
+
+Content Studio
+
+People
+
+Settings
+
+Users have become Members.
+
+Prayer Requests have become Prayer.
+
+Rooms are inside People.
+
+Attendance is inside People.
+
+Care exists as a prepared subsection.
+
+All functionality remains intact.
+
+No duplicate navigation exists.
+
+No data is lost.
+
+No permissions change.
+
+No new build errors remain.
+
+=====================================================
+FINAL REVIEW
+
+Provide:
+
+1. Old navigation
+
+2. New navigation
+
+3. Route changes
+
+4. Redirects
+
+5. Components moved
+
+6. Permissions preserved
+
+7. Dashboard updates
+
+8. Responsive behaviour
+
+9. Tests completed
+
+10. Known limitations
+
+Do not begin another sprint.
+
+Stop after presenting the completed Admin Portal architecture.

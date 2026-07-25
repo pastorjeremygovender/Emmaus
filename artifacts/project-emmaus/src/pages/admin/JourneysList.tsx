@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useJourney } from '@/contexts/JourneyContext';
-import { Plus, Eye, Pencil, Archive, Copy, Upload, Download, Sparkles, Search, X, Tag } from 'lucide-react';
+import { Plus, Eye, Pencil, Archive, Copy, Upload, Download, Sparkles, Search, X, Tag, Trash2 } from 'lucide-react';
 import { StatusBadge, AdminBtn, AdminTable, Th, Td, ConfirmDialog, PageHeader } from './shared';
 import type { Journey } from '@/contexts/JourneyContext';
 import { exportJourneysAsCsv } from '@/lib/journeys-api';
 import { useAuth } from '@/contexts/AuthContext';
 import JourneyCsvImport from './JourneyCsvImport';
 import JourneyAiGenerator from './JourneyAiGenerator';
+import DeleteJourneyDialog from './content-studio/DeleteJourneyDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,9 +47,12 @@ async function triggerCsvDownload(csv: string, filename: string) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function JourneysList({ onEdit, onNew, onPreview }: Props) {
-  const { journeys, duplicateJourney, updateJourney, refreshJourneys } = useJourney();
+  const { journeys, duplicateJourney, updateJourney, refreshJourneys, permanentDeleteJourney } = useJourney();
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superAdmin';
   const [archiveTarget, setArchiveTarget] = useState<Journey | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Journey | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState('');
 
   // Search & filter state
   const [searchQ, setSearchQ] = useState('');
@@ -117,6 +121,15 @@ export default function JourneysList({ onEdit, onNew, onPreview }: Props) {
       await triggerCsvDownload(csv, `all-journeys-${Date.now()}.csv`);
     } catch (err) { console.error('Export failed:', err); }
     finally { setExporting(false); }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!deleteTarget) return;
+    await permanentDeleteJourney(deleteTarget.id);
+    setDeleteSuccess(`"${deleteTarget.title}" was permanently deleted.`);
+    setDeleteTarget(null);
+    await refreshJourneys();
+    setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
   const handleExportFiltered = async () => {
@@ -310,6 +323,15 @@ export default function JourneysList({ onEdit, onNew, onPreview }: Props) {
                       <Archive size={13} />
                     </AdminBtn>
                   )}
+                  {isSuperAdmin && (
+                    <button
+                      onClick={() => setDeleteTarget(j)}
+                      title="Delete permanently (Super Admin only)"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-lg transition-colors text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               </Td>
             </tr>
@@ -323,6 +345,22 @@ export default function JourneysList({ onEdit, onNew, onPreview }: Props) {
           )}
         </tbody>
       </AdminTable>
+
+      {/* Success banner */}
+      {deleteSuccess && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-green-600 text-white text-sm font-medium rounded-xl shadow-lg">
+          ✓ {deleteSuccess}
+        </div>
+      )}
+
+      {/* Permanent delete confirm */}
+      {deleteTarget && (
+        <DeleteJourneyDialog
+          journeyTitle={deleteTarget.title}
+          onConfirm={handlePermanentDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       {/* Archive confirm */}
       {archiveTarget && (

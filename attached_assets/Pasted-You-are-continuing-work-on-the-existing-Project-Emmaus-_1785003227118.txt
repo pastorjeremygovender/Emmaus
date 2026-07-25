@@ -1,0 +1,407 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+Inspect the existing Journey management, permissions, Content Studio and database before making changes.
+
+Do not rebuild anything.
+
+Do not begin another sprint after completing this one.
+
+=====================================================
+SPRINT
+
+Permanent Journey Deletion (Admin Only)
+
+=====================================================
+
+GOAL
+
+Emmaus currently supports Archive only.
+
+Add a true permanent Delete option for administrators while preserving Archive as the default safe option.
+
+This feature is primarily for development while we are creating and testing content.
+
+=====================================================
+
+RULES
+
+Archive and Delete are different actions.
+
+ARCHIVE
+
+• Removes the Journey from members.
+• Preserves all data.
+• Journey can later be restored.
+
+DELETE
+
+• Permanently removes the Journey.
+• Removes all associated data.
+• Cannot be undone.
+• Available ONLY to Super Administrators.
+
+=====================================================
+
+PERMISSIONS
+
+Super Administrator
+
+✓ Archive
+
+✓ Restore
+
+✓ Delete Permanently
+
+Content Editor
+
+✓ Archive
+
+✓ Restore
+
+✗ Delete
+
+Reviewer
+
+✗ Delete
+
+Member
+
+Never sees either option.
+
+=====================================================
+
+USER INTERFACE
+
+Where Journey actions currently appear, replace the single Archive action with a menu.
+
+Example:
+
+⋮
+
+Archive Journey
+
+Duplicate Journey
+
+Export Journey
+
+Delete Journey...
+
+Delete Journey should be red.
+
+=====================================================
+
+DELETE CONFIRMATION
+
+Selecting Delete opens a confirmation dialog.
+
+Title:
+
+Delete Journey Permanently?
+
+Body:
+
+This will permanently delete:
+
+• Journey
+
+• All Steps
+
+• All Blocks
+
+• Drafts
+
+• Review history
+
+• Published versions
+
+• Member progress
+
+• Saved progress
+
+• Completion records
+
+• Journal responses
+
+• Reflection responses
+
+• Journey recommendations
+
+• Related Journey metadata
+
+This action cannot be undone.
+
+To continue, type:
+
+DELETE
+
+Buttons:
+
+Cancel
+
+Delete Permanently (red)
+
+Disable the Delete button until DELETE has been typed exactly.
+
+=====================================================
+
+DATABASE
+
+Deleting a Journey should safely remove:
+
+Journey
+
+Journey metadata
+
+Steps
+
+Blocks
+
+Step ordering
+
+Journey tags
+
+Journey cover assignment
+
+Journey versions
+
+Drafts
+
+Review records
+
+Publish records
+
+Journey progress
+
+Step completion
+
+Saved Journey state
+
+Paused Journey state
+
+Completed Journey state
+
+Journey-specific journal responses
+
+Journey-specific checklist data
+
+Journey-specific reminders
+
+Journey-specific recommendation data
+
+Journey media relationships
+
+Journey scripture relationships
+
+Journey sermon relationships
+
+Do not leave orphaned records.
+
+Use existing relationships and cascade deletion where appropriate.
+
+=====================================================
+
+DO NOT DELETE
+
+Never delete:
+
+Users
+
+Authentication
+
+Roles
+
+Rooms
+
+Room membership
+
+Prayer Requests
+
+Bible
+
+Bible Notes
+
+Bible Highlights
+
+Bible Reader
+
+Sermons
+
+YouTube Archive
+
+Media Studio
+
+Collections
+
+Templates
+
+Saved Blocks
+
+AI Journey Builder
+
+Content Studio
+
+Journey Editor
+
+Publishing workflow
+
+Admin Portal
+
+=====================================================
+
+COLLECTIONS
+
+Deleting the final Journey inside a Collection must NOT delete the Collection.
+
+Instead:
+
+Journey count becomes zero.
+
+Collection remains available.
+
+=====================================================
+
+SEARCH
+
+After deletion:
+
+Refresh Journey search.
+
+Refresh member Explore.
+
+Refresh Walk.
+
+Refresh recommendations.
+
+Refresh admin Journey counts.
+
+Refresh Content Studio totals.
+
+=====================================================
+
+AUDIT LOG
+
+Create an audit record containing:
+
+Administrator
+
+Journey deleted
+
+Date
+
+Time
+
+Journey ID
+
+Journey title
+
+Number of Steps removed
+
+Number of Blocks removed
+
+Number of progress records removed
+
+=====================================================
+
+SAFETY
+
+Prevent accidental double deletion.
+
+Prevent deletion while another delete is running.
+
+Handle errors cleanly.
+
+Show:
+
+Journey deleted successfully.
+
+or
+
+Journey could not be deleted.
+
+No raw database errors.
+
+=====================================================
+
+TESTS
+
+Test:
+
+✓ Delete a Draft Journey
+
+✓ Delete a Published Journey
+
+✓ Delete a Journey with Steps
+
+✓ Delete a Journey with Blocks
+
+✓ Delete a Journey with member progress
+
+✓ Delete a Journey from a Collection
+
+✓ Confirm Collection remains
+
+✓ Confirm Journey disappears everywhere
+
+✓ Confirm search refreshes
+
+✓ Confirm Walk refreshes
+
+✓ Confirm no orphaned records
+
+✓ Confirm Archive still works
+
+✓ Confirm Restore still works
+
+✓ Confirm non-admins cannot delete
+
+=====================================================
+
+DEFINITION OF DONE
+
+This sprint is complete only when:
+
+• Super Administrators can permanently delete Journeys.
+
+• Archive functionality is unchanged.
+
+• Collections remain.
+
+• Templates remain.
+
+• Saved Blocks remain.
+
+• Related Journey data is removed cleanly.
+
+• No orphaned records remain.
+
+• Walk updates correctly.
+
+• Explore updates correctly.
+
+• Search updates correctly.
+
+• Admin totals update correctly.
+
+• No TypeScript, lint or runtime errors remain.
+
+=====================================================
+
+When complete provide:
+
+1. Files changed
+
+2. Database changes
+
+3. Cascade delete behaviour
+
+4. Permissions implemented
+
+5. Tests completed
+
+6. Known limitations
+
+Do not begin another sprint.
+
+Stop after the permanent Journey deletion feature is complete.

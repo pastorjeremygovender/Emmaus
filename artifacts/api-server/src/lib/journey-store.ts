@@ -16,6 +16,7 @@ import {
   journeyStepsTable,
   userJourneyProgressTable,
   stepReflectionsTable,
+  journeyAuditLogTable,
 } from "@workspace/db/schema";
 import type {
   Journey as DbJourney,
@@ -109,6 +110,13 @@ export interface FrontendJourney {
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
   requiresDailyGate?: boolean;  // default true — false bypasses the daily 15-min gate
+  // AI Builder fields (also stored in metadata JSONB)
+  aiGenerated?: boolean;
+  sourcesSummary?: {
+    scriptureReferences: string[];
+    sermonsUsed: Array<{ title: string; date: string }>;
+    generatedSections: string[];
+  };
 }
 
 export interface FrontendProgress {
@@ -151,6 +159,8 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     scriptureReference: (meta.scriptureReference as string) || undefined,
     nextJourneyId: (meta.nextJourneyId as string) || undefined,
     requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
+    aiGenerated: meta.aiGenerated === true ? true : undefined,
+    sourcesSummary: (meta.sourcesSummary as FrontendJourney["sourcesSummary"]) || undefined,
   };
 }
 
@@ -321,6 +331,9 @@ export async function createJourney(data: Partial<FrontendJourney> & { id: strin
       metadata: {
         ...(data.scriptureReference ? { scriptureReference: data.scriptureReference } : {}),
         ...(data.nextJourneyId ? { nextJourneyId: data.nextJourneyId } : {}),
+        ...(data.requiresDailyGate !== undefined ? { requiresDailyGate: data.requiresDailyGate } : {}),
+        ...(data.aiGenerated ? { aiGenerated: true } : {}),
+        ...(data.sourcesSummary ? { sourcesSummary: data.sourcesSummary } : {}),
       },
       createdAt: now,
       updatedAt: now,
@@ -402,6 +415,70 @@ export async function updateJourney(
 
 export async function deleteJourney(id: string): Promise<void> {
   await db.delete(journeysTable).where(eq(journeysTable.id, id));
+}
+
+/**
+ * Permanently deletes a Journey and all associated records.
+ * Requires Super Administrator identity — call requireSuperAdmin() before this.
+ *
+ * Cascade rules on journeysTable already handle:
+ *   journey_steps, user_journey_progress, journey_imports
+ * Manual pre-delete needed for:
+ *   step_reflections (no FK cascade)
+ *
+ * Collections are NOT touched — a collection with zero journeys is valid.
+ *
+ * Returns counts for the audit record that is written after deletion.
+ */
+export async function permanentDeleteJourney(
+  id: string,
+  adminId: string,
+  adminEmail: string
+): Promise<{ stepCount: number; blockCount: number; progressCount: number; reflectionCount: number }> {
+  // 1. Fetch the journey so we have the title for the audit record
+  const journey = await getJourney(id);
+  if (!journey) throw new Error("Journey not found");
+
+  // 2. Count associated records before any deletion
+  const steps = await listSteps(id);
+  const stepCount = steps.length;
+  const blockCount = steps.reduce((sum, step) => {
+    const blocks = (step as unknown as Record<string, unknown>).blocks;
+    return sum + (Array.isArray(blocks) ? blocks.length : 0);
+  }, 0);
+
+  const [progressRows, reflectionRows] = await Promise.all([
+    db.select({ id: userJourneyProgressTable.id })
+      .from(userJourneyProgressTable)
+      .where(eq(userJourneyProgressTable.journeyId, id)),
+    db.select({ id: stepReflectionsTable.id })
+      .from(stepReflectionsTable)
+      .where(eq(stepReflectionsTable.journeyId, id)),
+  ]);
+  const progressCount = progressRows.length;
+  const reflectionCount = reflectionRows.length;
+
+  // 3. Delete records with no FK cascade before removing the journey
+  await db.delete(stepReflectionsTable).where(eq(stepReflectionsTable.journeyId, id));
+
+  // 4. Delete the journey — DB cascade removes steps, progress, imports
+  await db.delete(journeysTable).where(eq(journeysTable.id, id));
+
+  // 5. Write immutable audit record (after deletion so it reflects actual final state)
+  await db.insert(journeyAuditLogTable).values({
+    action: "permanent_delete",
+    adminId,
+    adminEmail,
+    journeyId: id,
+    journeyTitle: journey.title,
+    stepCount,
+    blockCount,
+    progressCount,
+    reflectionCount,
+    deletedAt: new Date(),
+  });
+
+  return { stepCount, blockCount, progressCount, reflectionCount };
 }
 
 export async function duplicateJourney(id: string): Promise<FrontendJourney | null> {

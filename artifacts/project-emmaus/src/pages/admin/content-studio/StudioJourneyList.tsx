@@ -1,12 +1,15 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Plus, Search, BookOpen, Layers, Filter, X,
-  Heart, GraduationCap, Clock, Tag,
+  Heart, GraduationCap, Clock, Tag, MoreHorizontal,
+  Archive, Copy, Download, Trash2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Journey } from '@/lib/journeys-api';
 import { StatusBadge } from '../shared';
 import NewJourneyModal from './NewJourneyModal';
+import DeleteJourneyDialog from './DeleteJourneyDialog';
 
 interface Props {
   collectionId?: string;
@@ -18,7 +21,6 @@ interface Props {
 const STATUS_TABS = ['All', 'Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived'];
 const TYPE_OPTIONS = ['All Types', 'core', 'companion', 'series', 'course'];
 
-// Journey type config
 const TYPE_CONFIG: Record<string, { Icon: React.ElementType; color: string; bg: string; label: string }> = {
   core:      { Icon: BookOpen,       color: 'text-teal-600',   bg: 'bg-teal-50',   label: 'Core'      },
   companion: { Icon: Heart,          color: 'text-rose-500',   bg: 'bg-rose-50',   label: 'Companion' },
@@ -37,11 +39,33 @@ function JourneyTypeCell({ type }: { type: string }) {
 }
 
 export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, onLegacyEdit }: Props) {
-  const { journeys, refreshJourneys } = useJourney();
+  const { journeys, refreshJourneys, updateJourney, duplicateJourney, permanentDeleteJourney } = useJourney();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superAdmin';
+
   const [query, setQuery] = useState('');
   const [statusTab, setStatusTab] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [showNew, setShowNew] = useState(!!autoOpenNew);
+
+  // Action menu state
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Delete dialog state
+  const [deleteTarget, setDeleteTarget] = useState<Journey | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const filtered = useMemo(() => {
     let list = journeys as Journey[];
@@ -64,6 +88,46 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
     await refreshJourneys?.();
     onEdit(id);
   }, [onEdit, refreshJourneys]);
+
+  const handleArchive = async (j: Journey) => {
+    setOpenMenuId(null);
+    try {
+      await updateJourney({ ...j, status: 'Archived' } as any);
+    } catch (err) {
+      console.error('Archive failed:', err);
+    }
+  };
+
+  const handleDuplicate = async (j: Journey) => {
+    setOpenMenuId(null);
+    try {
+      const copy = await duplicateJourney(j.id);
+      await refreshJourneys?.();
+      onEdit(copy.id);
+    } catch (err) {
+      console.error('Duplicate failed:', err);
+    }
+  };
+
+  const handleExport = (j: Journey) => {
+    setOpenMenuId(null);
+    const blob = new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${j.id}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    await permanentDeleteJourney(deleteTarget.id);
+    setDeleteSuccess(`"${deleteTarget.title}" was permanently deleted.`);
+    setDeleteTarget(null);
+    await refreshJourneys?.();
+    setTimeout(() => setDeleteSuccess(''), 4000);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -121,6 +185,13 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
         </div>
       </div>
 
+      {/* Success banner */}
+      {deleteSuccess && (
+        <div className="flex-shrink-0 mx-6 mt-3 px-4 py-3 bg-green-50 border border-green-100 rounded-xl text-sm text-green-700 font-medium">
+          ✓ {deleteSuccess}
+        </div>
+      )}
+
       {/* Journey list */}
       <div className="flex-1 overflow-y-auto bg-white">
         {filtered.length === 0 ? (
@@ -149,12 +220,12 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
           <div className="divide-y divide-gray-50">
             {filtered.map(j => {
               const cfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
+              const isMenuOpen = openMenuId === j.id;
               return (
                 <div
                   key={j.id}
                   className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/60 group transition-colors"
                 >
-                  {/* Type icon */}
                   <JourneyTypeCell type={j.journeyType} />
 
                   {/* Title + meta */}
@@ -184,7 +255,6 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
                     </div>
                   </div>
 
-                  {/* Status */}
                   <StatusBadge status={j.status} />
 
                   {/* Actions — appear on hover */}
@@ -196,6 +266,53 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
                     >
                       <Layers size={12} /> Edit
                     </button>
+
+                    {/* ⋮ Action menu */}
+                    <div className="relative" ref={isMenuOpen ? menuRef : undefined}>
+                      <button
+                        onClick={() => setOpenMenuId(isMenuOpen ? null : j.id)}
+                        title="More actions"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        aria-haspopup="true"
+                        aria-expanded={isMenuOpen}
+                      >
+                        <MoreHorizontal size={14} />
+                      </button>
+
+                      {isMenuOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-[176px]">
+                          <button
+                            onClick={() => handleArchive(j)}
+                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Archive size={14} className="text-gray-400" /> Archive Journey
+                          </button>
+                          <button
+                            onClick={() => handleDuplicate(j)}
+                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Copy size={14} className="text-gray-400" /> Duplicate Journey
+                          </button>
+                          <button
+                            onClick={() => handleExport(j)}
+                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Download size={14} className="text-gray-400" /> Export Journey
+                          </button>
+                          {isSuperAdmin && (
+                            <>
+                              <div className="my-1 border-t border-gray-100" />
+                              <button
+                                onClick={() => { setOpenMenuId(null); setDeleteTarget(j); }}
+                                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 size={14} /> Delete Journey…
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -208,6 +325,14 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
         <NewJourneyModal
           onClose={() => setShowNew(false)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteJourneyDialog
+          journeyTitle={deleteTarget.title}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </div>

@@ -216,3 +216,23 @@ export const journeyImportsTable = pgTable("journey_imports", {
 });
 
 export type JourneyImport = typeof journeyImportsTable.$inferSelect;
+
+// ─── Journey Audit Log ─────────────────────────────────────────────────────────
+// Immutable record written on every permanent deletion.
+// Never deleted — these records survive even when the journey is gone.
+
+export const journeyAuditLogTable = pgTable("journey_audit_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  action: text("action").notNull(),           // 'permanent_delete'
+  adminId: text("admin_id").notNull(),
+  adminEmail: text("admin_email").notNull().default(""),
+  journeyId: text("journey_id").notNull(),    // the former journey slug
+  journeyTitle: text("journey_title").notNull(),
+  stepCount: integer("step_count").notNull().default(0),
+  blockCount: integer("block_count").notNull().default(0),
+  progressCount: integer("progress_count").notNull().default(0),
+  reflectionCount: integer("reflection_count").notNull().default(0),
+  deletedAt: timestamp("deleted_at").defaultNow().notNull(),
+});
+
+export type JourneyAuditLog = typeof journeyAuditLogTable.$inferSelect;

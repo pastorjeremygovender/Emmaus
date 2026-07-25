@@ -10,10 +10,11 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { extractUserId, requireAuth } from "../emmaus/auth.js";
+import { extractUserId, requireAuth, requireSuperAdmin } from "../emmaus/auth.js";
 import * as store from "../lib/journey-store.js";
+import type { FrontendStep } from "../lib/journey-store.js";
 import { parseImportCsv, exportJourneysToCsv } from "../lib/journey-csv.js";
-import { generateJourney } from "../lib/journey-ai.js";
+import { generateJourney, generateStructuredJourney, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
 
 const router = Router();
 
@@ -243,6 +244,160 @@ router.post("/journeys/generate", async (req: Request, res: Response) => {
   res.status(201).json({ journeyId, title: generated.title, stepCount: generated.steps.length });
 });
 
+// ─── AI Journey Builder (structured, block-native) ───────────────────────────
+
+// In-memory dedup guard: userId+slugifiedTitle → expiry timestamp
+const buildInProgress = new Map<string, number>();
+// Prevents double-delete races (keyed by "delete:<journeyId>")
+const deleteInProgress = new Map<string, number>();
+const BUILD_DEDUP_MS = 90_000;
+
+router.post("/journeys/ai-build", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+
+  const payload = req.body as BuilderPayload;
+
+  // Basic validation
+  if (!payload?.title?.trim()) {
+    res.status(400).json({ error: "title is required" });
+    return;
+  }
+  if (!payload.length || payload.length < 1 || payload.length > 60) {
+    res.status(400).json({ error: "length must be between 1 and 60" });
+    return;
+  }
+
+  // Dedup guard — prevent accidental double submission
+  const dedupKey = `${callerId}:${slugify(payload.title)}`;
+  const now = Date.now();
+  const existing = buildInProgress.get(dedupKey);
+  if (existing && existing > now) {
+    res.status(409).json({
+      error: "A Journey with this title is already being generated. Please wait a moment.",
+    });
+    return;
+  }
+  buildInProgress.set(dedupKey, now + BUILD_DEDUP_MS);
+
+  try {
+    const generated = await generateStructuredJourney(payload);
+
+    // Create Journey in DB as Draft
+    const baseId = slugify(payload.title) || `journey-${Date.now()}`;
+    const journeyId = await findUniqueId(baseId);
+
+    await store.createJourney({
+      id: journeyId,
+      title: generated.title,
+      description: generated.description,
+      subtitle: generated.subtitle,
+      journeyType: payload.contentType ?? "core",
+      status: "Draft",
+      tags: generated.tags,
+      durationDays: generated.steps.length,
+      estimatedDuration: payload.estimatedTime,
+      collectionId: payload.collectionId,
+      requiresDailyGate: payload.requiresDailyGate,
+      aiGenerated: true,
+      sourcesSummary: generated.sourcesSummary,
+    });
+
+    // Create all steps with blocks
+    for (const step of generated.steps) {
+      // Normalise blocks: assign a stable UUID to each and validate type/content
+      const ALLOWED_BLOCK_TYPES = new Set([
+        "heading", "paragraph", "scripture", "reflection", "prayer",
+        "action", "question", "sermon-clip", "completion", "divider",
+        "quote", "callout", "memory-verse",
+      ]);
+      const normalisedBlocks = (step.blocks ?? [])
+        .filter(b => b && typeof b.type === "string" && ALLOWED_BLOCK_TYPES.has(b.type) && b.content && typeof b.content === "object")
+        .map(b => ({
+          id: crypto.randomUUID(),
+          type: b.type,
+          content: b.content,
+        }));
+
+      if (normalisedBlocks.length === 0) {
+        throw new Error(`Step ${step.day} "${step.title}" has no valid blocks — generation failed.`);
+      }
+
+      await store.createStep(journeyId, {
+        day: step.day,
+        title: step.title,
+        mentorIntro: step.mentorIntro ?? "",
+        scripture: step.scripture ?? "",
+        devotional: step.devotional ?? "",
+        reflectionQuestion: step.reflectionQuestion ?? "",
+        prayerPrompt: step.prayerPrompt ?? "",
+        actionStep: step.actionStep ?? "",
+        memoryVerse: step.memoryVerse || undefined,
+        // Pass normalised blocks — buildStepColumns stores them as content.blocks JSONB
+        blocks: normalisedBlocks as unknown as FrontendStep["blocks"],
+        suggestedSermons: payload.sermonSources.map(s => ({
+          sermonId: s.sermonId,
+          topic: s.title,
+          link: undefined,
+        })),
+      });
+    }
+
+    buildInProgress.delete(dedupKey);
+    res.status(201).json({
+      journeyId,
+      title: generated.title,
+      stepCount: generated.steps.length,
+      sourcesSummary: generated.sourcesSummary,
+    });
+  } catch (err: unknown) {
+    buildInProgress.delete(dedupKey);
+    const msg = err instanceof Error ? err.message : "Journey generation failed";
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── AI Block Action ──────────────────────────────────────────────────────────
+
+router.post("/journeys/ai-block-action", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+
+  const { action, blockType, currentContent, journeyContext } = req.body as {
+    action: string;
+    blockType: string;
+    currentContent: Record<string, unknown>;
+    journeyContext: string;
+  };
+
+  if (!action || !blockType || !currentContent) {
+    res.status(400).json({ error: "action, blockType, and currentContent are required" });
+    return;
+  }
+
+  const VALID_ACTIONS = [
+    "rewrite", "shorten", "expand", "make-warmer", "make-clearer",
+    "new-believer", "suggest-prayer", "suggest-action", "find-scripture", "regenerate",
+  ];
+  if (!VALID_ACTIONS.includes(action)) {
+    res.status(400).json({ error: `Unknown action. Valid: ${VALID_ACTIONS.join(", ")}` });
+    return;
+  }
+
+  try {
+    const updatedContent = await aiBlockAction(
+      action,
+      blockType,
+      currentContent,
+      journeyContext ?? "Emmaus discipleship Journey",
+    );
+    res.json({ content: updatedContent });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Block action failed";
+    res.status(500).json({ error: msg });
+  }
+});
+
 // ─── Journey CRUD (admin — requires authenticated caller) ─────────────────────
 
 router.get("/journeys", async (_req: Request, res: Response) => {
@@ -318,11 +473,35 @@ router.patch("/journeys/:id", async (req: Request, res: Response) => {
 });
 
 router.delete("/journeys/:id", async (req: Request, res: Response) => {
-  const callerId = requireAuth(req, res);
+  // Permanent deletion is restricted to Super Administrators only
+  const callerId = requireSuperAdmin(req, res);
   if (!callerId) return;
 
-  await store.deleteJourney(String(req.params["id"]));
-  res.json({ ok: true });
+  const id = String(req.params["id"]);
+
+  // In-memory dedup guard — prevent double-delete if button is clicked twice
+  const dedupeKey = `delete:${id}`;
+  if (deleteInProgress.has(dedupeKey)) {
+    res.status(409).json({ error: "A deletion is already in progress for this journey." });
+    return;
+  }
+  deleteInProgress.set(dedupeKey, Date.now());
+
+  try {
+    const adminEmail = req.headers["x-user-email"] as string ?? "";
+    const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
+    res.json({ ok: true, ...counts });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Deletion failed";
+    if (message === "Journey not found") {
+      res.status(404).json({ error: message });
+    } else {
+      console.error("[delete journey]", err);
+      res.status(500).json({ error: "Journey could not be deleted." });
+    }
+  } finally {
+    deleteInProgress.delete(dedupeKey);
+  }
 });
 
 router.post("/journeys/:id/publish", async (req: Request, res: Response) => {

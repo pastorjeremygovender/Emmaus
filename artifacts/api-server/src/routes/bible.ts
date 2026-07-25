@@ -377,6 +377,78 @@ router.post("/bible/search", (req, res) => {
   res.json({ query: q, translation, results });
 });
 
+// ─── GET /api/bible/validate-ref?ref=John+15 ─────────────────────────────────
+// Returns { valid, reference, bookId, chapter, verseCount, verseText }
+// verseText is populated only if ref includes a specific verse number.
+
+router.get("/bible/validate-ref", (req, res) => {
+  const raw = String(req.query.ref ?? "").trim();
+  if (!raw) {
+    res.status(400).json({ error: "ref query param is required" });
+    return;
+  }
+
+  const ref = parseReference(raw);
+  if (!ref || !VALID_BOOK_IDS.has(ref.bookId)) {
+    res.json({ valid: false });
+    return;
+  }
+
+  // Try to read the file to get verse count and optionally verse text
+  // (only available for local public-domain translations)
+  const defaultTranslation = "bsb";
+  const filePath = join(DATA_DIR, defaultTranslation, `${ref.bookId}.json`);
+  if (!existsSync(filePath)) {
+    // Book recognised but no local data — valid reference, no text
+    const bookName = BOOK_NAMES[ref.bookId] ?? ref.bookId;
+    const verseLabel = ref.verse ? `:${ref.verse}` : "";
+    res.json({
+      valid: true,
+      reference: `${bookName} ${ref.chapter}${verseLabel}`,
+      bookId: ref.bookId,
+      chapter: ref.chapter,
+      verseCount: 0,
+    });
+    return;
+  }
+
+  try {
+    const raw2 = readFileSync(filePath, "utf8");
+    const data = JSON.parse(raw2) as {
+      bookId: string;
+      chapters: Record<string, Array<{ verse: number; text: string }>>;
+    };
+    const chapterVerses = data.chapters[String(ref.chapter)] ?? [];
+    if (chapterVerses.length === 0) {
+      res.json({ valid: false }); return;
+    }
+
+    const bookName = BOOK_NAMES[ref.bookId] ?? ref.bookId;
+    const verseLabel = ref.verse ? `:${ref.verse}` : "";
+    const reference = `${bookName} ${ref.chapter}${verseLabel}`;
+
+    let verseText: string | undefined;
+    if (ref.verse) {
+      const v = chapterVerses.find(v => v.verse === ref.verse);
+      verseText = v?.text;
+    } else {
+      // Return first 5 verses joined
+      verseText = chapterVerses.slice(0, 5).map(v => `${v.verse} ${v.text}`).join(" ");
+    }
+
+    res.json({
+      valid: true,
+      reference,
+      bookId: ref.bookId,
+      chapter: ref.chapter,
+      verseCount: chapterVerses.length,
+      verseText,
+    });
+  } catch {
+    res.json({ valid: false });
+  }
+});
+
 // ─── User Reading Data Routes ──────────────────────────────────────────────────
 //
 // GET  /api/bible/data   — load all Bible reading data for the authenticated user

@@ -111,6 +111,62 @@ export type ImportValidationError = {
   message: string;
 };
 
+// ─── AI Builder types ─────────────────────────────────────────────────────────
+
+export type ValidatedScripture = {
+  reference: string;
+  bookId: string;
+  chapter: number;
+  verseText?: string;
+};
+
+export type ApprovedSermon = {
+  sermonId: string;
+  title: string;
+  date: string;
+  timestamp?: number;
+  scriptureReference?: string;
+};
+
+export type BuilderPayload = {
+  contentType: string;
+  title: string;
+  purpose: string;
+  desiredOutcome: string;
+  audience: string[];
+  customAudience?: string;
+  collectionId?: string;
+  rhythm: string;
+  length: number;
+  estimatedTime: string;
+  scriptureRefs: ValidatedScripture[];
+  sermonSources: ApprovedSermon[];
+  components: string[];
+  requiresDailyGate: boolean;
+  writingStyle: string;
+  specialInstructions?: string;
+};
+
+export type BuildResult = {
+  journeyId: string;
+  title: string;
+  stepCount: number;
+  sourcesSummary: {
+    scriptureReferences: string[];
+    sermonsUsed: Array<{ title: string; date: string }>;
+    generatedSections: string[];
+  };
+};
+
+export type SermonSearchHit = {
+  sermonId: string;
+  title: string;
+  date: string;
+  scriptureReference?: string;
+  excerpt?: string;
+  timestamp?: number;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(
@@ -179,6 +235,26 @@ export async function deleteJourney(id: string, userId?: string): Promise<void> 
   await apiFetch<void>(`/api/journeys/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     userId,
+  });
+}
+
+/**
+ * Permanently deletes a Journey and all associated records.
+ * Requires the caller to be a Super Administrator (role checked server-side).
+ * Sends X-User-Role: superAdmin so the backend permits the action.
+ */
+export async function permanentDeleteJourney(
+  id: string,
+  userId?: string,
+  userEmail?: string
+): Promise<{ stepCount: number; blockCount: number; progressCount: number; reflectionCount: number }> {
+  return apiFetch(`/api/journeys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    userId,
+    headers: {
+      'X-User-Role': 'superAdmin',
+      ...(userEmail ? { 'X-User-Email': userEmail } : {}),
+    },
   });
 }
 
@@ -262,7 +338,6 @@ export async function searchJourneys(q: string, tags?: string[]): Promise<Search
 
 // ─── CSV Import / Export ──────────────────────────────────────────────────────
 
-/** Validate a CSV string without importing — returns errors only */
 export async function validateImportCsv(
   csv: string,
   userId?: string
@@ -286,7 +361,6 @@ export async function importJourneys(csv: string, userId?: string): Promise<Impo
   });
 }
 
-/** Download a CSV export.  Returns raw CSV text. */
 export async function exportJourneysAsCsv(ids?: string[], userId?: string): Promise<string> {
   const params = ids?.length ? `?ids=${ids.join(',')}` : '';
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -296,7 +370,7 @@ export async function exportJourneysAsCsv(ids?: string[], userId?: string): Prom
   return res.text();
 }
 
-// ─── AI Journey Generator ─────────────────────────────────────────────────────
+// ─── Legacy AI Journey Generator ─────────────────────────────────────────────
 
 export async function generateJourneyWithAI(
   prompt: string,
@@ -307,6 +381,69 @@ export async function generateJourneyWithAI(
     body: JSON.stringify({ prompt }),
     userId,
   });
+}
+
+// ─── AI Journey Builder ───────────────────────────────────────────────────────
+
+export async function buildJourneyWithAI(
+  payload: BuilderPayload,
+  userId?: string
+): Promise<BuildResult> {
+  return apiFetch('/api/journeys/ai-build', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    userId,
+  });
+}
+
+export async function validateScriptureRef(
+  reference: string
+): Promise<{ valid: boolean; reference?: string; bookId?: string; chapter?: number; verseCount?: number; verseText?: string }> {
+  const params = new URLSearchParams({ ref: reference });
+  return apiFetch(`/api/bible/validate-ref?${params.toString()}`);
+}
+
+export async function searchSermonsForBuilder(
+  query: string,
+  userId?: string
+): Promise<SermonSearchHit[]> {
+  const res = await apiFetch<{ results: Array<{
+    sermonId?: string;
+    videoId?: string;
+    videoTitle?: string;
+    sermonDate?: string;
+    scriptureReference?: string;
+    text?: string;
+    startTime?: number;
+  }> }>('/api/youtube-archive/search', {
+    method: 'POST',
+    body: JSON.stringify({ query, limit: 8 }),
+    userId,
+  });
+  return (res.results ?? []).map(r => ({
+    sermonId: r.sermonId ?? r.videoId ?? '',
+    title: r.videoTitle ?? query,
+    date: r.sermonDate ?? '',
+    scriptureReference: r.scriptureReference,
+    excerpt: r.text,
+    timestamp: r.startTime,
+  }));
+}
+
+export async function aiBlockAction(
+  action: string,
+  blockType: string,
+  currentContent: Record<string, unknown>,
+  journeyContext: string,
+  userId?: string
+): Promise<Record<string, unknown>> {
+  const res = await apiFetch<{ content: Record<string, unknown> }>('/api/journeys/ai-block-action', {
+    method: 'POST',
+    body: JSON.stringify({ action, blockType, currentContent, journeyContext }),
+    userId,
+  });
+  // Unwrap the { content: {...} } envelope the backend returns
+  return res.content;
 }
 
 // ─── Progress endpoints ───────────────────────────────────────────────────────

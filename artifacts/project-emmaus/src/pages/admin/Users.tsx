@@ -17,7 +17,7 @@ export default function AdminUsers() {
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl">
-      <PageHeader title="Users" subtitle={`${adminUsers.length} accounts`} />
+      <PageHeader title="Members" subtitle={`${adminUsers.length} accounts`} />
 
       <AdminTable>
         <thead>

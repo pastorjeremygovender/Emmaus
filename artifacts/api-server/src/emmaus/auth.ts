@@ -114,6 +114,44 @@ export function requireAuth(
   return userId;
 }
 
+// ─── Super-Admin Guard ────────────────────────────────────────────────────────
+
+/**
+ * In demo mode the frontend passes X-User-Role: superAdmin alongside X-User-Id.
+ * Production upgrade path: verify the role claim from a JWT or database lookup
+ * before trusting it — never rely on a client-provided header in production.
+ *
+ * Returns the userId on success. Sends 401 (no identity) or 403 (wrong role)
+ * and returns null when access is denied.
+ */
+export function requireSuperAdmin(
+  req: Request,
+  res: { status: (code: number) => { json: (body: object) => void } }
+): string | null {
+  const userId = extractUserId(req);
+  if (!userId) {
+    res.status(401).json({
+      error: "Authentication required.",
+    });
+    return null;
+  }
+
+  // Check role claim from header (demo mode) or known super-admin userId
+  const roleClaim = req.headers["x-user-role"];
+  const isSuperAdmin =
+    roleClaim === "superAdmin" ||
+    userId === "demo-superadmin-1"; // demo fallback
+
+  if (!isSuperAdmin) {
+    res.status(403).json({
+      error: "Permanent deletion requires Super Administrator access.",
+    });
+    return null;
+  }
+
+  return userId;
+}
+
 // ─── Ownership Guard ──────────────────────────────────────────────────────────
 
 /**

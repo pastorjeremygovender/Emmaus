@@ -20,6 +20,17 @@ export const DEMO_ADMIN = {
   feelingUpdatedAt: null,
 };
 
+export const DEMO_SUPER_ADMIN = {
+  id: 'demo-superadmin-1',
+  email: 'superadmin@emmaus.church',
+  preferredName: 'Super Admin',
+  role: 'superAdmin' as const,
+  createdAt: new Date().toISOString(),
+  lastActiveAt: new Date().toISOString(),
+  currentFeeling: null,
+  feelingUpdatedAt: null,
+};
+
 export const DEMO_JOURNEYS = [
   {
     id: "15-minutes-with-jesus",

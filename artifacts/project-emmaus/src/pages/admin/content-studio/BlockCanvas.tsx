@@ -5,10 +5,17 @@
  *   - Generous spacing: blocks breathe
  *   - Minimal chrome: no heavy borders unless focused/hovered
  *   - Controls appear on hover, disappear when writing
+ *
+ * AI actions (per-block sparkle button):
+ *   - Appears next to existing Duplicate / Delete actions on hover
+ *   - Opens a dropdown with: Rewrite, Shorten, Expand, Make Warmer,
+ *     Make Clearer, Suggest Prayer, Suggest Action, Find Scripture, Regenerate
+ *   - Uses a "compare panel" — suggestion is shown below the block
+ *     with Accept / Keep Original buttons. No silent overwrites.
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Plus, GripVertical, Trash2, Copy } from 'lucide-react';
+import { Plus, GripVertical, Trash2, Copy, Sparkles, ChevronDown, Check, X as XIcon, Loader2 } from 'lucide-react';
 import {
   Block, BlockType, createBlock, getBlockMeta,
 } from '@/lib/blocks';
@@ -26,16 +33,121 @@ import DividerBlock from './blocks/DividerBlock';
 import QuoteBlock from './blocks/QuoteBlock';
 import CalloutBlock from './blocks/CalloutBlock';
 import MemoryVerseBlock from './blocks/MemoryVerseBlock';
+import { aiBlockAction } from '@/lib/journeys-api';
 
 interface Props {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
+  journeyContext?: string; // e.g. "15 Minutes with Jesus — John 15 devotional"
 }
 
 interface SlashState {
   blockId: string;
   query: string;
   anchor: { top: number; left: number };
+}
+
+// ─── AI actions menu ──────────────────────────────────────────────────────────
+
+const AI_ACTIONS: Array<{ id: string; label: string; applicableTo?: BlockType[] }> = [
+  { id: 'rewrite',        label: 'Rewrite' },
+  { id: 'shorten',        label: 'Shorten' },
+  { id: 'expand',         label: 'Expand' },
+  { id: 'make-warmer',    label: 'Make warmer' },
+  { id: 'make-clearer',   label: 'Make clearer' },
+  { id: 'new-believer',   label: 'Simplify for new believers' },
+  { id: 'suggest-prayer', label: 'Suggest prayer',  applicableTo: ['prayer', 'paragraph'] },
+  { id: 'suggest-action', label: 'Suggest action step', applicableTo: ['action', 'paragraph'] },
+  { id: 'find-scripture', label: 'Find Scripture',  applicableTo: ['scripture', 'paragraph', 'reflection', 'prayer'] },
+  { id: 'regenerate',     label: 'Regenerate block' },
+];
+
+interface AISuggestion {
+  blockId: string;
+  action: string;
+  suggestedContent: Record<string, unknown>;
+}
+
+function AIMenu({
+  block,
+  onSelect,
+  onClose,
+}: {
+  block: Block;
+  onSelect: (actionId: string) => void;
+  onClose: () => void;
+}) {
+  const applicable = AI_ACTIONS.filter(a =>
+    !a.applicableTo || a.applicableTo.includes(block.type as BlockType)
+  );
+
+  return (
+    <div
+      className="absolute right-0 top-full mt-1 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-xl py-1"
+      onMouseLeave={onClose}
+    >
+      <div className="px-3 py-1.5 border-b border-gray-100">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">AI Actions</p>
+      </div>
+      {applicable.map(a => (
+        <button
+          key={a.id}
+          onClick={() => { onSelect(a.id); onClose(); }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-teal-50 hover:text-teal-700 transition-colors text-left"
+        >
+          <Sparkles size={10} className="text-teal-400 flex-shrink-0" />
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Compare panel (shown below block after AI suggestion) ────────────────────
+
+function AIComparePanel({
+  originalBlock,
+  suggestion,
+  onAccept,
+  onKeep,
+}: {
+  originalBlock: Block;
+  suggestion: AISuggestion;
+  onAccept: () => void;
+  onKeep: () => void;
+}) {
+  // Render a preview of the suggested content as plain text
+  const preview = Object.values(suggestion.suggestedContent)
+    .filter(v => typeof v === 'string')
+    .join(' ')
+    .slice(0, 300);
+
+  return (
+    <div className="mx-1 mb-2 rounded-xl border border-teal-200 bg-teal-50 overflow-hidden">
+      <div className="px-3 py-2 border-b border-teal-100 flex items-center gap-1.5">
+        <Sparkles size={11} className="text-teal-500" />
+        <span className="text-[11px] font-semibold text-teal-700">AI Suggestion</span>
+        <span className="ml-auto text-[10px] text-teal-400">{suggestion.action.replace(/-/g, ' ')}</span>
+      </div>
+      <div className="px-3 py-2.5">
+        <p className="text-xs text-teal-800 leading-relaxed whitespace-pre-wrap">{preview}</p>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-teal-100">
+        <button
+          onClick={onAccept}
+          className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"
+        >
+          <Check size={10} /> Accept
+        </button>
+        <button
+          onClick={onKeep}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <XIcon size={10} /> Keep original
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Block renderer ───────────────────────────────────────────────────────────
@@ -104,11 +216,16 @@ const LABEL_COLORS: Partial<Record<BlockType, string>> = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function BlockCanvas({ blocks, onChange }: Props) {
+export default function BlockCanvas({ blocks, onChange, journeyContext = '' }: Props) {
   const [slashState, setSlashState] = useState<SlashState | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [newBlockId, setNewBlockId] = useState<string | null>(null);
+
+  // AI state
+  const [aiMenuBlockId, setAiMenuBlockId] = useState<string | null>(null);
+  const [aiLoadingBlockId, setAiLoadingBlockId] = useState<string | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null);
 
   const dragIdx = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -199,6 +316,57 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
     setDragOverIdx(null);
   };
 
+  // ─── AI action handler ───────────────────────────────────────────────────
+
+  const handleAiAction = useCallback(async (block: Block, actionId: string) => {
+    setAiMenuBlockId(null);
+    setAiSuggestion(null);
+    setAiLoadingBlockId(block.id);
+    try {
+      const updatedContent = await aiBlockAction(
+        actionId,
+        block.type,
+        block.content as Record<string, unknown>,
+        journeyContext || 'Emmaus discipleship Journey',
+      );
+      setAiSuggestion({ blockId: block.id, action: actionId, suggestedContent: updatedContent });
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setAiLoadingBlockId(null);
+    }
+  }, [journeyContext]);
+
+  const handleAcceptSuggestion = useCallback(() => {
+    if (!aiSuggestion) return;
+    const block = blocks.find(b => b.id === aiSuggestion.blockId);
+    if (!block) return;
+
+    // Guard: the suggestion must be a plain object, not a nested wrapper.
+    // If the AI returned { content: {...} } instead of the flat shape, unwrap it.
+    let safeContent = aiSuggestion.suggestedContent;
+    if (
+      safeContent &&
+      typeof safeContent === 'object' &&
+      'content' in safeContent &&
+      typeof (safeContent as Record<string, unknown>).content === 'object' &&
+      Object.keys(safeContent).length === 1
+    ) {
+      safeContent = (safeContent as Record<string, unknown>).content as Record<string, unknown>;
+    }
+
+    // Final sanity: must have at least one string value matching the block's expected shape
+    const hasStringValue = Object.values(safeContent).some(v => typeof v === 'string');
+    if (!hasStringValue) {
+      // Suggestion is unusable — silently discard
+      setAiSuggestion(null);
+      return;
+    }
+
+    updateBlock(block.id, { ...block, content: safeContent } as Block);
+    setAiSuggestion(null);
+  }, [aiSuggestion, blocks, updateBlock]);
+
   // ─── Empty state ─────────────────────────────────────────────────────────
 
   if (blocks.length === 0) {
@@ -227,6 +395,8 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
         const isDragTarget = dragOverIdx === idx;
         const showChrome = isHovered || isFocused;
         const labelColor = LABEL_COLORS[block.type] ?? 'text-gray-400';
+        const isAiLoading = aiLoadingBlockId === block.id;
+        const hasSuggestion = aiSuggestion?.blockId === block.id;
 
         return (
           <div key={block.id}>
@@ -234,9 +404,9 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
               id={`block-${block.id}`}
               className={`relative group flex items-start gap-1.5 rounded-xl py-2 px-1 transition-colors ${
                 isFocused ? 'bg-gray-50/70' : isHovered ? 'bg-gray-50/40' : ''
-              } ${isDragTarget ? 'ring-2 ring-teal-300/50' : ''}`}
+              } ${isDragTarget ? 'ring-2 ring-teal-300/50' : ''} ${hasSuggestion ? 'ring-1 ring-teal-200' : ''}`}
               onMouseEnter={() => setHoveredId(block.id)}
-              onMouseLeave={() => setHoveredId(null)}
+              onMouseLeave={() => { setHoveredId(null); setAiMenuBlockId(null); }}
               onFocus={() => setFocusedId(block.id)}
               onBlur={() => setFocusedId(null)}
               draggable
@@ -276,7 +446,36 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
               </div>
 
               {/* Right actions */}
-              <div className={`flex flex-col gap-0.5 flex-shrink-0 pt-0.5 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+              <div className={`relative flex flex-col gap-0.5 flex-shrink-0 pt-0.5 transition-opacity ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+                {/* AI sparkle button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setAiMenuBlockId(aiMenuBlockId === block.id ? null : block.id)}
+                    title="AI actions"
+                    disabled={isAiLoading}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      isAiLoading
+                        ? 'text-teal-400 bg-teal-50'
+                        : aiMenuBlockId === block.id
+                          ? 'bg-teal-50 text-teal-600'
+                          : 'hover:bg-teal-50 text-gray-300 hover:text-teal-500'
+                    }`}
+                  >
+                    {isAiLoading
+                      ? <Loader2 size={12} className="animate-spin" />
+                      : <Sparkles size={12} />
+                    }
+                  </button>
+
+                  {aiMenuBlockId === block.id && (
+                    <AIMenu
+                      block={block}
+                      onSelect={(actionId) => handleAiAction(block, actionId)}
+                      onClose={() => setAiMenuBlockId(null)}
+                    />
+                  )}
+                </div>
+
                 <button
                   onClick={() => duplicateBlock(block.id)}
                   title="Duplicate"
@@ -293,6 +492,16 @@ export default function BlockCanvas({ blocks, onChange }: Props) {
                 </button>
               </div>
             </div>
+
+            {/* AI compare panel */}
+            {hasSuggestion && aiSuggestion && (
+              <AIComparePanel
+                originalBlock={block}
+                suggestion={aiSuggestion}
+                onAccept={handleAcceptSuggestion}
+                onKeep={() => setAiSuggestion(null)}
+              />
+            )}
 
             {/* Between-block add button */}
             <AddBetweenBtn onClick={() => insertAfter(block.id)} />

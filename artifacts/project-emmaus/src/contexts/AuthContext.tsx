@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { isDemoMode } from '../lib/firebase';
-import { DEMO_USER, DEMO_ADMIN } from '../lib/demo-data';
+import { DEMO_USER, DEMO_ADMIN, DEMO_SUPER_ADMIN } from '../lib/demo-data';
 import { DEMO_USER_2 } from '../lib/rooms-demo-data';
 
 export type User = {
   id: string;
   email: string;
   preferredName: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'superAdmin';
   currentFeeling?: string | null;
   feelingUpdatedAt?: string | null;
   streak?: number;
@@ -18,7 +18,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   isDemoMode: boolean;
-  signIn: (email: string, pass: string) => Promise<'admin' | 'user'>;
+  signIn: (email: string, pass: string) => Promise<'admin' | 'user' | 'superAdmin'>;
   signUp: (email: string, pass: string, name: string) => Promise<void>;
   signInDemo: (asAdmin?: boolean) => void;
   signOut: () => void;
@@ -40,9 +40,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }, []);
 
-  const signIn = async (email: string, pass: string): Promise<'admin' | 'user'> => {
-    // Demo only for now — exact match for the demo admin account
-    if (email === 'admin@emmaus.demo' && pass === 'admin123') {
+  const signIn = async (email: string, pass: string): Promise<'admin' | 'user' | 'superAdmin'> => {
+    // Demo only — exact match for known demo accounts
+    if (email === 'superadmin@emmaus.church' && pass === 'admin123') {
+      setUser(DEMO_SUPER_ADMIN);
+      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_SUPER_ADMIN));
+      return 'superAdmin';
+    } else if ((email === 'admin@emmaus.demo' || email === 'pastor@emmaus.church') && pass === 'admin123') {
       setUser(DEMO_ADMIN);
       localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_ADMIN));
       return 'admin';

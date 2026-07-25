@@ -35,6 +35,13 @@ export type Journey = {
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
   requiresDailyGate?: boolean;  // default true — set false to bypass daily gate for pastoral journeys
+  // AI Builder metadata
+  aiGenerated?: boolean;
+  sourcesSummary?: {
+    scriptureReferences: string[];
+    sermonsUsed: Array<{ title: string; date: string }>;
+    generatedSections: string[];
+  };
 };
 
 export type Step = {
@@ -101,6 +108,7 @@ type JourneyContextType = {
   updateJourney: (journey: Journey) => Promise<Journey>;
   addJourney: (journey: Journey) => Promise<Journey>;
   deleteJourney: (journeyId: string) => Promise<void>;
+  permanentDeleteJourney: (journeyId: string) => Promise<void>;
   duplicateJourney: (journeyId: string) => Promise<Journey>;
   // originalDay: the day number used to look up the existing row (before any renumbering)
   updateStep: (step: Step, originalDay?: number) => Promise<Step>;
@@ -296,6 +304,15 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     [user?.id]
   );
 
+  const permanentDeleteJourney = useCallback(
+    async (journeyId: string): Promise<void> => {
+      await api.permanentDeleteJourney(journeyId, user?.id, user?.email);
+      setJourneys(js => js.filter(j => j.id !== journeyId));
+      setSteps(ss => ss.filter(s => s.journeyId !== journeyId));
+    },
+    [user?.id, user?.email]
+  );
+
   const duplicateJourney = useCallback(
     async (journeyId: string): Promise<Journey> => {
       const copy = await api.duplicateJourney(journeyId, user?.id);
@@ -387,6 +404,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         updateJourney,
         addJourney,
         deleteJourney,
+        permanentDeleteJourney,
         duplicateJourney,
         updateStep,
         addStep,

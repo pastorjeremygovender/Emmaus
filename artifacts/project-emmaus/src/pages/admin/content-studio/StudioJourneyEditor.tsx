@@ -18,6 +18,7 @@ import {
   Settings, ChevronLeft, ChevronRight, PanelLeftClose,
   PanelLeftOpen, PanelRightClose, PanelRightOpen, BookOpen,
   FileText, Smartphone, Tablet, Monitor, GripVertical, ImageIcon,
+  Sparkles, X as XIcon, ChevronDown, ChevronUp, Headphones, Layers,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/contexts/JourneyContext';
@@ -369,6 +370,80 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
   );
 }
 
+// ─── AI Review Banner ─────────────────────────────────────────────────────────
+
+function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: () => void }) {
+  const [showSources, setShowSources] = useState(false);
+  const sources = journey.sourcesSummary;
+
+  return (
+    <div className="mx-8 mt-6 rounded-2xl border border-teal-200 bg-teal-50 overflow-hidden">
+      <div className="flex items-start gap-3 p-4">
+        <div className="w-7 h-7 rounded-lg bg-teal-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Sparkles size={13} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-teal-900">AI-generated draft — please review</p>
+          <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
+            This Journey was created by Emmaus AI. Review each step for accuracy, pastoral tone, and doctrinal soundness before publishing.
+            Scripture text was verified at generation time — check any quoted verses match your preferred translation.
+          </p>
+          {sources && (
+            <button
+              onClick={() => setShowSources(v => !v)}
+              className="flex items-center gap-1 mt-2 text-xs font-medium text-teal-600 hover:text-teal-800 transition-colors"
+            >
+              {showSources ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showSources ? 'Hide sources' : 'Show sources used'}
+            </button>
+          )}
+        </div>
+        <button onClick={onDismiss} className="text-teal-400 hover:text-teal-600 flex-shrink-0">
+          <XIcon size={14} />
+        </button>
+      </div>
+
+      {showSources && sources && (
+        <div className="border-t border-teal-100 px-4 py-3 grid grid-cols-3 gap-4">
+          {sources.scriptureReferences.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <BookOpen size={10} /> Scripture
+              </p>
+              {sources.scriptureReferences.map(r => (
+                <p key={r} className="text-xs text-teal-800">{r}</p>
+              ))}
+            </div>
+          )}
+          {sources.sermonsUsed.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <Headphones size={10} /> Sermons
+              </p>
+              {sources.sermonsUsed.map(s => (
+                <div key={s.title} className="mb-1">
+                  <p className="text-xs text-teal-800 leading-tight">{s.title}</p>
+                  <p className="text-[10px] text-teal-500">{s.date}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {sources.generatedSections.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <Layers size={10} /> AI-written
+              </p>
+              {sources.generatedSections.map(s => (
+                <p key={s} className="text-xs text-teal-800">{s}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor }: Props) {
@@ -387,6 +462,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [confirmBack, setConfirmBack] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   const autosaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -403,9 +479,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       const existing = stepsWithBlocks.find(s => s.day === step.day);
       if (existing) return existing;
       const savedBlocks = (step as Step & { blocks?: Array<Record<string, unknown>> | null }).blocks;
-      const blocks: Block[] = savedBlocks && savedBlocks.length > 0
-        ? (savedBlocks as unknown as Block[])
-        : stepToBlocks(step);
+      let blocks: Block[];
+      if (savedBlocks && savedBlocks.length > 0) {
+        // Backfill missing IDs — guards against AI-generated or legacy blocks stored without UUIDs
+        blocks = (savedBlocks as unknown as Block[]).map(b =>
+          b.id ? b : { ...b, id: crypto.randomUUID() }
+        );
+      } else {
+        blocks = stepToBlocks(step);
+      }
       return { ...step, blocks, isDirty: false };
     });
     setStepsWithBlocks(initialised);
@@ -738,6 +820,13 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
         {/* Writing area */}
         {selectedView === 'overview' ? (
           <div className="flex-1 overflow-y-auto bg-white">
+            {/* AI Review banner */}
+            {journey.aiGenerated && !aiBannerDismissed && (
+              <AIReviewBanner
+                journey={journey}
+                onDismiss={() => setAiBannerDismissed(true)}
+              />
+            )}
             <JourneyHeader
               journey={journey}
               form={journeyForm}
@@ -751,6 +840,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               <BlockCanvas
                 blocks={selectedStep.blocks}
                 onChange={blocks => handleBlocksChange(selectedStep.day, blocks)}
+                journeyContext={`${journey.title}${journey.description ? ' — ' + journey.description : ''}`}
               />
             </div>
           </div>
