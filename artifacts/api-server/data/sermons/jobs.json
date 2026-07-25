@@ -198,5 +198,20 @@
     "options": {
       "maxVideos": 500
     }
+  },
+  {
+    "id": "2046812e-f707-4756-a8e5-a137aa551fb1",
+    "type": "sync",
+    "status": "completed",
+    "createdAt": "2026-07-25T18:03:00.694Z",
+    "updatedAt": "2026-07-25T18:03:35.132Z",
+    "progress": {
+      "total": 377,
+      "done": 377,
+      "failed": 0
+    },
+    "options": {
+      "maxVideos": 500
+    }
   }
 ]
