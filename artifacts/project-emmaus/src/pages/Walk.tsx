@@ -121,6 +121,7 @@ function WeeklyProgress({
 
 // ─── 15 Minutes with Jesus card ───────────────────────────────────────────────
 // This is the central daily rhythm card and must be the most prominent element.
+// For daily-rhythm journeys: never shows "of X" total or any "complete" language.
 function FifteenMinutesCard({
   journey,
   prog,
@@ -134,15 +135,17 @@ function FifteenMinutesCard({
   const nextDayAvail    = isNextDayAvailable(prog?.lastCompletedAt);
   const currentDay      = prog?.currentDay ?? 1;
   const started         = !!prog;
+  // Daily Rhythm journeys never show an end — they continue indefinitely.
+  const isDailyRhythm   = journey.journeyType === 'daily-rhythm';
 
   let state: 'start' | 'ready' | 'complete' | 'tomorrow';
-  if (!started)                          state = 'start';
+  if (!started)                             state = 'start';
   else if (completedToday && !nextDayAvail) state = 'complete';
-  else if (completedToday)               state = 'tomorrow';
-  else                                   state = 'ready';
+  else if (completedToday)                  state = 'tomorrow';
+  else                                      state = 'ready';
 
   const cfg = {
-    start:    { label: 'Begin Day 1',       variant: 'default'  as const, disabled: false },
+    start:    { label: 'Begin Day 1',        variant: 'default'  as const, disabled: false },
     ready:    {
       label:   prog && prog.completedDays.length > 0
                  ? `Continue Day ${currentDay}`
@@ -150,9 +153,21 @@ function FifteenMinutesCard({
       variant: 'default' as const,
       disabled: false,
     },
-    complete: { label: 'Review today',      variant: 'outline'  as const, disabled: false },
-    tomorrow: { label: 'Available tomorrow', variant: 'outline' as const, disabled: true  },
+    complete: { label: 'Review today',       variant: 'outline'  as const, disabled: false },
+    tomorrow: { label: 'Available tomorrow', variant: 'outline'  as const, disabled: true  },
   }[state];
+
+  // Title line — never shows "of Y" for daily-rhythm; shows day number only.
+  const titleLine = (() => {
+    if (state === 'start') return 'Begin your daily walk';
+    const doneDay = currentDay - 1 > 0 ? currentDay - 1 : currentDay;
+    if (state === 'complete' || state === 'tomorrow') {
+      return isDailyRhythm ? `Day ${doneDay} — done for today` : `Day ${doneDay} — Complete`;
+    }
+    return isDailyRhythm
+      ? `Day ${currentDay}`
+      : `Day ${currentDay} of ${journey.durationDays}`;
+  })();
 
   return (
     <div
@@ -170,11 +185,7 @@ function FifteenMinutesCard({
             15 Minutes with Jesus
           </p>
           <p className="text-[22px] font-medium text-foreground leading-snug">
-            {state === 'start'
-              ? 'Begin your daily walk'
-              : state === 'complete' || state === 'tomorrow'
-              ? `Day ${currentDay - 1 > 0 ? currentDay - 1 : currentDay} — Complete`
-              : `Day ${currentDay} of ${journey.durationDays}`}
+            {titleLine}
           </p>
         </div>
         {(state === 'complete' || state === 'tomorrow') && (
@@ -183,14 +194,11 @@ function FifteenMinutesCard({
       </div>
 
       {/* Completion message */}
-      {state === 'complete' && (
+      {(state === 'complete' || state === 'tomorrow') && (
         <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Today's time with Jesus is complete. Come back tomorrow for the next step.
-        </p>
-      )}
-      {state === 'tomorrow' && (
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Today's time with Jesus is complete. Come back tomorrow for the next step.
+          {isDailyRhythm
+            ? "Today's time with Jesus is complete. Come back tomorrow."
+            : "Today's time with Jesus is complete. Come back tomorrow for the next step."}
         </p>
       )}
 
@@ -399,8 +407,11 @@ export default function Walk() {
 
   // ── Content resolution ───────────────────────────────────────────────────────
 
-  // 1. Core — 15 Minutes with Jesus
-  const coreJourney    = publishedJourneys.find(j => j.journeyType === 'core');
+  // 1. Daily Rhythm — 15 Minutes with Jesus
+  // Accepts 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
+  const coreJourney    = publishedJourneys.find(
+    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
+  );
   const coreProg       = coreJourney ? progress[coreJourney.id] : undefined;
 
   // 2. Companion — This Week's Sermon Devotional

@@ -17,9 +17,11 @@ import {
   Clapperboard,
   ImagePlay,
   ChevronRight,
+  Sun,
 } from 'lucide-react';
 
 import StudioOverview from './StudioOverview';
+import DailyRhythmStudio from './DailyRhythmStudio';
 import CollectionsList from './CollectionsList';
 import CollectionEditor from './CollectionEditor';
 import StudioJourneyList from './StudioJourneyList';
@@ -44,6 +46,9 @@ type StudioView =
   | { id: 'legacy-journey-editor'; journeyId?: string; freshlyGenerated?: boolean }
   | { id: 'legacy-day-editor'; journeyId: string; day?: number }
   | { id: 'legacy-day-preview'; journeyId: string; day: number }
+  // Daily Rhythm
+  | { id: 'daily-rhythm' }
+  | { id: 'daily-rhythm-editor'; journeyId: string }
   // Sermons
   | { id: 'sermons' }
   | { id: 'sermon-editor'; sermonId?: string | null }
@@ -59,6 +64,7 @@ type NavTab = { id: string; label: string; Icon: React.ElementType };
 const TOP_NAV: NavTab[] = [
   { id: 'overview',       label: 'Overview',         Icon: LayoutGrid  },
   { id: 'collections',    label: 'Collections',      Icon: FolderOpen  },
+  { id: 'daily-rhythm',   label: 'Daily Rhythm',     Icon: Sun         },
   { id: 'journeys',       label: 'Journeys',         Icon: BookOpen    },
   { id: 'sermons',        label: 'Sermons',          Icon: Video       },
   { id: 'youtube-archive',label: 'YouTube Archive',  Icon: Clapperboard},
@@ -70,6 +76,8 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'overview':               'overview',
   'collections':            'collections',
   'collection-editor':      'collections',
+  'daily-rhythm':           'daily-rhythm',
+  'daily-rhythm-editor':    'daily-rhythm',
   'journeys':               'journeys',
   'journey-editor':         'journeys',
   'legacy-journey-editor':  'journeys',
@@ -87,6 +95,7 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
 const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   overview:         { id: 'overview' },
   collections:      { id: 'collections' },
+  'daily-rhythm':   { id: 'daily-rhythm' },
   journeys:         { id: 'journeys' },
   sermons:          { id: 'sermons' },
   'youtube-archive':{ id: 'youtube-archive' },
@@ -143,6 +152,12 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys' }) });
       crumbs.push({ label: 'Preview' });
     }
+    if (view.id === 'daily-rhythm')
+      crumbs.push({ label: 'Daily Rhythm' });
+    if (view.id === 'daily-rhythm-editor') {
+      crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
+      crumbs.push({ label: 'Edit Track' });
+    }
     if (view.id === 'sermons')
       crumbs.push({ label: 'Sermons' });
     if (view.id === 'sermon-editor') {
@@ -193,6 +208,24 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             collectionId={view.collectionId}
             onBack={() => navigate({ id: 'collections' })}
             onSaved={() => navigate({ id: 'collections' })}
+          />
+        );
+      // ── Daily Rhythm ──
+      case 'daily-rhythm':
+        return (
+          <DailyRhythmStudio
+            onEdit={(id) => navigate({ id: 'daily-rhythm-editor', journeyId: id })}
+          />
+        );
+      case 'daily-rhythm-editor':
+        return (
+          <StudioJourneyEditor
+            key={view.journeyId}
+            journeyId={view.journeyId}
+            onBack={() => navigate({ id: 'daily-rhythm' })}
+            onLegacyEditor={() =>
+              navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId })
+            }
           />
         );
       // ── Journeys (block editor) ──

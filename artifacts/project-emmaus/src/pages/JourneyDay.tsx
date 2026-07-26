@@ -57,7 +57,38 @@ export default function JourneyDay() {
     );
   }
 
-  if (!step || !journey) {
+  if (!journey) {
+    return (
+      <div className="p-6 text-center mt-20 text-muted-foreground">
+        Journey not found.
+      </div>
+    );
+  }
+
+  const isDailyRhythmJourney = journey.journeyType === 'daily-rhythm';
+
+  if (!step) {
+    // Daily Rhythm: day content may not be authored yet — show a calm placeholder.
+    if (isDailyRhythmJourney) {
+      return (
+        <div className="min-h-[100dvh] flex items-center justify-center bg-background p-6">
+          <div className="text-center space-y-4 max-w-[320px]">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+              <Check size={28} className="text-primary" />
+            </div>
+            <h2 className="text-[22px] font-serif font-medium">You're ahead of the rhythm.</h2>
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
+              Today's 15 Minutes with Jesus will be ready soon. Check back later.
+            </p>
+            <div className="pt-4">
+              <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
+                Back to Walk
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="p-6 text-center mt-20 text-muted-foreground">
         Journey step not found.
@@ -79,7 +110,9 @@ export default function JourneyDay() {
 
   const reflectionKey = `${journeyId}-${day}`;
 
-  const isFinalStep = journey.durationDays > 0 && day >= journey.durationDays;
+  // Daily Rhythm journeys never reach a "final step" — they continue indefinitely.
+  const isDailyRhythm = journey.journeyType === 'daily-rhythm';
+  const isFinalStep = !isDailyRhythm && journey.durationDays > 0 && day >= journey.durationDays;
 
   const handleComplete = () => {
     completeStep(journey.id, day, reflection);

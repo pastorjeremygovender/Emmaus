@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { runStartupMigrations } from "./lib/startup-migrations.js";
 
 const app: Express = express();
 
@@ -32,5 +33,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Run startup migrations on boot (non-blocking — never prevents startup)
+runStartupMigrations().catch(err =>
+  logger.warn({ err }, "Startup migrations encountered a non-fatal error")
+);
 
 export default app;

@@ -22,7 +22,7 @@ const STORAGE_KEY = 'emmaus_enrollment';
 export const MAX_ACTIVE_JOURNEYS = 5;
 
 /** Types that are always exempt from the active-Journey limit. */
-const EXEMPT_TYPES = new Set(['core', 'companion', 'devotional']);
+const EXEMPT_TYPES = new Set(['core', 'companion', 'devotional', 'daily-rhythm']);
 
 export function isExemptJourney(j: Journey): boolean {
   return EXEMPT_TYPES.has(j.journeyType) || j.overloadExempt === true;

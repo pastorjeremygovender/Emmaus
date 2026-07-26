@@ -1,0 +1,483 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+This sprint changes the architecture of Emmaus.
+
+Do not redesign the Bible, Ask Emmaus, Rooms, Admin Portal or Content Studio.
+
+Inspect the existing Journey system, Walk screen, Content Studio, publishing workflow, progress tracking and notifications before making changes.
+
+Preserve existing functionality wherever possible.
+
+=====================================================
+
+SPRINT NAME
+
+Daily Rhythm Architecture
+
+=====================================================
+
+VISION
+
+15 Minutes with Jesus is no longer a normal Journey.
+
+It becomes the permanent Daily Rhythm of Emmaus.
+
+Every member begins every day here.
+
+It is the heartbeat of the platform.
+
+Journeys begin and end.
+
+Daily Rhythm continues for life.
+
+=====================================================
+
+CORE PRINCIPLE
+
+Every day when a member opens Emmaus they should immediately know their next step.
+
+The Daily Rhythm always appears first.
+
+Emmaus should never ask:
+
+"What would you like to do today?"
+
+Instead it gently says:
+
+"This is today's next step."
+
+=====================================================
+
+NEW CONTENT TYPE
+
+Create a new content type:
+
+Daily Rhythm
+
+Initial implementation:
+
+15 Minutes with Jesus
+
+This content type is separate from normal Journeys.
+
+Do not force it into the Journey architecture if a cleaner abstraction is possible.
+
+Reuse existing Journey infrastructure where appropriate.
+
+Separate only where it improves long-term clarity.
+
+=====================================================
+
+15 MINUTES WITH JESUS
+
+This is no longer a 7-Day Journey.
+
+Instead:
+
+Days 1–7
+
+serve as the onboarding foundation.
+
+Day 8 onward
+
+continues seamlessly.
+
+Members should never notice a transition.
+
+The title remains:
+
+15 Minutes with Jesus
+
+every day.
+
+Never display:
+
+Journey Complete
+
+Congratulations, you've finished
+
+or similar wording.
+
+=====================================================
+
+CONTENT FLOW
+
+Every Daily Rhythm session follows this structure:
+
+Welcome
+
+↓
+
+Scripture
+
+↓
+
+Reflection
+
+↓
+
+Prayer
+
+↓
+
+Practical Action
+
+↓
+
+Optional deeper reading
+
+↓
+
+Related sermon (where appropriate)
+
+↓
+
+Closing encouragement
+
+Keep the experience calm.
+
+Simple.
+
+Pastoral.
+
+=====================================================
+
+WALK SCREEN
+
+The Walk screen must always begin with:
+
+15 Minutes with Jesus
+
+Nothing should appear above it.
+
+Below it display:
+
+Today's Devotional
+
+↓
+
+This Week's Sermon Companion
+
+↓
+
+Continue Your Journeys
+
+↓
+
+This Week
+
+Maintain existing styling.
+
+=====================================================
+
+DAILY PROGRESSION
+
+Members complete one Daily Rhythm each calendar day.
+
+Previous days remain available.
+
+Future days remain locked.
+
+The next Daily Rhythm unlocks automatically on the next local day.
+
+=====================================================
+
+NO END DATE
+
+There is no final Day.
+
+The Daily Rhythm continues indefinitely.
+
+Internally support:
+
+Day 1
+
+Day 2
+
+...
+
+Day 500
+
+...
+
+without artificial limits.
+
+=====================================================
+
+CONTENT MODEL
+
+Support:
+
+Foundation Days
+
+Recurring Daily Rhythm
+
+Seasonal Daily Rhythm
+
+Church-specific Daily Rhythm
+
+Future churches should be able to customise their Daily Rhythm while preserving Emmaus architecture.
+
+=====================================================
+
+ADMIN
+
+Inside Content Studio create a new section:
+
+Daily Rhythm
+
+This sits alongside:
+
+Journeys
+
+Collections
+
+Templates
+
+Media
+
+etc.
+
+Administrators should be able to:
+
+Create Daily Rhythm content
+
+Edit future days
+
+Schedule days
+
+Preview
+
+Draft
+
+Review
+
+Publish
+
+Archive
+
+Duplicate
+
+Import
+
+Export
+
+Do not mix Daily Rhythm entries into the normal Journey list.
+
+=====================================================
+
+ONBOARDING
+
+Every new member begins with:
+
+15 Minutes with Jesus
+
+Day 1
+
+No exceptions.
+
+Journey selection remains optional.
+
+=====================================================
+
+JOURNEYS
+
+Journeys remain:
+
+Made Free
+
+Prayer Basics
+
+Marriage
+
+Serving
+
+Leadership
+
+Membership
+
+etc.
+
+Journeys begin.
+
+Journeys finish.
+
+Daily Rhythm never finishes.
+
+=====================================================
+
+UNLOCKING
+
+Normal Journeys continue using the existing daily gate.
+
+Members complete today's Daily Rhythm.
+
+↓
+
+Eligible Journeys unlock.
+
+Maintain the existing admin override.
+
+=====================================================
+
+PROGRESS
+
+Track:
+
+Current Day
+
+Completion history
+
+Missed days
+
+Last completed day
+
+Current streak data if retained internally
+
+Do NOT expose streaks to members.
+
+Emmaus should encourage consistency without competition.
+
+=====================================================
+
+NOTIFICATIONS
+
+Examples:
+
+Good morning.
+
+Today's 15 Minutes with Jesus is ready.
+
+Today's Scripture is waiting for you.
+
+Begin your day with Jesus.
+
+Never:
+
+You missed yesterday.
+
+Don't break your streak.
+
+You're behind.
+
+=====================================================
+
+REPORTING
+
+Weekly summary remains:
+
+Read Scripture
+
+Prayed
+
+Continued Journeys
+
+No XP.
+
+No levels.
+
+No achievements.
+
+=====================================================
+
+CONTENT GENERATION
+
+Future AI generation must support:
+
+Generate Daily Rhythm
+
+separately from:
+
+Generate Journey
+
+These are different content types.
+
+=====================================================
+
+MEMBER EXPERIENCE
+
+The member should feel:
+
+Every morning Emmaus already knows my next step.
+
+Not:
+
+I need to choose something to do.
+
+=====================================================
+
+TESTS
+
+Verify:
+
+15 Minutes with Jesus appears first.
+
+Never completes.
+
+Advances one Day per calendar day.
+
+Previous Days available.
+
+Future Days locked.
+
+Journeys still function.
+
+Journey gate still functions.
+
+Admin can create Daily Rhythm entries.
+
+Publishing works.
+
+Progress saves.
+
+Walk screen ordering correct.
+
+Notifications correct.
+
+No TypeScript errors.
+
+No runtime errors.
+
+=====================================================
+
+DEFINITION OF DONE
+
+Complete only when:
+
+15 Minutes with Jesus has become the permanent Daily Rhythm of Emmaus.
+
+It is no longer treated as a finite Journey.
+
+Journeys remain separate.
+
+The Walk screen naturally begins with Daily Rhythm every day.
+
+Members always know their next step.
+
+=====================================================
+
+FINAL REVIEW
+
+Provide:
+
+1. Architecture changes
+
+2. Daily Rhythm data model
+
+3. Admin changes
+
+4. Walk screen updates
+
+5. Progress model
+
+6. Notification changes
+
+7. Journey relationship
+
+8. Tests completed
+
+9. Known limitations
+
+Stop after presenting the completed Daily Rhythm architecture.

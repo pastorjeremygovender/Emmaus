@@ -69,6 +69,8 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
 
   const filtered = useMemo(() => {
     let list = journeys as Journey[];
+    // Daily Rhythm journeys are managed separately in the Daily Rhythm tab — exclude them here.
+    list = list.filter(j => j.journeyType !== 'daily-rhythm');
     if (collectionId) list = list.filter(j => (j as any).collectionId === collectionId);
     if (statusTab !== 'All') list = list.filter(j => j.status === statusTab);
     if (typeFilter !== 'All Types') list = list.filter(j => j.journeyType === typeFilter);

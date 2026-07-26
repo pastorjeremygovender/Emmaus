@@ -6,3 +6,4 @@
 - [YouTube Sermon Archive](youtube-archive.md) — file-based import pipeline; YouTube Data API v3 working; ICC channel 375 videos; caption search needs OAuth; req.params quirk requires String() cast; route mounted bare (no /api prefix).
 - [Ask Emmaus spec implementation](ask-emmaus-spec.md) — full spec landed: parallel Bible+sermon search, nextSteps array, listen step injection, no-section-headers prompt, Preached Here chapter badge, searchByScripture with text fallback.
 - [Daily Discipleship Rhythm sprint](daily-rhythm-sprint.md) — enrollment limit 5, daily gate, onboarding, metadata JSONB pattern for journey extras; no DB migrations needed.
+- [Daily Rhythm Architecture](daily-rhythm-architecture.md) — journeyType 'daily-rhythm' replaces 'core'; startup-migrations.ts runs idempotent DB patch on boot; isFinalStep forced false; Walk card never shows "of X".

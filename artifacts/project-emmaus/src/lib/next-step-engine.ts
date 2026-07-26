@@ -69,8 +69,11 @@ export function computeNextStep(
 ): NextStepEngineResult {
   const publishedJourneys = journeys.filter(j => j.status === 'Published');
 
-  // ── Priority 1: Core journey (15 Minutes with Jesus) ─────────────────────
-  const coreJourney = publishedJourneys.find(j => j.journeyType === 'core');
+  // ── Priority 1: Daily Rhythm (15 Minutes with Jesus) ─────────────────────
+  // Accepts both 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
+  const coreJourney = publishedJourneys.find(
+    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
+  );
   if (coreJourney) {
     const prog = progress[coreJourney.id];
     const completedToday = isCompletedToday(prog?.lastCompletedAt);
