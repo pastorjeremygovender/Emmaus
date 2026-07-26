@@ -21,12 +21,14 @@ import {
   Search,
   X,
   Layers,
+  Trash2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey } from '@/lib/journeys-api';
 import { StatusBadge } from '../shared';
 import NewDailyRhythmModal from './NewDailyRhythmModal';
+import DeleteDailyRhythmDialog from './DeleteDailyRhythmDialog';
 
 interface Props {
   onEdit: (journeyId: string) => void;
@@ -35,14 +37,18 @@ interface Props {
 const STATUS_TABS = ['All', 'Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived'];
 
 export default function DailyRhythmStudio({ onEdit }: Props) {
-  const { journeys, refreshJourneys, updateJourney, duplicateJourney } = useJourney();
+  const { journeys, refreshJourneys, updateJourney, duplicateJourney, permanentDeleteJourney } = useJourney();
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'superAdmin';
 
   const [query, setQuery] = useState('');
   const [statusTab, setStatusTab] = useState('All');
   const [showNew, setShowNew] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [banner, setBanner] = useState('');
+
+  // Permanent delete state
+  const [deleteTarget, setDeleteTarget] = useState<Journey | null>(null);
 
   // Only daily-rhythm journeys appear here
   const tracks = useMemo(() => {
@@ -79,6 +85,15 @@ export default function DailyRhythmStudio({ onEdit }: Props) {
     a.download = `${j.id}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    await permanentDeleteJourney(deleteTarget.id);
+    setBanner(`"${deleteTarget.title}" was permanently deleted.`);
+    setDeleteTarget(null);
+    await refreshJourneys?.();
+    setTimeout(() => setBanner(''), 4000);
   };
 
   const handleCreated = useCallback(async (id: string) => {
@@ -284,6 +299,17 @@ export default function DailyRhythmStudio({ onEdit }: Props) {
                             <Archive size={13} className="text-gray-400" /> Archive
                           </button>
                         )}
+                        {isSuperAdmin && (
+                          <>
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                              onClick={() => { setOpenMenuId(null); setDeleteTarget(j); }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 size={13} /> Delete Permanently
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -299,6 +325,15 @@ export default function DailyRhythmStudio({ onEdit }: Props) {
         <NewDailyRhythmModal
           onClose={() => setShowNew(false)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {/* Permanent delete confirmation */}
+      {deleteTarget && (
+        <DeleteDailyRhythmDialog
+          trackTitle={deleteTarget.title}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </div>

@@ -7,3 +7,4 @@
 - [Ask Emmaus spec implementation](ask-emmaus-spec.md) — full spec landed: parallel Bible+sermon search, nextSteps array, listen step injection, no-section-headers prompt, Preached Here chapter badge, searchByScripture with text fallback.
 - [Daily Discipleship Rhythm sprint](daily-rhythm-sprint.md) — enrollment limit 5, daily gate, onboarding, metadata JSONB pattern for journey extras; no DB migrations needed.
 - [Daily Rhythm Architecture](daily-rhythm-architecture.md) — journeyType 'daily-rhythm' replaces 'core'; startup-migrations.ts runs idempotent DB patch on boot; isFinalStep forced false; Walk card never shows "of X".
+- [Daily Rhythm Content](daily-rhythm-content.md) — 30 days seeded (John 1–19); parseBibleLink helper; JourneyDay daily-rhythm layout; isDailyRhythmReadOnly; Days 31+ not yet seeded.

@@ -5,8 +5,22 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Check, PlayCircle, Eye, EyeOff, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { isCompletedToday } from '@/lib/daily-lock';
+
+/** Parse a scripture reference into the Bible reader path.
+ *  "John 1:35-39"  →  "/bible/read/john/1"
+ *  "1 John 4:7"    →  "/bible/read/1-john/4"
+ */
+function parseBibleLink(ref: string): string {
+  const match = ref.trim().match(/^(\d\s+)?([A-Za-z]+)\s+(\d+)/);
+  if (!match) return '/bible/books';
+  const num  = match[1] ? match[1].trim() + '-' : '';
+  const book = (num + match[2]).toLowerCase();
+  const ch   = match[3];
+  return `/bible/read/${book}/${ch}`;
+}
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -22,7 +36,7 @@ export default function JourneyDay() {
   const { journeyId, day: dayStr } = useParams<{ journeyId: string; day: string }>();
   const day = parseInt(dayStr || '1', 10);
   const [, setLocation] = useLocation();
-  const { getStep, completeStep, startJourney, getJourney, loading } = useJourney();
+  const { getStep, completeStep, startJourney, getJourney, loading, progress } = useJourney();
   const { user } = useAuth();
   const {
     getMyRooms,
@@ -34,6 +48,11 @@ export default function JourneyDay() {
 
   const step = getStep(journeyId || '', day);
   const journey = getJourney(journeyId || '');
+  const journeyProgress = journeyId ? progress[journeyId] : undefined;
+  const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';
+  // Day is read-only if it's already been completed (any time — past or today)
+  const isDayCompleted = journeyProgress?.completedDays?.includes(day) ?? false;
+  const isDailyRhythmReadOnly = isDailyRhythmJourney && isDayCompleted;
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
@@ -64,8 +83,6 @@ export default function JourneyDay() {
       </div>
     );
   }
-
-  const isDailyRhythmJourney = journey.journeyType === 'daily-rhythm';
 
   if (!step) {
     // Daily Rhythm: day content may not be authored yet — show a calm placeholder.
@@ -111,10 +128,15 @@ export default function JourneyDay() {
   const reflectionKey = `${journeyId}-${day}`;
 
   // Daily Rhythm journeys never reach a "final step" — they continue indefinitely.
-  const isDailyRhythm = journey.journeyType === 'daily-rhythm';
-  const isFinalStep = !isDailyRhythm && journey.durationDays > 0 && day >= journey.durationDays;
+  const isFinalStep = !isDailyRhythmJourney && journey.durationDays > 0 && day >= journey.durationDays;
 
   const handleComplete = () => {
+    // Daily Rhythm: complete and navigate directly to Walk (no intermediate screen)
+    if (isDailyRhythmJourney) {
+      completeStep(journey.id, day, '');
+      setLocation('/walk');
+      return;
+    }
     completeStep(journey.id, day, reflection);
     if (reflection.trim() && activeRoomsForJourney.length > 0) {
       setShowSharePrompt(true);
@@ -303,10 +325,10 @@ export default function JourneyDay() {
           </button>
           <div className="flex-1 min-w-0 text-center px-3">
             <div className="font-medium text-sm text-foreground truncate leading-tight">
-              {journey.title}
+              {isDailyRhythmJourney ? '10 Minutes with Jesus' : journey.title}
             </div>
             <div className="text-[12px] text-muted-foreground">
-              Day {day} of {journey.durationDays}
+              {isDailyRhythmJourney ? `Day ${day}` : `Day ${day} of ${journey.durationDays}`}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
@@ -318,6 +340,11 @@ export default function JourneyDay() {
 
         {/* Day label + title */}
         <section className="mb-10">
+          {isDailyRhythmJourney && (
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+              10 Minutes with Jesus
+            </p>
+          )}
           <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
             Day {day}
           </span>
@@ -335,11 +362,20 @@ export default function JourneyDay() {
 
         {/* Scripture */}
         <section className="mb-10">
-          <SectionLabel>The Word</SectionLabel>
-          <div className="mt-4 bg-card rounded-2xl p-6 border border-border shadow-sm">
-            <p className="font-serif text-[19px] leading-[1.7] text-foreground">
+          <SectionLabel>Scripture</SectionLabel>
+          <div className="mt-4 bg-card rounded-2xl p-6 border border-border shadow-sm space-y-4">
+            <p className="font-serif text-[19px] leading-[1.7] text-foreground font-medium">
               {step.scripture}
             </p>
+            {isDailyRhythmJourney && step.scripture && (
+              <button
+                onClick={() => setLocation(parseBibleLink(step.scripture))}
+                className="inline-flex items-center gap-1.5 text-[14px] text-primary font-medium hover:underline"
+              >
+                <BookOpen size={14} />
+                Read in Bible
+              </button>
+            )}
           </div>
         </section>
 
@@ -373,21 +409,23 @@ export default function JourneyDay() {
           </section>
         )}
 
-        {/* Reflection question + optional response */}
-        <section className="mb-10">
-          <SectionLabel>Consider</SectionLabel>
-          <p className="mt-4 text-[18px] font-medium text-foreground leading-[1.6]">
-            {step.reflectionQuestion}
-          </p>
-          <Textarea
-            placeholder="What stood out to you today?"
-            className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
-            value={reflection}
-            onChange={(e) => setReflection(e.target.value)}
-            data-testid="input-reflection"
-            aria-label="Your reflection"
-          />
-        </section>
+        {/* Reflection question + optional response — hidden for daily-rhythm */}
+        {!isDailyRhythmJourney && (
+          <section className="mb-10">
+            <SectionLabel>Consider</SectionLabel>
+            <p className="mt-4 text-[18px] font-medium text-foreground leading-[1.6]">
+              {step.reflectionQuestion}
+            </p>
+            <Textarea
+              placeholder="What stood out to you today?"
+              className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+              value={reflection}
+              onChange={(e) => setReflection(e.target.value)}
+              data-testid="input-reflection"
+              aria-label="Your reflection"
+            />
+          </section>
+        )}
 
         {/* Prayer */}
         <section className="mb-10">
@@ -399,7 +437,7 @@ export default function JourneyDay() {
 
         {/* Action step */}
         <section className="mb-10">
-          <SectionLabel primary>Today's Step</SectionLabel>
+          <SectionLabel primary>Your Next Step</SectionLabel>
           <div className="mt-4 bg-accent/10 border border-accent/20 rounded-2xl p-6">
             <p className="text-[18px] font-medium text-foreground leading-[1.6]">
               {step.actionStep}
@@ -407,16 +445,47 @@ export default function JourneyDay() {
           </div>
         </section>
 
-        {/* Single completion button */}
+        {/* Closing text — daily-rhythm only */}
+        {isDailyRhythmJourney && (
+          <section className="mb-8">
+            <p className="text-[16px] text-muted-foreground text-center leading-relaxed italic">
+              Tomorrow we'll continue walking together.
+            </p>
+          </section>
+        )}
+
+        {/* Completion / navigation button */}
         <div className="pt-2 pb-8">
-          <Button
-            size="lg"
-            className="w-full h-14 text-[17px] rounded-2xl"
-            onClick={handleComplete}
-            data-testid="button-complete-today"
-          >
-            Complete Today
-          </Button>
+          {isDailyRhythmJourney ? (
+            isDailyRhythmReadOnly ? (
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full h-14 text-[17px] rounded-2xl"
+                onClick={() => setLocation('/walk')}
+              >
+                Back to Walk
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="w-full h-14 text-[17px] rounded-2xl"
+                onClick={handleComplete}
+                data-testid="button-complete-today"
+              >
+                Continue
+              </Button>
+            )
+          ) : (
+            <Button
+              size="lg"
+              className="w-full h-14 text-[17px] rounded-2xl"
+              onClick={handleComplete}
+              data-testid="button-complete-today"
+            >
+              Complete Today
+            </Button>
+          )}
         </div>
 
       </main>

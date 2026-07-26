@@ -1,0 +1,392 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is a focused bug-fix sprint.
+
+Do not redesign Content Studio.
+
+Do not change Daily Rhythm.
+
+Do not add content.
+
+Do not change Journeys, Walk, Bible, Ask Emmaus, Rooms, People or Settings.
+
+Do not begin another task after this.
+
+=====================================================
+TASK
+
+Add Permanent Delete for Admin Content
+
+=====================================================
+CURRENT PROBLEM
+
+Journey management currently offers Archive only.
+
+There is no true Delete option.
+
+Administrators need to permanently remove test content while Emmaus is still being built.
+
+Add a visible and working permanent Delete action.
+
+=====================================================
+APPLIES TO
+
+Add permanent deletion for:
+
+- Journeys
+- Daily Rhythm entries
+
+Do not add deletion to unrelated systems in this sprint.
+
+=====================================================
+PERMISSIONS
+
+Only authorised Super Administrators may permanently delete content.
+
+Content Editors may:
+
+- Archive
+- Restore
+
+Content Editors may not permanently delete.
+
+Members must never see admin deletion controls.
+
+Enforce permissions on both the interface and server.
+
+Do not rely only on hiding the button.
+
+=====================================================
+USER INTERFACE
+
+In Content Studio, each Journey and Daily Rhythm entry should have an actions menu.
+
+Include:
+
+- Preview
+- Edit
+- Duplicate
+- Archive
+- Delete Permanently
+
+“Delete Permanently” must:
+
+- Be visually distinct
+- Use red text or a red destructive icon
+- Appear only for authorised Super Administrators
+
+Do not replace Archive.
+
+Archive and Delete are separate actions.
+
+=====================================================
+DELETE CONFIRMATION
+
+When “Delete Permanently” is selected, open a confirmation dialog.
+
+For a Journey:
+
+Title:
+
+Delete Journey Permanently?
+
+Message:
+
+This will permanently delete this Journey, all of its Steps and Blocks, and all progress connected to it.
+
+This action cannot be undone.
+
+For a Daily Rhythm entry:
+
+Title:
+
+Delete Daily Rhythm Entry Permanently?
+
+Message:
+
+This will permanently delete this Daily Rhythm entry and any progress connected to it.
+
+This action cannot be undone.
+
+Require the administrator to type:
+
+DELETE
+
+The destructive button remains disabled until DELETE is entered exactly.
+
+Buttons:
+
+Cancel
+
+Delete Permanently
+
+=====================================================
+JOURNEY DELETION
+
+Permanently deleting a Journey must safely remove:
+
+- Journey record
+- Journey metadata
+- Steps
+- Blocks
+- Step order
+- Version history
+- Draft records
+- Review records
+- Publication records
+- Collection relationships
+- Scripture relationships
+- Sermon relationships
+- Media relationships
+- Tags and join records
+- Saved-for-later records
+- Active enrolments
+- Paused enrolments
+- Completed enrolments
+- Journey progress
+- Step progress
+- Completion records
+- Journey-specific reflections
+- Journey-specific journal responses
+- Journey-specific checklist responses
+- Journey recommendations
+- Room-to-Journey assignments
+- Journey-specific notifications
+- Journey search and discovery cache entries
+
+Use the actual existing model and table names.
+
+Do not leave orphaned Steps, Blocks or progress records.
+
+=====================================================
+DAILY RHYTHM DELETION
+
+Permanently deleting a Daily Rhythm entry must safely remove:
+
+- Daily Rhythm entry
+- Draft and publication records
+- Version history
+- Completion records for that entry
+- Daily progress linked to that entry
+- Search index references
+- Cached Walk screen references
+- Notifications linked only to that entry
+
+Do not delete the Daily Rhythm architecture.
+
+Do not delete:
+
+- 10 Minutes with Jesus content type
+- Daily Rhythm editor
+- Daily progression logic
+- Walk screen placement
+- Daily gate logic
+- Templates
+- Other Daily Rhythm entries
+
+=====================================================
+PRESERVE
+
+Never delete:
+
+- Users or Members
+- Authentication
+- Roles
+- Churches
+- Rooms
+- Prayer Requests
+- Bible data
+- Bible notes or highlights
+- Sermon archive
+- YouTube Archive
+- Ask Emmaus
+- Collections
+- Templates
+- Saved Blocks
+- Media files used elsewhere
+- Content Studio
+- Journey editor
+- Daily Rhythm editor
+- Publishing architecture
+- Database schemas
+
+If a Journey is the last item in a Collection, preserve the Collection and update its Journey count to zero.
+
+=====================================================
+DATA SAFETY
+
+Use a transaction or safe controlled deletion process where supported.
+
+If deletion fails:
+
+- Do not show success
+- Roll back where possible
+- Show a clear message
+- Do not expose raw database errors
+- Allow a safe retry
+
+Prevent double-clicking or duplicate delete requests.
+
+The operation must be idempotent.
+
+=====================================================
+SUCCESS AND ERROR MESSAGES
+
+Success:
+
+Journey deleted permanently.
+
+or:
+
+Daily Rhythm entry deleted permanently.
+
+Error:
+
+We couldn’t delete this content. Please try again.
+
+Do not show technical database details.
+
+=====================================================
+AFTER DELETION
+
+Immediately refresh:
+
+- Content Studio lists
+- Journey totals
+- Daily Rhythm totals
+- Draft totals
+- Published totals
+- Archive totals
+- Search results
+- Member Explore Journeys
+- Walk screen content
+- Recommendations
+- Collection counts
+
+The deleted item must disappear without requiring logout or a full browser restart.
+
+=====================================================
+AUDIT LOG
+
+Create an admin audit record containing:
+
+- Administrator
+- Content type
+- Content ID
+- Content title
+- Date and time
+- Number of Steps removed
+- Number of Blocks removed
+- Number of progress records removed
+- Success or failure result
+
+Do not store private journal or reflection text in the audit log.
+
+=====================================================
+TESTS
+
+Test all of the following.
+
+TEST 1: Draft Journey
+
+- Delete action is visible to Super Admin
+- Confirmation requires DELETE
+- Journey is permanently removed
+- Steps and Blocks are removed
+- Admin totals refresh
+
+TEST 2: Published Journey
+
+- Published Journey can be deleted by Super Admin
+- It disappears from member Explore
+- It disappears from Walk and recommendations
+- Related progress is removed
+- Collection remains
+
+TEST 3: Journey with progress
+
+- Active, paused, saved and completed records are removed
+- No orphaned progress remains
+
+TEST 4: Daily Rhythm Draft
+
+- Delete action appears
+- Entry is removed
+- Other Daily Rhythm entries remain intact
+
+TEST 5: Published Daily Rhythm entry
+
+- Entry can be deleted
+- Walk no longer references it
+- Daily Rhythm architecture remains functional
+
+TEST 6: Permissions
+
+- Super Admin can delete
+- Content Editor cannot delete
+- Reviewer cannot delete
+- Member cannot access deletion endpoint
+
+TEST 7: Archive remains
+
+- Archive still works
+- Restore still works
+- Archive does not permanently delete content
+
+TEST 8: Existing systems
+
+Confirm these remain unchanged:
+
+- Content Studio
+- Journey editor
+- Daily Rhythm editor
+- Walk
+- Bible
+- Sermons
+- Ask Emmaus
+- Rooms
+- People
+- Settings
+- Authentication
+
+TEST 9: Build quality
+
+- No TypeScript errors
+- No lint errors
+- No runtime errors
+- No broken routes
+- No orphaned database records
+
+=====================================================
+DEFINITION OF DONE
+
+This task is complete only when:
+
+- A visible permanent Delete action exists for Journeys.
+- A visible permanent Delete action exists for Daily Rhythm entries.
+- Only Super Administrators can use it.
+- Typing DELETE is required.
+- Archive remains unchanged.
+- Associated records are removed safely.
+- Collections, Templates and system architecture remain intact.
+- Deleted content disappears everywhere immediately.
+- Audit records are created.
+- No new build or runtime errors remain.
+
+=====================================================
+FINAL REPORT
+
+When complete, report only:
+
+1. Where the Delete action was added
+2. Permission rules
+3. Deletion behaviour for Journeys
+4. Deletion behaviour for Daily Rhythm
+5. Files changed
+6. Database or migration changes
+7. Tests completed
+8. Known limitations
+
+Stop after completing the permanent Delete feature.
+
+Do not start Daily Rhythm content work.
