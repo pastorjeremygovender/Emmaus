@@ -1,0 +1,347 @@
+You are continuing the existing Project Emmaus application.
+
+Do not redesign the platform.
+
+Do not change the Daily Rhythm architecture.
+
+Do not modify the Walk screen.
+
+Do not alter the approved UX flow.
+
+This sprint is CONTENT DEPLOYMENT ONLY.
+
+=====================================================
+
+SPRINT
+
+Deploy "10 Minutes with Jesus"
+Starting with Jesus
+Days 1–30
+
+=====================================================
+
+OBJECTIVE
+
+Populate Emmaus with the first production Daily Rhythm.
+
+This is the permanent Daily Rhythm.
+
+It is not a Journey.
+
+It is not optional.
+
+It is the heartbeat of Emmaus.
+
+=====================================================
+
+CONTENT SOURCE
+
+Import the approved "Starting with Jesus" content.
+
+Create Days 1 through 30 exactly as approved.
+
+Do not rewrite.
+
+Do not summarise.
+
+Do not AI-regenerate.
+
+Store the content exactly as written.
+
+=====================================================
+
+DATABASE
+
+Create a dedicated collection:
+
+daily_rhythm
+
+Each document represents one day.
+
+Fields:
+
+id
+dayNumber
+title
+scriptureReference
+reflection
+prayer
+nextStep
+closing
+status
+publishedAt
+updatedAt
+
+Status defaults to:
+
+Published
+
+=====================================================
+
+SCRIPTURE
+
+Do NOT store Bible text.
+
+Store ONLY the Scripture reference.
+
+Example:
+
+John 1:35-39
+
+When rendering,
+
+Emmaus retrieves the passage from the user's chosen Bible translation.
+
+=====================================================
+
+USER EXPERIENCE
+
+Every calendar day:
+
+Open Emmaus
+
+↓
+
+Automatically load today's Daily Rhythm
+
+↓
+
+Display:
+
+10 Minutes with Jesus
+
+Day X
+
+Title
+
+↓
+
+Load Scripture dynamically
+
+↓
+
+Reflection
+
+↓
+
+Prayer
+
+↓
+
+Your Next Step
+
+↓
+
+Tomorrow we'll continue walking together.
+
+↓
+
+Continue
+
+↓
+
+Walk screen
+
+=====================================================
+
+LOCKING
+
+Members may only complete ONE new Daily Rhythm each calendar day.
+
+If today's Daily Rhythm has already been completed:
+
+Open today's completed page.
+
+Allow unlimited rereading.
+
+Do not unlock tomorrow.
+
+Tomorrow unlocks automatically on the next calendar day.
+
+=====================================================
+
+MISSED DAYS
+
+Never force catch-up.
+
+If a member misses three days,
+
+Day 8 is still waiting.
+
+Emmaus never skips ahead.
+
+Never shame.
+
+Never display:
+
+"You missed three days."
+
+Instead simply continue where the member left off.
+
+=====================================================
+
+WALK SCREEN
+
+Update the first card.
+
+If incomplete:
+
+Continue
+10 Minutes with Jesus
+
+If completed:
+
+Today's
+10 Minutes with Jesus ✓
+
+Tapping the card reopens today's content.
+
+=====================================================
+
+CONTENT STUDIO
+
+Add a new section:
+
+Daily Rhythm
+
+Inside it:
+
+10 Minutes with Jesus
+
+Days 1–30
+
+Editors can:
+
+Open any day
+
+Edit
+
+Preview
+
+Duplicate
+
+Save Draft
+
+Publish
+
+Future days (31 onward) can be added seamlessly.
+
+=====================================================
+
+ADMIN
+
+Show:
+
+Current Published Day Count
+
+30
+
+Future Drafts
+
+0
+
+=====================================================
+
+SEARCH
+
+Searching:
+
+Day 1
+
+Come and See
+
+John 1
+
+Starting with Jesus
+
+should all locate the correct day.
+
+=====================================================
+
+PROGRESS
+
+Track:
+
+Current Day
+
+Date Completed
+
+Completion History
+
+Allow statistics such as:
+
+Completed 6 consecutive days
+
+without introducing streak pressure into the member experience.
+
+=====================================================
+
+TESTS
+
+Verify:
+
+✓ 30 days imported
+
+✓ Scripture loads dynamically
+
+✓ User translation respected
+
+✓ One day unlocks per calendar day
+
+✓ Unlimited rereading
+
+✓ Continue returns to Walk
+
+✓ Walk card updates correctly
+
+✓ Content Studio editing works
+
+✓ No duplicate Daily Rhythms
+
+✓ Existing data preserved
+
+✓ No TypeScript errors
+
+✓ No runtime errors
+
+=====================================================
+
+DO NOT
+
+Do not redesign UX.
+
+Do not rename anything.
+
+Do not introduce badges.
+
+Do not introduce XP.
+
+Do not introduce streaks.
+
+Do not add celebrations.
+
+Do not change wording.
+
+Simply deploy the approved content.
+
+=====================================================
+
+FINAL REPORT
+
+Provide:
+
+1. Database changes
+
+2. Content imported
+
+3. Files modified
+
+4. Admin updates
+
+5. Content Studio updates
+
+6. Walk screen updates
+
+7. Tests completed
+
+8. Remaining work before Day 31
