@@ -197,7 +197,7 @@ export const DEMO_CHURCH_SETTINGS: ChurchSettings = {
 };
 
 export const DEMO_RECENT_ACTIVITY: RecentActivity[] = [
-  { id: 'a1', text: 'Michael completed Day 4 of 15 Minutes with Jesus', time: '2h ago', type: 'progress' },
+  { id: 'a1', text: 'Michael completed Day 4 of 10 Minutes with Jesus', time: '2h ago', type: 'progress' },
   { id: 'a2', text: 'New prayer request received from Friend', time: '3h ago', type: 'prayer' },
   { id: 'a3', text: "Sarah started God's Kindness Restores the Broken", time: '1d ago', type: 'progress' },
   {

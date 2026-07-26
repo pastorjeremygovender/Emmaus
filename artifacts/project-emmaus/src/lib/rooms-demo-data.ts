@@ -144,7 +144,7 @@ export const DEMO_ROOM_NOTIFICATIONS: RoomNotification[] = [
     roomId: 'room-demo-1',
     journeyId: '15-minutes-with-jesus',
     fromUserId: 'demo-user-1',
-    message: 'Friend has invited Govender Family to begin: 15 Minutes with Jesus',
+    message: 'Friend has invited Govender Family to begin: 10 Minutes with Jesus',
     read: false,
     createdAt: '2026-07-15T07:00:00.000Z',
   },

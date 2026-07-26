@@ -7,12 +7,12 @@
  * Flow:
  *   Step 1: Welcome, {First Name}
  *           What would you like to begin with?
- *           ☑ 15 Minutes with Jesus (pre-selected)
+ *           ☑ 10 Minutes with Jesus (pre-selected)
  *           [Explore Journeys] button (optional — opens /journeys/explore)
  *           [Continue] button → Step 2
  *
  *   Step 2: Welcome. Let's begin.
- *           [Begin 15 Minutes with Jesus] → /walk
+ *           [Begin 10 Minutes with Jesus] → /walk
  *
  * On complete: sets emmaus_onboarded = 'true' in localStorage.
  */
@@ -34,7 +34,9 @@ export default function Onboarding() {
 
   const firstName = user?.preferredName?.split(' ')[0] ?? 'Friend';
 
-  const coreJourney = journeys.find(j => j.journeyType === 'core' && j.status === 'Published');
+  const coreJourney = journeys.find(
+    j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
+  );
 
   function handleContinue() {
     setStep(2);
@@ -77,13 +79,13 @@ export default function Onboarding() {
               </p>
             </div>
 
-            {/* 15 Minutes selection — always pre-checked */}
+            {/* 10 Minutes selection — always pre-checked */}
             <div className="rounded-2xl border border-primary/25 bg-primary/5 p-5 space-y-2.5">
               <div className="flex items-start gap-3">
                 <CheckSquare size={20} className="text-primary shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[16px] font-medium text-foreground">
-                    15 Minutes with Jesus
+                    10 Minutes with Jesus
                   </p>
                   <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
                     A simple daily rhythm of Scripture, reflection and prayer.
@@ -137,7 +139,7 @@ export default function Onboarding() {
               className="w-full h-13 rounded-xl text-[17px] font-medium py-3.5"
               onClick={handleBegin}
             >
-              Begin 15 Minutes with Jesus
+              Begin 10 Minutes with Jesus
             </Button>
           </motion.div>
         )}

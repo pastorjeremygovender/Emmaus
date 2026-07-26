@@ -282,14 +282,14 @@ export default function JourneyEditor({ journeyId, freshlyGenerated, onBack, onE
                 Exempt from overload rules
               </label>
             )}
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer" title="When ON (default), members must complete today's 15 Minutes with Jesus before accessing this journey. Turn OFF for pastoral journeys like Crisis Care or Grief Support.">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer" title="When ON (default), members must complete today's 10 Minutes with Jesus before accessing this journey. Turn OFF for pastoral journeys like Crisis Care or Grief Support.">
               <input
                 type="checkbox"
                 checked={(form as any).requiresDailyGate !== false}
                 onChange={e => patch('requiresDailyGate' as any, e.target.checked)}
                 className="rounded"
               />
-              Requires daily 15 Min gate
+              Requires daily 10 Min gate
             </label>
           </div>
 

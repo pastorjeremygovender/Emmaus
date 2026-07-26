@@ -2,7 +2,7 @@
  * Next-step engine — deterministic, priority-ordered recommendation.
  *
  * Priority order (spec §NEXT-STEP ENGINE):
- *   1. Today's unfinished 15 Minutes with Jesus (core journey)
+ *   1. Today's unfinished 10 Minutes with Jesus (daily rhythm)
  *   2. This Week's Sermon companion if active and not completed today
  *   3. Next unfinished step in the user's most recently continued active growth Journey
  *   4. A newly assigned church-wide Journey (churchWide = true)
@@ -29,7 +29,7 @@ export interface NextStep {
   type: NextStepType;
   journey: Journey;
   day: number;
-  label: string;         // e.g. "15 Minutes with Jesus"
+  label: string;         // e.g. "10 Minutes with Jesus"
   title: string;         // step or journey title
   description: string;   // warm supporting copy
   buttonText: string;    // e.g. "Begin", "Continue"
@@ -69,7 +69,7 @@ export function computeNextStep(
 ): NextStepEngineResult {
   const publishedJourneys = journeys.filter(j => j.status === 'Published');
 
-  // ── Priority 1: Daily Rhythm (15 Minutes with Jesus) ─────────────────────
+  // ── Priority 1: Daily Rhythm (10 Minutes with Jesus) ─────────────────────
   // Accepts both 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
   const coreJourney = publishedJourneys.find(
     j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
@@ -85,11 +85,11 @@ export function computeNextStep(
           type: 'core',
           journey: coreJourney,
           day: 1,
-          label: '15 Minutes with Jesus',
+          label: '10 Minutes with Jesus',
           title: 'Day 1 — Begin your walk',
           description: 'Start your daily time with Jesus. A simple, steady rhythm.',
           buttonText: 'Begin',
-          estimatedTime: '15 min',
+          estimatedTime: '10 min',
           progressPercent: 0,
           completedToday: false,
         },
@@ -103,13 +103,13 @@ export function computeNextStep(
           type: 'core',
           journey: coreJourney,
           day,
-          label: '15 Minutes with Jesus',
+          label: '10 Minutes with Jesus',
           title: `Day ${day}`,
           description: prog.completedDays.length > 0
             ? "Continue where you left off. Today's time with Jesus is ready."
             : 'Your daily time with Jesus is ready.',
           buttonText: prog.completedDays.length > 0 ? 'Continue' : 'Begin',
-          estimatedTime: coreJourney.estimatedDuration ?? '15 min',
+          estimatedTime: coreJourney.estimatedDuration ?? '10 min',
           progressPercent: pct(prog, coreJourney),
           completedToday: false,
         },

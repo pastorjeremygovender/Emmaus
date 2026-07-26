@@ -7,7 +7,7 @@
  *   3. Saved Journeys          (inline list)
  *   4. Completed Journeys      (inline list)
  *
- * Daily gate: before today's 15 Minutes with Jesus is complete, the
+ * Daily gate: before today's 10 Minutes with Jesus is complete, the
  * Continue button on gated journeys redirects to the core journey instead.
  * Gate clears immediately after completion — no reload required.
  */
@@ -242,7 +242,7 @@ function ActiveJourneyCard({ journey, prog, onContinue, onGate, onPause, onDetai
               variant="outline"
               onClick={onGate}
             >
-              Complete today's 15 Minutes with Jesus
+              Complete today's 10 Minutes with Jesus
             </Button>
             <p className="text-[12px] text-muted-foreground text-center leading-snug">
               Begin with today's time with Jesus. Your Journey will be ready afterwards.

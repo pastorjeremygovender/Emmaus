@@ -14,14 +14,14 @@ import { eq, and } from "drizzle-orm";
 const JOURNEYS = [
   {
     id: "15-minutes-with-jesus",
-    title: "15 Minutes with Jesus",
+    title: "10 Minutes with Jesus",
     subtitle: "A daily encounter with the living God",
-    description: "A short, guided journey to help you connect with Jesus in the middle of your everyday life.",
+    description: "A simple daily rhythm to help you spend time with Jesus every day.",
     journeyType: "daily-rhythm",
     category: "Devotional",
     difficulty: "Beginner",
-    estimatedDuration: "15 min/day",
-    tags: ["daily", "jesus", "beginner", "daily-rhythm"],
+    estimatedDuration: "10 min/day",
+    tags: ["daily", "jesus", "beginner", "daily-rhythm", "15-minutes-with-jesus"],
     durationDays: 7,
     status: "Published",
     xpReward: 70,
@@ -56,7 +56,7 @@ type StepData = {
 };
 
 const STEPS: StepData[] = [
-  // ── 15 Minutes with Jesus ──────────────────────────────────────────────────
+  // ── 10 Minutes with Jesus ──────────────────────────────────────────────────
   {
     journeyId: "15-minutes-with-jesus", day: 1, title: "Jesus Meets You Here",
     mentorIntro: "Wherever you are right now — in the middle of a busy week or a quiet moment — Jesus is already here.",

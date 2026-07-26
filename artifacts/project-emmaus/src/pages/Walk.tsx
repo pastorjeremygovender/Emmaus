@@ -119,7 +119,7 @@ function WeeklyProgress({
   );
 }
 
-// ─── 15 Minutes with Jesus card ───────────────────────────────────────────────
+// ─── 10 Minutes with Jesus card ───────────────────────────────────────────────
 // This is the central daily rhythm card and must be the most prominent element.
 // For daily-rhythm journeys: never shows "of X" total or any "complete" language.
 function FifteenMinutesCard({
@@ -182,7 +182,7 @@ function FifteenMinutesCard({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 flex-1 min-w-0">
           <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-            15 Minutes with Jesus
+            10 Minutes with Jesus
           </p>
           <p className="text-[22px] font-medium text-foreground leading-snug">
             {titleLine}
@@ -407,7 +407,7 @@ export default function Walk() {
 
   // ── Content resolution ───────────────────────────────────────────────────────
 
-  // 1. Daily Rhythm — 15 Minutes with Jesus
+  // 1. Daily Rhythm — 10 Minutes with Jesus
   // Accepts 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
   const coreJourney    = publishedJourneys.find(
     j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
@@ -472,7 +472,7 @@ export default function Walk() {
           </motion.h1>
         </header>
 
-        {/* ── 1. 15 Minutes with Jesus ───────────────────────────────────────── */}
+        {/* ── 1. 10 Minutes with Jesus ───────────────────────────────────────── */}
         {coreJourney ? (
           <motion.section
             initial={{ opacity: 0, y: 6 }}

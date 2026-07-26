@@ -38,7 +38,7 @@ import { aiBlockAction } from '@/lib/journeys-api';
 interface Props {
   blocks: Block[];
   onChange: (blocks: Block[]) => void;
-  journeyContext?: string; // e.g. "15 Minutes with Jesus — John 15 devotional"
+  journeyContext?: string; // e.g. "10 Minutes with Jesus — John 15 devotional"
 }
 
 interface SlashState {

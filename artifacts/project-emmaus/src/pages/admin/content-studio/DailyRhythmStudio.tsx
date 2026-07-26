@@ -191,7 +191,7 @@ export default function DailyRhythmStudio({ onEdit }: Props) {
               {query ? 'No tracks match that search.' : 'No Daily Rhythm tracks yet.'}
             </p>
             <p className="text-xs text-gray-400 mt-1 max-w-[280px]">
-              {!query && 'Create your first track — "15 Minutes with Jesus" is the foundation.'}
+              {!query && 'Create your first track — "10 Minutes with Jesus" is the foundation.'}
             </p>
             {!query && (
               <button

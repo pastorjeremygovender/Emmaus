@@ -78,7 +78,7 @@ export default function JourneyDay() {
             </div>
             <h2 className="text-[22px] font-serif font-medium">You're ahead of the rhythm.</h2>
             <p className="text-[15px] text-muted-foreground leading-relaxed">
-              Today's 15 Minutes with Jesus will be ready soon. Check back later.
+              Today's 10 Minutes with Jesus will be ready soon. Check back later.
             </p>
             <div className="pt-4">
               <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>

@@ -119,7 +119,7 @@ export default function NewJourneyModal({ onClose, onCreated }: Props) {
                 value={scratchForm.title}
                 onChange={e => patchScratch('title', e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreateScratch()}
-                placeholder="e.g. 15 Minutes with Jesus"
+                placeholder="e.g. 10 Minutes with Jesus"
                 autoFocus
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
               />

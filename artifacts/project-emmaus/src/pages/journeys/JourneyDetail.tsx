@@ -280,7 +280,7 @@ export default function JourneyDetail() {
   }
 
   const primaryLabel =
-    (isGated && !isCompleted) ? 'Complete today\'s 15 Minutes with Jesus' :
+    (isGated && !isCompleted) ? 'Complete today\'s 10 Minutes with Jesus' :
     isActive                   ? 'Continue'       :
     isPaused                   ? 'Resume'         :
     isCompleted                ? 'Review Journey' :

@@ -130,7 +130,7 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
 Available resources for recommendations:
   Journeys:
     - Walk Through John (21 chapters) → /bible/journey/walk-through-john
-    - 15 Minutes With Jesus (core journey) → /journey/15-minutes-with-jesus/day/1
+    - 10 Minutes With Jesus (daily rhythm) → /journey/15-minutes-with-jesus/day/1
   Sermons: Verified sermon retrieval runs automatically. Do not fabricate sermon recommendations in metadata.
   Emmaus Rooms: Community groups for shared journeys → /rooms
   Pastoral contact: Recommend connecting with a pastor for personal, marriage, bereavement, or safeguarding needs.

@@ -34,9 +34,9 @@ export const DEMO_SUPER_ADMIN = {
 export const DEMO_JOURNEYS = [
   {
     id: "15-minutes-with-jesus",
-    title: "15 Minutes with Jesus",
-    description: "A short, guided journey to help you connect with Jesus in the middle of your everyday life.",
-    journeyType: "core",
+    title: "10 Minutes with Jesus",
+    description: "A simple daily rhythm to help you spend time with Jesus every day.",
+    journeyType: "daily-rhythm",
     durationDays: 7,
     status: "Published",
   },
@@ -57,7 +57,7 @@ export const DEMO_JOURNEYS = [
 ];
 
 export const DEMO_STEPS = [
-  // 15 Minutes with Jesus
+  // 10 Minutes with Jesus
   {
     journeyId: "15-minutes-with-jesus",
     day: 1,

@@ -462,7 +462,7 @@ function Screen1({ state, patch, errors }: {
           type="text"
           value={state.title}
           onChange={e => patch('title', e.target.value)}
-          placeholder="e.g. 15 Minutes with Jesus"
+          placeholder="e.g. 10 Minutes with Jesus"
           autoFocus
           className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 ${
             errors.title ? 'border-red-300' : 'border-gray-200'
@@ -635,7 +635,7 @@ function Screen4({ state, patch, collections }: {
         </WizardField>
       )}
 
-      <WizardField label="Require daily 15 Min gate?">
+      <WizardField label="Require daily 10 Min gate?">
         <label className="flex items-center gap-3 cursor-pointer">
           <div
             onClick={() => patch('requiresDailyGate', !state.requiresDailyGate)}
@@ -648,7 +648,7 @@ function Screen4({ state, patch, collections }: {
             }`} />
           </div>
           <span className="text-sm text-gray-600">
-            Members must complete 15 Min reading before unlocking each step
+            Members must complete 10 Minutes with Jesus before unlocking each step
           </span>
         </label>
       </WizardField>

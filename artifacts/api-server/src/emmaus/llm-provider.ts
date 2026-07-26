@@ -194,7 +194,7 @@ The road to Emmaus is not a triumphant story. It is a story about confusion, los
   "recommendations": [
     {
       "type": "journey",
-      "title": "15 Minutes With Jesus",
+      "title": "10 Minutes With Jesus",
       "description": "A daily journey that builds a quiet rhythm with God — one step at a time.",
       "path": "/journey/15-minutes-with-jesus/day/1"
     }
@@ -318,7 +318,7 @@ Today — read Psalm 42 slowly. When you reach a verse that resonates, stop and 
   "recommendations": [
     {
       "type": "journey",
-      "title": "15 Minutes With Jesus",
+      "title": "10 Minutes With Jesus",
       "description": "A daily journey that builds a quiet rhythm with God — even when it is hard.",
       "path": "/journey/15-minutes-with-jesus/day/1"
     },
@@ -366,7 +366,7 @@ Today — choose a time. Set a small alarm. When it goes off, read Psalm 23 slow
   "recommendations": [
     {
       "type": "journey",
-      "title": "15 Minutes With Jesus",
+      "title": "10 Minutes With Jesus",
       "description": "A daily journey that builds a prayer and reflection rhythm one step at a time.",
       "path": "/journey/15-minutes-with-jesus/day/1"
     }
@@ -410,7 +410,7 @@ Today — write the name of the person you are thinking of on a piece of paper. 
   "recommendations": [
     {
       "type": "journey",
-      "title": "15 Minutes With Jesus",
+      "title": "10 Minutes With Jesus",
       "description": "A daily journey that builds grace into your rhythm with God.",
       "path": "/journey/15-minutes-with-jesus/day/1"
     },
@@ -434,7 +434,7 @@ Today — write the name of the person you are thinking of on a piece of paper. 
 
 If you want to start with Scripture — and that is always a good place to begin — Walk Through John is designed for exactly that. It takes you through all 21 chapters of John's Gospel, one chapter at a time. John wrote his Gospel with this specific aim: "that you may believe that Jesus is the Messiah, the Son of God, and that by believing you may have life in his name." It is the best introduction to Jesus there is.
 
-If you are looking for a more structured daily rhythm, 15 Minutes With Jesus builds a simple quiet-time practice over several weeks. It combines Scripture, reflection, and prayer — all in a format that fits into a normal morning.
+If you are looking for a more structured daily rhythm, 10 Minutes With Jesus builds a simple quiet-time practice over several weeks. It combines Scripture, reflection, and prayer — all in a format that fits into a normal morning.
 
 If you would rather start in community — with other people who are on the same path — Emmaus Rooms are small groups who share a journey together. Some people find that accountability and conversation make the journey stick in a way solo reading never quite does.
 
@@ -462,7 +462,7 @@ All three are valid starting points. The question is: what has been missing for 
     },
     {
       "type": "journey",
-      "title": "15 Minutes With Jesus",
+      "title": "10 Minutes With Jesus",
       "description": "A structured daily rhythm — Scripture, reflection, and prayer.",
       "path": "/journey/15-minutes-with-jesus/day/1"
     },
@@ -475,7 +475,7 @@ All three are valid starting points. The question is: what has been missing for 
   ],
   "followUpPrompts": [
     "Tell me more about Walk Through John.",
-    "What is the 15 Minutes With Jesus journey?",
+    "What is the 10 Minutes With Jesus journey?",
     "How do Emmaus Rooms work?"
   ],
   "handoffType": null

@@ -10,8 +10,10 @@ The seed script (`artifacts/api-server/src/scripts/seed-journeys.ts`) inserts th
 
 | ID | Title | Days | Status |
 |---|---|---|---|
-| `15-minutes-with-jesus` | 15 Minutes with Jesus | 7 | Published |
+| `15-minutes-with-jesus` | 10 Minutes with Jesus | 7 | Published |
 | `gods-kindness-restores-the-broken` | God's Kindness Restores the Broken | 5 | Published |
+
+> **Note:** The journey ID `15-minutes-with-jesus` is intentionally preserved for backward compatibility — member progress records, room invitations, and deep links all use this ID. The display title is "10 Minutes with Jesus".
 
 The seed script is idempotent — running it twice is safe.
 

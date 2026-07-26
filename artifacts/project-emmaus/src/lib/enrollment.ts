@@ -6,8 +6,8 @@
  * so state is consistent across the app without a new context.
  *
  * Exempt journey types do NOT count toward the five-active-Journey limit:
- *   - 'core'      (15 Minutes with Jesus)
- *   - 'companion' (This Week's Sermon companion)
+ *   - 'daily-rhythm' / 'core' (10 Minutes with Jesus)
+ *   - 'companion'             (This Week's Sermon companion)
  *   - 'devotional' (Daily Devotional)
  *   - journey.overloadExempt === true (admin-marked)
  */

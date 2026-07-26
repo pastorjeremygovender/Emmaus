@@ -50,7 +50,7 @@ export default function NewDailyRhythmModal({ onClose, onCreated }: Props) {
         status: 'Draft',
         durationDays: 0,
         tags: ['daily-rhythm', trackType],
-        estimatedDuration: '15 min/day',
+        estimatedDuration: '10 min/day',
       } as any);
       onCreated(journey.id);
     } catch (err: any) {
@@ -87,7 +87,7 @@ export default function NewDailyRhythmModal({ onClose, onCreated }: Props) {
               type="text"
               value={title}
               onChange={e => { setTitle(e.target.value); setError(''); }}
-              placeholder="e.g. 15 Minutes with Jesus"
+              placeholder="e.g. 10 Minutes with Jesus"
               className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
             />
           </div>

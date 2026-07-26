@@ -1,0 +1,341 @@
+You are continuing work on the existing Project Emmaus application.
+
+This is not a new project.
+
+Do not rebuild the application.
+
+Inspect the existing Daily Rhythm architecture, Walk screen, Content Studio, AI Journey Builder, Journey templates, notifications, documentation, database models and member experience before making changes.
+
+This sprint is a refinement sprint.
+
+Preserve all existing functionality.
+
+Do not begin another sprint after completing this one.
+
+=====================================================
+SPRINT NAME
+
+Rename "15 Minutes with Jesus" to "10 Minutes with Jesus"
+
+=====================================================
+
+VISION
+
+Emmaus is built around one permanent Daily Rhythm.
+
+The name should communicate that spending time with Jesus is both achievable and life-giving.
+
+The goal is not to limit people to ten minutes.
+
+The goal is to remove barriers to beginning.
+
+Members are always free to continue for as long as they wish.
+
+=====================================================
+
+PRIMARY CHANGE
+
+Globally replace:
+
+15 Minutes with Jesus
+
+with:
+
+10 Minutes with Jesus
+
+wherever it appears throughout the application.
+
+=====================================================
+
+PURPOSE
+
+The official description becomes:
+
+10 Minutes with Jesus
+
+A simple daily rhythm to help you spend time with Jesus every day.
+
+=====================================================
+
+UPDATE ALL USER-FACING TEXT
+
+Replace the name throughout:
+
+- Walk screen
+- Splash flow
+- Daily Rhythm screens
+- Journey cards
+- Continue cards
+- Daily reminders
+- Notifications
+- Empty states
+- Progress summaries
+- Welcome screens
+- AI Journey Builder
+- Content Studio
+- Templates
+- Documentation
+- Default generated content
+- Demo content
+- Search
+- Help text
+
+Preserve translations where applicable.
+
+=====================================================
+
+DAILY RHYTHM
+
+10 Minutes with Jesus remains:
+
+- the first thing every member experiences every day
+- the permanent Daily Rhythm
+- separate from normal Journeys
+- never "completed"
+- always positioned above every other activity
+
+=====================================================
+
+WALK SCREEN
+
+Every morning the flow remains:
+
+Splash
+
+↓
+
+10 Minutes with Jesus
+
+↓
+
+Silence
+
+↓
+
+Walk
+
+The Walk screen should never appear before the Daily Rhythm.
+
+=====================================================
+
+CONTENT STUDIO
+
+Rename:
+
+15 Minutes with Jesus Template
+
+↓
+
+10 Minutes with Jesus Template
+
+Update:
+
+- AI Journey Builder
+- Daily Rhythm builder
+- Template picker
+- Draft labels
+- Preview titles
+- Default content
+
+=====================================================
+
+AI JOURNEY BUILDER
+
+Where example content currently uses:
+
+15 Minutes with Jesus
+
+replace with:
+
+10 Minutes with Jesus
+
+Update the acceptance test accordingly.
+
+=====================================================
+
+NOTIFICATIONS
+
+Replace wording such as:
+
+Your 15 Minutes with Jesus is ready.
+
+with gentle wording like:
+
+Good morning.
+
+Your 10 Minutes with Jesus is ready.
+
+or
+
+Let's spend a few minutes with Jesus together.
+
+Never:
+
+You missed yesterday.
+
+Your streak is broken.
+
+You're behind.
+
+=====================================================
+
+CONTENT STYLE
+
+Where content currently says:
+
+Take ten quiet minutes...
+
+replace with:
+
+Take a few quiet moments with Jesus.
+
+The Daily Rhythm should never feel timed.
+
+The title is an invitation rather than a stopwatch.
+
+=====================================================
+
+DOCUMENTATION
+
+Update all documentation so that the official language becomes:
+
+10 Minutes with Jesus
+
+The Daily Rhythm of Emmaus.
+
+Every other Journey supports this daily encounter with Jesus.
+
+=====================================================
+
+SEARCH
+
+Searching either:
+
+15 Minutes with Jesus
+
+or
+
+10 Minutes with Jesus
+
+should return the Daily Rhythm.
+
+Preserve backwards compatibility.
+
+=====================================================
+
+DATABASE
+
+If the name is stored as seed data or defaults:
+
+Update it safely.
+
+Do not lose member progress.
+
+Do not reset Daily Rhythm history.
+
+Do not create duplicate records.
+
+=====================================================
+
+MIGRATION
+
+If migration is required:
+
+Perform it safely.
+
+Preserve:
+
+- progress
+- schedules
+- notifications
+- references
+- analytics
+- content IDs
+
+=====================================================
+
+TESTS
+
+Verify:
+
+✓ Walk displays 10 Minutes with Jesus.
+
+✓ Splash displays 10 Minutes with Jesus.
+
+✓ Daily Rhythm still opens first.
+
+✓ Content Studio updated.
+
+✓ Templates updated.
+
+✓ Notifications updated.
+
+✓ AI Journey Builder updated.
+
+✓ Search supports both names.
+
+✓ Existing member progress preserved.
+
+✓ Existing Daily Rhythm works normally.
+
+✓ No duplicate Daily Rhythm created.
+
+✓ No TypeScript errors.
+
+✓ No lint errors.
+
+✓ No runtime errors.
+
+=====================================================
+
+DEFINITION OF DONE
+
+Complete only when:
+
+Every member-facing reference uses:
+
+10 Minutes with Jesus
+
+Documentation has been updated.
+
+Content Studio has been updated.
+
+Templates have been updated.
+
+Notifications have been updated.
+
+Daily Rhythm behaviour remains unchanged.
+
+Existing progress is preserved.
+
+Backwards compatibility is maintained.
+
+No build errors remain.
+
+=====================================================
+
+FINAL REVIEW
+
+Provide:
+
+1. Files updated
+
+2. Components updated
+
+3. Database changes
+
+4. Migration details
+
+5. Search compatibility
+
+6. Notifications updated
+
+7. Documentation updated
+
+8. Tests completed
+
+9. Known limitations
+
+Do not begin another sprint.
+
+Stop after presenting the completed rename for review.
