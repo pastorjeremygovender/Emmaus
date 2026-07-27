@@ -100,7 +100,7 @@ export default function JourneyDay() {
             </p>
             <div className="pt-4">
               <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
-                Back to Walk
+                Back to Today's Steps
               </Button>
             </div>
           </div>
@@ -277,7 +277,7 @@ export default function JourneyDay() {
                 className="rounded-xl px-8 w-full text-muted-foreground"
                 onClick={() => setLocation('/walk')}
               >
-                Back to Walk
+                Back to Today's Steps
               </Button>
             </div>
           </motion.div>
@@ -304,7 +304,7 @@ export default function JourneyDay() {
           )}
           <div className="pt-6">
             <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
-              Back to Walk
+              Back to Today's Steps
             </Button>
           </div>
         </motion.div>
@@ -320,7 +320,7 @@ export default function JourneyDay() {
           <button
             onClick={() => setLocation('/walk')}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back to Walk"
+            aria-label="Back to Today's Steps"
           >
             <ArrowLeft size={22} />
           </button>
@@ -359,7 +359,7 @@ export default function JourneyDay() {
                 className="w-full h-14 text-[17px] rounded-2xl"
                 onClick={() => setLocation('/walk')}
               >
-                Back to Walk
+                Back to Today's Steps
               </Button>
             ) : (
               <Button

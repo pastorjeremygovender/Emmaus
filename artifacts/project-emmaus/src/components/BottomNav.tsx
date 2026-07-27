@@ -3,19 +3,19 @@ import { Footprints, BookOpen, Compass, User } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
 
 // Navigation order (locked):
-// 1. Walk        /walk
-// 2. Journeys    /journeys
-// 3. Bible       /bible
-// 4. Personal    /personal
+// 1. Today's Steps  /walk
+// 2. Next Steps     /journeys
+// 3. My Bible       /bible
+// 4. My Journey     /personal
 
 export function BottomNav() {
   const [location] = useLocation();
 
   const navItems = [
-    { path: '/walk',      label: 'Walk',      icon: Footprints },
-    { path: '/journeys',  label: 'Journeys',  icon: Compass },
-    { path: '/bible',     label: 'Bible',     icon: BookOpen },
-    { path: '/personal',  label: 'Personal',  icon: User },
+    { path: '/walk',      label: "Today's Steps", icon: Footprints },
+    { path: '/journeys',  label: 'Next Steps',    icon: Compass },
+    { path: '/bible',     label: 'My Bible',      icon: BookOpen },
+    { path: '/personal',  label: 'My Journey',    icon: User },
   ];
 
   function isActive(path: string): boolean {

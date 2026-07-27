@@ -58,7 +58,7 @@ export default function Admin() {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
         <p className="text-muted-foreground">You do not have permission to view this page.</p>
-        <Button onClick={() => setLocation('/walk')}>Back to Walk</Button>
+        <Button onClick={() => setLocation('/walk')}>Back to Today's Steps</Button>
       </div>
     );
   }

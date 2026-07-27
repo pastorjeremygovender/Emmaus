@@ -222,7 +222,7 @@ export default function JourneyDetail() {
       <div className="min-h-[100dvh] bg-background pb-24 flex items-center justify-center">
         <div className="text-center space-y-3 px-5">
           <p className="text-[16px] text-foreground font-medium">This Journey isn't available yet.</p>
-          <Button variant="outline" onClick={() => setLocation('/journeys')}>Back to Journeys</Button>
+          <Button variant="outline" onClick={() => setLocation('/journeys')}>Back to Next Steps</Button>
         </div>
         <BottomNav />
       </div>
@@ -298,7 +298,7 @@ export default function JourneyDetail() {
         <button
           onClick={() => setLocation('/journeys')}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
-          aria-label="Back to Journeys"
+          aria-label="Back to Next Steps"
         >
           <ChevronLeft size={17} />
           Journeys

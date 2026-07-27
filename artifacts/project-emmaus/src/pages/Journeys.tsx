@@ -446,7 +446,7 @@ export default function Journeys() {
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <header className="space-y-1">
-          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">Journeys</h1>
+          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">Next Steps</h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">Grow through guided discipleship.</p>
           {activeCount > 0 && (
             <p className="text-[12px] text-muted-foreground pt-0.5">

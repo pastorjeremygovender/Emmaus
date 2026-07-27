@@ -45,11 +45,11 @@ function formatDate(iso: string): string {
 }
 
 const ENTRY_POINT_LABELS: Record<string, string> = {
-  bible: 'Bible',
-  walk: 'Walk',
-  journeys: 'Journeys',
+  bible: 'My Bible',
+  walk: "Today's Steps",
+  journeys: 'Next Steps',
   sermons: 'Sermons',
-  personal: 'Personal',
+  personal: 'My Journey',
   standalone: 'Ask Emmaus',
 };
 

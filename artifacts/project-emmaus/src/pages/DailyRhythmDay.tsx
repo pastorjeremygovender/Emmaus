@@ -5,7 +5,7 @@
  *
  * Modes:
  *   Live    — day === member's current day; shows Continue button; marks complete on tap.
- *   Replay  — day <  member's current day; read-only; shows Back to Walk; never writes progress.
+ *   Replay  — day <  member's current day; read-only; shows Back to Today's Steps; never writes progress.
  *
  * Access enforcement (data-layer):
  *   day > currentDay  →  blocked; renders ahead-of-rhythm screen.
@@ -56,7 +56,7 @@ function AheadOfRhythm({
         </p>
         <div className="pt-4 flex flex-col gap-3">
           <Button variant="outline" className="rounded-xl px-8" onClick={onBack}>
-            Back to Walk
+            Back to Today's Steps
           </Button>
           {hasPreviousDays && (
             <button
@@ -171,7 +171,7 @@ export default function DailyRhythmDay() {
           <button
             onClick={goBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back to Walk"
+            aria-label="Back to Today's Steps"
           >
             <ArrowLeft size={22} />
           </button>
@@ -208,10 +208,10 @@ export default function DailyRhythmDay() {
               className="w-full h-14 text-[17px] rounded-2xl"
               onClick={goBack}
             >
-              Back to Walk
+              Back to Today's Steps
             </Button>
           ) : (
-            /* Live: marks the day complete and returns to Walk */
+            /* Live: marks the day complete and returns to Today's Steps */
             <Button
               size="lg"
               className="w-full h-14 text-[17px] rounded-2xl"

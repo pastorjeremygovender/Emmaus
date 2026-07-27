@@ -21,7 +21,7 @@ export default function Bible() {
 
         {/* Header */}
         <header className="space-y-1">
-          <h1 className="text-[30px] font-sans font-medium tracking-tight">Bible</h1>
+          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
           <p className="text-[13px] text-muted-foreground">
             {currentTranslation.name} · {currentTranslation.copyright}
           </p>
