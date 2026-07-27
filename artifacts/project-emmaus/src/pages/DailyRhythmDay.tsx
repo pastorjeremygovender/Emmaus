@@ -169,7 +169,7 @@ export default function DailyRhythmDay() {
   return (
     <div className="min-h-[100dvh] bg-background pb-32">
 
-      {/* Sticky nav bar */}
+      {/* Sticky nav bar — back arrow only; identity shown in reading content below */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
@@ -179,15 +179,8 @@ export default function DailyRhythmDay() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 min-w-0 text-center px-3">
-            <div className="font-medium text-sm text-foreground truncate leading-tight">
-              10 Minutes with Jesus
-            </div>
-            <div className="text-[12px] text-muted-foreground">
-              Day {day}
-            </div>
-          </div>
-          {/* Spacer balances the back arrow */}
+          <div className="flex-1" />
+          {/* Balance spacer */}
           <div className="min-w-[44px]" />
         </div>
       </header>

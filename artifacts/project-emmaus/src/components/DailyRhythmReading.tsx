@@ -2,8 +2,8 @@
  * DailyRhythmReading — single source of truth for the Daily Rhythm reading layout.
  *
  * Used by:
- *   - JourneyDay.tsx          (member-facing view)
- *   - DailyRhythmDayEditor.tsx (Content Studio preview)
+ *   - DailyRhythmDay.tsx          (member-facing view)
+ *   - DailyRhythmDayEditor.tsx    (Content Studio preview)
  *
  * Any typography, spacing, or alignment change made here automatically
  * applies to both surfaces. The only differences allowed between the two
@@ -12,6 +12,8 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { useBible } from '@/contexts/BibleContext';
+import { useTranslations } from '@/hooks/useTranslations';
 
 // ─── Greeting personalization ─────────────────────────────────────────────────
 //
@@ -83,12 +85,15 @@ export function resolveDisplayName(
 }
 
 // ─── Section heading ──────────────────────────────────────────────────────────
+// Shared understated style across all section labels:
+// Today's Reading, Reflection, Prayer, Your Next Step.
+//
 // Exported so JourneyDay can reuse it for non-daily-rhythm sections (Sermon Moment,
 // Consider, etc.) and keep a single consistent style across the whole page.
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <h2 className="text-[12px] font-semibold text-muted-foreground">
       {children}
     </h2>
   );
@@ -130,7 +135,7 @@ export interface DailyRhythmReadingProps {
 
   /**
    * The primary call-to-action rendered at the bottom of the reading.
-   *   Member view:  <Button> Continue | Back to Walk </Button>
+   *   Member view:  <Button> Continue | Back to Previous Days </Button>
    *   Preview:      a mocked, non-interactive Continue affordance
    */
   actionButton?: React.ReactNode;
@@ -152,71 +157,110 @@ export function DailyRhythmReading({
   previewMode = false,
   actionButton,
 }: DailyRhythmReadingProps) {
+
+  // Translation name for the Scripture section — resolved from the member's
+  // current Bible selection. Falls back to the abbreviation if the full name
+  // is not yet loaded.
+  const { translationId } = useBible();
+  const { translations } = useTranslations();
+  const translationName =
+    translations.find(t => t.id === translationId)?.name ??
+    translationId.toUpperCase();
+
+  // ── Greeting text split ─────────────────────────────────────────────────────
+  // The first paragraph (personalised salutation) gets slightly stronger weight.
+  // Remaining paragraphs render in normal body style.
+  const greetingFull = mentorIntro
+    ? personalizeGreeting(mentorIntro, memberName)
+    : (memberName ? `Good ${getTimeOfDay()}, ${memberName}.` : `Good ${getTimeOfDay()}.`);
+
+  const firstBreak      = greetingFull.indexOf('\n\n');
+  const greetingLead    = firstBreak === -1 ? greetingFull : greetingFull.slice(0, firstBreak);
+  const greetingBody    = firstBreak === -1 ? '' : greetingFull.slice(firstBreak + 2).trim();
+
   return (
     <div className="px-5 pt-10 max-w-[640px] mx-auto">
 
-      {/* ── Header — centered per typography spec ────────────────────── */}
-      <section className="mb-12 text-center">
-        <p className="text-[28px] font-bold text-foreground leading-tight mb-2">
+      {/* ── Identity header — centered ────────────────────────────────────── */}
+      <section className="mb-10 text-center">
+        <p className="text-[14px] font-medium text-muted-foreground tracking-wide mb-1">
           10 Minutes with Jesus
         </p>
-        <p className="text-[15px] font-medium text-muted-foreground mb-3">
+        <p className="text-[13px] text-muted-foreground mb-4">
           Day {day}
         </p>
-        <h1 className="text-[26px] font-bold text-foreground leading-snug">
+        <h1 className="text-[26px] font-semibold text-foreground leading-snug">
           {title || (previewMode
             ? <span className="text-muted-foreground/40">Title</span>
             : null)}
         </h1>
       </section>
 
-      {/* ── Greeting ─────────────────────────────────────────────────── */}
+      {/* ── Greeting — left-aligned, body weight ─────────────────────────── */}
       {(mentorIntro || previewMode) && (
-        <section className="mb-12">
+        <section className="mb-10">
           {previewMode && (
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Greeting · personalized automatically per member
             </p>
           )}
-          <p className="text-[18px] text-foreground leading-[1.8] whitespace-pre-wrap">
+          {/* Salutation line — slightly stronger weight, still body-scale */}
+          <p className="text-[17px] font-medium text-foreground leading-[1.8]">
             {mentorIntro
-              ? personalizeGreeting(mentorIntro, memberName)
+              ? greetingLead
               : previewMode
                 ? <span className="text-muted-foreground/40">Greeting will appear here…</span>
                 : null}
           </p>
-        </section>
-      )}
-
-      {/* ── Scripture ─────────────────────────────────────────────────── */}
-      {(scripture || previewMode) && (
-        <section className="mb-12">
-          <SectionLabel>Scripture</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-            {scripture || (previewMode
-              ? <span className="text-muted-foreground/40">No scripture reference yet</span>
-              : null)}
-          </p>
-          {previewMode ? (
-            <p className="mt-2 text-[13px] text-muted-foreground">
-              The member's chosen Bible translation will appear here.
+          {/* Remaining paragraphs — normal body weight */}
+          {greetingBody ? (
+            <p className="mt-4 text-[17px] text-foreground leading-[1.8] whitespace-pre-wrap">
+              {greetingBody}
             </p>
-          ) : (scripture && onReadInBible) ? (
-            <button
-              onClick={onReadInBible}
-              className="mt-2 text-[14px] text-primary font-medium hover:underline"
-            >
-              Read in Bible
-            </button>
           ) : null}
         </section>
       )}
 
-      {/* ── Reflection ───────────────────────────────────────────────── */}
+      {/* ── Today's Reading ───────────────────────────────────────────────── */}
+      {(scripture || previewMode) && (
+        <section className="mb-10">
+          <SectionLabel>Today's Reading</SectionLabel>
+
+          {/* Reference */}
+          <p className="mt-3 text-[18px] font-medium text-foreground leading-snug">
+            {scripture || (previewMode
+              ? <span className="text-muted-foreground/40">Scripture reference</span>
+              : null)}
+          </p>
+
+          {/* Translation name */}
+          {previewMode ? (
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Member's selected translation
+            </p>
+          ) : scripture ? (
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              {translationName}
+            </p>
+          ) : null}
+
+          {/* Read in Bible link */}
+          {!previewMode && scripture && onReadInBible && (
+            <button
+              onClick={onReadInBible}
+              className="mt-3 text-[14px] text-primary font-medium hover:underline"
+            >
+              Read in Bible
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* ── Reflection ───────────────────────────────────────────────────── */}
       {(devotional || previewMode) && (
-        <section className="mb-12">
+        <section className="mb-10">
           <SectionLabel>Reflection</SectionLabel>
-          <p className="mt-3 text-[18px] leading-[1.8] text-foreground whitespace-pre-wrap">
+          <p className="mt-3 text-[17px] leading-[1.8] text-foreground whitespace-pre-wrap">
             {devotional || (previewMode
               ? <span className="text-muted-foreground/40">Reflection will appear here…</span>
               : null)}
@@ -224,11 +268,11 @@ export function DailyRhythmReading({
         </section>
       )}
 
-      {/* ── Prayer ───────────────────────────────────────────────────── */}
+      {/* ── Prayer ───────────────────────────────────────────────────────── */}
       {(prayerPrompt || previewMode) && (
-        <section className="mb-12">
+        <section className="mb-10">
           <SectionLabel>Prayer</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8] whitespace-pre-wrap">
+          <p className="mt-3 text-[17px] text-foreground leading-[1.8] whitespace-pre-wrap">
             {prayerPrompt || (previewMode
               ? <span className="text-muted-foreground/40">Prayer will appear here…</span>
               : null)}
@@ -236,11 +280,11 @@ export function DailyRhythmReading({
         </section>
       )}
 
-      {/* ── Your Next Step ───────────────────────────────────────────── */}
+      {/* ── Your Next Step ───────────────────────────────────────────────── */}
       {(actionStep || previewMode) && (
-        <section className="mb-12">
+        <section className="mb-10">
           <SectionLabel>Your Next Step</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8] whitespace-pre-wrap">
+          <p className="mt-3 text-[17px] text-foreground leading-[1.8] whitespace-pre-wrap">
             {actionStep || (previewMode
               ? <span className="text-muted-foreground/40">Next step will appear here…</span>
               : null)}
@@ -248,7 +292,7 @@ export function DailyRhythmReading({
         </section>
       )}
 
-      {/* ── Closing ──────────────────────────────────────────────────── */}
+      {/* ── Closing ──────────────────────────────────────────────────────── */}
       {closingText && (
         <section className="mb-8">
           <p className="text-[16px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
@@ -257,7 +301,7 @@ export function DailyRhythmReading({
         </section>
       )}
 
-      {/* ── Action button slot ───────────────────────────────────────── */}
+      {/* ── Action button slot ───────────────────────────────────────────── */}
       <div className="pt-2 pb-8">
         {actionButton}
       </div>

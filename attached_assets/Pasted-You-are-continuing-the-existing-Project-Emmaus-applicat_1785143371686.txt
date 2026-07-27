@@ -1,0 +1,266 @@
+You are continuing the existing Project Emmaus application.
+
+The Daily Rhythm content, routing, progress rules, replay mode, typography system and shared renderer are already working.
+
+Do not redesign the experience.
+
+Do not change content.
+
+Do not change progress logic.
+
+Do not add features.
+
+This is a focused layout refinement for the member-facing 10 Minutes with Jesus reader and its Content Studio preview.
+
+=====================================================
+OBJECTIVE
+
+Refine the reading layout so it feels calm, continuous and uncluttered.
+
+The interface should disappear behind the experience.
+
+=====================================================
+REMOVE DUPLICATE HEADER
+
+The page currently displays the Daily Rhythm identity twice:
+
+- a top header showing “10 Minutes with Jesus” and “Day 1”
+- the main reading content showing the same information again
+
+Remove the duplication.
+
+Keep the top app/header area minimal:
+
+- Back arrow only, where applicable
+- No repeated “10 Minutes with Jesus”
+- No repeated Day number
+
+The reading content itself should display one clear hierarchy:
+
+10 Minutes with Jesus
+
+Day X
+
+Day Title
+
+Example:
+
+10 Minutes with Jesus
+
+Day 1
+
+Come and See
+
+=====================================================
+GREETING
+
+The personalized greeting currently has too much visual weight.
+
+Render the greeting using the same font family and basic size as the body text.
+
+It may use a slightly stronger font weight, but it must not look like a page heading.
+
+Example:
+
+Good morning, Jeremy.
+
+The remaining greeting paragraphs should use normal body styling.
+
+Do not center the greeting.
+
+Left-align all greeting content.
+
+=====================================================
+ALIGNMENT
+
+Center only:
+
+- 10 Minutes with Jesus
+- Day number
+- Day title
+
+Left-align:
+
+- Personalized greeting
+- Scripture section
+- Reflection
+- Prayer
+- Your Next Step
+- Closing
+
+Do not center reading paragraphs.
+
+=====================================================
+SCRIPTURE SECTION
+
+Reduce the visual emphasis of the current uppercase “SCRIPTURE” label.
+
+Replace it with:
+
+Today’s Reading
+
+Use the same understated section-heading style used for Prayer and Your Next Step.
+
+Below it display:
+
+John 1:35–39
+
+Then display the user’s chosen Bible translation name in a subtle secondary style.
+
+Example:
+
+Today’s Reading
+
+John 1:35–39
+
+Bible Society of South Africa translation name or the current selected translation
+
+Then render the dynamically retrieved passage.
+
+Do not hard-code a translation name.
+
+Use the member’s actual selected translation.
+
+=====================================================
+CONTINUOUS READING FLOW
+
+The page should feel like one beautifully written reading experience, not a collection of cards or disconnected blocks.
+
+Preserve this order:
+
+Greeting
+
+Today’s Reading
+
+Dynamic Scripture
+
+Reflection
+
+Prayer
+
+Your Next Step
+
+Closing
+
+Continue
+
+Use whitespace and typography to separate sections.
+
+Do not add cards, boxes, borders or decorative dividers around each section.
+
+=====================================================
+SECTION HEADINGS
+
+Use one shared understated style for:
+
+Today’s Reading
+
+Reflection
+
+Prayer
+
+Your Next Step
+
+Requirements:
+
+- Same font family
+- Small size
+- Semibold
+- Consistent spacing
+- No decorative font
+- No mixed serif and sans-serif styles
+
+=====================================================
+BODY TYPOGRAPHY
+
+Use the existing standardized Emmaus font family throughout.
+
+Do not italicize the entire prayer.
+
+Do not use serif or cursive styling.
+
+Bible text, reflection, prayer and next step must all feel part of the same reading system.
+
+Only direct quotations may use restrained emphasis where already authored.
+
+=====================================================
+WIDTH AND SPACING
+
+Maintain a comfortable maximum reading width on desktop.
+
+Keep the page fully responsive on mobile.
+
+Use calm vertical spacing.
+
+Reduce any unusually large gaps between greeting paragraphs while still allowing the content to breathe.
+
+=====================================================
+ASK EMMAUS
+
+Keep Ask Emmaus available.
+
+Do not increase its prominence.
+
+Ensure it does not overlap the reading text or Continue button on mobile.
+
+=====================================================
+SHARED RENDERER
+
+Apply these refinements to the shared Daily Rhythm reader component so both surfaces remain identical:
+
+- Member-facing Daily Rhythm
+- Content Studio preview
+
+Do not duplicate styles.
+
+Future changes must continue to affect both views automatically.
+
+=====================================================
+DO NOT ADD
+
+Do not add:
+
+- badges
+- XP
+- confetti
+- completion celebrations
+- illustrations
+- animations
+- decorative cards
+- progress bars
+
+=====================================================
+TESTS
+
+Verify:
+
+- Duplicate header is removed.
+- The Daily Rhythm identity appears only once.
+- Greeting is personalized automatically.
+- Greeting and all reading paragraphs are left-aligned.
+- Title hierarchy remains centered.
+- “Today’s Reading” replaces the old Scripture label.
+- Selected Bible translation is shown dynamically.
+- Scripture loads normally.
+- Reflection, prayer and next step use one font family.
+- Member view and Content Studio preview match.
+- Replay mode also uses the refined layout.
+- Mobile layout remains readable.
+- Ask Emmaus does not overlap content.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+DEFINITION OF DONE
+
+This task is complete when the 10 Minutes with Jesus reader feels like one calm, continuous page with no duplicated information and no mixed typography.
+
+Do not begin another task.
+
+When complete, report only:
+
+1. Components updated
+2. Shared styles changed
+3. Header duplication removed
+4. Scripture translation display
+5. Mobile test results
+6. Known limitations
