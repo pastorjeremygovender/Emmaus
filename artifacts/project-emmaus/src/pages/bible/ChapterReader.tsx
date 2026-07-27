@@ -33,7 +33,9 @@ export default function ChapterReader() {
   const [, setLocation] = useLocation();
   const chapterNum = parseInt(chapterStr || '1', 10);
   const queryParams = new URLSearchParams(search);
-  const journeyId = queryParams.get('journey');
+  const journeyId      = queryParams.get('journey');
+  const returnTo       = queryParams.get('returnTo');       // set when opened from Daily Rhythm
+  const startVerseParam = queryParams.get('startVerse');    // set when opened with a verse ref
   const qs = journeyId ? `?journey=${journeyId}` : '';
 
   const {
@@ -105,6 +107,16 @@ export default function ChapterReader() {
       scrollBeforeTranslation.current = null;
       requestAnimationFrame(() => window.scrollTo(0, y));
       return;
+    }
+    // Deep-link: scroll to specific verse when opened from Daily Rhythm.
+    // Takes priority over saved session scroll so the reader starts at
+    // the exact passage referenced in today's reading.
+    if (startVerseParam) {
+      const el = document.getElementById(`verse-${startVerseParam}`);
+      if (el) {
+        requestAnimationFrame(() => el.scrollIntoView({ block: 'center' }));
+        return;
+      }
     }
     const saved = sessionStorage.getItem(scrollSaveKey);
     if (saved) {
@@ -274,11 +286,11 @@ export default function ChapterReader() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[600px] mx-auto gap-2">
 
-          {/* Back — always returns to My Bible home */}
+          {/* Back — returns to caller (Daily Rhythm) or My Bible home */}
           <button
-            onClick={() => setLocation('/bible')}
+            onClick={() => setLocation(returnTo ?? '/bible')}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
-            aria-label="Back to My Bible"
+            aria-label={returnTo ? 'Back to 10 Minutes with Jesus' : 'Back to My Bible'}
           >
             <ArrowLeft size={22} />
           </button>
@@ -409,6 +421,7 @@ export default function ChapterReader() {
               const note = getNote(book.id, chapterNum, v.verse);
               return (
                 <span
+                  id={`verse-${v.verse}`}
                   key={v.verse}
                   onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
                   className={[

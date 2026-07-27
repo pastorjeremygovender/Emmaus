@@ -350,7 +350,7 @@ export default function JourneyDay() {
           prayerPrompt={step.prayerPrompt}
           actionStep={step.actionStep}
           closingText={(step as any).closingText}
-          onReadInBible={step.scripture ? () => setLocation(parseBibleLink(step.scripture)) : undefined}
+          returnPath={`/journey/${journeyId}/day/${day}`}
           actionButton={
             isDailyRhythmReadOnly ? (
               <Button

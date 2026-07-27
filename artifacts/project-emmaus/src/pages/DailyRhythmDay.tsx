@@ -21,16 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseBibleLink(ref: string): string {
-  const match = ref.trim().match(/^(\d\s+)?([A-Za-z]+)\s+(\d+)/);
-  if (!match) return '/bible/books';
-  const num  = match[1] ? match[1].trim() + '-' : '';
-  const book = (num + match[2]).toLowerCase();
-  return `/bible/read/${book}/${match[3]}`;
-}
+import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 
 // ─── Ahead-of-rhythm screen ───────────────────────────────────────────────────
 // Shared by two cases: (a) day > currentDay, (b) current day not yet published.
@@ -100,8 +91,21 @@ export default function DailyRhythmDay() {
   // Enroll in the journey on first visit (idempotent — no-ops if already enrolled).
   useEffect(() => {
     if (journeyId) startJourney(journeyId);
-    window.scrollTo(0, 0);
   }, [journeyId]);
+
+  // Scroll restore — on mount, restore position if returning from My Bible;
+  // otherwise start at the top. Save position on unmount for the return trip.
+  const returnScrollKey = buildReturnScrollKey(`/daily-rhythm/day/${day}`);
+  useEffect(() => {
+    const saved = sessionStorage.getItem(returnScrollKey);
+    if (saved) {
+      sessionStorage.removeItem(returnScrollKey);
+      requestAnimationFrame(() => window.scrollTo(0, parseInt(saved, 10)));
+    } else {
+      window.scrollTo(0, 0);
+    }
+    // No cleanup needed — EmbeddedScripture saves the key before navigating away.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -195,7 +199,7 @@ export default function DailyRhythmDay() {
         prayerPrompt={step.prayerPrompt}
         actionStep={step.actionStep}
         closingText={(step as any).closingText}
-        onReadInBible={step.scripture ? () => setLocation(parseBibleLink(step.scripture)) : undefined}
+        returnPath={`/daily-rhythm/day/${day}`}
         actionButton={
           isReplay ? (
             /* Replay: never writes progress, never advances the sequence */

@@ -1,0 +1,303 @@
+You are continuing the existing Project Emmaus application.
+
+The current 10 Minutes with Jesus reader is working, but the reading flow has too much friction.
+
+This sprint implements the approved reading structure.
+
+Do not redesign unrelated screens.
+
+Do not change Daily Rhythm progress rules.
+
+Do not change published content.
+
+Do not add new features outside this flow.
+
+=====================================================
+OBJECTIVE
+
+Make 10 Minutes with Jesus feel like one continuous devotional reading.
+
+The member should not need to leave the Daily Rhythm screen just to read the assigned Scripture passage.
+
+=====================================================
+APPROVED READING FLOW
+
+Today’s Steps
+
+↓
+
+Continue Day X
+
+↓
+
+Greeting
+
+↓
+
+Today’s Reading
+
+↓
+
+Embedded Scripture passage in the member’s selected Bible translation
+
+↓
+
+Reflection
+
+↓
+
+Prayer
+
+↓
+
+Your Next Step
+
+↓
+
+Closing
+
+↓
+
+Continue
+
+↓
+
+Today’s Steps
+
+The member must not be forced into My Bible to read the assigned verses.
+
+=====================================================
+PARAGRAPH SPACING
+
+The current content renderer creates too much vertical space because many individual lines are treated like separate paragraphs.
+
+Fix this globally in the shared Daily Rhythm reader.
+
+Requirements:
+
+- Sentences within the same thought should read as a normal paragraph.
+- Do not insert large margins between every line.
+- Preserve intentional paragraph breaks authored in Content Studio.
+- Use normal body line-height.
+- Use modest paragraph spacing.
+- Avoid a presentation-slide appearance.
+
+Example:
+
+Good morning, Jeremy.
+
+I’m glad you’re back.
+
+Yesterday, Jesus invited you to come and see. Today, you’ll discover something even more personal. He already knows you.
+
+Do not display every sentence as a separate widely spaced block unless the editor intentionally inserted a paragraph break.
+
+Apply this to:
+
+- Greeting
+- Reflection
+- Prayer
+- Your Next Step
+- Closing
+- Member view
+- Content Studio preview
+- Replay mode
+
+=====================================================
+EMBED SCRIPTURE
+
+Under Today’s Reading, show:
+
+- Scripture reference
+- Selected Bible translation name
+- The full assigned passage
+
+Example:
+
+Today’s Reading
+
+John 1:40–42
+
+[Selected translation name]
+
+[Verse 40 text]
+[Verse 41 text]
+[Verse 42 text]
+
+Use the existing Bible retrieval system already built in Emmaus.
+
+Do not hard-code Bible text.
+
+Do not store Bible text in Daily Rhythm records.
+
+Retrieve it dynamically from:
+
+- scriptureReference
+- member’s selected translation
+
+=====================================================
+REFERENCE PARSING
+
+Support references such as:
+
+John 1:40–42
+John 6:35
+John 20:24–29
+
+Parse:
+
+- book
+- chapter
+- starting verse
+- ending verse
+
+Return only the requested verses.
+
+Do not retrieve the entire chapter when a verse range is provided.
+
+=====================================================
+LOADING AND ERROR STATES
+
+While Scripture is loading, show a subtle inline loading state.
+
+Do not block the entire devotional.
+
+If retrieval fails, show:
+
+We couldn’t load today’s Scripture.
+
+[Try Again]
+
+Also provide a secondary action:
+
+Open in My Bible
+
+Do not remove the rest of the Daily Rhythm content.
+
+=====================================================
+OPTIONAL BIBLE ACTION
+
+After the embedded passage, include one understated text action:
+
+Open in My Bible →
+
+This is optional and secondary.
+
+The member should already be able to complete today’s reading without using it.
+
+=====================================================
+DEEP LINK TO EXACT VERSES
+
+If the member taps Open in My Bible:
+
+- Open the correct book
+- Open the correct chapter
+- Scroll directly to the starting verse
+- Highlight or otherwise identify the requested verse range where the Bible reader supports it
+
+Example:
+
+John 1:40–42
+
+must open at verse 40, not at the top of John 1.
+
+Do not require the member to search or scroll manually.
+
+=====================================================
+RETURN CONTEXT
+
+When My Bible is opened from 10 Minutes with Jesus, preserve the return context.
+
+The back button must return to the exact Daily Rhythm day and scroll position the member came from.
+
+Example:
+
+Day 2
+→ Open in My Bible
+→ John 1:40–42
+→ Back
+→ Day 2, at the Scripture section
+
+Do not send the member to the My Bible home screen.
+
+Do not send the member to Today’s Steps unless they explicitly leave the Daily Rhythm.
+
+=====================================================
+NORMAL MY BIBLE BEHAVIOUR
+
+Do not change normal My Bible navigation.
+
+Only use contextual return behaviour when My Bible was opened from:
+
+- Daily Rhythm
+- replay mode
+- Content Studio member preview where applicable
+
+=====================================================
+CONTINUE BUTTON
+
+At the end of the current Daily Rhythm day, Continue must return directly to Today’s Steps.
+
+Do not show:
+
+- completion celebration
+- badge
+- extra confirmation page
+- My Bible
+- silence screen
+
+=====================================================
+SHARED IMPLEMENTATION
+
+Use the existing shared Daily Rhythm reader.
+
+Do not create a separate design for:
+
+- live Daily Rhythm
+- replay mode
+- Content Studio preview
+
+Extract or reuse shared Scripture rendering and paragraph styles.
+
+Avoid duplicated logic.
+
+=====================================================
+TESTS
+
+Test Day 1 and Day 2.
+
+Verify:
+
+- Greeting paragraphs have natural spacing.
+- Reflection reads as normal paragraphs.
+- Prayer uses normal paragraph spacing.
+- John 1:35–39 loads inline.
+- John 1:40–42 loads inline.
+- Only the requested verses appear.
+- Selected translation is respected.
+- Open in My Bible starts at the correct verse.
+- Back returns to the correct Daily Rhythm day.
+- Back restores the previous reading position.
+- Continue returns to Today’s Steps.
+- Replay mode works without changing progress.
+- Content Studio preview matches the member view.
+- Scripture failure shows Retry and Open in My Bible.
+- Mobile and desktop both work.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+DEFINITION OF DONE
+
+This task is complete when a member can read the assigned Scripture, reflection, prayer and next step as one uninterrupted experience without leaving 10 Minutes with Jesus.
+
+Do not begin another sprint.
+
+When complete, report only:
+
+1. Paragraph rendering changes
+2. Scripture retrieval integration
+3. Exact-verse deep linking
+4. Return-context navigation
+5. Components changed
+6. Tests completed
+7. Known limitations
