@@ -5,7 +5,7 @@
  * Opens directly to the day list. No track selection, no track types.
  */
 import React, { useMemo } from 'react';
-import { Sun, Plus, Clock, CheckCircle2, FileText } from 'lucide-react';
+import { Sun, Plus, Clock, CheckCircle2, FileText, Loader2, AlertTriangle } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
 
@@ -20,7 +20,7 @@ function statusColor(status?: string) {
 }
 
 export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
-  const { journeys, steps } = useJourney();
+  const { journeys, steps, loading } = useJourney();
 
   // There is always one daily-rhythm journey — find it automatically.
   const journey = useMemo(
@@ -59,22 +59,43 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
 
       {/* Day list */}
       <div className="flex-1 overflow-y-auto bg-white">
-        {!journey ? (
-          <div className="flex items-center justify-center py-20 text-sm text-gray-400">
-            Loading…
+        {loading ? (
+          /* Still fetching from the API */
+          <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading Daily Rhythm…
+          </div>
+        ) : !journey ? (
+          /* Fetch finished but journey not found — surface an actionable error */
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
+              <AlertTriangle size={22} className="text-amber-500" />
+            </div>
+            <p className="text-sm font-medium text-gray-700">Couldn't load Daily Rhythm content.</p>
+            <p className="text-xs text-gray-400 mt-1 max-w-[280px]">
+              The "10 Minutes with Jesus" journey wasn't found. This may be a connection issue.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-5 px-5 py-2.5 border border-gray-200 text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Retry
+            </button>
           </div>
         ) : days.length === 0 ? (
+          /* Fetch finished, journey found, but no days authored yet */
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mb-4">
               <FileText size={22} className="text-teal-400" />
             </div>
-            <p className="text-sm font-medium text-gray-700">No days yet.</p>
+            <p className="text-sm font-medium text-gray-700">
+              No Daily Rhythm days have been created yet.
+            </p>
             <p className="text-xs text-gray-400 mt-1">Click "New Day" to write Day 1.</p>
             <button
               onClick={() => onNewDay(journey.id)}
               className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
             >
-              Write Day 1
+              + New Day
             </button>
           </div>
         ) : (

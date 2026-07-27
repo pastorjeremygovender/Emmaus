@@ -136,8 +136,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     async function init() {
       setLoading(true);
       try {
-        // Admins get all journeys (any status); users get published only
-        const jList = user?.role === 'admin'
+        // Admins and super-admins get all journeys (any status); users get published only
+        const jList = (user?.role === 'admin' || user?.role === 'superAdmin')
           ? await api.listJourneys()
           : await api.listPublishedJourneys();
 
