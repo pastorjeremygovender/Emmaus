@@ -1,0 +1,200 @@
+You are continuing the existing Project Emmaus application.
+
+Do not change the approved Daily Rhythm content.
+
+This task is only to automate greeting personalization in the member-facing Daily Rhythm experience.
+
+=====================================================
+OBJECTIVE
+
+Content editors must write one generic greeting in Content Studio.
+
+Emmaus must automatically personalize it for each signed-in member at runtime.
+
+Editors must never manually enter individual names.
+
+=====================================================
+CONTENT STUDIO
+
+Store the authored greeting exactly as written.
+
+Example:
+
+Good morning.
+
+I'm glad you're here.
+
+Do not save a specific member name inside the content record.
+
+Do not create separate content copies per member.
+
+=====================================================
+MEMBER-FACING RENDERING
+
+When rendering a Daily Rhythm entry, personalize the first greeting line using:
+
+1. The signed-in member's preferred first name
+2. The member's local time of day
+
+Render:
+
+Good morning, Jeremy.
+
+Good afternoon, Jeremy.
+
+Good evening, Jeremy.
+
+Then render the remaining authored greeting text unchanged.
+
+Example stored content:
+
+Good morning.
+
+I'm glad you're here.
+
+Example rendered at 8:00 AM:
+
+Good morning, Jeremy.
+
+I'm glad you're here.
+
+Example rendered at 3:00 PM:
+
+Good afternoon, Jeremy.
+
+I'm glad you're here.
+
+=====================================================
+NAME RULES
+
+Use this priority:
+
+1. Preferred first name
+2. First name
+3. Display name
+4. No name
+
+If no usable name exists, render:
+
+Good morning.
+
+Do not render:
+
+Good morning, undefined.
+
+Good morning, null.
+
+Good morning, Member.
+
+Do not expose an email address as the greeting name.
+
+=====================================================
+TIME-OF-DAY RULES
+
+Use the member's local timezone where available.
+
+Use:
+
+Morning: 05:00–11:59
+
+Afternoon: 12:00–17:59
+
+Evening: 18:00–04:59
+
+Do not store the time-specific greeting in the content record.
+
+Calculate it at runtime.
+
+=====================================================
+AUTHORING RULE
+
+The editor may author one of these opening lines:
+
+Good morning.
+
+Good afternoon.
+
+Good evening.
+
+Hello.
+
+Welcome.
+
+For Daily Rhythm content, if the first line is one of the time-based greetings, replace it dynamically with the correct local greeting and first name.
+
+Do not alter any later sentences.
+
+If the authored greeting does not begin with a recognised greeting, prepend the personalised greeting rather than rewriting the authored content.
+
+=====================================================
+SHARED RENDERER
+
+Implement this in the shared Daily Rhythm reader used by:
+
+- Content Studio member preview
+- Member-facing Daily Rhythm screen
+
+In Content Studio preview, use a clearly labelled sample member name such as:
+
+Good morning, Jeremy.
+
+or allow the current admin's first name.
+
+The preview must make it clear that personalization is automatic.
+
+Do not require editors to type template variables manually.
+
+=====================================================
+RETURNING MEMBER
+
+Do not automatically change the second sentence yet.
+
+Only personalize:
+
+- Time of day
+- First name
+
+Future contextual wording such as “Welcome back” is outside this task.
+
+=====================================================
+PRIVACY
+
+Use only profile information already available to the signed-in member session.
+
+Do not send the member's name to the AI service.
+
+Do not create separate personalized content records.
+
+Do not log personalized greetings unnecessarily.
+
+=====================================================
+TESTS
+
+Verify:
+
+- Morning greeting uses the member's first name.
+- Afternoon greeting changes automatically.
+- Evening greeting changes automatically.
+- Missing preferred name falls back safely.
+- Missing all names renders without a name.
+- Email addresses are never shown as names.
+- Content Studio stores only generic content.
+- Preview shows automatic personalization.
+- Member view and preview use the same renderer.
+- Existing reflection, prayer, next step and closing remain unchanged.
+- No duplicate Daily Rhythm records are created.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+DEFINITION OF DONE
+
+This task is complete when:
+
+- Editors enter one generic greeting.
+- Every member automatically sees their own first name.
+- Greeting changes according to local time.
+- No manual personalization is required.
+- The underlying content remains shared by everyone.
+- Preview and member view match.
+
+Do not begin another task.

@@ -558,6 +558,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       journeyId,
       day: nextDay,
       title: 'Untitled Step',
+      status: 'Draft',
       mentorIntro: '', scripture: '', devotional: '',
       reflectionQuestion: '', prayerPrompt: '', actionStep: '',
     });

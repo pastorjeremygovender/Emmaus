@@ -101,6 +101,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         journeyId: jId,
         day: d,
         title: `[Day ${d} title — pastoral review required]`,
+        status: 'Draft',
         mentorIntro: '[Mentor introduction — edit before publication]',
         scripture: form.scriptureReference,
         devotional: '[Devotional reflection — edit before publication]',

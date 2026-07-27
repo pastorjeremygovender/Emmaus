@@ -48,6 +48,7 @@ export type Step = {
   journeyId: string;
   day: number;
   title: string;
+  status: string;       // "Draft" | "Published"
 
   // Canonical discipleship fields
   mentorIntro: string;
@@ -155,7 +156,10 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
           }
         }
         if (cancelled) return;
-        setSteps(allSteps);
+        // Admins and super-admins see all steps (Draft + Published).
+        // Members only receive Published steps — Draft steps must never appear to members.
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
 
         // Fetch progress for logged-in users
         if (user?.id) {
@@ -382,11 +386,14 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const refreshSteps = useCallback(async (journeyId: string) => {
     try {
       const jSteps = await api.listSteps(journeyId);
-      setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...jSteps]);
+      // Apply the same Published-only filter for members as the initial load does.
+      const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+      const visible = isAdmin ? jSteps : jSteps.filter(s => s.status === 'Published');
+      setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...visible]);
     } catch {
       // ignore
     }
-  }, []);
+  }, [user?.role]);
 
   return (
     <JourneyContext.Provider

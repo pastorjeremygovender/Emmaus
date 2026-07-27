@@ -13,6 +13,75 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 
+// ─── Greeting personalization ─────────────────────────────────────────────────
+//
+// Editors author one generic greeting (e.g. "Good morning.\n\nI'm glad you're here.").
+// At render time the first line is replaced (or prepended) with a personalised
+// time-of-day + first-name greeting.  The rest of the text is never altered.
+
+/** Opening lines the editor may write that we know how to replace at runtime. */
+const RECOGNIZED_OPENING_PREFIXES = [
+  'good morning',
+  'good afternoon',
+  'good evening',
+  'hello',
+  'welcome',
+];
+
+function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 18) return 'afternoon';
+  return 'evening';  // 18:00–04:59
+}
+
+/**
+ * Returns the personalized greeting text:
+ *
+ * - If the first line is a recognised greeting, that line is replaced with the
+ *   correct time-of-day salutation + name; the rest of the content is unchanged.
+ * - If the first line is not recognised, the personalised greeting is prepended.
+ * - If no name is available, the salutation is rendered without a name.
+ */
+export function personalizeGreeting(mentorIntro: string, name: string | undefined): string {
+  const period = getTimeOfDay();
+  const salutation = `Good ${period}`;
+  const personalizedFirstLine = name ? `${salutation}, ${name}.` : `${salutation}.`;
+
+  if (!mentorIntro) return personalizedFirstLine;
+
+  const firstNewline = mentorIntro.indexOf('\n');
+  const rawFirstLine = firstNewline === -1
+    ? mentorIntro
+    : mentorIntro.slice(0, firstNewline);
+  const rest = firstNewline === -1 ? '' : mentorIntro.slice(firstNewline);
+
+  const isRecognized = RECOGNIZED_OPENING_PREFIXES.some(
+    g => rawFirstLine.trim().toLowerCase().startsWith(g)
+  );
+
+  if (isRecognized) {
+    // Replace the authored opening line; keep everything after it untouched.
+    return personalizedFirstLine + rest;
+  } else {
+    // Authored content doesn't start with a greeting — prepend ours.
+    return `${personalizedFirstLine}\n\n${mentorIntro}`;
+  }
+}
+
+/**
+ * Extract a safe display name from a raw preferredName string.
+ * Returns undefined when the value is blank, looks like an email, or is null/undefined.
+ */
+export function resolveDisplayName(
+  preferredName: string | null | undefined
+): string | undefined {
+  const name = preferredName?.trim();
+  if (!name) return undefined;
+  if (name.includes('@')) return undefined; // never expose email
+  return name;
+}
+
 // ─── Section heading ──────────────────────────────────────────────────────────
 // Exported so JourneyDay can reuse it for non-daily-rhythm sections (Sermon Moment,
 // Consider, etc.) and keep a single consistent style across the whole page.
@@ -36,6 +105,15 @@ export interface DailyRhythmReadingProps {
   prayerPrompt?: string;
   actionStep?: string;
   closingText?: string;
+
+  /**
+   * The member's resolved first name used to personalise the greeting at runtime.
+   *
+   * Member view: pass the signed-in user's preferredName (after stripping emails).
+   * Preview:     pass the admin's name, or a clearly labelled sample such as "Jeremy".
+   * If omitted or undefined, the greeting renders without a name ("Good morning.").
+   */
+  memberName?: string;
 
   /**
    * Member view: navigate to the Bible reader when "Read in Bible" is tapped.
@@ -69,6 +147,7 @@ export function DailyRhythmReading({
   prayerPrompt,
   actionStep,
   closingText,
+  memberName,
   onReadInBible,
   previewMode = false,
   actionButton,
@@ -94,10 +173,17 @@ export function DailyRhythmReading({
       {/* ── Greeting ─────────────────────────────────────────────────── */}
       {(mentorIntro || previewMode) && (
         <section className="mb-12">
-          <p className="text-[18px] text-foreground leading-[1.8]">
-            {mentorIntro || (previewMode
-              ? <span className="text-muted-foreground/40">Greeting will appear here…</span>
-              : null)}
+          {previewMode && (
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Greeting · personalized automatically per member
+            </p>
+          )}
+          <p className="text-[18px] text-foreground leading-[1.8] whitespace-pre-wrap">
+            {mentorIntro
+              ? personalizeGreeting(mentorIntro, memberName)
+              : previewMode
+                ? <span className="text-muted-foreground/40">Greeting will appear here…</span>
+                : null}
           </p>
         </section>
       )}

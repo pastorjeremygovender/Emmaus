@@ -20,6 +20,7 @@ const EMPTY_STEP = (journeyId: string, day: number): Step => ({
   journeyId,
   day,
   title: '',
+  status: 'Draft',
   mentorIntro: '',
   scripture: '',
   devotional: '',

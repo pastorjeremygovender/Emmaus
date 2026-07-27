@@ -44,6 +44,7 @@ export interface FrontendStep {
   journeyId: string;
   day: number;          // step number
   title: string;
+  status: string;       // "Draft" | "Published"
 
   // Canonical discipleship fields
   mentorIntro: string;
@@ -199,6 +200,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     journeyId: row.journeyId,
     day: row.day,
     title: row.title,
+    status: row.status ?? 'Draft',
     mentorIntro,
     scripture,
     devotional,
@@ -237,6 +239,12 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
 /** Build the step column values from a FrontendStep (write path). */
 function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> {
   const cols: Record<string, unknown> = {};
+
+  // ── Status ──────────────────────────────────────────────────────────────────
+  // Must be mapped explicitly — it is not caught by any of the field-name
+  // remappings below (e.g. devotional → teachingContent). Without this line,
+  // every PATCH silently drops the status field and steps stay as Draft forever.
+  if (data.status !== undefined) cols.status = data.status;
 
   if (data.title !== undefined)              cols.title              = data.title;
   if (data.mentorIntro !== undefined)        cols.mentorIntro        = data.mentorIntro;
@@ -541,7 +549,7 @@ export async function createStep(journeyId: string, data: Partial<FrontendStep> 
     journeyId,
     day: data.day,
     title: (data.title ?? "") as string,
-    status: "draft",
+    status: "Draft",
     content: {},  // legacy JSONB left empty; real data is in columns
     createdAt: now,
     updatedAt: now,

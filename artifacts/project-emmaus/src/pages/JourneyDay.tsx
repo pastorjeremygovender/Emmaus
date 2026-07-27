@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
-import { DailyRhythmReading, SectionLabel } from '@/components/DailyRhythmReading';
+import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
 
 /** Parse a scripture reference into the Bible reader path.
  *  "John 1:35-39"  →  "/bible/read/john/1"
@@ -344,6 +344,7 @@ export default function JourneyDay() {
           day={day}
           title={step.title}
           mentorIntro={step.mentorIntro}
+          memberName={resolveDisplayName(user?.preferredName)}
           scripture={step.scripture}
           devotional={step.devotional}
           prayerPrompt={step.prayerPrompt}

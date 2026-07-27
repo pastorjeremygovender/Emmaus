@@ -50,6 +50,7 @@ export type Step = {
   journeyId: string;
   day: number;
   title: string;
+  status: string;       // "Draft" | "Published"
 
   // Canonical discipleship fields
   mentorIntro: string;

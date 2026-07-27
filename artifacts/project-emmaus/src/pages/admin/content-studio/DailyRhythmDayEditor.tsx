@@ -11,8 +11,9 @@ import {
   AlertTriangle, Loader2, X,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
-import { DailyRhythmReading, PreviewContinueButton } from '@/components/DailyRhythmReading';
+import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,10 @@ function TextArea({
 // DailyRhythmReading is pixel-identical to what members see.
 
 function DayPreview({ form, onClose }: { form: DayForm; onClose: () => void }) {
+  const { user } = useAuth();
+  // Use the signed-in admin's name so preview is realistic; fall back to
+  // "Jeremy" (the spec's example) when no usable name is available.
+  const previewName = resolveDisplayName(user?.preferredName) ?? 'Jeremy';
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
 
@@ -106,6 +111,7 @@ function DayPreview({ form, onClose }: { form: DayForm; onClose: () => void }) {
           day={form.day}
           title={form.title}
           mentorIntro={form.mentorIntro}
+          memberName={previewName}
           scripture={form.scripture}
           devotional={form.devotional}
           prayerPrompt={form.prayerPrompt}
