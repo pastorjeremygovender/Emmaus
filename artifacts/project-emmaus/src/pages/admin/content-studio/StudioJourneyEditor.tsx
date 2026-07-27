@@ -326,7 +326,12 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
           onChange={e => { onPatch('status' as keyof Journey, e.target.value); onBlur(); }}
           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
         >
-          {['Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived'].map(s => <option key={s}>{s}</option>)}
+          {/* Daily Rhythm is a permanent practice — it can only be Draft or Published,
+              never archived or moved through a pastoral review workflow. */}
+          {(journey.journeyType === 'daily-rhythm'
+            ? ['Draft', 'Published']
+            : ['Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived']
+          ).map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
       <div>

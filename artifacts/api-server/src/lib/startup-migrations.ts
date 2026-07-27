@@ -29,6 +29,25 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: daily-rhythm type failed (non-fatal)");
   }
 
+  // ── Restore Daily Rhythm to Published (2026-07) ──────────────────────────────
+  // The Daily Rhythm journey is a permanent, always-on practice.
+  // If it was accidentally set to Archived via the editor, restore it to Published
+  // so the Walk screen can always find it via listPublishedJourneys().
+  try {
+    await db
+      .update(journeysTable)
+      .set({ status: "Published" })
+      .where(
+        and(
+          eq(journeysTable.id, "15-minutes-with-jesus"),
+          eq(journeysTable.status, "Archived")
+        )
+      );
+    logger.info("Startup migration: daily-rhythm status restored to Published (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: daily-rhythm status restore failed (non-fatal)");
+  }
+
   // ── Rename sprint (2026-07) ──────────────────────────────────────────────────
   // Display title update: journey was formerly "15 Minutes with Jesus", now "10 Minutes with Jesus".
   // The journey ID ("15-minutes-with-jesus") and all member progress are preserved.

@@ -25,7 +25,6 @@ export default function Auth() {
   useEffect(() => {
     if (user) {
       if (user.role === 'admin' || user.role === 'superAdmin') setLocation('/admin');
-      else if (!user.currentFeeling) setLocation('/checkin');
       else setLocation('/walk');
     }
   }, [user]);
@@ -51,10 +50,10 @@ export default function Auth() {
     try {
       if (mode === 'login') {
         const role = await signIn(email, password);
-        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/checkin');
+        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/walk');
       } else {
         await signUp(email, password, name);
-        setLocation('/checkin');
+        setLocation('/walk');
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -65,7 +64,7 @@ export default function Auth() {
 
   const handleDemo = () => {
     signInDemo(false);
-    setLocation('/checkin');
+    setLocation('/walk');
   };
 
   const handleDemoAdmin = () => {

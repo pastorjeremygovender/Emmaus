@@ -6,10 +6,12 @@
  *
  * Flow:
  *   1. Splash appears immediately.
- *   2. Auth state resolves behind the splash.
- *   3. After ~2 s AND auth resolved → navigate:
- *        authenticated  → /walk
- *        unauthenticated → /auth
+ *   2. Auth + journey state resolves behind the splash.
+ *   3. After ~2 s AND both resolved → navigate:
+ *        authenticated member  → today's Daily Rhythm day (resolves correct day from progress)
+ *        authenticated admin   → /admin
+ *        new member            → /onboarding
+ *        unauthenticated       → /auth
  *   4. Subsequent in-app visits to "/" skip the splash and redirect instantly.
  */
 
@@ -17,13 +19,32 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
+import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded } from '@/lib/onboarding';
+
+/**
+ * Resolve the URL for today's Daily Rhythm day.
+ * Uses the member's current progress to pick the right day; falls back to day 1
+ * for new members and to /walk if the journey is not yet published.
+ */
+function getDailyRhythmUrl(
+  journeys: import('@/lib/journeys-api').Journey[],
+  progress: Record<string, import('@/contexts/JourneyContext').Progress>
+): string {
+  const journey = journeys.find(
+    j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
+  );
+  if (!journey) return '/walk';
+  const currentDay = progress[journey.id]?.currentDay ?? 1;
+  return `/journey/${journey.id}/day/${currentDay}`;
+}
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves faster
 
 export default function Welcome() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { journeys, progress, loading: journeyLoading } = useJourney();
   const [, setLocation] = useLocation();
 
   // Has this splash already been shown in the current browser session?
@@ -34,22 +55,22 @@ export default function Welcome() {
   const navigatedRef                 = useRef(false);
 
   // ── Fast path: splash already shown this session ──────────────────────────
+  // Journey context is already loaded (same session), so we can resolve the day.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (loading) return;
-    // Skip straight to destination without showing splash.
+    if (authLoading) return;
     if (user) {
-      if (user.role === 'admin') {
+      if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation('/walk');
+        setLocation(getDailyRhythmUrl(journeys, progress));
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, loading, user]);
+  }, [alreadyShown, authLoading, user, journeys, progress]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -58,27 +79,28 @@ export default function Welcome() {
     return () => clearTimeout(id);
   }, [alreadyShown]);
 
-  // ── Navigate once both conditions are met ─────────────────────────────────
+  // ── Navigate once splash timer, auth, AND journey data are all ready ──────
+  // Waiting for journeyLoading ensures progress is resolved before we pick the day.
   useEffect(() => {
     if (alreadyShown) return;
-    if (!timerDone || loading) return;
+    if (!timerDone || authLoading || journeyLoading) return;
     if (navigatedRef.current) return;
     navigatedRef.current = true;
 
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
     if (user) {
-      if (user.role === 'admin') {
+      if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation('/walk');
+        setLocation(getDailyRhythmUrl(journeys, progress));
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, timerDone, loading, user]);
+  }, [alreadyShown, timerDone, authLoading, journeyLoading, user, journeys, progress]);
 
   // ── If already shown, render nothing while redirecting ───────────────────
   if (alreadyShown) return null;
