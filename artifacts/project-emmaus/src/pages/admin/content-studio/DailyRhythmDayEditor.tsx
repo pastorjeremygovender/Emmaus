@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
+import { DailyRhythmReading, PreviewContinueButton } from '@/components/DailyRhythmReading';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,10 +80,16 @@ function TextArea({
 
 // ─── Preview overlay ──────────────────────────────────────────────────────────
 
-function DayPreview({ form, journeyTitle, onClose }: { form: DayForm; journeyTitle: string; onClose: () => void }) {
+// ─── Preview overlay ──────────────────────────────────────────────────────────
+// Wraps the shared DailyRhythmReading component in a full-screen overlay.
+// The sticky banner is the only editor-specific control; everything inside
+// DailyRhythmReading is pixel-identical to what members see.
+
+function DayPreview({ form, onClose }: { form: DayForm; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-      {/* Preview header */}
+
+      {/* Editor control — not visible to members */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-100 flex items-center justify-between px-5 h-14">
         <div className="text-[13px] font-medium text-gray-500">Preview — member view</div>
         <button
@@ -93,90 +100,22 @@ function DayPreview({ form, journeyTitle, onClose }: { form: DayForm; journeyTit
         </button>
       </div>
 
-      {/* Rendered member experience */}
-      <div className="min-h-[100dvh] bg-background pb-32">
-        <div className="px-5 pt-10 max-w-[480px] mx-auto">
-
-          {/* Eyebrow + day label */}
-          <section className="mb-10">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-              {journeyTitle || '10 Minutes with Jesus'}
-            </p>
-            <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              Day {form.day}
-            </span>
-            <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
-              {form.title || <span className="text-gray-300">Title</span>}
-            </h1>
-          </section>
-
-          {/* Greeting */}
-          {form.mentorIntro && (
-            <section className="mb-10">
-              <p className="text-[18px] text-foreground leading-[1.7] italic border-l-2 border-primary/25 pl-5">
-                {form.mentorIntro}
-              </p>
-            </section>
-          )}
-
-          {/* Scripture */}
-          <section className="mb-10">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-3">Scripture</p>
-            <div className="bg-card rounded-2xl p-6 border border-border shadow-sm space-y-3">
-              <p className="font-serif text-[19px] leading-[1.7] text-foreground font-medium">
-                {form.scripture || <span className="text-gray-300 not-italic font-normal">No scripture reference yet</span>}
-              </p>
-              <p className="text-[13px] text-muted-foreground italic">
-                The user's chosen Bible translation will appear here.
-              </p>
-            </div>
-          </section>
-
-          {/* Reflection */}
-          {form.devotional && (
-            <section className="mb-10">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-3">Reflection</p>
-              <p className="text-[18px] leading-[1.7] text-foreground whitespace-pre-wrap">{form.devotional}</p>
-            </section>
-          )}
-
-          {/* Prayer */}
-          {form.prayerPrompt && (
-            <section className="mb-10">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-3">Prayer</p>
-              <p className="text-[18px] font-serif italic leading-[1.7] text-foreground whitespace-pre-wrap">
-                "{form.prayerPrompt}"
-              </p>
-            </section>
-          )}
-
-          {/* Next Step */}
-          {form.actionStep && (
-            <section className="mb-10">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest mb-3">Your Next Step</p>
-              <div className="bg-accent/10 border border-accent/20 rounded-2xl p-6">
-                <p className="text-[18px] font-medium text-foreground leading-[1.6] whitespace-pre-wrap">{form.actionStep}</p>
-              </div>
-            </section>
-          )}
-
-          {/* Closing */}
-          {form.closingText && (
-            <section className="mb-8">
-              <p className="text-[16px] text-muted-foreground text-center leading-relaxed italic whitespace-pre-wrap">
-                {form.closingText}
-              </p>
-            </section>
-          )}
-
-          {/* Continue button */}
-          <div className="pt-2 pb-8">
-            <div className="w-full h-14 flex items-center justify-center text-[17px] font-semibold rounded-2xl bg-primary text-primary-foreground">
-              Continue
-            </div>
-          </div>
-        </div>
+      {/* Shared reading component — identical to member experience */}
+      <div className="min-h-[100dvh] bg-background pb-8">
+        <DailyRhythmReading
+          day={form.day}
+          title={form.title}
+          mentorIntro={form.mentorIntro}
+          scripture={form.scripture}
+          devotional={form.devotional}
+          prayerPrompt={form.prayerPrompt}
+          actionStep={form.actionStep}
+          closingText={form.closingText}
+          previewMode
+          actionButton={<PreviewContinueButton />}
+        />
       </div>
+
     </div>
   );
 }
@@ -344,7 +283,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
     <>
       {/* Preview overlay */}
       {showPreview && (
-        <DayPreview form={form} journeyTitle={journey?.title ?? '10 Minutes with Jesus'} onClose={() => setShowPreview(false)} />
+        <DayPreview form={form} onClose={() => setShowPreview(false)} />
       )}
 
       {/* Delete confirm */}

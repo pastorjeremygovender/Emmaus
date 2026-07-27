@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
+import { DailyRhythmReading, SectionLabel } from '@/components/DailyRhythmReading';
 
 /** Parse a scripture reference into the Bible reader path.
  *  "John 1:35-39"  →  "/bible/read/john/1"
@@ -336,134 +337,20 @@ export default function JourneyDay() {
         </div>
       </header>
 
-      <main className="px-5 pt-10 max-w-[640px] mx-auto">
+      {isDailyRhythmJourney ? (
 
-        {/* Day label + title */}
-        <section className="mb-12">
-          {isDailyRhythmJourney ? (
-            /* Daily Rhythm: centered hierarchy per spec */
-            <div className="text-center">
-              <p className="text-[28px] font-bold text-foreground leading-tight mb-2">
-                10 Minutes with Jesus
-              </p>
-              <p className="text-[15px] font-medium text-muted-foreground mb-3">
-                Day {day}
-              </p>
-              <h1 className="text-[26px] font-bold text-foreground leading-snug">
-                {step.title}
-              </h1>
-            </div>
-          ) : (
-            <>
-              <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                Day {day}
-              </span>
-              <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
-                {step.title}
-              </h1>
-            </>
-          )}
-        </section>
-
-        {/* Mentor introduction */}
-        {step.mentorIntro ? (
-          <section className="mb-12">
-            <p className="text-[18px] text-foreground leading-[1.8]">
-              {step.mentorIntro}
-            </p>
-          </section>
-        ) : null}
-
-        {/* Scripture */}
-        <section className="mb-12">
-          <SectionLabel>Scripture</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-            {step.scripture}
-          </p>
-          {isDailyRhythmJourney && step.scripture && (
-            <button
-              onClick={() => setLocation(parseBibleLink(step.scripture))}
-              className="mt-2 text-[14px] text-primary font-medium hover:underline"
-            >
-              Read in Bible
-            </button>
-          )}
-        </section>
-
-        {/* Devotional reflection */}
-        <section className="mb-12">
-          <SectionLabel>Reflection</SectionLabel>
-          <p className="mt-3 text-[18px] leading-[1.8] text-foreground">
-            {step.devotional}
-          </p>
-        </section>
-
-        {/* Sermon moment — placed here for companion journeys */}
-        {hasSermon && (
-          <section className="mb-12">
-            <SectionLabel>Sermon Moment</SectionLabel>
-            <p className="mt-3 text-[17px] text-foreground leading-[1.8]">
-              This moment in Sunday's sermon connects directly with today's reflection.
-            </p>
-            <a
-              href={(step as any).sermonLink}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
-              aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
-            >
-              <PlayCircle size={18} className="shrink-0" />
-              Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
-            </a>
-          </section>
-        )}
-
-        {/* Reflection question + optional response — hidden for daily-rhythm */}
-        {!isDailyRhythmJourney && (
-          <section className="mb-12">
-            <SectionLabel>Consider</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.reflectionQuestion}
-            </p>
-            <Textarea
-              placeholder="What stood out to you today?"
-              className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
-              value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
-              data-testid="input-reflection"
-              aria-label="Your reflection"
-            />
-          </section>
-        )}
-
-        {/* Prayer */}
-        <section className="mb-12">
-          <SectionLabel>Prayer</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-            {step.prayerPrompt}
-          </p>
-        </section>
-
-        {/* Action step */}
-        <section className="mb-12">
-          <SectionLabel>Your Next Step</SectionLabel>
-          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-            {step.actionStep}
-          </p>
-        </section>
-
-        {/* Closing text — daily-rhythm only */}
-        {isDailyRhythmJourney && (
-          <section className="mb-8">
-            <p className="text-[16px] text-muted-foreground leading-relaxed">
-              Tomorrow we'll continue walking together.
-            </p>
-          </section>
-        )}
-
-        {/* Completion / navigation button */}
-        <div className="pt-2 pb-8">
-          {isDailyRhythmJourney ? (
+        /* ── Daily Rhythm — rendered from shared source of truth ─────────── */
+        <DailyRhythmReading
+          day={day}
+          title={step.title}
+          mentorIntro={step.mentorIntro}
+          scripture={step.scripture}
+          devotional={step.devotional}
+          prayerPrompt={step.prayerPrompt}
+          actionStep={step.actionStep}
+          closingText={(step as any).closingText}
+          onReadInBible={step.scripture ? () => setLocation(parseBibleLink(step.scripture)) : undefined}
+          actionButton={
             isDailyRhythmReadOnly ? (
               <Button
                 size="lg"
@@ -483,7 +370,103 @@ export default function JourneyDay() {
                 Continue
               </Button>
             )
-          ) : (
+          }
+        />
+
+      ) : (
+
+        /* ── Regular journey ─────────────────────────────────────────────── */
+        <main className="px-5 pt-10 max-w-[640px] mx-auto">
+
+          {/* Day label + title */}
+          <section className="mb-12">
+            <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+              Day {day}
+            </span>
+            <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
+              {step.title}
+            </h1>
+          </section>
+
+          {/* Mentor introduction */}
+          {step.mentorIntro ? (
+            <section className="mb-12">
+              <p className="text-[18px] text-foreground leading-[1.8]">
+                {step.mentorIntro}
+              </p>
+            </section>
+          ) : null}
+
+          {/* Scripture */}
+          <section className="mb-12">
+            <SectionLabel>Scripture</SectionLabel>
+            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+              {step.scripture}
+            </p>
+          </section>
+
+          {/* Devotional reflection */}
+          <section className="mb-12">
+            <SectionLabel>Reflection</SectionLabel>
+            <p className="mt-3 text-[18px] leading-[1.8] text-foreground">
+              {step.devotional}
+            </p>
+          </section>
+
+          {/* Sermon moment */}
+          {hasSermon && (
+            <section className="mb-12">
+              <SectionLabel>Sermon Moment</SectionLabel>
+              <p className="mt-3 text-[17px] text-foreground leading-[1.8]">
+                This moment in Sunday's sermon connects directly with today's reflection.
+              </p>
+              <a
+                href={(step as any).sermonLink}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
+                aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
+              >
+                <PlayCircle size={18} className="shrink-0" />
+                Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
+              </a>
+            </section>
+          )}
+
+          {/* Reflection question + optional response */}
+          <section className="mb-12">
+            <SectionLabel>Consider</SectionLabel>
+            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+              {step.reflectionQuestion}
+            </p>
+            <Textarea
+              placeholder="What stood out to you today?"
+              className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+              value={reflection}
+              onChange={(e) => setReflection(e.target.value)}
+              data-testid="input-reflection"
+              aria-label="Your reflection"
+            />
+          </section>
+
+          {/* Prayer */}
+          <section className="mb-12">
+            <SectionLabel>Prayer</SectionLabel>
+            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+              {step.prayerPrompt}
+            </p>
+          </section>
+
+          {/* Action step */}
+          <section className="mb-12">
+            <SectionLabel>Your Next Step</SectionLabel>
+            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+              {step.actionStep}
+            </p>
+          </section>
+
+          {/* Complete button */}
+          <div className="pt-2 pb-8">
             <Button
               size="lg"
               className="w-full h-14 text-[17px] rounded-2xl"
@@ -492,18 +475,10 @@ export default function JourneyDay() {
             >
               Complete Today
             </Button>
-          )}
-        </div>
+          </div>
 
-      </main>
+        </main>
+      )}
     </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-      {children}
-    </h2>
   );
 }
