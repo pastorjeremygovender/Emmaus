@@ -5,7 +5,7 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Check, PlayCircle, Eye, EyeOff, BookOpen } from 'lucide-react';
+import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 
@@ -336,84 +336,93 @@ export default function JourneyDay() {
         </div>
       </header>
 
-      <main className="px-5 pt-10 max-w-[480px] mx-auto">
+      <main className="px-5 pt-10 max-w-[640px] mx-auto">
 
         {/* Day label + title */}
-        <section className="mb-10">
-          {isDailyRhythmJourney && (
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
-              10 Minutes with Jesus
-            </p>
+        <section className="mb-12">
+          {isDailyRhythmJourney ? (
+            /* Daily Rhythm: centered hierarchy per spec */
+            <div className="text-center">
+              <p className="text-[28px] font-bold text-foreground leading-tight mb-2">
+                10 Minutes with Jesus
+              </p>
+              <p className="text-[15px] font-medium text-muted-foreground mb-3">
+                Day {day}
+              </p>
+              <h1 className="text-[26px] font-bold text-foreground leading-snug">
+                {step.title}
+              </h1>
+            </div>
+          ) : (
+            <>
+              <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                Day {day}
+              </span>
+              <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
+                {step.title}
+              </h1>
+            </>
           )}
-          <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-            Day {day}
-          </span>
-          <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
-            {step.title}
-          </h1>
         </section>
 
         {/* Mentor introduction */}
-        <section className="mb-10">
-          <p className="text-[18px] text-foreground leading-[1.7] italic border-l-2 border-primary/25 pl-5">
-            {step.mentorIntro}
-          </p>
-        </section>
+        {step.mentorIntro ? (
+          <section className="mb-12">
+            <p className="text-[18px] text-foreground leading-[1.8]">
+              {step.mentorIntro}
+            </p>
+          </section>
+        ) : null}
 
         {/* Scripture */}
-        <section className="mb-10">
+        <section className="mb-12">
           <SectionLabel>Scripture</SectionLabel>
-          <div className="mt-4 bg-card rounded-2xl p-6 border border-border shadow-sm space-y-4">
-            <p className="font-serif text-[19px] leading-[1.7] text-foreground font-medium">
-              {step.scripture}
-            </p>
-            {isDailyRhythmJourney && step.scripture && (
-              <button
-                onClick={() => setLocation(parseBibleLink(step.scripture))}
-                className="inline-flex items-center gap-1.5 text-[14px] text-primary font-medium hover:underline"
-              >
-                <BookOpen size={14} />
-                Read in Bible
-              </button>
-            )}
-          </div>
+          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+            {step.scripture}
+          </p>
+          {isDailyRhythmJourney && step.scripture && (
+            <button
+              onClick={() => setLocation(parseBibleLink(step.scripture))}
+              className="mt-2 text-[14px] text-primary font-medium hover:underline"
+            >
+              Read in Bible
+            </button>
+          )}
         </section>
 
         {/* Devotional reflection */}
-        <section className="mb-10">
+        <section className="mb-12">
           <SectionLabel>Reflection</SectionLabel>
-          <p className="mt-4 text-[18px] leading-[1.7] text-foreground">
+          <p className="mt-3 text-[18px] leading-[1.8] text-foreground">
             {step.devotional}
           </p>
         </section>
 
         {/* Sermon moment — placed here for companion journeys */}
         {hasSermon && (
-          <section className="mb-10">
+          <section className="mb-12">
             <SectionLabel>Sermon Moment</SectionLabel>
-            <div className="mt-4 bg-card rounded-2xl p-5 border border-border shadow-sm space-y-3">
-              <p className="text-[17px] text-foreground leading-[1.6]">
-                This moment in Sunday's sermon connects directly with today's reflection.
-              </p>
-              <a
-                href={(step as any).sermonLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
-                aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
-              >
-                <PlayCircle size={18} className="shrink-0" />
-                Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
-              </a>
-            </div>
+            <p className="mt-3 text-[17px] text-foreground leading-[1.8]">
+              This moment in Sunday's sermon connects directly with today's reflection.
+            </p>
+            <a
+              href={(step as any).sermonLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
+              aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
+            >
+              <PlayCircle size={18} className="shrink-0" />
+              Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
+            </a>
           </section>
         )}
 
         {/* Reflection question + optional response — hidden for daily-rhythm */}
         {!isDailyRhythmJourney && (
-          <section className="mb-10">
+          <section className="mb-12">
             <SectionLabel>Consider</SectionLabel>
-            <p className="mt-4 text-[18px] font-medium text-foreground leading-[1.6]">
+            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
               {step.reflectionQuestion}
             </p>
             <Textarea
@@ -428,27 +437,25 @@ export default function JourneyDay() {
         )}
 
         {/* Prayer */}
-        <section className="mb-10">
+        <section className="mb-12">
           <SectionLabel>Prayer</SectionLabel>
-          <p className="mt-4 text-[18px] font-serif italic leading-[1.7] text-foreground">
-            "{step.prayerPrompt}"
+          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+            {step.prayerPrompt}
           </p>
         </section>
 
         {/* Action step */}
-        <section className="mb-10">
-          <SectionLabel primary>Your Next Step</SectionLabel>
-          <div className="mt-4 bg-accent/10 border border-accent/20 rounded-2xl p-6">
-            <p className="text-[18px] font-medium text-foreground leading-[1.6]">
-              {step.actionStep}
-            </p>
-          </div>
+        <section className="mb-12">
+          <SectionLabel>Your Next Step</SectionLabel>
+          <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
+            {step.actionStep}
+          </p>
         </section>
 
         {/* Closing text — daily-rhythm only */}
         {isDailyRhythmJourney && (
           <section className="mb-8">
-            <p className="text-[16px] text-muted-foreground text-center leading-relaxed italic">
+            <p className="text-[16px] text-muted-foreground leading-relaxed">
               Tomorrow we'll continue walking together.
             </p>
           </section>
@@ -493,14 +500,9 @@ export default function JourneyDay() {
   );
 }
 
-function SectionLabel({ children, primary }: { children: React.ReactNode; primary?: boolean }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2
-      className={
-        'text-[11px] font-semibold uppercase tracking-widest ' +
-        (primary ? 'text-primary' : 'text-muted-foreground')
-      }
-    >
+    <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
       {children}
     </h2>
   );

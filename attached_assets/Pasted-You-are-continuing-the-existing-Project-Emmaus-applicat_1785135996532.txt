@@ -1,0 +1,281 @@
+You are continuing the existing Project Emmaus application.
+
+Do not redesign the Daily Rhythm experience.
+
+Do not change navigation.
+
+Do not change content.
+
+This sprint is typography and reading experience only.
+
+=====================================================
+
+OBJECTIVE
+
+Create a clean, calm, distraction-free reading experience.
+
+Emmaus should feel like quietly reading Scripture and reflecting with Jesus.
+
+Not like reading a word processor.
+
+=====================================================
+
+TYPOGRAPHY
+
+Use ONE font family throughout the Daily Rhythm experience.
+
+Do not mix serif and sans-serif fonts.
+
+Do not switch fonts for prayers.
+
+Do not use cursive fonts.
+
+Do not use decorative fonts.
+
+Use the same font family everywhere.
+
+Only vary:
+
+- font size
+- weight
+- spacing
+
+=====================================================
+
+HIERARCHY
+
+10 Minutes with Jesus
+
+Largest text.
+
+Bold.
+
+Centered.
+
+-----------------------------------------------------
+
+Day Number
+
+Smaller than title.
+
+Medium weight.
+
+Centered.
+
+-----------------------------------------------------
+
+Day Title
+
+Example:
+
+Come and See
+
+Large.
+
+Bold.
+
+Centered.
+
+-----------------------------------------------------
+
+Section Headings
+
+Use consistent styling.
+
+Examples:
+
+SCRIPTURE
+
+REFLECTION
+
+PRAYER
+
+YOUR NEXT STEP
+
+Small uppercase.
+
+Semibold.
+
+Consistent spacing.
+
+Do not use different heading styles.
+
+-----------------------------------------------------
+
+Body Text
+
+Use the same font everywhere.
+
+Regular weight.
+
+Comfortable line spacing.
+
+Easy to read on mobile.
+
+No justified text.
+
+=====================================================
+
+ALIGNMENT
+
+Center only:
+
+- 10 Minutes with Jesus
+- Day Number
+- Day Title
+
+Everything else should be LEFT aligned.
+
+This includes:
+
+Greeting
+
+Reflection
+
+Prayer
+
+Next Step
+
+Closing
+
+Reading paragraphs should never be centered.
+
+=====================================================
+
+PRAYER
+
+Prayer should use the EXACT SAME FONT as the rest of the body.
+
+Do not italicise the entire prayer.
+
+Do not change font family.
+
+Do not change typography.
+
+Only the heading "PRAYER" distinguishes the section.
+
+=====================================================
+
+SCRIPTURE
+
+Scripture reference:
+
+John 1:35–39
+
+Use body font.
+
+Do not over-style it.
+
+The dynamically loaded Bible passage should inherit the same body typography.
+
+=====================================================
+
+SPACING
+
+Increase whitespace between sections.
+
+Do not crowd paragraphs.
+
+Keep a calm rhythm.
+
+Allow each paragraph to breathe.
+
+=====================================================
+
+WIDTH
+
+Limit reading width for desktop preview.
+
+Long lines become difficult to read.
+
+Use a comfortable maximum content width while remaining fully responsive on mobile.
+
+=====================================================
+
+COLOURS
+
+Keep colours minimal.
+
+Primary text:
+
+Dark charcoal.
+
+Secondary labels:
+
+Muted grey.
+
+No decorative colours.
+
+=====================================================
+
+DO NOT
+
+Do not add cards.
+
+Do not add gradients.
+
+Do not add icons.
+
+Do not add animations.
+
+Do not add decorative dividers.
+
+Do not add badges.
+
+Do not add illustrations.
+
+The content should remain the focus.
+
+=====================================================
+
+GOAL
+
+The reading experience should feel like:
+
+calm
+
+simple
+
+intentional
+
+uncluttered
+
+reverent
+
+=====================================================
+
+TEST
+
+Preview Day 1.
+
+Verify:
+
+✓ One font family throughout
+
+✓ Reflection left aligned
+
+✓ Prayer left aligned
+
+✓ Body typography consistent
+
+✓ Comfortable spacing
+
+✓ Responsive on mobile
+
+✓ No mixed typography
+
+✓ No layout regressions
+
+=====================================================
+
+Do not begin another sprint.
+
+Stop after typography is complete.
+
+Report:
+
+1. Typography changes
+2. Components updated
+3. Styles modified
+4. Mobile preview results
+5. Remaining issues
