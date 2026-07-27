@@ -90,9 +90,11 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── Body text ────────────────────────────────────────────────────────────────
 // Splits authored text on double newlines so each intentional paragraph is its
 // own <p> element. Single newlines within a paragraph are preserved via
-// whitespace-pre-wrap. This prevents the "every sentence looks like a slide"
-// problem caused by whitespace-pre-wrap on a single large <p> with large
-// leading.
+// whitespace-pre-wrap.
+//
+// Paragraph gap: 0.65em ≈ 11px at 17px body. This matches the spacing a
+// printed devotional or modern Bible uses — tight enough that consecutive
+// thoughts read as one continuous passage, wide enough to mark the break.
 
 function BodyParagraphs({
   text,
@@ -107,7 +109,7 @@ function BodyParagraphs({
       {paragraphs.map((para, i) => (
         <p
           key={i}
-          className={`${i > 0 ? 'mt-4' : ''} text-[17px] text-foreground leading-[1.65] whitespace-pre-wrap ${className}`.trim()}
+          className={`${i > 0 ? 'mt-[0.65em]' : ''} text-[17px] text-foreground leading-[1.65] whitespace-pre-wrap ${className}`.trim()}
         >
           {para.trim()}
         </p>
@@ -220,7 +222,7 @@ export function DailyRhythmReading({
               </p>
               {/* Remaining paragraphs */}
               {greetingRest && (
-                <div className="mt-4">
+                <div className="mt-[0.65em]">
                   <BodyParagraphs text={greetingRest} />
                 </div>
               )}
