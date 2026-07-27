@@ -1,0 +1,183 @@
+You are continuing the existing Project Emmaus application.
+
+Do not redesign the Daily Rhythm.
+
+Do not change the daily unlock rules.
+
+This task adds access to previous Daily Rhythm days.
+
+=====================================================
+OBJECTIVE
+
+Members must be able to return to previously unlocked days of:
+
+10 Minutes with Jesus
+
+Future days must remain locked.
+
+=====================================================
+WALK SCREEN
+
+Under the main 10 Minutes with Jesus card, add a compact section:
+
+Previous Days
+
+Show previously unlocked Daily Rhythm entries in reverse order, most recent first.
+
+Each item should display:
+
+Day number
+
+Title
+
+Example:
+
+Day 3
+Follow Me
+
+Day 2
+Jesus Knows Your Name
+
+Day 1
+Come and See
+
+Do not show future days.
+
+Do not show unpublished days.
+
+=====================================================
+EMPTY STATE
+
+If the member is on Day 1 and has no previous days, hide the section completely.
+
+Do not show an empty card.
+
+=====================================================
+REPLAY MODE
+
+Tapping a previous day opens the existing Daily Rhythm reader in read-only replay mode.
+
+Replay mode must:
+
+- display the complete day
+- use the same member-facing typography
+- personalize the greeting at runtime
+- load Scripture from the member’s chosen translation
+- allow normal scrolling
+- show a final button:
+
+Back to Walk
+
+Replay mode must not:
+
+- change the member’s current day
+- mark the replayed day as newly completed
+- change completion dates
+- unlock another day
+- affect today’s progress
+- restart the Daily Rhythm sequence
+
+=====================================================
+CURRENT DAY
+
+The main Daily Rhythm card continues to show the member’s current available day.
+
+Previous Days is only for revisiting earlier content.
+
+=====================================================
+AHEAD-OF-RHYTHM SCREEN
+
+The current screen says:
+
+“You’re ahead of the rhythm.”
+
+When this screen appears, add a secondary action:
+
+View Previous Days
+
+This opens the same previous-days list.
+
+Keep:
+
+Back to Walk
+
+Do not direct the member to a future day.
+
+=====================================================
+ROUTING
+
+Use a clear route for replaying a day, consistent with the existing app.
+
+Conceptually:
+
+/daily-rhythm/day/:dayNumber?mode=replay
+
+Use the project’s actual routing conventions.
+
+Do not continue using an outdated route containing:
+
+15-minutes-with-jesus
+
+Update canonical Daily Rhythm routes to use the current 10 Minutes with Jesus architecture.
+
+Preserve redirects from old routes where necessary.
+
+=====================================================
+DATA RULES
+
+A member may access a Daily Rhythm day only when:
+
+- the entry is Published
+- the day number is less than or equal to the member’s current unlocked day
+
+Do not rely only on hidden UI.
+
+Enforce this server-side or in the data service as appropriate.
+
+=====================================================
+DESIGN
+
+Keep the section understated.
+
+No badges.
+
+No streaks.
+
+No completion trophies.
+
+No large cards for every day.
+
+Use the existing Emmaus visual system.
+
+On mobile, use either:
+
+- a compact vertical list
+- or a horizontally scrollable row
+
+Choose whichever fits the existing Walk layout best without clutter.
+
+=====================================================
+TESTS
+
+Verify:
+
+- Day 1 shows no Previous Days section.
+- Day 2 shows Day 1.
+- Day 5 shows Days 1–4.
+- Most recent previous day appears first.
+- Tapping a previous day opens the correct content.
+- Replay does not change current progress.
+- Replay does not unlock another day.
+- Future days cannot be opened by editing the URL.
+- Unpublished days never appear.
+- Back to Walk returns correctly.
+- Ahead-of-rhythm screen includes View Previous Days.
+- Mobile and desktop layouts work.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+DEFINITION OF DONE
+
+This task is complete when members can safely revisit any previously unlocked Daily Rhythm day without affecting their current progress or daily unlock sequence.
+
+Do not begin another task.

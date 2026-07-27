@@ -46,7 +46,7 @@ export default function Onboarding() {
     markOnboarded();
     if (coreJourney) {
       startJourney(coreJourney.id);
-      setLocation(`/journey/${coreJourney.id}/day/1`);
+      setLocation('/daily-rhythm/day/1');
     } else {
       setLocation('/walk');
     }

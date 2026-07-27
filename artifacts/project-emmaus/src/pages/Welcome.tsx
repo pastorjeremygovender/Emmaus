@@ -36,7 +36,7 @@ function getDailyRhythmUrl(
   );
   if (!journey) return '/walk';
   const currentDay = progress[journey.id]?.currentDay ?? 1;
-  return `/journey/${journey.id}/day/${currentDay}`;
+  return `/daily-rhythm/day/${currentDay}`;
 }
 
 const SPLASH_KEY   = 'emmaus_splash_shown';

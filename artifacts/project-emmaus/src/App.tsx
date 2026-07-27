@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
 import { RoomsProvider } from './contexts/RoomsContext';
@@ -15,6 +15,7 @@ import Auth from '@/pages/Auth';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
 import JourneyDay from '@/pages/JourneyDay';
+import DailyRhythmDay from '@/pages/DailyRhythmDay';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
 import JourneyDetail from '@/pages/journeys/JourneyDetail';
@@ -48,6 +49,15 @@ import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
 import RoomDiscussion from '@/pages/rooms/RoomDiscussion';
 import RoomSettings from '@/pages/rooms/RoomSettings';
 
+/** Redirect /journey/15-minutes-with-jesus/day/:day → /daily-rhythm/day/:day */
+function LegacyDailyRhythmRedirect({ day }: { day: string }) {
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    setLocation(`/daily-rhythm/day/${day}`);
+  }, [day]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -56,6 +66,12 @@ function Router() {
       <Route path="/auth" component={Auth} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
+      {/* Canonical Daily Rhythm route */}
+      <Route path="/daily-rhythm/day/:dayNumber" component={DailyRhythmDay} />
+      {/* Legacy redirect — /journey/15-minutes-with-jesus/day/:day → canonical */}
+      <Route path="/journey/15-minutes-with-jesus/day/:day">
+        {(params) => <LegacyDailyRhythmRedirect day={params?.day ?? '1'} />}
+      </Route>
       <Route path="/journey/:journeyId/day/:day" component={JourneyDay} />
 
       {/* Bible */}

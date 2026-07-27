@@ -375,10 +375,56 @@ function ContinueJourneyCard({
   );
 }
 
+// ─── Previous Days list ───────────────────────────────────────────────────────
+// Shows previously unlocked Daily Rhythm days in reverse order (most recent first).
+// Hidden entirely when the member has no previous days (Day 1, or no progress yet).
+function PreviousDays({
+  journey,
+  prog,
+  getSteps,
+  onSelect,
+}: {
+  journey: import('@/contexts/JourneyContext').Journey;
+  prog:    import('@/contexts/JourneyContext').Progress | undefined;
+  getSteps: (id: string) => import('@/contexts/JourneyContext').Step[];
+  onSelect: (day: number) => void;
+}) {
+  const currentDay = prog?.currentDay ?? 1;
+  if (currentDay <= 1) return null;
+
+  // Members already see only Published steps via JourneyContext.
+  // Filter to days strictly before currentDay and sort most-recent-first.
+  const previous = getSteps(journey.id)
+    .filter(s => s.status === 'Published' && s.day < currentDay)
+    .sort((a, b) => b.day - a.day);
+
+  if (previous.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-1 pb-1">
+        Previous Days
+      </p>
+      {previous.map(s => (
+        <button
+          key={s.day}
+          onClick={() => onSelect(s.day)}
+          className="w-full flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
+        >
+          <span className="text-[12px] font-medium text-muted-foreground shrink-0 w-12">
+            Day {s.day}
+          </span>
+          <span className="text-[14px] text-foreground truncate">{s.title}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Walk() {
   const { user } = useAuth();
-  const { journeys, progress, loading, startJourney } = useJourney();
+  const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
   const { enrollment, pauseJourney, getState } = useEnrollment();
   const [, setLocation] = useLocation();
 
@@ -432,6 +478,12 @@ export default function Walk() {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
+  /** Navigate to a Daily Rhythm day using the canonical route. */
+  function goToDailyRhythmDay(day: number) {
+    setLocation(`/daily-rhythm/day/${day}`);
+  }
+
+  /** Navigate to a non-Daily-Rhythm journey day. */
   function goToJourney(journeyId: string, prog?: { currentDay: number }) {
     const day = prog?.currentDay ?? 1;
     if (!progress[journeyId]) startJourney(journeyId);
@@ -482,7 +534,7 @@ export default function Walk() {
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
-              onContinue={() => goToJourney(coreJourney.id, coreProg)}
+              onContinue={() => goToDailyRhythmDay(coreProg?.currentDay ?? 1)}
             />
           </motion.section>
         ) : (
@@ -491,6 +543,22 @@ export default function Walk() {
               We couldn't load this step. Please try again.
             </p>
           </div>
+        )}
+
+        {/* ── Previous Days (Daily Rhythm) ──────────────────────────────────── */}
+        {coreJourney && (
+          <motion.section
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.08 }}
+          >
+            <PreviousDays
+              journey={coreJourney}
+              prog={coreProg}
+              getSteps={getStepsForJourney}
+              onSelect={(day) => setLocation(`/daily-rhythm/day/${day}`)}
+            />
+          </motion.section>
         )}
 
         {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
