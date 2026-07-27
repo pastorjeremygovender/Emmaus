@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-base-3.13"]
+modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -24,3 +24,6 @@ timeoutMs = 20000
 [userenv.shared]
 EMMAUS_DEEP_MODEL = "gpt-5"
 EMMAUS_FAST_MODEL = "gpt-4o"
+
+[nix]
+channel = "stable-25_05"

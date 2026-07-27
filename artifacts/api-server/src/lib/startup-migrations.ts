@@ -9,8 +9,6 @@ import { db } from "@workspace/db";
 import { journeysTable } from "@workspace/db/schema";
 import { and, eq, ne } from "drizzle-orm";
 import { logger } from "./logger.js";
-import { seedDailyRhythm } from "../scripts/seed-daily-rhythm.js";
-
 export async function runStartupMigrations(): Promise<void> {
   // ── Daily Rhythm Architecture (2026-07) ──────────────────────────────────────
   // Promote "15-minutes-with-jesus" from journeyType "core" → "daily-rhythm".
@@ -53,8 +51,4 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: title rename failed (non-fatal)");
   }
 
-  // ── Seed Daily Rhythm content (2026-07) ────────────────────────────────────
-  // Insert Days 1–30 of "Starting with Jesus" into journey_steps.
-  // Uses ON CONFLICT DO NOTHING so admin edits are never overwritten.
-  await seedDailyRhythm();
 }
