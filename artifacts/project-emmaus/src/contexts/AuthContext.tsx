@@ -20,7 +20,7 @@ type AuthContextType = {
   isDemoMode: boolean;
   signIn: (email: string, pass: string) => Promise<'admin' | 'user' | 'superAdmin'>;
   signUp: (email: string, pass: string, name: string) => Promise<void>;
-  signInDemo: (asAdmin?: boolean) => void;
+  signInDemo: (as?: boolean | 'superAdmin') => void;
   signOut: () => void;
   updateFeeling: (feeling: string) => void;
 };
@@ -67,8 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('emmaus_demo_user', JSON.stringify(newUser));
   };
 
-  const signInDemo = (asAdmin = false) => {
-    const u = asAdmin ? DEMO_ADMIN : DEMO_USER;
+  const signInDemo = (as: boolean | 'superAdmin' = false) => {
+    const u = as === 'superAdmin' ? DEMO_SUPER_ADMIN : as ? DEMO_ADMIN : DEMO_USER;
     setUser(u);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(u));
   };

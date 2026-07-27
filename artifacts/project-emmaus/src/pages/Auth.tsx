@@ -24,7 +24,7 @@ export default function Auth() {
   // Redirect if already authed
   useEffect(() => {
     if (user) {
-      if (user.role === 'admin') setLocation('/admin');
+      if (user.role === 'admin' || user.role === 'superAdmin') setLocation('/admin');
       else if (!user.currentFeeling) setLocation('/checkin');
       else setLocation('/walk');
     }
@@ -51,7 +51,7 @@ export default function Auth() {
     try {
       if (mode === 'login') {
         const role = await signIn(email, password);
-        setLocation(role === 'admin' ? '/admin' : '/checkin');
+        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/checkin');
       } else {
         await signUp(email, password, name);
         setLocation('/checkin');
@@ -70,6 +70,11 @@ export default function Auth() {
 
   const handleDemoAdmin = () => {
     signInDemo(true);
+    setLocation('/admin');
+  };
+
+  const handleDemoSuperAdmin = () => {
+    signInDemo('superAdmin');
     setLocation('/admin');
   };
 
@@ -200,6 +205,14 @@ export default function Auth() {
                   data-testid="button-demo-admin"
                 >
                   Continue as Demo Admin
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDemoSuperAdmin}
+                  className="w-full h-12 text-base rounded-xl border-red-200 text-red-700 hover:bg-red-50"
+                  data-testid="button-demo-super-admin"
+                >
+                  Continue as Super Admin
                 </Button>
               </div>
             </div>
