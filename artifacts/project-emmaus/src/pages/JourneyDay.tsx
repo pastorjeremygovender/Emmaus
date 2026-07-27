@@ -9,6 +9,7 @@ import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { BottomNav } from '@/components/BottomNav';
 
 /** Parse a scripture reference into the Bible reader path.
  *  "John 1:35-39"  →  "/bible/read/john/1"
@@ -480,6 +481,7 @@ export default function JourneyDay() {
 
         </main>
       )}
+      <BottomNav />
     </div>
   );
 }

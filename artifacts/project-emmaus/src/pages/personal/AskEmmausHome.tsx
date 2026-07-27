@@ -17,6 +17,7 @@ import { ArrowLeft, Clock, MessageCircle, ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import { useAuth } from '@/contexts/AuthContext';
+import { BottomNav } from '@/components/BottomNav';
 import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
 import {
   setPendingMessage,
@@ -109,7 +110,7 @@ export default function AskEmmausHome() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-16">
+    <div className="min-h-[100dvh] bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
@@ -243,6 +244,7 @@ export default function AskEmmausHome() {
         )}
 
       </main>
+      <BottomNav />
     </div>
   );
 }

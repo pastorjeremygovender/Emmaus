@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
+import { BottomNav } from '@/components/BottomNav';
 
 // ─── Ahead-of-rhythm screen ───────────────────────────────────────────────────
 // Shared by two cases: (a) day > currentDay, (b) current day not yet published.
@@ -225,6 +226,7 @@ export default function DailyRhythmDay() {
         }
       />
 
+      <BottomNav />
     </div>
   );
 }

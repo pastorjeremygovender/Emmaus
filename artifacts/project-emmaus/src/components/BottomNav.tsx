@@ -36,7 +36,10 @@ export function BottomNav() {
       return false;
     }
 
-    if (path === '/walk')     return location === '/walk';
+    if (path === '/walk')     return (
+      location === '/walk' ||
+      location.startsWith('/daily-rhythm/')
+    );
     if (path === '/bible')    return location === '/bible' || location.startsWith('/bible/');
     if (path === '/journeys') return location === '/journeys' || location.startsWith('/journey/');
     if (path === '/personal') {

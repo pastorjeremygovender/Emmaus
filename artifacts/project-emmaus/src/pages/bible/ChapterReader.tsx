@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { getApiUrl } from '@/lib/api';
 import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
+import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown
@@ -727,6 +728,7 @@ export default function ChapterReader() {
         />
       )}
 
+      <BottomNav />
     </div>
   );
 }

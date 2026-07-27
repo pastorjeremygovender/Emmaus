@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, useCallback, memo, type RefObject } from '
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { BottomNav } from '@/components/BottomNav';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import {
   startConversation,
@@ -394,7 +395,7 @@ export default function AskEmmausConversation() {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div ref={rootRef} className="h-[100dvh] bg-background flex flex-col overflow-hidden">
+    <div ref={rootRef} className="h-[100dvh] bg-background flex flex-col overflow-hidden pb-16">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
@@ -520,6 +521,7 @@ export default function AskEmmausConversation() {
           </div>
         </div>
       )}
+      <BottomNav />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMessages, type StoredMessage } from '@/lib/emmaus-client';
+import { BottomNav } from '@/components/BottomNav';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
@@ -65,7 +66,7 @@ export default function AskEmmausHistory() {
         </div>
       </header>
 
-      <main className="px-5 pt-6 pb-12 max-w-[560px] mx-auto space-y-8">
+      <main className="px-5 pt-6 pb-24 max-w-[560px] mx-auto space-y-8">
         {loading && (
           <p className="text-[15px] text-muted-foreground pt-8 text-center">Loading…</p>
         )}
@@ -108,6 +109,7 @@ export default function AskEmmausHistory() {
           </div>
         ))}
       </main>
+      <BottomNav />
     </div>
   );
 }

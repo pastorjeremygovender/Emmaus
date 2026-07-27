@@ -1,3 +1,5 @@
+import { BottomNav } from '@/components/BottomNav';
+
 /**
  * PreviousDays — lists every Published Daily Rhythm day the member is allowed to revisit.
  *
@@ -113,6 +115,7 @@ export default function PreviousDays() {
 
         )}
       </main>
+      <BottomNav />
     </div>
   );
 }
