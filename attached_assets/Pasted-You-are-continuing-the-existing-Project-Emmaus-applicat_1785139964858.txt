@@ -1,0 +1,238 @@
+You are continuing the existing Project Emmaus application.
+
+This sprint finalizes the Walk screen.
+
+Do not redesign the application.
+
+Do not add new features.
+
+Do not change routing.
+
+Refine the information architecture only.
+
+=====================================================
+
+CORE PRINCIPLE
+
+The Walk screen exists for ONE purpose:
+
+"What is Jesus inviting me to continue today?"
+
+Every element on this screen must answer that question.
+
+If it does not help the member continue today's walk with Jesus, it does not belong here.
+
+=====================================================
+
+10 MINUTES WITH JESUS
+
+Keep this as the highest priority card.
+
+Primary action:
+
+Continue Day X
+
+Add ONE secondary action beneath the Continue button.
+
+Style it as a simple text link.
+
+Example:
+
+View Previous Days →
+
+or
+
+See Previous Days →
+
+Do NOT make this another button.
+
+Do NOT create another card.
+
+Do NOT give it equal visual weight.
+
+It is a secondary action only.
+
+Selecting it opens the previously implemented Previous Days view.
+
+=====================================================
+
+PREVIOUS DAYS
+
+Remove the standalone "Previous Days" section from the Walk screen.
+
+The only entry point should now be:
+
+10 Minutes with Jesus
+↓
+Continue Day X
+View Previous Days →
+
+Previous Days still functions exactly as before.
+
+Only its location changes.
+
+=====================================================
+
+YOUR JOURNEYS
+
+Below Daily Rhythm display:
+
+Your Journeys
+
+List only journeys the member has already started.
+
+Example:
+
+Made Free
+Continue →
+
+Marriage Journey
+Continue →
+
+Volunteer Training
+Continue →
+
+Every journey has ONE primary action:
+
+Continue
+
+If the member has no active journeys:
+
+Display a simple invitation:
+
+Explore Journeys
+
+which opens the Next Steps screen.
+
+Do not show empty cards.
+
+=====================================================
+
+THIS WEEK'S SERMON DEVOTIONAL
+
+Keep this section.
+
+Display only when a current sermon devotional exists.
+
+Primary action:
+
+Continue
+
+Do not display historical sermon series.
+
+=====================================================
+
+REMOVE
+
+Delete the entire:
+
+THIS WEEK
+
+information section.
+
+Remove:
+
+- heading
+- information card
+- encouragement text
+- placeholder content
+
+Do not replace it.
+
+=====================================================
+
+ASK EMMAUS
+
+Keep Ask Emmaus floating.
+
+Do not increase its prominence.
+
+It should remain available but never compete visually with today's discipleship.
+
+=====================================================
+
+VISUAL HIERARCHY
+
+Today's 10 Minutes with Jesus
+
+↓
+
+Your Journeys
+
+↓
+
+This Week's Sermon Devotional
+
+↓
+
+Ask Emmaus
+
+The screen should naturally lead the member from the most important commitment to the least.
+
+=====================================================
+
+DESIGN PRINCIPLES
+
+Every content card should have ONE primary action.
+
+Daily Rhythm
+
+Continue Day X
+
+Secondary:
+
+View Previous Days →
+
+Journeys
+
+Continue
+
+Sermon Devotional
+
+Continue
+
+Avoid multiple competing buttons.
+
+=====================================================
+
+SUCCESS CRITERIA
+
+The Walk screen should answer one question:
+
+"What am I continuing with Jesus today?"
+
+Nothing on the screen should feel like a feature list.
+
+Everything should feel like a current commitment.
+
+=====================================================
+
+TEST
+
+Verify:
+
+✓ Daily Rhythm remains first.
+
+✓ Previous Days is no longer a separate section.
+
+✓ View Previous Days opens replay mode.
+
+✓ Journeys display correctly.
+
+✓ Empty journeys state links to Next Steps.
+
+✓ Sermon devotional displays only when active.
+
+✓ "This Week" section removed.
+
+✓ Ask Emmaus unchanged.
+
+✓ Mobile spacing remains clean.
+
+✓ No TypeScript or runtime errors.
+
+=====================================================
+
+Do not begin another sprint.
+
+Stop after the Walk screen reflects these principles and report the completed changes.

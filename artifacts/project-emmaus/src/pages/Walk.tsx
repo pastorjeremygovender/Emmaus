@@ -1,3 +1,14 @@
+/**
+ * Walk — "What is Jesus inviting me to continue today?"
+ *
+ * Visual hierarchy (top → bottom):
+ *   1. Today's 10 Minutes with Jesus  (highest priority — always first)
+ *   2. Your Journeys                  (started journeys; "Explore Journeys →" if none)
+ *   3. This Week's Sermon Devotional  (companion journey, only when active)
+ *
+ * Ask Emmaus floats above the nav — not part of this hierarchy.
+ */
+
 import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -31,111 +42,26 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Weekly progress ──────────────────────────────────────────────────────────
-function WeeklyProgress({
-  progress,
-  journeys,
-}: {
-  progress: Record<string, import('@/contexts/JourneyContext').Progress>;
-  journeys: import('@/contexts/JourneyContext').Journey[];
-}) {
-  const now = new Date();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  monday.setHours(0, 0, 0, 0);
-
-  const completionDates = new Set<string>();
-  let listenedSermon = false;
-
-  for (const j of journeys) {
-    const prog = progress[j.id];
-    if (!prog?.lastCompletedAt) continue;
-    const completedAt = new Date(prog.lastCompletedAt);
-    if (completedAt >= monday) {
-      completionDates.add(completedAt.toLocaleDateString());
-      if (j.journeyType === 'companion') listenedSermon = true;
-    }
-  }
-
-  const scripturedays   = completionDates.size;
-  const journeyContinued = completionDates.size;
-
-  const items: Array<{ label: string; show: boolean }> = [
-    {
-      label:
-        scripturedays === 0
-          ? "Open Scripture to begin your week\u2019s rhythm."
-          : `Read Scripture ${scripturedays} day${scripturedays !== 1 ? 's' : ''} this week`,
-      show: true,
-    },
-    {
-      label: `Continued a Journey ${journeyContinued} day${journeyContinued !== 1 ? 's' : ''} this week`,
-      show: journeyContinued > 0,
-    },
-    {
-      label: "Listened to this week's sermon",
-      show: listenedSermon,
-    },
-  ];
-
-  const shown = items.filter(i => i.show);
-
-  const encouragements = [
-    "You're building a steady rhythm. Keep taking the next step.",
-    'Every small step matters. Keep going, one day at a time.',
-    "You've made space to walk with Jesus. Keep it up.",
-    'Faithful steps add up. Well done this week.',
-  ];
-  const encouragement = encouragements[new Date().getDay() % encouragements.length];
-
-  return (
-    <section className="space-y-3">
-      <SectionLabel>This week</SectionLabel>
-      <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-        {shown.length === 0 ? (
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Your weekly rhythm will appear here as you begin.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {shown.map((item, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2.5 text-[14px] text-foreground leading-snug"
-              >
-                <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
-                <span>{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {shown.length > 0 && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed border-t border-border pt-3">
-            {encouragement}
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
 // ─── 10 Minutes with Jesus card ───────────────────────────────────────────────
-// This is the central daily rhythm card and must be the most prominent element.
+// Highest-priority card. Always first.
 // For daily-rhythm journeys: never shows "of X" total or any "complete" language.
+// onViewPreviousDays — when provided, a "View Previous Days →" text link is shown
+// beneath the primary action. Only supply when the member actually has previous days.
 function FifteenMinutesCard({
   journey,
   prog,
   onContinue,
+  onViewPreviousDays,
 }: {
   journey: import('@/contexts/JourneyContext').Journey;
   prog: import('@/contexts/JourneyContext').Progress | undefined;
   onContinue: () => void;
+  onViewPreviousDays?: () => void;
 }) {
   const completedToday  = isCompletedToday(prog?.lastCompletedAt);
   const nextDayAvail    = isNextDayAvailable(prog?.lastCompletedAt);
   const currentDay      = prog?.currentDay ?? 1;
   const started         = !!prog;
-  // Daily Rhythm journeys never show an end — they continue indefinitely.
   const isDailyRhythm   = journey.journeyType === 'daily-rhythm';
 
   let state: 'start' | 'ready' | 'complete' | 'tomorrow';
@@ -202,7 +128,7 @@ function FifteenMinutesCard({
         </p>
       )}
 
-      {/* Action */}
+      {/* Primary action */}
       <Button
         className="w-full h-12 rounded-xl text-[16px] font-medium"
         variant={cfg.variant}
@@ -211,6 +137,16 @@ function FifteenMinutesCard({
       >
         {cfg.label}
       </Button>
+
+      {/* Secondary — View Previous Days text link, only when previous days exist */}
+      {onViewPreviousDays && (
+        <button
+          onClick={onViewPreviousDays}
+          className="w-full text-center text-[13px] text-muted-foreground hover:text-foreground transition-colors pt-1"
+        >
+          View Previous Days →
+        </button>
+      )}
     </div>
   );
 }
@@ -236,11 +172,6 @@ function SermonDevotionalCard({
         <p className="text-[17px] font-medium text-foreground leading-snug">
           {journey.sermon?.title ?? journey.title}
         </p>
-        {!started && (
-          <p className="text-[13px] text-muted-foreground pt-0.5">
-            Five weekday reflections based on Sunday's message.
-          </p>
-        )}
         {started && prog && (
           <p className="text-[13px] text-muted-foreground pt-0.5">
             Day {prog.currentDay} of {journey.durationDays}
@@ -252,172 +183,58 @@ function SermonDevotionalCard({
         variant={started ? 'default' : 'outline'}
         onClick={onContinue}
       >
-        {started ? 'Continue' : 'Start Monday'}
-      </Button>
-    </div>
-  );
-}
-
-// ─── Daily Devotional card ────────────────────────────────────────────────────
-function DailyDevotionalCard({
-  journey,
-  prog,
-  onContinue,
-}: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog: import('@/contexts/JourneyContext').Progress | undefined;
-  onContinue: () => void;
-}) {
-  const completedToday = isCompletedToday(prog?.lastCompletedAt);
-  const nextDayAvail   = isNextDayAvailable(prog?.lastCompletedAt);
-  const currentDay     = prog?.currentDay ?? 1;
-  const started        = !!prog;
-
-  let state: 'start' | 'ready' | 'complete' | 'tomorrow';
-  if (!started)                              state = 'start';
-  else if (completedToday && !nextDayAvail)  state = 'complete';
-  else if (completedToday)                   state = 'tomorrow';
-  else                                       state = 'ready';
-
-  const cfg = {
-    start:    { label: 'Begin today',        variant: 'outline'  as const, disabled: false },
-    ready:    { label: 'Continue reading',   variant: 'outline'  as const, disabled: false },
-    complete: { label: 'Read again',         variant: 'outline'  as const, disabled: false },
-    tomorrow: { label: 'Available tomorrow', variant: 'outline'  as const, disabled: true  },
-  }[state];
-
-  return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-      <div className="space-y-0.5">
-        <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-          Daily Devotional
-        </p>
-        <p className="text-[17px] font-medium text-foreground leading-snug">
-          {journey.title}
-        </p>
-        {started && (
-          <p className="text-[13px] text-muted-foreground pt-0.5">
-            {state === 'complete' || state === 'tomorrow'
-              ? 'Completed today'
-              : `Day ${currentDay} of ${journey.durationDays}`}
-          </p>
-        )}
-      </div>
-
-      {(state === 'complete' || state === 'tomorrow') && (
-        <p className="text-[13px] text-muted-foreground leading-relaxed">
-          Today's devotional is complete. Come back tomorrow.
-        </p>
-      )}
-
-      <Button
-        className="w-full h-11 rounded-xl text-[15px]"
-        variant={cfg.variant}
-        onClick={onContinue}
-        disabled={cfg.disabled}
-      >
-        {cfg.label}
-      </Button>
-    </div>
-  );
-}
-
-// ─── Continue journey card ────────────────────────────────────────────────────
-function ContinueJourneyCard({
-  journey,
-  prog,
-  onContinue,
-  onPause,
-}: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog: import('@/contexts/JourneyContext').Progress;
-  onContinue: () => void;
-  onPause: () => void;
-}) {
-  const pct = Math.round((prog.completedDays.length / (journey.durationDays || 1)) * 100);
-
-  return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-0.5 flex-1 min-w-0">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Journey
-          </p>
-          <h3 className="text-[17px] font-medium text-foreground leading-snug truncate">
-            {journey.title}
-          </h3>
-          <p className="text-[13px] text-muted-foreground">
-            Step {prog.currentDay} of {journey.durationDays}
-          </p>
-        </div>
-        <button
-          onClick={onPause}
-          className="text-[12px] text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1"
-          aria-label="Pause journey"
-        >
-          Pause
-        </button>
-      </div>
-
-      {pct > 0 && (
-        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-
-      <Button className="w-full h-11 rounded-xl text-[15px]" onClick={onContinue}>
         Continue
       </Button>
     </div>
   );
 }
 
-// ─── Previous Days list ───────────────────────────────────────────────────────
-// Shows previously unlocked Daily Rhythm days in reverse order (most recent first).
-// Hidden entirely when the member has no previous days (Day 1, or no progress yet).
-function PreviousDays({
-  journey,
-  prog,
-  getSteps,
+// ─── Your Journeys section ────────────────────────────────────────────────────
+// Lists journeys the member has already started.
+// Empty state: an "Explore Journeys →" invitation leading to Next Steps.
+function YourJourneysSection({
+  startedJourneys,
   onSelect,
+  onExplore,
 }: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog:    import('@/contexts/JourneyContext').Progress | undefined;
-  getSteps: (id: string) => import('@/contexts/JourneyContext').Step[];
-  onSelect: (day: number) => void;
+  startedJourneys: Array<{
+    journey: import('@/contexts/JourneyContext').Journey;
+    prog: import('@/contexts/JourneyContext').Progress;
+  }>;
+  onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
+  onExplore: () => void;
 }) {
-  const currentDay = prog?.currentDay ?? 1;
-  if (currentDay <= 1) return null;
-
-  // Members already see only Published steps via JourneyContext.
-  // Filter to days strictly before currentDay and sort most-recent-first.
-  const previous = getSteps(journey.id)
-    .filter(s => s.status === 'Published' && s.day < currentDay)
-    .sort((a, b) => b.day - a.day);
-
-  if (previous.length === 0) return null;
-
   return (
-    <div className="space-y-1">
-      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-1 pb-1">
-        Previous Days
-      </p>
-      {previous.map(s => (
+    <section className="space-y-2">
+      <SectionLabel>Your Journeys</SectionLabel>
+
+      {startedJourneys.length === 0 ? (
+        /* Empty state — no card, just a quiet invitation */
         <button
-          key={s.day}
-          onClick={() => onSelect(s.day)}
-          className="w-full flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
+          onClick={onExplore}
+          className="text-[15px] text-primary hover:text-primary/80 transition-colors py-1"
         >
-          <span className="text-[12px] font-medium text-muted-foreground shrink-0 w-12">
-            Day {s.day}
-          </span>
-          <span className="text-[14px] text-foreground truncate">{s.title}</span>
+          Explore Journeys →
         </button>
-      ))}
-    </div>
+      ) : (
+        <div className="space-y-1">
+          {startedJourneys.map(({ journey, prog }) => (
+            <button
+              key={journey.id}
+              onClick={() => onSelect(journey.id, prog)}
+              className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
+            >
+              <span className="text-[15px] font-medium text-foreground truncate">
+                {journey.title}
+              </span>
+              <span className="text-[13px] text-primary shrink-0 ml-3">
+                Continue →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -425,7 +242,7 @@ function PreviousDays({
 export default function Walk() {
   const { user } = useAuth();
   const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
-  const { enrollment, pauseJourney, getState } = useEnrollment();
+  const { getState } = useEnrollment();
   const [, setLocation] = useLocation();
 
   // Hooks must all be called before early returns.
@@ -454,45 +271,55 @@ export default function Walk() {
   // ── Content resolution ───────────────────────────────────────────────────────
 
   // 1. Daily Rhythm — 10 Minutes with Jesus
-  // Accepts 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
-  const coreJourney    = publishedJourneys.find(
+  const coreJourney = publishedJourneys.find(
     j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
   );
-  const coreProg       = coreJourney ? progress[coreJourney.id] : undefined;
+  const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
+
+  // Does the member have any published previous days to revisit?
+  const coreCurrentDay = coreProg?.currentDay ?? 1;
+  const hasPreviousDays =
+    !!coreJourney &&
+    coreCurrentDay > 1 &&
+    getStepsForJourney(coreJourney.id).some(
+      s => s.status === 'Published' && s.day < coreCurrentDay
+    );
 
   // 2. Companion — This Week's Sermon Devotional
   const companionJourney = publishedJourneys.find(j => j.journeyType === 'companion');
   const companionProg    = companionJourney ? progress[companionJourney.id] : undefined;
 
-  // 3. Devotional — Daily Devotional
+  // 3. Your Journeys — journeys the member has already started.
+  //    Includes: active growth journeys + started daily devotional.
+  //    Excludes: Daily Rhythm (shown above), Companion (shown below).
+  const activeGrowthJourneys = publishedJourneys
+    .filter(j => !isExemptJourney(j) && progress[j.id] && getState(j.id) === 'active')
+    .map(j => ({ journey: j, prog: progress[j.id]! }));
+
   const devotionalJourney = publishedJourneys.find(j => j.journeyType === 'devotional');
   const devotionalProg    = devotionalJourney ? progress[devotionalJourney.id] : undefined;
+  const devotionalEntry   =
+    devotionalJourney && devotionalProg
+      ? [{ journey: devotionalJourney, prog: devotionalProg }]
+      : [];
 
-  // 4. Continue Your Journeys — active non-exempt growth journeys only
-  const activeGrowthJourneys = publishedJourneys.filter(
-    j =>
-      !isExemptJourney(j) &&
-      progress[j.id] &&
-      getState(j.id) === 'active'
-  );
+  const startedJourneys = [...activeGrowthJourneys, ...devotionalEntry];
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  /** Navigate to a Daily Rhythm day using the canonical route. */
   function goToDailyRhythmDay(day: number) {
     setLocation(`/daily-rhythm/day/${day}`);
   }
 
-  /** Navigate to a non-Daily-Rhythm journey day. */
-  function goToJourney(journeyId: string, prog?: { currentDay: number }) {
-    const day = prog?.currentDay ?? 1;
+  function goToJourney(journeyId: string, prog: { currentDay: number }) {
+    const day = prog.currentDay ?? 1;
     if (!progress[journeyId]) startJourney(journeyId);
     setLocation(`/journey/${journeyId}/day/${day}`);
   }
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
 
-  const hour    = new Date().getHours();
+  const hour = new Date().getHours();
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -534,7 +361,10 @@ export default function Walk() {
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
-              onContinue={() => goToDailyRhythmDay(coreProg?.currentDay ?? 1)}
+              onContinue={() => goToDailyRhythmDay(coreCurrentDay)}
+              onViewPreviousDays={
+                hasPreviousDays ? () => setLocation(`/daily-rhythm/day/${coreCurrentDay - 1}`) : undefined
+              }
             />
           </motion.section>
         ) : (
@@ -545,39 +375,20 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── Previous Days (Daily Rhythm) ──────────────────────────────────── */}
-        {coreJourney && (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.08 }}
-          >
-            <PreviousDays
-              journey={coreJourney}
-              prog={coreProg}
-              getSteps={getStepsForJourney}
-              onSelect={(day) => setLocation(`/daily-rhythm/day/${day}`)}
-            />
-          </motion.section>
-        )}
+        {/* ── 2. Your Journeys ───────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.10 }}
+        >
+          <YourJourneysSection
+            startedJourneys={startedJourneys}
+            onSelect={goToJourney}
+            onExplore={() => setLocation('/journeys')}
+          />
+        </motion.div>
 
-        {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
-        {devotionalJourney && (
-          <motion.section
-            className="space-y-3"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.10 }}
-          >
-            <DailyDevotionalCard
-              journey={devotionalJourney}
-              prog={devotionalProg}
-              onContinue={() => goToJourney(devotionalJourney.id, devotionalProg)}
-            />
-          </motion.section>
-        )}
-
-        {/* ── 3. This Week's Sermon Companion ────────────────────────────────── */}
+        {/* ── 3. This Week's Sermon Devotional ───────────────────────────────── */}
         {companionJourney && (
           <motion.section
             className="space-y-3"
@@ -588,39 +399,10 @@ export default function Walk() {
             <SermonDevotionalCard
               journey={companionJourney}
               prog={companionProg}
-              onContinue={() => goToJourney(companionJourney.id, companionProg)}
+              onContinue={() => goToJourney(companionJourney.id, companionProg ?? { currentDay: 1 })}
             />
           </motion.section>
         )}
-
-        {/* ── 4. Continue Your Journeys ──────────────────────────────────────── */}
-        {activeGrowthJourneys.length > 0 && (
-          <motion.section
-            className="space-y-3"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.20 }}
-          >
-            <SectionLabel>Continue Your Journeys</SectionLabel>
-            <div className="space-y-3">
-              {activeGrowthJourneys.map(j => {
-                const jProg = progress[j.id]!;
-                return (
-                  <ContinueJourneyCard
-                    key={j.id}
-                    journey={j}
-                    prog={jProg}
-                    onContinue={() => goToJourney(j.id, jProg)}
-                    onPause={() => pauseJourney(j.id)}
-                  />
-                );
-              })}
-            </div>
-          </motion.section>
-        )}
-
-        {/* ── 5. This Week ───────────────────────────────────────────────────── */}
-        <WeeklyProgress progress={progress} journeys={journeys} />
 
       </main>
 
