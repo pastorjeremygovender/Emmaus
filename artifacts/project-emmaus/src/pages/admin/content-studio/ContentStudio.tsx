@@ -26,7 +26,6 @@ import CollectionsList from './CollectionsList';
 import CollectionEditor from './CollectionEditor';
 import StudioJourneyList from './StudioJourneyList';
 import StudioJourneyEditor from './StudioJourneyEditor';
-import DailyRhythmDayList from './DailyRhythmDayList';
 import DailyRhythmDayEditor from './DailyRhythmDayEditor';
 import SermonsList from '../SermonsList';
 import SermonEditor from '../SermonEditor';
@@ -51,7 +50,6 @@ type StudioView =
   // Daily Rhythm
   | { id: 'daily-rhythm' }
   | { id: 'daily-rhythm-editor'; journeyId: string }
-  | { id: 'daily-rhythm-day-list'; journeyId: string }
   | { id: 'daily-rhythm-day-editor'; journeyId: string; day: number | null }
   // Sermons
   | { id: 'sermons' }
@@ -80,10 +78,9 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'overview':               'overview',
   'collections':            'collections',
   'collection-editor':      'collections',
-  'daily-rhythm':              'daily-rhythm',
-  'daily-rhythm-editor':       'daily-rhythm',
-  'daily-rhythm-day-list':     'daily-rhythm',
-  'daily-rhythm-day-editor':   'daily-rhythm',
+  'daily-rhythm':            'daily-rhythm',
+  'daily-rhythm-editor':     'daily-rhythm',
+  'daily-rhythm-day-editor': 'daily-rhythm',
   'journeys':               'journeys',
   'journey-editor':         'journeys',
   'legacy-journey-editor':  'journeys',
@@ -164,13 +161,8 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
       crumbs.push({ label: 'Edit Track' });
     }
-    if (view.id === 'daily-rhythm-day-list') {
-      crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
-      crumbs.push({ label: 'Days' });
-    }
     if (view.id === 'daily-rhythm-day-editor') {
       crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
-      crumbs.push({ label: 'Days', onClick: () => navigate({ id: 'daily-rhythm-day-list', journeyId: view.journeyId }) });
       crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
     }
     if (view.id === 'sermons')
@@ -229,8 +221,8 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       case 'daily-rhythm':
         return (
           <DailyRhythmStudio
-            onEdit={(id) => navigate({ id: 'daily-rhythm-day-list', journeyId: id })}
             onNewDay={(id) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day: null })}
+            onEditDay={(id, day) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day })}
           />
         );
       case 'daily-rhythm-editor':
@@ -245,24 +237,15 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             }
           />
         );
-      case 'daily-rhythm-day-list':
-        return (
-          <DailyRhythmDayList
-            journeyId={view.journeyId}
-            onBack={() => navigate({ id: 'daily-rhythm' })}
-            onEditDay={(d) => navigate({ id: 'daily-rhythm-day-editor', journeyId: view.journeyId, day: d })}
-            onNewDay={() => navigate({ id: 'daily-rhythm-day-editor', journeyId: view.journeyId, day: null })}
-          />
-        );
       case 'daily-rhythm-day-editor':
         return (
           <DailyRhythmDayEditor
             key={`${view.journeyId}-${view.day}`}
             journeyId={view.journeyId}
             day={view.day}
-            onBack={() => navigate({ id: 'daily-rhythm-day-list', journeyId: view.journeyId })}
+            onBack={() => navigate({ id: 'daily-rhythm' })}
             onDuplicated={(newDay) => navigate({ id: 'daily-rhythm-day-editor', journeyId: view.journeyId, day: newDay })}
-            onDeleted={() => navigate({ id: 'daily-rhythm-day-list', journeyId: view.journeyId })}
+            onDeleted={() => navigate({ id: 'daily-rhythm' })}
           />
         );
       // ── Journeys (block editor) ──
