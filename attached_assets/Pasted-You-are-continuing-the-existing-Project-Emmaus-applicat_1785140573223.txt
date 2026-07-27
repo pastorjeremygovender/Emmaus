@@ -1,0 +1,180 @@
+You are continuing the existing Project Emmaus application.
+
+This is a focused routing bug fix.
+
+Do not redesign the Today’s Steps screen.
+
+Do not change Daily Rhythm content.
+
+Do not change progress logic.
+
+Do not begin another task.
+
+=====================================================
+
+BUG
+
+The “View Previous Days” link under 10 Minutes with Jesus currently returns the member to Today’s Steps.
+
+That is incorrect.
+
+It must open a dedicated Previous Days view.
+
+=====================================================
+
+EXPECTED FLOW
+
+Today’s Steps
+
+↓
+
+10 Minutes with Jesus card
+
+↓
+
+View Previous Days →
+
+↓
+
+Previous Days screen
+
+=====================================================
+
+PREVIOUS DAYS SCREEN
+
+Create or use the existing Previous Days screen.
+
+Display:
+
+10 Minutes with Jesus
+
+Previous Days
+
+Then list every Published Daily Rhythm day the member is allowed to revisit.
+
+Order:
+
+Most recent previous day first.
+
+Example:
+
+Day 3
+Follow Me
+
+Day 2
+Jesus Knows Your Name
+
+Day 1
+Come and See
+
+Each row is tappable.
+
+=====================================================
+
+ACCESS RULES
+
+Show only days that are:
+
+- Published
+- Earlier than the member’s current unlocked day
+- Already unlocked for that member
+
+Do not show:
+
+- Today’s current day
+- Future days
+- Draft days
+- Deleted days
+
+=====================================================
+
+REPLAY
+
+Tapping a previous day opens that day in replay mode.
+
+Replay mode must:
+
+- Show the full Daily Rhythm content
+- Use the same member-facing renderer
+- Load Scripture dynamically
+- Personalize the greeting
+- End with:
+
+Back to Previous Days
+
+It must not:
+
+- Mark the day complete again
+- Change the current day
+- Advance progress
+- Unlock another day
+- Change completion dates
+
+=====================================================
+
+NAVIGATION
+
+Fix the “View Previous Days” link so it navigates to the Previous Days route, not Today’s Steps.
+
+Use the project’s existing routing conventions.
+
+A route such as this is acceptable:
+
+/daily-rhythm/previous
+
+Do not use `/walk` for this link.
+
+The back action from Previous Days should return to Today’s Steps.
+
+=====================================================
+
+AHEAD-OF-RHYTHM SCREEN
+
+The “View Previous Days” link on the “You’re ahead of the rhythm” screen must open the same Previous Days screen.
+
+Both links must use the same route and component.
+
+=====================================================
+
+EMPTY STATE
+
+If there are no previous days available, show:
+
+No previous days are available yet.
+
+Then provide:
+
+Back to Today’s Steps
+
+Do not redirect automatically.
+
+=====================================================
+
+TESTS
+
+Verify:
+
+- View Previous Days from Today’s Steps opens the previous-days list.
+- It no longer redirects back to Today’s Steps.
+- View Previous Days from the ahead-of-rhythm screen opens the same list.
+- Day 4 shows Days 1–3 only.
+- Tapping Day 1 opens Day 1.
+- Replay does not change progress.
+- Future days remain inaccessible.
+- Back navigation works.
+- Mobile and desktop both work.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+
+REPORT
+
+When complete, report only:
+
+1. Root cause
+2. Route added or corrected
+3. Components changed
+4. Tests completed
+5. Known limitations
+
+Stop after fixing this routing bug.

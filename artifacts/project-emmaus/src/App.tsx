@@ -16,6 +16,7 @@ import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
 import JourneyDay from '@/pages/JourneyDay';
 import DailyRhythmDay from '@/pages/DailyRhythmDay';
+import PreviousDays from '@/pages/PreviousDays';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
 import JourneyDetail from '@/pages/journeys/JourneyDetail';
@@ -66,7 +67,8 @@ function Router() {
       <Route path="/auth" component={Auth} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
-      {/* Canonical Daily Rhythm route */}
+      {/* Canonical Daily Rhythm routes */}
+      <Route path="/daily-rhythm/previous" component={PreviousDays} />
       <Route path="/daily-rhythm/day/:dayNumber" component={DailyRhythmDay} />
       {/* Legacy redirect — /journey/15-minutes-with-jesus/day/:day → canonical */}
       <Route path="/journey/15-minutes-with-jesus/day/:day">

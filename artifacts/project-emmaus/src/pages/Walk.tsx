@@ -363,7 +363,7 @@ export default function Walk() {
               prog={coreProg}
               onContinue={() => goToDailyRhythmDay(coreCurrentDay)}
               onViewPreviousDays={
-                hasPreviousDays ? () => setLocation(`/daily-rhythm/day/${coreCurrentDay - 1}`) : undefined
+                hasPreviousDays ? () => setLocation('/daily-rhythm/previous') : undefined
               }
             />
           </motion.section>

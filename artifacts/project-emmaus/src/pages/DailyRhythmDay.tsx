@@ -124,8 +124,9 @@ export default function DailyRhythmDay() {
     );
   }
 
-  const hasPreviousDays = currentDay > 1;
-  const goBack          = () => setLocation('/walk');
+  const hasPreviousDays   = currentDay > 1;
+  const goBack            = () => setLocation('/walk');
+  const goToPreviousDays  = () => setLocation('/daily-rhythm/previous');
 
   // ── Access enforcement: future days are blocked ────────────────────────────
   if (day > currentDay) {
@@ -133,7 +134,7 @@ export default function DailyRhythmDay() {
       <AheadOfRhythm
         hasPreviousDays={hasPreviousDays}
         onBack={goBack}
-        onViewPrevious={goBack}
+        onViewPrevious={goToPreviousDays}
       />
     );
   }
@@ -147,7 +148,7 @@ export default function DailyRhythmDay() {
       <AheadOfRhythm
         hasPreviousDays={hasPreviousDays}
         onBack={goBack}
-        onViewPrevious={goBack}
+        onViewPrevious={goToPreviousDays}
       />
     );
   }
@@ -156,6 +157,9 @@ export default function DailyRhythmDay() {
   // day < currentDay → replay (read-only).
   // day === currentDay → live (Continue button marks complete and returns to Walk).
   const isReplay = day < currentDay;
+
+  // Replay returns to Previous Days; live mode returns to Today's Steps.
+  const handleBack = isReplay ? goToPreviousDays : goBack;
 
   const handleComplete = () => {
     completeStep(journeyId, day, '');
@@ -169,9 +173,9 @@ export default function DailyRhythmDay() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={goBack}
+            onClick={handleBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back to Today's Steps"
+            aria-label={isReplay ? 'Back to Previous Days' : "Back to Today's Steps"}
           >
             <ArrowLeft size={22} />
           </button>
@@ -206,9 +210,9 @@ export default function DailyRhythmDay() {
               size="lg"
               variant="outline"
               className="w-full h-14 text-[17px] rounded-2xl"
-              onClick={goBack}
+              onClick={goToPreviousDays}
             >
-              Back to Today's Steps
+              Back to Previous Days
             </Button>
           ) : (
             /* Live: marks the day complete and returns to Today's Steps */
