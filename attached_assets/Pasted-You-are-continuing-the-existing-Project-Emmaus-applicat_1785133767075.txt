@@ -1,0 +1,232 @@
+You are continuing the existing Project Emmaus application.
+
+Delete is complete.
+
+Do not redesign anything.
+
+Do not add new architecture.
+
+Do not create importers.
+
+Do not create Word export.
+
+Do not create AI generation.
+
+This sprint has ONE objective.
+
+====================================================
+
+OBJECTIVE
+
+Turn Content Studio into the place where Emmaus content is created.
+
+We are beginning with:
+
+10 Minutes with Jesus
+
+====================================================
+
+CONTENT STUDIO
+
+The Daily Rhythm section must become a complete editor.
+
+When I click:
+
+Content Studio
+
+↓
+
+Daily Rhythm
+
+↓
+
+New Day
+
+Open a proper editor.
+
+====================================================
+
+EDITOR FIELDS
+
+Display these fields in order.
+
+----------------------------------------------------
+
+Day Number
+
+(integer)
+
+----------------------------------------------------
+
+Title
+
+(single line)
+
+----------------------------------------------------
+
+Scripture Reference
+
+(single line)
+
+Example:
+
+John 1:35–39
+
+Store only the reference.
+
+Never store Bible text.
+
+----------------------------------------------------
+
+Greeting
+
+Rich text
+
+----------------------------------------------------
+
+Reflection
+
+Rich text
+
+----------------------------------------------------
+
+Prayer
+
+Rich text
+
+----------------------------------------------------
+
+Your Next Step
+
+Rich text
+
+----------------------------------------------------
+
+Closing
+
+Rich text
+
+----------------------------------------------------
+
+Buttons
+
+Preview
+
+Save Draft
+
+Publish
+
+Duplicate
+
+Delete
+
+====================================================
+
+PREVIEW
+
+Preview should render exactly like the Emmaus member experience.
+
+Show:
+
+10 Minutes with Jesus
+
+Day X
+
+Title
+
+Greeting
+
+Scripture Reference
+
+(placeholder saying:
+"The user's chosen Bible translation will appear here.")
+
+Reflection
+
+Prayer
+
+Your Next Step
+
+Closing
+
+Continue
+
+====================================================
+
+SAVE
+
+Save Draft stores the content.
+
+Publish immediately makes it available to members.
+
+====================================================
+
+DUPLICATE
+
+Duplicate copies the current day.
+
+Increase the Day Number by 1.
+
+Leave everything else unchanged.
+
+This lets us create Day 2 from Day 1 quickly.
+
+====================================================
+
+DELETE
+
+Use the permanent delete functionality already completed.
+
+====================================================
+
+NO AI
+
+Do not generate content.
+
+Content will be written by me.
+
+====================================================
+
+NO IMPORTER
+
+Do not build CSV import.
+
+Do not build paste import.
+
+Content Studio is the editor.
+
+====================================================
+
+SUCCESS
+
+When complete I should be able to:
+
+Create Day 1
+
+Preview it
+
+Save it
+
+Publish it
+
+Duplicate it
+
+Delete it
+
+without leaving Content Studio.
+
+====================================================
+
+STOP
+
+Do not start another sprint.
+
+Report only:
+
+Files changed
+
+Database changes
+
+Features completed
+
+Known issues

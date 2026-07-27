@@ -79,6 +79,9 @@ export interface FrontendStep {
   // Block-based content (stored in content.blocks JSONB)
   // null = not yet edited in block editor; undefined = not loaded
   blocks?: Array<Record<string, unknown>> | null;
+
+  // Daily Rhythm closing text (stored in content.closingText JSONB)
+  closingText?: string;
 }
 
 export interface FrontendJourney {
@@ -189,6 +192,9 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
   // Blocks are stored in content.blocks JSONB; null means never edited in block editor
   const blocks = (legacy.blocks as Array<Record<string, unknown>> | undefined) ?? null;
 
+  // Daily Rhythm closing text
+  const closingText = (legacy.closingText as string | undefined);
+
   return {
     journeyId: row.journeyId,
     day: row.day,
@@ -212,6 +218,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     sermonContextualSentence,
     order: row.day,
     blocks,
+    closingText,
   };
 }
 
@@ -246,9 +253,14 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
   if (data.suggestedFollowUpQuestions !== undefined) cols.suggestedFollowUpQuestions = data.suggestedFollowUpQuestions;
   if (data.unlockConditions !== undefined)   cols.unlockConditions   = data.unlockConditions;
 
-  // Blocks stored in the content JSONB column as { blocks: [...] }
-  if (data.blocks !== undefined) {
-    cols.content = { blocks: data.blocks };
+  // Content JSONB column: holds blocks (block editor) and closingText (daily rhythm)
+  // Build only the keys that were supplied — other keys in the JSONB are overwritten,
+  // but daily-rhythm steps never use blocks and block-editor steps never use closingText.
+  const contentPatch: Record<string, unknown> = {};
+  if (data.blocks !== undefined)      contentPatch.blocks      = data.blocks;
+  if (data.closingText !== undefined) contentPatch.closingText = data.closingText;
+  if (Object.keys(contentPatch).length > 0) {
+    cols.content = contentPatch;
   }
 
   // Merge legacy sermon fields into suggestedSermons.

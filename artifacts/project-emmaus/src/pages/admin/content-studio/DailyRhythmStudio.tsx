@@ -32,11 +32,12 @@ import DeleteDailyRhythmDialog from './DeleteDailyRhythmDialog';
 
 interface Props {
   onEdit: (journeyId: string) => void;
+  onNewDay: (journeyId: string) => void;
 }
 
 const STATUS_TABS = ['All', 'Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived'];
 
-export default function DailyRhythmStudio({ onEdit }: Props) {
+export default function DailyRhythmStudio({ onEdit, onNewDay }: Props) {
   const { journeys, refreshJourneys, updateJourney, duplicateJourney, permanentDeleteJourney } = useJourney();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superAdmin';
@@ -260,13 +261,21 @@ export default function DailyRhythmStudio({ onEdit }: Props) {
 
                   <StatusBadge status={j.status} />
 
-                  {/* Edit button */}
-                  <button
-                    onClick={() => onEdit(j.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-[12px] font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-lg flex-shrink-0"
-                  >
-                    Edit Days
-                  </button>
+                  {/* Action buttons */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => onNewDay(j.id)}
+                      className="px-3 py-1.5 text-[12px] font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-lg"
+                    >
+                      + New Day
+                    </button>
+                    <button
+                      onClick={() => onEdit(j.id)}
+                      className="px-3 py-1.5 text-[12px] font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg"
+                    >
+                      Edit Days
+                    </button>
+                  </div>
 
                   {/* Action menu */}
                   <div className="relative flex-shrink-0">

@@ -77,6 +77,9 @@ export type Step = {
   sermonContextualSentence?: string;
 
   order?: number;
+
+  // Daily Rhythm closing text (stored in content.closingText JSONB)
+  closingText?: string;
 };
 
 export type Progress = {
