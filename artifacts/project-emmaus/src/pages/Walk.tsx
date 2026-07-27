@@ -277,7 +277,12 @@ export default function Walk() {
   const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
 
   // Does the member have any published previous days to revisit?
-  const coreCurrentDay = coreProg?.currentDay ?? 1;
+  const coreCurrentDay    = coreProg?.currentDay ?? 1;
+  // True when the member already completed today's reading.
+  // Used to navigate "Review today" to the done day, never to the next one.
+  const coreCompletedToday = isCompletedToday(coreProg?.lastCompletedAt);
+  // The day the member just finished — one behind currentDay after completeStep runs.
+  const coreCompletedDay  = Math.max(1, coreCurrentDay - 1);
   const hasPreviousDays =
     !!coreJourney &&
     coreCurrentDay > 1 &&
@@ -361,7 +366,10 @@ export default function Walk() {
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
-              onContinue={() => goToDailyRhythmDay(coreCurrentDay)}
+              onContinue={() =>
+                // "Review today" must reopen the completed day, never advance to the next.
+                goToDailyRhythmDay(coreCompletedToday ? coreCompletedDay : coreCurrentDay)
+              }
               onViewPreviousDays={
                 hasPreviousDays ? () => setLocation('/daily-rhythm/previous') : undefined
               }
