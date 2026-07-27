@@ -497,3 +497,27 @@ export async function importLocalProgress(
     body: JSON.stringify({ userId, progress }),
   });
 }
+
+// ─── Development-mode progress tools ─────────────────────────────────────────
+// These functions affect only the requesting user's own progress.
+
+export async function resetProgress(
+  journeyId: string,
+  userId: string
+): Promise<Progress> {
+  return apiFetch<Progress>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/reset`,
+    { method: 'POST', body: JSON.stringify({ userId }) }
+  );
+}
+
+export async function markStepIncomplete(
+  journeyId: string,
+  userId: string,
+  day: number
+): Promise<Progress> {
+  return apiFetch<Progress>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/mark-step-incomplete`,
+    { method: 'POST', body: JSON.stringify({ userId, day }) }
+  );
+}

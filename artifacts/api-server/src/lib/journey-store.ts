@@ -628,6 +628,62 @@ export async function getAllProgress(userId: string): Promise<Record<string, Fro
   return result;
 }
 
+// ─── Development-mode progress mutations ──────────────────────────────────────
+// These are admin-only helpers used by the Development Mode testing tools.
+// They affect only the specified user's own progress row and nothing else.
+
+/** Reset a user's progress for a journey back to Day 1 (admin / dev only). */
+export async function resetProgress(
+  userId: string,
+  journeyId: string
+): Promise<FrontendProgress> {
+  const existing = await getProgress(userId, journeyId);
+  if (!existing) {
+    return startJourney(userId, journeyId);
+  }
+  const now = new Date();
+  const rows = await db
+    .update(userJourneyProgressTable)
+    .set({ currentDay: 1, completedDays: [], lastCompletedAt: null, updatedAt: now })
+    .where(and(
+      eq(userJourneyProgressTable.userId, userId),
+      eq(userJourneyProgressTable.journeyId, journeyId)
+    ))
+    .returning();
+  return toFrontendProgress(rows[0]);
+}
+
+/**
+ * Mark a specific day as incomplete — remove it from completedDays and roll
+ * currentDay back so the tester can re-complete it (admin / dev only).
+ */
+export async function markStepIncomplete(
+  userId: string,
+  journeyId: string,
+  day: number
+): Promise<FrontendProgress> {
+  const existing = await getProgress(userId, journeyId);
+  if (!existing) throw new Error("No progress record found");
+
+  const completedDays = existing.completedDays.filter(d => d !== day);
+  // Roll currentDay back to at most `day` so the tester can re-complete it.
+  const newCurrentDay = Math.min(existing.currentDay, day);
+  // Clear the last-completed timestamp if no days remain, so the daily lock
+  // is lifted and the tester can continue immediately.
+  const lastCompletedAt = completedDays.length > 0 ? (existing.lastCompletedAt ? new Date(existing.lastCompletedAt) : null) : null;
+
+  const now = new Date();
+  const rows = await db
+    .update(userJourneyProgressTable)
+    .set({ currentDay: newCurrentDay, completedDays, lastCompletedAt, updatedAt: now })
+    .where(and(
+      eq(userJourneyProgressTable.userId, userId),
+      eq(userJourneyProgressTable.journeyId, journeyId)
+    ))
+    .returning();
+  return toFrontendProgress(rows[0]);
+}
+
 export async function getProgress(userId: string, journeyId: string): Promise<FrontendProgress | null> {
   const rows = await db
     .select()

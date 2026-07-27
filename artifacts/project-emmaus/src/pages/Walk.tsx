@@ -18,6 +18,8 @@ import { motion } from 'framer-motion';
 import { CheckCircle2 } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
+import { isDevelopmentMode } from '@/lib/dev-mode';
+import { DevModeBanner } from '@/components/DevModeBanner';
 import { useMemo } from 'react';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
@@ -52,14 +54,19 @@ function FifteenMinutesCard({
   prog,
   onContinue,
   onViewPreviousDays,
+  devMode = false,
 }: {
   journey: import('@/contexts/JourneyContext').Journey;
   prog: import('@/contexts/JourneyContext').Progress | undefined;
   onContinue: () => void;
   onViewPreviousDays?: () => void;
+  /** When true (admin / super-admin), the daily release schedule is bypassed. */
+  devMode?: boolean;
 }) {
-  const completedToday  = isCompletedToday(prog?.lastCompletedAt);
-  const nextDayAvail    = isNextDayAvailable(prog?.lastCompletedAt);
+  // In dev mode the calendar lock is lifted: treat every day as immediately
+  // available so Continue advances freely without waiting for tomorrow.
+  const completedToday  = devMode ? false : isCompletedToday(prog?.lastCompletedAt);
+  const nextDayAvail    = devMode ? true  : isNextDayAvailable(prog?.lastCompletedAt);
   const currentDay      = prog?.currentDay ?? 1;
   const started         = !!prog;
   const isDailyRhythm   = journey.journeyType === 'daily-rhythm';
@@ -278,9 +285,10 @@ export default function Walk() {
 
   // Does the member have any published previous days to revisit?
   const coreCurrentDay    = coreProg?.currentDay ?? 1;
-  // True when the member already completed today's reading.
-  // Used to navigate "Review today" to the done day, never to the next one.
-  const coreCompletedToday = isCompletedToday(coreProg?.lastCompletedAt);
+  const devMode           = isDevelopmentMode(user);
+  // In dev mode the calendar lock is lifted, so "completed today" is always
+  // false — Continue navigates to the next day rather than "Review today".
+  const coreCompletedToday = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
   // The day the member just finished — one behind currentDay after completeStep runs.
   const coreCompletedDay  = Math.max(1, coreCurrentDay - 1);
   const hasPreviousDays =
@@ -332,7 +340,10 @@ export default function Walk() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
-      {user.role === 'admin' && (
+      {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
+      {devMode && <DevModeBanner />}
+      {/* Admin quick-link (shown to admins regardless of dev mode) */}
+      {user.role === 'admin' && !devMode && (
         <div className="bg-primary text-primary-foreground text-xs py-1.5 text-center font-medium">
           Admin mode —{' '}
           <Link href="/admin" className="underline">
@@ -366,8 +377,10 @@ export default function Walk() {
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
+              devMode={devMode}
               onContinue={() =>
                 // "Review today" must reopen the completed day, never advance to the next.
+                // In dev mode coreCompletedToday is always false so this always continues.
                 goToDailyRhythmDay(coreCompletedToday ? coreCompletedDay : coreCurrentDay)
               }
               onViewPreviousDays={

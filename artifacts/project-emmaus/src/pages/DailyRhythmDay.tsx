@@ -23,6 +23,8 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 import { BottomNav } from '@/components/BottomNav';
+import { isDevelopmentMode } from '@/lib/dev-mode';
+import { DevModeBanner } from '@/components/DevModeBanner';
 
 // ─── Ahead-of-rhythm screen ───────────────────────────────────────────────────
 // Shared by two cases: (a) day > currentDay, (b) current day not yet published.
@@ -133,8 +135,12 @@ export default function DailyRhythmDay() {
   const goBack            = () => setLocation('/walk');
   const goToPreviousDays  = () => setLocation('/daily-rhythm/previous');
 
-  // ── Access enforcement: future days are blocked ────────────────────────────
-  if (day > currentDay) {
+  const devMode = isDevelopmentMode(user);
+
+  // ── Access enforcement: future days are blocked (production members only) ──
+  // Dev mode (admin / super-admin) skips this gate entirely so every published
+  // day is immediately accessible during development and content review.
+  if (!devMode && day > currentDay) {
     return (
       <AheadOfRhythm
         hasPreviousDays={hasPreviousDays}
@@ -148,6 +154,9 @@ export default function DailyRhythmDay() {
   const step = getStep(journeyId, day);
 
   // ── Step not published / not authored yet ──────────────────────────────────
+  // In dev mode still show a calm gate if the content has not been authored —
+  // bypassing the calendar lock does not bypass unpublished drafts for members,
+  // but for admins the Content Studio is the right place to author the day.
   if (!step) {
     return (
       <AheadOfRhythm
@@ -159,8 +168,10 @@ export default function DailyRhythmDay() {
   }
 
   // ── Reader ────────────────────────────────────────────────────────────────
-  // day < currentDay → replay (read-only).
-  // day === currentDay → live (Continue button marks complete and returns to Walk).
+  // Normal mode:  day < currentDay → replay (read-only).
+  // Dev mode:     any day < currentDay is still replay (already completed).
+  //               future days (day > currentDay) are treated as live so the
+  //               admin can read and Continue through them freely.
   const isReplay = day < currentDay;
 
   // Replay returns to Previous Days; live mode returns to Today's Steps.
@@ -173,6 +184,9 @@ export default function DailyRhythmDay() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-32">
+
+      {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
+      <DevModeBanner />
 
       {/* Sticky nav bar — back arrow only; identity shown in reading content below */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">

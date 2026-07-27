@@ -609,6 +609,30 @@ router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Re
   res.json(prog);
 });
 
+// ─── Development-mode progress tools (self-only) ──────────────────────────────
+// These routes are intentionally not role-gated at the HTTP layer because they
+// operate only on the requesting user's own progress row. A member who calls
+// them just resets their own data — no privilege escalation is possible.
+
+router.post("/journeys/:id/progress/reset", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  const prog = await store.resetProgress(userId, String(req.params["id"]));
+  res.json(prog);
+});
+
+router.post("/journeys/:id/progress/mark-step-incomplete", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  const { day } = req.body as { day: number };
+  if (!day || typeof day !== "number") {
+    res.status(400).json({ error: "day is required" });
+    return;
+  }
+  const prog = await store.markStepIncomplete(userId, String(req.params["id"]), day);
+  res.json(prog);
+});
+
 router.get("/journeys/:id/progress/reflections", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }

@@ -5,15 +5,17 @@
  *         Prayer, Your Next Step, Closing
  * Actions: Preview, Save Draft, Publish, Duplicate, Delete
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ArrowLeft, Eye, EyeOff, Save, CheckCircle, Copy, Trash2,
-  AlertTriangle, Loader2, X,
+  AlertTriangle, Loader2, X, Wand2, ChevronDown, CornerDownLeft,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { WritingAssistantPanel, type PreviousDayInfo } from '@/components/WritingAssistantPanel';
+import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +78,173 @@ function TextArea({
         focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none
         placeholder:text-gray-300 leading-relaxed"
     />
+  );
+}
+
+// ─── Field refiner (inline AI editing actions) ────────────────────────────────
+
+const FIELD_REFINE_ACTIONS: Record<string, Array<{ action: RefineAction; label: string }>> = {
+  mentorIntro:  [
+    { action: 'warmer',      label: 'Make warmer' },
+    { action: 'clearer',     label: 'Make clearer' },
+    { action: 'shorter',     label: 'Shorten' },
+    { action: 'new-believer',label: 'For new believers' },
+  ],
+  devotional: [
+    { action: 'warmer',         label: 'Make warmer' },
+    { action: 'clearer',        label: 'Make clearer' },
+    { action: 'shorter',        label: 'Shorten' },
+    { action: 'paragraph-flow', label: 'Improve paragraph flow' },
+    { action: 'jesus-central',  label: 'Keep Jesus central' },
+    { action: 'new-believer',   label: 'For new believers' },
+  ],
+  prayerPrompt: [
+    { action: 'warmer',         label: 'Make warmer' },
+    { action: 'clearer',        label: 'Make clearer' },
+    { action: 'shorter',        label: 'Shorten' },
+    { action: 'new-believer',   label: 'For new believers' },
+    { action: 'another-prayer', label: 'New version' },
+  ],
+  actionStep: [
+    { action: 'clearer',          label: 'Make clearer' },
+    { action: 'shorter',          label: 'Shorten' },
+    { action: 'another-next-step',label: 'Suggest different step' },
+    { action: 'check-repetition', label: 'Check for repetition' },
+  ],
+  closingText: [
+    { action: 'warmer',  label: 'Make warmer' },
+    { action: 'clearer', label: 'Make clearer' },
+    { action: 'shorter', label: 'Shorten' },
+  ],
+};
+
+interface FieldRefinerProps {
+  field: DraftField;
+  fieldLabel: string;
+  value: string;
+  onApply: (v: string, mode: 'replace' | 'append') => void;
+  scripture: string;
+  dayTitle: string;
+  userId: string;
+  userRole: string;
+}
+
+function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, userId, userRole }: FieldRefinerProps) {
+  const [open, setOpen] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [suggestion, setSuggestion] = useState('');
+  const [activeAction, setActiveAction] = useState<RefineAction | null>(null);
+  const [refineError, setRefineError] = useState('');
+  const menuRef = useRef<HTMLDivElement>(null);
+  const actions = FIELD_REFINE_ACTIONS[field] ?? [];
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const handleAction = async (action: RefineAction) => {
+    if (!value.trim()) return;
+    setOpen(false);
+    setRefining(true);
+    setActiveAction(action);
+    setSuggestion('');
+    setRefineError('');
+    try {
+      const result = await refineContent(userId, userRole, action, value, {
+        scripture,
+        dayTitle,
+        fieldLabel,
+      });
+      setSuggestion(result.suggestion);
+    } catch (err) {
+      setRefineError(err instanceof Error ? err.message : 'Could not refine content. Please try again.');
+    } finally {
+      setRefining(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="relative inline-block" ref={menuRef}>
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          disabled={!value.trim()}
+          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-teal-600 disabled:opacity-30 transition-colors py-0.5"
+        >
+          <Wand2 size={11} />
+          AI
+          <ChevronDown size={10} />
+        </button>
+        {open && (
+          <div className="absolute left-0 top-6 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden py-1">
+            {actions.map(({ action, label }) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => handleAction(action)}
+                className="w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {refining && (
+        <div className="flex items-center gap-2 text-[12px] text-gray-400 animate-pulse">
+          <Loader2 size={11} className="animate-spin" />
+          Refining…
+        </div>
+      )}
+
+      {refineError && (
+        <p className="text-[12px] text-red-500">{refineError}</p>
+      )}
+
+      {suggestion && !refining && (
+        <div className="border border-teal-200 bg-teal-50 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">AI Suggestion</span>
+            <button type="button" onClick={() => { setSuggestion(''); setActiveAction(null); }}
+              className="text-teal-400 hover:text-teal-600 transition-colors">
+              <X size={12} />
+            </button>
+          </div>
+          <p className="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{suggestion}</p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => { onApply(suggestion, 'replace'); setSuggestion(''); setActiveAction(null); }}
+              className="flex items-center gap-1 px-3 py-1.5 text-[12px] bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+            >
+              <CornerDownLeft size={10} /> Replace
+            </button>
+            <button
+              type="button"
+              onClick={() => { onApply(suggestion, 'append'); setSuggestion(''); setActiveAction(null); }}
+              className="px-3 py-1.5 text-[12px] border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
+            >
+              Insert Below
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSuggestion(''); setActiveAction(null); }}
+              className="px-3 py-1.5 text-[12px] text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -175,7 +344,9 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
 
 export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplicated, onDeleted }: Props) {
   const { getJourney, getStep, steps, addStep, updateStep, deleteStep } = useJourney();
+  const { user } = useAuth();
   const journey = getJourney(journeyId) as Journey | undefined;
+  const isEditor = user?.role === 'admin' || user?.role === 'superAdmin';
 
   // Compute next available day number for new days
   const nextDay = useMemo(() => computeNextDay(steps as Step[], journeyId), [steps, journeyId]);
@@ -187,6 +358,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const [showPreview, setShowPreview] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [currentDay, setCurrentDay] = useState<number | null>(day); // tracks saved day number
+  const [showAssistant, setShowAssistant] = useState(false);
 
   // Load existing step
   useEffect(() => {
@@ -277,6 +449,30 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
     onDeleted();
   };
 
+  // Previous days for Writing Assistant continuity context
+  const previousDays = useMemo<PreviousDayInfo[]>(() =>
+    (steps as Step[])
+      .filter(s => s.journeyId === journeyId && s.day < form.day)
+      .sort((a, b) => b.day - a.day)
+      .slice(0, 3)
+      .map(s => ({
+        day: s.day,
+        title: (s as Step & { title?: string }).title ?? '',
+        scripture: (s as Step & { scripture?: string }).scripture ?? '',
+        devotional: (s as Step & { devotional?: string }).devotional ?? '',
+        actionStep: (s as Step & { actionStep?: string }).actionStep ?? '',
+      })),
+    [steps, journeyId, form.day]
+  );
+
+  const handleApplyField = useCallback((field: DraftField, value: string, mode: 'replace' | 'append') => {
+    const existing = form[field as keyof DayForm] as string;
+    patch(
+      field as keyof DayForm,
+      mode === 'append' && existing.trim() ? `${existing}\n\n${value}` : value
+    );
+  }, [form, patch]);
+
   if (!loaded) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -290,6 +486,27 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
       {/* Preview overlay */}
       {showPreview && (
         <DayPreview form={form} onClose={() => setShowPreview(false)} />
+      )}
+
+      {/* Writing Assistant panel */}
+      {showAssistant && user && (
+        <WritingAssistantPanel
+          journeyId={journeyId}
+          dayNumber={form.day}
+          dayTitle={form.title}
+          scriptureRef={form.scripture}
+          existingContent={{
+            mentorIntro:  form.mentorIntro,
+            devotional:   form.devotional,
+            prayerPrompt: form.prayerPrompt,
+            actionStep:   form.actionStep,
+            closingText:  form.closingText,
+          }}
+          previousDays={previousDays}
+          user={user}
+          onApplyField={handleApplyField}
+          onClose={() => setShowAssistant(false)}
+        />
       )}
 
       {/* Delete confirm */}
@@ -343,6 +560,20 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
               {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
               Preview
             </button>
+
+            {isEditor && (
+              <button
+                onClick={() => setShowAssistant(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
+                  showAssistant
+                    ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
+                    : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
+                }`}
+              >
+                <Wand2 size={12} />
+                Help Me Write
+              </button>
+            )}
 
             <button
               onClick={() => handleSave('Draft')}
@@ -433,6 +664,12 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
                 rows={3}
                 placeholder="A warm opening that sets the tone for today's time…"
               />
+              {isEditor && (
+                <FieldRefiner field="mentorIntro" fieldLabel="Greeting" value={form.mentorIntro}
+                  onApply={(v, mode) => handleApplyField('mentorIntro', v, mode)}
+                  scripture={form.scripture} dayTitle={form.title}
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+              )}
             </div>
 
             {/* Reflection */}
@@ -444,6 +681,12 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
                 rows={6}
                 placeholder="The main devotional reflection for this day…"
               />
+              {isEditor && (
+                <FieldRefiner field="devotional" fieldLabel="Reflection" value={form.devotional}
+                  onApply={(v, mode) => handleApplyField('devotional', v, mode)}
+                  scripture={form.scripture} dayTitle={form.title}
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+              )}
             </div>
 
             {/* Prayer */}
@@ -455,6 +698,12 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
                 rows={3}
                 placeholder="A prayer the member can pray or adapt…"
               />
+              {isEditor && (
+                <FieldRefiner field="prayerPrompt" fieldLabel="Prayer" value={form.prayerPrompt}
+                  onApply={(v, mode) => handleApplyField('prayerPrompt', v, mode)}
+                  scripture={form.scripture} dayTitle={form.title}
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+              )}
             </div>
 
             {/* Your Next Step */}
@@ -466,6 +715,12 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
                 rows={3}
                 placeholder="One concrete action to take today…"
               />
+              {isEditor && (
+                <FieldRefiner field="actionStep" fieldLabel="Your Next Step" value={form.actionStep}
+                  onApply={(v, mode) => handleApplyField('actionStep', v, mode)}
+                  scripture={form.scripture} dayTitle={form.title}
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+              )}
             </div>
 
             {/* Closing */}
@@ -477,6 +732,12 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
                 rows={2}
                 placeholder="e.g. Tomorrow we'll continue walking together."
               />
+              {isEditor && (
+                <FieldRefiner field="closingText" fieldLabel="Closing" value={form.closingText}
+                  onApply={(v, mode) => handleApplyField('closingText', v, mode)}
+                  scripture={form.scripture} dayTitle={form.title}
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+              )}
             </div>
 
           </div>

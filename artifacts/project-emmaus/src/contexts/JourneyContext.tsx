@@ -117,6 +117,9 @@ type JourneyContextType = {
   deleteStep: (journeyId: string, day: number) => Promise<void>;
   refreshJourneys: () => Promise<void>;
   refreshSteps: (journeyId: string) => Promise<void>;
+  // Development-mode test tools — affect the calling user's progress only
+  resetProgress: (journeyId: string) => Promise<void>;
+  markStepIncomplete: (journeyId: string, day: number) => Promise<void>;
 };
 
 const JourneyContext = createContext<JourneyContextType | null>(null);
@@ -370,6 +373,27 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     [user?.id, user?.role]
   );
 
+  // ─── Development-mode test tools ──────────────────────────────────────────
+  // These affect only the current user's own progress row.
+
+  const resetProgress = useCallback(
+    async (journeyId: string): Promise<void> => {
+      if (!user?.id) return;
+      const prog = await api.resetProgress(journeyId, user.id);
+      setProgress(p => ({ ...p, [journeyId]: prog }));
+    },
+    [user?.id]
+  );
+
+  const markStepIncomplete = useCallback(
+    async (journeyId: string, day: number): Promise<void> => {
+      if (!user?.id) return;
+      const prog = await api.markStepIncomplete(journeyId, user.id, day);
+      setProgress(p => ({ ...p, [journeyId]: prog }));
+    },
+    [user?.id]
+  );
+
   // ─── Refresh helpers ───────────────────────────────────────────────────────
 
   const refreshJourneys = useCallback(async () => {
@@ -418,6 +442,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         deleteStep,
         refreshJourneys,
         refreshSteps,
+        resetProgress,
+        markStepIncomplete,
       }}
     >
       {children}

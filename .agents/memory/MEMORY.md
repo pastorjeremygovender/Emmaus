@@ -8,3 +8,5 @@
 - [Daily Discipleship Rhythm sprint](daily-rhythm-sprint.md) — enrollment limit 5, daily gate, onboarding, metadata JSONB pattern for journey extras; no DB migrations needed.
 - [Daily Rhythm Architecture](daily-rhythm-architecture.md) — journeyType 'daily-rhythm' replaces 'core'; startup-migrations.ts runs idempotent DB patch on boot; isFinalStep forced false; Walk card never shows "of X".
 - [Daily Rhythm Content](daily-rhythm-content.md) — 30 days seeded (John 1–19); parseBibleLink helper; JourneyDay daily-rhythm layout; isDailyRhythmReadOnly; Days 31+ not yet seeded.
+- [Dev Mode Architecture](dev-mode-architecture.md) — two-part gate: role + explicit localStorage toggle; isDevelopmentMode requires {id,role}; Admin→Settings→Development is the control surface.
+- [Writing Assistant](writing-assistant.md) — "Help Me Write" panel in Day Editor; generate/refine endpoints; Scripture retrieved client-side before generation; content stays Draft always; admin/superAdmin only.

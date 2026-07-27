@@ -16,13 +16,18 @@ import { BottomNav } from '@/components/BottomNav';
 
 import { useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { isDevelopmentMode } from '@/lib/dev-mode';
+import { DevModeBanner } from '@/components/DevModeBanner';
 
 export default function PreviousDays() {
   const [, setLocation] = useLocation();
-
+  const { user } = useAuth();
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
+
+  const devMode = isDevelopmentMode(user);
 
   // Resolve the published Daily Rhythm journey.
   const coreJourney = journeys.find(
@@ -31,10 +36,11 @@ export default function PreviousDays() {
   const journeyId  = coreJourney?.id;
   const currentDay = journeyId ? (progress[journeyId]?.currentDay ?? 1) : 1;
 
-  // Published steps strictly earlier than today's unlocked day, newest first.
+  // In dev mode: show all Published days (admins can revisit any day).
+  // In production: only days strictly earlier than the current unlocked day.
   const previousDays = coreJourney
     ? getStepsForJourney(coreJourney.id)
-        .filter(s => s.status === 'Published' && s.day < currentDay)
+        .filter(s => s.status === 'Published' && (devMode || s.day < currentDay))
         .sort((a, b) => b.day - a.day)
     : [];
 
@@ -49,6 +55,9 @@ export default function PreviousDays() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
+
+      {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
+      {devMode && <DevModeBanner hidePicker={false} />}
 
       {/* Sticky nav bar */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">

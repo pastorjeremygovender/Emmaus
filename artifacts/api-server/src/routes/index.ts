@@ -6,6 +6,7 @@ import bibleAiRouter from "./bible-ai";
 import youtubeArchiveRouter from "./youtube-archive";
 import journeysRouter from "./journeys";
 import collectionsRouter from "./collections";
+import writingAssistantRouter from "./writing-assistant";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(bibleAiRouter);
 router.use(youtubeArchiveRouter);
 router.use(journeysRouter);
 router.use(collectionsRouter);
+router.use(writingAssistantRouter);
 
 export default router;

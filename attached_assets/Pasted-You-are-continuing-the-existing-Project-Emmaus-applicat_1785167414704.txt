@@ -1,0 +1,325 @@
+You are continuing the existing Project Emmaus application.
+
+This is a focused development-tooling sprint.
+
+Do not redesign Daily Rhythm.
+
+Do not change the production one-day unlock rules for normal members.
+
+Do not change published content.
+
+Do not begin another sprint after this task.
+
+=====================================================
+SPRINT NAME
+
+Emmaus Development Mode
+
+=====================================================
+OBJECTIVE
+
+Administrators need to test all Daily Rhythm content without waiting one calendar day between entries.
+
+Create a safe Development Mode that bypasses Daily Rhythm release restrictions only for authorised development and administrator accounts.
+
+Normal members must continue experiencing one new Daily Rhythm day per calendar day.
+
+=====================================================
+AUTHORISED ACCESS
+
+Development Mode may be available only to:
+
+- Super Administrators
+- Explicit development/test accounts
+- Users with an existing development-mode permission or flag
+
+Do not enable it for ordinary members.
+
+Do not identify development users by display name or email text where a proper role or flag can be used.
+
+Enforce access on both the interface and server/data layer.
+
+=====================================================
+DEVELOPMENT MODE CONTROL
+
+Add an admin-only Development Mode control.
+
+Place it somewhere appropriate for development tools, such as:
+
+Admin Portal → Settings → Development
+
+or an existing developer toolbar.
+
+Control:
+
+Development Mode
+
+Off / On
+
+Supporting text:
+
+Temporarily bypass member scheduling restrictions while testing Emmaus.
+
+Show a visible but understated development indicator when enabled:
+
+Development Mode
+
+This indicator must never appear to normal members.
+
+=====================================================
+DAILY RHYTHM BEHAVIOUR WHEN ENABLED
+
+When Development Mode is ON for an authorised account:
+
+- All Published Daily Rhythm days are immediately accessible.
+- Future-day calendar locks are bypassed.
+- “You’re ahead of the rhythm” is not shown.
+- The tester may open any Published day directly.
+- The tester may move forward or backward between days.
+- Previous Days may include all Published entries.
+- Direct links to Published future days are permitted for the authorised tester.
+- Draft entries remain hidden on the normal member side unless using Content Studio preview.
+- Deleted or unpublished entries remain inaccessible.
+
+Do not automatically mark days complete merely because they were opened.
+
+=====================================================
+PRODUCTION BEHAVIOUR WHEN DISABLED
+
+When Development Mode is OFF, or the user is not authorised:
+
+- One new Daily Rhythm day unlocks per local calendar day.
+- Future days remain locked.
+- Review Today never advances progress.
+- Replay mode never changes progress.
+- Existing completion and scheduling rules remain unchanged.
+
+No production behaviour may be weakened by this feature.
+
+=====================================================
+TEST DAY NAVIGATION
+
+When Development Mode is enabled, add an admin-only testing control to the Daily Rhythm reader or developer toolbar:
+
+Preview Day
+
+Allow selection from all Published Daily Rhythm days.
+
+Display:
+
+- Day number
+- Title
+- Publication status
+
+Opening a selected day must use the real member-facing shared renderer.
+
+Do not create a separate fake preview design.
+
+=====================================================
+PROGRESS SAFETY
+
+Development Mode bypasses scheduling only.
+
+It must not silently change:
+
+- Completion history
+- Current production day
+- Completion dates
+- Streak data
+- Member analytics
+- Journey unlock state
+
+Provide a separate explicit testing action if progress changes are needed.
+
+Do not combine “open day” with “complete day.”
+
+=====================================================
+TEST PROGRESS TOOLS
+
+For authorised administrators only, add these clearly labelled tools:
+
+Reset My Daily Rhythm Test Progress
+
+Mark Current Test Day Complete
+
+Mark Current Test Day Incomplete
+
+These actions affect only the current authorised tester’s own test progress.
+
+They must never modify another member’s progress.
+
+Require confirmation before resetting progress.
+
+Reset confirmation:
+
+Reset your Daily Rhythm test progress?
+
+This affects only your development account.
+
+Buttons:
+
+Cancel
+
+Reset Test Progress
+
+=====================================================
+FIRST-TIME AND RETURNING PREVIEW
+
+Add development presets:
+
+Preview as First-Time Member
+
+Preview as Returning Member
+
+Preview as Completed Today
+
+Preview as Day X
+
+These should simulate or safely configure the current tester’s state without changing production data for other users.
+
+Where practical, keep simulated preview state separate from real member progress.
+
+=====================================================
+IMPLEMENTATION
+
+Create or reuse a central helper/service such as:
+
+isDevelopmentMode(user)
+
+All Daily Rhythm calendar-lock checks must use the same authoritative helper.
+
+Do not scatter hard-coded role checks across components.
+
+Server-side/data-service access rules must also respect the authorised bypass.
+
+The member UI alone is not sufficient.
+
+=====================================================
+AUDIT AND LOGGING
+
+Record development-mode changes and destructive test actions:
+
+- Administrator
+- Action
+- Date and time
+- Previous state
+- New state
+
+Do not log devotional text, prayers or private user content.
+
+=====================================================
+ENVIRONMENT SAFETY
+
+If the project has separate development, staging and production environments:
+
+- Allow Development Mode freely in development and staging for authorised users.
+- In production, require Super Administrator permission and an explicit configuration allowing it.
+- Never enable it globally for all production users.
+
+If no environment separation exists, use permissions and feature flags carefully.
+
+=====================================================
+UI WORDING
+
+Use:
+
+Development Mode
+
+Preview Day
+
+Reset Test Progress
+
+Do not use confusing member-facing language.
+
+Keep developer controls clearly separate from normal discipleship actions.
+
+=====================================================
+TESTS
+
+Verify all of the following:
+
+TEST 1: Normal member
+
+- Development controls are hidden.
+- Day locks remain enforced.
+- Future URL access is blocked.
+- One new day unlocks per calendar day.
+
+TEST 2: Authorised admin with Development Mode OFF
+
+- Production scheduling remains active.
+- Admin may enable Development Mode.
+
+TEST 3: Authorised admin with Development Mode ON
+
+- All Published days are accessible.
+- Future days open correctly.
+- Ahead-of-rhythm screen is bypassed.
+- Draft and unpublished days remain hidden.
+
+TEST 4: Preview Day
+
+- Selecting Day 1 opens Day 1.
+- Selecting Day 7 opens Day 7.
+- Shared member renderer is used.
+- Opening does not automatically change completion.
+
+TEST 5: Test progress tools
+
+- Mark complete works for the tester only.
+- Mark incomplete works for the tester only.
+- Reset requires confirmation.
+- No other member progress changes.
+
+TEST 6: Review behaviour
+
+- Review Today opens today’s completed day.
+- It never advances to tomorrow.
+- Replay remains read-only unless the explicit test-completion tool is used.
+
+TEST 7: Production safety
+
+- Turning Development Mode off immediately restores normal restrictions.
+- No global bypass remains active.
+- No ordinary member can call bypass endpoints directly.
+
+TEST 8: Existing functionality
+
+- Content Studio works.
+- Daily Rhythm editor works.
+- Today’s Steps works.
+- Previous Days works.
+- Scripture embedding works.
+- My Bible return context works.
+- Journeys remain unchanged.
+- No TypeScript, lint or runtime errors remain.
+
+=====================================================
+DEFINITION OF DONE
+
+This sprint is complete only when:
+
+- Authorised testers can access every Published Daily Rhythm day immediately.
+- Normal members remain limited to one new day per calendar day.
+- Development Mode is explicit, visible and reversible.
+- Test progress can be reset safely for the tester only.
+- No other member data is affected.
+- Production access rules remain secure.
+- No existing Daily Rhythm behaviour is broken.
+
+=====================================================
+FINAL REPORT
+
+When complete, report only:
+
+1. Where Development Mode is controlled
+2. Permissions used
+3. Calendar-lock bypass implementation
+4. Preview Day behaviour
+5. Test progress tools
+6. Production safeguards
+7. Files or schema changes
+8. Tests completed
+9. Known limitations
+
+Stop after completing Emmaus Development Mode.
