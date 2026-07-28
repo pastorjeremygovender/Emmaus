@@ -16,7 +16,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
-import { SermonCompanionCard } from '@/components/SermonCompanionCard';
+import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
@@ -295,82 +295,48 @@ function DiscoveryCard({
   enrollmentState?: string | null;
 }) {
   const dur = dayLabel(item.metadata.durationDays);
+  const metaParts = [dur, item.metadata.difficulty].filter(Boolean);
   const actionLabel = enrollmentState === 'paused' && item.memberProgressState === 'in-progress'
     ? 'Continue Journey'
     : item.primaryActionLabel;
+  const label = (CONTENT_TYPE_LABELS[item.contentType] ?? item.contentType).toUpperCase();
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden">
-      <div className="flex">
-        <div className="w-14 shrink-0 min-h-[68px]">
-          <CoverThumb url={item.metadata.coverImageUrl} title={item.title} className="w-full h-full rounded-l-2xl" />
-        </div>
-        <div className="flex-1 min-w-0 px-4 pt-3.5 pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <ContentTypeChip contentType={item.contentType} />
-                <StatePill state={item.memberProgressState} />
-              </div>
-              <h3 className="text-[15px] font-medium text-foreground leading-snug">{item.title}</h3>
-              <div className="flex items-center gap-x-2 text-[12px] text-muted-foreground flex-wrap">
-                {dur && <span>{dur}</span>}
-                {item.metadata.difficulty && (
-                  <><span className="opacity-30">·</span><span>{item.metadata.difficulty}</span></>
-                )}
-              </div>
-            </div>
-            {item.memberProgressState === 'in-progress' && onPause && onDetails && (
-              <MoreMenu onPause={onPause} onDetails={onDetails} />
-            )}
-          </div>
-        </div>
-      </div>
-      <ProgressBar item={item} />
-      <div className="px-4 pb-4 pt-3">
-        {isGated && item.memberProgressState === 'in-progress' ? (
-          <Button className="w-full h-10 rounded-xl text-[13px]" onClick={onGate}>
-            Complete today's 10 Minutes with Jesus first
-          </Button>
-        ) : (
-          <Button
-            className="w-full h-10 rounded-xl text-[14px]"
-            onClick={onAction}
-          >
-            {actionLabel}
-          </Button>
-        )}
-      </div>
-    </div>
+    <EmmausContentCard
+      label={label}
+      title={item.title}
+      description={item.description}
+      metadata={metaParts.join(' · ') || undefined}
+      primaryActionLabel={actionLabel}
+      onAction={onAction}
+      headerTrailing={
+        item.memberProgressState === 'in-progress' && onPause && onDetails
+          ? <MoreMenu onPause={onPause} onDetails={onDetails} />
+          : undefined
+      }
+      progressPercent={item.memberProgressState === 'in-progress' ? 33 : undefined}
+      gatedMessage={
+        isGated && item.memberProgressState === 'in-progress'
+          ? "Complete today's 10 Minutes with Jesus first"
+          : undefined
+      }
+      onGate={onGate}
+    />
   );
 }
 
 function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onAction: () => void; starting: boolean }) {
   const dur = dayLabel(item.metadata.durationDays);
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <BookHeart size={12} className="text-primary shrink-0" />
-            <ContentTypeChip contentType="daily-devotional" />
-          </div>
-          <StatePill state={item.memberProgressState} />
-        </div>
-        <p className="text-[16px] font-medium text-foreground leading-snug">{item.title}</p>
-        {item.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
-        )}
-        {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
-      </div>
-      <Button
-        className="w-full h-10 rounded-xl text-[14px]"
-        onClick={onAction}
-        disabled={starting}
-      >
-        {starting ? <Loader2 size={14} className="animate-spin" /> : item.primaryActionLabel}
-      </Button>
-    </div>
+    <EmmausContentCard
+      label="DAILY DEVOTIONAL"
+      title={item.title}
+      description={item.description}
+      metadata={dur || undefined}
+      primaryActionLabel={item.primaryActionLabel}
+      onAction={onAction}
+      loading={starting}
+    />
   );
 }
 
@@ -478,10 +444,11 @@ function SermonCompanionsPanel({
       {current && (
         <section className="space-y-3">
           <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          <SermonCompanionCard
+          <EmmausContentCard
+            label="SERMON COMPANION"
             title={current.title}
             description={current.description}
-            durationDays={current.metadata.durationDays}
+            metadata={current.metadata.durationDays ? `${current.metadata.durationDays} Days` : '5 Days'}
             primaryActionLabel={current.primaryActionLabel}
             onAction={() => onAction(current)}
           />
@@ -493,11 +460,12 @@ function SermonCompanionsPanel({
           <SectionLabel>Previous Sermon Companions</SectionLabel>
           <div className="space-y-3">
             {previous.map(item => (
-              <SermonCompanionCard
+              <EmmausContentCard
                 key={item.id}
+                label="SERMON COMPANION"
                 title={item.title}
                 description={item.description}
-                durationDays={item.metadata.durationDays}
+                metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
                 primaryActionLabel={item.primaryActionLabel}
                 onAction={() => onAction(item)}
               />

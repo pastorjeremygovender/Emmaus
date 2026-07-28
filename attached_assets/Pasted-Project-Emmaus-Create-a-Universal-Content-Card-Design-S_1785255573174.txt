@@ -1,0 +1,208 @@
+Project Emmaus — Create a Universal Content Card Design System
+
+We are standardizing every content card in Emmaus.
+
+There should only be ONE reusable card component used across the app.
+
+This applies to:
+
+• Daily Rhythm
+• Daily Devotionals
+• Journeys
+• Sermon Companions
+• Bible Studies
+• Future Courses
+
+==================================================
+
+CARD STRUCTURE
+
+1. Category label
+2. Title
+3. Short description
+4. Metadata
+5. Primary button
+
+Always in this order.
+
+==================================================
+
+CATEGORY LABEL
+
+Small uppercase text.
+
+Emmaus green.
+
+Same font.
+
+Same spacing.
+
+Examples
+
+DAILY DEVOTIONAL
+
+SERMON COMPANION
+
+JOURNEY
+
+BIBLE STUDY
+
+==================================================
+
+TITLE
+
+Medium size.
+
+Semibold.
+
+Maximum two lines.
+
+Never append AI-generated subtitles.
+
+The title should always remain the published content title.
+
+==================================================
+
+DESCRIPTION
+
+Exactly one sentence.
+
+20–25 words maximum.
+
+The description explains what the member will experience.
+
+Do not use promotional language.
+
+Do not create long summaries.
+
+Future AI-generated descriptions must follow this same standard.
+
+==================================================
+
+METADATA
+
+Small muted text.
+
+Examples
+
+5 Days
+
+7 Days
+
+30 Days
+
+365 Days
+
+==================================================
+
+BUTTON
+
+Full width.
+
+Emmaus green.
+
+Same height.
+
+Same border radius.
+
+Use the Emmaus language standard.
+
+Open Devotional
+
+Open Companion
+
+Open Journey
+
+Continue
+
+Review
+
+Never use Begin.
+
+==================================================
+
+SPACING
+
+Standardize spacing across every card.
+
+Label
+
+↓
+
+12px
+
+↓
+
+Title
+
+↓
+
+8px
+
+↓
+
+Description
+
+↓
+
+12px
+
+↓
+
+Metadata
+
+↓
+
+20px
+
+↓
+
+Button
+
+↓
+
+Bottom padding
+
+Every card must use the same spacing values.
+
+==================================================
+
+TYPOGRAPHY
+
+Use one shared typography scale.
+
+Title
+
+Description
+
+Metadata
+
+Category
+
+must all use shared design tokens instead of page-specific styling.
+
+==================================================
+
+IMPLEMENTATION
+
+Create a single reusable component (EmmausContentCard).
+
+Daily Rhythm, Daily Devotionals, Journeys, Sermon Companions and future content should all render using this component.
+
+Do not duplicate layouts.
+
+==================================================
+
+SUCCESS CRITERIA
+
+✓ Every content card in Emmaus looks like part of the same family.
+
+✓ Typography is identical.
+
+✓ Spacing is identical.
+
+✓ Buttons are identical.
+
+✓ Descriptions follow the same editorial standard.
+
+✓ Only the content changes—not the design.

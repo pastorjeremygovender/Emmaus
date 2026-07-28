@@ -14,15 +14,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
-import { SermonCompanionCard } from '@/components/SermonCompanionCard';
+import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { motion } from 'framer-motion';
-import { CheckCircle2, BookHeart, ChevronRight } from 'lucide-react';
+import { CheckCircle2, ChevronRight } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { useMemo, useEffect, useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
 import {
   getAllProgress,
   listPublishedSeries,
@@ -83,59 +82,30 @@ function DevotionalCard({
   onReviewToday: () => void;
   onViewPreviousDays?: () => void;
 }) {
+  const description = completedToday
+    ? 'Completed for today.'
+    : entryTitle
+      ? `Day ${availableDay} · ${entryTitle}`
+      : `Day ${availableDay}`;
+
   return (
-    <div className={[
-      'rounded-2xl border p-5 space-y-3',
-      completedToday ? 'bg-card border-border' : 'bg-card border-border',
-    ].join(' ')}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <BookHeart size={14} className="text-primary" />
-          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Daily Devotional
-          </span>
-        </div>
-        {completedToday && (
-          <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-        )}
-      </div>
-
-      <p className="text-[18px] font-semibold text-foreground leading-snug">
-        {series.title}
-      </p>
-      <p className="text-[14px] text-muted-foreground">
-        Day {availableDay}{entryTitle ? ` · ${entryTitle}` : ''}
-      </p>
-
-      {completedToday && (
-        <p className="text-[13px] text-muted-foreground">Completed for today</p>
-      )}
-
-      {completedToday ? (
-        <Button
-          className="w-full h-12 text-[15px] font-semibold rounded-xl"
-          onClick={onReviewToday}
-        >
-          Review
-        </Button>
-      ) : (
-        <Button
-          className="w-full h-12 text-[15px] font-semibold rounded-xl"
-          onClick={onBeginToday}
-        >
-          Begin Today
-        </Button>
-      )}
-
-      {onViewPreviousDays && (
-        <button
-          onClick={onViewPreviousDays}
-          className="w-full flex items-center justify-center gap-1 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
-        >
-          View Previous Days <ChevronRight size={13} />
-        </button>
-      )}
-    </div>
+    <EmmausContentCard
+      label="DAILY DEVOTIONAL"
+      title={series.title}
+      description={description}
+      primaryActionLabel={completedToday ? 'Review' : "Open Today's Time"}
+      onAction={completedToday ? onReviewToday : onBeginToday}
+      headerTrailing={
+        completedToday
+          ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
+          : undefined
+      }
+      secondaryAction={
+        onViewPreviousDays
+          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+          : undefined
+      }
+    />
   );
 }
 
@@ -150,29 +120,14 @@ function DevotionalDiscoveryCard({
   starting: boolean;
 }) {
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <BookHeart size={14} className="text-primary" />
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-          Daily Devotional
-        </span>
-      </div>
-      <p className="text-[18px] font-semibold text-foreground leading-snug">
-        {series.title}
-      </p>
-      <p className="text-[14px] text-muted-foreground">
-        A new devotional series is available
-      </p>
-      <Button
-        className="w-full h-12 text-[15px] font-semibold rounded-xl"
-        onClick={onBegin}
-        disabled={starting}
-      >
-        {starting
-          ? <Loader2 size={16} className="animate-spin" />
-          : 'Open Devotional'}
-      </Button>
-    </div>
+    <EmmausContentCard
+      label="DAILY DEVOTIONAL"
+      title={series.title}
+      description="A new devotional series is available."
+      primaryActionLabel="Open Devotional"
+      onAction={onBegin}
+      loading={starting}
+    />
   );
 }
 
@@ -234,59 +189,34 @@ function FifteenMinutesCard({
       : `Day ${currentDay} of ${journey.durationDays}`;
   })();
 
+  const done = state === 'complete' || state === 'tomorrow';
+
   return (
-    <div
-      className={[
-        'rounded-2xl p-6 space-y-4 border',
-        state === 'complete' || state === 'tomorrow'
-          ? 'bg-card border-border'
-          : 'bg-primary/5 border-primary/20',
-      ].join(' ')}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1 flex-1 min-w-0">
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-            10 Minutes with Jesus
-          </p>
-          <p className="text-[22px] font-medium text-foreground leading-snug">
-            {titleLine}
-          </p>
-        </div>
-        {(state === 'complete' || state === 'tomorrow') && (
-          <CheckCircle2 size={22} className="text-primary mt-1 shrink-0" />
-        )}
-      </div>
-
-      {/* Completion message */}
-      {(state === 'complete' || state === 'tomorrow') && (
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          {isDailyRhythm
+    <EmmausContentCard
+      label="DAILY RHYTHM"
+      title={titleLine}
+      description={
+        done
+          ? isDailyRhythm
             ? "Today's time with Jesus is complete. Come back tomorrow."
-            : "Today's time with Jesus is complete. Come back tomorrow for the next step."}
-        </p>
-      )}
-
-      {/* Primary action */}
-      <Button
-        className="w-full h-12 rounded-xl text-[16px] font-medium"
-        variant={cfg.variant}
-        onClick={onContinue}
-        disabled={cfg.disabled}
-      >
-        {cfg.label}
-      </Button>
-
-      {/* Secondary — View Previous Days text link, only when previous days exist */}
-      {onViewPreviousDays && (
-        <button
-          onClick={onViewPreviousDays}
-          className="w-full text-center text-[13px] text-muted-foreground hover:text-foreground transition-colors pt-1"
-        >
-          View Previous Days →
-        </button>
-      )}
-    </div>
+            : "Today's time with Jesus is complete. Come back tomorrow for the next step."
+          : undefined
+      }
+      primaryActionLabel={cfg.label}
+      onAction={onContinue}
+      disabled={cfg.disabled}
+      variant={done ? 'default' : 'featured'}
+      headerTrailing={
+        done
+          ? <CheckCircle2 size={20} className="text-primary shrink-0" />
+          : undefined
+      }
+      secondaryAction={
+        onViewPreviousDays
+          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+          : undefined
+      }
+    />
   );
 }
 
@@ -613,9 +543,11 @@ export default function Walk() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
           >
-            <SermonCompanionCard
+            <EmmausContentCard
+              label="SERMON COMPANION"
               title={companionJourney.sermon?.title ?? companionJourney.title}
-              durationDays={companionJourney.durationDays}
+              description="Five short weekday devotionals based on Sunday's sermon."
+              metadata={companionJourney.durationDays ? `${companionJourney.durationDays} Days` : '5 Days'}
               primaryActionLabel={!companionProg ? 'Open Companion' : 'Continue'}
               onAction={() => goToJourney(companionJourney.id, companionProg ?? { currentDay: 1 })}
             />
