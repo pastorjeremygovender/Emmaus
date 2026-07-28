@@ -220,7 +220,9 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           <StudioOverview
             onNavigateCollections={() => navigate({ id: 'collections' })}
             onNavigateJourneys={() => navigate({ id: 'journeys' })}
+            onNavigateDevotionals={() => navigate({ id: 'devotionals' })}
             onOpenJourney={(id) => navigate({ id: 'journey-editor', journeyId: id })}
+            onOpenDevotional={(id) => navigate({ id: 'devotional-editor', seriesId: id })}
             onNewJourney={() => navigate({ id: 'journeys', openNew: true })}
           />
         );

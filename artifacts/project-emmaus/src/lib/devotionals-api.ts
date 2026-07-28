@@ -100,8 +100,10 @@ export function listAllSeries(auth?: AdminAuth): Promise<DevotionalSeries[]> {
   return request<DevotionalSeries[]>(apiUrl("/admin"), { userId: auth?.userId, userRole: auth?.userRole });
 }
 
-export function getSeriesWithEntries(id: string, auth?: AdminAuth): Promise<SeriesWithEntries> {
-  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId, userRole: auth?.userRole });
+export function getSeriesWithEntries(id: string, auth?: AdminAuth | MemberAuth): Promise<SeriesWithEntries> {
+  // Read-only route — only userId is needed for requireAuth; userRole is ignored.
+  const userRole = auth && 'userRole' in auth ? (auth as AdminAuth).userRole : undefined;
+  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId, userRole });
 }
 
 export function createSeries(
@@ -161,32 +163,46 @@ export function deleteEntry(seriesId: string, dayNumber: number, auth?: AdminAut
   });
 }
 
+// ─── Member auth bag ──────────────────────────────────────────────────────────
+// Member routes rely on session cookies (set at login). In demo / dev mode,
+// the caller's userId is forwarded as the X-User-Id header so requireAuth()
+// can identify the user without a cookie.
+
+export interface MemberAuth {
+  userId?: string;
+}
+
 // ─── Member: Discovery ────────────────────────────────────────────────────────
 
-export function listPublishedSeries(): Promise<DevotionalSeries[]> {
-  return request<DevotionalSeries[]>(apiUrl("/"));
+export function listPublishedSeries(auth?: MemberAuth): Promise<DevotionalSeries[]> {
+  return request<DevotionalSeries[]>(apiUrl("/"), { userId: auth?.userId });
 }
 
 // ─── Member: Progress ─────────────────────────────────────────────────────────
 
-export function getProgress(seriesId: string): Promise<DevotionalProgress | null> {
-  return request<DevotionalProgress | null>(apiUrl(`/${seriesId}/progress`));
+export function getProgress(seriesId: string, auth?: MemberAuth): Promise<DevotionalProgress | null> {
+  return request<DevotionalProgress | null>(apiUrl(`/${seriesId}/progress`), { userId: auth?.userId });
 }
 
-export function getAllProgress(): Promise<DevotionalProgress[]> {
-  return request<DevotionalProgress[]>(apiUrl("/progress/all"));
+export function getAllProgress(auth?: MemberAuth): Promise<DevotionalProgress[]> {
+  return request<DevotionalProgress[]>(apiUrl("/progress/all"), { userId: auth?.userId });
 }
 
-export function startSeries(seriesId: string): Promise<DevotionalProgress> {
-  return request<DevotionalProgress>(apiUrl(`/${seriesId}/start`), { method: "POST" });
+export function startSeries(seriesId: string, auth?: MemberAuth): Promise<DevotionalProgress> {
+  return request<DevotionalProgress>(apiUrl(`/${seriesId}/start`), {
+    method: "POST",
+    userId: auth?.userId,
+  });
 }
 
 export function markDayComplete(
   seriesId: string,
-  day: number
+  day: number,
+  auth?: MemberAuth
 ): Promise<DevotionalProgress> {
   return request<DevotionalProgress>(apiUrl(`/${seriesId}/progress/complete`), {
     method: "POST",
     body: JSON.stringify({ day }),
+    userId: auth?.userId,
   });
 }

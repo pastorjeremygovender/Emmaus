@@ -35,16 +35,17 @@ export default function DevotionalDay() {
 
   const load = useCallback(async () => {
     if (!seriesId) return;
+    const auth = user?.id ? { userId: user.id } : undefined;
     try {
       const [d, p] = await Promise.all([
-        getSeriesWithEntries(seriesId),
-        getProgress(seriesId),
+        getSeriesWithEntries(seriesId, auth),
+        getProgress(seriesId, auth),
       ]);
       setSeriesData(d);
 
-      // Auto-start if the member hasn't started this series yet
+      // Auto-start as a fallback if the member navigated here directly
       if (!p) {
-        const started = await startSeries(seriesId);
+        const started = await startSeries(seriesId, auth);
         setProgress(started);
       } else {
         setProgress(p);
@@ -54,7 +55,7 @@ export default function DevotionalDay() {
     } finally {
       setLoading(false);
     }
-  }, [seriesId]);
+  }, [seriesId, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -64,8 +65,9 @@ export default function DevotionalDay() {
   const handleContinue = async () => {
     if (!seriesId) return;
     setCompleting(true);
+    const auth = user?.id ? { userId: user.id } : undefined;
     try {
-      const updated = await markDayComplete(seriesId, day);
+      const updated = await markDayComplete(seriesId, day, auth);
       setProgress(updated);
       // Navigate to next day or back to walk
       const nextDay = day + 1;

@@ -1,0 +1,291 @@
+Project Emmaus — Fix Published Daily Devotionals Not Appearing for Members
+
+Current status:
+
+- Daily Devotional series creation works.
+- Psalms Daily Devotional exists.
+- Day 1 exists.
+- The series/day has been published successfully in Content Studio.
+- However, it does not appear anywhere in the member-facing app.
+- It also does not appear in the Content Studio Overview, but the member experience is the priority.
+
+Do not redesign Daily Devotionals.
+Do not work on Journeys.
+Do not generate more devotional content.
+Fix the published devotional delivery flow end to end.
+
+====================================================
+PRIMARY ISSUE
+====================================================
+
+Published Daily Devotionals are not being returned to or rendered for members.
+
+The intended member flow is:
+
+Today’s Steps
+→ Daily Devotional card
+→ current active published series/day
+→ open devotional reading screen
+→ View Previous Days
+
+Display order on Today’s Steps must remain:
+
+1. 10 Minutes with Jesus
+2. Daily Devotional
+3. Your Journeys
+4. This Week’s Sermon Devotional
+5. Floating Ask Emmaus
+
+====================================================
+TASK 1 — TRACE THE FULL DATA FLOW
+====================================================
+
+Inspect the full flow from database to member UI:
+
+1. Daily Devotional series database record
+2. Daily Devotional entry database record
+3. publish status fields
+4. series status
+5. entry status
+6. publication date fields
+7. API query used by the member Today’s Steps screen
+8. member devotional progress/start record
+9. DevotionalCard visibility rules
+10. devotional reading route
+
+Identify exactly where the published devotional is being excluded.
+
+Add temporary logging for:
+
+- published devotional series returned by API
+- published entries returned by API
+- current member devotional state
+- selected current day
+- reason the card is hidden
+- route opened when card is tapped
+
+Remove noisy temporary logging after verification.
+
+====================================================
+TASK 2 — CANONICAL MEMBER API
+====================================================
+
+Create or correct one canonical member-facing API endpoint that returns the member’s Daily Devotional state.
+
+It should return a structured JSON response similar to:
+
+{
+  "activeSeries": {
+    "id": "...",
+    "title": "Psalms Daily Devotional",
+    "seriesType": "psalms",
+    "status": "published"
+  },
+  "currentEntry": {
+    "id": "...",
+    "dayNumber": 1,
+    "title": "Blessed Is the One",
+    "scriptureReference": "Psalm 1:1",
+    "status": "published"
+  },
+  "progress": {
+    "started": true,
+    "currentDay": 1
+  }
+}
+
+Use the project’s existing route conventions.
+Do not create competing duplicate endpoints.
+
+The API must only return:
+
+- published series
+- published entries
+- entries valid for the current member
+- future entries locked for normal members
+- all published entries available in Development Mode
+
+====================================================
+TASK 3 — STARTING A DEVOTIONAL SERIES
+====================================================
+
+Locked product rule:
+
+Members intentionally begin a Daily Devotional series.
+It must not auto-start silently.
+
+However, there must be a clear member path to discover and start a published series.
+
+Ensure the published Psalms Daily Devotional appears in the appropriate member-facing discovery area, using existing architecture.
+
+Expected behaviour:
+
+- Published devotional series is discoverable by members.
+- Member can open the series details.
+- Member can tap one clear primary action:
+  “Begin Devotional”
+- This creates a separate Daily Devotional progress/start record.
+- After starting, the Daily Devotional card appears on Today’s Steps.
+- The card links to the member’s current day.
+
+Do not place Daily Devotionals under Journeys.
+Do not use Journey progress for Devotionals.
+
+====================================================
+TASK 4 — TODAY’S STEPS CARD
+====================================================
+
+After the member starts Psalms Daily Devotional, show a Daily Devotional card directly beneath 10 Minutes with Jesus.
+
+The card should display:
+
+- series title
+- Day 1
+- entry title
+- one primary action: Continue or Begin Today
+- secondary action: View Previous Days →
+
+The card must not appear before the member intentionally starts the series.
+
+The card must remain visible after refresh.
+
+The card must use separate Daily Devotional progress data, not Journey data.
+
+====================================================
+TASK 5 — READING SCREEN
+====================================================
+
+When the member opens the devotional, render:
+
+- series title
+- day number
+- title
+- personalised greeting at runtime
+- Today’s Reading
+- embedded Scripture using the selected Bible translation
+- Consider This
+- Prayer
+- Your Next Step
+- Closing
+- standard bottom navigation
+
+The reading screen must load using the real series ID and entry ID.
+
+No raw API errors.
+No “not found” dead ends.
+No progress changes during replay or Previous Days.
+
+====================================================
+TASK 6 — PREVIOUS DAYS AND LOCKING
+====================================================
+
+Implement or verify:
+
+- View Previous Days shows previously unlocked/published entries.
+- Completed/read entries can be reopened safely.
+- Reopening does not advance progress.
+- Future entries remain locked for normal members.
+- Development Mode may access all published entries.
+- Daily Devotional progress remains separate from Daily Rhythm and Journeys.
+
+====================================================
+TASK 7 — PUBLICATION LOGIC
+====================================================
+
+Verify the exact publish requirements.
+
+A member should only see a devotional when:
+
+- the series is published;
+- the entry is published;
+- the publication date is valid, where applicable;
+- the series is available to members;
+- the member has intentionally started it for Today’s Steps display.
+
+Ensure publishing Day 1 does not remain admin-only.
+
+Check for mismatched values such as:
+
+- “published” vs “PUBLISHED”
+- isPublished boolean vs status field
+- missing publishedAt
+- series published but entry draft
+- entry published but series draft
+- incorrect content type filtering
+- API still querying Journeys only
+
+====================================================
+TASK 8 — CONTENT STUDIO OVERVIEW
+====================================================
+
+After the member flow works, update the Content Studio Overview so Daily Devotionals contribute to:
+
+- Total
+- Published
+- Drafts
+- Recently Updated
+- quick navigation cards
+
+Recently Updated should include:
+
+Psalms Daily Devotional
+Daily Devotional
+Published
+
+This is secondary to fixing member delivery.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Use the existing Psalms Daily Devotional and Day 1.
+
+Verify:
+
+✓ Psalms Daily Devotional is published.
+
+✓ Day 1 is published.
+
+✓ A normal member can discover the published series.
+
+✓ The member can tap Begin Devotional.
+
+✓ A separate Daily Devotional progress record is created.
+
+✓ The Daily Devotional card appears beneath 10 Minutes with Jesus.
+
+✓ The card shows Day 1 — Blessed Is the One.
+
+✓ The card remains after refresh and sign-in.
+
+✓ Tapping the card opens the correct reading screen.
+
+✓ All devotional fields render.
+
+✓ Scripture reference resolves through the existing Bible renderer.
+
+✓ View Previous Days works.
+
+✓ Future entries remain locked for normal members.
+
+✓ Development Mode can access all published entries.
+
+✓ Replay does not advance progress.
+
+✓ Daily Devotional progress is not stored as Journey progress.
+
+✓ Content Studio Overview includes the devotional afterward.
+
+Do not stop after fixing only the admin dashboard.
+
+Stop only when the published devotional is discoverable, startable and readable by a member from end to end.
+
+Report:
+
+1. the root cause;
+2. the member-facing route where the series is now discoverable;
+3. the API endpoint used;
+4. the progress table/collection used;
+5. the files changed;
+6. the result of every test above;
+7. any remaining manual test required.
