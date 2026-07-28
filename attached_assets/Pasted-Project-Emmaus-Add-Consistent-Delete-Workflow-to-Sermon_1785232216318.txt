@@ -1,0 +1,187 @@
+Project Emmaus — Add Consistent Delete Workflow to Sermons
+
+The Sermons section currently allows creating and editing sermons but has no way to delete them.
+
+Implement the same delete experience already used successfully in Daily Devotionals.
+
+Do not invent a different delete workflow.
+
+==================================================
+GOAL
+==================================================
+
+Every sermon record must support deletion.
+
+The workflow should match the rest of Emmaus.
+
+==================================================
+SERMON LIST
+==================================================
+
+On the Sermons list page add a final Actions column.
+
+Each sermon row should include:
+
+Edit
+
+Delete
+
+Do not hide Delete inside a browser context menu.
+
+Keep it visible and consistent with the rest of Content Studio.
+
+==================================================
+EDITOR
+==================================================
+
+When editing a sermon, add a Delete button to the toolbar.
+
+Toolbar order:
+
+Cancel
+
+Save Draft
+
+Publish / Unpublish
+
+Delete
+
+Delete should use the existing Emmaus destructive styling.
+
+==================================================
+CONFIRMATION
+==================================================
+
+Before deleting display:
+
+Delete Sermon?
+
+You are about to permanently delete this sermon.
+
+The linked sermon companion draft will also be deleted.
+
+This action cannot be undone.
+
+Buttons
+
+Cancel
+
+Delete Permanently
+
+Delete remains the destructive action.
+
+==================================================
+CASCADE DELETE
+==================================================
+
+Deleting a sermon must also delete:
+
+• sermon companion
+
+• all companion days
+
+• generated metadata
+
+• transcript
+
+• sermon transcript
+
+• timestamps
+
+• AI generation metadata
+
+Do NOT leave orphaned companion records.
+
+==================================================
+PUBLISHED SERMONS
+==================================================
+
+If the sermon has been published, display an additional warning.
+
+This sermon is currently visible to members.
+
+Deleting it will immediately remove it from Emmaus.
+
+==================================================
+ACTIVE SERMON
+==================================================
+
+If the deleted sermon is currently marked as:
+
+This Week's Sermon
+
+automatically clear that assignment.
+
+Do not leave Today's Steps pointing to a missing sermon.
+
+==================================================
+DATABASE
+==================================================
+
+Perform deletion inside a transaction where supported.
+
+If any linked record fails to delete:
+
+rollback the deletion
+
+or
+
+return a structured error.
+
+Never leave partial data.
+
+==================================================
+SUCCESS
+==================================================
+
+After deletion:
+
+return to Sermons list
+
+refresh automatically
+
+display
+
+"Sermon deleted successfully."
+
+==================================================
+TEST
+==================================================
+
+Verify:
+
+✓ Draft sermon deletes.
+
+✓ Published sermon deletes after confirmation.
+
+✓ Companion deletes.
+
+✓ Companion days delete.
+
+✓ No orphan records remain.
+
+✓ Today's Steps updates correctly.
+
+✓ List refreshes.
+
+✓ Success message shown.
+
+✓ Delete styling matches Daily Devotionals.
+
+==================================================
+FUTURE
+==================================================
+
+Use the same delete component across:
+
+Journeys
+
+Daily Rhythm
+
+Daily Devotionals
+
+Sermons
+
+Collections
+
+This should become the standard Emmaus delete workflow.

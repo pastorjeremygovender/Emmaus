@@ -20,6 +20,7 @@ import {
   redetectSermon,
   saveCompanionEntry,
   getCompanion,
+  deleteServerSermon,
   ApiError,
   type SermonDraftResult,
   type SermonDetectionSource,
@@ -31,7 +32,7 @@ import {
 } from './shared';
 import {
   Loader2, RefreshCw, Check, X, ChevronRight,
-  PanelRightClose, PanelRightOpen, Clock, AlertCircle, CheckCircle2,
+  PanelRightClose, PanelRightOpen, Clock, AlertCircle, CheckCircle2, Trash2,
 } from 'lucide-react';
 
 type Props = {
@@ -596,9 +597,12 @@ function ConfirmSermonPhase({
           <Check size={14} className="mr-1" />
           Looks Correct — Generate
         </AdminBtn>
-        <AdminBtn variant="secondary" onClick={() => onAdjust(detection)}>
-          Adjust Boundaries
-        </AdminBtn>
+        {/* Only show Adjust when we have timestamps to reason from */}
+        {detection.startSecs !== null && detection.endSecs !== null && (
+          <AdminBtn variant="secondary" onClick={() => onAdjust(detection)}>
+            Adjust Boundaries
+          </AdminBtn>
+        )}
         <AdminBtn variant="ghost" onClick={onBack}>
           Cancel
         </AdminBtn>
@@ -614,6 +618,7 @@ function ConfirmSermonPhase({
 
 // ─── Adjust Sermon Phase ──────────────────────────────────────────────────────
 // Lets the pastor manually enter corrected start/end timestamps.
+// Word-offset computation is handled server-side against the timed VTT cue index.
 
 function AdjustSermonPhase({
   detection,
@@ -623,7 +628,7 @@ function AdjustSermonPhase({
 }: {
   detection: SermonDetectionSource;
   youtubeUrl: string;
-  onApply: (updated: SermonDetectionSource) => void;
+  onApply: (adjusted: { startSecs: number; endSecs: number }) => void;
   onBack: () => void;
 }) {
   function secsToInput(secs: number | null): string {
@@ -659,23 +664,9 @@ function AdjustSermonPhase({
       setError('End time must be after start time');
       return;
     }
-    // Compute approximate word boundaries proportional to time
-    const totalWords = detection.endWord + detection.startWord; // rough proxy
-    const videoDuration = (detection.endSecs ?? 0) + (detection.startSecs ?? 0);
-    const totalWords2 = detection.segmentCount > 0
-      ? detection.segmentCount * 200 : totalWords || 10000;
-    const estimatedDuration = videoDuration > 0 ? videoDuration : totalWords2 / 2.5;
-    const startWord = Math.round((startSecs / estimatedDuration) * totalWords2);
-    const endWord   = Math.round((endSecs   / estimatedDuration) * totalWords2);
-
-    onApply({
-      ...detection,
-      startSecs,
-      endSecs,
-      durationSecs: endSecs - startSecs,
-      startWord,
-      endWord,
-    });
+    // Send corrected seconds only — the server maps them to word offsets using
+    // the timed VTT cue index from the original transcript retrieval.
+    onApply({ startSecs, endSecs });
   };
 
   return (
@@ -725,7 +716,7 @@ function AdjustSermonPhase({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
-  const { sermons, addSermon, updateSermon } = useAdmin();
+  const { sermons, addSermon, updateSermon, removeSermon } = useAdmin();
   const { user } = useAuth();
 
   const isNew = !sermonId;
@@ -752,6 +743,9 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmBack, setConfirmBack] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Per-field regen state
   type RegenField = 'title' | 'speaker' | 'scriptureReference' | 'summary' | 'topics' | 'keywords';
@@ -841,6 +835,11 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       topics: result.sermon.topics,
       keywords: result.sermon.keywords,
       transcript: result.sermon.transcript,
+      sermonTranscript: result.sermon.sermonTranscript,
+      sermonStartTime: result.sermon.sermonStartTime,
+      sermonEndTime: result.sermon.sermonEndTime,
+      detectionConfidence: result.sermon.detectionConfidence,
+      detectionMethod: result.sermon.detectionMethod,
       transcriptStatus: result.sermon.transcriptStatus,
       aiIndexStatus: result.sermon.aiIndexStatus,
       companionJourneyId: result.companion.id,
@@ -852,7 +851,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       ...result.sermon,
       companionJourneyId: result.companion.id,
       status: 'draft',
-    } as Sermon;
+    };
     addSermon(sermonRecord);
     setSermonId_(result.sermon.id);
     setCompanionData(result.companion);
@@ -931,14 +930,27 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     });
   }, [generatingUrl, handleGenerate]);
 
-  const handleSermonAdjust = useCallback((updated: SermonDetectionSource) => {
+  const handleSermonAdjust = useCallback((adjusted: { startSecs: number; endSecs: number }) => {
+    // Pass only seconds — the server maps them to word offsets via the timed VTT cue index
     handleGenerate(generatingUrl, {
-      sermonStartSec:  updated.startSecs  ?? undefined,
-      sermonEndSec:    updated.endSecs    ?? undefined,
-      sermonStartWord: updated.startWord,
-      sermonEndWord:   updated.endWord,
+      sermonStartSec: adjusted.startSecs,
+      sermonEndSec:   adjusted.endSecs,
     });
   }, [generatingUrl, handleGenerate]);
+
+  const handleDelete = useCallback(async () => {
+    if (!auth || !sermonId_) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await deleteServerSermon(sermonId_, auth);
+      removeSermon(sermonId_);
+      onBack();
+    } catch {
+      setDeleteError('Failed to delete. Please try again.');
+      setDeleting(false);
+    }
+  }, [auth, sermonId_, removeSermon, onBack]);
 
   const handleRedetect = useCallback(async () => {
     if (!auth || !sermonId_) return;
@@ -952,7 +964,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         sermonEndTime: detection.sermonEndTime,
         detectionConfidence: detection.detectionConfidence,
         detectionMethod: detection.detectionMethod,
-      } as typeof f));
+      }));
       setIsDirty(true);
     } catch {
       // non-fatal — user can retry
@@ -971,7 +983,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         currentTitle: form.title,
         currentSummary: form.summary ?? '',
         scriptureReference: form.scriptureReference,
-        transcript: form.transcript ?? '',
+        transcript: form.sermonTranscript ?? form.transcript ?? '',
         description: form.summary ?? '',
       }, auth);
       setProposed(prev => ({ ...prev, [field]: result.value }));
@@ -1241,20 +1253,27 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               </Field>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap items-center">
               <AdminBtn variant="secondary" onClick={() => { if (isDirty) { setConfirmBack(true); return; } onBack(); }}>Cancel</AdminBtn>
               <AdminBtn variant="primary" onClick={handleSave}>Save Sermon</AdminBtn>
+              {sermonId_ && (
+                <button
+                  onClick={() => { setConfirmDelete(true); setDeleteError(''); }}
+                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-[13px] text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              )}
             </div>
           </div>
         )}
 
         {/* Sermon transcript section (collapsible) */}
         {activeTab === 'sermon' && (() => {
-          const f = form as Record<string, unknown>;
-          const st = f.sermonTranscript as string | undefined;
-          const conf = f.detectionConfidence as number | undefined;
-          const startT = f.sermonStartTime as string | undefined;
-          const endT = f.sermonEndTime as string | undefined;
+          const st = form.sermonTranscript;
+          const conf = form.detectionConfidence;
+          const startT = form.sermonStartTime;
+          const endT = form.sermonEndTime;
           if (!st) return null;
           return (
             <div className="px-6 lg:px-8 pb-2 max-w-3xl">
@@ -1326,6 +1345,49 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
           onConfirm={() => { setConfirmBack(false); onBack(); }}
           onCancel={() => setConfirmBack(false)}
         />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Sermon?</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              You are about to permanently delete this sermon.
+              {form.companionJourneyId && (
+                <> The linked sermon companion draft will also be deleted.</>
+              )}
+              {' '}This action cannot be undone.
+            </p>
+            {form.status === 'published' && (
+              <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                This sermon is currently visible to members. Deleting it will immediately remove it from Emmaus.
+              </div>
+            )}
+            {deleteError && (
+              <p className="text-sm text-red-600 mb-3">{deleteError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setConfirmDelete(false); setDeleteError(''); }}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {deleting
+                  ? <><Loader2 size={13} className="animate-spin" /> Deleting…</>
+                  : 'Delete Permanently'
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

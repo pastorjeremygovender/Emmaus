@@ -263,6 +263,11 @@ export interface AdminSermonRecord {
   topics: string[];
   keywords: string[];
   transcript?: string;
+  sermonTranscript?: string;
+  sermonStartTime?: string;
+  sermonEndTime?: string;
+  detectionConfidence?: number;
+  detectionMethod?: 'ai-auto' | 'ai-confirmed' | 'manual' | 'none';
   transcriptStatus: 'none' | 'pending' | 'complete';
   aiIndexStatus: 'none' | 'pending' | 'indexed';
   companionJourneyId?: string;
@@ -303,6 +308,18 @@ export async function patchServerSermon(
   auth: AuthHeaders,
 ): Promise<AdminSermonRecord> {
   return patch<AdminSermonRecord>(`/admin-sermons/${id}`, fields as Record<string, unknown>, auth);
+}
+
+export async function deleteServerSermon(id: string, auth: AuthHeaders): Promise<void> {
+  const res = await fetch(apiUrl(`/admin-sermons/${id}`), {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "X-User-Id": auth.userId, "X-User-Role": auth.userRole },
+  });
+  if (!res.ok) {
+    const b = await res.text();
+    throw new Error(b || `HTTP ${res.status}`);
+  }
 }
 
 // ─── Companion CRUD ───────────────────────────────────────────────────────────

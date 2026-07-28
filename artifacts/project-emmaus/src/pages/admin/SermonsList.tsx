@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { Plus, Pencil, ExternalLink, BookOpen } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Plus, Pencil, ExternalLink, BookOpen, Trash2, Loader2 } from 'lucide-react';
 import { StatusBadge, AdminBtn, AdminTable, Th, Td, PageHeader } from './shared';
+import { deleteServerSermon } from '@/lib/sermon-generator-api';
+import type { Sermon } from '@/lib/admin-demo-data';
 
 type Props = {
   onEdit: (id: string) => void;
@@ -19,8 +22,38 @@ function isUUID(id: string): boolean {
 }
 
 export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
-  const { sermons } = useAdmin();
+  const { sermons, removeSermon } = useAdmin();
   const { journeys } = useJourney();
+  const { user } = useAuth();
+
+  const [deleteTarget, setDeleteTarget] = useState<Sermon | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const auth = user ? { userId: user.id, userRole: user.role } : null;
+
+  const handleDeleteClick = (sermon: Sermon) => {
+    setDeleteTarget(sermon);
+    setDeleteError('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !auth) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await deleteServerSermon(deleteTarget.id, auth);
+      removeSermon(deleteTarget.id);
+      setDeleteTarget(null);
+      setSuccessMessage('Sermon deleted successfully.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch {
+      setDeleteError('Failed to delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl">
@@ -33,6 +66,12 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           </AdminBtn>
         }
       />
+
+      {successMessage && (
+        <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+          {successMessage}
+        </div>
+      )}
 
       <AdminTable>
         <thead>
@@ -103,6 +142,12 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                         <ExternalLink size={13} />
                       </a>
                     )}
+                    <button
+                      onClick={() => handleDeleteClick(s)}
+                      className="inline-flex items-center gap-1 px-2 py-1.5 text-[13px] text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
                   </div>
                 </Td>
               </tr>
@@ -117,6 +162,46 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           )}
         </tbody>
       </AdminTable>
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Sermon?</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              You are about to permanently delete this sermon.
+              {deleteTarget.companionJourneyId && (
+                <> The linked sermon companion draft will also be deleted.</>
+              )}
+              {' '}This action cannot be undone.
+            </p>
+            {deleteTarget.status === 'published' && (
+              <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                This sermon is currently visible to members. Deleting it will immediately remove it from Emmaus.
+              </div>
+            )}
+            {deleteError && (
+              <p className="text-sm text-red-600 mb-3">{deleteError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setDeleteTarget(null); setDeleteError(''); }}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {deleting ? <><Loader2 size={13} className="animate-spin" /> Deleting…</> : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

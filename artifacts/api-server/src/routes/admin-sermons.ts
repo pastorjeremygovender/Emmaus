@@ -1,10 +1,11 @@
 /**
  * admin-sermons.ts — Server-side persistence for admin sermon draft records.
  *
- * GET  /api/admin-sermons           — list all server-persisted sermon drafts
- * GET  /api/admin-sermons/:id       — get one by id
- * POST /api/admin-sermons           — create / upsert
- * PATCH /api/admin-sermons/:id      — update fields
+ * GET    /api/admin-sermons           — list all server-persisted sermon drafts
+ * GET    /api/admin-sermons/:id       — get one by id
+ * POST   /api/admin-sermons           — create / upsert
+ * PATCH  /api/admin-sermons/:id       — update fields
+ * DELETE /api/admin-sermons/:id       — delete sermon + companion cascade
  *
  * All endpoints require admin or superAdmin role.
  */
@@ -15,7 +16,9 @@ import {
   getAdminSermonById,
   upsertAdminSermon,
   updateAdminSermon,
+  deleteAdminSermon,
 } from "../lib/admin-sermon-store.js";
+import { deleteCompanion } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
@@ -83,6 +86,44 @@ adminSermonsRouter.post("/", async (req: Request, res: Response) => {
     res.status(201).json(sermon);
   } catch (err) {
     logger.error({ err }, "admin-sermons: upsert failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── DELETE /:id ──────────────────────────────────────────────────────────────
+// Cascade: delete companion + all companion entries, then the sermon record.
+
+adminSermonsRouter.delete("/:id", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+  try {
+    // Load the record first so we know the companion id
+    const sermon = await getAdminSermonById(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+
+    // Cascade-delete the companion and all its entries if one exists
+    if (sermon.companionJourneyId) {
+      try {
+        await deleteCompanion(sermon.companionJourneyId);
+      } catch (companionErr) {
+        // Companion may already be gone — log but don't abort
+        logger.warn({ companionErr, companionId: sermon.companionJourneyId },
+          "admin-sermons: companion delete failed (may already be absent)");
+      }
+    }
+
+    const deleted = await deleteAdminSermon(id);
+    if (!deleted) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "admin-sermons: delete failed");
     res.status(500).json({ error: "Server error" });
   }
 });

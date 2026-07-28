@@ -114,6 +114,19 @@ export async function upsertAdminSermon(
   return record;
 }
 
+/**
+ * Permanently remove a sermon record by id.
+ * Returns true if found and deleted, false if not found.
+ */
+export async function deleteAdminSermon(id: string): Promise<boolean> {
+  const records = await readAll();
+  const idx = records.findIndex(r => r.id === id);
+  if (idx < 0) return false;
+  records.splice(idx, 1);
+  await atomicWrite(records);
+  return true;
+}
+
 export async function updateAdminSermon(
   id: string,
   patch: Partial<Omit<AdminSermonRecord, "id" | "createdAt">>

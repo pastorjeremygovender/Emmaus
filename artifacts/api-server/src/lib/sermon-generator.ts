@@ -457,6 +457,42 @@ async function detectSermonSection(
   };
 }
 
+/**
+ * Given a target time in seconds and the timed VTT cues, return the word offset
+ * in the full transcript that corresponds to that time. Used when the pastor
+ * provides corrected timestamp boundaries (Adjust Sermon phase) to slice the
+ * transcript server-side from the authoritative cue index.
+ *
+ * Falls back to a words-per-second estimate when no timed cues are available.
+ */
+function timeToWordOffset(
+  secs: number,
+  timedCues: TimedCue[] | undefined,
+  totalWords: number
+): number {
+  if (!timedCues || timedCues.length === 0) {
+    // No timed data — estimate at average speech rate (2.5 words/sec)
+    return Math.min(Math.max(0, Math.round(secs * 2.5)), totalWords);
+  }
+
+  // Build cumulative word-start per cue (same as buildSegments does internally)
+  const entries: Array<{ wordStart: number; secs: number }> = [];
+  let w = 0;
+  for (const cue of timedCues) {
+    entries.push({ wordStart: w, secs: cue.startSecs });
+    w += cue.text.split(/\s+/).filter(Boolean).length;
+  }
+
+  // Binary search: last entry whose cue.startSecs ≤ secs
+  let lo = 0, hi = entries.length - 1, best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (entries[mid].secs <= secs) { best = entries[mid].wordStart; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  return Math.min(best, totalWords);
+}
+
 /** Re-run sermon detection on a stored sermon record (for the Re-detect button) */
 export async function redetectSermon(fullTranscript: string): Promise<{
   sermonTranscript: string;
@@ -756,6 +792,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
 
   // 4. Extract sermon-only transcript
   const hasBoundaries = options.sermonStartWord !== undefined && options.sermonEndWord !== undefined;
+  const hasTimeBoundaries = !hasBoundaries
+    && options.sermonStartSec !== undefined && options.sermonEndSec !== undefined;
 
   let sermonTranscript: string;
   let detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none";
@@ -764,7 +802,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   let detectionConfidence: number;
 
   if (hasBoundaries) {
-    // Pastor already confirmed or adjusted boundaries — slice by word offset
+    // Pastor confirmed AI-detected boundaries (word offsets from detection, reliable)
     const words = fullTranscript.split(/\s+/).filter(Boolean);
     sermonTranscript = words.slice(options.sermonStartWord, options.sermonEndWord).join(" ");
     detectionStartSecs = options.sermonStartSec ?? null;
@@ -772,7 +810,21 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     detectionConfidence = 1.0;
     detectionMethod = "ai-confirmed";
     logger.info({ startWord: options.sermonStartWord, endWord: options.sermonEndWord },
-      "sermon-generator: using pastor-confirmed sermon boundaries");
+      "sermon-generator: using pastor-confirmed word boundaries");
+  } else if (hasTimeBoundaries) {
+    // Pastor manually adjusted timestamps — convert to word offsets via cue index
+    const words = fullTranscript.split(/\s+/).filter(Boolean);
+    const startWord = timeToWordOffset(options.sermonStartSec!, timedCues, words.length);
+    const endWord   = timeToWordOffset(options.sermonEndSec!,   timedCues, words.length);
+    sermonTranscript = words.slice(startWord, Math.max(startWord + 1, endWord)).join(" ");
+    detectionStartSecs = options.sermonStartSec!;
+    detectionEndSecs   = options.sermonEndSec!;
+    detectionConfidence = 1.0;
+    detectionMethod = "ai-confirmed";
+    logger.info(
+      { startSec: options.sermonStartSec, endSec: options.sermonEndSec, startWord, endWord,
+        hasCues: !!(timedCues && timedCues.length) },
+      "sermon-generator: using pastor-adjusted time boundaries (server-mapped to words)");
   } else {
     let detection: SermonDetectionResult;
     try {

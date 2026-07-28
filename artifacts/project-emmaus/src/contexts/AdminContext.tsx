@@ -13,6 +13,7 @@ import {
   listServerSermons,
   saveServerSermon,
   patchServerSermon,
+  deleteServerSermon,
   type AdminSermonRecord,
 } from '../lib/sermon-generator-api';
 import { useAuth } from './AuthContext';
@@ -21,6 +22,7 @@ type AdminContextType = {
   sermons: Sermon[];
   addSermon: (sermon: Sermon) => void;
   updateSermon: (sermon: Sermon) => void;
+  removeSermon: (id: string) => void;
   prayerRequests: PrayerRequest[];
   updatePrayerRequest: (req: PrayerRequest) => void;
   adminUsers: AdminUser[];
@@ -52,6 +54,11 @@ function mergeSermons(local: Sermon[], server: AdminSermonRecord[]): Sermon[] {
         topics: r.topics ?? [],
         keywords: r.keywords ?? [],
         transcript: r.transcript,
+        sermonTranscript: r.sermonTranscript,
+        sermonStartTime: r.sermonStartTime,
+        sermonEndTime: r.sermonEndTime,
+        detectionConfidence: r.detectionConfidence,
+        detectionMethod: r.detectionMethod,
         transcriptStatus: r.transcriptStatus ?? 'none',
         aiIndexStatus: r.aiIndexStatus ?? 'none',
         companionJourneyId: r.companionJourneyId,
@@ -141,6 +148,19 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }
   }, [authHeaders]);
 
+  /**
+   * Remove a sermon from local state (and localStorage).
+   * Callers are responsible for the server-side delete — they need to handle
+   * the async result and navigate away before calling this.
+   */
+  const removeSermon = useCallback((id: string) => {
+    setSermons(prev => {
+      const next = prev.filter(s => s.id !== id);
+      localStorage.setItem('emmaus_admin_sermons', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const updatePrayerRequest = (req: PrayerRequest) => {
     const next = prayerRequests.map(p => (p.id === req.id ? req : p));
     setPrayerRequests(next);
@@ -154,7 +174,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AdminContext.Provider
-      value={{ sermons, addSermon, updateSermon, prayerRequests, updatePrayerRequest, adminUsers, settings, updateSettings }}
+      value={{ sermons, addSermon, updateSermon, removeSermon, prayerRequests, updatePrayerRequest, adminUsers, settings, updateSettings }}
     >
       {children}
     </AdminContext.Provider>

@@ -11,7 +11,14 @@ export type Sermon = {
   summary?: string;
   topics: string[];
   keywords: string[];
+  /** Full church-service transcript (retained for reference) */
   transcript?: string;
+  /** Sermon-only transcript — canonical source for all AI generation */
+  sermonTranscript?: string;
+  sermonStartTime?: string;     // "HH:MM:SS" or "" if untimed
+  sermonEndTime?: string;       // "HH:MM:SS" or "" if untimed
+  detectionConfidence?: number; // 0.0 → 1.0
+  detectionMethod?: 'ai-auto' | 'ai-confirmed' | 'manual' | 'none';
   transcriptStatus: 'none' | 'pending' | 'complete';
   aiIndexStatus: 'none' | 'pending' | 'indexed';
   companionJourneyId?: string;
