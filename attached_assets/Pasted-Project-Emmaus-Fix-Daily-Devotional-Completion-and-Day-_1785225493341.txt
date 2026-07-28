@@ -1,0 +1,381 @@
+Project Emmaus — Fix Daily Devotional Completion and Day Advancement
+
+Current problem:
+
+In the member Daily Devotional reading screen, pressing Continue at the end of Day 1 immediately advances the member to Day 2.
+
+This is incorrect.
+
+Daily Devotionals are calendar-based daily content.
+
+A normal member must not move directly from Day 1 to Day 2 on the same day.
+
+Development Mode may bypass the daily lock for authorised testers.
+
+Fix this specific behaviour completely.
+
+Do not redesign the Daily Devotional architecture.
+Do not merge Daily Devotional progress with Journey progress.
+Do not modify Daily Rhythm.
+Do not generate new content.
+
+====================================================
+LOCKED EXPECTED BEHAVIOUR
+====================================================
+
+At the end of a Daily Devotional entry, the primary button should be:
+
+Finished
+
+Do not use “Continue” when it implies opening the next day.
+
+When a normal member taps Finished:
+
+1. Mark the current Daily Devotional entry as completed/read.
+2. Save completion for the current member.
+3. Do not advance currentDay to the next entry unless that next entry is already unlocked by the calendar.
+4. Do not navigate to Day 2.
+5. Return the member to Today’s Steps.
+6. Keep the Daily Devotional card visible with the correct completed state for today.
+
+Day 2 should only become available on the next eligible local calendar day.
+
+Development Mode may allow the tester to open Day 2 manually.
+
+====================================================
+TASK 1 — CHANGE THE END BUTTON
+====================================================
+
+On the live Daily Devotional reading screen:
+
+Replace:
+
+Continue
+
+with:
+
+Finished
+
+The button should clearly mean:
+
+“I have finished today’s devotional.”
+
+It must not mean:
+
+“Open the next day.”
+
+Use the existing Emmaus primary button style.
+
+Do not add confetti, badges, XP, celebration screens or streak pressure.
+
+====================================================
+TASK 2 — SEPARATE COMPLETION FROM ADVANCEMENT
+====================================================
+
+Inspect the current completion handler.
+
+The current logic appears to do something like:
+
+complete current entry
+→ increment currentDay
+→ navigate to next entry
+
+Replace this with two separate concepts:
+
+A. completion
+B. availability/unlock
+
+Completion records that the member finished the current entry.
+
+Availability is calculated from:
+
+- series start date;
+- member start date;
+- local calendar date;
+- publication status;
+- Development Mode.
+
+Tapping Finished must only perform completion.
+
+It must not automatically increment the member to the next locked day.
+
+====================================================
+TASK 3 — MEMBER PROGRESS DATA
+====================================================
+
+Use the existing separate Daily Devotional progress record.
+
+Ensure it can store:
+
+- memberId
+- seriesId
+- startedAt
+- startDateLocal
+- lastCompletedDay
+- completedEntryIds or completedDays
+- lastReadAt
+- currentAvailableDay, if stored
+- updatedAt
+
+Prefer calculating currentAvailableDay from dates rather than blindly incrementing it on button press.
+
+Do not use Journey progress.
+
+Do not use Daily Rhythm progress.
+
+Prevent duplicate completion records when Finished is tapped more than once.
+
+====================================================
+TASK 4 — CALENDAR UNLOCK RULE
+====================================================
+
+For normal members:
+
+Day 1 is available on the day the member begins the devotional series.
+
+Day 2 becomes available on the next local calendar day.
+
+Day 3 becomes available on the following local calendar day.
+
+Use the member’s local date, not only UTC elapsed hours.
+
+Example:
+
+Member begins Day 1 at 10:00 PM.
+
+Day 2 may unlock after local midnight.
+
+The member should not be forced to wait a full 24 hours.
+
+Suggested calculation:
+
+availableDay =
+daysBetween(memberStartLocalDate, memberCurrentLocalDate) + 1
+
+Clamp the value to:
+
+- minimum 1;
+- maximum number of published entries.
+
+Only published entries may unlock.
+
+Do not unlock a missing or draft entry.
+
+====================================================
+TASK 5 — AFTER FINISHED IS TAPPED
+====================================================
+
+After successful completion:
+
+Navigate to:
+
+Today’s Steps
+
+Do not navigate to:
+
+- Day 2;
+- Previous Days;
+- series details;
+- a completion screen.
+
+Show a subtle success state if the project already has one, such as:
+
+“Today’s devotional is complete.”
+
+Keep it brief and non-intrusive.
+
+No modal is required.
+
+====================================================
+TASK 6 — TODAY’S STEPS CARD AFTER COMPLETION
+====================================================
+
+After Day 1 is completed on the same day, the Daily Devotional card should remain beneath 10 Minutes with Jesus.
+
+It should show a calm completed state, for example:
+
+Psalms Daily Devotional
+Day 1 — Blessed Is the One
+Completed for today
+
+Primary action:
+
+Review Today
+
+Secondary action:
+
+View Previous Days →
+
+Review Today must reopen Day 1 in replay/read-only mode.
+
+It must not:
+
+- complete the day again;
+- advance progress;
+- unlock Day 2;
+- alter the completion date.
+
+Do not display Day 2 as the active entry until it is genuinely unlocked.
+
+====================================================
+TASK 7 — NEXT DAY BEHAVIOUR
+====================================================
+
+On the next eligible local calendar day:
+
+The Today’s Steps card should automatically update to:
+
+Psalms Daily Devotional
+Day 2 — Choose Your Company
+
+Primary action:
+
+Begin Today
+
+or:
+
+Continue
+
+Use the wording already established in the existing member cards.
+
+Opening Day 2 should not require manually changing the progress record.
+
+It should be derived from the calendar unlock rule.
+
+====================================================
+TASK 8 — DEVELOPMENT MODE
+====================================================
+
+For authorised Development Mode accounts:
+
+- all published devotional entries may be opened for testing;
+- the tester may manually select Day 1, Day 2 and later published days;
+- tapping Finished should still not forcibly navigate to the next day;
+- completion and replay rules remain safe;
+- testing one entry must not corrupt normal production scheduling.
+
+Do not make Development Mode a global bypass for normal members.
+
+====================================================
+TASK 9 — REPLAY AND PREVIOUS DAYS
+====================================================
+
+Verify:
+
+Review Today opens the completed current entry in replay mode.
+
+View Previous Days shows only entries the member has already unlocked.
+
+Opening a previous entry:
+
+- does not change current day;
+- does not alter lastCompletedDay;
+- does not unlock future entries;
+- does not show a button that advances to the next day.
+
+For replayed entries, the bottom action may be:
+
+Back to Today’s Steps
+
+Do not show Finished again if it would create duplicate completion behaviour.
+
+====================================================
+TASK 10 — LOADING AND DOUBLE-TAP SAFETY
+====================================================
+
+The screenshot shows the bottom button in a loading state.
+
+Ensure:
+
+- the button disables while completion is saving;
+- only one completion request is sent;
+- double-tapping does not advance twice;
+- failure restores the button;
+- a clean error appears if saving fails;
+- the member remains on the current devotional if the save fails.
+
+Never leave the button permanently spinning.
+
+====================================================
+TASK 11 — PUBLICATION AND MISSING DAY SAFETY
+====================================================
+
+If Day 2 is not published when it becomes eligible:
+
+- do not show a broken Day 2 route;
+- keep the member in a safe completed state;
+- show no raw error;
+- do not skip automatically to Day 3.
+
+Once Day 2 is published, it may become available according to the member’s existing schedule.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Use the existing published entries:
+
+Day 1 — Blessed Is the One
+Day 2 — Choose Your Company
+
+Test as a normal member:
+
+✓ Open Day 1.
+
+✓ The end button says Finished.
+
+✓ Tap Finished once.
+
+✓ Day 1 is marked complete.
+
+✓ The app returns to Today’s Steps.
+
+✓ The app does not open Day 2.
+
+✓ Day 2 remains locked on the same local day.
+
+✓ The card displays Completed for today.
+
+✓ Review Today reopens Day 1 safely.
+
+✓ Reviewing Day 1 does not alter progress.
+
+✓ Refreshing preserves the completed state.
+
+✓ Signing out and back in preserves the completed state.
+
+✓ On the next simulated local calendar day, Day 2 becomes available.
+
+✓ Day 2 opens correctly.
+
+✓ No full 24-hour wait is required after local midnight.
+
+✓ A draft or missing Day 2 does not create a dead end.
+
+Test in Development Mode:
+
+✓ Day 2 can be opened manually.
+
+✓ Finishing Day 1 still does not force navigation to Day 2.
+
+✓ Testing does not alter normal-member scheduling rules.
+
+Test failure handling:
+
+✓ Double-tapping sends one completion request.
+
+✓ A failed save does not advance progress.
+
+✓ The loading spinner clears after success or failure.
+
+Stop only when normal members cannot advance from Day 1 to Day 2 by pressing the end button.
+
+At completion, report:
+
+1. the root cause;
+2. the previous completion-and-navigation logic;
+3. the new calendar unlock calculation;
+4. the Daily Devotional progress fields used;
+5. the files changed;
+6. the result of every test above;
+7. any final manual test still required.

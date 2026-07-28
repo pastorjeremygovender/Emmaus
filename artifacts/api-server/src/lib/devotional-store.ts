@@ -239,21 +239,23 @@ export async function markDayComplete(
 ): Promise<DevotionalProgress> {
   const existing = await getProgress(userId, seriesId);
   const completed = existing?.completedDays ?? [];
+  // Idempotent: adding the same day twice has no effect.
   const newCompleted = completed.includes(day) ? completed : [...completed, day];
-  const newCurrentDay = day + 1;
 
+  // currentDay is intentionally NOT incremented here.
+  // The day that is available to the member is derived on the client from the
+  // member's local calendar date and startedAt — not from a stored counter.
   const [row] = await db
     .insert(devotionalProgressTable)
     .values({
       userId,
       seriesId,
-      currentDay: newCurrentDay,
+      currentDay: 1,          // seed value; never incremented on completion
       completedDays: newCompleted,
     })
     .onConflictDoUpdate({
       target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
       set: {
-        currentDay: newCurrentDay,
         completedDays: newCompleted,
         updatedAt: new Date(),
       },

@@ -29,7 +29,9 @@ import {
   startSeries,
   type DevotionalSeries,
   type DevotionalProgress,
+  type DevotionalEntry,
 } from '@/lib/devotionals-api';
+import { calcAvailableDay } from '@/lib/devotional-calendar';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ lines = 3 }: { lines?: number }) {
@@ -54,37 +56,77 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ─── Daily Devotional card — active (member has started) ─────────────────────
+//
+// States:
+//   complete  — today's available day has already been marked done
+//   ready     — today's day is unlocked and unread
+//
+// Day availability is calendar-derived (see devotional-calendar.ts).
+// currentDay stored in the progress record is intentionally ignored here.
 function DevotionalCard({
   series,
-  progress,
+  availableDay,
   entryTitle,
-  onContinue,
+  completedToday,
+  onBeginToday,
+  onReviewToday,
   onViewPreviousDays,
 }: {
   series: DevotionalSeries;
-  progress: DevotionalProgress;
+  /** Calendar-derived day the member has access to today. */
+  availableDay: number;
   entryTitle?: string;
-  onContinue: () => void;
+  /** True when the member has already completed today's available day. */
+  completedToday: boolean;
+  onBeginToday: () => void;
+  onReviewToday: () => void;
   onViewPreviousDays?: () => void;
 }) {
-  const day = progress.currentDay;
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-      <div className="flex items-center gap-2">
-        <BookHeart size={14} className="text-primary" />
-        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-          Daily Devotional
-        </span>
+    <div className={[
+      'rounded-2xl border p-5 space-y-3',
+      completedToday ? 'bg-card border-border' : 'bg-card border-border',
+    ].join(' ')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <BookHeart size={14} className="text-primary" />
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Daily Devotional
+          </span>
+        </div>
+        {completedToday && (
+          <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
+        )}
       </div>
+
       <p className="text-[18px] font-semibold text-foreground leading-snug">
         {series.title}
       </p>
       <p className="text-[14px] text-muted-foreground">
-        Day {day}{entryTitle ? ` · ${entryTitle}` : ''}
+        Day {availableDay}{entryTitle ? ` · ${entryTitle}` : ''}
       </p>
-      <Button className="w-full h-12 text-[15px] font-semibold rounded-xl" onClick={onContinue}>
-        Begin Today
-      </Button>
+
+      {completedToday && (
+        <p className="text-[13px] text-muted-foreground">Completed for today</p>
+      )}
+
+      {completedToday ? (
+        <Button
+          className="w-full h-12 text-[15px] font-semibold rounded-xl"
+          variant="outline"
+          onClick={onReviewToday}
+        >
+          Review Today
+        </Button>
+      ) : (
+        <Button
+          className="w-full h-12 text-[15px] font-semibold rounded-xl"
+          onClick={onBeginToday}
+        >
+          Begin Today
+        </Button>
+      )}
+
       {onViewPreviousDays && (
         <button
           onClick={onViewPreviousDays}
@@ -352,7 +394,7 @@ export default function Walk() {
   const [activeDevotional, setActiveDevotional] = useState<{
     series: DevotionalSeries;
     progress: DevotionalProgress;
-    entryTitle: string;
+    entries: DevotionalEntry[];
   } | null>(null);
   const [unstartedSeries, setUnstartedSeries] = useState<DevotionalSeries[]>([]);
   const [startingId, setStartingId] = useState<string | null>(null);
@@ -371,16 +413,13 @@ export default function Walk() {
 
     const started = withProg.find(x => x.progress !== null);
     if (started && started.progress) {
-      // Fetch entries so we can show the current day's title on the card
+      // Fetch entries so we can compute available day and show the entry title
       const withEntries = await getSeriesWithEntries(started.series.id, auth)
         .catch(() => null);
-      const currentEntry = withEntries?.entries.find(
-        e => e.dayNumber === started.progress!.currentDay
-      );
       setActiveDevotional({
         series: started.series,
         progress: started.progress,
-        entryTitle: currentEntry?.title ?? '',
+        entries: withEntries?.entries ?? [],
       });
       setUnstartedSeries([]);
     } else {
@@ -547,29 +586,49 @@ export default function Walk() {
         )}
 
         {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
-        {activeDevotional ? (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.09 }}
-          >
-            <DevotionalCard
-              series={activeDevotional.series}
-              progress={activeDevotional.progress}
-              entryTitle={activeDevotional.entryTitle}
-              onContinue={() =>
-                setLocation(
-                  `/devotional/${activeDevotional.series.id}/day/${activeDevotional.progress.currentDay}`
-                )
-              }
-              onViewPreviousDays={
-                activeDevotional.progress.currentDay > 1
-                  ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous`)
-                  : undefined
-              }
-            />
-          </motion.section>
-        ) : unstartedSeries.length > 0 ? (
+        {activeDevotional ? (() => {
+          const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
+          const maxPublishedDay  = publishedEntries.length > 0
+            ? Math.max(...publishedEntries.map(e => e.dayNumber))
+            : 1;
+          const availableDay    = calcAvailableDay(
+            activeDevotional.progress.startedAt,
+            maxPublishedDay,
+            devMode,
+          );
+          const availableEntry  = activeDevotional.entries.find(
+            e => e.dayNumber === availableDay && e.status === 'Published',
+          );
+          const completedToday  = (activeDevotional.progress.completedDays ?? []).includes(availableDay);
+          // Show "View Previous Days" once the member has unlocked more than day 1
+          const hasPrevDevotionalDays = availableDay > 1;
+
+          return (
+            <motion.section
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.09 }}
+            >
+              <DevotionalCard
+                series={activeDevotional.series}
+                availableDay={availableDay}
+                entryTitle={availableEntry?.title}
+                completedToday={completedToday}
+                onBeginToday={() =>
+                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}`)
+                }
+                onReviewToday={() =>
+                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}`)
+                }
+                onViewPreviousDays={
+                  hasPrevDevotionalDays
+                    ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous`)
+                    : undefined
+                }
+              />
+            </motion.section>
+          );
+        })() : unstartedSeries.length > 0 ? (
           <motion.section
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}

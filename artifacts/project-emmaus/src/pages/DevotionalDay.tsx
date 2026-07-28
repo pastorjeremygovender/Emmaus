@@ -2,11 +2,17 @@
  * DevotionalDay — member reading page for a single devotional entry.
  *
  * Route: /devotional/:seriesId/day/:day
+ *
+ * Completion behaviour:
+ *   - Tapping "Finished" marks the current day complete and returns to Today's Steps.
+ *   - The app never navigates forward to the next day on button press.
+ *   - Day availability is calendar-derived on Walk.tsx; this page is read-only once
+ *     a day is completed (replay / review mode).
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ArrowLeft, ChevronLeft } from 'lucide-react';
+import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
 import { Button } from '@/components/ui/button';
@@ -33,6 +39,7 @@ export default function DevotionalDay() {
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const load = useCallback(async () => {
     if (!seriesId) return;
@@ -52,7 +59,7 @@ export default function DevotionalDay() {
         setProgress(p);
       }
     } catch {
-      // ignore
+      // ignore — loading errors shown via empty state below
     } finally {
       setLoading(false);
     }
@@ -63,29 +70,32 @@ export default function DevotionalDay() {
   const entry = seriesData?.entries.find(e => e.dayNumber === day);
   const totalEntries = seriesData?.entries.filter(e => e.status === 'Published').length ?? 0;
 
-  const handleContinue = async () => {
-    if (!seriesId) return;
+  // This day has already been completed — show read-only / replay mode.
+  const alreadyCompleted = progress?.completedDays?.includes(day) ?? false;
+
+  /**
+   * Handle "Finished" — marks the current day complete then returns to Today's Steps.
+   * Never navigates forward to the next day.
+   */
+  const handleFinished = async () => {
+    if (!seriesId || completing) return;
+    setSaveError(false);
     setCompleting(true);
     const auth = user?.id ? { userId: user.id } : undefined;
     try {
       const updated = await markDayComplete(seriesId, day, auth);
       setProgress(updated);
-      // Navigate to next day or back to walk
-      const nextDay = day + 1;
-      const hasNext = seriesData?.entries.some(e => e.dayNumber === nextDay && e.status === 'Published');
-      if (hasNext) {
-        setLocation(`/devotional/${seriesId}/day/${nextDay}`);
-      } else {
-        setLocation('/walk');
-      }
+      setLocation('/walk');
     } catch {
+      // Restore button so the member can try again — never leave it spinning.
       setCompleting(false);
+      setSaveError(true);
     }
   };
 
-  const alreadyCompleted = progress?.completedDays?.includes(day) ?? false;
   const returnPath = `/devotional/${seriesId}/day/${day}`;
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
@@ -94,17 +104,54 @@ export default function DevotionalDay() {
     );
   }
 
+  // ── Not found / not available ──────────────────────────────────────────────
   if (!seriesData || !entry) {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6">
-        <p className="text-muted-foreground text-sm">This devotional isn't available.</p>
+        <p className="text-muted-foreground text-sm text-center">
+          This devotional isn't available yet.
+        </p>
         <Button variant="outline" onClick={() => setLocation('/walk')}>
-          Back to Today
+          Back to Today's Steps
         </Button>
       </div>
     );
   }
 
+  // ── Action button ──────────────────────────────────────────────────────────
+
+  /** Replay / review state — day already completed. */
+  const replayAction = (
+    <div className="w-full text-center py-4 space-y-1">
+      <p className="text-sm text-muted-foreground">You've completed this devotional.</p>
+      <button
+        onClick={() => setLocation('/walk')}
+        className="text-sm text-primary font-medium hover:underline"
+      >
+        Back to Today's Steps
+      </button>
+    </div>
+  );
+
+  /** First-time completion — "Finished" button with loading + error states. */
+  const finishAction = (
+    <div className="space-y-2">
+      {saveError && (
+        <p className="text-center text-sm text-destructive">
+          Something went wrong. Please try again.
+        </p>
+      )}
+      <Button
+        className="w-full h-14 text-[17px] font-semibold rounded-2xl"
+        onClick={handleFinished}
+        disabled={completing}
+      >
+        {completing ? <Loader2 size={18} className="animate-spin" /> : 'Finished'}
+      </Button>
+    </div>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
       {/* Nav bar */}
@@ -138,27 +185,7 @@ export default function DevotionalDay() {
         closing={entry.closing ?? ''}
         memberName={resolveDisplayName(user?.preferredName)}
         returnPath={returnPath}
-        actionButton={
-          alreadyCompleted ? (
-            <div className="w-full text-center py-4">
-              <p className="text-sm text-muted-foreground">You've completed today's devotional.</p>
-              <button
-                onClick={() => setLocation('/walk')}
-                className="mt-2 text-sm text-primary font-medium hover:underline"
-              >
-                Back to Today
-              </button>
-            </div>
-          ) : (
-            <Button
-              className="w-full h-14 text-[17px] font-semibold rounded-2xl"
-              onClick={handleContinue}
-              disabled={completing}
-            >
-              {completing ? <Loader2 size={18} className="animate-spin" /> : 'Continue'}
-            </Button>
-          )
-        }
+        actionButton={alreadyCompleted ? replayAction : finishAction}
       />
 
       <BottomNav />

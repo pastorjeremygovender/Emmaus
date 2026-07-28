@@ -1,13 +1,19 @@
 /**
- * DevotionalPreviousDays — member's history of completed devotional entries.
+ * DevotionalPreviousDays — member's history of completed/unlocked devotional entries.
  *
  * Route: /devotional/:seriesId/previous
+ *
+ * Shows only entries the member has calendar-unlocked (dayNumber <= availableDay).
+ * In Development Mode all published entries are shown.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ChevronLeft, BookHeart, Loader2 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
+import { useAuth } from '@/contexts/AuthContext';
+import { isDevelopmentMode } from '@/lib/dev-mode';
+import { calcAvailableDay } from '@/lib/devotional-calendar';
 import {
   getSeriesWithEntries,
   getProgress,
@@ -18,6 +24,7 @@ import {
 export default function DevotionalPreviousDays() {
   const params = useParams<{ seriesId: string }>();
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const seriesId = params.seriesId;
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
@@ -26,10 +33,11 @@ export default function DevotionalPreviousDays() {
 
   const load = useCallback(async () => {
     if (!seriesId) return;
+    const auth = user?.id ? { userId: user.id } : undefined;
     try {
       const [d, p] = await Promise.all([
-        getSeriesWithEntries(seriesId),
-        getProgress(seriesId),
+        getSeriesWithEntries(seriesId, auth),
+        getProgress(seriesId, auth),
       ]);
       setSeriesData(d);
       setProgress(p);
@@ -38,14 +46,27 @@ export default function DevotionalPreviousDays() {
     } finally {
       setLoading(false);
     }
-  }, [seriesId]);
+  }, [seriesId, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
-  const completedDays = new Set(progress?.completedDays ?? []);
-  const publishedEntries = (seriesData?.entries ?? [])
-    .filter(e => e.status === 'Published')
+  const devMode = isDevelopmentMode(user ?? undefined);
+
+  // Calendar-derived available day — same rule used by Walk.tsx
+  const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
+  const maxPublishedDay  = publishedEntries.length > 0
+    ? Math.max(...publishedEntries.map(e => e.dayNumber))
+    : 1;
+  const availableDay = progress
+    ? calcAvailableDay(progress.startedAt, maxPublishedDay, devMode)
+    : 1;
+
+  // Only show entries the member has unlocked; sort most-recent first.
+  const visibleEntries = publishedEntries
+    .filter(e => e.dayNumber <= availableDay)
     .sort((a, b) => b.dayNumber - a.dayNumber);
+
+  const completedDays = new Set(progress?.completedDays ?? []);
 
   if (loading) {
     return (
@@ -82,13 +103,13 @@ export default function DevotionalPreviousDays() {
         </div>
 
         {/* Entry list */}
-        {publishedEntries.length === 0 ? (
+        {visibleEntries.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-8 text-center">
             <p className="text-sm text-muted-foreground">No entries available yet.</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {publishedEntries.map(entry => {
+            {visibleEntries.map(entry => {
               const done = completedDays.has(entry.dayNumber);
               return (
                 <button
@@ -113,7 +134,7 @@ export default function DevotionalPreviousDays() {
                     )}
                   </div>
 
-                  {/* Completion dot */}
+                  {/* Completion indicator */}
                   {done && (
                     <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                   )}
