@@ -181,3 +181,61 @@ sermonCompanionsRouter.post("/:companionId/progress/complete-day", async (req: R
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ─── POST /:companionId/publish ───────────────────────────────────────────────
+// Admin only. Publishes the companion header AND all its entries atomically
+// so members always see a fully readable companion without a gap between
+// companion status and entry status.
+
+sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+
+  try {
+    const id = String(req.params.companionId);
+    await store.updateCompanion(id, { status: "Published" });
+    await store.publishAllEntries(id);
+    res.json({ ok: true, status: "Published" });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: publish failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /:companionId/unpublish ─────────────────────────────────────────────
+
+sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+
+  try {
+    await store.updateCompanion(String(req.params.companionId), { status: "Draft" });
+    res.json({ ok: true, status: "Draft" });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: unpublish failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── GET /:companionId/member ─────────────────────────────────────────────────
+// Any authenticated member. Returns a Published companion with only its
+// Published entries, plus the caller's progress record. Returns 404 for Draft
+// companions so members can never reach unpublished content via a guessed URL.
+
+sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    if (!companion) {
+      res.status(404).json({ error: "Companion not found or not published" });
+      return;
+    }
+    const progress = await store.getProgressForUser(userId, companion.id);
+    res.json({ ...companion, progress: progress ?? null });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: getMember failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});

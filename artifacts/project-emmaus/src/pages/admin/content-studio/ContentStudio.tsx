@@ -484,6 +484,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             key={`${view.journeyId}-${view.day}`}
             journeyId={view.journeyId}
             day={view.day}
+            variant="journey"
             onBack={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
             onDuplicated={(newDay) =>
               navigate({ id: 'journey-day-editor', journeyId: view.journeyId, journeyTitle: view.journeyTitle, day: newDay, collectionId: view.collectionId, collectionTitle: view.collectionTitle })

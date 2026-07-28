@@ -22,12 +22,18 @@ import {
   getCompanion,
   deleteServerSermon,
   patchServerSermon,
+  publishSermonCompanion,
+  unpublishSermonCompanion,
+  suggestAlternativeTheme,
+  regenerateSermonTheme,
 
   ApiError,
   type SermonDraftResult,
   type SermonDetectionSource,
+  type ThemeConfirmationSource,
   type CompanionEntry,
 } from '@/lib/sermon-generator-api';
+import EmmausContentEditor from './content-studio/EmmausContentEditor';
 import {
   ConfirmDialog,
   Field, TextInput, TextArea, Select, AdminBtn, StatusBadge,
@@ -35,7 +41,7 @@ import {
 } from './shared';
 import {
   Loader2, RefreshCw, Check, X, ChevronRight,
-  PanelRightClose, PanelRightOpen, Clock, AlertCircle, CheckCircle2, Trash2,
+  AlertCircle, CheckCircle2, Trash2,
 } from 'lucide-react';
 
 type Props = {
@@ -44,7 +50,7 @@ type Props = {
   onOpenCompanion: (journeyId: string, fresh?: boolean) => void;
 };
 
-type Phase = 'url-input' | 'generating' | 'transcript-required' | 'confirm-sermon' | 'adjust-sermon' | 'review';
+type Phase = 'url-input' | 'generating' | 'transcript-required' | 'confirm-sermon' | 'adjust-sermon' | 'confirm-theme' | 'review';
 
 /** Video metadata returned when transcript is unavailable */
 interface TranscriptSource {
@@ -69,31 +75,41 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
   transcriptStatus: 'none',
   aiIndexStatus: 'none',
   companionJourneyId: '',
+  mainTheme: '',
   status: 'draft',
   pastorEdited: false,
   updatedAt: new Date().toISOString(),
 };
 
 // ─── Companion Day Editor ─────────────────────────────────────────────────────
+// Uses the shared EmmausContentEditor layout and ContentStudioToolbar so the
+// Companion tab matches the Daily Rhythm, Daily Devotionals, and Journey editors.
 
 function CompanionDayEditor({
   companionId,
   companionTitle,
   entries,
   auth,
+  companionStatus,
+  onCompanionPublish,
+  onCompanionUnpublish,
+  onBack,
 }: {
   companionId: string;
   companionTitle: string;
   entries: CompanionEntry[];
   auth: { userId: string; userRole: string };
+  companionStatus: string;
+  onCompanionPublish: () => Promise<void>;
+  onCompanionUnpublish: () => Promise<void>;
+  onBack: () => void;
 }) {
   const [selectedDay, setSelectedDay] = useState(1);
   const [localEntries, setLocalEntries] = useState<CompanionEntry[]>(entries);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [rightOpen, setRightOpen] = useState(true);
+  const [savingAs, setSavingAs] = useState<'draft' | 'publish' | 'unpublish' | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Holds the complete entry snapshot to save — captures all field changes
-  // within a debounce window so rapid edits never drop earlier changes.
   const pendingSaveRef = useRef<Partial<CompanionEntry> | null>(null);
 
   const current = localEntries.find(e => e.dayNumber === selectedDay);
@@ -103,7 +119,6 @@ function CompanionDayEditor({
       const updated = prev.map(e =>
         e.dayNumber === selectedDay ? { ...e, [field]: value } : e
       );
-      // Capture the complete current entry so we always save all fields
       const entry = updated.find(e => e.dayNumber === selectedDay);
       if (entry) {
         pendingSaveRef.current = {
@@ -124,67 +139,131 @@ function CompanionDayEditor({
       const toSave = pendingSaveRef.current;
       if (!toSave) return;
       pendingSaveRef.current = null;
-      setSaveStatus('saving');
       try {
         await saveCompanionEntry(companionId, selectedDay, toSave, auth);
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2000);
       } catch {
-        setSaveStatus('error');
+        // Autosave failure is silent; the pastor can retry with Save Draft
       }
     }, 1200);
   }, [companionId, selectedDay, auth]);
 
+  /** Flush any pending debounced autosave immediately */
+  const flushSave = useCallback(async () => {
+    if (autosaveRef.current) { clearTimeout(autosaveRef.current); autosaveRef.current = null; }
+    const toSave = pendingSaveRef.current;
+    if (!toSave) return;
+    pendingSaveRef.current = null;
+    await saveCompanionEntry(companionId, selectedDay, toSave, auth);
+  }, [companionId, selectedDay, auth]);
+
+  const handleSaveDraft = async () => {
+    setSavingAs('draft');
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      await flushSave();
+      // Also save the full current entry to ensure nothing is missed
+      const entry = localEntries.find(e => e.dayNumber === selectedDay);
+      if (entry) {
+        await saveCompanionEntry(companionId, selectedDay, {
+          title: entry.title,
+          scriptureReference: entry.scriptureReference,
+          greeting: entry.greeting,
+          reflection: entry.reflection,
+          prayer: entry.prayer,
+          nextStep: entry.nextStep,
+          closing: entry.closing,
+        }, auth);
+      }
+      setSuccessMsg('Draft saved successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Save failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
+  const handlePublish = async () => {
+    setSavingAs('publish');
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      await flushSave();
+      await onCompanionPublish();
+      setSuccessMsg('Published successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Publish failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    setSavingAs('unpublish');
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      await onCompanionUnpublish();
+      setSuccessMsg('Unpublished successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Unpublish failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
   if (!current) return (
-    <div className="flex items-center justify-center h-48 text-gray-400">
-      No entries found.
-    </div>
+    <div className="flex items-center justify-center h-48 text-gray-400">No entries found.</div>
   );
 
   const InputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300";
   const TextareaCls = `${InputCls} resize-none`;
 
-  return (
-    <div className="flex h-full min-h-0 bg-gray-50">
-      {/* Editor panel */}
-      <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
-        {/* Header with day selector */}
-        <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-gray-100 gap-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {localEntries.map(e => (
-              <button
-                key={e.dayNumber}
-                onClick={() => setSelectedDay(e.dayNumber)}
-                className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
-                  selectedDay === e.dayNumber
-                    ? 'bg-teal-50 text-teal-700 border border-teal-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                Day {e.dayNumber}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className={`text-xs transition-all ${
-              saveStatus === 'saving' ? 'text-gray-400' :
-              saveStatus === 'saved'  ? 'text-emerald-600' :
-              saveStatus === 'error'  ? 'text-red-500' : 'invisible'
-            }`}>
-              {saveStatus === 'saving' && <><Clock size={11} className="inline animate-spin mr-1" />Saving…</>}
-              {saveStatus === 'saved'  && <><Check size={11} className="inline mr-1" />Saved</>}
-              {saveStatus === 'error'  && <><AlertCircle size={11} className="inline mr-1" />Error</>}
-            </span>
-            <button
-              onClick={() => setRightOpen(r => !r)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
-            >
-              {rightOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-            </button>
-          </div>
-        </div>
+  // Day selector strip rendered between toolbar and field panel
+  const daySelector = (
+    <div className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-gray-50 border-b border-gray-100 flex-wrap">
+      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mr-1">Day</span>
+      {localEntries.map(e => (
+        <button
+          key={e.dayNumber}
+          onClick={() => setSelectedDay(e.dayNumber)}
+          className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+            selectedDay === e.dayNumber
+              ? 'bg-teal-50 text-teal-700 border border-teal-200'
+              : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          {e.dayNumber}
+        </button>
+      ))}
+    </div>
+  );
 
-        {/* Fields */}
+  return (
+    <EmmausContentEditor
+      toolbar={
+        <ContentStudioToolbar
+          onBack={onBack}
+          title={companionTitle}
+          subtitle={`Day ${selectedDay}`}
+          status={companionStatus}
+          isSaving={savingAs === 'draft'}
+          isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
+          successMessage={successMsg}
+          errorMessage={errorMsg}
+          onSaveDraft={handleSaveDraft}
+          onPublish={handlePublish}
+          onUnpublish={handleUnpublish}
+        />
+      }
+      aboveSplit={daySelector}
+      fields={
         <div className="flex-1 p-6 space-y-5 max-w-2xl">
           <div className="flex items-center gap-2 text-xs text-gray-400 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
             <AlertCircle size={12} className="text-amber-500 flex-shrink-0" />
@@ -192,101 +271,61 @@ function CompanionDayEditor({
           </div>
 
           <Field label="Title">
-            <input
-              value={current.title}
-              onChange={e => patchEntry('title', e.target.value)}
-              placeholder="e.g. When Grace Finds You"
-              className={InputCls}
-            />
+            <input value={current.title} onChange={e => patchEntry('title', e.target.value)}
+              placeholder="e.g. When Grace Finds You" className={InputCls} />
           </Field>
 
           <Field label="Scripture Reference">
-            <input
-              value={current.scriptureReference}
-              onChange={e => patchEntry('scriptureReference', e.target.value)}
-              placeholder="e.g. Psalm 23:1-6"
-              className={InputCls}
-            />
+            <input value={current.scriptureReference} onChange={e => patchEntry('scriptureReference', e.target.value)}
+              placeholder="e.g. Psalm 23:1-6" className={InputCls} />
           </Field>
 
           <Field label="Greeting">
-            <textarea
-              value={current.greeting}
-              onChange={e => patchEntry('greeting', e.target.value)}
-              rows={3}
-              placeholder="Good morning, [name]. Today we begin…"
-              className={TextareaCls}
-            />
+            <textarea value={current.greeting} onChange={e => patchEntry('greeting', e.target.value)}
+              rows={3} placeholder="Good morning, [name]. Today we begin…" className={TextareaCls} />
             <p className="mt-1 text-[11px] text-gray-400">Use [name] — replaced with the member's first name.</p>
           </Field>
 
           <Field label="Reflection">
-            <textarea
-              value={current.reflection}
-              onChange={e => patchEntry('reflection', e.target.value)}
-              rows={7}
-              placeholder="The devotional reflection…"
-              className={`${InputCls} resize-y`}
-            />
+            <textarea value={current.reflection} onChange={e => patchEntry('reflection', e.target.value)}
+              rows={7} placeholder="The devotional reflection…" className={`${InputCls} resize-y`} />
             <p className="mt-1 text-[11px] text-gray-400">2–4 paragraphs grounded in the day's scripture.</p>
           </Field>
 
           <Field label="Prayer">
-            <textarea
-              value={current.prayer}
-              onChange={e => patchEntry('prayer', e.target.value)}
-              rows={4}
-              placeholder="Lord, today I come to you with…"
-              className={TextareaCls}
-            />
+            <textarea value={current.prayer} onChange={e => patchEntry('prayer', e.target.value)}
+              rows={4} placeholder="Lord, today I come to you with…" className={TextareaCls} />
             <p className="mt-1 text-[11px] text-gray-400">Written in first person for the member to pray aloud.</p>
           </Field>
 
-          <Field label="Next Step">
-            <textarea
-              value={current.nextStep}
-              onChange={e => patchEntry('nextStep', e.target.value)}
-              rows={2}
-              placeholder="Take five minutes today to…"
-              className={TextareaCls}
-            />
+          <Field label="Your Next Step">
+            <textarea value={current.nextStep} onChange={e => patchEntry('nextStep', e.target.value)}
+              rows={2} placeholder="Take five minutes today to…" className={TextareaCls} />
           </Field>
 
           <Field label="Closing">
-            <textarea
-              value={current.closing}
-              onChange={e => patchEntry('closing', e.target.value)}
-              rows={2}
-              placeholder="Walk with grace today."
-              className={TextareaCls}
-            />
+            <textarea value={current.closing} onChange={e => patchEntry('closing', e.target.value)}
+              rows={2} placeholder="Walk with grace today." className={TextareaCls} />
           </Field>
         </div>
-      </div>
-
-      {/* Preview panel */}
-      {rightOpen && (
-        <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
-          <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
-          </div>
-          <DevotionalReading
-            seriesTitle={companionTitle}
-            dayNumber={selectedDay}
-            title={current.title}
-            greeting={current.greeting}
-            scripture={current.scriptureReference}
-            considerThis={current.reflection}
-            prayer={current.prayer}
-            nextStep={current.nextStep}
-            closing={current.closing}
-            memberName="Friend"
-            previewMode
-            actionButton={<PreviewDevotionalContinueButton />}
-          />
-        </div>
-      )}
-    </div>
+      }
+      preview={
+        <DevotionalReading
+          seriesTitle={companionTitle}
+          dayNumber={selectedDay}
+          title={current.title}
+          greeting={current.greeting}
+          scripture={current.scriptureReference}
+          considerThis={current.reflection}
+          prayer={current.prayer}
+          nextStep={current.nextStep}
+          closing={current.closing}
+          memberName="Friend"
+          previewMode
+          actionButton={<PreviewDevotionalContinueButton />}
+        />
+      }
+    />
   );
 }
 
@@ -715,6 +754,341 @@ function AdjustSermonPhase({
   );
 }
 
+// ─── Main Theme Card (review tab) ────────────────────────────────────────────
+// Shows the confirmed theme in the Sermon Details panel with Edit + Regenerate.
+
+function MainThemeCard({
+  theme,
+  sermonId,
+  auth,
+  onChange,
+}: {
+  theme: string;
+  sermonId: string | null;
+  auth: { userId: string; userRole: string } | null;
+  onChange: (v: string) => void;
+}) {
+  const [editMode, setEditMode]         = useState(false);
+  const [editValue, setEditValue]       = useState(theme);
+  const [regenerating, setRegenerating] = useState(false);
+  const [proposed, setProposed]         = useState<string | null>(null);
+  const [regenError, setRegenError]     = useState('');
+
+  // Keep edit value in sync if parent changes the theme externally
+  React.useEffect(() => { setEditValue(theme); }, [theme]);
+
+  const handleSave = () => {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    onChange(trimmed);
+    setEditMode(false);
+  };
+
+  const handleRegenerate = async () => {
+    if (!sermonId || !auth) return;
+    setRegenerating(true);
+    setRegenError('');
+    try {
+      const newTheme = await regenerateSermonTheme(sermonId, auth);
+      setProposed(newTheme);
+    } catch {
+      setRegenError('Regeneration failed. Please try again.');
+      setTimeout(() => setRegenError(''), 4000);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-teal-200 p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-700">Main Theme</h2>
+        <div className="flex items-center gap-2">
+          {!editMode && (
+            <>
+              <button
+                onClick={() => { setEditValue(theme); setEditMode(true); setProposed(null); }}
+                className="text-[11px] text-gray-400 hover:text-teal-700 font-medium transition-colors"
+              >
+                Edit
+              </button>
+              {sermonId && (
+                <button
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-teal-600 transition-colors disabled:opacity-50"
+                >
+                  {regenerating
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <RefreshCw size={11} />}
+                  {regenerating ? 'Generating…' : theme ? 'Regenerate' : 'Generate Theme'}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {!editMode ? (
+        <>
+          <p className="text-sm text-gray-800 italic leading-relaxed">
+            {theme ? `"${theme}"` : (
+              <span className="text-gray-400 not-italic">No theme set — generate a sermon to create one.</span>
+            )}
+          </p>
+          {regenError && <p className="text-xs text-red-600">{regenError}</p>}
+          {proposed && (
+            <div className="border border-amber-200 bg-amber-50 rounded-xl p-3 space-y-2">
+              <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Proposed replacement</p>
+              <p className="text-sm text-gray-700 italic">"{proposed}"</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { onChange(proposed); setProposed(null); }}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  <Check size={11} /> Apply
+                </button>
+                <button
+                  onClick={() => setProposed(null)}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-white text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <X size={11} /> Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="space-y-2">
+          <textarea
+            autoFocus
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            rows={2}
+            placeholder="e.g. Following Jesus means putting Him first in every area of life."
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+          />
+          <p className="text-[11px] text-gray-400">One sentence — the Big Idea that ties every companion day together.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+            >
+              Save Theme
+            </button>
+            <button
+              onClick={() => { setEditMode(false); setEditValue(theme); }}
+              className="px-3 py-1.5 text-xs font-medium bg-white text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Confirm Theme Phase ──────────────────────────────────────────────────────
+// Shown after sermon boundaries are confirmed. AI produces a one-sentence Big
+// Idea; the pastor can accept, edit, or regenerate it before generation begins.
+
+function ConfirmThemePhase({
+  theme: initialTheme,
+  sermonSnippet,
+  onConfirm,
+  onBack,
+  onSuggest,
+}: {
+  theme: string;
+  sermonSnippet: string;
+  onConfirm: (theme: string) => void;
+  onBack: () => void;
+  onSuggest: (prev: string) => Promise<string>;
+}) {
+  const [editMode, setEditMode]           = useState(false);
+  const [editValue, setEditValue]         = useState(initialTheme);
+  const [activeTheme, setActiveTheme]     = useState(initialTheme);
+  const [regenerating, setRegenerating]   = useState(false);
+  const [suggestions, setSuggestions]     = useState<{ a: string; b: string } | null>(null);
+  const [selected, setSelected]           = useState<'a' | 'b' | null>(null);
+  const [regenError, setRegenError]       = useState('');
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    setRegenError('');
+    try {
+      const alt = await onSuggest(activeTheme);
+      setSuggestions({ a: activeTheme, b: alt });
+      setSelected(null);
+    } catch {
+      setRegenError('Could not generate a suggestion. Please try again.');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handlePickSuggestion = () => {
+    if (!suggestions || !selected) return;
+    const chosen = selected === 'a' ? suggestions.a : suggestions.b;
+    setActiveTheme(chosen);
+    setEditValue(chosen);
+    setSuggestions(null);
+    setSelected(null);
+  };
+
+  const handleSaveEdit = () => {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    setActiveTheme(trimmed);
+    setEditMode(false);
+    setSuggestions(null);
+  };
+
+  const displayTheme = activeTheme;
+
+  return (
+    <div className="max-w-xl mx-auto px-6 py-12 space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-[18px] font-semibold text-gray-900">Main Theme</h2>
+        <p className="text-sm text-gray-500">
+          Emmaus identified the main idea from the sermon. Confirm it before generating the Companion.
+        </p>
+      </div>
+
+      {/* Theme card */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+        {!editMode && !suggestions && (
+          <>
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-5">
+              <p className="text-xs font-semibold text-teal-600 uppercase tracking-wide mb-2">
+                I believe this sermon is about:
+              </p>
+              <p className="text-[17px] font-medium text-gray-900 leading-relaxed italic">
+                "{displayTheme}"
+              </p>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <AdminBtn variant="primary" onClick={() => onConfirm(displayTheme)}>
+                <Check size={14} className="mr-1" />
+                That's Correct
+              </AdminBtn>
+              <AdminBtn
+                variant="secondary"
+                onClick={() => { setEditValue(displayTheme); setEditMode(true); }}
+              >
+                ✏ Edit Main Theme
+              </AdminBtn>
+            </div>
+
+            <div className="pt-1 border-t border-gray-100">
+              {regenError && (
+                <p className="text-xs text-red-600 mb-2">{regenError}</p>
+              )}
+              <button
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-teal-600 transition-colors disabled:opacity-50"
+              >
+                {regenerating
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <RefreshCw size={12} />}
+                {regenerating ? 'Generating suggestion…' : 'Regenerate Theme'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {editMode && (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1.5">
+                Main Theme (one sentence)
+              </label>
+              <textarea
+                autoFocus
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                rows={3}
+                placeholder="e.g. Following Jesus means putting Him first in every area of life."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              />
+              <p className="mt-1 text-[11px] text-gray-400">
+                One sentence — the Big Idea the pastor wants every devotional to reinforce.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <AdminBtn
+                variant="primary"
+                onClick={handleSaveEdit}
+              >
+                Save Theme
+              </AdminBtn>
+              <AdminBtn variant="ghost" onClick={() => { setEditMode(false); setEditValue(activeTheme); }}>
+                Cancel
+              </AdminBtn>
+            </div>
+          </div>
+        )}
+
+        {suggestions && !editMode && (
+          <div className="space-y-4">
+            <p className="text-[13px] font-medium text-gray-700">Choose a suggestion or write your own:</p>
+
+            {(['a', 'b'] as const).map(key => (
+              <button
+                key={key}
+                onClick={() => setSelected(key)}
+                className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
+                  selected === key
+                    ? 'border-teal-500 bg-teal-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block mb-1">
+                  Suggestion {key.toUpperCase()}
+                </span>
+                <span className="text-sm text-gray-800 italic">"{suggestions[key]}"</span>
+              </button>
+            ))}
+
+            <div className="flex gap-2 flex-wrap">
+              <AdminBtn
+                variant="primary"
+                onClick={handlePickSuggestion}
+              >
+                <Check size={14} className="mr-1" />
+                Use Selected
+              </AdminBtn>
+              <AdminBtn
+                variant="secondary"
+                onClick={() => { setEditValue(activeTheme); setEditMode(true); setSuggestions(null); }}
+              >
+                ✏ Write My Own
+              </AdminBtn>
+              <AdminBtn variant="ghost" onClick={() => { setSuggestions(null); setSelected(null); }}>
+                Back
+              </AdminBtn>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!editMode && !suggestions && (
+        <AdminBtn variant="ghost" onClick={onBack}>
+          ← Back
+        </AdminBtn>
+      )}
+
+      <div className="text-xs text-gray-400 space-y-1">
+        <p>• The confirmed theme becomes the unifying thread for every day of the Companion.</p>
+        <p>• You can edit it later from the Sermon Editor.</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
@@ -729,12 +1103,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [generationError, setGenerationError] = useState('');
   const [transcriptSource, setTranscriptSource] = useState<TranscriptSource | null>(null);
   const [detectionSource, setDetectionSource] = useState<SermonDetectionSource | null>(null);
+  const [themeSource, setThemeSource] = useState<ThemeConfirmationSource | null>(null);
   const [activeTab, setActiveTab] = useState<'sermon' | 'companion'>('sermon');
   const [sermonTranscriptOpen, setSermonTranscriptOpen] = useState(false);
   const [redetecting, setRedetecting] = useState(false);
 
   // Companion state (from generation result or loaded for existing)
   const [companionData, setCompanionData] = useState<SermonDraftResult['companion'] | null>(null);
+  // Companion publish status — tracked separately so the CompanionDayEditor toolbar
+  // shows the correct Published/Draft state and Publish/Unpublish buttons.
+  const [companionStatusLocal, setCompanionStatusLocal] = useState<string>('Draft');
+  const [companionPublishing, setCompanionPublishing] = useState(false);
 
   // Sermon form state
   const [form, setForm] = useState<Omit<Sermon, 'id'>>(() =>
@@ -776,12 +1155,45 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         title: c.title,
         entries: c.entries ?? [],
       });
+      setCompanionStatusLocal(c.status ?? 'Draft');
     }).catch(() => {
       // Non-fatal: companion tab shows "No companion found" as an indicator
       // without breaking the sermon editing flow.
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sermonId, user?.id]);  // re-runs when auth hydrates (null → userId) after mount
+
+  // Keep companionStatusLocal in sync when companionData arrives from generation result
+  useEffect(() => {
+    if (companionData) {
+      // Generation always creates companions as Draft; only update when we have real status
+      setCompanionStatusLocal((companionData as { status?: string }).status ?? 'Draft');
+    }
+  }, [companionData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCompanionPublish = useCallback(async () => {
+    if (!companionData?.id || !auth) return;
+    setCompanionPublishing(true);
+    try {
+      // publishSermonCompanion calls POST /api/sermon-companions/:id/publish which
+      // atomically sets the companion status to Published AND publishes all entries.
+      await publishSermonCompanion(companionData.id, auth);
+      setCompanionStatusLocal('Published');
+    } finally {
+      setCompanionPublishing(false);
+    }
+  }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCompanionUnpublish = useCallback(async () => {
+    if (!companionData?.id || !auth) return;
+    setCompanionPublishing(true);
+    try {
+      await unpublishSermonCompanion(companionData.id, auth);
+      setCompanionStatusLocal('Draft');
+    } finally {
+      setCompanionPublishing(false);
+    }
+  }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (k: keyof typeof form, v: unknown) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -903,6 +1315,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       transcriptStatus: result.sermon.transcriptStatus,
       aiIndexStatus: result.sermon.aiIndexStatus,
       companionJourneyId: result.companion.id,
+      mainTheme: result.sermon.mainTheme ?? '',
       status: 'draft',
       pastorEdited: false,
       updatedAt: new Date().toISOString(),
@@ -927,6 +1340,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       sermonEndSec?: number;
       sermonStartWord?: number;
       sermonEndWord?: number;
+      confirmedTheme?: string;
     }
   ) => {
     if (!auth) return;
@@ -955,6 +1369,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         setPhase('confirm-sermon');
         return;
       }
+      if (err instanceof ApiError && err.code === 'THEME_CONFIRMATION_REQUIRED') {
+        setThemeSource(err.source as unknown as ThemeConfirmationSource);
+        setGeneratingUrl(url);
+        setPhase('confirm-theme');
+        return;
+      }
       setGenerationError(errorMessage(err));
       setPhase('url-input');
     }
@@ -976,10 +1396,26 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         setPhase('confirm-sermon');
         return;
       }
+      if (err instanceof ApiError && err.code === 'THEME_CONFIRMATION_REQUIRED') {
+        setThemeSource(err.source as unknown as ThemeConfirmationSource);
+        setPhase('confirm-theme');
+        return;
+      }
       setGenerationError(errorMessage(err));
       setPhase('transcript-required');
     }
   }, [auth, transcriptSource, applyGenerationResult]);
+
+  const handleThemeConfirm = useCallback((confirmedTheme: string) => {
+    if (!themeSource) return;
+    handleGenerate(generatingUrl, {
+      sermonStartWord: themeSource.startWord,
+      sermonEndWord:   themeSource.endWord,
+      sermonStartSec:  themeSource.startSecs  ?? undefined,
+      sermonEndSec:    themeSource.endSecs    ?? undefined,
+      confirmedTheme,
+    });
+  }, [themeSource, generatingUrl, handleGenerate]);
 
   const handleSermonConfirm = useCallback((src: SermonDetectionSource) => {
     handleGenerate(generatingUrl, {
@@ -1125,6 +1561,27 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     );
   }
 
+  if (phase === 'confirm-theme' && themeSource) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <ConfirmThemePhase
+          theme={themeSource.theme}
+          sermonSnippet={themeSource.sermonSnippet}
+          onConfirm={handleThemeConfirm}
+          onBack={() => {
+            // Go back to boundary confirmation if we came from there, else url-input
+            if (detectionSource) setPhase('confirm-sermon');
+            else setPhase('url-input');
+          }}
+          onSuggest={async (prev) => {
+            if (!auth) return prev;
+            return suggestAlternativeTheme(themeSource.sermonSnippet, prev, auth);
+          }}
+        />
+      </div>
+    );
+  }
+
   if (phase === 'adjust-sermon' && detectionSource) {
     return (
       <div className="h-full overflow-y-auto">
@@ -1188,6 +1645,16 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                 <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
                 <span>AI draft generated. Review all fields carefully — use Regenerate to get a new suggestion for any field.</span>
               </div>
+            )}
+
+            {/* Main Theme card — visible after generation */}
+            {(form.mainTheme || sermonId_) && (
+              <MainThemeCard
+                theme={form.mainTheme ?? ''}
+                sermonId={sermonId_}
+                auth={auth}
+                onChange={v => patch('mainTheme', v)}
+              />
             )}
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
@@ -1393,6 +1860,10 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               companionTitle={companionData.title}
               entries={companionData.entries}
               auth={auth!}
+              companionStatus={companionStatusLocal}
+              onCompanionPublish={handleCompanionPublish}
+              onCompanionUnpublish={handleCompanionUnpublish}
+              onBack={() => setActiveTab('sermon')}
             />
           </>
         )}

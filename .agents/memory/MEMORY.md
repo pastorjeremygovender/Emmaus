@@ -1,4 +1,4 @@
-- [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase.
+- [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; THEME_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase/ConfirmThemePhase.
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
@@ -12,3 +12,4 @@
 - [Daily Devotionals module](daily-devotionals.md) — separate DB tables; role auth via x-user-role header; lib/db dist must be rebuilt with `tsc -b lib/db` after schema changes; devotional-store.ts + routes/devotionals.ts; member routes at /devotional/:seriesId/day/:day.
 - [Dev Mode Architecture](dev-mode-architecture.md) — two-part gate: role + explicit localStorage toggle; isDevelopmentMode requires {id,role}; Admin→Settings→Development is the control surface.
 - [Writing Assistant](writing-assistant.md) — "Help Me Write" panel in Day Editor; generate/refine endpoints; Scripture retrieved client-side before generation; content stays Draft always; admin/superAdmin only.
+- [EmmausContentEditor shared layout](emmaus-content-editor.md) — shared two-panel shell for all four editors; variant prop for Journey labels; companion status tracked separately in SermonEditor.

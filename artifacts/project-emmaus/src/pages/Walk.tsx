@@ -113,7 +113,6 @@ function DevotionalCard({
       {completedToday ? (
         <Button
           className="w-full h-12 text-[15px] font-semibold rounded-xl"
-          variant="outline"
           onClick={onReviewToday}
         >
           Review Today
@@ -218,8 +217,8 @@ function FifteenMinutesCard({
       variant: 'default' as const,
       disabled: false,
     },
-    complete: { label: 'Review today',       variant: 'outline'  as const, disabled: false },
-    tomorrow: { label: 'Available tomorrow', variant: 'outline'  as const, disabled: true  },
+    complete: { label: 'Review today',       variant: 'default'  as const, disabled: false },
+    tomorrow: { label: 'Available tomorrow', variant: 'default'  as const, disabled: true  },
   }[state];
 
   // Title line — never shows "of Y" for daily-rhythm; shows day number only.
@@ -319,7 +318,6 @@ function SermonDevotionalCard({
       </div>
       <Button
         className="w-full h-11 rounded-xl text-[15px]"
-        variant={started ? 'default' : 'outline'}
         onClick={onContinue}
       >
         Continue
@@ -330,49 +328,37 @@ function SermonDevotionalCard({
 
 // ─── Your Journeys section ────────────────────────────────────────────────────
 // Lists journeys the member has already started.
-// Empty state: an "Explore Journeys →" invitation leading to Next Steps.
+// Returns null when there are no started journeys — no heading, no empty state.
 function YourJourneysSection({
   startedJourneys,
   onSelect,
-  onExplore,
 }: {
   startedJourneys: Array<{
     journey: import('@/contexts/JourneyContext').Journey;
     prog: import('@/contexts/JourneyContext').Progress;
   }>;
   onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
-  onExplore: () => void;
 }) {
-  return (
-    <section className="space-y-2">
-      <SectionLabel>Your Next Steps</SectionLabel>
+  if (startedJourneys.length === 0) return null;
 
-      {startedJourneys.length === 0 ? (
-        /* Empty state — no card, just a quiet invitation */
-        <button
-          onClick={onExplore}
-          className="text-[15px] text-primary hover:text-primary/80 transition-colors py-1"
-        >
-          Explore Next Steps →
-        </button>
-      ) : (
-        <div className="space-y-1">
-          {startedJourneys.map(({ journey, prog }) => (
-            <button
-              key={journey.id}
-              onClick={() => onSelect(journey.id, prog)}
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
-            >
-              <span className="text-[15px] font-medium text-foreground truncate">
-                {journey.title}
-              </span>
-              <span className="text-[13px] text-primary shrink-0 ml-3">
-                Continue →
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+  return (
+    <section>
+      <div className="space-y-1">
+        {startedJourneys.map(({ journey, prog }) => (
+          <button
+            key={journey.id}
+            onClick={() => onSelect(journey.id, prog)}
+            className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
+          >
+            <span className="text-[15px] font-medium text-foreground truncate">
+              {journey.title}
+            </span>
+            <span className="text-[13px] text-primary shrink-0 ml-3">
+              Continue →
+            </span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -651,7 +637,6 @@ export default function Walk() {
           <YourJourneysSection
             startedJourneys={startedJourneys}
             onSelect={goToJourney}
-            onExplore={() => setLocation('/journeys')}
           />
         </motion.div>
 

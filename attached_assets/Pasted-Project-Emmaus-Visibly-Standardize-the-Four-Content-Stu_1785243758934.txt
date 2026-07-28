@@ -1,0 +1,456 @@
+Project Emmaus — Visibly Standardize the Four Content Studio List Screens
+
+The previous standardisation task produced no visible UI change.
+
+Do not perform another architecture review.
+Do not explore unrelated files.
+Do not refactor editors.
+Do not change APIs, databases, publishing logic, routes, member screens or progress systems.
+
+This task is complete only when the four Content Studio list screens visibly share the same design and layout.
+
+Apply the redesign to:
+
+1. Daily Rhythm
+2. Daily Devotionals
+3. Journeys
+4. Sermon Companions
+
+Use the current Daily Devotionals screen as the visual starting point, but improve it into one shared list-page standard.
+
+====================================================
+LOCKED PAGE STRUCTURE
+====================================================
+
+Every screen must visibly use this exact structure:
+
+A. CONTENT STUDIO TOP NAVIGATION
+
+Keep the existing top navigation unchanged:
+
+Daily Rhythm
+Daily Devotionals
+Journeys
+Sermon Companions
+Media Studio
+
+B. BREADCRUMB
+
+One consistent breadcrumb row beneath the top navigation.
+
+Examples:
+
+Content Studio > Daily Rhythm
+
+Content Studio > Daily Devotionals
+
+Content Studio > Journeys > Collections
+
+Content Studio > Sermon Companions
+
+Use identical:
+
+- height;
+- font size;
+- spacing;
+- divider;
+- background.
+
+C. PAGE HEADER
+
+Every page must have the same header layout:
+
+LEFT:
+
+Page Title
+
+One-line description
+
+RIGHT:
+
+One primary New button
+
+Examples:
+
+Daily Rhythm
+A daily walk with Jesus for every member.
++ New Day
+
+Daily Devotionals
+Short daily devotional series for members.
++ New Series
+
+Journey Collections
+Group related Journeys into clear pathways.
++ New Collection
+
+Sermon Companions
+Turn Sunday’s sermon into discipleship for the week.
++ New Sermon Companion
+
+Use the same:
+
+- title size;
+- description style;
+- vertical spacing;
+- button size;
+- button position;
+- content width.
+
+D. FILTERS
+
+Where filters are relevant, use the same filter row:
+
+All
+Draft
+Published
+Archived
+
+Apply this to:
+
+- Daily Devotionals
+- Journeys where applicable
+- Sermon Companions
+
+Daily Rhythm may omit filters if the single-track structure makes them unnecessary.
+
+Do not create empty or meaningless filters.
+
+E. CONTENT LIST
+
+Use one shared responsive card-row design.
+
+Do not use:
+
+- one page as large cards;
+- another as a wide table;
+- another as a loose text list.
+
+Every content record should appear inside the same styled row/card.
+
+====================================================
+SHARED CONTENT ROW
+====================================================
+
+Create one reusable visual component such as:
+
+ContentStudioListItem
+
+Each row contains:
+
+LEFT ICON
+
+A content-type icon inside the same circular or rounded-square treatment.
+
+MAIN CONTENT
+
+Title
+
+One short metadata line beneath it.
+
+STATUS
+
+Draft
+Published
+Archived
+
+ACTIONS
+
+Edit
+Publish / Unpublish where supported
+More menu or Delete
+
+Use the same row:
+
+- height;
+- border;
+- radius;
+- padding;
+- hover state;
+- status badge;
+- action spacing;
+- typography.
+
+====================================================
+DAILY RHYTHM
+====================================================
+
+The current Daily Rhythm page is visually different because it displays loose day rows beneath a custom header.
+
+Restyle it into the shared list system.
+
+Header card:
+
+10 Minutes with Jesus
+
+7 days authored
+
++ New Day
+
+Then display every day using ContentStudioListItem.
+
+Each item:
+
+Day number icon
+
+Title
+
+Scripture Reference
+
+Published/Draft badge
+
+Edit action
+
+Example:
+
+1
+
+Come and See
+
+John 1:35–39
+
+Published
+
+Do not alter the content, order, status or actions.
+
+Only standardize the presentation.
+
+====================================================
+DAILY DEVOTIONALS
+====================================================
+
+Keep the existing series structure.
+
+Render Psalms Daily Devotional using ContentStudioListItem.
+
+Display:
+
+Icon
+
+Psalms Daily Devotional
+
+Psalms · 7 published days
+
+Published
+
+Edit
+
+More actions
+
+Remove unnecessary empty space around the single row.
+
+The content list should align to the same width used by all other sections.
+
+====================================================
+JOURNEYS
+====================================================
+
+Keep the approved internal tabs:
+
+Collections
+Standalone
+
+Do not alter their architecture.
+
+Style the internal tabs consistently beneath the breadcrumb.
+
+Collections screen:
+
+Header:
+
+Journey Collections
+
+Group related Journeys into clear pathways.
+
++ New Collection
+
+Render New to Faith using ContentStudioListItem instead of the current oversized standalone card.
+
+Display:
+
+Collection icon
+
+New to Faith
+
+1 Journey · Introductory pathway for people beginning their faith journey
+
+Draft
+
+Edit
+
+More actions
+
+Standalone must use the same layout for Journey records.
+
+====================================================
+SERMON COMPANIONS
+====================================================
+
+Replace the current wide horizontally scrolling table with the shared responsive row/card design.
+
+Horizontal scrolling must be removed.
+
+Each Sermon Companion row should display:
+
+Sermon Companion icon
+
+Title
+
+Speaker · Date
+
+Main Scripture
+
+Transcript status
+
+Companion status
+
+Published/Draft badge
+
+Edit
+
+Publish/Unpublish
+
+More actions
+
+Example:
+
+Jesus at the Center
+
+Pastor Jeremy Govender · 24 July 2026
+
+Jonah · Transcript complete
+
+Published
+
+Do not compress this into a table.
+
+On smaller widths, metadata should wrap naturally beneath the title.
+
+====================================================
+CONSISTENT CONTENT WIDTH
+====================================================
+
+All four pages must use the same maximum content width.
+
+All page titles, descriptions, filters and content rows must begin and end on the same vertical alignment.
+
+Do not allow:
+
+- Daily Rhythm to use nearly the full page;
+- Journeys to use a narrow card;
+- Sermon Companions to overflow horizontally;
+- Daily Devotionals to leave excessive unused width.
+
+====================================================
+SPACING STANDARD
+====================================================
+
+Use one consistent spacing system.
+
+Between breadcrumb and header:
+24px
+
+Between title and description:
+4–8px
+
+Between header and filters/list:
+24px
+
+Between rows:
+12px
+
+Inside rows:
+16–20px
+
+Use existing Emmaus spacing tokens if available.
+
+Do not introduce arbitrary values on each screen.
+
+====================================================
+MOBILE BEHAVIOUR
+====================================================
+
+On mobile:
+
+- page header stacks;
+- New button remains visible;
+- content rows stack metadata cleanly;
+- actions remain accessible;
+- no horizontal scrolling;
+- internal Journey tabs remain usable;
+- status badges do not overlap text.
+
+====================================================
+DO NOT CHANGE
+====================================================
+
+Do not change:
+
+- Content Studio top navigation;
+- data models;
+- API routes;
+- publishing behaviour;
+- delete behaviour;
+- editor screens;
+- live previews;
+- Journey architecture;
+- Sermon Companion generation;
+- member-facing Next Steps;
+- database content.
+
+This is a visible list-page redesign only.
+
+====================================================
+IMPLEMENTATION RULE
+====================================================
+
+Do not spend the task only documenting or planning.
+
+After inspecting the four current list components:
+
+1. create the shared list-page components;
+2. replace the visible layout in all four screens;
+3. run TypeScript checks;
+4. open every screen in the browser;
+5. verify the visible result.
+
+Do not report completion while the pages still look like the current screenshots.
+
+====================================================
+VISUAL ACCEPTANCE TEST
+====================================================
+
+The task passes only when:
+
+✓ All four pages use the same page-header layout.
+
+✓ All four pages use the same content width.
+
+✓ All four pages use the same row/card style.
+
+✓ Daily Rhythm days are rendered in the shared row style.
+
+✓ Daily Devotionals no longer has excessive empty space.
+
+✓ Journey Collections no longer uses an unrelated oversized card design.
+
+✓ Sermon Companions no longer uses a horizontally scrolling table.
+
+✓ Buttons, badges, spacing and typography visibly match.
+
+✓ Collections and Standalone remain available inside Journeys.
+
+✓ No existing content or functionality is lost.
+
+At completion, provide browser screenshots of:
+
+1. Daily Rhythm
+2. Daily Devotionals
+3. Journeys — Collections
+4. Sermon Companions
+
+Also report:
+
+- shared components created;
+- files changed;
+- confirmation that no API/database/member-facing logic was changed.

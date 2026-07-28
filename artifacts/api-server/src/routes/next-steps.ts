@@ -20,6 +20,7 @@ import { Router, type Request, type Response } from "express";
 import * as journeyStore from "../lib/journey-store.js";
 import * as devStore from "../lib/devotional-store.js";
 import * as collectionsStore from "../lib/collections-store.js";
+import * as sermonCompanionStore from "../lib/sermon-companion-store.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -178,14 +179,16 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
-    const [publishedJourneys, devSeries, allCollections] = await Promise.all([
+    const [publishedJourneys, devSeries, allCollections, scTableCompanions] = await Promise.all([
       journeyStore.listPublishedJourneys(),
       devStore.listPublishedSeries(),
       collectionsStore.listCollections(),
+      // Sermon companions from the sermon_companion table (AI-generated pipeline)
+      sermonCompanionStore.listPublishedSermonCompanions(),
     ]);
 
     // Fetch user progress if available
-    const [journeyProgress, devProgressMap] = await Promise.all([
+    const [journeyProgress, devProgressMap, scProgressMap] = await Promise.all([
       userId
         ? journeyStore.getAllProgress(userId)
         : Promise.resolve({} as Record<string, journeyStore.FrontendProgress>),
@@ -196,6 +199,9 @@ router.get("/next-steps", async (req: Request, res: Response) => {
             return m;
           })
         : Promise.resolve(new Map<string, devStore.DevotionalProgress>()),
+      userId
+        ? sermonCompanionStore.getAllSermonCompanionProgress(userId)
+        : Promise.resolve({} as Record<string, sermonCompanionStore.CompanionProgress>),
     ]);
 
     // Count published entries per devotional series
@@ -214,24 +220,84 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       .filter(s => (entryCounts.get(s.id) ?? 0) > 0)
       .map(s => buildDevotionalItem(s, entryCounts.get(s.id) ?? 0, devProgressMap));
 
-    // ── Sermon Companions (companion journeyType) ─────────────────────────────
+    // ── Sermon Companions ──────────────────────────────────────────────────────
+    // Two sources are merged into one list:
+    //   1. journeys table (journeyType='companion') — manually created / legacy
+    //   2. sermon_companion table — AI-generated via the sermon generation pipeline
+    //
+    // Eligibility for both: Published status AND at least one published entry.
+    // listPublishedJourneys() already enforces Published status; the journey-step
+    // count is not re-checked here because the journey editor controls entry status.
+    // listPublishedSermonCompanions() enforces both status and published entry count.
 
-    const companions = publishedJourneys.filter(j => j.journeyType === "companion");
-    const sortedCompanions = [...companions].sort(
-      (a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""),
-    );
-    const currentCompanion =
-      (currentCompanionId ? sortedCompanions.find(j => j.id === currentCompanionId) : null) ??
-      sortedCompanions[0] ??
+    type UnifiedCompanion =
+      | { source: "journey"; data: journeyStore.FrontendJourney }
+      | { source: "sermon-table"; data: sermonCompanionStore.Companion & { publishedEntryCount: number } };
+
+    const seenIds = new Set<string>();
+    const allCompanions: UnifiedCompanion[] = [];
+
+    for (const j of publishedJourneys.filter(j => j.journeyType === "companion")) {
+      if (seenIds.has(j.id)) continue;
+      seenIds.add(j.id);
+      allCompanions.push({ source: "journey", data: j });
+    }
+    for (const c of scTableCompanions) {
+      if (seenIds.has(c.id)) continue;
+      seenIds.add(c.id);
+      allCompanions.push({ source: "sermon-table", data: c });
+    }
+
+    // Sort newest-published first so the fallback current-companion is consistent.
+    allCompanions.sort((a, b) => {
+      const aDate = a.source === "journey" ? (a.data.publishedAt ?? "") : (a.data.publishedAt ?? "");
+      const bDate = b.source === "journey" ? (b.data.publishedAt ?? "") : (b.data.publishedAt ?? "");
+      return bDate.localeCompare(aDate);
+    });
+
+    // Current = explicit admin override OR most recently published.
+    const currentCompanionUnified =
+      (currentCompanionId ? allCompanions.find(c => c.data.id === currentCompanionId) : null) ??
+      allCompanions[0] ??
       null;
-    const previousCompanions = companions.filter(j => j.id !== currentCompanion?.id);
+    const previousCompanionsUnified = allCompanions.filter(
+      c => c.data.id !== currentCompanionUnified?.data.id,
+    );
 
-    const currentSermonCompanion = currentCompanion
-      ? buildJourneyItem(currentCompanion, "sermon-devotional", journeyProgress)
+    // Build NextStepsItem from either source type.
+    function buildCompanionItem(u: UnifiedCompanion): NextStepsItem {
+      if (u.source === "journey") {
+        return buildJourneyItem(u.data, "sermon-devotional", journeyProgress);
+      }
+      // sermon-table companion
+      const c = u.data;
+      const prog = scProgressMap[c.id];
+      let state: MemberProgressState = "not-started";
+      if (prog) {
+        state =
+          c.numberOfDays > 0 && prog.completedDays.length >= c.numberOfDays
+            ? "completed"
+            : "in-progress";
+      }
+      const currentDay = prog?.currentDay ?? 1;
+      return {
+        id: c.id,
+        contentType: "sermon-devotional",
+        title: c.title,
+        memberProgressState: state,
+        metadata: {
+          durationDays: c.numberOfDays,
+          publishedAt: c.publishedAt ?? undefined,
+        },
+        route: `/sermon-companion/${c.id}/day/${currentDay}`,
+        primaryActionLabel: primaryActionLabel("sermon-devotional", state),
+      };
+    }
+
+    const currentSermonCompanion = currentCompanionUnified
+      ? buildCompanionItem(currentCompanionUnified)
       : null;
-    const previousSermonCompanions = [...previousCompanions]
-      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .map(j => buildJourneyItem(j, "sermon-devotional", journeyProgress));
+    const previousSermonCompanions = previousCompanionsUnified.map(buildCompanionItem);
 
     // ── Journey grouping ──────────────────────────────────────────────────────
     // Exclude companion and daily-rhythm types — they live in their own tabs.

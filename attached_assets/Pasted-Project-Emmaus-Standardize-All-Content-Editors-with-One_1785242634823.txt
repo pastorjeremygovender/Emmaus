@@ -1,0 +1,867 @@
+Project Emmaus — Standardize All Content Editors with One Shared Emmaus Content Editor
+
+The Content Studio navigation has already been simplified and is now correct.
+
+Do not redesign or revisit the top-level navigation.
+
+Current Content Studio structure remains:
+
+- Daily Rhythm
+- Daily Devotionals
+- Journeys
+  - Collections
+  - Standalone
+- Sermon Companions
+- Media Studio
+
+The next task is to standardize the design and workflow inside the content editors.
+
+At present, Daily Rhythm, Daily Devotionals, Journeys and Sermon Companions still use slightly different editor layouts, field arrangements, toolbar behaviour and preview patterns.
+
+Create one shared Emmaus content editor experience across all four content types.
+
+Do not change content architecture.
+Do not merge content types.
+Do not merge progress systems.
+Do not redesign the member experience.
+Do not remove working features.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+A pastor who learns to edit one type of Emmaus content should immediately know how to edit every other type.
+
+Standardize:
+
+- page header;
+- breadcrumb;
+- back navigation;
+- toolbar;
+- field layout;
+- day navigation;
+- live preview;
+- save behaviour;
+- publish behaviour;
+- delete behaviour;
+- loading states;
+- success messages;
+- spacing;
+- typography;
+- responsive layout.
+
+The editor should feel like one application, not four separate tools.
+
+====================================================
+SHARED EDITOR COMPONENT
+====================================================
+
+Create or consolidate into one reusable component such as:
+
+EmmausContentEditor
+
+Use existing project naming conventions if an appropriate shared editor already exists.
+
+The shared editor must support:
+
+- Daily Rhythm Day
+- Daily Devotional Entry
+- Journey Day
+- Sermon Companion Day
+
+Do not create one giant component filled with content-type-specific conditional rendering.
+
+Use a clear configuration or adapter pattern.
+
+Suggested structure:
+
+EmmausContentEditor
+- EditorHeader
+- ContentStudioToolbar
+- DayNavigator
+- FieldRenderer
+- LiveMemberPreview
+- Completion/Status feedback
+
+Each content type should provide:
+
+- editor title;
+- parent title;
+- breadcrumb items;
+- content fields;
+- renderer type;
+- save callback;
+- publish callback;
+- unpublish callback;
+- delete callback;
+- back route;
+- day-navigation data;
+- content-type-specific labels.
+
+====================================================
+STANDARD DESKTOP LAYOUT
+====================================================
+
+Use the existing Daily Devotional editor as the visual source of truth.
+
+Desktop layout:
+
+LEFT PANEL
+
+Editable fields
+
+RIGHT PANEL
+
+Live Member Preview
+
+Recommended proportions:
+
+- editor panel: approximately 42–48%
+- preview panel: remaining width
+
+Use the existing responsive widths if already working well.
+
+Both panels may scroll independently where appropriate.
+
+Keep the toolbar fixed or consistently visible according to the existing editor pattern.
+
+Do not use a separate Preview page.
+
+Do not use a Preview button.
+
+====================================================
+STANDARD MOBILE LAYOUT
+====================================================
+
+On smaller screens:
+
+- show the editor first;
+- provide a clear Editor / Preview segmented control or tabs;
+- preserve all fields;
+- preserve the exact member renderer;
+- avoid horizontal scrolling;
+- keep actions reachable;
+- do not squeeze the side-by-side desktop layout into an unusable width.
+
+Use the same data and renderer on mobile and desktop.
+
+Do not create a simplified preview that differs from the member experience.
+
+====================================================
+STANDARD HEADER
+====================================================
+
+Every day/entry editor should use the same header structure.
+
+Example:
+
+Back control
+
+Parent title
+
+Day number or entry number
+
+Current status badge
+
+Shared toolbar actions
+
+Examples:
+
+10 Minutes with Jesus
+Day 7
+
+Psalms Daily Devotional
+Day 7
+
+Coming to Jesus
+Day 1
+
+Jesus at the Center
+Day 1
+
+Do not place unrelated content-type-specific controls in different header positions.
+
+====================================================
+STANDARD BREADCRUMB
+====================================================
+
+Use a consistent breadcrumb above or within the editor header.
+
+Examples:
+
+Content Studio
+> Daily Rhythm
+> Day 7
+
+Content Studio
+> Daily Devotionals
+> Psalms Daily Devotional
+> Day 7
+
+Content Studio
+> Journeys
+> New to Faith
+> Coming to Jesus
+> Day 1
+
+Content Studio
+> Sermon Companions
+> Jesus at the Center
+> Day 1
+
+Back navigation must return to the correct parent list or parent content screen.
+
+Do not return to a generic dashboard.
+
+====================================================
+SHARED TOOLBAR
+====================================================
+
+Reuse the approved shared Content Studio toolbar.
+
+Exact action order:
+
+Back
+
+Save Draft / Save Changes
+
+Publish / Unpublish
+
+Delete
+
+Rules:
+
+- Back may be a left-side control while the other actions remain on the right, but the order and placement must remain consistent.
+- New unsaved records do not show Delete.
+- Draft records show Publish.
+- Published records show Unpublish.
+- Status badges remain informational only.
+- Buttons disable while their own operation is running.
+- Prevent duplicate requests.
+- Use the shared delete confirmation workflow.
+- Preserve existing Permanent Delete safeguards.
+
+Do not create separate toolbar logic for each editor.
+
+====================================================
+STANDARD SAVE BEHAVIOUR
+====================================================
+
+Save Draft or Save Changes must:
+
+- save the current fields;
+- remain on the same screen;
+- update the live preview state if needed;
+- show a brief success message;
+- never publish;
+- never navigate away.
+
+Standard success copy:
+
+Draft saved successfully.
+
+For already published content:
+
+Changes saved successfully.
+
+Use the same wording everywhere.
+
+====================================================
+STANDARD PUBLISH BEHAVIOUR
+====================================================
+
+Publish must:
+
+- validate required fields;
+- save pending changes;
+- persist Published status;
+- update the editor status badge;
+- change Publish to Unpublish;
+- refresh the parent list;
+- refresh relevant member-facing discovery queries;
+- show:
+
+Published successfully.
+
+Do not automatically publish parent or child records unless that behaviour is already explicitly established for that content type.
+
+Preserve each content type’s publication rules.
+
+====================================================
+STANDARD UNPUBLISH BEHAVIOUR
+====================================================
+
+Use the shared confirmation dialog.
+
+Heading:
+
+Unpublish this content?
+
+Body:
+
+Members will no longer be able to access it.
+
+Buttons:
+
+Cancel
+
+Unpublish
+
+After success:
+
+- status updates;
+- button becomes Publish;
+- parent list updates;
+- member-facing caches refresh;
+- show:
+
+Unpublished successfully.
+
+====================================================
+STANDARD DELETE BEHAVIOUR
+====================================================
+
+Use the existing shared delete component and established cascade rules.
+
+Do not invent new deletion behaviour.
+
+Preserve:
+
+- Daily Rhythm safeguards;
+- Daily Devotional series/entry rules;
+- Journey day and Journey rules;
+- Sermon Companion cascade rules;
+- existing Permanent Delete behaviour.
+
+Only show Delete when valid for the current record.
+
+====================================================
+STANDARD DAY NAVIGATION
+====================================================
+
+Every multi-day content editor should use the same day-navigation pattern.
+
+Supported examples:
+
+- a compact horizontal Day 1 / Day 2 / Day 3 selector;
+- a left-side day list;
+- a dropdown on smaller screens.
+
+Choose one pattern and reuse it consistently.
+
+The day navigator should show:
+
+- day number;
+- title where space allows;
+- Draft/Published state;
+- current selection;
+- Add Day action where valid.
+
+Do not make Daily Rhythm, Daily Devotionals, Journeys and Sermon Companions use unrelated navigation designs.
+
+====================================================
+STANDARD ENTRY FIELDS
+====================================================
+
+Use one shared field rendering system where possible.
+
+Common fields include:
+
+- Day Number
+- Title
+- Scripture Reference
+- Greeting
+- Reflection or Consider This
+- Prayer
+- Your Next Step
+- Closing
+- Status metadata
+
+Content-type-specific labels may vary through configuration.
+
+Examples:
+
+Daily Rhythm:
+- Reflection
+
+Daily Devotional:
+- Consider This
+
+Journey:
+- Today’s Journey
+- Let’s Think About This
+
+Sermon Companion:
+- Reflection
+
+Do not force all content types to use identical wording where approved terminology differs.
+
+The layout and behaviour should be identical even when labels differ.
+
+====================================================
+DAILY RHYTHM CONFIGURATION
+====================================================
+
+Preserve the current Daily Rhythm fields and terminology.
+
+Use the shared editor for:
+
+- Day Number
+- Title
+- Scripture Reference
+- Greeting
+- Reflection
+- Prayer
+- Your Next Step
+- Closing
+
+Preserve:
+
+- one Daily Rhythm track;
+- embedded Scripture;
+- personalised greetings;
+- Development Mode;
+- calendar locking;
+- Previous Days;
+- replay mode;
+- completion rules.
+
+Do not alter the 10 Minutes with Jesus content structure.
+
+====================================================
+DAILY DEVOTIONAL CONFIGURATION
+====================================================
+
+Use the shared editor for:
+
+- Day Number
+- Title
+- Scripture Reference
+- Greeting
+- Consider This
+- Prayer
+- Your Next Step
+- Closing
+
+Preserve:
+
+- series relationship;
+- separate Daily Devotional progress;
+- calendar unlocking;
+- active series behaviour;
+- live Scripture retrieval;
+- member selection rules.
+
+The current Daily Devotional editor is the approved visual benchmark.
+
+====================================================
+JOURNEY CONFIGURATION
+====================================================
+
+Use the shared editor for Journey Days.
+
+Approved Journey day labels:
+
+- Day Number
+- Title
+- Scripture Reference
+- Greeting
+- Today’s Journey
+- Let’s Think About This
+- Prayer
+- Today’s Step
+- Closing
+
+Preserve:
+
+- Collection or Standalone relationship;
+- Journey metadata;
+- Journey Type;
+- separate Journey progress;
+- ordered day flow;
+- member start/continue behaviour.
+
+The parent Journey details editor may remain a metadata editor, but its toolbar and visual structure must follow the same Content Studio standard.
+
+====================================================
+SERMON COMPANION CONFIGURATION
+====================================================
+
+Use the shared editor for Companion Days.
+
+Fields:
+
+- Day Number
+- Title
+- Scripture Reference
+- Greeting
+- Reflection
+- Prayer
+- Your Next Step
+- Closing
+
+Preserve:
+
+- link to source Sermon;
+- sermon-only transcript grounding;
+- separate Sermon Companion progress;
+- current-week assignment;
+- AI field regeneration;
+- pastoral review;
+- Draft-by-default generation.
+
+The Sermon Source tab may retain its specialized fields, but must use the shared header, toolbar, spacing and status behaviour.
+
+====================================================
+LIVE MEMBER PREVIEW
+====================================================
+
+The right panel must use the actual shared member renderer for the selected content type.
+
+The preview must include where relevant:
+
+- parent/series title;
+- day number;
+- title;
+- runtime greeting personalisation;
+- Scripture reference;
+- embedded Scripture;
+- reflection content;
+- prayer;
+- next step;
+- closing;
+- completion footer;
+- Ask Emmaus;
+- standard bottom navigation.
+
+Do not build a separate visual approximation.
+
+The editor preview and live member screen must share the same renderer.
+
+====================================================
+LIVE UPDATE BEHAVIOUR
+====================================================
+
+Editing a field should update the preview immediately.
+
+Use debounced local state where needed.
+
+Do not require:
+
+- saving;
+- page refresh;
+- opening a preview route;
+- clicking a preview button.
+
+The preview may display unsaved local edits while the database remains unchanged until Save or Publish.
+
+Clearly distinguish preview state from persisted state internally.
+
+====================================================
+SCRIPTURE PREVIEW
+====================================================
+
+All four content types must use the same shared Bible passage renderer.
+
+Do not duplicate Scripture fetching.
+
+The preview should:
+
+- parse the current reference;
+- use the selected preview/member translation;
+- render the passage;
+- show a clean loading state;
+- show the established clean fallback;
+- support Try Again and Open in My Bible where appropriate.
+
+Do not hard-code Scripture text into records.
+
+====================================================
+GREETING PREVIEW
+====================================================
+
+All four content types must use the same shared greeting-personalisation utility.
+
+Preserve the full authored greeting.
+
+Personalise only the salutation or supported [name] token.
+
+Never display:
+
+- Super Admin;
+- Member;
+- undefined;
+- null;
+- an email address.
+
+Preview and member experience must match.
+
+====================================================
+STANDARD LIST SCREENS
+====================================================
+
+Standardize the visual pattern of the parent list screens without forcing inappropriate data into one template.
+
+Each top-level content list should use:
+
+- page title;
+- short description;
+- primary New action;
+- optional All / Draft / Published / Archived filters;
+- consistent cards or rows;
+- status badge;
+- Edit;
+- Publish/Unpublish where available;
+- Delete.
+
+Use the same:
+
+- spacing;
+- typography;
+- status styles;
+- button styles;
+- empty states;
+- loading skeletons;
+- error states.
+
+Do not turn all lists into wide desktop tables.
+
+Prefer mobile-friendly cards or responsive rows.
+
+====================================================
+PARENT SCREEN FLOW
+====================================================
+
+Lock these flows:
+
+Daily Rhythm
+→ Day List
+→ Day Editor
+
+Daily Devotionals
+→ Series List
+→ Series
+→ Entry Editor
+
+Journeys
+→ Collections or Standalone
+→ Journey
+→ Day Editor
+
+Sermon Companions
+→ Companion List
+→ Sermon Source / Companion
+→ Companion Day Editor
+
+The flow should be visually and behaviourally consistent while preserving the necessary hierarchy.
+
+====================================================
+SHARED DESIGN TOKENS
+====================================================
+
+Use the existing Emmaus design system.
+
+Standardize:
+
+- content max width;
+- page padding;
+- card radius;
+- border treatment;
+- heading sizes;
+- section-label typography;
+- form-label typography;
+- textarea heights;
+- toolbar spacing;
+- status badges;
+- destructive actions;
+- preview background;
+- loading states.
+
+Do not introduce a new colour palette or font.
+
+Do not use Times New Roman.
+
+====================================================
+ACCESSIBILITY
+====================================================
+
+Ensure:
+
+- form fields have visible labels;
+- buttons have accessible names;
+- tab/day navigation supports keyboard use;
+- status is not communicated by colour alone;
+- confirmation dialogs trap focus;
+- loading states are announced where practical;
+- mobile controls remain large enough to tap.
+
+====================================================
+IMPLEMENTATION APPROACH
+====================================================
+
+First inspect and document the current editors:
+
+- Daily Rhythm editor;
+- Daily Devotional entry editor;
+- Journey day editor;
+- Sermon Companion day editor;
+- shared member renderers;
+- shared toolbar;
+- shared delete dialog;
+- shared Scripture renderer;
+- shared greeting utility.
+
+Then consolidate incrementally.
+
+Use the Daily Devotional editor as the visual reference.
+
+Do not rewrite all data-fetching logic at once.
+
+Create adapters for each content type so existing API contracts remain stable.
+
+Do not break working routes.
+
+====================================================
+TEST DAILY RHYTHM
+====================================================
+
+Verify:
+
+✓ Opens from its day list.
+
+✓ Shared header and toolbar appear.
+
+✓ Live preview is visible.
+
+✓ Fields update preview immediately.
+
+✓ Save Draft works.
+
+✓ Publish/Unpublish works.
+
+✓ Delete safeguards remain correct.
+
+✓ Scripture renders.
+
+✓ Greeting renders correctly.
+
+✓ Member rendering is unchanged.
+
+====================================================
+TEST DAILY DEVOTIONALS
+====================================================
+
+Verify:
+
+✓ Existing visual quality is preserved.
+
+✓ Shared header and toolbar appear.
+
+✓ Series/entry navigation remains correct.
+
+✓ Save and publishing work.
+
+✓ Calendar behaviour remains unchanged.
+
+✓ Preview matches member experience.
+
+====================================================
+TEST JOURNEYS
+====================================================
+
+Verify:
+
+✓ Collection and Standalone flows remain intact.
+
+✓ Journey metadata editor follows the shared standard.
+
+✓ Journey Day editor uses live preview.
+
+✓ Approved Journey labels are used.
+
+✓ Save, publish, unpublish and delete work.
+
+✓ Member Journey progress remains unchanged.
+
+====================================================
+TEST SERMON COMPANIONS
+====================================================
+
+Verify:
+
+✓ Sermon Source and Companion tabs remain available.
+
+✓ Companion Day editor uses the shared editor.
+
+✓ AI-generated drafts remain editable.
+
+✓ Regeneration controls still work.
+
+✓ Save, publish, unpublish and delete work.
+
+✓ Current-week assignment remains intact.
+
+✓ Sermon Companion progress remains unchanged.
+
+====================================================
+REGRESSION TEST
+====================================================
+
+Verify:
+
+✓ No content records are lost.
+
+✓ Existing routes still work or redirect safely.
+
+✓ Deep links still open the correct editor.
+
+✓ Content Studio navigation remains unchanged.
+
+✓ Member Next Steps tabs remain unchanged.
+
+✓ Today’s Steps remains unchanged.
+
+✓ No progress system is merged.
+
+✓ No published content is altered automatically.
+
+✓ No pastor-authored content is rewritten.
+
+====================================================
+IMPORTANT GUARDRAILS
+====================================================
+
+Do not redesign Content Studio navigation again.
+
+Do not remove the current five top-level areas.
+
+Do not merge content types.
+
+Do not rename locked member-facing terminology.
+
+Do not replace approved content-specific field labels with generic labels.
+
+Do not create separate preview implementations.
+
+Do not change member progress or calendar rules.
+
+Do not prioritize code elegance over preserving working functionality.
+
+The goal is consistent design and flow, not architectural reinvention.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the shared EmmausContentEditor component created or reused;
+2. the adapter/configuration used for each content type;
+3. the shared components consolidated;
+4. the editors updated;
+5. the list screens updated;
+6. the files changed;
+7. any duplicated editor code removed;
+8. confirmation that Content Studio navigation was not changed;
+9. the result of every test above;
+10. any remaining manual test.

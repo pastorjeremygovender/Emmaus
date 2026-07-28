@@ -38,6 +38,8 @@ export interface AdminSermonRecord {
   transcriptStatus: "none" | "pending" | "complete";
   aiIndexStatus: "none" | "pending" | "indexed";
   companionJourneyId?: string;
+  /** Pastor-confirmed one-sentence Big Idea */
+  mainTheme?: string;
   status: "draft" | "review" | "published";
   pastorEdited: boolean;
   updatedAt: string;

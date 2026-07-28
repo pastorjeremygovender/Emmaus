@@ -11,7 +11,10 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { generateFromUrl, regenerateSermonField, redetectSermon, GenerationError } from "../lib/sermon-generator.js";
+import {
+  generateFromUrl, regenerateSermonField, redetectSermon, GenerationError,
+  generateMainTheme, suggestAlternativeTheme,
+} from "../lib/sermon-generator.js";
 import { getAdminSermonById, upsertAdminSermon } from "../lib/admin-sermon-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
@@ -62,6 +65,7 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
     sermonEndSec,
     sermonStartWord,
     sermonEndWord,
+    confirmedTheme,
   } = req.body as {
     youtubeUrl?: string;
     transcript?: string;
@@ -69,6 +73,7 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
     sermonEndSec?: number;
     sermonStartWord?: number;
     sermonEndWord?: number;
+    confirmedTheme?: string;
   };
 
   if (!youtubeUrl?.trim()) {
@@ -80,6 +85,7 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
     youtubeUrl, userId,
     hasProvidedTranscript: !!providedTranscript,
     hasBoundaries: sermonStartWord !== undefined,
+    hasConfirmedTheme: !!confirmedTheme,
   }, "sermon-generator: starting generation");
 
   try {
@@ -89,6 +95,7 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
       sermonEndSec:    typeof sermonEndSec    === "number" ? sermonEndSec    : undefined,
       sermonStartWord: typeof sermonStartWord === "number" ? sermonStartWord : undefined,
       sermonEndWord:   typeof sermonEndWord   === "number" ? sermonEndWord   : undefined,
+      confirmedTheme:  typeof confirmedTheme  === "string" ? confirmedTheme  : undefined,
     });
 
     logger.info({ sermonId: result.sermon.id, companionId: result.companion.id, userId },
@@ -188,6 +195,65 @@ router.post("/sermon-generator/:sermonId/regenerate-field", async (req: Request,
     const message = err instanceof Error ? err.message : "Regeneration failed";
     logger.error({ err, field }, "sermon-generator: field regen failed");
     res.status(500).json({ error: message.replace(/sk-[a-zA-Z0-9]+/g, "[redacted]") });
+  }
+});
+
+// ─── POST /api/sermon-generator/suggest-theme ────────────────────────────────
+//
+// Generate an alternative one-sentence theme during the pastoral confirmation
+// step — no sermon ID exists yet so we accept the snippet inline.
+// Body: { sermonSnippet, previousTheme }
+
+router.post("/sermon-generator/suggest-theme", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+
+  const { sermonSnippet, previousTheme } = req.body as {
+    sermonSnippet?: string;
+    previousTheme?: string;
+  };
+
+  if (!sermonSnippet?.trim()) {
+    res.status(400).json({ error: "sermonSnippet is required" });
+    return;
+  }
+
+  try {
+    const theme = await suggestAlternativeTheme(sermonSnippet, previousTheme ?? "");
+    res.json({ theme });
+  } catch (err) {
+    logger.error({ err }, "sermon-generator: suggest-theme failed");
+    res.status(500).json({ error: "Theme suggestion failed. Please try again." });
+  }
+});
+
+// ─── POST /api/sermon-generator/:sermonId/regenerate-theme ───────────────────
+//
+// Regenerate the main theme for an existing sermon (from the Sermon Editor).
+// Uses the stored sermonTranscript so the client doesn't need to send content.
+
+router.post("/sermon-generator/:sermonId/regenerate-theme", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const sermonId = String(req.params.sermonId);
+
+  const existing = await getAdminSermonById(sermonId);
+  if (!existing) {
+    res.status(404).json({ error: "Sermon not found" });
+    return;
+  }
+
+  const source = existing.sermonTranscript ?? existing.transcript;
+  if (!source) {
+    res.status(422).json({ error: "This sermon has no stored transcript to analyse." });
+    return;
+  }
+
+  try {
+    const theme = await generateMainTheme(source);
+    logger.info({ sermonId, theme }, "sermon-generator: theme regenerated");
+    res.json({ theme });
+  } catch (err) {
+    logger.error({ err, sermonId }, "sermon-generator: regenerate-theme failed");
+    res.status(500).json({ error: "Theme regeneration failed. Please try again." });
   }
 });
 

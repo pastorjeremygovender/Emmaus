@@ -125,6 +125,8 @@ export interface SermonDraftFields {
   transcriptStatus: 'none' | 'pending' | 'complete';
   aiIndexStatus: 'none' | 'pending' | 'indexed';
   companionJourneyId: string;
+  /** Pastor-confirmed one-sentence Big Idea — canonical theme for the companion */
+  mainTheme: string;
   status: 'draft';
   pastorEdited: boolean;
   updatedAt: string;
@@ -493,6 +495,89 @@ function timeToWordOffset(
   return Math.min(best, totalWords);
 }
 
+// ─── OpenAI: main theme generation ───────────────────────────────────────────
+
+const MAIN_THEME_SYSTEM = `You are a pastoral content editor for a church.
+
+Your task: identify the BIG IDEA of this sermon in ONE sentence.
+
+The Big Idea is:
+- The single main point the preacher is making
+- Something the congregation should walk away believing or doing differently
+- Expressed as a complete sentence (subject + verb + complement)
+- Grounded in this specific scripture passage
+
+Rules:
+- ONE sentence only — never a list, never a paragraph
+- Plain, pastoral language the pastor himself would use
+- No theological jargon ("Christocentric", "covenantal", "eschatological", etc.)
+- No vague generic phrases ("we should trust God", "faith is important")
+- Specific to THIS sermon — not a spiritual platitude that could apply to any sermon
+
+Good examples:
+- "Following Jesus means putting Him first in every area of life."
+- "God's kindness restores people who believe they are beyond hope."
+- "The Christian life begins when we trust Jesus rather than ourselves."
+- "True peace is not the absence of problems but the presence of God."
+
+Bad examples:
+- "Christocentric Kingdom Discipleship Paradigm"
+- "Exploring covenantal implications of grace"
+- Lists or multiple ideas
+- Paragraphs
+
+Return ONLY JSON:
+{ "mainTheme": "..." }`;
+
+/**
+ * Generate a one-sentence Big Idea from the sermon-only transcript.
+ * Called once after sermon boundary detection, before companion generation.
+ */
+export async function generateMainTheme(sermonTranscript: string): Promise<string> {
+  const snippet = sermonTranscript.split(/\s+/).slice(0, 2000).join(" ");
+  const res = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: MAIN_THEME_SYSTEM },
+      { role: "user", content: `Sermon transcript:\n\n${snippet}` },
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 200,
+  });
+  const raw = res.choices[0]?.message?.content ?? '{"mainTheme":""}';
+  const parsed = safeParseJson(raw) as { mainTheme?: string };
+  const theme = typeof parsed.mainTheme === "string" ? parsed.mainTheme.trim() : "";
+  logger.info({ theme }, "sermon-generator: main theme generated");
+  return theme || "The main message of this sermon.";
+}
+
+/**
+ * Generate an alternative one-sentence Big Idea (used by the "Regenerate Theme"
+ * button on the pastoral confirmation screen).
+ */
+export async function suggestAlternativeTheme(
+  sermonSnippet: string,
+  previousTheme: string
+): Promise<string> {
+  const snippet = sermonSnippet.split(/\s+/).slice(0, 2000).join(" ");
+  const res = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: MAIN_THEME_SYSTEM },
+      {
+        role: "user",
+        content: `The previous suggestion was: "${previousTheme}"\n\nGenerate a different one-sentence main theme from this transcript:\n\n${snippet}`,
+      },
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 200,
+  });
+  const raw = res.choices[0]?.message?.content ?? '{"mainTheme":""}';
+  const parsed = safeParseJson(raw) as { mainTheme?: string };
+  const theme = typeof parsed.mainTheme === "string" ? parsed.mainTheme.trim() : "";
+  return theme || previousTheme;
+}
+
 /** Re-run sermon detection on a stored sermon record (for the Re-detect button) */
 export async function redetectSermon(fullTranscript: string): Promise<{
   sermonTranscript: string;
@@ -580,7 +665,15 @@ async function generateSermonDraft(meta: {
 
 const COMPANION_SYSTEM = `You are a pastoral content writer for a church.
 Generate a 5-day devotional companion to a sermon.
-Each day should flow naturally from the sermon and deepen the listener's engagement with its message.
+
+CRITICAL: A confirmed Main Theme is provided. This is the pastor's chosen Big Idea — the single sentence that defines the heart of the sermon. Every day must reflect this theme, not by repeating the sentence, but by approaching it from a different angle each day. The theme is the unifying thread that makes the companion feel like one continuous walk.
+
+Example: If the theme is "Putting Jesus at the centre changes everything":
+- Day 1: Why Jesus belongs at the centre
+- Day 2: Removing competing priorities
+- Day 3: Trusting Him in difficult decisions
+- Day 4: Following Him daily
+- Day 5: Living with Jesus at the centre
 
 Return ONLY JSON — no markdown, no explanation.
 
@@ -590,10 +683,10 @@ JSON shape:
   "days": [
     {
       "dayNumber": 1,
-      "title": "...",              // Day title (e.g. "When You Are Running on Empty")
+      "title": "...",              // Day title that connects to ONE angle of the main theme
       "scriptureReference": "...", // 1 scripture reference for the day (may differ from sermon's main text)
       "greeting": "...",           // 2-3 sentences. Warm, personal opening. Use [name] for the member.
-      "reflection": "...",         // 3-4 paragraphs. Devotional reflection grounded in the scripture and sermon theme.
+      "reflection": "...",         // 3-4 paragraphs. Devotional reflection grounded in the scripture AND the confirmed main theme.
       "prayer": "...",             // 4-6 sentences. Written in first person for the member to pray aloud.
       "nextStep": "...",           // 1 sentence. One concrete, doable action for today.
       "closing": "..."             // 1 sentence. Warm send-off.
@@ -603,7 +696,7 @@ JSON shape:
 }
 
 Guidelines:
-- Each day builds on the previous day's theme
+- Each day explores a different angle of the confirmed main theme
 - Prayers begin "Lord," or "Father," — never "Dear God"
 - Reflections never repeat the same illustration twice
 - [name] placeholder is used in greeting only
@@ -614,6 +707,7 @@ async function generateCompanion(context: {
   scriptureReference: string;
   summary: string;
   transcript: string;
+  mainTheme: string;
 }): Promise<{
   companionTitle: string;
   days: CompanionEntryDraft[];
@@ -622,7 +716,9 @@ async function generateCompanion(context: {
     ? `\n\nSermon transcript (first 2000 words):\n${context.transcript.split(/\s+/).slice(0, 2000).join(" ")}`
     : "";
 
-  const userMsg = `Sermon title: ${context.sermonTitle}
+  const userMsg = `Confirmed Main Theme: ${context.mainTheme}
+
+Sermon title: ${context.sermonTitle}
 Scripture: ${context.scriptureReference}
 Summary: ${context.summary}${transcriptSnippet}`;
 
@@ -736,6 +832,12 @@ export interface GenerationOptions {
   /** Pastor-confirmed sermon boundaries (word offsets into full transcript) */
   sermonStartWord?: number;
   sermonEndWord?: number;
+  /**
+   * Pastor-confirmed one-sentence Big Idea.
+   * When provided, the theme-confirmation step is skipped and this value
+   * is used directly as the companion's unifying thread.
+   */
+  confirmedTheme?: string;
 }
 
 export async function generateFromUrl(youtubeUrl: string, options: GenerationOptions = {}): Promise<GenerationResult> {
@@ -800,6 +902,11 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   let detectionStartSecs: number | null = null;
   let detectionEndSecs: number | null = null;
   let detectionConfidence: number;
+  // Actual word offsets used to slice the sermon transcript — passed back in
+  // THEME_CONFIRMATION_REQUIRED so the client can send them on the next call,
+  // allowing the server to skip re-detection entirely.
+  let actualStartWord: number;
+  let actualEndWord: number;
 
   if (hasBoundaries) {
     // Pastor confirmed AI-detected boundaries (word offsets from detection, reliable)
@@ -809,6 +916,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     detectionEndSecs   = options.sermonEndSec   ?? null;
     detectionConfidence = 1.0;
     detectionMethod = "ai-confirmed";
+    actualStartWord = options.sermonStartWord!;
+    actualEndWord   = options.sermonEndWord!;
     logger.info({ startWord: options.sermonStartWord, endWord: options.sermonEndWord },
       "sermon-generator: using pastor-confirmed word boundaries");
   } else if (hasTimeBoundaries) {
@@ -821,6 +930,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     detectionEndSecs   = options.sermonEndSec!;
     detectionConfidence = 1.0;
     detectionMethod = "ai-confirmed";
+    actualStartWord = startWord;
+    actualEndWord   = endWord;
     logger.info(
       { startSec: options.sermonStartSec, endSec: options.sermonEndSec, startWord, endWord,
         hasCues: !!(timedCues && timedCues.length) },
@@ -867,10 +978,47 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     detectionEndSecs   = detection.endSecs;
     detectionConfidence = detection.confidence;
     detectionMethod = "ai-auto";
+    actualStartWord = detection.startWord;
+    actualEndWord   = detection.endWord;
   }
 
   logger.info({ sermonWords: sermonTranscript.split(/\s+/).length, detectionConfidence, detectionMethod },
     "sermon-generator: sermon transcript extracted");
+
+  // 4.5. Pastoral theme confirmation — pause the pipeline until the pastor
+  //      confirms the main theme. When confirmedTheme is already set (second
+  //      call after the pastor confirms), skip straight to generation.
+  let mainTheme: string;
+  if (options.confirmedTheme && options.confirmedTheme.trim()) {
+    mainTheme = options.confirmedTheme.trim();
+    logger.info({ mainTheme }, "sermon-generator: using pastor-confirmed main theme");
+  } else {
+    // Generate a theme suggestion and return it to the client for confirmation.
+    let suggestedTheme: string;
+    try {
+      suggestedTheme = await generateMainTheme(sermonTranscript);
+    } catch (err) {
+      logger.warn({ err }, "sermon-generator: theme generation failed, using fallback");
+      suggestedTheme = "The main message of this sermon.";
+    }
+    logger.info({ suggestedTheme }, "sermon-generator: returning THEME_CONFIRMATION_REQUIRED");
+    throw new GenerationError(
+      "THEME_CONFIRMATION_REQUIRED",
+      "Emmaus identified the main theme below. Please confirm before generating the companion.",
+      {
+        theme: suggestedTheme,
+        // First ~1 500 words of the sermon — sent back by the client if the pastor
+        // clicks "Regenerate Theme" so the server can produce an alternative.
+        sermonSnippet: sermonTranscript.split(/\s+/).slice(0, 1500).join(" "),
+        startSecs: detectionStartSecs,
+        endSecs: detectionEndSecs,
+        startWord: actualStartWord,
+        endWord: actualEndWord,
+        detectionConfidence,
+        detectionMethod,
+      }
+    );
+  }
 
   // 5. Generate sermon draft fields from sermon-only transcript
   let draftFields;
@@ -886,7 +1034,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     throw new GenerationError("GENERATION_FAILED", "We couldn't prepare the sermon draft. Your sermon has not been saved.");
   }
 
-  // 6. Generate 5-day companion from sermon-only transcript
+  // 6. Generate 5-day companion from sermon-only transcript, anchored to mainTheme
   let companionDraft;
   try {
     companionDraft = await generateCompanion({
@@ -894,6 +1042,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       scriptureReference: draftFields.scriptureReference,
       summary: draftFields.summary,
       transcript: sermonTranscript,   // ← sermon only
+      mainTheme,
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
@@ -931,6 +1080,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     transcriptStatus: fullTranscript ? "complete" : "none",
     aiIndexStatus: "none",
     companionJourneyId: savedCompanion.id,
+    mainTheme,
     status: "draft",
     pastorEdited: false,
     updatedAt: new Date().toISOString(),

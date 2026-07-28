@@ -328,13 +328,12 @@ function DiscoveryCard({
       <ProgressBar item={item} />
       <div className="px-4 pb-4 pt-3">
         {isGated && item.memberProgressState === 'in-progress' ? (
-          <Button variant="outline" className="w-full h-10 rounded-xl text-[13px]" onClick={onGate}>
+          <Button className="w-full h-10 rounded-xl text-[13px]" onClick={onGate}>
             Complete today's 10 Minutes with Jesus first
           </Button>
         ) : (
           <Button
             className="w-full h-10 rounded-xl text-[14px]"
-            variant={item.memberProgressState === 'not-started' ? 'outline' : 'default'}
             onClick={onAction}
           >
             {actionLabel}
@@ -365,7 +364,6 @@ function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onA
       </div>
       <Button
         className="w-full h-10 rounded-xl text-[14px]"
-        variant={item.memberProgressState === 'not-started' ? 'outline' : 'default'}
         onClick={onAction}
         disabled={starting}
       >
@@ -401,7 +399,6 @@ function SermonCard({ item, onAction, featured = false }: { item: NextStepsItem;
       </div>
       <Button
         className="w-full h-10 rounded-xl text-[14px]"
-        variant={featured ? 'default' : (item.memberProgressState === 'not-started' ? 'outline' : 'default')}
         onClick={onAction}
       >
         {item.primaryActionLabel}
@@ -621,6 +618,21 @@ export default function Journeys() {
   const [startingDevId, setStartingDevId] = useState<string | null>(null);
   const [switchTarget,  setSwitchTarget]  = useState<NextStepsItem | null>(null);
 
+  // ── Sermon companion action handler ──────────────────────────────────────
+  // Sermon companions from the sermon_companion table (AI-generated pipeline) use
+  // /sermon-companion/ routes and a separate progress system. They bypass the
+  // journey enrollment limit and start automatically on the reading page.
+  // Companions that are journeys-table-based (slug IDs, /journey/ routes) fall
+  // through to handleJourneyAction which uses the standard journey flow.
+
+  function handleSermonCompanionAction(item: NextStepsItem) {
+    if (item.route.startsWith('/sermon-companion/')) {
+      setLocation(item.route);
+      return;
+    }
+    handleJourneyAction(item);
+  }
+
   // ── Journey action handler ────────────────────────────────────────────────
 
   function handleJourneyAction(item: NextStepsItem) {
@@ -758,7 +770,7 @@ export default function Journeys() {
               <SermonCompanionsPanel
                 current={data.currentSermonCompanion}
                 previous={data.previousSermonCompanions}
-                onAction={handleJourneyAction}
+                onAction={handleSermonCompanionAction}
               />
             )}
           </>

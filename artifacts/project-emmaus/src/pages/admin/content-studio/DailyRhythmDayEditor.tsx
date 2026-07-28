@@ -1,18 +1,24 @@
 /**
- * DailyRhythmDayEditor — purpose-built editor for a single Daily Rhythm day.
+ * DailyRhythmDayEditor — editor for a single Daily Rhythm OR Journey day.
  *
- * Layout: two-column split, matching the Daily Devotionals editor standard.
- *   Left panel  — all fields + toolbar (Help Me Write, Save Draft, Publish)
+ * Uses EmmausContentEditor for the shared two-panel layout:
+ *   Left panel  — all fields + ContentStudioToolbar
  *   Right panel — live DailyRhythmReading preview; updates as the admin types.
  *
- * Fields: Day Number, Title, Scripture Reference, Greeting, Reflection,
- *         Prayer, Your Next Step, Closing
+ * Fields: Day Number, Title, Scripture Reference, Greeting,
+ *         Reflection (daily-rhythm) / Today's Journey (journey),
+ *         Prayer,
+ *         Your Next Step (daily-rhythm) / Today's Step (journey),
+ *         Closing
+ *
  * Actions: Help Me Write, Save Draft, Publish, Duplicate, Delete
+ *
+ * Pass variant="journey" when rendering a Journey day so the correct approved
+ * terminology appears. Default is 'daily-rhythm'.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Save, CheckCircle, Copy, Trash2,
-  AlertTriangle, Loader2, X, Wand2, ChevronDown, CornerDownLeft,
+  Copy, Loader2, X, Wand2, ChevronDown, CornerDownLeft, AlertTriangle,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +27,33 @@ import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@
 import { WritingAssistantPanel, type PreviousDayInfo } from '@/components/WritingAssistantPanel';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
+import EmmausContentEditor from './EmmausContentEditor';
+
+// ─── Variant labels ───────────────────────────────────────────────────────────
+
+type EditorVariant = 'daily-rhythm' | 'journey';
+
+interface VariantLabels {
+  reflection: string;
+  reflectionHint: string;
+  actionStep: string;
+  actionStepHint: string;
+}
+
+const VARIANT_LABELS: Record<EditorVariant, VariantLabels> = {
+  'daily-rhythm': {
+    reflection:     'Reflection',
+    reflectionHint: 'The main devotional reflection for this day — 2–4 paragraphs.',
+    actionStep:     'Your Next Step',
+    actionStepHint: 'One concrete action for today.',
+  },
+  'journey': {
+    reflection:     "Today's Journey",
+    reflectionHint: "Help members reflect on today's scripture — 2–4 paragraphs. Prompt them to think about what it means and how God might be speaking today.",
+    actionStep:     "Today's Step",
+    actionStepHint: 'One concrete action the member can take today.',
+  },
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +63,8 @@ interface Props {
   onBack: () => void;
   onDuplicated: (newDay: number) => void;
   onDeleted: () => void;
+  /** Controls field labels. Default: 'daily-rhythm' */
+  variant?: EditorVariant;
 }
 
 interface DayForm {
@@ -54,7 +89,7 @@ const EMPTY_FORM: DayForm = {
   closingText: '',
 };
 
-// ─── Field components ─────────────────────────────────────────────────────────
+// ─── Field sub-components ─────────────────────────────────────────────────────
 
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
@@ -65,7 +100,7 @@ function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: stri
   );
 }
 
-function TextArea({
+function StyledTextArea({
   value, onChange, rows = 4, placeholder,
 }: {
   value: string;
@@ -86,7 +121,7 @@ function TextArea({
   );
 }
 
-// ─── Field refiner (inline AI editing actions) ────────────────────────────────
+// ─── Inline AI field refiner ──────────────────────────────────────────────────
 
 const FIELD_REFINE_ACTIONS: Record<string, Array<{ action: RefineAction; label: string }>> = {
   mentorIntro:  [
@@ -143,7 +178,6 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
   const menuRef = useRef<HTMLDivElement>(null);
   const actions = FIELD_REFINE_ACTIONS[field] ?? [];
 
-  // Close menu on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -266,7 +300,7 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
   const handleConfirm = async () => {
     setBusy(true);
     try { await onConfirm(); } catch {
-      setError('We couldn\'t delete this day. Please try again.');
+      setError("We couldn't delete this day. Please try again.");
       setBusy(false);
     }
   };
@@ -280,15 +314,25 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900">Delete Day {dayNum}?</h2>
-            <p className="text-sm text-gray-500 mt-0.5">This will permanently remove Day {dayNum} and its content. This cannot be undone.</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              This will permanently remove Day {dayNum} and its content. This cannot be undone.
+            </p>
           </div>
         </div>
         {error && <p className="px-6 pt-4 text-sm text-red-600">{error}</p>}
         <div className="flex items-center justify-end gap-3 px-6 pb-6 pt-4">
-          <button onClick={onCancel} disabled={busy} className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50"
+          >
             Cancel
           </button>
-          <button onClick={handleConfirm} disabled={busy} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-40">
+          <button
+            onClick={handleConfirm}
+            disabled={busy}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-40"
+          >
             {busy ? <Loader2 size={14} className="animate-spin" /> : null}
             Delete Day
           </button>
@@ -300,16 +344,22 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
 
 // ─── Main editor ──────────────────────────────────────────────────────────────
 
-export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplicated, onDeleted }: Props) {
+export default function DailyRhythmDayEditor({
+  journeyId,
+  day,
+  onBack,
+  onDuplicated,
+  onDeleted,
+  variant = 'daily-rhythm',
+}: Props) {
   const { getJourney, getStep, steps, addStep, updateStep, deleteStep } = useJourney();
   const { user } = useAuth();
   const journey = getJourney(journeyId) as Journey | undefined;
   const isEditor = user?.role === 'admin' || user?.role === 'superAdmin';
+  const labels = VARIANT_LABELS[variant];
 
-  // Preview uses the signed-in admin's name for realism; falls back to "Jeremy".
   const previewName = resolveDisplayName(user?.preferredName) ?? 'Jeremy';
 
-  // Compute next available day number for new days
   const nextDay = useMemo(() => computeNextDay(steps as Step[], journeyId), [steps, journeyId]);
 
   const [form, setForm] = useState<DayForm>(() => ({ ...EMPTY_FORM, day: day ?? nextDay }));
@@ -320,10 +370,9 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showDelete, setShowDelete] = useState(false);
-  const [currentDay, setCurrentDay] = useState<number | null>(day); // tracks saved day number
+  const [currentDay, setCurrentDay] = useState<number | null>(day);
   const [showAssistant, setShowAssistant] = useState(false);
 
-  // Load existing step
   useEffect(() => {
     if (day !== null) {
       const existing = getStep(journeyId, day) as (Step & { closingText?: string }) | undefined;
@@ -343,7 +392,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
       }
     }
     setLoaded(true);
-  }, [day, journeyId]);
+  }, [day, journeyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = useCallback(<K extends keyof DayForm>(key: K, val: DayForm[K]) => {
     setForm(f => ({ ...f, [key]: val }));
@@ -378,7 +427,10 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
         setCurrentDay(form.day);
       }
       setStepStatus(status);
-      setSuccessMsg(status === 'Published' ? 'Published successfully.' : 'Draft saved successfully.');
+      setSuccessMsg(
+        status === 'Published' ? 'Published successfully.' :
+        stepStatus === 'Published' ? 'Changes saved successfully.' : 'Draft saved successfully.'
+      );
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch {
       setErrorMsg('Save failed — please try again.');
@@ -393,13 +445,9 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
     if (saving) return;
     setSaving(true);
     try {
-      // Save current first to preserve content
       if (currentDay === null) await handleSave('Draft');
       const newDayNum = nextDay > form.day ? nextDay : form.day + 1;
-      const data = {
-        ...buildStepData('Draft'),
-        day: newDayNum,
-      };
+      const data = { ...buildStepData('Draft'), day: newDayNum };
       const created = await addStep(data);
       onDuplicated(created.day);
     } catch {
@@ -416,7 +464,6 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
     onDeleted();
   };
 
-  // Previous days for Writing Assistant continuity context
   const previousDays = useMemo<PreviousDayInfo[]>(() =>
     (steps as Step[])
       .filter(s => s.journeyId === journeyId && s.day < form.day)
@@ -450,7 +497,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
 
   return (
     <>
-      {/* Writing Assistant panel — full-screen overlay; unchanged */}
+      {/* Writing Assistant panel — full-screen overlay, rendered outside layout flow */}
       {showAssistant && user && (
         <WritingAssistantPanel
           journeyId={journeyId}
@@ -471,25 +518,11 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
         />
       )}
 
-      {/* Delete confirm */}
-      {showDelete && (
-        <DeleteConfirmDialog
-          dayNum={currentDay ?? form.day}
-          onConfirm={handleDelete}
-          onCancel={() => setShowDelete(false)}
-        />
-      )}
-
-      {/* ── Two-column split layout (matches Daily Devotionals editor standard) ── */}
-      <div className="flex h-full min-h-0 bg-gray-50">
-
-        {/* ── Left panel: editor fields ──────────────────────────────────────── */}
-        <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
-
-          {/* Sticky header — ContentStudioToolbar */}
+      <EmmausContentEditor
+        toolbar={
           <ContentStudioToolbar
             onBack={onBack}
-            title={journey?.title ?? 'Daily Rhythm'}
+            title={journey?.title ?? (variant === 'journey' ? 'Journey' : 'Daily Rhythm')}
             subtitle={`Day ${form.day}${form.title ? ` — ${form.title}` : ''}`}
             status={stepStatus}
             isSaving={savingAs === 'draft'}
@@ -526,8 +559,8 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
               </div>
             }
           />
-
-          {/* Fields */}
+        }
+        fields={
           <div className="flex-1 p-6 space-y-7 max-w-2xl">
 
             {/* Day Number + Title row */}
@@ -572,96 +605,104 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
             {/* Greeting */}
             <div>
               <FieldLabel>Greeting</FieldLabel>
-              <TextArea
+              <StyledTextArea
                 value={form.mentorIntro}
                 onChange={v => patch('mentorIntro', v)}
                 rows={3}
                 placeholder="A warm opening that sets the tone for today's time…"
               />
               {isEditor && (
-                <FieldRefiner field="mentorIntro" fieldLabel="Greeting" value={form.mentorIntro}
+                <FieldRefiner
+                  field="mentorIntro" fieldLabel="Greeting" value={form.mentorIntro}
                   onApply={(v, mode) => handleApplyField('mentorIntro', v, mode)}
                   scripture={form.scripture} dayTitle={form.title}
-                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''}
+                />
               )}
             </div>
 
-            {/* Reflection */}
+            {/* Reflection / Today's Journey */}
             <div>
-              <FieldLabel>Reflection</FieldLabel>
-              <TextArea
+              <FieldLabel hint={labels.reflectionHint}>{labels.reflection}</FieldLabel>
+              <StyledTextArea
                 value={form.devotional}
                 onChange={v => patch('devotional', v)}
                 rows={6}
-                placeholder="The main devotional reflection for this day…"
+                placeholder={variant === 'journey'
+                  ? "Guide members through today's scripture and what it means for their life…"
+                  : "The main devotional reflection for this day…"
+                }
               />
               {isEditor && (
-                <FieldRefiner field="devotional" fieldLabel="Reflection" value={form.devotional}
+                <FieldRefiner
+                  field="devotional" fieldLabel={labels.reflection} value={form.devotional}
                   onApply={(v, mode) => handleApplyField('devotional', v, mode)}
                   scripture={form.scripture} dayTitle={form.title}
-                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''}
+                />
               )}
             </div>
 
             {/* Prayer */}
             <div>
               <FieldLabel>Prayer</FieldLabel>
-              <TextArea
+              <StyledTextArea
                 value={form.prayerPrompt}
                 onChange={v => patch('prayerPrompt', v)}
                 rows={3}
                 placeholder="A prayer the member can pray or adapt…"
               />
               {isEditor && (
-                <FieldRefiner field="prayerPrompt" fieldLabel="Prayer" value={form.prayerPrompt}
+                <FieldRefiner
+                  field="prayerPrompt" fieldLabel="Prayer" value={form.prayerPrompt}
                   onApply={(v, mode) => handleApplyField('prayerPrompt', v, mode)}
                   scripture={form.scripture} dayTitle={form.title}
-                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''}
+                />
               )}
             </div>
 
-            {/* Your Next Step */}
+            {/* Your Next Step / Today's Step */}
             <div>
-              <FieldLabel>Your Next Step</FieldLabel>
-              <TextArea
+              <FieldLabel hint={labels.actionStepHint}>{labels.actionStep}</FieldLabel>
+              <StyledTextArea
                 value={form.actionStep}
                 onChange={v => patch('actionStep', v)}
                 rows={3}
                 placeholder="One concrete action to take today…"
               />
               {isEditor && (
-                <FieldRefiner field="actionStep" fieldLabel="Your Next Step" value={form.actionStep}
+                <FieldRefiner
+                  field="actionStep" fieldLabel={labels.actionStep} value={form.actionStep}
                   onApply={(v, mode) => handleApplyField('actionStep', v, mode)}
                   scripture={form.scripture} dayTitle={form.title}
-                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''}
+                />
               )}
             </div>
 
             {/* Closing */}
             <div>
               <FieldLabel>Closing</FieldLabel>
-              <TextArea
+              <StyledTextArea
                 value={form.closingText}
                 onChange={v => patch('closingText', v)}
                 rows={2}
                 placeholder="e.g. Tomorrow we'll continue walking together."
               />
               {isEditor && (
-                <FieldRefiner field="closingText" fieldLabel="Closing" value={form.closingText}
+                <FieldRefiner
+                  field="closingText" fieldLabel="Closing" value={form.closingText}
                   onApply={(v, mode) => handleApplyField('closingText', v, mode)}
                   scripture={form.scripture} dayTitle={form.title}
-                  userId={user?.id ?? ''} userRole={user?.role ?? ''} />
+                  userId={user?.id ?? ''} userRole={user?.role ?? ''}
+                />
               )}
             </div>
 
           </div>
-        </div>
-
-        {/* ── Right panel: live preview ───────────────────────────────────────── */}
-        <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
-          <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
-          </div>
+        }
+        preview={
           <DailyRhythmReading
             day={form.day}
             title={form.title}
@@ -675,9 +716,17 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
             previewMode
             actionButton={<PreviewContinueButton />}
           />
-        </div>
-
-      </div>
+        }
+        dialogs={
+          showDelete ? (
+            <DeleteConfirmDialog
+              dayNum={currentDay ?? form.day}
+              onConfirm={handleDelete}
+              onCancel={() => setShowDelete(false)}
+            />
+          ) : null
+        }
+      />
     </>
   );
 }

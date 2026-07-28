@@ -150,6 +150,23 @@ export interface SermonDetectionSource {
   youtubeUrl: string;
 }
 
+/**
+ * Metadata returned with a THEME_CONFIRMATION_REQUIRED error.
+ * Contains the AI-generated theme suggestion and the sermon boundaries so the
+ * client can pass them back when the pastor confirms, skipping re-detection.
+ */
+export interface ThemeConfirmationSource {
+  theme: string;
+  /** First ~1 500 words of the sermon — used for the "Regenerate Theme" call */
+  sermonSnippet: string;
+  startSecs: number | null;
+  endSecs: number | null;
+  startWord: number;
+  endWord: number;
+  detectionConfidence: number;
+  detectionMethod: string;
+}
+
 export interface SermonDraftResult {
   sermon: {
     id: string;
@@ -171,6 +188,7 @@ export interface SermonDraftResult {
     transcriptStatus: 'none' | 'complete';
     aiIndexStatus: 'none';
     companionJourneyId: string;
+    mainTheme: string;
     status: 'draft';
     pastorEdited: boolean;
     updatedAt: string;
@@ -192,6 +210,8 @@ export async function generateSermonDraft(
     sermonEndSec?: number;
     sermonStartWord?: number;
     sermonEndWord?: number;
+    /** Pastor-confirmed one-sentence Big Idea — skips theme confirmation step */
+    confirmedTheme?: string;
   }
 ): Promise<SermonDraftResult> {
   const body: Record<string, unknown> = { youtubeUrl };
@@ -201,10 +221,44 @@ export async function generateSermonDraft(
   if (opts?.sermonEndSec     != null) body.sermonEndSec     = opts.sermonEndSec;
   if (opts?.sermonStartWord  != null) body.sermonStartWord  = opts.sermonStartWord;
   if (opts?.sermonEndWord    != null) body.sermonEndWord    = opts.sermonEndWord;
+  if (opts?.confirmedTheme)           body.confirmedTheme   = opts.confirmedTheme;
   const raw = await post<{ _full?: SermonDraftResult; sermon?: unknown; companion?: unknown } & SermonDraftResult>(
     "/sermon-generator/generate", body, auth
   );
   return raw._full ?? raw;
+}
+
+/**
+ * Generate an alternative theme suggestion during the confirmation step.
+ * Used by the "Regenerate Theme" link on the ConfirmThemePhase screen.
+ */
+export async function suggestAlternativeTheme(
+  sermonSnippet: string,
+  previousTheme: string,
+  auth: AuthHeaders,
+): Promise<string> {
+  const res = await post<{ theme: string }>(
+    "/sermon-generator/suggest-theme",
+    { sermonSnippet, previousTheme },
+    auth,
+  );
+  return res.theme;
+}
+
+/**
+ * Regenerate the main theme for an existing sermon (from the Sermon Editor).
+ * The server uses the stored sermonTranscript — no content sent from client.
+ */
+export async function regenerateSermonTheme(
+  sermonId: string,
+  auth: AuthHeaders,
+): Promise<string> {
+  const res = await post<{ theme: string }>(
+    `/sermon-generator/${sermonId}/regenerate-theme`,
+    {},
+    auth,
+  );
+  return res.theme;
 }
 
 export async function redetectSermon(
@@ -339,4 +393,28 @@ export async function saveCompanionEntry(
   auth: AuthHeaders,
 ): Promise<CompanionEntry> {
   return patch<CompanionEntry>(`/sermon-companions/${companionId}/entries/${day}`, fields, auth);
+}
+
+/**
+ * Publish a sermon companion and ALL its entries atomically.
+ * The companion moves from Draft → Published and all 5 days become visible
+ * to members in a single request.
+ */
+export async function publishSermonCompanion(
+  companionId: string,
+  auth: AuthHeaders,
+): Promise<void> {
+  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/publish`, {}, auth);
+}
+
+/**
+ * Unpublish a sermon companion (revert to Draft).
+ * Entries are left in their current Published state so the pastor's edits
+ * are preserved when they republish.
+ */
+export async function unpublishSermonCompanion(
+  companionId: string,
+  auth: AuthHeaders,
+): Promise<void> {
+  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/unpublish`, {}, auth);
 }

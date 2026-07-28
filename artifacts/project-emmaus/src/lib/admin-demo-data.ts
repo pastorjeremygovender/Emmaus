@@ -22,6 +22,8 @@ export type Sermon = {
   transcriptStatus: 'none' | 'pending' | 'complete';
   aiIndexStatus: 'none' | 'pending' | 'indexed';
   companionJourneyId?: string;
+  /** Pastor-confirmed one-sentence Big Idea — canonical theme for the companion */
+  mainTheme?: string;
   status: 'draft' | 'review' | 'published';
   pastorEdited: boolean;
   updatedAt: string;

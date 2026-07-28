@@ -1,0 +1,390 @@
+Project Emmaus — Fix Missing Published Sermon Companions in Next Steps
+
+This bug has been raised multiple times and must now be resolved completely.
+
+Current behaviour:
+
+Next Steps
+→ Sermon Companions tab
+
+Only one card appears:
+
+God’s Kindness Restores the Broken
+
+This is the Companion marked:
+
+This Week’s Sermon
+
+A second Sermon Companion is already published in Content Studio:
+
+Jesus at the Center
+
+However, it does not appear anywhere in the member Sermon Companions tab.
+
+This is incorrect.
+
+The Sermon Companions tab must show:
+
+1. This Week’s Sermon
+2. Previous Sermon Companions
+
+All eligible published Sermon Companions must be visible.
+
+Do not redesign the page.
+Do not add more tabs.
+Do not change Content Studio architecture.
+Do not hard-code “Jesus at the Center.”
+Fix the real query, eligibility or rendering bug.
+
+====================================================
+EXPECTED RESULT
+====================================================
+
+The Sermon Companions tab should display:
+
+THIS WEEK’S SERMON
+
+God’s Kindness Restores the Broken
+
+Then beneath it:
+
+PREVIOUS SERMON COMPANIONS
+
+Jesus at the Center
+
+Any additional eligible published companions should also appear automatically, newest first.
+
+The current companion must not be repeated in Previous Sermon Companions.
+
+====================================================
+TASK 1 — TRACE THE MISSING RECORD
+====================================================
+
+Inspect the actual database record for:
+
+Jesus at the Center
+
+Confirm and log temporarily:
+
+- sermon ID;
+- companion ID;
+- sermon status;
+- companion status;
+- number of companion entries;
+- number of published companion entries;
+- memberVisible value;
+- isCurrent or current-week value;
+- publication date;
+- publishedAt;
+- archived state;
+- publication window;
+- source sermon relationship;
+- route used by the member card.
+
+Then inspect the member discovery API response.
+
+Confirm whether Jesus at the Center:
+
+A. is excluded by the server query;
+B. is returned but removed during grouping;
+C. is returned but filtered by the frontend;
+D. is rendered but hidden by a layout/state bug.
+
+Do not guess. Identify the exact stage where it disappears.
+
+====================================================
+TASK 2 — CANONICAL ELIGIBILITY RULE
+====================================================
+
+A Sermon Companion belongs in the member Sermon Companions tab when:
+
+- companion status is Published;
+- companion is not Archived;
+- member visibility is enabled;
+- at least one companion entry is Published;
+- publication window is valid, where used.
+
+It does not need to be marked This Week’s Sermon to appear.
+
+The current-week flag only determines whether it appears in the featured top section.
+
+It must not determine whether it appears at all.
+
+====================================================
+TASK 3 — CURRENT AND PREVIOUS GROUPING
+====================================================
+
+The API or shared discovery service must return:
+
+{
+  "currentSermonCompanion": { ... } | null,
+  "previousSermonCompanions": [ ... ]
+}
+
+Grouping rule:
+
+currentSermonCompanion:
+the one eligible published Companion with isCurrent = true
+
+previousSermonCompanions:
+all other eligible published Companions where companion.id !== currentSermonCompanion.id
+
+Sort previous Sermon Companions by:
+
+1. sermon date descending;
+2. publishedAt descending;
+3. updatedAt descending.
+
+Do not filter previous companions by member progress state.
+
+Do not require them to be started.
+
+Do not require them to be current.
+
+====================================================
+TASK 4 — CHECK STATUS FIELD MISMATCHES
+====================================================
+
+Inspect whether Jesus at the Center uses a different status representation.
+
+Examples:
+
+- "published"
+- "PUBLISHED"
+- status enum
+- isPublished boolean
+- approved state
+- publishedAt without status
+- source Sermon published while Companion remains Draft
+- Companion published while entries remain Draft
+
+Normalize the query to use the project’s canonical Companion publication state.
+
+Do not infer Companion publication from the source Sermon status.
+
+The member tab displays Sermon Companions, so Companion status and entry status are decisive.
+
+====================================================
+TASK 5 — CHECK MEMBER VISIBILITY
+====================================================
+
+Inspect whether Jesus at the Center is missing or false for:
+
+memberVisible
+
+If the editor publish flow does not set or preserve this field correctly, fix the canonical publish logic.
+
+Published Sermon Companions intended for the member library should receive the established member-visible default.
+
+Do not make Draft content visible.
+
+Do not require an obscure admin-only field that the pastor cannot control.
+
+If a visibility control exists, ensure it is clear and preserved during Save, Publish and Unpublish.
+
+====================================================
+TASK 6 — CHECK PUBLISHED ENTRIES
+====================================================
+
+Confirm whether the Companion’s five generated days are:
+
+- Draft;
+- Published;
+- mixed status.
+
+If the Companion itself is Published but none of its days are Published, it is correctly ineligible under the current rules.
+
+In that case:
+
+- clearly identify this as the root cause;
+- ensure the Companion editor shows the day publication state;
+- provide an explicit action to publish reviewed Companion entries;
+- do not silently publish them without confirmation.
+
+If the days are already Published, fix the query that is excluding them.
+
+====================================================
+TASK 7 — FIX THE DISCOVERY ENDPOINT
+====================================================
+
+Inspect the actual member endpoint used by the Next Steps Sermon Companions tab.
+
+Ensure it retrieves all eligible published Companion records.
+
+Do not use a query limited to:
+
+- isCurrent = true;
+- limit 1;
+- active only;
+- started by member only;
+- this week only;
+- one specific sermon ID.
+
+The query should fetch the full eligible list, then separate current and previous.
+
+Suggested server flow:
+
+eligibleCompanions = fetch all eligible published companions
+
+current = eligibleCompanions.find(item => item.isCurrent)
+
+previous = eligibleCompanions
+  .filter(item => item.id !== current?.id)
+  .sort(newestFirst)
+
+Return both groups.
+
+====================================================
+TASK 8 — FIX FRONTEND RENDERING
+====================================================
+
+In the Sermon Companions tab:
+
+If currentSermonCompanion exists, render:
+
+This Week’s Sermon
+
+[featured card]
+
+If previousSermonCompanions.length > 0, render:
+
+Previous Sermon Companions
+
+[card list]
+
+Do not hide Previous Sermon Companions because a current companion exists.
+
+Do not use an else branch such as:
+
+if current exists
+  show current
+else
+  show previous
+
+Both sections may render on the same page.
+
+Do not collapse the previous list behind a missing button.
+
+====================================================
+TASK 9 — CARD ROUTING
+====================================================
+
+The Jesus at the Center card must use:
+
+- the real Companion ID;
+- the correct member detail route;
+- the correct member progress state.
+
+It should show:
+
+Begin Sermon Companion
+
+if not started.
+
+Continue Sermon Companion
+
+if in progress.
+
+Review Today
+
+if completed for the current available day.
+
+Do not hide the card because the member has not started it.
+
+====================================================
+TASK 10 — CACHE INVALIDATION
+====================================================
+
+When a Sermon Companion is:
+
+- published;
+- unpublished;
+- marked current;
+- unmarked current;
+- deleted;
+- its entries are published or unpublished;
+
+invalidate the member Next Steps Sermon Companions query.
+
+The member page must update after refresh and ideally without requiring sign-out.
+
+Do not allow a stale cached response containing only one Companion to persist.
+
+====================================================
+TASK 11 — TEST THE EXACT CURRENT RECORDS
+====================================================
+
+Use:
+
+Current Companion:
+God’s Kindness Restores the Broken
+
+Second published Companion:
+Jesus at the Center
+
+Verify:
+
+✓ God’s Kindness Restores the Broken appears under This Week’s Sermon.
+
+✓ Jesus at the Center appears under Previous Sermon Companions.
+
+✓ Jesus at the Center is not duplicated in the featured section.
+
+✓ Both cards use real Companion IDs.
+
+✓ Jesus at the Center can be opened.
+
+✓ Begin Sermon Companion works.
+
+✓ Progress is created in the Sermon Companion progress system.
+
+✓ Refresh preserves both cards.
+
+✓ Unpublishing Jesus at the Center removes it.
+
+✓ Republishing Jesus at the Center restores it.
+
+✓ Marking Jesus at the Center as This Week’s Sermon moves it to the featured section.
+
+✓ The previous current Companion moves into Previous Sermon Companions.
+
+✓ No progress is deleted during the switch.
+
+✓ Draft Companions remain hidden.
+
+✓ Companions with zero published entries remain hidden.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not solve this by adding a hard-coded second card.
+
+Do not require the pastor to create the Companion again.
+
+Do not redesign Next Steps.
+
+Do not remove the current-week featured section.
+
+Do not hide old published Companions.
+
+The root rule is:
+
+This Week’s Sermon is featured.
+
+All other eligible published Sermon Companions remain browseable underneath it.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact root cause;
+2. whether Jesus at the Center was excluded by status, visibility, entry publication, API query or frontend rendering;
+3. the canonical eligibility rule now used;
+4. the endpoint/query fixed;
+5. the files changed;
+6. the returned current and previous Companion IDs;
+7. the result of every test above;
+8. any final manual test.

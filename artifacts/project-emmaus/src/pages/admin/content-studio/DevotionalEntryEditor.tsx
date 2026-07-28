@@ -1,8 +1,11 @@
 /**
  * DevotionalEntryEditor — edit a single devotional entry (day).
  *
- * Left panel:  all text fields + status/publish controls
- * Right panel: live DevotionalReading preview
+ * Uses EmmausContentEditor for the shared two-panel layout:
+ *   Left panel:  all text fields + ContentStudioToolbar
+ *   Right panel: live DevotionalReading preview (actual member renderer)
+ *
+ * This editor is the approved visual benchmark for all Emmaus day editors.
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
@@ -18,6 +21,7 @@ import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
+import EmmausContentEditor from './EmmausContentEditor';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -29,6 +33,8 @@ interface Props {
 
 export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) {
   const { user } = useAuth();
+  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
+
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -71,11 +77,9 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
     } finally {
       setLoading(false);
     }
-  }, [seriesId, day]);
+  }, [seriesId, day]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
-
-  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
 
   const doSave = useCallback(async (fields: Partial<DevotionalEntry>) => {
     setSaveStatus('saving');
@@ -86,14 +90,13 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
     } catch {
       setSaveStatus('error');
     }
-  }, [seriesId, day]);
+  }, [seriesId, day]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scheduleSave = useCallback((fields: Partial<DevotionalEntry>) => {
     if (autosaveRef.current) clearTimeout(autosaveRef.current);
     autosaveRef.current = setTimeout(() => doSave(fields), 1200);
   }, [doSave]);
 
-  // Build current entry snapshot for save
   const currentFields = (): Partial<DevotionalEntry> => ({
     title, scriptureReference, greeting, considerThis, prayer, nextStep, closing, status,
   });
@@ -106,19 +109,13 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
     };
   }
 
-  const handleTogglePublish = async () => {
-    const next = status === 'Published' ? 'Draft' : 'Published';
-    setStatus(next);
-    await doSave({ ...currentFields(), status: next });
-  };
-
   const handleSaveDraft = async () => {
     setSavingAs('draft');
     setSuccessMsg('');
     setErrorMsg('');
     try {
       await doSave(currentFields());
-      setSuccessMsg('Draft saved successfully.');
+      setSuccessMsg(status === 'Published' ? 'Changes saved successfully.' : 'Draft saved successfully.');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch {
       setErrorMsg('Save failed — please try again.');
@@ -136,6 +133,9 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
       await doSave({ ...currentFields(), status: 'Published' });
       setSuccessMsg('Published successfully.');
       setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Publish failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
     } finally {
       setSavingAs(null);
     }
@@ -149,6 +149,9 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
       await doSave({ ...currentFields(), status: 'Draft' });
       setSuccessMsg('Unpublished successfully.');
       setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Unpublish failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
     } finally {
       setSavingAs(null);
     }
@@ -175,49 +178,35 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
 
   const seriesTitle = seriesData?.title ?? '';
 
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300";
+  const textareaCls = `${inputCls} resize-none`;
+
   return (
-    <div className="flex flex-col h-full min-h-0 bg-gray-50">
-
-      {/* Shared toolbar */}
-      <ContentStudioToolbar
-        onBack={onBack}
-        title={seriesTitle || 'Daily Devotionals'}
-        subtitle={`Day ${day}`}
-        status={status}
-        isSaving={savingAs === 'draft'}
-        isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
-        successMessage={successMsg}
-        onSaveDraft={handleSaveDraft}
-        onPublish={handlePublish}
-        onUnpublish={handleUnpublish}
-        onDelete={() => setConfirmDelete(true)}
-        errorMessage={errorMsg}
-      />
-
-      {/* Delete confirmation */}
-      {confirmDelete && (
-        <ConfirmDialog
-          title="Delete Day?"
-          message={`Day ${day} will be permanently deleted. This cannot be undone.`}
-          confirmLabel={deleting ? 'Deleting…' : 'Delete Permanently'}
-          danger
-          onConfirm={handleDelete}
-          onCancel={() => setConfirmDelete(false)}
+    <EmmausContentEditor
+      toolbar={
+        <ContentStudioToolbar
+          onBack={onBack}
+          title={seriesTitle || 'Daily Devotionals'}
+          subtitle={`Day ${day}`}
+          status={status}
+          isSaving={savingAs === 'draft'}
+          isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
+          successMessage={successMsg}
+          errorMessage={errorMsg}
+          onSaveDraft={handleSaveDraft}
+          onPublish={handlePublish}
+          onUnpublish={handleUnpublish}
+          onDelete={() => setConfirmDelete(true)}
         />
-      )}
-
-      {/* ── Editor panel ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
-      <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
-
-        {/* Fields */}
+      }
+      fields={
         <div className="flex-1 p-6 space-y-5 max-w-2xl">
           <Field label="Title">
             <input
               value={title}
               onChange={e => patch(setTitle, 'title')(e.target.value)}
               placeholder="e.g. When God Restores"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              className={inputCls}
             />
           </Field>
 
@@ -226,7 +215,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               value={scriptureReference}
               onChange={e => patch(setScriptureReference, 'scriptureReference')(e.target.value)}
               placeholder="Psalm 23:1-6"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+              className={inputCls}
             />
             <p className="mt-1 text-[11px] text-gray-400">e.g. Psalm 23:1-6 or John 15:1-11</p>
           </Field>
@@ -237,7 +226,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               onChange={e => patch(setGreeting, 'greeting')(e.target.value)}
               rows={3}
               placeholder="Good morning, [name]. Today we begin…"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              className={textareaCls}
             />
             <p className="mt-1 text-[11px] text-gray-400">Use [name] — it will be replaced with the member's first name.</p>
           </Field>
@@ -248,7 +237,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               onChange={e => patch(setConsiderThis, 'considerThis')(e.target.value)}
               rows={6}
               placeholder="When the Psalmist wrote these words…"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-y"
+              className={`${inputCls} resize-y`}
             />
             <p className="mt-1 text-[11px] text-gray-400">The devotional reflection — 2–4 paragraphs.</p>
           </Field>
@@ -259,7 +248,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               onChange={e => patch(setPrayer, 'prayer')(e.target.value)}
               rows={4}
               placeholder="Lord, today I come to you with…"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              className={textareaCls}
             />
             <p className="mt-1 text-[11px] text-gray-400">Written in first person for the member to pray aloud.</p>
           </Field>
@@ -270,7 +259,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               onChange={e => patch(setNextStep, 'nextStep')(e.target.value)}
               rows={2}
               placeholder="Take five minutes today to…"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              className={textareaCls}
             />
             <p className="mt-1 text-[11px] text-gray-400">One concrete action for today.</p>
           </Field>
@@ -281,18 +270,13 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
               onChange={e => patch(setClosing, 'closing')(e.target.value)}
               rows={2}
               placeholder="Walk with grace today."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              className={textareaCls}
             />
             <p className="mt-1 text-[11px] text-gray-400">Optional send-off at the bottom of the reading.</p>
           </Field>
         </div>
-      </div>
-
-      {/* ── Preview panel ─────────────────────────────────────────────────────── */}
-      <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
-        <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
-        </div>
+      }
+      preview={
         <DevotionalReading
           seriesTitle={seriesTitle}
           dayNumber={day}
@@ -307,8 +291,19 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
           previewMode
           actionButton={<PreviewDevotionalContinueButton />}
         />
-      </div>
-      </div>{/* end flex-1 min-h-0 two-panel wrapper */}
-    </div>
+      }
+      dialogs={
+        confirmDelete ? (
+          <ConfirmDialog
+            title="Delete Day?"
+            message={`Day ${day} will be permanently deleted. This cannot be undone.`}
+            confirmLabel={deleting ? 'Deleting…' : 'Delete Permanently'}
+            danger
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        ) : null
+      }
+    />
   );
 }

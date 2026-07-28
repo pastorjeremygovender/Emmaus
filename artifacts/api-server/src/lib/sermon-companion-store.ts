@@ -33,6 +33,7 @@ export interface Companion {
   title: string;
   numberOfDays: number;
   status: string;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
   entries?: CompanionEntry[];
@@ -114,6 +115,7 @@ export async function createCompanion(data: {
     title: data.title,
     numberOfDays: data.numberOfDays ?? 5,
     status: 'Draft',
+    publishedAt: null,
     createdAt: now,
     updatedAt: now,
     entries: entryRows,
@@ -167,6 +169,10 @@ export async function updateCompanion(
     }
     sets.push(`status = $${idx++}`);
     vals.push(patch.status);
+    // Set published_at the first time the companion is published; never clear it on unpublish.
+    if (patch.status === 'Published') {
+      sets.push(`published_at = COALESCE(published_at, NOW())`);
+    }
   }
   if (!sets.length) return;
   sets.push(`updated_at = NOW()`);
@@ -274,9 +280,94 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     title: String(row.title ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
     status: String(row.status ?? 'Draft'),
+    publishedAt: row.published_at ? String(row.published_at) : null,
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
+}
+
+// ─── Batch publish helpers ─────────────────────────────────────────────────────
+
+/**
+ * Publish all entries belonging to a companion in a single UPDATE.
+ * Called atomically from the publish endpoint so the companion and its entries
+ * become visible to members at the same time.
+ */
+export async function publishAllEntries(companionId: string): Promise<void> {
+  await pool.query(
+    `UPDATE sermon_companion_entry
+     SET status = 'Published', updated_at = NOW()
+     WHERE companion_id = $1`,
+    [companionId],
+  );
+}
+
+// ─── Member discovery ──────────────────────────────────────────────────────────
+
+/**
+ * Returns all Published companions that have at least one Published entry,
+ * ordered by publication date descending (most-recent first).
+ * Used by the member Next Steps endpoint.
+ */
+export async function listPublishedSermonCompanions(): Promise<
+  Array<Companion & { publishedEntryCount: number }>
+> {
+  const res = await pool.query(`
+    SELECT sc.*,
+           COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
+    FROM   sermon_companion sc
+    LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
+    WHERE  sc.status = 'Published'
+    GROUP  BY sc.id
+    HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
+    ORDER  BY COALESCE(sc.published_at, sc.updated_at) DESC
+  `);
+  return res.rows.map(row => ({
+    ...rowToCompanion(row),
+    publishedEntryCount: Number(row.published_entry_count ?? 0),
+  }));
+}
+
+/**
+ * Fetch a single Published companion with only its Published entries.
+ * Used by the member reading route — returns null when the companion is Draft
+ * so unpublished content is never exposed to members.
+ */
+export async function getPublicCompanionById(
+  id: string,
+): Promise<(Companion & { entries: CompanionEntry[] }) | null> {
+  const cRes = await pool.query(
+    `SELECT * FROM sermon_companion WHERE id = $1 AND status = 'Published'`,
+    [id],
+  );
+  if (!cRes.rows[0]) return null;
+  const companion = rowToCompanion(cRes.rows[0]);
+  const eRes = await pool.query(
+    `SELECT * FROM sermon_companion_entry
+     WHERE companion_id = $1 AND status = 'Published'
+     ORDER BY day_number ASC`,
+    [id],
+  );
+  return { ...companion, entries: eRes.rows.map(rowToEntry) };
+}
+
+/**
+ * Return all sermon_companion_progress rows for a user, keyed by companionId.
+ * Used to personalise the Next Steps response in bulk instead of N individual queries.
+ */
+export async function getAllSermonCompanionProgress(
+  userId: string,
+): Promise<Record<string, CompanionProgress>> {
+  const res = await pool.query(
+    `SELECT * FROM sermon_companion_progress WHERE user_id = $1`,
+    [userId],
+  );
+  const result: Record<string, CompanionProgress> = {};
+  for (const row of res.rows) {
+    const p = rowToProgress(row);
+    result[p.companionId] = p;
+  }
+  return result;
 }
 
 function rowToEntry(row: Record<string, unknown>): CompanionEntry {

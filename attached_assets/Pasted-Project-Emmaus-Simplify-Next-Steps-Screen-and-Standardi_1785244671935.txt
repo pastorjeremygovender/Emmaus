@@ -1,0 +1,160 @@
+Project Emmaus — Simplify Next Steps Screen and Standardize Primary Buttons
+
+We are refining the member-facing Next Steps screen.
+
+The current page still contains unnecessary navigation text and inconsistent primary button styling.
+
+The goal is to simplify the page and make every primary action immediately obvious.
+
+==================================================
+1. REMOVE REDUNDANT SECTION
+==================================================
+
+Remove completely:
+
+YOUR NEXT STEPS
+
+Explore Next Steps →
+
+These add no value because the member is already on the Next Steps page.
+
+Do not replace them with another heading.
+
+After removing them, allow the content cards to flow naturally with consistent vertical spacing.
+
+==================================================
+2. STANDARDIZE PRIMARY BUTTONS
+==================================================
+
+Every primary action on the Next Steps page should use the same Emmaus primary button.
+
+Current examples:
+
+Begin Devotional
+
+Continue
+
+Begin Sermon Companion
+
+Review Today
+
+Resume Journey
+
+All of these should use the identical primary button component.
+
+Requirements:
+
+✓ Emmaus Green background
+✓ White text
+✓ Same height
+✓ Same border radius
+✓ Same font weight
+✓ Same hover state
+✓ Same pressed state
+✓ Same disabled state
+✓ Full card width
+✓ Consistent top margin
+
+There should no longer be white outlined buttons for primary actions.
+
+==================================================
+3. APPLY TO CURRENT SCREEN
+==================================================
+
+The following buttons should all become the same green primary button:
+
+Psalms Daily Devotional
+
+Begin Devotional
+
+God's Kindness Restores the Broken
+
+Continue
+
+Any future:
+
+Begin Journey
+
+Resume Journey
+
+Begin Sermon Companion
+
+Review Today
+
+Continue Journey
+
+must automatically use the same component.
+
+==================================================
+4. CREATE SHARED COMPONENT
+==================================================
+
+If one does not already exist, create a shared component such as:
+
+PrimaryActionButton
+
+or reuse the existing Emmaus Primary Button everywhere.
+
+Future content should inherit this automatically.
+
+==================================================
+5. SPACING
+==================================================
+
+After removing the unnecessary "Your Next Steps" section, rebalance the page spacing.
+
+The cards should feel like one continuous list.
+
+Example:
+
+Daily Devotional
+
+(card)
+
+24–32px spacing
+
+This Week's Sermon Companion
+
+(card)
+
+24–32px spacing
+
+Journeys (when present)
+
+(card)
+
+Avoid large empty gaps.
+
+==================================================
+6. DO NOT CHANGE
+==================================================
+
+Do not alter:
+
+• card layout
+• content
+• navigation
+• progress logic
+• completion logic
+• database
+• APIs
+
+This is purely a visual simplification and button standardization.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+✓ "Your Next Steps" removed.
+
+✓ "Explore Next Steps" removed.
+
+✓ Psalms Daily Devotional button is green.
+
+✓ Sermon Companion button is green.
+
+✓ All future primary actions use the same shared green button.
+
+✓ Button sizing is identical across all Next Steps cards.
+
+✓ Vertical spacing is balanced after removing the unnecessary section.

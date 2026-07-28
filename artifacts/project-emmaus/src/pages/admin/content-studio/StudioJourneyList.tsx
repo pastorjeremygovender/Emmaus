@@ -1,64 +1,51 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
-  Plus, Search, BookOpen, Layers, Filter, X,
-  Heart, GraduationCap, Clock, Tag, MoreHorizontal,
+  Plus, Search, BookOpen, Layers, X,
+  Heart, GraduationCap, Tag, MoreHorizontal,
   Archive, Copy, Download, Trash2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey } from '@/lib/journeys-api';
 import { StatusBadge } from '../shared';
+import ContentStudioListItem from './ContentStudioListItem';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
 import NewJourneyModal from './NewJourneyModal';
 import DeleteJourneyDialog from './DeleteJourneyDialog';
 
 interface Props {
   collectionId?: string;
-  /** When true, show only journeys that have no collection assigned. */
   standaloneOnly?: boolean;
   autoOpenNew?: boolean;
   onEdit: (id: string) => void;
   onLegacyEdit: (id: string) => void;
 }
 
-const STATUS_TABS = ['All', 'Draft', 'Pastoral Review', 'Approved', 'Published', 'Archived'];
+const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
+
 const TYPE_OPTIONS = ['All Types', 'core', 'companion', 'series', 'course'];
 
 const TYPE_CONFIG: Record<string, { Icon: React.ElementType; color: string; bg: string; label: string }> = {
-  core:      { Icon: BookOpen,       color: 'text-teal-600',   bg: 'bg-teal-50',   label: 'Core'      },
-  companion: { Icon: Heart,          color: 'text-rose-500',   bg: 'bg-rose-50',   label: 'Companion' },
-  series:    { Icon: Layers,         color: 'text-purple-600', bg: 'bg-purple-50', label: 'Series'    },
+  core:      { Icon: BookOpen,      color: 'text-teal-600',   bg: 'bg-teal-50',   label: 'Core'      },
+  companion: { Icon: Heart,         color: 'text-rose-500',   bg: 'bg-rose-50',   label: 'Companion' },
+  series:    { Icon: Layers,        color: 'text-purple-600', bg: 'bg-purple-50', label: 'Series'    },
   course:    { Icon: GraduationCap, color: 'text-amber-600',  bg: 'bg-amber-50',  label: 'Course'    },
 };
-
-function JourneyTypeCell({ type }: { type: string }) {
-  const cfg = TYPE_CONFIG[type] ?? TYPE_CONFIG.core;
-  const { Icon, color, bg } = cfg;
-  return (
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
-      <Icon size={16} className={color} />
-    </div>
-  );
-}
 
 export default function StudioJourneyList({ collectionId, standaloneOnly, autoOpenNew, onEdit, onLegacyEdit }: Props) {
   const { journeys, refreshJourneys, updateJourney, duplicateJourney, permanentDeleteJourney } = useJourney();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superAdmin';
 
-  const [query, setQuery] = useState('');
-  const [statusTab, setStatusTab] = useState('All');
+  const [query, setQuery]           = useState('');
+  const [statusTab, setStatusTab]   = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState('All Types');
-  const [showNew, setShowNew] = useState(!!autoOpenNew);
-
-  // Action menu state
+  const [showNew, setShowNew]       = useState(!!autoOpenNew);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Delete dialog state
+  const menuRef                     = useRef<HTMLDivElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<Journey | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState('');
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -71,12 +58,9 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
 
   const filtered = useMemo(() => {
     let list = journeys as Journey[];
-    // Daily Rhythm journeys are managed separately in the Daily Rhythm tab — exclude them here.
     list = list.filter(j => j.journeyType !== 'daily-rhythm');
-    // Companion journeys are managed inside Sermon Companions — exclude them here.
     list = list.filter(j => j.journeyType !== 'companion');
     if (collectionId) list = list.filter(j => (j as any).collectionId === collectionId);
-    // Standalone subtab: show only journeys without a collection assigned.
     if (standaloneOnly) list = list.filter(j => !(j as any).collectionId);
     if (statusTab !== 'All') list = list.filter(j => j.status === statusTab);
     if (typeFilter !== 'All Types') list = list.filter(j => j.journeyType === typeFilter);
@@ -89,25 +73,17 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
       );
     }
     return [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
-  }, [journeys, query, statusTab, typeFilter, collectionId]);
+  }, [journeys, query, statusTab, typeFilter, collectionId, standaloneOnly]);
 
   const handleCreated = useCallback((id: string) => {
     setShowNew(false);
-    // Navigate immediately — addJourney already added the new Journey to context.
-    // Fire refresh in the background to keep the list fresh; do not await it
-    // before opening the editor (awaiting caused a race where the editor opened
-    // before React applied the queued setJourneys state update).
     onEdit(id);
     refreshJourneys?.();
   }, [onEdit, refreshJourneys]);
 
   const handleArchive = async (j: Journey) => {
     setOpenMenuId(null);
-    try {
-      await updateJourney({ ...j, status: 'Archived' } as any);
-    } catch (err) {
-      console.error('Archive failed:', err);
-    }
+    try { await updateJourney({ ...j, status: 'Archived' } as any); } catch { /* ignore */ }
   };
 
   const handleDuplicate = async (j: Journey) => {
@@ -116,9 +92,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
       const copy = await duplicateJourney(j.id);
       await refreshJourneys?.();
       onEdit(copy.id);
-    } catch (err) {
-      console.error('Duplicate failed:', err);
-    }
+    } catch { /* ignore */ }
   };
 
   const handleExport = (j: Journey) => {
@@ -141,73 +115,56 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
+  const pageTitle = standaloneOnly ? 'Standalone Journeys' : 'Journeys';
+  const pageDescription = standaloneOnly
+    ? 'Journeys without a collection assignment.'
+    : 'All journeys in this collection.';
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex-shrink-0 px-6 py-4 bg-white border-b border-gray-100 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search journeys…"
-              className="w-full pl-9 pr-8 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-300 text-gray-700"
-          >
-            {TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-          <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors flex-shrink-0"
-          >
+    <>
+      <ContentStudioListPage
+        title={pageTitle}
+        description={pageDescription}
+        newButton={
+          <button onClick={() => setShowNew(true)} className={newBtnCls}>
             <Plus size={14} /> New Journey
           </button>
-        </div>
-
-        {/* Status tabs */}
-        <div className="flex gap-1 overflow-x-auto pb-0.5 -mb-0.5 scrollbar-none">
-          {STATUS_TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setStatusTab(tab)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors ${
-                statusTab === tab
-                  ? 'bg-teal-600 text-white'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-              }`}
+        }
+        toolbar={
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search journeys…"
+                className="w-full pl-9 pr-8 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {/* Type filter */}
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="text-sm border border-gray-200 rounded-xl px-3 py-2.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-300 text-gray-700"
             >
-              {tab}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Success banner */}
-      {deleteSuccess && (
-        <div className="flex-shrink-0 mx-6 mt-3 px-4 py-3 bg-green-50 border border-green-100 rounded-xl text-sm text-green-700 font-medium">
-          ✓ {deleteSuccess}
-        </div>
-      )}
-
-      {/* Journey list */}
-      <div className="flex-1 overflow-y-auto bg-white">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+              {TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+        }
+        filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
+        isEmpty={filtered.length === 0}
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
               <BookOpen size={22} className="text-gray-300" />
             </div>
@@ -228,110 +185,112 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
               </button>
             )}
           </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {filtered.map(j => {
-              const cfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
-              const isMenuOpen = openMenuId === j.id;
-              return (
-                <div
-                  key={j.id}
-                  className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/60 group transition-colors"
-                >
-                  <JourneyTypeCell type={j.journeyType} />
-
-                  {/* Title + meta */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-gray-900 truncate">{j.title}</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.color}`}>
-                        {cfg.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      {j.durationDays > 0 && (
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                          <Clock size={10} /> {j.durationDays} days
-                        </span>
-                      )}
-                      {j.tags && j.tags.length > 0 && (
-                        <span className="text-xs text-gray-400 flex items-center gap-1 truncate">
-                          <Tag size={10} /> {j.tags.slice(0, 2).join(', ')}
-                        </span>
-                      )}
-                      {j.updatedAt && (
-                        <span className="text-xs text-gray-400">
-                          {new Date(j.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <StatusBadge status={j.status} />
-
-                  {/* Actions — appear on hover */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button
-                      onClick={() => onEdit(j.id)}
-                      title="Open in Block Editor"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 text-xs font-medium hover:bg-teal-100 transition-colors"
-                    >
-                      <Layers size={12} /> Edit
-                    </button>
-
-                    {/* ⋮ Action menu */}
-                    <div className="relative" ref={isMenuOpen ? menuRef : undefined}>
-                      <button
-                        onClick={() => setOpenMenuId(isMenuOpen ? null : j.id)}
-                        title="More actions"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                        aria-haspopup="true"
-                        aria-expanded={isMenuOpen}
-                      >
-                        <MoreHorizontal size={14} />
-                      </button>
-
-                      {isMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-[176px]">
-                          <button
-                            onClick={() => handleArchive(j)}
-                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Archive size={14} className="text-gray-400" /> Archive Journey
-                          </button>
-                          <button
-                            onClick={() => handleDuplicate(j)}
-                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Copy size={14} className="text-gray-400" /> Duplicate Journey
-                          </button>
-                          <button
-                            onClick={() => handleExport(j)}
-                            className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Download size={14} className="text-gray-400" /> Export Journey
-                          </button>
-                          {isSuperAdmin && (
-                            <>
-                              <div className="my-1 border-t border-gray-100" />
-                              <button
-                                onClick={() => { setOpenMenuId(null); setDeleteTarget(j); }}
-                                className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 size={14} /> Delete Journey…
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        }
+      >
+        {deleteSuccess && (
+          <div className="-mt-1 mb-1 px-4 py-3 bg-green-50 border border-green-100 rounded-xl text-sm text-green-700 font-medium">
+            ✓ {deleteSuccess}
           </div>
         )}
-      </div>
+
+        {filtered.map(j => {
+          const cfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
+          const isMenuOpen = openMenuId === j.id;
+          const metaParts: string[] = [];
+          if (j.durationDays > 0) metaParts.push(`${j.durationDays} days`);
+          if (j.updatedAt) metaParts.push(new Date(j.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+
+          return (
+            <ContentStudioListItem
+              key={j.id}
+              iconBg={cfg.bg}
+              iconContent={<cfg.Icon size={16} className={cfg.color} />}
+              title={
+                <span className="flex items-center gap-2">
+                  <span className="truncate">{j.title}</span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${cfg.bg} ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
+                </span>
+              }
+              meta={
+                <span className="flex items-center gap-2 flex-wrap">
+                  {metaParts.map((p, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <span className="text-gray-300">·</span>}
+                      <span>{p}</span>
+                    </React.Fragment>
+                  ))}
+                  {j.tags && j.tags.length > 0 && (
+                    <>
+                      {metaParts.length > 0 && <span className="text-gray-300">·</span>}
+                      <span className="flex items-center gap-1">
+                        <Tag size={10} />
+                        {j.tags.slice(0, 2).join(', ')}
+                      </span>
+                    </>
+                  )}
+                </span>
+              }
+              status={<StatusBadge status={j.status} />}
+              onClick={() => onEdit(j.id)}
+              actions={
+                <>
+                  <button
+                    onClick={() => onEdit(j.id)}
+                    className={`${actionBtnCls} flex items-center gap-1`}
+                  >
+                    <Layers size={11} /> Edit
+                  </button>
+                  <div className="relative" ref={isMenuOpen ? menuRef : undefined}>
+                    <button
+                      onClick={() => setOpenMenuId(isMenuOpen ? null : j.id)}
+                      className={menuBtnCls}
+                      aria-haspopup="true"
+                      aria-expanded={isMenuOpen}
+                    >
+                      <MoreHorizontal size={15} />
+                    </button>
+                    {isMenuOpen && (
+                      <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-[176px]">
+                        <button
+                          onClick={() => handleArchive(j)}
+                          className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Archive size={14} className="text-gray-400" /> Archive Journey
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(j)}
+                          className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Copy size={14} className="text-gray-400" /> Duplicate Journey
+                        </button>
+                        <button
+                          onClick={() => handleExport(j)}
+                          className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <Download size={14} className="text-gray-400" /> Export Journey
+                        </button>
+                        {isSuperAdmin && (
+                          <>
+                            <div className="my-1 border-t border-gray-100" />
+                            <button
+                              onClick={() => { setOpenMenuId(null); setDeleteTarget(j); }}
+                              className="flex items-center gap-2.5 w-full text-left px-3.5 py-2 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 size={14} /> Delete Journey…
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              }
+            />
+          );
+        })}
+      </ContentStudioListPage>
 
       {showNew && (
         <NewJourneyModal
@@ -347,6 +306,6 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
           onCancel={() => setDeleteTarget(null)}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -13,6 +13,20 @@ export async function runStartupMigrations(): Promise<void> {
   // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
   // Three tables for AI-generated sermon companions. sermon_id is text (not FK)
   // because sermons are stored in a JSON file, not a DB table.
+  // ── sermon_companion.published_at column (2026-07) ──────────────────────────
+  // Added after initial launch so companions can be sorted by publication date
+  // in the member Next Steps endpoint.  ALTER TABLE … ADD COLUMN IF NOT EXISTS
+  // is a no-op on subsequent boots.
+  try {
+    await pool.query(`
+      ALTER TABLE sermon_companion
+        ADD COLUMN IF NOT EXISTS published_at timestamp;
+    `);
+    logger.info("Startup migration: sermon_companion.published_at column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: sermon_companion.published_at column failed (non-fatal)");
+  }
+
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sermon_companion (

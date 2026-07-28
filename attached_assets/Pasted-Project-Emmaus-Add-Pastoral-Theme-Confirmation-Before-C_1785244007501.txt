@@ -1,0 +1,330 @@
+Project Emmaus — Add Pastoral Theme Confirmation Before Companion Generation
+
+We are improving the Sermon Companion generation workflow.
+
+The goal is to ensure every Companion Journey reflects the pastor's intended message, not merely the words most frequently found in the transcript.
+
+This becomes a permanent part of the Sermon Companion generation pipeline.
+
+==================================================
+NEW GENERATION WORKFLOW
+==================================================
+
+Current workflow:
+
+Paste YouTube URL
+↓
+
+Extract metadata
+↓
+
+Retrieve transcript
+↓
+
+Detect sermon boundaries
+↓
+
+Generate Companion
+
+Replace this with:
+
+Paste YouTube URL
+↓
+
+Extract metadata
+↓
+
+Retrieve transcript
+↓
+
+Detect sermon boundaries
+
+↓
+
+AI analyses ONLY the sermon portion
+
+↓
+
+Generate ONE concise sermon summary
+
+↓
+
+Pastoral Confirmation
+
+↓
+
+Generate Companion Journey
+
+==================================================
+PASTORAL CONFIRMATION STEP
+==================================================
+
+After sermon boundaries have been identified, pause the workflow.
+
+Do NOT generate the Companion yet.
+
+Instead show:
+
+-----------------------------------
+
+Main Theme
+
+"I believe this sermon is about:
+
+Putting Jesus at the centre of every area of life."
+
+-----------------------------------
+
+Two actions:
+
+✓ That's Correct
+
+✏ Edit Main Theme
+
+==================================================
+THEME REQUIREMENTS
+==================================================
+
+The AI-generated theme should:
+
+• be one sentence only
+
+• describe the BIG IDEA
+
+• avoid buzzwords
+
+• avoid theological jargon
+
+• sound like something the pastor himself would say
+
+Good:
+
+"Following Jesus means putting Him first in every area of life."
+
+Good:
+
+"God's kindness restores people who believe they are beyond hope."
+
+Good:
+
+"The Christian life begins when we trust Jesus rather than ourselves."
+
+Avoid:
+
+"Christocentric Kingdom Discipleship Paradigm"
+
+Avoid:
+
+"Exploring covenantal implications of..."
+
+Avoid:
+
+lists
+
+Avoid:
+
+multiple ideas
+
+Avoid:
+
+paragraphs
+
+==================================================
+EDIT MODE
+==================================================
+
+If the pastor clicks
+
+Edit Main Theme
+
+replace the sentence with an editable textbox.
+
+The pastor may rewrite it entirely.
+
+Example:
+
+Original
+
+God calls us to trust Him.
+
+Edited
+
+Putting Jesus at the centre changes everything.
+
+Buttons:
+
+Save Theme
+
+Cancel
+
+==================================================
+LOCK THE THEME
+==================================================
+
+Once the pastor confirms:
+
+That sentence becomes the canonical theme for generation.
+
+Store it with the sermon.
+
+Example:
+
+mainTheme
+
+or
+
+canonicalTheme
+
+The Companion generator must receive that theme as a required input.
+
+==================================================
+GENERATION RULE
+==================================================
+
+The confirmed theme has higher priority than:
+
+• keyword frequency
+
+• repeated phrases
+
+• transcript headings
+
+• title wording
+
+• description wording
+
+The AI should use the confirmed theme as the central thread tying every devotional together.
+
+==================================================
+HOW IT INFLUENCES THE COMPANION
+==================================================
+
+Every generated devotional should naturally reinforce the confirmed theme.
+
+Not by repeating the sentence every day,
+
+but by approaching it from different angles.
+
+Example
+
+Theme:
+
+Putting Jesus at the centre changes everything.
+
+Day 1
+
+Why Jesus belongs at the centre
+
+Day 2
+
+Removing competing priorities
+
+Day 3
+
+Trusting Him in difficult decisions
+
+Day 4
+
+Following Him daily
+
+Day 5
+
+Living with Jesus at the centre
+
+The Companion should feel like one continuous walk.
+
+==================================================
+REGENERATE THEME
+==================================================
+
+Provide a small
+
+Regenerate Theme
+
+link.
+
+This generates another one-sentence suggestion.
+
+The pastor may choose:
+
+✓ Suggestion A
+
+✓ Suggestion B
+
+or
+
+write their own.
+
+==================================================
+SAVE
+==================================================
+
+The confirmed theme should remain editable later.
+
+In the Sermon Editor display:
+
+Main Theme
+
+Putting Jesus at the centre changes everything.
+
+Edit
+
+Regenerate
+
+==================================================
+FUTURE USE
+==================================================
+
+This Main Theme should become available throughout Emmaus.
+
+Future features may use it for:
+
+• Journey descriptions
+
+• Companion overview
+
+• Search
+
+• AI recommendations
+
+• Topic grouping
+
+• Church reporting
+
+Therefore store it as a first-class sermon field rather than a temporary prompt.
+
+==================================================
+IMPORTANT
+==================================================
+
+Do not automatically continue after transcript extraction.
+
+Generation pauses until the pastor confirms the theme.
+
+The pastor always has the final word.
+
+Emmaus assists.
+
+The pastor shepherds.
+
+This editorial checkpoint becomes a permanent part of every Sermon Companion generation workflow.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+The feature is complete when:
+
+✓ Emmaus identifies the sermon boundaries.
+
+✓ Emmaus analyses only the sermon section.
+
+✓ Emmaus produces a single concise Main Theme.
+
+✓ The pastor can confirm, edit or regenerate it.
+
+✓ The confirmed theme is stored with the sermon.
+
+✓ Companion generation only begins after confirmation.
+
+✓ Every generated devotional reflects that confirmed Main Theme as its unifying thread.
