@@ -1,0 +1,137 @@
+Project Emmaus — Standardize Member Language Throughout the App
+
+We are establishing a permanent language principle for Emmaus.
+
+Emmaus is not a productivity app.
+
+Emmaus is not a habit tracker.
+
+Emmaus is a gentle companion that invites people to spend time with Jesus.
+
+Every piece of language should reflect this philosophy.
+
+==================================================
+LANGUAGE PRINCIPLE
+==================================================
+
+Avoid command-driven wording.
+
+Avoid instructional wording.
+
+Avoid productivity language.
+
+Avoid wording that makes discipleship feel like completing tasks.
+
+Emmaus should always sound warm, invitational and pastoral.
+
+The app opens content.
+
+Jesus changes lives.
+
+==================================================
+BUTTON STANDARD
+==================================================
+
+Primary buttons should open content rather than instruct behaviour.
+
+Replace wording as follows wherever appropriate.
+
+Begin Devotional
+→ Open Devotional
+
+Begin Journey
+→ Open Journey
+
+Begin Sermon Companion
+→ Open Companion
+
+Begin Day 1
+→ Open Today's Time
+
+Continue Day
+→ Continue
+
+Resume Journey
+→ Continue Journey
+
+Review Today
+→ Review
+
+Review Journey
+→ Review Journey
+
+Only use "Continue" when progress already exists.
+
+Only use "Review" once content has been completed.
+
+==================================================
+CARD HEADINGS
+==================================================
+
+Avoid wording such as
+
+Begin your daily walk
+
+Start your journey
+
+Complete today's lesson
+
+Instead use gentle invitations.
+
+Examples:
+
+Today's time with Jesus is ready.
+
+Spend a few moments with Jesus today.
+
+Continue where you left off.
+
+Your devotional is ready.
+
+This week's sermon companion is ready.
+
+Continue walking with Jesus.
+
+These are examples only.
+
+The principle matters more than the exact wording.
+
+==================================================
+IMPORTANT
+==================================================
+
+Do not change navigation.
+
+Do not change progress logic.
+
+Do not change completion logic.
+
+Only update member-facing wording.
+
+==================================================
+SPECIAL CASE
+==================================================
+
+Daily Rhythm is compulsory.
+
+Members should never see
+
+"Begin your daily walk"
+
+because opening Emmaus already means they have begun.
+
+Instead the card should simply invite them into today's time with Jesus.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+✓ Emmaus sounds like a caring mentor.
+
+✓ Buttons open content instead of commanding behaviour.
+
+✓ No productivity language.
+
+✓ No checklist language.
+
+✓ The tone is consistently gentle, invitational and pastoral across the entire member experience.

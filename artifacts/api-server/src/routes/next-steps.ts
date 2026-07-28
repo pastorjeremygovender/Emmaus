@@ -74,21 +74,21 @@ export interface NextStepsResponse {
 function primaryActionLabel(contentType: ContentType, state: MemberProgressState): string {
   if (contentType === "sermon-devotional") {
     switch (state) {
-      case "not-started": return "Begin Sermon Companion";
-      case "in-progress": return "Continue Sermon Companion";
-      case "completed":   return "Review Today";
+      case "not-started": return "Open Companion";
+      case "in-progress": return "Continue";
+      case "completed":   return "Review";
     }
   }
   if (contentType === "daily-devotional") {
     switch (state) {
-      case "not-started": return "Begin Devotional";
-      case "in-progress": return "Continue Devotional";
-      case "completed":   return "Review Today";
+      case "not-started": return "Open Devotional";
+      case "in-progress": return "Continue";
+      case "completed":   return "Review";
     }
   }
   const noun = contentType === "bible-study" ? "Bible Study" : "Journey";
   switch (state) {
-    case "not-started": return `Begin ${noun}`;
+    case "not-started": return `Open ${noun}`;
     case "in-progress": return `Continue ${noun}`;
     case "completed":   return `Review ${noun}`;
   }
@@ -123,10 +123,17 @@ function buildJourneyItem(
   const state = journeyProgressState(j, allProgress);
   const p = allProgress[j.id];
   const currentDay = p?.currentDay ?? 1;
+
+  // For sermon companions, strip any subtitle appended to the title
+  // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
+  const title = contentType === "sermon-devotional" && j.title.includes(": ")
+    ? j.title.split(": ")[0].trim()
+    : j.title;
+
   return {
     id: j.id,
     contentType,
-    title: j.title,
+    title,
     description: j.description || undefined,
     memberProgressState: state,
     metadata: {
@@ -280,10 +287,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
             : "in-progress";
       }
       const currentDay = prog?.currentDay ?? 1;
+      // Strip any subtitle appended to the companion title by AI generation
+      // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
+      const title = c.title.includes(": ") ? c.title.split(": ")[0].trim() : c.title;
       return {
         id: c.id,
         contentType: "sermon-devotional",
-        title: c.title,
+        title,
         memberProgressState: state,
         metadata: {
           durationDays: c.numberOfDays,

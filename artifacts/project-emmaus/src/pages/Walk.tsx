@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
+import { SermonCompanionCard } from '@/components/SermonCompanionCard';
 import { motion } from 'framer-motion';
 import { CheckCircle2, BookHeart, ChevronRight } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
@@ -115,7 +116,7 @@ function DevotionalCard({
           className="w-full h-12 text-[15px] font-semibold rounded-xl"
           onClick={onReviewToday}
         >
-          Review Today
+          Review
         </Button>
       ) : (
         <Button
@@ -169,7 +170,7 @@ function DevotionalDiscoveryCard({
       >
         {starting
           ? <Loader2 size={16} className="animate-spin" />
-          : 'Begin Devotional'}
+          : 'Open Devotional'}
       </Button>
     </div>
   );
@@ -209,21 +210,21 @@ function FifteenMinutesCard({
   else                                      state = 'ready';
 
   const cfg = {
-    start:    { label: 'Begin Day 1',        variant: 'default'  as const, disabled: false },
+    start:    { label: "Open Today's Time",  variant: 'default'  as const, disabled: false },
     ready:    {
       label:   prog && prog.completedDays.length > 0
-                 ? `Continue Day ${currentDay}`
-                 : 'Begin today',
+                 ? 'Continue'
+                 : "Open Today's Time",
       variant: 'default' as const,
       disabled: false,
     },
-    complete: { label: 'Review today',       variant: 'default'  as const, disabled: false },
+    complete: { label: 'Review',             variant: 'default'  as const, disabled: false },
     tomorrow: { label: 'Available tomorrow', variant: 'default'  as const, disabled: true  },
   }[state];
 
   // Title line — never shows "of Y" for daily-rhythm; shows day number only.
   const titleLine = (() => {
-    if (state === 'start') return 'Begin your daily walk';
+    if (state === 'start') return "Today's time with Jesus is ready.";
     const doneDay = currentDay - 1 > 0 ? currentDay - 1 : currentDay;
     if (state === 'complete' || state === 'tomorrow') {
       return isDailyRhythm ? `Day ${doneDay} — done for today` : `Day ${doneDay} — Complete`;
@@ -289,42 +290,7 @@ function FifteenMinutesCard({
   );
 }
 
-// ─── This Week's Sermon Devotional card ──────────────────────────────────────
-function SermonDevotionalCard({
-  journey,
-  prog,
-  onContinue,
-}: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog: import('@/contexts/JourneyContext').Progress | undefined;
-  onContinue: () => void;
-}) {
-  const started = prog && prog.completedDays.length > 0;
-
-  return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
-      <div className="space-y-0.5">
-        <p className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-          This Week's Sermon Devotional
-        </p>
-        <p className="text-[17px] font-medium text-foreground leading-snug">
-          {journey.sermon?.title ?? journey.title}
-        </p>
-        {started && prog && (
-          <p className="text-[13px] text-muted-foreground pt-0.5">
-            Day {prog.currentDay} of {journey.durationDays}
-          </p>
-        )}
-      </div>
-      <Button
-        className="w-full h-11 rounded-xl text-[15px]"
-        onClick={onContinue}
-      >
-        Continue
-      </Button>
-    </div>
-  );
-}
+// SermonDevotionalCard removed — Walk.tsx now uses the shared SermonCompanionCard component.
 
 // ─── Your Journeys section ────────────────────────────────────────────────────
 // Lists journeys the member has already started.
@@ -640,18 +606,18 @@ export default function Walk() {
           />
         </motion.div>
 
-        {/* ── 3. This Week's Sermon Devotional ───────────────────────────────── */}
+        {/* ── 3. This Week's Sermon Companion ────────────────────────────────── */}
         {companionJourney && (
           <motion.section
-            className="space-y-3"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.15 }}
           >
-            <SermonDevotionalCard
-              journey={companionJourney}
-              prog={companionProg}
-              onContinue={() => goToJourney(companionJourney.id, companionProg ?? { currentDay: 1 })}
+            <SermonCompanionCard
+              title={companionJourney.sermon?.title ?? companionJourney.title}
+              durationDays={companionJourney.durationDays}
+              primaryActionLabel={!companionProg ? 'Open Companion' : 'Continue'}
+              onAction={() => goToJourney(companionJourney.id, companionProg ?? { currentDay: 1 })}
             />
           </motion.section>
         )}

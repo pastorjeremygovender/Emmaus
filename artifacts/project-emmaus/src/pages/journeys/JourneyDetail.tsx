@@ -281,10 +281,10 @@ export default function JourneyDetail() {
 
   const primaryLabel =
     (isGated && !isCompleted) ? 'Complete today\'s 10 Minutes with Jesus' :
-    isActive                   ? 'Continue'       :
-    isPaused                   ? 'Resume'         :
-    isCompleted                ? 'Review Journey' :
-                                 'Start Journey';
+    isActive                   ? 'Continue'          :
+    isPaused                   ? 'Continue Journey'  :
+    isCompleted                ? 'Review Journey'    :
+                                 'Open Journey';
 
   const rhythm = rhythmLabel(journey);
   const time   = timeLabel(journey);

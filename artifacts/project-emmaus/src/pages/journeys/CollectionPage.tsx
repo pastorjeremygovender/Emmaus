@@ -107,10 +107,10 @@ function JourneyCard({
   const time   = timeLabel(journey);
 
   const actionLabel =
-    enrollState === 'active'    ? 'Continue'    :
-    enrollState === 'paused'    ? 'Resume'      :
-    enrollState === 'completed' ? 'Review'      :
-    'Start Journey';
+    enrollState === 'active'    ? 'Continue'         :
+    enrollState === 'paused'    ? 'Continue Journey' :
+    enrollState === 'completed' ? 'Review'           :
+    'Open Journey';
 
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">

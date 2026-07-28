@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
+import { SermonCompanionCard } from '@/components/SermonCompanionCard';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
@@ -295,7 +296,7 @@ function DiscoveryCard({
 }) {
   const dur = dayLabel(item.metadata.durationDays);
   const actionLabel = enrollmentState === 'paused' && item.memberProgressState === 'in-progress'
-    ? `Resume ${CONTENT_TYPE_LABELS[item.contentType]}`
+    ? 'Continue Journey'
     : item.primaryActionLabel;
 
   return (
@@ -373,39 +374,7 @@ function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onA
   );
 }
 
-function SermonCard({ item, onAction, featured = false }: { item: NextStepsItem; onAction: () => void; featured?: boolean }) {
-  const dur = dayLabel(item.metadata.durationDays);
-  return (
-    <div className={`bg-card rounded-2xl border border-border p-5 space-y-3 ${featured ? 'border-primary/20 bg-primary/[0.02]' : ''}`}>
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Mic2 size={12} className="text-primary shrink-0" />
-          <ContentTypeChip contentType="sermon-devotional" />
-          <StatePill state={item.memberProgressState} />
-        </div>
-        <p className={`font-medium text-foreground leading-snug ${featured ? 'text-[18px]' : 'text-[15px]'}`}>
-          {item.title}
-        </p>
-        {item.metadata.subtitle && (
-          <p className="text-[12px] text-muted-foreground font-medium">{item.metadata.subtitle}</p>
-        )}
-        {item.metadata.scriptureReference && (
-          <p className="text-[12px] text-muted-foreground font-medium">{item.metadata.scriptureReference}</p>
-        )}
-        {item.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
-        )}
-        {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
-      </div>
-      <Button
-        className="w-full h-10 rounded-xl text-[14px]"
-        onClick={onAction}
-      >
-        {item.primaryActionLabel}
-      </Button>
-    </div>
-  );
-}
+// SermonCard removed — Journeys.tsx now uses the shared SermonCompanionCard component.
 
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
@@ -509,7 +478,13 @@ function SermonCompanionsPanel({
       {current && (
         <section className="space-y-3">
           <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          <SermonCard item={current} onAction={() => onAction(current)} featured />
+          <SermonCompanionCard
+            title={current.title}
+            description={current.description}
+            durationDays={current.metadata.durationDays}
+            primaryActionLabel={current.primaryActionLabel}
+            onAction={() => onAction(current)}
+          />
         </section>
       )}
 
@@ -518,7 +493,14 @@ function SermonCompanionsPanel({
           <SectionLabel>Previous Sermon Companions</SectionLabel>
           <div className="space-y-3">
             {previous.map(item => (
-              <SermonCard key={item.id} item={item} onAction={() => onAction(item)} />
+              <SermonCompanionCard
+                key={item.id}
+                title={item.title}
+                description={item.description}
+                durationDays={item.metadata.durationDays}
+                primaryActionLabel={item.primaryActionLabel}
+                onAction={() => onAction(item)}
+              />
             ))}
           </div>
         </section>
