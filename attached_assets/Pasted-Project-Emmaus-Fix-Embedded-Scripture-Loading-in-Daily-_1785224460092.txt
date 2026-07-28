@@ -1,0 +1,361 @@
+Project Emmaus — Fix Embedded Scripture Loading in Daily Devotionals
+
+Current status:
+
+- Psalms Daily Devotional is published.
+- Day 1 opens correctly in the member experience.
+- The title, personalised greeting, devotional content, Ask Emmaus and bottom navigation all render correctly.
+- The Scripture reference is stored as “Psalm 1:1”.
+- The member screen displays the selected translation as “The Message”.
+- The embedded Scripture fails and shows:
+  “We couldn’t load today’s Scripture.”
+
+Fix this specific Bible integration blocker completely.
+
+Do not redesign the devotional page.
+Do not change the Daily Devotionals architecture.
+Do not hard-code Scripture text into the devotional content.
+Do not work on Journeys.
+Do not generate additional devotional entries.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+The Daily Devotional reading screen must:
+
+1. Read the stored Scripture reference from the devotional entry.
+2. Resolve the member’s selected Bible translation.
+3. Parse the reference correctly.
+4. Fetch the exact passage through the existing Emmaus Bible service.
+5. Render the Scripture inline.
+6. Keep “Open in My Bible” linked to the same exact reference.
+7. Preserve the devotional page as the return destination.
+
+For the current test entry:
+
+Reference:
+Psalm 1:1
+
+Selected translation:
+The Message
+
+The page should render the corresponding verse from the configured Bible provider, subject to the translation’s licensing and availability.
+
+====================================================
+TASK 1 — TRACE THE FAILURE
+====================================================
+
+Inspect the full Scripture-loading flow used by Daily Devotionals:
+
+- devotional entry Scripture reference
+- member translation preference
+- reference parser
+- Bible API client
+- translation/version identifier mapping
+- request URL or service method
+- API response
+- error handling
+- devotional Scripture renderer
+
+Identify the exact root cause.
+
+Add temporary development logging for:
+
+- raw stored reference
+- normalized reference
+- parsed book
+- parsed chapter
+- parsed verse start
+- parsed verse end
+- member translation label
+- member translation API/version ID
+- Bible service request
+- response status
+- response body shape
+- final rendered passage
+
+Do not expose technical logs to members.
+Remove noisy logs after the fix is verified.
+
+====================================================
+TASK 2 — USE THE EXISTING SHARED BIBLE RENDERER
+====================================================
+
+Daily Devotionals must use the same shared Bible parsing, retrieval and rendering system already used by Daily Rhythm and My Bible.
+
+Do not create a separate devotional-only Bible implementation.
+
+If Daily Devotionals currently use a duplicated or incomplete fetch function, replace it with the existing shared Bible passage service/component.
+
+The shared service should accept values such as:
+
+{
+  reference: "Psalm 1:1",
+  translationId: "<member-selected-version-id>"
+}
+
+and return a normalized result such as:
+
+{
+  reference: "Psalm 1:1",
+  translationName: "The Message",
+  verses: [
+    {
+      number: 1,
+      text: "..."
+    }
+  ]
+}
+
+Use the project’s existing data structures where possible rather than inventing parallel ones.
+
+====================================================
+TASK 3 — FIX REFERENCE PARSING
+====================================================
+
+Confirm that the parser correctly recognizes singular and plural Bible book names, including:
+
+- Psalm 1:1
+- Psalms 1:1
+
+Normalize both to the canonical book identifier expected by the Bible service.
+
+Verify that the parser supports:
+
+- one verse: Psalm 1:1
+- verse range: Psalm 1:1–3
+- full chapter: Psalm 1
+- numbered books such as 1 John 1:5–7
+
+Do not change the stored editorial reference unless normalization is necessary internally.
+
+The visible reference should remain clean and human-readable.
+
+====================================================
+TASK 4 — FIX TRANSLATION MAPPING
+====================================================
+
+Inspect how the displayed translation name “The Message” maps to the Bible provider’s version ID.
+
+The display label must never be sent directly to an API if the provider expects a version code or database ID.
+
+Use the canonical translation record, for example:
+
+{
+  id: "<provider-version-id>",
+  code: "MSG",
+  name: "The Message"
+}
+
+Confirm that:
+
+- the member preference stores or resolves a valid version ID;
+- the devotional renderer receives that ID;
+- the Bible API request uses the correct ID;
+- unavailable or unlicensed translations are handled safely.
+
+Do not assume The Message is available through the configured provider.
+Respect the translation licensing and provider configuration already established in Emmaus.
+
+====================================================
+TASK 5 — DEFAULT TRANSLATION FALLBACK
+====================================================
+
+If the member does not have a valid selected translation:
+
+1. Use the existing Emmaus default Bible translation.
+2. Do not fail with a blank or undefined translation ID.
+3. Do not display “undefined”, “null” or an internal code.
+
+If the stored translation preference points to a translation no longer available:
+
+- fall back safely to the configured default;
+- optionally show a subtle member-facing message only if necessary;
+- do not block the devotional from loading when a licensed default is available.
+
+====================================================
+TASK 6 — FIX API AND RESPONSE HANDLING
+====================================================
+
+Inspect the actual Bible provider response structure.
+
+Ensure the code does not assume the wrong property names, such as:
+
+- response.text when the provider returns response.data.content;
+- response.verses when the provider returns passages;
+- plain JSON when the provider returns HTML-formatted verse content;
+- a single passage object when the provider returns an array.
+
+Normalize the provider response in the shared Bible service before passing it to the UI.
+
+Sanitize any provider-supplied HTML before rendering.
+Preserve verse numbers where supported.
+Do not display raw markup or API metadata.
+
+Handle:
+
+- 200 success
+- 400 invalid reference
+- 401/403 provider authentication or licensing failure
+- 404 unavailable passage/version
+- 429 rate limit
+- network timeout
+- malformed response
+
+====================================================
+TASK 7 — LOADING, SUCCESS AND ERROR STATES
+====================================================
+
+While Scripture is loading, show a clean loading state in the Scripture area.
+
+On success, display:
+
+Today’s Reading
+
+Psalm 1:1
+
+The Message
+
+[embedded Scripture text]
+
+Only show the translation label after a valid passage has loaded.
+
+On failure, display:
+
+Today’s Reading
+
+Psalm 1:1
+
+We’re having trouble loading this passage.
+
+Try Again    Open in My Bible
+
+Do not show the translation label above an error state.
+
+Do not display:
+
+- raw API errors
+- stack traces
+- provider response bodies
+- HTTP status codes
+- “Cannot GET”
+- “Cannot POST”
+- undefined values
+
+The Try Again action must make a genuine new request and update the current state.
+
+====================================================
+TASK 8 — OPEN IN MY BIBLE
+====================================================
+
+Confirm that “Open in My Bible” deep-links to the exact reference:
+
+Psalm 1:1
+
+Use the existing My Bible route and reference format.
+
+Opening My Bible must:
+
+- retain the selected translation;
+- open the exact book, chapter and verse;
+- preserve the devotional return context;
+- return the member to the same devotional entry when Back is used.
+
+Do not send the member to the generic My Bible home screen.
+
+====================================================
+TASK 9 — CACHE AND RETRY BEHAVIOUR
+====================================================
+
+Use the existing Bible passage cache if one exists.
+
+Ensure:
+
+- a failed request is not cached as a permanent empty result;
+- Try Again bypasses or invalidates a failed cache entry;
+- successful passages may be cached using reference plus translation ID;
+- switching translation fetches the correct new passage;
+- stale data from another reference is never displayed.
+
+Suggested cache key:
+
+bible-passage:<translationId>:<normalizedReference>
+
+Use the existing project convention if one already exists.
+
+====================================================
+TASK 10 — VERIFY OTHER BIBLE SURFACES
+====================================================
+
+After fixing Daily Devotionals, verify that the shared change does not break:
+
+- Daily Rhythm embedded Scripture
+- My Bible
+- Open in My Bible deep links
+- member translation selection
+- Scripture range parsing
+
+Do not redesign or expand those surfaces.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Test the existing published entry:
+
+Psalms Daily Devotional
+Day 1
+Blessed Is the One
+Psalm 1:1
+
+Verify all of the following:
+
+✓ “Psalm 1:1” parses successfully.
+
+✓ “Psalms 1:1” also parses successfully.
+
+✓ The member’s selected translation resolves to a valid provider version ID.
+
+✓ A valid fallback translation is used when no preference exists.
+
+✓ The Bible request reaches the correct provider/service.
+
+✓ The response is normalized correctly.
+
+✓ The verse renders inline in the devotional.
+
+✓ The translation label appears only after successful loading.
+
+✓ The loading state appears while waiting.
+
+✓ The error state is clean and contains no raw technical details.
+
+✓ Try Again performs a real retry.
+
+✓ Open in My Bible opens Psalm 1:1.
+
+✓ Back returns to the same devotional page.
+
+✓ Refreshing the devotional still loads the Scripture.
+
+✓ Daily Rhythm Scripture still works.
+
+✓ My Bible still works.
+
+✓ No Scripture text is hard-coded into the devotional record.
+
+Stop only when Psalm 1:1 renders successfully in the member Daily Devotional page, or when you have identified a genuine provider/licensing limitation that prevents The Message from being embedded.
+
+If The Message is unavailable through the configured provider, do not fake support. Use the configured licensed default translation for the test, preserve the member-facing translation rules, and report the limitation clearly.
+
+At completion, report:
+
+1. the root cause;
+2. the reference normalization used;
+3. the translation/version mapping used;
+4. the Bible API or shared service used;
+5. the files changed;
+6. the result of every test above;
+7. any provider or licensing limitation;
+8. any final manual test still required.

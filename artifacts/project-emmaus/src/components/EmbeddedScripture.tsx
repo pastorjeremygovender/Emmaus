@@ -88,13 +88,10 @@ export function EmbeddedScripture({ scripture, returnPath }: EmbeddedScripturePr
 
   return (
     <div>
-      {/* Reference */}
+      {/* Reference — always shown */}
       <p className="text-[18px] font-medium text-foreground leading-snug">
         {parsed.display}
       </p>
-
-      {/* Translation name */}
-      <p className="mt-1 text-[13px] text-muted-foreground">{translationName}</p>
 
       {/* ── Loading ──────────────────────────────────────────────────────── */}
       {loading && (
@@ -108,7 +105,7 @@ export function EmbeddedScripture({ scripture, returnPath }: EmbeddedScripturePr
       {!loading && (error || !chapterData) && (
         <div className="mt-4 space-y-3">
           <p className="text-[15px] text-muted-foreground">
-            We couldn't load today's Scripture.
+            We're having trouble loading this passage.
           </p>
           <div className="flex items-center gap-5">
             <button
@@ -138,26 +135,29 @@ export function EmbeddedScripture({ scripture, returnPath }: EmbeddedScripturePr
       )}
 
       {!loading && chapterData && verses.length > 0 && (
-        <p className="mt-4 text-[17px] text-foreground leading-[1.75]">
-          {verses.map(v => (
-            <span key={v.verse}>
-              <sup className="text-[10px] font-semibold text-primary/60 mr-0.5 select-none">
-                {v.verse}
-              </sup>
-              {v.text}{' '}
-            </span>
-          ))}
-        </p>
-      )}
-
-      {/* ── Open in My Bible — secondary, understated ─────────────────────── */}
-      {!loading && chapterData && verses.length > 0 && bibleUrl && (
-        <button
-          onClick={handleOpenInBible}
-          className="mt-3 text-[14px] text-muted-foreground hover:text-primary hover:underline transition-colors"
-        >
-          Open in My Bible →
-        </button>
+        <>
+          {/* Translation label — only shown after a valid passage loads */}
+          <p className="mt-1 text-[13px] text-muted-foreground">{translationName}</p>
+          <p className="mt-4 text-[17px] text-foreground leading-[1.75]">
+            {verses.map(v => (
+              <span key={v.verse}>
+                <sup className="text-[10px] font-semibold text-primary/60 mr-0.5 select-none">
+                  {v.verse}
+                </sup>
+                {v.text}{' '}
+              </span>
+            ))}
+          </p>
+          {/* Open in My Bible — secondary, understated */}
+          {bibleUrl && (
+            <button
+              onClick={handleOpenInBible}
+              className="mt-3 text-[14px] text-muted-foreground hover:text-primary hover:underline transition-colors"
+            >
+              Open in My Bible →
+            </button>
+          )}
+        </>
       )}
     </div>
   );
