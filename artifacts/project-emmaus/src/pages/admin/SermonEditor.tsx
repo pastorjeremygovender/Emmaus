@@ -19,6 +19,7 @@ import {
   regenerateField,
   saveCompanionEntry,
   getCompanion,
+  ApiError,
   type SermonDraftResult,
   type CompanionEntry,
 } from '@/lib/sermon-generator-api';
@@ -37,7 +38,15 @@ type Props = {
   onOpenCompanion: (journeyId: string, fresh?: boolean) => void;
 };
 
-type Phase = 'url-input' | 'generating' | 'review';
+type Phase = 'url-input' | 'generating' | 'transcript-required' | 'review';
+
+/** Video metadata returned when transcript is unavailable */
+interface TranscriptSource {
+  youtubeUrl: string;
+  videoId: string;
+  title?: string;
+  thumbnailUrl?: string;
+}
 
 const STATUS_SEQ = ['draft', 'review', 'published'] as const;
 
@@ -407,6 +416,96 @@ function GeneratingPhase({ url }: { url: string }) {
   );
 }
 
+// ─── Transcript Fallback Phase ────────────────────────────────────────────────
+
+function TranscriptFallbackPhase({
+  source,
+  onContinue,
+  onBack,
+}: {
+  source: TranscriptSource;
+  onContinue: (transcript: string) => void;
+  onBack: () => void;
+}) {
+  const [transcript, setTranscript] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = () => {
+    if (!transcript.trim() || transcript.trim().split(/\s+/).length < 20) {
+      setError('Please paste the sermon transcript before continuing.');
+      return;
+    }
+    setError('');
+    onContinue(transcript.trim());
+  };
+
+  return (
+    <div className="max-w-xl mx-auto px-6 py-12 space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-[18px] font-semibold text-gray-900">Transcript Required</h2>
+        <p className="text-sm text-gray-500">
+          We couldn't retrieve a transcript from this video.
+        </p>
+      </div>
+
+      {/* Video context card */}
+      <div className="flex items-start gap-4 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
+        {source.thumbnailUrl && (
+          <img
+            src={source.thumbnailUrl}
+            alt=""
+            className="w-24 h-14 object-cover rounded-lg shrink-0"
+          />
+        )}
+        <div className="min-w-0">
+          {source.title && (
+            <p className="text-[14px] font-medium text-gray-900 line-clamp-2">{source.title}</p>
+          )}
+          <p className="text-xs text-gray-400 mt-1 break-all">{source.youtubeUrl}</p>
+        </div>
+      </div>
+
+      {/* Transcript paste area */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+        <div className="space-y-1">
+          <p className="text-[14px] font-medium text-gray-800">Sermon Transcript</p>
+          <p className="text-sm text-gray-500">
+            Paste the sermon transcript below and Emmaus will continue preparing the draft.
+          </p>
+        </div>
+
+        <div>
+          <textarea
+            className={`w-full h-56 text-sm p-3 border rounded-xl resize-y font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+              error ? 'border-red-400 bg-red-50' : 'border-gray-200'
+            }`}
+            placeholder="Paste the full sermon transcript here…"
+            value={transcript}
+            onChange={e => { setTranscript(e.target.value); setError(''); }}
+          />
+          {error && (
+            <p className="mt-1 text-xs text-red-600">{error}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <AdminBtn variant="primary" onClick={handleSubmit}>
+            Continue Generating Draft
+          </AdminBtn>
+          <AdminBtn variant="ghost" onClick={onBack}>
+            Cancel
+          </AdminBtn>
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-400 space-y-1">
+        <p>• You can find the transcript via YouTube's "Show transcript" option below the video.</p>
+        <p>• All generated output is Draft. Nothing is published automatically.</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
@@ -419,6 +518,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [phase, setPhase] = useState<Phase>(isNew ? 'url-input' : 'review');
   const [generatingUrl, setGeneratingUrl] = useState('');
   const [generationError, setGenerationError] = useState('');
+  const [transcriptSource, setTranscriptSource] = useState<TranscriptSource | null>(null);
   const [activeTab, setActiveTab] = useState<'sermon' | 'companion'>('sermon');
 
   // Companion state (from generation result or loaded for existing)
@@ -493,6 +593,54 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   // ── Generation flow ──────────────────────────────────────────────────────────
 
+  /** Maps server error codes to user-friendly messages (per spec Task 12) */
+  function errorMessage(err: unknown): string {
+    if (err instanceof ApiError) {
+      switch (err.code) {
+        case 'INVALID_YOUTUBE_URL':   return 'Please enter a valid YouTube video link.';
+        case 'UNAUTHENTICATED':        return 'Your session has expired. Please sign in again.';
+        case 'FORBIDDEN':              return "You don't have permission to generate sermon drafts.";
+        case 'VIDEO_UNAVAILABLE':      return "We couldn't access this YouTube video. Check that it is public and try again.";
+        case 'AI_NOT_CONFIGURED':      return 'Sermon generation is not configured yet.';
+        case 'GENERATION_TIMEOUT':     return 'Emmaus took too long to prepare this draft. Please try again.';
+        case 'GENERATION_FAILED':      return "We couldn't prepare the sermon draft. Your sermon has not been saved.";
+        default:                       return err.message || 'Generation failed. Please try again.';
+      }
+    }
+    return err instanceof Error ? err.message : 'Generation failed. Please try again.';
+  }
+
+  const applyGenerationResult = useCallback((result: SermonDraftResult) => {
+    setForm({
+      title: result.sermon.title,
+      speaker: result.sermon.speaker,
+      sermonDate: result.sermon.sermonDate,
+      series: result.sermon.series,
+      scriptureReference: result.sermon.scriptureReference,
+      youtubeUrl: result.sermon.youtubeUrl,
+      summary: result.sermon.summary,
+      topics: result.sermon.topics,
+      keywords: result.sermon.keywords,
+      transcript: result.sermon.transcript,
+      transcriptStatus: result.sermon.transcriptStatus,
+      aiIndexStatus: result.sermon.aiIndexStatus,
+      companionJourneyId: result.companion.id,
+      status: 'draft',
+      pastorEdited: false,
+      updatedAt: new Date().toISOString(),
+    });
+    const sermonRecord: Sermon = {
+      ...result.sermon,
+      companionJourneyId: result.companion.id,
+      status: 'draft',
+    } as Sermon;
+    addSermon(sermonRecord);
+    setSermonId_(result.sermon.id);
+    setCompanionData(result.companion);
+    setIsDirty(false);
+    setPhase('review');
+  }, [addSermon]);
+
   const handleGenerate = useCallback(async (url: string) => {
     if (!auth) return;
     setGeneratingUrl(url);
@@ -501,45 +649,41 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
     try {
       const result = await generateSermonDraft(url, auth);
-
-      // Populate form from AI result
-      setForm({
-        title: result.sermon.title,
-        speaker: result.sermon.speaker,
-        sermonDate: result.sermon.sermonDate,
-        series: result.sermon.series,
-        scriptureReference: result.sermon.scriptureReference,
-        youtubeUrl: result.sermon.youtubeUrl,
-        summary: result.sermon.summary,
-        topics: result.sermon.topics,
-        keywords: result.sermon.keywords,
-        transcript: result.sermon.transcript,
-        transcriptStatus: result.sermon.transcriptStatus,
-        aiIndexStatus: result.sermon.aiIndexStatus,
-        companionJourneyId: result.companion.id,
-        status: 'draft',
-        pastorEdited: false,
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Save to AdminContext immediately so it persists
-      const sermonRecord: Sermon = {
-        ...result.sermon,
-        companionJourneyId: result.companion.id,
-        status: 'draft',
-      } as Sermon;
-      addSermon(sermonRecord);
-      setSermonId_(result.sermon.id);
-
-      setCompanionData(result.companion);
-      setIsDirty(false);
-      setPhase('review');
+      applyGenerationResult(result);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Generation failed';
-      setGenerationError(msg);
+      // TRANSCRIPT_REQUIRED — show the paste fallback, not an error
+      if (err instanceof ApiError && err.code === 'TRANSCRIPT_REQUIRED') {
+        const src = err.source as TranscriptSource | null;
+        setTranscriptSource({
+          youtubeUrl: url,
+          videoId: src?.videoId as string ?? '',
+          title: src?.title as string | undefined,
+          thumbnailUrl: src?.thumbnailUrl as string | undefined,
+        });
+        setPhase('transcript-required');
+        return;
+      }
+      setGenerationError(errorMessage(err));
       setPhase('url-input');
     }
-  }, [auth]);
+  }, [auth, applyGenerationResult]);
+
+  const handleTranscriptContinue = useCallback(async (transcript: string) => {
+    if (!auth || !transcriptSource) return;
+    setGenerationError('');
+    setPhase('generating');
+
+    try {
+      const result = await generateSermonDraft(transcriptSource.youtubeUrl, auth, {
+        transcript,
+        videoId: transcriptSource.videoId,
+      });
+      applyGenerationResult(result);
+    } catch (err) {
+      setGenerationError(errorMessage(err));
+      setPhase('transcript-required'); // return to fallback so pastor can re-try
+    }
+  }, [auth, transcriptSource, applyGenerationResult]);
 
   // ── Field-level regeneration ─────────────────────────────────────────────────
 
@@ -597,6 +741,26 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   if (phase === 'generating') {
     return <GeneratingPhase url={generatingUrl} />;
+  }
+
+  if (phase === 'transcript-required' && transcriptSource) {
+    return (
+      <div className="h-full overflow-y-auto">
+        {generationError && (
+          <div className="max-w-xl mx-auto px-6 pt-6">
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{generationError}</span>
+            </div>
+          </div>
+        )}
+        <TranscriptFallbackPhase
+          source={transcriptSource}
+          onContinue={handleTranscriptContinue}
+          onBack={() => { setPhase('url-input'); setGenerationError(''); }}
+        />
+      </div>
+    );
   }
 
   // ── Review / edit phase ──────────────────────────────────────────────────────

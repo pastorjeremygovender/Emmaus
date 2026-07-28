@@ -13,6 +13,18 @@ interface AuthHeaders {
   userRole: string;
 }
 
+/** Structured error that carries a machine-readable code from the server */
+export class ApiError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly source?: Record<string, unknown> | null
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function post<T>(path: string, body: Record<string, unknown>, auth: AuthHeaders): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "POST",
@@ -25,18 +37,26 @@ async function post<T>(path: string, body: Record<string, unknown>, auth: AuthHe
     body: JSON.stringify({ ...body, userId: auth.userId, userRole: auth.userRole }),
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    let msg: string;
-    try {
-      msg = (JSON.parse(body) as { error?: string }).error ?? `HTTP ${res.status}`;
-    } catch {
-      msg = body.startsWith("<") ? `HTTP ${res.status}` : body || `HTTP ${res.status}`;
-    }
-    throw new Error(msg);
+  const text = await res.text();
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(text); } catch { parsed = {}; }
+
+  // 200 OK with success:false — structured "needs input" (e.g. TRANSCRIPT_REQUIRED)
+  if (res.ok && parsed.success === false && typeof parsed.code === "string") {
+    throw new ApiError(
+      parsed.code as string,
+      (parsed.message ?? parsed.error ?? `Response code ${parsed.code}`) as string,
+      (parsed.source ?? null) as Record<string, unknown> | null
+    );
   }
 
-  return res.json();
+  if (!res.ok) {
+    const code = typeof parsed.code === "string" ? parsed.code : `HTTP_${res.status}`;
+    const msg = (parsed.message ?? parsed.error ?? text) as string;
+    throw new ApiError(code, msg.startsWith("<") ? `HTTP ${res.status}` : msg || `HTTP ${res.status}`, null);
+  }
+
+  return parsed as T;
 }
 
 async function patch<T>(path: string, body: Record<string, unknown>, auth: AuthHeaders): Promise<T> {
@@ -147,8 +167,18 @@ export interface SermonDraftResult {
 export async function generateSermonDraft(
   youtubeUrl: string,
   auth: AuthHeaders,
+  opts?: { transcript?: string; videoId?: string }
 ): Promise<SermonDraftResult> {
-  return post<SermonDraftResult>("/sermon-generator/generate", { youtubeUrl }, auth);
+  const body: Record<string, unknown> = { youtubeUrl };
+  if (opts?.transcript) body.transcript = opts.transcript;
+  if (opts?.videoId) body.videoId = opts.videoId;
+  // Server now returns { success: true, ..., _full: { sermon, companion } }
+  // or throws ApiError for structured failures (TRANSCRIPT_REQUIRED etc.)
+  const raw = await post<{ _full?: SermonDraftResult; sermon?: unknown; companion?: unknown } & SermonDraftResult>(
+    "/sermon-generator/generate", body, auth
+  );
+  // Unwrap _full envelope if present (new response shape)
+  return raw._full ?? raw;
 }
 
 export async function regenerateField(

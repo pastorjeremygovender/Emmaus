@@ -24,6 +24,77 @@ import { logger } from "./logger.js";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
+// ─── Structured generation errors ────────────────────────────────────────────
+
+/**
+ * GenerationError carries a machine-readable code that the route translates
+ * into a structured JSON response. Never surfaces raw OpenAI or Node errors.
+ */
+export class GenerationError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    /** Optional extra data forwarded to the client (never includes secrets) */
+    public readonly source?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "GenerationError";
+  }
+}
+
+// ─── Safe JSON parser (handles truncated OpenAI responses) ───────────────────
+
+/**
+ * Attempts to parse JSON produced by the model.
+ * When finish_reason is "length" the model may have been cut off mid-value.
+ * This function tries a simple repair before giving up so partial responses
+ * are still usable rather than crashing the whole pipeline.
+ */
+function safeParseJson(raw: string, finishReason?: string | null): Record<string, unknown> {
+  // 1. Happy path
+  try { return JSON.parse(raw); } catch {}
+
+  // 2. Log the truncation so we can tune token limits
+  if (finishReason === "length") {
+    logger.warn({ rawLength: raw.length }, "sermon-generator: JSON truncated (finish_reason=length) — attempting repair");
+  }
+
+  // 3. Try to repair common truncation patterns
+  try {
+    let s = raw.trimEnd();
+    // Remove trailing comma or incomplete key
+    s = s.replace(/,\s*"[^"]*$/, "").replace(/,\s*$/, "");
+    // Close any open string
+    let inStr = false, escaped = false;
+    for (const ch of s) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\" && inStr) { escaped = true; continue; }
+      if (ch === '"') inStr = !inStr;
+    }
+    if (inStr) s += '"';
+    s = s.trimEnd().replace(/,\s*$/, "");
+    // Count and close open brackets/braces
+    let braces = 0, brackets = 0;
+    inStr = false; escaped = false;
+    for (const ch of s) {
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\" && inStr) { escaped = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === "{") braces++;
+      else if (ch === "}") braces--;
+      else if (ch === "[") brackets++;
+      else if (ch === "]") brackets--;
+    }
+    s += "]".repeat(Math.max(0, brackets));
+    s += "}".repeat(Math.max(0, braces));
+    return JSON.parse(s);
+  } catch {
+    logger.error({ raw: raw.slice(0, 200) }, "sermon-generator: JSON repair failed — returning empty object");
+    return {};
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SermonDraftFields {
@@ -73,13 +144,21 @@ export function extractVideoId(url: string): string | null {
     const u = new URL(url.trim());
     // https://www.youtube.com/watch?v=ID
     const v = u.searchParams.get("v");
-    if (v) return v;
+    if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return v;
     // https://youtu.be/ID
-    if (u.hostname === "youtu.be") return u.pathname.slice(1).split("?")[0] || null;
-    // https://www.youtube.com/embed/ID
-    const parts = u.pathname.split("/");
-    const embedIdx = parts.indexOf("embed");
-    if (embedIdx >= 0 && parts[embedIdx + 1]) return parts[embedIdx + 1];
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.slice(1).split("?")[0];
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+    // Path-based: /embed/ID  /live/ID  /shorts/ID
+    const parts = u.pathname.split("/").filter(Boolean);
+    for (const seg of ["embed", "live", "shorts"]) {
+      const idx = parts.indexOf(seg);
+      if (idx >= 0 && parts[idx + 1]) {
+        const id = parts[idx + 1].split("?")[0];
+        if (/^[A-Za-z0-9_-]{11}$/.test(id)) return id;
+      }
+    }
     return null;
   } catch {
     return null;
@@ -183,11 +262,14 @@ async function generateSermonDraft(meta: {
       { role: "user", content: userMsg },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 600,
+    max_completion_tokens: 1500,  // 600 was too low — caused truncated JSON
   });
 
+  const finishReason = res.choices[0]?.finish_reason;
   const raw = res.choices[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  logger.info({ finishReason, rawLength: raw.length, model: MODEL }, "sermon-generator: OpenAI sermon draft response");
+
+  const parsed = safeParseJson(raw, finishReason);
 
   return {
     title: typeof parsed.title === "string" ? parsed.title : meta.title,
@@ -257,11 +339,14 @@ Summary: ${context.summary}${transcriptSnippet}`;
       { role: "user", content: userMsg },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 4000,
+    max_completion_tokens: 6000,
   });
 
+  const finishReason = res.choices[0]?.finish_reason;
   const raw = res.choices[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(raw) as { companionTitle?: string; days?: unknown[] };
+  logger.info({ finishReason, rawLength: raw.length, model: MODEL }, "sermon-generator: OpenAI companion response");
+
+  const parsed = safeParseJson(raw, finishReason) as { companionTitle?: string; days?: unknown[] };
 
   const days: CompanionEntryDraft[] = [];
   const rawDays = Array.isArray(parsed.days) ? parsed.days : [];
@@ -348,10 +433,18 @@ Description: ${context.description.slice(0, 600)}${transcriptSnippet}`;
 
 // ─── Main generation pipeline ─────────────────────────────────────────────────
 
-export async function generateFromUrl(youtubeUrl: string): Promise<GenerationResult> {
+export interface GenerationOptions {
+  /** Pastor-pasted transcript — skips OAuth retrieval when provided */
+  providedTranscript?: string;
+}
+
+export async function generateFromUrl(youtubeUrl: string, options: GenerationOptions = {}): Promise<GenerationResult> {
   const videoId = extractVideoId(youtubeUrl);
   if (!videoId) {
-    throw new Error("That doesn't look like a valid YouTube URL. Please use a link like https://www.youtube.com/watch?v=...");
+    throw new GenerationError(
+      "INVALID_YOUTUBE_URL",
+      "Please enter a valid YouTube video link."
+    );
   }
 
   // 1. Fetch metadata
@@ -361,78 +454,106 @@ export async function generateFromUrl(youtubeUrl: string): Promise<GenerationRes
   } catch (err) {
     const msg = String(err);
     if (msg.includes("403") || msg.includes("API key")) {
-      throw new Error("Couldn't reach YouTube — check that the YouTube API key is configured.");
+      throw new GenerationError(
+        "VIDEO_UNAVAILABLE",
+        "Couldn't reach YouTube — check that the YouTube API key is configured."
+      );
     }
-    throw new Error("Couldn't fetch video details from YouTube. Please check the URL and try again.");
+    throw new GenerationError(
+      "VIDEO_UNAVAILABLE",
+      "We couldn't access this YouTube video. Check that it is public and try again."
+    );
   }
 
   if (!metaList.length) {
-    throw new Error("No video found for that URL. The video may be private or deleted.");
+    throw new GenerationError(
+      "VIDEO_UNAVAILABLE",
+      "We couldn't access this YouTube video. Check that it is public and try again."
+    );
   }
 
   const meta = metaList[0];
   if (meta.privacyStatus === "private") {
-    throw new Error("This video is private and cannot be accessed.");
+    throw new GenerationError(
+      "VIDEO_UNAVAILABLE",
+      "We couldn't access this YouTube video. Check that it is public and try again."
+    );
   }
 
-  // 2. Attempt transcript retrieval (non-fatal)
-  const transcriptResult = await fetchTranscript(videoId);
-  const transcriptText = transcriptResult?.text ?? "";
-  const transcriptSource = transcriptResult?.source ?? null;
+  const thumbnailUrl = meta.thumbnailUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-  // 3. Generate sermon draft fields
+  // 2. Resolve transcript — pastor-paste takes priority, then OAuth retrieval
+  let transcriptText: string;
+  let transcriptStatus: "none" | "pending" | "complete";
+
+  if (options.providedTranscript && options.providedTranscript.trim().length > 50) {
+    // Pastor pasted the transcript — use it directly
+    transcriptText = options.providedTranscript.trim();
+    transcriptStatus = "complete";
+    logger.info({ videoId, length: transcriptText.length }, "sermon-generator: using pastor-provided transcript");
+  } else {
+    // Attempt OAuth transcript retrieval
+    const transcriptResult = await fetchTranscript(videoId);
+    if (!transcriptResult) {
+      // No transcript available — ask the pastor to paste it
+      logger.info({ videoId }, "sermon-generator: transcript unavailable, returning TRANSCRIPT_REQUIRED");
+      throw new GenerationError(
+        "TRANSCRIPT_REQUIRED",
+        "We couldn't retrieve a transcript from this video.",
+        {
+          youtubeUrl,
+          videoId,
+          title: meta.title,
+          thumbnailUrl,
+        }
+      );
+    }
+    transcriptText = transcriptResult.text;
+    transcriptStatus = "complete";
+    logger.info({ videoId, source: transcriptResult.source, length: transcriptText.length }, "sermon-generator: transcript retrieved");
+  }
+
+  // 3. Check AI configuration
+  if (!process.env.OPENAI_API_KEY) {
+    throw new GenerationError(
+      "AI_NOT_CONFIGURED",
+      "Sermon generation is not configured yet."
+    );
+  }
+
+  // 4. Generate sermon draft fields
   let draftFields;
-  if (!process.env.OPENAI_API_KEY) {
-    draftFields = {
+  try {
+    draftFields = await generateSermonDraft({
       title: meta.title,
-      speaker: "",
-      series: "",
-      scriptureReference: "",
-      summary: meta.description.slice(0, 200),
-      topics: [],
-      keywords: [],
-    };
-  } else {
-    try {
-      draftFields = await generateSermonDraft({
-        title: meta.title,
-        description: meta.description,
-        transcript: transcriptText,
-      });
-    } catch (err) {
-      logger.error({ err }, "sermon-generator: OpenAI sermon draft failed");
-      throw new Error("We couldn't generate the sermon draft. Please try again in a moment.");
-    }
+      description: meta.description,
+      transcript: transcriptText,
+    });
+  } catch (err) {
+    logger.error({ err }, "sermon-generator: OpenAI sermon draft failed");
+    if (err instanceof GenerationError) throw err;
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "We couldn't prepare the sermon draft. Your sermon has not been saved."
+    );
   }
 
-  // 4. Generate 5-day companion
+  // 5. Generate 5-day companion
   let companionDraft;
-  if (!process.env.OPENAI_API_KEY) {
-    companionDraft = {
-      companionTitle: `5 Days with "${draftFields.title}"`,
-      days: Array.from({ length: 5 }, (_, i) => ({
-        dayNumber: i + 1,
-        title: `Day ${i + 1} — [Draft title]`,
-        scriptureReference: draftFields.scriptureReference,
-        greeting: "[Greeting — pastoral review required]",
-        reflection: "[Devotional reflection — pastoral review required]",
-        prayer: "[Prayer — pastoral review required]",
-        nextStep: "[Next step — pastoral review required]",
-        closing: "[Closing — pastoral review required]",
-      })),
-    };
-  } else {
-    try {
-      companionDraft = await generateCompanion({
-        sermonTitle: draftFields.title,
-        scriptureReference: draftFields.scriptureReference,
-        summary: draftFields.summary,
-        transcript: transcriptText,
-      });
-    } catch (err) {
-      logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
-      throw new Error("Sermon draft was created but the companion generation failed. Please try again.");
-    }
+  try {
+    companionDraft = await generateCompanion({
+      sermonTitle: draftFields.title,
+      scriptureReference: draftFields.scriptureReference,
+      summary: draftFields.summary,
+      transcript: transcriptText,
+    });
+  } catch (err) {
+    logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
+    if (err instanceof GenerationError) throw err;
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "We couldn't prepare the sermon draft. Your sermon has not been saved."
+    );
   }
 
   // 5. Save companion to DB

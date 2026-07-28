@@ -1,0 +1,623 @@
+Project Emmaus — Diagnose and Fix “We Couldn’t Generate the Sermon Draft”
+
+Current behaviour:
+
+Content Studio
+→ Sermons
+→ New Sermon
+→ paste a valid YouTube URL
+→ Generate Draft
+
+The UI returns:
+
+“We couldn’t generate the sermon draft. Please try again in a moment.”
+
+The URL-first interface is correct. Do not redesign it.
+
+Fix the complete generation request end to end.
+
+Do not hide the real problem behind another generic catch block.
+Do not auto-publish anything.
+Do not create duplicate sermon records while testing.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+A logged-in authorised pastor must be able to:
+
+1. paste a valid public YouTube sermon URL;
+2. click Generate Draft;
+3. establish an authenticated server request;
+4. retrieve available video metadata and transcript;
+5. generate a sermon draft;
+6. generate a five-day companion draft;
+7. open the editable review screen.
+
+If transcript retrieval is unavailable, the pastor must receive the approved transcript-paste fallback rather than a failed generation message.
+
+====================================================
+TASK 1 — IDENTIFY THE EXACT FAILURE
+====================================================
+
+Trace the Generate Draft action from the frontend button through every server step.
+
+Inspect:
+
+- frontend submit handler;
+- request URL;
+- HTTP method;
+- request body;
+- credentials/cookie settings;
+- authentication middleware;
+- CSRF handling if applicable;
+- generation endpoint registration;
+- YouTube URL parsing;
+- metadata retrieval;
+- transcript retrieval;
+- AI provider call;
+- database transaction;
+- response serialization;
+- frontend response parsing.
+
+Use the actual browser Network panel and backend logs.
+
+Record during testing:
+
+- request route;
+- HTTP method;
+- response status;
+- authenticated user ID;
+- user role;
+- normalized YouTube video ID;
+- metadata retrieval result;
+- transcript retrieval result;
+- transcript length;
+- AI request start and completion;
+- sermon record ID;
+- companion record ID;
+- final response body shape.
+
+Do not expose these technical details in the member-facing UI.
+
+Do not stop at the first catch block. Find the original failing operation.
+
+====================================================
+TASK 2 — FIX AUTHENTICATION AND SESSION COOKIES
+====================================================
+
+The recent implementation changed the sign-in flow to issue a session cookie.
+
+Verify that the sermon generation request includes the authenticated session.
+
+For same-origin requests, use the project’s correct credentials behaviour.
+
+For example:
+
+fetch(endpoint, {
+  method: "POST",
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(payload)
+})
+
+Use the established project API helper if one exists.
+
+Verify:
+
+- login successfully creates the session;
+- the browser stores the cookie;
+- the cookie is sent with the generation request;
+- the server reads and validates the cookie;
+- the authenticated user is available to the route;
+- authorised admin/editor roles pass;
+- unauthorised users receive structured 401 or 403 JSON.
+
+Check cookie settings for the current Replit environment:
+
+- httpOnly;
+- sameSite;
+- secure;
+- path;
+- domain;
+- development versus deployed environment.
+
+Do not configure a cookie that cannot be sent from the current preview domain.
+
+Do not use “Super Admin” as identity data. Use the real authenticated account ID and role.
+
+====================================================
+TASK 3 — CANONICAL GENERATION ENDPOINT
+====================================================
+
+Confirm one canonical server route for generation.
+
+Use the route already intended by the project, or standardise it to one route such as:
+
+POST /api/sermons/generate
+
+Do not create multiple competing endpoints.
+
+Expected request:
+
+{
+  "youtubeUrl": "https://www.youtube.com/watch?v=...",
+  "companionDays": 5
+}
+
+Expected successful response:
+
+{
+  "success": true,
+  "sermon": {
+    "id": "...",
+    "status": "draft"
+  },
+  "companion": {
+    "id": "...",
+    "status": "draft",
+    "entryCount": 5
+  },
+  "source": {
+    "videoId": "...",
+    "transcriptStatus": "available"
+  }
+}
+
+Expected transcript-fallback response:
+
+{
+  "success": false,
+  "code": "TRANSCRIPT_REQUIRED",
+  "message": "We couldn’t retrieve a transcript from this video.",
+  "source": {
+    "youtubeUrl": "...",
+    "videoId": "...",
+    "title": "...",
+    "thumbnailUrl": "..."
+  }
+}
+
+All API responses must be JSON.
+
+Never return:
+
+- HTML error pages;
+- stack traces;
+- “Cannot POST”;
+- raw provider errors;
+- undefined values.
+
+====================================================
+TASK 4 — VALIDATE THE YOUTUBE URL
+====================================================
+
+Support and normalize:
+
+- youtube.com/watch?v=
+- youtu.be/
+- youtube.com/live/
+- youtube.com/shorts/
+
+Extract the canonical video ID.
+
+Reject invalid or unsupported URLs before starting generation.
+
+Return:
+
+{
+  "success": false,
+  "code": "INVALID_YOUTUBE_URL",
+  "message": "Please enter a valid YouTube video link."
+}
+
+Do not send an invalid URL to metadata, transcript or AI providers.
+
+====================================================
+TASK 5 — METADATA RETRIEVAL
+====================================================
+
+Retrieve available public metadata server-side:
+
+- video title;
+- channel name;
+- publication date;
+- thumbnail;
+- description where available;
+- duration where available.
+
+Verify the retrieval method works in the Replit server environment.
+
+Handle:
+
+- private videos;
+- deleted videos;
+- age-restricted videos;
+- livestream URLs;
+- provider timeout;
+- unavailable metadata.
+
+If metadata fails completely, return a clean actionable error.
+
+Do not continue with invented metadata.
+
+====================================================
+TASK 6 — TRANSCRIPT RETRIEVAL
+====================================================
+
+Inspect the transcript library or provider currently used.
+
+Verify:
+
+- the package is installed;
+- imports work in the production/server runtime;
+- the function accepts the normalized video ID;
+- requests are made server-side;
+- captions are available for the test video;
+- returned transcript structure is parsed correctly;
+- duplicate caption fragments are removed;
+- transcript text is not empty;
+- transcript length is sufficient for analysis.
+
+Do not assume every YouTube video has an accessible transcript.
+
+Classify failures correctly:
+
+TRANSCRIPT_NOT_AVAILABLE
+CAPTIONS_DISABLED
+VIDEO_PRIVATE
+VIDEO_UNAVAILABLE
+PROVIDER_TIMEOUT
+PROVIDER_BLOCKED
+TRANSCRIPT_TOO_SHORT
+
+For all transcript-access failures, preserve the URL and any retrieved metadata and show the transcript-paste fallback.
+
+Do not show the generic generation failure when the correct next step is to paste the transcript.
+
+====================================================
+TASK 7 — TRANSCRIPT FALLBACK UI
+====================================================
+
+When the server returns TRANSCRIPT_REQUIRED or another transcript-specific failure, replace the current generic error with:
+
+“We couldn’t retrieve a transcript from this video.”
+
+Supporting text:
+
+“Paste the sermon transcript below and Emmaus will continue preparing the draft.”
+
+Display:
+
+Sermon Transcript
+[large text area]
+
+Primary button:
+
+Continue Generating Draft
+
+Keep visible:
+
+- original YouTube URL;
+- video title if retrieved;
+- thumbnail if retrieved.
+
+Do not make the pastor paste the URL again.
+
+Submit the fallback to the same generation pipeline using:
+
+{
+  "youtubeUrl": "...",
+  "videoId": "...",
+  "transcript": "...",
+  "companionDays": 5
+}
+
+====================================================
+TASK 8 — AI PROVIDER CONFIGURATION
+====================================================
+
+Confirm the AI generation service is configured and callable server-side.
+
+Verify:
+
+- required API key exists in Replit Secrets;
+- the server reads the correct environment-variable name;
+- the selected model is valid;
+- the request does not exceed model input limits;
+- transcript length is safely handled;
+- timeouts are sufficient;
+- provider response structure is parsed correctly;
+- malformed model output does not crash the route.
+
+Do not expose the API key to the frontend.
+
+If the AI key is missing, log the configuration issue server-side and return:
+
+{
+  "success": false,
+  "code": "AI_NOT_CONFIGURED",
+  "message": "Sermon generation is not configured yet."
+}
+
+Do not claim that generation succeeded.
+
+====================================================
+TASK 9 — SAFE LONG-TRANSCRIPT HANDLING
+====================================================
+
+Sermon transcripts may be long.
+
+Do not send an unlimited transcript through one fragile request.
+
+Use the existing model limits and implement a safe strategy:
+
+1. normalize transcript;
+2. estimate token length;
+3. chunk only when required;
+4. analyse chunks in sermon order;
+5. create one consolidated sermon analysis;
+6. generate the companion from that consolidated analysis.
+
+Preserve:
+
+- central message;
+- main Scripture;
+- major teaching points;
+- illustrations;
+- application;
+- closing response.
+
+Do not generate five devotionals independently from unrelated chunks.
+
+====================================================
+TASK 10 — DATABASE TRANSACTION AND DUPLICATES
+====================================================
+
+Do not create partial or duplicate records when a later pipeline step fails.
+
+Use a safe workflow:
+
+1. validate request;
+2. retrieve source content;
+3. generate structured output;
+4. validate output;
+5. create sermon draft;
+6. create companion draft;
+7. create five companion entries;
+8. return all created IDs.
+
+Use a transaction where supported.
+
+If database creation fails:
+
+- roll back newly created linked records;
+- return structured JSON;
+- do not leave an empty sermon or duplicate companion.
+
+Add idempotency or duplicate-click protection using an existing request/job identifier.
+
+Disable Generate Draft while a request is active.
+
+====================================================
+TASK 11 — VALIDATE GENERATED OUTPUT
+====================================================
+
+Before saving, validate that the AI response contains:
+
+Sermon:
+
+- title;
+- speaker or blank;
+- date or blank;
+- main Scripture or blank;
+- summary;
+- central message;
+- key truths;
+- topics;
+- keywords;
+- transcript source;
+- status: draft.
+
+Companion:
+
+- title;
+- five entries;
+- each entry has:
+  - day number;
+  - title;
+  - Scripture reference;
+  - greeting;
+  - reflection;
+  - prayer;
+  - next step;
+  - closing;
+  - status: draft.
+
+If the AI response is incomplete or invalid:
+
+- attempt one structured repair;
+- do not save malformed records;
+- return a clean generation error if repair fails.
+
+Do not invent Scripture references solely to satisfy validation.
+
+====================================================
+TASK 12 — FRONTEND ERROR HANDLING
+====================================================
+
+Replace the current single generic error handler with error-specific responses.
+
+INVALID_YOUTUBE_URL:
+
+“Please enter a valid YouTube video link.”
+
+UNAUTHENTICATED:
+
+“Your session has expired. Please sign in again.”
+
+FORBIDDEN:
+
+“You don’t have permission to generate sermon drafts.”
+
+TRANSCRIPT_REQUIRED:
+
+Show transcript fallback UI.
+
+VIDEO_UNAVAILABLE:
+
+“We couldn’t access this YouTube video. Check that it is public and try again.”
+
+AI_NOT_CONFIGURED:
+
+“Sermon generation is not configured yet.”
+
+GENERATION_TIMEOUT:
+
+“Emmaus took too long to prepare this draft. Please try again.”
+
+GENERATION_FAILED:
+
+“We couldn’t prepare the sermon draft. Your sermon has not been saved.”
+
+Do not show raw technical errors.
+
+Keep detailed root-cause information in server logs.
+
+====================================================
+TASK 13 — SUCCESSFUL NAVIGATION
+====================================================
+
+After successful generation:
+
+1. stop the loading state;
+2. show a brief success confirmation;
+3. navigate using the real sermon ID;
+4. open the generated review workspace;
+5. show the Sermon and Companion tabs;
+6. show all records as Draft.
+
+Use the existing canonical sermon editor route.
+
+Do not navigate using:
+
+- title;
+- slug alone;
+- undefined;
+- a temporary ID.
+
+Refreshing the review page must reload the saved draft correctly.
+
+====================================================
+TASK 14 — TEST WITH CONTROLLED INPUTS
+====================================================
+
+Run the following tests separately.
+
+TEST A — Authentication
+
+✓ Logged-in admin can generate.
+
+✓ Session cookie is sent.
+
+✓ Logged-out request returns structured 401 JSON.
+
+✓ Authorised role is resolved correctly.
+
+TEST B — Invalid URL
+
+✓ Invalid URL returns a clean validation message.
+
+✓ No provider request starts.
+
+✓ No database record is created.
+
+TEST C — Public video with captions
+
+✓ Metadata is retrieved.
+
+✓ Transcript is retrieved.
+
+✓ AI generation completes.
+
+✓ Sermon draft is created.
+
+✓ Companion draft is created.
+
+✓ Five entries are created.
+
+✓ Review editor opens.
+
+TEST D — Public video without accessible captions
+
+✓ Metadata is preserved.
+
+✓ Transcript fallback appears.
+
+✓ Pastor can paste transcript.
+
+✓ Continue Generating Draft succeeds.
+
+TEST E — AI failure
+
+✓ No partial records remain.
+
+✓ Loading state clears.
+
+✓ Clean error appears.
+
+TEST F — Duplicate click
+
+✓ Generate button disables.
+
+✓ One server request is sent.
+
+✓ One sermon is created.
+
+✓ One companion is created.
+
+TEST G — Refresh
+
+✓ Generated draft reloads after refresh.
+
+✓ All fields remain editable.
+
+✓ Nothing is published.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not redesign the URL-first screen.
+
+Do not remove transcript fallback.
+
+Do not auto-publish.
+
+Do not store Sermon Companions as Journeys.
+
+Do not merely replace the generic message with a more detailed message.
+
+Find and fix the real failing operation.
+
+Do not report the workflow as working unless one real sermon has successfully completed the full pipeline or the remaining blocker is explicitly identified as an external transcript/provider limitation.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact root cause of the current failure;
+2. the failed HTTP status and endpoint;
+3. whether authentication/session cookies were involved;
+4. the YouTube metadata method used;
+5. the transcript retrieval method used;
+6. the AI provider/model used;
+7. the database records created;
+8. the files changed;
+9. the result of every test above;
+10. any Replit Secret that still needs to be configured;
+11. any remaining manual or provider-limited test.

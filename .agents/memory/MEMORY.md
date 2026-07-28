@@ -1,3 +1,4 @@
+- [Sermon generation pipeline](sermon-generation-pipeline.md) — root cause was max_completion_tokens:600; GenerationError codes; transcript fallback; safeParseJson repair; ApiError frontend class.
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
