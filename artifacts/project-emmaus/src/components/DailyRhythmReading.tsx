@@ -23,8 +23,18 @@ const RECOGNIZED_OPENING_PREFIXES = [
   'good afternoon',
   'good evening',
   'hello',
+  'hi',
   'welcome',
 ];
+
+/** Display names that look like roles or system labels — never use as a personal name. */
+const BLOCKED_DISPLAY_NAMES = new Set([
+  'super admin',
+  'admin',
+  'administrator',
+  'member',
+  'user',
+]);
 
 function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {
   const hour = new Date().getHours();
@@ -34,35 +44,72 @@ function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {
 }
 
 /**
- * Returns the personalized greeting text:
- * - If the first line is a recognised greeting prefix it is replaced with
- *   the correct time-of-day salutation + name; the rest is unchanged.
- * - Otherwise the personalised salutation is prepended.
- * - If no name is available the salutation renders without one.
+ * Returns the personalized greeting text.
+ *
+ * Rules (in order):
+ * 1. If the authored text contains [name], replace it with the member's name
+ *    (or remove ", [name]" cleanly when no name is available).
+ * 2. If the first sentence is a recognised time greeting, replace only that
+ *    sentence with the correct local-time salutation + name; all subsequent
+ *    text — including any paragraph breaks — is preserved verbatim.
+ * 3. If the first sentence is meaningful content (not a salutation), prepend
+ *    the personalised salutation as a new paragraph before the authored text.
+ * 4. If no name is available the salutation renders without one ("Good morning.").
  */
 export function personalizeGreeting(mentorIntro: string, name: string | undefined): string {
   const period = getTimeOfDay();
   const salutation = `Good ${period}`;
-  const personalizedFirstLine = name ? `${salutation}, ${name}.` : `${salutation}.`;
+  const personalizedSalutation = name ? `${salutation}, ${name}.` : `${salutation}.`;
 
-  if (!mentorIntro) return personalizedFirstLine;
+  if (!mentorIntro?.trim()) return personalizedSalutation;
 
-  const firstNewline = mentorIntro.indexOf('\n');
-  const rawFirstLine = firstNewline === -1 ? mentorIntro : mentorIntro.slice(0, firstNewline);
-  const rest         = firstNewline === -1 ? '' : mentorIntro.slice(firstNewline);
+  // ── [name] token replacement ─────────────────────────────────────────────
+  if (mentorIntro.includes('[name]')) {
+    return name
+      ? mentorIntro.replace(/\[name\]/g, name)
+      : mentorIntro.replace(/,?\s*\[name\]/g, '');
+  }
 
-  const isRecognized = RECOGNIZED_OPENING_PREFIXES.some(
-    g => rawFirstLine.trim().toLowerCase().startsWith(g)
+  // ── Find the first sentence boundary: .  !  ?  followed by space or end ──
+  const firstSentenceMatch = mentorIntro.match(/[.!?](?=\s|$)/);
+  if (!firstSentenceMatch || firstSentenceMatch.index == null) {
+    // No sentence boundary found — treat the whole text as the opener
+    const isRecognized = RECOGNIZED_OPENING_PREFIXES.some(p =>
+      mentorIntro.trim().toLowerCase().startsWith(p)
+    );
+    return isRecognized
+      ? personalizedSalutation
+      : `${personalizedSalutation}\n\n${mentorIntro}`;
+  }
+
+  const sentenceEndIdx   = firstSentenceMatch.index;          // index of . ! ?
+  const rawFirstSentence = mentorIntro.slice(0, sentenceEndIdx + 1);
+  const afterFirstSentence = mentorIntro.slice(sentenceEndIdx + 1); // may start with space/\n
+
+  const isRecognized = RECOGNIZED_OPENING_PREFIXES.some(p =>
+    rawFirstSentence.trim().toLowerCase().startsWith(p)
   );
 
-  return isRecognized
-    ? personalizedFirstLine + rest
-    : `${personalizedFirstLine}\n\n${mentorIntro}`;
+  if (!isRecognized) {
+    // Meaningful opener — prepend salutation as its own paragraph
+    return `${personalizedSalutation}\n\n${mentorIntro}`;
+  }
+
+  // Replace just the opening salutation; preserve every character that follows
+  return afterFirstSentence.trim()
+    ? personalizedSalutation + afterFirstSentence
+    : personalizedSalutation;
 }
 
 /**
- * Extract a safe display name from a raw preferredName string.
- * Returns undefined when the value is blank, looks like an email, or is null/undefined.
+ * Extract a safe personal display name from a raw preferredName string.
+ *
+ * Returns undefined when the value is:
+ * - blank / null / undefined
+ * - an email address (contains @)
+ * - a system/role label (Super Admin, Admin, Member, User, …)
+ *
+ * This ensures role labels are never shown as a member's personal name.
  */
 export function resolveDisplayName(
   preferredName: string | null | undefined
@@ -70,6 +117,7 @@ export function resolveDisplayName(
   const name = preferredName?.trim();
   if (!name) return undefined;
   if (name.includes('@')) return undefined;
+  if (BLOCKED_DISPLAY_NAMES.has(name.toLowerCase())) return undefined;
   return name;
 }
 

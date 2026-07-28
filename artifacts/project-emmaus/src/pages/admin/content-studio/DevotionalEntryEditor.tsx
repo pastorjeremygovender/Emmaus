@@ -17,6 +17,7 @@ import {
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
+import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { Field } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -263,7 +264,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
             prayer={prayer}
             nextStep={nextStep}
             closing={closing}
-            memberName={user?.preferredName}
+            memberName={resolveDisplayName(user?.preferredName)}
             previewMode
             actionButton={<PreviewDevotionalContinueButton />}
           />

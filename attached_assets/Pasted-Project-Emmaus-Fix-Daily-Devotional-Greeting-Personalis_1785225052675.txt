@@ -1,0 +1,299 @@
+Project Emmaus — Fix Daily Devotional Greeting Personalisation
+
+Current problem:
+
+The Daily Devotional greeting field contains a full authored greeting, for example:
+
+“Good morning. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+However, the member preview only renders:
+
+“Good morning, Super Admin.”
+
+The personalised greeting logic is replacing the entire authored Greeting field instead of replacing only the opening salutation.
+
+Fix this specific issue completely.
+
+Do not redesign the devotional screen.
+Do not change the Daily Devotionals architecture.
+Do not change the editorial fields.
+Do not work on Journeys or other modules.
+
+====================================================
+EXPECTED RESULT
+====================================================
+
+For the stored greeting:
+
+“Good morning. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+The member experience should render:
+
+“Good morning, Jeremy. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+The runtime must personalise only the opening greeting.
+
+It must preserve every sentence after the first greeting sentence.
+
+====================================================
+LOCKED PERSONALISATION RULES
+====================================================
+
+The editor stores one generic greeting.
+
+The renderer personalises it automatically according to:
+
+1. member local time;
+2. preferred first name;
+3. first name;
+4. display name;
+5. no name if none is valid.
+
+Never display:
+
+- undefined
+- null
+- Member
+- an email address
+- an internal role such as Super Admin
+
+The member’s admin role is not their name.
+
+====================================================
+TASK 1 — FIX NAME RESOLUTION
+====================================================
+
+Inspect the shared member-name resolver.
+
+The current preview displays:
+
+“Super Admin”
+
+This suggests the renderer is using the account role or a generic admin label as the display name.
+
+Correct the fallback sequence:
+
+preferredFirstName
+→ firstName
+→ valid displayName
+→ no name
+
+Reject display names that are:
+
+- Super Admin
+- Admin
+- Administrator
+- Member
+- User
+- an email address
+- undefined
+- null
+- blank
+
+If no valid personal name exists, render:
+
+“Good morning.”
+
+Do not render:
+
+“Good morning, Super Admin.”
+
+Use the same valid name resolver already used by Daily Rhythm, if available.
+
+Do not create conflicting name-resolution logic.
+
+====================================================
+TASK 2 — PRESERVE THE AUTHORED GREETING BODY
+====================================================
+
+The personaliser must separate the opening salutation from the remaining authored text.
+
+For example:
+
+Stored:
+
+“Good morning. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+Runtime:
+
+Opening salutation:
+“Good morning.”
+
+Remaining text:
+“It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+Personalised output:
+
+“Good morning, Jeremy. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+Do not discard, shorten or rewrite the remaining authored text.
+
+====================================================
+TASK 3 — SUPPORT TIME-BASED GREETINGS
+====================================================
+
+Recognise common generic opening salutations such as:
+
+- Good morning.
+- Good afternoon.
+- Good evening.
+- Hello.
+- Hi.
+- Welcome.
+- It’s good to have you back.
+- I'm glad you're here today.
+
+Where the first sentence is a recognised time greeting, replace only that sentence with the correct local-time greeting.
+
+Suggested local-time logic:
+
+Morning:
+Good morning
+
+Afternoon:
+Good afternoon
+
+Evening:
+Good evening
+
+Use the existing Project Emmaus time ranges if already defined.
+
+Do not replace a meaningful first sentence that is not a salutation.
+
+====================================================
+TASK 4 — OPTIONAL [NAME] TOKEN SUPPORT
+====================================================
+
+The editor currently shows guidance that says:
+
+“Use [name] — it will be replaced with the member’s first name.”
+
+Ensure this works correctly.
+
+Example stored greeting:
+
+“Good morning, [name]. It’s good to have you back.”
+
+With valid name:
+
+“Good morning, Jeremy. It’s good to have you back.”
+
+Without a valid name:
+
+“Good morning. It’s good to have you back.”
+
+Remove awkward punctuation or spaces when the name is unavailable.
+
+The system should support both:
+
+1. greetings containing [name];
+2. ordinary generic greetings without [name].
+
+Do not require editors to type [name].
+
+====================================================
+TASK 5 — USE ONE SHARED GREETING SERVICE
+====================================================
+
+Daily Rhythm and Daily Devotionals should use the same shared greeting-personalisation utility.
+
+Inspect the existing Daily Rhythm implementation.
+
+If Daily Rhythm already preserves the complete greeting correctly, reuse that implementation in Daily Devotionals.
+
+Do not maintain separate implementations that behave differently.
+
+Suggested shared function responsibility:
+
+personaliseGreeting({
+  authoredGreeting,
+  memberProfile,
+  localTime
+})
+
+It should return one complete greeting string containing:
+
+- the correct salutation;
+- the valid first name when available;
+- all remaining authored text.
+
+====================================================
+TASK 6 — PRESERVE PARAGRAPHS
+====================================================
+
+If the Greeting field contains multiple paragraphs or line breaks:
+
+- preserve them;
+- personalise only the opening greeting;
+- do not collapse the greeting into a single sentence;
+- do not remove punctuation.
+
+Do not trim meaningful content.
+
+Only normalize accidental excess whitespace where necessary.
+
+====================================================
+TASK 7 — PREVIEW AND MEMBER CONSISTENCY
+====================================================
+
+The Content Studio preview and the member reading page must use the same renderer.
+
+The preview should not display a different greeting from the live member screen.
+
+The admin preview may use:
+
+- the signed-in admin’s valid personal first name; or
+- a safe preview name such as “Jeremy” if the preview system already supports sample member data; or
+- no name.
+
+It must never use “Super Admin” as the personal name.
+
+====================================================
+TEST WITH CURRENT DAY 2
+====================================================
+
+Use the existing Day 2 greeting.
+
+Confirm:
+
+✓ The complete authored greeting remains stored.
+
+✓ The opening greeting is personalised.
+
+✓ The sentences after the opening greeting remain visible.
+
+✓ “Super Admin” is not used as a member name.
+
+✓ A valid first name is displayed when available.
+
+✓ No name is inserted when no valid personal name exists.
+
+✓ [name] replacement works.
+
+✓ Punctuation remains natural when no name exists.
+
+✓ Local time changes morning, afternoon and evening correctly.
+
+✓ Content Studio preview matches the member reading page.
+
+✓ Daily Rhythm greeting behaviour remains correct.
+
+✓ Refreshing the page does not remove part of the greeting.
+
+Expected Day 2 result with a valid name:
+
+“Good morning, Jeremy. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+Expected result without a valid name:
+
+“Good morning. It’s good to have you back. Today we’re going to think about the influence that other people have on our lives—and the influence we have on theirs.”
+
+Stop when the full greeting renders correctly in both the Content Studio preview and member experience.
+
+Report:
+
+1. the root cause;
+2. why “Super Admin” was selected as the name;
+3. the shared greeting utility used;
+4. the files changed;
+5. the result of every test above.

@@ -19,6 +19,7 @@ import {
   type SeriesWithEntries,
   type DevotionalProgress,
 } from '@/lib/devotionals-api';
+import { resolveDisplayName } from '@/components/DailyRhythmReading';
 
 export default function DevotionalDay() {
   const params = useParams<{ seriesId: string; day: string }>();
@@ -135,7 +136,7 @@ export default function DevotionalDay() {
         prayer={entry.prayer ?? ''}
         nextStep={entry.nextStep ?? ''}
         closing={entry.closing ?? ''}
-        memberName={user?.preferredName}
+        memberName={resolveDisplayName(user?.preferredName)}
         returnPath={returnPath}
         actionButton={
           alreadyCompleted ? (
