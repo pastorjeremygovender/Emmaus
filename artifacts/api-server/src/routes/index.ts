@@ -19,6 +19,6 @@ router.use(youtubeArchiveRouter);
 router.use(journeysRouter);
 router.use(collectionsRouter);
 router.use(writingAssistantRouter);
-router.use("/api/devotionals", devotionalsRouter);
+router.use("/devotionals", devotionalsRouter);
 
 export default router;

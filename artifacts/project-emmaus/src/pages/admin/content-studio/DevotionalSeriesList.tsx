@@ -47,16 +47,20 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
+
   const load = useCallback(async () => {
     try {
-      const data = await listAllSeries();
+      const data = await listAllSeries(auth);
       setSeries(data);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, []);
+  // auth object is derived from user; user is the stable dependency
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -66,25 +70,27 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
     if (!newTitle.trim()) { setError('Title is required.'); return; }
     setSaving(true); setError('');
     try {
-      const created = await createSeries({ title: newTitle.trim(), seriesType: newType });
+      const created = await createSeries({ title: newTitle.trim(), seriesType: newType }, auth);
       setShowNew(false);
       setNewTitle('');
+      setSaving(false);
+      load();
       onEdit(created.id);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create series');
+      setError(e instanceof Error ? e.message : "We couldn't create this devotional series. Please try again.");
       setSaving(false);
     }
   };
 
   const handleArchive = async (s: DevotionalSeries) => {
     setOpenMenuId(null);
-    await archiveSeries(s.id);
+    await archiveSeries(s.id, auth);
     load();
   };
 
   const handlePermanentDelete = async () => {
     if (!deleteTarget) return;
-    await permanentDeleteSeries(deleteTarget.id);
+    await permanentDeleteSeries(deleteTarget.id, auth);
     setDeleteTarget(null);
     load();
   };

@@ -48,7 +48,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
 
   const load = useCallback(async () => {
     try {
-      const d = await getSeriesWithEntries(seriesId);
+      const d = await getSeriesWithEntries(seriesId, auth);
       setSeriesData(d);
       const entry = d.entries.find(e => e.dayNumber === day);
       if (entry) {
@@ -70,10 +70,12 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
 
   useEffect(() => { load(); }, [load]);
 
+  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
+
   const doSave = useCallback(async (fields: Partial<DevotionalEntry>) => {
     setSaveStatus('saving');
     try {
-      await saveEntry(seriesId, day, fields);
+      await saveEntry(seriesId, day, fields, auth);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch {

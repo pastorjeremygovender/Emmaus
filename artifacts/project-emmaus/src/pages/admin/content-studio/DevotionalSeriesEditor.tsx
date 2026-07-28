@@ -20,6 +20,7 @@ import {
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { StatusBadge, Field } from '../shared';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   seriesId: string;
@@ -36,6 +37,8 @@ const SERIES_TYPES = [
 ];
 
 export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }: Props) {
+  const { user } = useAuth();
+  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
   const [data, setData] = useState<SeriesWithEntries | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,7 +53,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
 
   const load = useCallback(async () => {
     try {
-      const d = await getSeriesWithEntries(seriesId);
+      const d = await getSeriesWithEntries(seriesId, auth);
       setData(d);
       setTitle(d.title);
       setDescription(d.description ?? '');
@@ -68,7 +71,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateSeries(seriesId, { title, description, seriesType, status });
+      await updateSeries(seriesId, { title, description, seriesType, status }, auth);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       load();
@@ -83,7 +86,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
     const next = status === 'Published' ? 'Draft' : 'Published';
     setStatus(next);
     try {
-      await updateSeries(seriesId, { status: next });
+      await updateSeries(seriesId, { status: next }, auth);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
       load();
@@ -97,13 +100,13 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
     const nextDay = (data.entries.length > 0
       ? Math.max(...data.entries.map(e => e.dayNumber))
       : 0) + 1;
-    await saveEntry(seriesId, nextDay, { title: `Day ${nextDay}`, status: 'Draft' });
+    await saveEntry(seriesId, nextDay, { title: `Day ${nextDay}`, status: 'Draft' }, auth);
     onEditEntry(seriesId, nextDay);
   };
 
   const handleDeleteEntry = async () => {
     if (deleteTarget === null) return;
-    await deleteEntry(seriesId, deleteTarget);
+    await deleteEntry(seriesId, deleteTarget, auth);
     setDeleteTarget(null);
     load();
   };

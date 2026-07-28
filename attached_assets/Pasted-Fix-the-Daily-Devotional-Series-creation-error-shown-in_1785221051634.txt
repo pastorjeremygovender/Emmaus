@@ -1,0 +1,132 @@
+Fix the Daily Devotional Series creation error shown in the current app.
+
+Current behaviour:
+
+Content Studio
+→ Daily Devotionals
+→ New Series
+→ enter “Psalms Daily Devotional”
+→ select “Psalms”
+→ Create Series
+
+The form displays this raw server response:
+
+Cannot POST /api/devotionals
+
+This means the frontend is posting to an API endpoint that is not registered, is using the wrong route, or is using the wrong HTTP method.
+
+Do not redesign the Daily Devotionals interface.
+Do not change the Daily Devotionals architecture.
+Do not work on Journeys.
+Fix this specific blocker completely.
+
+REQUIRED FIX
+
+1. Inspect the frontend submission handler for the New Devotional Series modal.
+
+2. Identify the exact endpoint and HTTP method it currently calls.
+
+3. Inspect the backend devotional routes and determine the canonical series-creation endpoint.
+
+4. Either:
+   - register POST /api/devotionals as the correct create-series route, or
+   - update the frontend to call the existing correct route.
+
+Use one canonical endpoint consistently across frontend, backend and shared API helpers.
+
+5. The endpoint must:
+   - validate the authenticated admin/editor;
+   - accept the series title and series type;
+   - create a new Daily Devotional series in the correct database table or collection;
+   - generate and return the real series ID;
+   - return structured JSON;
+   - use an appropriate HTTP status such as 201;
+   - never return an HTML error page to the modal.
+
+Expected success response structure:
+
+{
+  "success": true,
+  "series": {
+    "id": "...",
+    "title": "Psalms Daily Devotional",
+    "seriesType": "psalms",
+    "status": "draft"
+  }
+}
+
+6. After successful creation:
+   - close the modal;
+   - show a brief success message;
+   - refresh the Daily Devotional series list;
+   - navigate to the newly created series using its real database ID.
+
+Example:
+
+/admin/content-studio/devotionals/{seriesId}
+
+Use the actual route structure already established in this project. Do not invent a second competing route.
+
+7. On failure:
+   - keep the modal open;
+   - show a clean human-readable error such as:
+     “We couldn’t create this devotional series. Please try again.”
+   - log the technical error for debugging;
+   - never display raw HTML, stack traces or “Cannot POST” responses to the user.
+
+8. Check whether the request body field names match the backend schema.
+
+The visible form currently contains:
+
+Title:
+Psalms Daily Devotional
+
+Series Type:
+Psalms
+
+Ensure the backend receives the required normalized values, for example:
+
+{
+  "title": "Psalms Daily Devotional",
+  "seriesType": "psalms"
+}
+
+9. Check for route-ordering problems, missing router registration, missing JSON middleware, incorrect API base paths, or frontend calls accidentally hitting the Vite/static server rather than the application API.
+
+10. Restart or rebuild the relevant server after registering the route.
+
+TEST THE COMPLETE FLOW
+
+Confirm all of the following:
+
+✓ Clicking Create Series sends one POST request.
+
+✓ The request reaches the correct backend handler.
+
+✓ The response is JSON, not HTML.
+
+✓ Psalms Daily Devotional is created only once.
+
+✓ A real series ID is returned.
+
+✓ The modal closes after success.
+
+✓ The new series appears in the Daily Devotionals list.
+
+✓ The app opens the correct series detail page.
+
+✓ Refreshing the page still loads the created series.
+
+✓ Validation errors appear cleanly.
+
+✓ Raw API errors are never rendered inside the form.
+
+Do not create extra sample series.
+Do not generate devotional entries.
+Do not auto-publish anything.
+
+Stop after this creation flow works and report:
+1. the route that was broken;
+2. the canonical route now being used;
+3. the files changed;
+4. the result of each test above.
