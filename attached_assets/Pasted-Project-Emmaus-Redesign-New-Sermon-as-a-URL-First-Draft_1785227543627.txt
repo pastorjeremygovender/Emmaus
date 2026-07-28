@@ -1,0 +1,781 @@
+Project Emmaus — Redesign New Sermon as a URL-First Draft Generator
+
+Redesign the current New Sermon workflow so a pastor can paste a YouTube sermon URL and let Emmaus generate a complete editable sermon draft and companion devotional draft.
+
+The pastor-facing experience should be simple:
+
+Paste YouTube URL
+→ Generate Draft
+→ Review
+→ Edit
+→ Publish manually
+
+Nothing may publish automatically.
+
+Do not remove the ability to paste a transcript manually.
+Do not generate content without an explicit button press.
+Do not treat sermon companions as Journeys.
+Do not expose technical IDs to the pastor.
+Preserve the existing Emmaus Content Studio styling.
+
+====================================================
+1. NEW SERMON LANDING STATE
+====================================================
+
+Replace the current long blank form as the first thing the pastor sees.
+
+The initial New Sermon screen should contain:
+
+Heading:
+Create Sermon Content
+
+Supporting text:
+Paste a YouTube sermon link and Emmaus will prepare an editable sermon record and companion devotional draft for your review.
+
+Primary card:
+
+YouTube URL
+
+[ Paste YouTube link here ]
+
+Primary button:
+
+Generate Draft
+
+Secondary divider:
+
+or
+
+Secondary option:
+
+Paste Transcript Instead
+
+The pastor should not initially be required to complete:
+
+- title;
+- speaker;
+- date;
+- series;
+- Scripture reference;
+- summary;
+- topics;
+- keywords;
+- transcript status;
+- companion ID.
+
+These become editable fields after generation.
+
+====================================================
+2. TRANSCRIPT FALLBACK
+====================================================
+
+When the pastor selects:
+
+Paste Transcript Instead
+
+show:
+
+Sermon Transcript
+
+[ large transcript field ]
+
+Optional supporting fields:
+
+Sermon Title
+Speaker
+Date
+
+Primary button:
+
+Generate Draft from Transcript
+
+The YouTube and transcript inputs should be two entry methods for the same generation pipeline.
+
+Do not require both.
+
+====================================================
+3. GENERATION PIPELINE
+====================================================
+
+When Generate Draft is pressed for a YouTube URL, run the following server-side pipeline:
+
+Step 1:
+Validate and normalize the YouTube URL.
+
+Support common formats including:
+
+- youtube.com/watch?v=
+- youtu.be/
+- youtube.com/live/
+- youtube.com/shorts/ where a valid transcript exists
+
+Extract and store the canonical video ID.
+
+Step 2:
+Retrieve available video metadata:
+
+- title;
+- channel name;
+- publication date;
+- thumbnail URL;
+- duration where available.
+
+Step 3:
+Retrieve the transcript or captions.
+
+Prefer:
+
+1. creator-provided captions;
+2. manually uploaded captions;
+3. auto-generated captions when available.
+
+Step 4:
+Normalize the transcript:
+
+- preserve sermon order;
+- remove duplicate caption fragments;
+- remove unnecessary timestamps from the readable transcript;
+- preserve timestamp mappings separately for future deep links;
+- do not rewrite the sermon before analysis.
+
+Step 5:
+Analyse the sermon.
+
+Step 6:
+Generate an editable Sermon Draft.
+
+Step 7:
+Generate an editable Sermon Companion Draft.
+
+Step 8:
+Save both as Draft only.
+
+Step 9:
+Open the generated sermon review editor.
+
+Do not publish either record automatically.
+
+====================================================
+4. FAILURE AND FALLBACK BEHAVIOUR
+====================================================
+
+If the transcript cannot be retrieved, do not fail with a raw technical error.
+
+Show:
+
+We couldn’t retrieve a transcript from this video.
+
+You can paste the sermon transcript below and Emmaus will continue preparing the draft.
+
+Provide:
+
+[ Paste Transcript ]
+
+[ Continue Generating Draft ]
+
+Preserve the original YouTube URL and metadata already retrieved.
+
+Do not make the pastor re-enter the URL.
+
+Handle cleanly:
+
+- invalid YouTube URL;
+- private video;
+- deleted video;
+- captions disabled;
+- no transcript;
+- provider timeout;
+- rate limiting;
+- transcript too short;
+- unsupported URL.
+
+Never display:
+
+- stack traces;
+- provider response bodies;
+- raw HTML;
+- API keys;
+- internal route names;
+- “Cannot POST”;
+- undefined or null.
+
+====================================================
+5. LOADING EXPERIENCE
+====================================================
+
+After Generate Draft is pressed, show a clear progress state.
+
+Suggested steps:
+
+Retrieving sermon details
+Retrieving transcript
+Understanding the message
+Preparing sermon draft
+Creating companion devotionals
+
+Show one calm progress interface.
+
+Do not use fake percentages unless the backend provides genuine progress.
+
+Disable repeated submissions while generation is running.
+
+Prevent duplicate sermon and companion records.
+
+Provide a safe Cancel action only if cancellation is technically supported.
+
+====================================================
+6. GENERATED SERMON DRAFT
+====================================================
+
+After analysis, populate an editable sermon record with:
+
+Title
+
+Speaker
+
+Date
+
+Series
+
+Main Scripture Reference
+
+YouTube URL
+
+Video ID
+
+Video Thumbnail
+
+Summary
+
+Central Message
+
+Key Truths
+
+Topics
+
+Keywords
+
+Full Transcript
+
+Transcript Source
+
+Transcript Status
+
+Status:
+Draft
+
+The generated fields must remain editable.
+
+Do not overwrite later pastoral edits if generation is retried.
+
+If a field cannot be confidently identified, leave it blank or mark it for review.
+
+Do not invent:
+
+- Scripture references;
+- sermon series names;
+- speaker names;
+- dates;
+- quotations;
+- stories not present in the transcript.
+
+====================================================
+7. SERMON ANALYSIS RULES
+====================================================
+
+Analyse the sermon as a pastoral message, not merely as a generic summary.
+
+Identify:
+
+- main Scripture;
+- central Christ-centred message;
+- primary pastoral concern;
+- main teaching points;
+- repeated ideas;
+- important illustrations;
+- warnings;
+- encouragements;
+- practical applications;
+- closing invitation or response;
+- supporting Scriptures actually mentioned.
+
+Preserve Pastor Jeremy’s theological meaning and pastoral emphasis.
+
+Do not replace strong biblical language with generic self-help.
+
+Do not introduce theology that is not supported by the sermon.
+
+Clearly distinguish the main Scripture from supporting references.
+
+====================================================
+8. COMPANION DEVOTIONAL DRAFT
+====================================================
+
+The generated companion is a Sermon Devotional, not a Journey.
+
+Remove all pastor-facing references to:
+
+Linked Companion Journey ID
+
+Replace the current section with:
+
+Sermon Companion
+
+Fields:
+
+Companion Title
+
+Number of Days
+
+Default:
+5 days
+
+Primary action:
+
+Generate Companion Draft
+
+When the initial URL generation succeeds, generate the companion automatically as part of the same draft-generation process.
+
+The pastor may regenerate the companion separately after editing the sermon record.
+
+Do not expose a technical companion ID in the main editor.
+
+Use the real database relationship internally.
+
+====================================================
+9. COMPANION CONTENT STRUCTURE
+====================================================
+
+Generate five editable daily entries by default.
+
+Each day must contain:
+
+Day Number
+
+Title
+
+Scripture Reference
+
+Greeting
+
+Reflection
+
+Prayer
+
+Your Next Step
+
+Closing
+
+Status:
+Draft
+
+Each day should explore a distinct part of the sermon while remaining connected as one continuous weekly companion.
+
+Do not create five repetitive summaries.
+
+Suggested progression:
+
+Day 1:
+The central truth of the sermon
+
+Day 2:
+A key heart issue or obstacle
+
+Day 3:
+A deeper biblical truth
+
+Day 4:
+Practical response and obedience
+
+Day 5:
+Hope, commitment and continued faith
+
+Adapt this progression to the actual sermon rather than forcing it mechanically.
+
+====================================================
+10. EMMAUS VOICE
+====================================================
+
+Generated devotionals must use the approved Emmaus voice:
+
+- written to one person;
+- warm and pastoral;
+- clear enough for a new believer;
+- Scripture-first;
+- Jesus-centred;
+- practical without becoming self-help;
+- one paragraph per complete thought;
+- mostly two to four sentences per paragraph;
+- one practical next step;
+- finish with hope.
+
+Do not:
+
+- shame;
+- manipulate;
+- exaggerate;
+- use generic motivational clichés;
+- invent personal stories;
+- misquote the pastor;
+- add unsupported claims;
+- automatically publish.
+
+Default closing:
+
+Tomorrow we’ll continue reflecting on Sunday’s message together.
+
+For the final day:
+
+Keep walking in the truth God has shown you this week.
+
+The pastor must be able to edit all wording.
+
+====================================================
+11. REVIEW EXPERIENCE
+====================================================
+
+After generation, open a review workspace.
+
+Use a clear two-part structure:
+
+Sermon
+Companion
+
+Sermon tab:
+
+- editable generated sermon fields;
+- transcript;
+- video source;
+- Save Draft;
+- regenerate selected field;
+- publish sermon only when explicitly chosen.
+
+Companion tab:
+
+- list of generated days;
+- status of each day;
+- open each day in the standard Content Studio editor;
+- live preview alongside editor;
+- Save Draft;
+- publish individual days;
+- publish all reviewed days only after explicit confirmation.
+
+Nothing should publish simply because generation completed.
+
+====================================================
+12. FIELD-LEVEL AI ASSISTANCE
+====================================================
+
+Allow the pastor to regenerate individual fields without regenerating the entire record.
+
+Examples:
+
+Regenerate Summary
+
+Regenerate Key Truths
+
+Regenerate Companion Title
+
+Rewrite Day 2 Reflection
+
+Shorten Prayer
+
+Improve Next Step
+
+Before replacing existing content:
+
+- preserve the current version;
+- show the proposed replacement;
+- require Apply or Cancel.
+
+Never silently overwrite pastoral edits.
+
+====================================================
+13. SOURCE GROUNDING
+====================================================
+
+Every generated statement must be grounded in:
+
+- the retrieved transcript;
+- the supplied transcript;
+- the sermon metadata;
+- Scripture references genuinely present in the sermon.
+
+Store generation provenance internally, including:
+
+- source type;
+- YouTube video ID;
+- transcript source;
+- generation date;
+- AI model/provider;
+- sermon record ID;
+- companion record ID.
+
+Do not display unnecessary technical metadata to members.
+
+The pastor may see a simple label:
+
+Generated from sermon transcript
+
+====================================================
+14. DATABASE RELATIONSHIPS
+====================================================
+
+Use separate records for:
+
+A. Sermon
+
+B. Sermon Companion
+
+C. Sermon Companion Entries
+
+The companion should reference the sermon internally using the real sermon ID.
+
+Suggested relationship:
+
+sermon.id
+→ sermonCompanion.sermonId
+→ sermonCompanionEntry.companionId
+
+Do not use a Journey record.
+
+Do not place sermon companion progress inside Journey progress.
+
+Preserve existing database conventions where possible.
+
+====================================================
+15. MEMBER EXPERIENCE
+====================================================
+
+Publishing the sermon record alone must not automatically display the companion to members.
+
+The companion appears on Today’s Steps only when:
+
+- the companion is published;
+- at least one valid entry is published;
+- it is marked as the current church sermon companion;
+- the publication window is valid.
+
+Today’s Steps placement remains:
+
+1. 10 Minutes with Jesus
+2. Daily Devotional
+3. Your Journeys
+4. This Week’s Sermon Devotional
+5. Ask Emmaus
+
+The card should show:
+
+This Week’s Sermon
+
+Sermon title
+
+Current companion day
+
+Entry title
+
+Primary action:
+Begin Today or Continue
+
+Secondary action:
+View Sermon
+
+Use separate Sermon Companion progress.
+
+====================================================
+16. PUBLISHING SAFETY
+====================================================
+
+Generation always results in Draft status.
+
+The pastor must explicitly publish:
+
+- the sermon record;
+- the companion;
+- each companion day or a reviewed group of days.
+
+Before bulk publishing, show a confirmation containing:
+
+- companion title;
+- number of entries;
+- publication date;
+- member visibility.
+
+Do not use automatic publishing.
+
+Do not change global notification settings.
+
+Do not send a notification automatically when publishing.
+
+====================================================
+17. CURRENT SCREEN CLEANUP
+====================================================
+
+Remove the current long blank form as the initial state.
+
+Remove or hide from the pastor-facing initial screen:
+
+- Transcript Status dropdown;
+- Status dropdown;
+- Linked Companion Journey ID;
+- manual Summary input;
+- manual Topics input;
+- manual Keywords input.
+
+These fields may remain available in the generated review editor where useful.
+
+Replace:
+
+Generate Companion Draft
+
+on an empty unsaved sermon
+
+with the URL-first:
+
+Generate Draft
+
+The companion generation action becomes available after a valid sermon draft exists.
+
+====================================================
+18. TOOLBAR
+====================================================
+
+Initial URL screen toolbar:
+
+Cancel
+
+No Save button is required until a draft exists.
+
+Generated review editor toolbar:
+
+Save Draft
+
+Regenerate
+
+Publish
+
+Use the existing Emmaus Content Studio toolbar styling.
+
+====================================================
+19. SECURITY AND SERVER-SIDE PROCESSING
+====================================================
+
+Transcript retrieval and AI generation must occur server-side.
+
+Do not expose:
+
+- AI API keys;
+- transcript-provider secrets;
+- internal prompts;
+- provider credentials.
+
+Validate that only authorised pastors/editors can generate sermon drafts.
+
+Apply sensible:
+
+- URL validation;
+- input size limits;
+- transcript length limits;
+- generation timeouts;
+- rate limits;
+- duplicate request protection;
+- audit logging.
+
+Sanitize stored transcript content.
+
+====================================================
+20. TEST WITH A COMPLETELY NEW SERMON
+====================================================
+
+Do not use:
+
+God’s Kindness Restores the Broken
+
+Use a different real YouTube sermon to test the workflow from the beginning.
+
+Test the following:
+
+✓ New Sermon opens with a URL-first screen.
+
+✓ The pastor can paste a YouTube URL.
+
+✓ Invalid URLs show a clean error.
+
+✓ Generate Draft starts one server-side job.
+
+✓ Duplicate clicks do not create duplicate records.
+
+✓ YouTube metadata is retrieved.
+
+✓ Transcript is retrieved when available.
+
+✓ Transcript fallback appears when unavailable.
+
+✓ Pasted transcript fallback continues the same job.
+
+✓ Sermon title is generated or retrieved accurately.
+
+✓ Speaker is identified or safely left for review.
+
+✓ Main Scripture is extracted without invention.
+
+✓ Summary is generated.
+
+✓ Central Message is generated.
+
+✓ Key Truths are generated.
+
+✓ Topics and keywords are generated.
+
+✓ Full transcript is stored.
+
+✓ A five-day Sermon Companion draft is generated.
+
+✓ Every companion day uses the approved fields.
+
+✓ Every generated record remains Draft.
+
+✓ Nothing appears to members before publishing.
+
+✓ The pastor can edit every generated field.
+
+✓ The pastor can regenerate one field safely.
+
+✓ Existing edits are not overwritten silently.
+
+✓ Companion records are not stored as Journeys.
+
+✓ Technical IDs are not exposed in the editor.
+
+✓ Publishing remains an explicit pastoral action.
+
+✓ Published companion appears in the correct Today’s Steps position.
+
+✓ Member progress is separate from Journey progress.
+
+====================================================
+21. COMPLETION REPORT
+====================================================
+
+Stop only when a pastor can:
+
+1. open New Sermon;
+2. paste a YouTube URL;
+3. click Generate Draft;
+4. receive an editable sermon draft;
+5. receive an editable five-day companion draft;
+6. review everything before publishing.
+
+At completion, report:
+
+1. the URL route used;
+2. the transcript retrieval method;
+3. the fallback method;
+4. the AI generation endpoint;
+5. the sermon fields generated;
+6. the companion fields generated;
+7. the database relationships used;
+8. the files changed;
+9. the result of every test above;
+10. any provider, transcript or licensing limitation;
+11. any remaining manual test.
