@@ -1,0 +1,217 @@
+Project Emmaus — Standardize Content Studio Editors with Live Preview
+
+The Daily Devotionals editor has become the preferred editor experience.
+
+Use it as the Content Studio standard.
+
+Do not redesign the overall Content Studio.
+
+Simply make Daily Rhythm use the same editor layout.
+
+====================================================
+
+CURRENT
+
+Daily Rhythm
+
+--------------------------------
+
+Editor
+
+Preview button
+
+Open Preview
+
+Return to editor
+
+--------------------------------
+
+Daily Devotionals
+
+--------------------------------
+
+Editor
+
+Live Preview
+
+(side-by-side)
+
+--------------------------------
+
+The Daily Devotionals layout is now the approved standard.
+
+====================================================
+
+GOAL
+
+Replace the Daily Rhythm editor layout with the same live-preview layout used by Daily Devotionals.
+
+Remove the Preview button entirely.
+
+The preview should update automatically as the editor types.
+
+====================================================
+
+LEFT PANEL
+
+Keep all existing Daily Rhythm fields exactly as they are.
+
+Do not rename fields.
+
+Do not change saving.
+
+Do not change publishing.
+
+Do not change AI writing.
+
+Do not change Scripture loading.
+
+====================================================
+
+RIGHT PANEL
+
+Replace the existing Preview page with the same live preview component already used by Daily Devotionals.
+
+It should render exactly what the member will see.
+
+Including:
+
+• personalised greeting
+
+• embedded Scripture
+
+• reflection
+
+• prayer
+
+• next step
+
+• closing
+
+• completion footer
+
+• bottom navigation
+
+• Ask Emmaus
+
+Use the existing shared renderer.
+
+There must not be two rendering systems.
+
+====================================================
+
+REMOVE
+
+Delete the Preview button from the toolbar.
+
+Current toolbar:
+
+Preview
+
+Help Me Write
+
+Save Draft
+
+Publish
+
+Change to:
+
+Help Me Write
+
+Save Draft
+
+Publish
+
+====================================================
+
+LIVE UPDATES
+
+The preview should update immediately when editing:
+
+Title
+
+Scripture Reference
+
+Greeting
+
+Reflection
+
+Prayer
+
+Next Step
+
+Closing
+
+No page refresh.
+
+No separate preview route.
+
+No manual reload.
+
+====================================================
+
+MATCH DAILY DEVOTIONALS
+
+The Daily Rhythm editor should visually match the Daily Devotionals editor:
+
+same spacing
+
+same panel widths
+
+same scrolling
+
+same preview sizing
+
+same typography
+
+same responsiveness
+
+====================================================
+
+SHARED PREVIEW COMPONENT
+
+If possible:
+
+Extract the preview renderer into one shared component used by:
+
+Daily Rhythm
+
+Daily Devotionals
+
+Future Journeys
+
+Future Sermons
+
+Future Bible Studies
+
+This guarantees every content type renders identically.
+
+====================================================
+
+TEST
+
+Verify:
+
+✓ Preview button removed.
+
+✓ Live preview always visible.
+
+✓ Editing updates preview instantly.
+
+✓ Publishing unaffected.
+
+✓ Draft saving unaffected.
+
+✓ Scripture still loads.
+
+✓ Greeting personalisation still works.
+
+✓ Mobile preview unchanged.
+
+✓ Desktop responsive.
+
+✓ No duplicated rendering logic.
+
+Stop when Daily Rhythm feels identical to Daily Devotionals from an editor's perspective.
+
+The Daily Devotionals editor is now the Content Studio design standard.

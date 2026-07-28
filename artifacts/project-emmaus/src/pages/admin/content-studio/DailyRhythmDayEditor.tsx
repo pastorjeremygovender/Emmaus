@@ -1,13 +1,17 @@
 /**
  * DailyRhythmDayEditor — purpose-built editor for a single Daily Rhythm day.
  *
+ * Layout: two-column split, matching the Daily Devotionals editor standard.
+ *   Left panel  — all fields + toolbar (Help Me Write, Save Draft, Publish)
+ *   Right panel — live DailyRhythmReading preview; updates as the admin types.
+ *
  * Fields: Day Number, Title, Scripture Reference, Greeting, Reflection,
  *         Prayer, Your Next Step, Closing
- * Actions: Preview, Save Draft, Publish, Duplicate, Delete
+ * Actions: Help Me Write, Save Draft, Publish, Duplicate, Delete
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  ArrowLeft, Eye, EyeOff, Save, CheckCircle, Copy, Trash2,
+  ArrowLeft, Save, CheckCircle, Copy, Trash2,
   AlertTriangle, Loader2, X, Wand2, ChevronDown, CornerDownLeft,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -248,53 +252,6 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
   );
 }
 
-// ─── Preview overlay ──────────────────────────────────────────────────────────
-
-// ─── Preview overlay ──────────────────────────────────────────────────────────
-// Wraps the shared DailyRhythmReading component in a full-screen overlay.
-// The sticky banner is the only editor-specific control; everything inside
-// DailyRhythmReading is pixel-identical to what members see.
-
-function DayPreview({ form, onClose }: { form: DayForm; onClose: () => void }) {
-  const { user } = useAuth();
-  // Use the signed-in admin's name so preview is realistic; fall back to
-  // "Jeremy" (the spec's example) when no usable name is available.
-  const previewName = resolveDisplayName(user?.preferredName) ?? 'Jeremy';
-  return (
-    <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-
-      {/* Editor control — not visible to members */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-100 flex items-center justify-between px-5 h-14">
-        <div className="text-[13px] font-medium text-gray-500">Preview — member view</div>
-        <button
-          onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-        >
-          <X size={14} /> Close Preview
-        </button>
-      </div>
-
-      {/* Shared reading component — identical to member experience */}
-      <div className="min-h-[100dvh] bg-background pb-8">
-        <DailyRhythmReading
-          day={form.day}
-          title={form.title}
-          mentorIntro={form.mentorIntro}
-          memberName={previewName}
-          scripture={form.scripture}
-          devotional={form.devotional}
-          prayerPrompt={form.prayerPrompt}
-          actionStep={form.actionStep}
-          closingText={form.closingText}
-          previewMode
-          actionButton={<PreviewContinueButton />}
-        />
-      </div>
-
-    </div>
-  );
-}
-
 // ─── Delete confirmation ───────────────────────────────────────────────────────
 
 function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
@@ -348,6 +305,9 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const journey = getJourney(journeyId) as Journey | undefined;
   const isEditor = user?.role === 'admin' || user?.role === 'superAdmin';
 
+  // Preview uses the signed-in admin's name for realism; falls back to "Jeremy".
+  const previewName = resolveDisplayName(user?.preferredName) ?? 'Jeremy';
+
   // Compute next available day number for new days
   const nextDay = useMemo(() => computeNextDay(steps as Step[], journeyId), [steps, journeyId]);
 
@@ -355,7 +315,6 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'published' | 'error'>('idle');
-  const [showPreview, setShowPreview] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [currentDay, setCurrentDay] = useState<number | null>(day); // tracks saved day number
   const [showAssistant, setShowAssistant] = useState(false);
@@ -483,12 +442,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
 
   return (
     <>
-      {/* Preview overlay */}
-      {showPreview && (
-        <DayPreview form={form} onClose={() => setShowPreview(false)} />
-      )}
-
-      {/* Writing Assistant panel */}
+      {/* Writing Assistant panel — full-screen overlay; unchanged */}
       {showAssistant && user && (
         <WritingAssistantPanel
           journeyId={journeyId}
@@ -518,103 +472,99 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
         />
       )}
 
-      <div className="flex flex-col h-full">
-        {/* Sticky editor header */}
-        <div className="flex-shrink-0 px-6 py-3 bg-white border-b border-gray-100 flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            aria-label="Back"
-          >
-            <ArrowLeft size={16} />
-          </button>
+      {/* ── Two-column split layout (matches Daily Devotionals editor standard) ── */}
+      <div className="flex h-full min-h-0 bg-gray-50">
 
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-gray-700 truncate">
-              {journey?.title ?? 'Daily Rhythm'} · Day {form.day}
-              {form.title ? ` — ${form.title}` : ''}
-            </p>
-          </div>
+        {/* ── Left panel: editor fields ──────────────────────────────────────── */}
+        <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Save status */}
-            {saveStatus === 'saved' && (
-              <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
-                <CheckCircle size={12} /> Saved
-              </span>
-            )}
-            {saveStatus === 'published' && (
-              <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
-                <CheckCircle size={12} /> Published
-              </span>
-            )}
-            {saveStatus === 'error' && (
-              <span className="text-[12px] text-red-500 font-medium">Save failed</span>
-            )}
-
+          {/* Sticky header */}
+          <div className="flex-shrink-0 px-6 py-3 bg-white border-b border-gray-100 flex items-center gap-3">
             <button
-              onClick={() => setShowPreview(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+              onClick={onBack}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label="Back"
             >
-              {showPreview ? <EyeOff size={13} /> : <Eye size={13} />}
-              Preview
+              <ArrowLeft size={16} />
             </button>
 
-            {isEditor && (
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-gray-700 truncate">
+                {journey?.title ?? 'Daily Rhythm'} · Day {form.day}
+                {form.title ? ` — ${form.title}` : ''}
+              </p>
+            </div>
+
+            {/* Action buttons — Preview removed; Help Me Write, Save Draft, Publish remain */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Save status */}
+              {saveStatus === 'saved' && (
+                <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
+                  <CheckCircle size={12} /> Saved
+                </span>
+              )}
+              {saveStatus === 'published' && (
+                <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
+                  <CheckCircle size={12} /> Published
+                </span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-[12px] text-red-500 font-medium">Save failed</span>
+              )}
+
+              {isEditor && (
+                <button
+                  onClick={() => setShowAssistant(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
+                    showAssistant
+                      ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
+                      : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
+                  }`}
+                >
+                  <Wand2 size={12} />
+                  Help Me Write
+                </button>
+              )}
+
               <button
-                onClick={() => setShowAssistant(v => !v)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
-                  showAssistant
-                    ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
-                    : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
-                }`}
+                onClick={() => handleSave('Draft')}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                <Wand2 size={12} />
-                Help Me Write
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                Save Draft
               </button>
-            )}
 
-            <button
-              onClick={() => handleSave('Draft')}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-              Save Draft
-            </button>
+              <button
+                onClick={() => handleSave('Published')}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                Publish
+              </button>
 
-            <button
-              onClick={() => handleSave('Published')}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
-            >
-              {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-              Publish
-            </button>
+              <button
+                onClick={handleDuplicate}
+                disabled={saving}
+                title="Duplicate this day (Day +1)"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
+              >
+                <Copy size={15} />
+              </button>
 
-            <button
-              onClick={handleDuplicate}
-              disabled={saving}
-              title="Duplicate this day (Day +1)"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
-            >
-              <Copy size={15} />
-            </button>
-
-            <button
-              onClick={() => setShowDelete(true)}
-              title="Delete this day"
-              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <Trash2 size={15} />
-            </button>
+              <button
+                onClick={() => setShowDelete(true)}
+                title="Delete this day"
+                className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Editor body */}
-        <div className="flex-1 overflow-y-auto bg-gray-50/50">
-          <div className="max-w-[720px] mx-auto px-6 py-8 space-y-7">
+          {/* Fields */}
+          <div className="flex-1 p-6 space-y-7 max-w-2xl">
 
             {/* Day Number + Title row */}
             <div className="grid grid-cols-[120px_1fr] gap-4">
@@ -742,6 +692,27 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
 
           </div>
         </div>
+
+        {/* ── Right panel: live preview ───────────────────────────────────────── */}
+        <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
+          </div>
+          <DailyRhythmReading
+            day={form.day}
+            title={form.title}
+            mentorIntro={form.mentorIntro}
+            memberName={previewName}
+            scripture={form.scripture}
+            devotional={form.devotional}
+            prayerPrompt={form.prayerPrompt}
+            actionStep={form.actionStep}
+            closingText={form.closingText}
+            previewMode
+            actionButton={<PreviewContinueButton />}
+          />
+        </div>
+
       </div>
     </>
   );
