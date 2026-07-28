@@ -1,0 +1,268 @@
+Project Emmaus — Standardize the Ending of 10 Minutes with Jesus and Daily Devotionals
+
+Current issue:
+
+The ending of Daily Devotionals and 10 Minutes with Jesus is inconsistent.
+
+Daily Devotional currently ends with:
+
+“You’ve completed this devotional.”
+
+Back to Today’s Steps
+
+10 Minutes with Jesus currently ends with:
+
+Back to Previous Days
+
+Pastor Jeremy prefers the Daily Devotional ending.
+
+Standardize both experiences so they use the same completion pattern.
+
+Do not redesign the reading screens.
+Do not change the content structures.
+Do not change progress rules.
+Do not modify Previous Days functionality itself.
+Only standardize the bottom completion area.
+
+====================================================
+LOCKED ENDING PATTERN
+====================================================
+
+For a newly completed reading, show:
+
+“You’ve completed today’s reading.”
+
+Primary text action:
+
+Back to Today’s Steps
+
+For Daily Devotionals, this replaces the current wording:
+
+“You’ve completed this devotional.”
+
+For 10 Minutes with Jesus, remove the bottom:
+
+Back to Previous Days
+
+button from the reading page.
+
+The member should always return to Today’s Steps after completing today’s reading.
+
+====================================================
+TASK 1 — SHARED COMPLETION COMPONENT
+====================================================
+
+Create or reuse one shared completion-footer component for:
+
+- 10 Minutes with Jesus
+- Daily Devotionals
+
+Suggested component responsibilities:
+
+ReadingCompletionFooter
+
+Inputs may include:
+
+- contentType
+- isCompleted
+- isReplay
+- onReturnToToday
+- returnLabel
+
+Do not maintain two visually different implementations.
+
+Use the current Daily Devotional styling as the visual source of truth.
+
+====================================================
+TASK 2 — NORMAL COMPLETION STATE
+====================================================
+
+After a member completes today’s reading, show:
+
+You’ve completed today’s reading.
+
+Back to Today’s Steps
+
+The action must navigate to the member Today’s Steps screen.
+
+Use the existing canonical Today’s Steps route.
+
+Do not navigate to:
+
+- the next day;
+- Previous Days;
+- the content library;
+- the series page;
+- a separate completion screen.
+
+====================================================
+TASK 3 — 10 MINUTES WITH JESUS
+====================================================
+
+Remove the large bottom button:
+
+Back to Previous Days
+
+from the 10 Minutes with Jesus reading screen.
+
+Previous Days must remain accessible from the approved secondary link beneath the 10 Minutes with Jesus card on Today’s Steps:
+
+View Previous Days →
+
+Do not remove or break the Previous Days page.
+
+Do not make Previous Days the primary completion destination.
+
+For a newly completed day, the bottom should show:
+
+You’ve completed today’s reading.
+
+Back to Today’s Steps
+
+====================================================
+TASK 4 — DAILY DEVOTIONALS
+====================================================
+
+Update the Daily Devotional completion wording from:
+
+You’ve completed this devotional.
+
+to:
+
+You’ve completed today’s reading.
+
+Keep:
+
+Back to Today’s Steps
+
+Preserve all existing Daily Devotional completion and calendar-lock behaviour.
+
+Do not advance to the next day.
+
+====================================================
+TASK 5 — REPLAY MODE
+====================================================
+
+When a member reopens a completed entry through:
+
+- Review Today
+- View Previous Days
+
+show a replay-safe ending.
+
+Preferred replay ending:
+
+Back to Today’s Steps
+
+Do not show:
+
+- Finished
+- Continue
+- Next Day
+- Complete Again
+- Back to Previous Days as the main bottom action
+
+Opening a previous reading must remain read-only and must not alter progress.
+
+====================================================
+TASK 6 — VISUAL CONSISTENCY
+====================================================
+
+Use the Daily Devotional completion styling shown in the current app:
+
+- centred confirmation text;
+- understated teal text action;
+- generous spacing;
+- no large outlined button;
+- no confetti;
+- no badge;
+- no completion card;
+- no extra screen.
+
+The completion footer should sit above:
+
+- Ask Emmaus;
+- standard bottom navigation.
+
+Ensure it does not overlap either element on mobile.
+
+====================================================
+TASK 7 — LOADING AND FAILURE STATE
+====================================================
+
+Before completion is saved:
+
+- disable the completion button;
+- show the existing loading state;
+- prevent duplicate requests.
+
+Only show:
+
+You’ve completed today’s reading.
+
+after the save succeeds.
+
+If saving fails:
+
+- keep the member on the reading screen;
+- restore the completion button;
+- show a clean error;
+- do not show the completed footer.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Test Daily Devotional Day 1:
+
+✓ Tap Finished.
+
+✓ Completion saves once.
+
+✓ The footer shows:
+  “You’ve completed today’s reading.”
+
+✓ Back to Today’s Steps returns to Today’s Steps.
+
+✓ The member is not advanced to Day 2.
+
+Test 10 Minutes with Jesus:
+
+✓ Complete today’s reading.
+
+✓ The large Back to Previous Days button is removed.
+
+✓ The same completion footer appears.
+
+✓ Back to Today’s Steps works.
+
+✓ View Previous Days remains available from Today’s Steps.
+
+Test replay:
+
+✓ Review Today opens safely.
+
+✓ A previous day opens safely.
+
+✓ No completion is recorded again.
+
+✓ No future day unlocks.
+
+✓ The replay ending returns to Today’s Steps.
+
+Test layout:
+
+✓ The footer does not overlap Ask Emmaus.
+
+✓ The footer does not overlap bottom navigation.
+
+✓ Mobile and desktop previews match.
+
+Stop when both 10 Minutes with Jesus and Daily Devotionals use the same Daily Devotional-style ending.
+
+At completion, report:
+
+1. the shared component used;
+2. the files changed;
+3. confirmation that Previous Days still works;
+4. the result of each test above.

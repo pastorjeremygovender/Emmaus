@@ -4,7 +4,8 @@
  * Route: /devotional/:seriesId/day/:day
  *
  * Completion behaviour:
- *   - Tapping "Finished" marks the current day complete and returns to Today's Steps.
+ *   - Tapping "Finished" marks the current day complete and shows ReadingCompletionFooter
+ *     in-page; the member then taps "Back to Today's Steps" to navigate to /walk.
  *   - The app never navigates forward to the next day on button press.
  *   - Day availability is calendar-derived on Walk.tsx; this page is read-only once
  *     a day is completed (replay / review mode).
@@ -15,6 +16,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { ReadingCompletionFooter } from '@/components/ReadingCompletionFooter';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -40,6 +42,9 @@ export default function DevotionalDay() {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  // In-page completion state — shown after a successful save, before the member
+  // taps "Back to Today's Steps". Prevents immediate auto-navigation.
+  const [justCompleted, setJustCompleted] = useState(false);
 
   const load = useCallback(async () => {
     if (!seriesId) return;
@@ -65,17 +70,21 @@ export default function DevotionalDay() {
     }
   }, [seriesId, user?.id]);
 
+  useEffect(() => {
+    setJustCompleted(false); // reset if the member navigates to a different day
+  }, [day]);
+
   useEffect(() => { load(); }, [load]);
 
   const entry = seriesData?.entries.find(e => e.dayNumber === day);
   const totalEntries = seriesData?.entries.filter(e => e.status === 'Published').length ?? 0;
 
-  // This day has already been completed — show read-only / replay mode.
+  // This day has already been completed in a prior session — replay mode.
   const alreadyCompleted = progress?.completedDays?.includes(day) ?? false;
 
   /**
-   * Handle "Finished" — marks the current day complete then returns to Today's Steps.
-   * Never navigates forward to the next day.
+   * Handle "Finished" — marks the current day complete then shows the
+   * ReadingCompletionFooter in-page. Never navigates forward to the next day.
    */
   const handleFinished = async () => {
     if (!seriesId || completing) return;
@@ -85,7 +94,7 @@ export default function DevotionalDay() {
     try {
       const updated = await markDayComplete(seriesId, day, auth);
       setProgress(updated);
-      setLocation('/walk');
+      setJustCompleted(true);
     } catch {
       // Restore button so the member can try again — never leave it spinning.
       setCompleting(false);
@@ -120,36 +129,35 @@ export default function DevotionalDay() {
 
   // ── Action button ──────────────────────────────────────────────────────────
 
-  /** Replay / review state — day already completed. */
-  const replayAction = (
-    <div className="w-full text-center py-4 space-y-1">
-      <p className="text-sm text-muted-foreground">You've completed this devotional.</p>
-      <button
-        onClick={() => setLocation('/walk')}
-        className="text-sm text-primary font-medium hover:underline"
-      >
-        Back to Today's Steps
-      </button>
-    </div>
-  );
+  let actionButton: React.ReactNode;
 
-  /** First-time completion — "Finished" button with loading + error states. */
-  const finishAction = (
-    <div className="space-y-2">
-      {saveError && (
-        <p className="text-center text-sm text-destructive">
-          Something went wrong. Please try again.
-        </p>
-      )}
-      <Button
-        className="w-full h-14 text-[17px] font-semibold rounded-2xl"
-        onClick={handleFinished}
-        disabled={completing}
-      >
-        {completing ? <Loader2 size={18} className="animate-spin" /> : 'Finished'}
-      </Button>
-    </div>
-  );
+  if (justCompleted || alreadyCompleted) {
+    // Completed this session or returning to an already-completed day (replay)
+    actionButton = (
+      <ReadingCompletionFooter
+        completedToday={justCompleted || alreadyCompleted}
+        onReturn={() => setLocation('/walk')}
+      />
+    );
+  } else {
+    // First-time reading — show "Finished" button with loading + error states
+    actionButton = (
+      <div className="space-y-2">
+        {saveError && (
+          <p className="text-center text-sm text-destructive">
+            Something went wrong. Please try again.
+          </p>
+        )}
+        <Button
+          className="w-full h-14 text-[17px] font-semibold rounded-2xl"
+          onClick={handleFinished}
+          disabled={completing}
+        >
+          {completing ? <Loader2 size={18} className="animate-spin" /> : 'Finished'}
+        </Button>
+      </div>
+    );
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -185,7 +193,7 @@ export default function DevotionalDay() {
         closing={entry.closing ?? ''}
         memberName={resolveDisplayName(user?.preferredName)}
         returnPath={returnPath}
-        actionButton={alreadyCompleted ? replayAction : finishAction}
+        actionButton={actionButton}
       />
 
       <BottomNav />
