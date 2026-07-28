@@ -3,9 +3,14 @@
  *
  * Route: /devotional/:seriesId/day/:day
  *
+ * Source-aware return (spec §4):
+ *   Pass ?source=today      → "Back to Today's Steps" → /walk
+ *   Pass ?source=nextSteps  → "Back to Next Steps"    → /journeys
+ *   Default (no param)      → Today's Steps (daily devotionals default to Walk)
+ *
  * Completion behaviour:
- *   - Tapping "Finished" marks the current day complete and shows ReadingCompletionFooter
- *     in-page; the member then taps "Back to Today's Steps" to navigate to /walk.
+ *   - Tapping "Finished" marks the current day complete and shows JourneyCompletionPanel
+ *     in-page; the member then taps the source-aware return button (or the back arrow).
  *   - The app never navigates forward to the next day on button press.
  *   - Day availability is calendar-derived on Walk.tsx; this page is read-only once
  *     a day is completed (replay / review mode).
@@ -17,6 +22,7 @@ import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
 import { ReadingCompletionFooter } from '@/components/ReadingCompletionFooter';
+import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -29,6 +35,13 @@ import {
 } from '@/lib/devotionals-api';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 
+// ─── Source-aware return helpers ──────────────────────────────────────────────
+
+function resolveReturn(source: string | null): { path: string; label: string } {
+  if (source === 'nextSteps') return { path: '/journeys', label: 'Back to Next Steps' };
+  return { path: '/walk', label: "Back to Today's Steps" };
+}
+
 export default function DevotionalDay() {
   const params = useParams<{ seriesId: string; day: string }>();
   const [, setLocation] = useLocation();
@@ -37,13 +50,17 @@ export default function DevotionalDay() {
   const seriesId = params.seriesId;
   const day = parseInt(params.day ?? '1', 10);
 
+  // Read source once on mount — query string doesn't change during the page lifetime
+  const source = new URLSearchParams(window.location.search).get('source');
+  const { path: returnPath, label: returnLabel } = resolveReturn(source);
+
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [saveError, setSaveError] = useState(false);
   // In-page completion state — shown after a successful save, before the member
-  // taps "Back to Today's Steps". Prevents immediate auto-navigation.
+  // taps the return button. Prevents immediate auto-navigation.
   const [justCompleted, setJustCompleted] = useState(false);
 
   const load = useCallback(async () => {
@@ -77,14 +94,15 @@ export default function DevotionalDay() {
   useEffect(() => { load(); }, [load]);
 
   const entry = seriesData?.entries.find(e => e.dayNumber === day);
-  const totalEntries = seriesData?.entries.filter(e => e.status === 'Published').length ?? 0;
+  const publishedEntries = seriesData?.entries.filter(e => e.status === 'Published') ?? [];
+  const totalEntries = publishedEntries.length;
 
   // This day has already been completed in a prior session — replay mode.
   const alreadyCompleted = progress?.completedDays?.includes(day) ?? false;
 
   /**
    * Handle "Finished" — marks the current day complete then shows the
-   * ReadingCompletionFooter in-page. Never navigates forward to the next day.
+   * JourneyCompletionPanel in-page. Never navigates forward to the next day.
    */
   const handleFinished = async () => {
     if (!seriesId || completing) return;
@@ -102,7 +120,7 @@ export default function DevotionalDay() {
     }
   };
 
-  const returnPath = `/devotional/${seriesId}/day/${day}`;
+  const devotionalReturnPath = `/devotional/${seriesId}/day/${day}`;
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -120,8 +138,8 @@ export default function DevotionalDay() {
         <p className="text-muted-foreground text-sm text-center">
           This devotional isn't available yet.
         </p>
-        <Button variant="outline" onClick={() => setLocation('/walk')}>
-          Back to Today's Steps
+        <Button variant="outline" onClick={() => setLocation(returnPath)}>
+          {returnLabel}
         </Button>
       </div>
     );
@@ -133,12 +151,29 @@ export default function DevotionalDay() {
 
   if (justCompleted || alreadyCompleted) {
     // Completed this session or returning to an already-completed day (replay)
-    actionButton = (
-      <ReadingCompletionFooter
-        completedToday={justCompleted || alreadyCompleted}
-        onReturn={() => setLocation('/walk')}
-      />
-    );
+    const hasNextDay = day < totalEntries;
+    const heading = 'Today\'s devotional complete';
+    const subMessage = hasNextDay ? "Tomorrow's devotional will be here tomorrow." : undefined;
+
+    if (justCompleted) {
+      // Show the standard completion panel (spec §5/7)
+      actionButton = (
+        <JourneyCompletionPanel
+          heading={heading}
+          subMessage={subMessage}
+          returnLabel={returnLabel}
+          onReturn={() => setLocation(returnPath)}
+        />
+      );
+    } else {
+      // Replay mode (revisiting an already-completed day) — understated link
+      actionButton = (
+        <ReadingCompletionFooter
+          completedToday={true}
+          onReturn={() => setLocation(returnPath)}
+        />
+      );
+    }
   } else {
     // First-time reading — show "Finished" button with loading + error states
     actionButton = (
@@ -161,14 +196,14 @@ export default function DevotionalDay() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-36">
       {/* Nav bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2 max-w-[640px] mx-auto">
         <button
-          onClick={() => setLocation('/walk')}
+          onClick={() => setLocation(returnPath)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ChevronLeft size={16} /> Today
+          <ChevronLeft size={16} /> {source === 'nextSteps' ? 'Next Steps' : 'Today'}
         </button>
         {totalEntries > 1 && (
           <button
@@ -192,7 +227,7 @@ export default function DevotionalDay() {
         nextStep={entry.nextStep ?? ''}
         closing={entry.closing ?? ''}
         memberName={resolveDisplayName(user?.preferredName)}
-        returnPath={returnPath}
+        returnPath={devotionalReturnPath}
         actionButton={actionButton}
       />
 

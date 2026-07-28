@@ -1,0 +1,362 @@
+Please fix and standardize the devotional completion flow across Emmaus.
+
+IMPORTANT:
+Do not redesign unrelated screens.
+Do not delete or reset any user progress, journey content, completion records, or existing data.
+Use the existing Sermon Companion completion panel as the visual and behavioural standard.
+
+==================================================
+1. TEN MINUTES WITH JESUS: RETURN AUTOMATICALLY
+==================================================
+
+Current problem:
+At the bottom of Ten Minutes with Jesus, the user taps Continue, sees a separate completed-reading message, and then has to manually tap “Back to Today’s Steps.”
+
+Required behaviour:
+
+When the user taps Continue or completes the daily reading:
+
+1. Save the day as completed.
+2. Update all relevant progress and streak data.
+3. Return the user directly to Today’s Steps.
+4. Do not require a second tap.
+5. Do not leave the user on an unnecessary intermediate completion screen.
+
+The transition should feel immediate and intentional.
+
+If a short completion confirmation is needed, show it briefly as a toast/snackbar before returning to Today’s Steps, for example:
+
+“Today’s time with Jesus is complete.”
+
+Do not create an additional full-page confirmation step.
+
+==================================================
+2. FIX SERMON COMPANION: “JOURNEY STEP NOT FOUND”
+==================================================
+
+Current problem:
+Tapping Continue on the Sermon Companion card opens a blank screen displaying:
+
+“Journey step not found.”
+
+This must be fixed.
+
+Please trace the complete navigation and data-loading flow for Sermon Companion journeys.
+
+Check and correct:
+
+- The journey ID passed by the card
+- The current day or current step ID
+- Slug versus database ID mismatches
+- Journey type filtering
+- Published versus draft filtering
+- Day-number indexing
+- Route parameters
+- API/database query conditions
+- Any assumption that Sermon Companion uses the same data structure as another journey type
+
+Required behaviour:
+
+- Continue must open the correct current Sermon Companion devotional.
+- Review must reopen the correct completed devotional.
+- If the user has completed Day 1, Continue must open Day 2 when Day 2 is available.
+- If the next day is time-locked, show the proper completion panel rather than “Journey step not found.”
+- If journey data genuinely cannot be loaded, show a useful recovery screen with a button back to the correct source page.
+
+Never expose the raw message “Journey step not found” to users.
+
+Add safe fallback handling, but fix the underlying data and routing issue rather than only hiding the error.
+
+==================================================
+3. PSALMS DAILY DEVOTIONAL: VIEW PREVIOUS DAYS
+==================================================
+
+Add a “View Previous Days →” link to the Psalms Daily Devotional card.
+
+It should match the existing Ten Minutes with Jesus card in:
+
+- Placement
+- Font
+- Spacing
+- Arrow style
+- Interaction behaviour
+
+Add this feature wherever the Psalms Daily Devotional card appears, including:
+
+- Today’s Steps
+- Next Steps
+
+When tapped, open a previous-days screen showing only the Psalms devotional days available to that user.
+
+Each previous-day item should show:
+
+- Day number or date, depending on the existing Psalms structure
+- Scripture reference
+- Devotional title, when available
+- Completion status
+- A Review button or tappable row
+
+Users may review previous days without changing their current progress or completion date.
+
+==================================================
+4. RETURN USERS TO THE SCREEN THEY CAME FROM
+==================================================
+
+Current problem:
+When Psalms Daily Devotional is opened from Next Steps, the completion link says:
+
+“Back to Today’s Steps”
+
+That is incorrect.
+
+The return destination must depend on where the devotional was opened.
+
+Required behaviour:
+
+Opened from Today’s Steps:
+- Completion button says “Back to Today’s Steps”
+- Returns to Today’s Steps
+
+Opened from Next Steps:
+- Completion button says “Back to Next Steps”
+- Returns to Next Steps
+
+Opened from My Journey or another valid source:
+- Return to that source screen using the appropriate wording
+
+Implement this using an explicit source/origin parameter such as:
+
+source=today
+source=nextSteps
+source=myJourney
+
+Do not rely only on browser history, because refreshed pages and direct routes must still behave safely.
+
+Use a sensible fallback:
+- Daily rhythm and Psalms content default to Today’s Steps
+- Additional journeys and Sermon Companions default to Next Steps
+
+==================================================
+5. STANDARDIZE THE COMPLETION DESIGN
+==================================================
+
+Use the current Sermon Companion completion panel as the standard completion design for:
+
+- Ten Minutes with Jesus
+- Psalms Daily Devotional
+- Sermon Companion
+- Other multi-day journeys and devotionals
+
+The standard panel should contain:
+
+1. A completion check icon
+2. A clear completion heading
+3. A short next-day message, when another day exists
+4. One outlined return button
+5. No duplicate completion messages
+6. No unnecessary second confirmation screen
+
+Examples:
+
+Ten Minutes with Jesus:
+
+[check icon]
+
+Day 7 complete
+
+Come back tomorrow for Day 8.
+
+[Back to Today’s Steps]
+
+
+Psalms Daily Devotional opened from Today’s Steps:
+
+[check icon]
+
+Today’s devotional complete
+
+Tomorrow’s devotional will be here tomorrow.
+
+[Back to Today’s Steps]
+
+
+Psalms Daily Devotional opened from Next Steps:
+
+[check icon]
+
+Today’s devotional complete
+
+Tomorrow’s devotional will be here tomorrow.
+
+[Back to Next Steps]
+
+
+Sermon Companion:
+
+[check icon]
+
+Day 2 complete
+
+Day 3 will be here tomorrow.
+
+[Back to Next Steps]
+
+If the journey itself is completely finished, use:
+
+[check icon]
+
+Journey complete
+
+You’ve completed this journey.
+
+[Back to Next Steps]
+
+==================================================
+6. STANDARD COMPLETION BUTTON STATES
+==================================================
+
+Before completion:
+Use the normal solid Emmaus green button.
+
+Labels should reflect the action:
+
+- Continue
+- Finish
+- Complete Today’s Reading
+
+After completion:
+Replace the active button with the muted completed state already used in the Sermon Companion screen:
+
+✓ Completed
+
+It must not submit completion more than once.
+
+The completed state should remain correct after:
+
+- Refreshing
+- Closing and reopening the app
+- Returning from another tab
+- Signing out and signing back in
+
+==================================================
+7. CREATE A REUSABLE COMPLETION COMPONENT
+==================================================
+
+Do not maintain separate, inconsistent completion layouts for each content type.
+
+Create or refactor to a reusable component such as:
+
+JourneyCompletionPanel
+
+Suggested inputs:
+
+- completedDayNumber
+- nextDayNumber
+- isFinalDay
+- journeyType
+- source
+- returnLabel
+- returnPath
+- completionHeading
+- nextDayMessage
+
+The component must use the same:
+
+- Border
+- Corner radius
+- Padding
+- Check icon
+- Typography
+- Button styling
+- Spacing
+- Responsive mobile layout
+
+Match the existing Sermon Companion completion panel closely.
+
+==================================================
+8. PREVENT FLOATING ASK EMMAUS OVERLAP
+==================================================
+
+The floating Ask Emmaus button must not cover:
+
+- The completion panel
+- Return buttons
+- Continue or Review buttons
+- Card text
+- Bottom navigation
+
+Add sufficient bottom spacing to all scrollable pages so the last action remains fully visible above Ask Emmaus and the bottom navigation.
+
+==================================================
+9. ACCEPTANCE TESTS
+==================================================
+
+Please test all of the following:
+
+TEST 1
+Open Ten Minutes with Jesus from Today’s Steps.
+Complete the reading.
+Tap Continue.
+Expected:
+- Progress saves
+- User returns directly to Today’s Steps
+- Card shows completed state
+- No extra Back button is required
+
+TEST 2
+Tap Continue on an unfinished Sermon Companion.
+Expected:
+- Correct day opens
+- “Journey step not found” never appears
+
+TEST 3
+Complete a Sermon Companion day.
+Expected:
+- Standard completion panel appears
+- Correct next-day message appears
+- Back to Next Steps works
+
+TEST 4
+Open Psalms from Today’s Steps and complete it.
+Expected:
+- Standard completion panel
+- Button says Back to Today’s Steps
+- Button returns there
+
+TEST 5
+Open Psalms from Next Steps and complete or review it.
+Expected:
+- Button says Back to Next Steps
+- Button returns there
+
+TEST 6
+Tap View Previous Days on the Psalms card from both tabs.
+Expected:
+- Previous Psalms days display
+- Completed days can be reviewed
+- Reviewing does not alter current progress
+
+TEST 7
+Refresh every completion page.
+Expected:
+- Completion state remains accurate
+- Return destination remains valid
+- No duplicate completion records are created
+
+TEST 8
+Test Day 1, a middle day, the latest available day, and the final day of every journey type.
+
+==================================================
+10. FINAL REPORT
+==================================================
+
+After implementing, report:
+
+1. The root cause of “Journey step not found”
+2. Which files and components were changed
+3. How source-aware return navigation now works
+4. How previous Psalms days are retrieved
+5. Whether completion logic is now shared across all journey types
+6. Any remaining content records that are missing valid day or step IDs
+
+Implement the fixes now.

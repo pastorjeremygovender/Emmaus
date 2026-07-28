@@ -3,9 +3,14 @@
  *
  * Canonical route: /daily-rhythm/day/:dayNumber
  *
+ * Completion behaviour (spec §1):
+ *   Tapping Continue immediately saves progress and returns the user to Today's Steps.
+ *   A brief JourneyCompletionPanel is shown in-page and auto-navigates after 2 s so the
+ *   member never has to tap a second time.
+ *
  * Modes:
  *   Live    — day === member's current day; shows Continue button; marks complete on tap,
- *             then shows ReadingCompletionFooter in-page before returning to Today's Steps.
+ *             then auto-returns to Today's Steps via JourneyCompletionPanel.
  *   Replay  — day <  member's current day; read-only; shows ReadingCompletionFooter only.
  *             Never writes progress.
  *
@@ -28,6 +33,7 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 import { ReadingCompletionFooter } from '@/components/ReadingCompletionFooter';
+import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
 import { BottomNav } from '@/components/BottomNav';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
@@ -100,6 +106,13 @@ export default function DailyRhythmDay() {
     setJustCompleted(false); // reset on day change
   }, [day]);
 
+  // Auto-return to Today's Steps 2 s after the completion panel appears (spec §1)
+  useEffect(() => {
+    if (!justCompleted) return;
+    const timer = setTimeout(() => setLocation('/walk'), 2000);
+    return () => clearTimeout(timer);
+  }, [justCompleted, setLocation]);
+
   // Preserve scroll position for EmbeddedScripture deep-links
   useEffect(() => {
     const key = buildReturnScrollKey(`/daily-rhythm/day/${day}`);
@@ -146,24 +159,37 @@ export default function DailyRhythmDay() {
   const handleComplete = () => {
     completeStep(journeyId, day, '');
     setJustCompleted(true);
+    // Auto-navigation is handled by the useEffect above (2 s delay).
+    // The JourneyCompletionPanel below gives the user an immediate tap-to-return option.
   };
 
   // ── Action button / footer ────────────────────────────────────────────────
 
   let actionButton: React.ReactNode;
 
-  if (justCompleted || (isReplay && alreadyCompleted)) {
-    // Just completed this session, or returning to a completed day
+  if (justCompleted) {
+    // Just completed this session — show standard panel; auto-returns in 2 s
+    const nextDay = day + 1;
+    actionButton = (
+      <JourneyCompletionPanel
+        heading={`Day ${day} complete`}
+        subMessage={`Come back tomorrow for Day ${nextDay}.`}
+        returnLabel="Back to Today's Steps"
+        onReturn={goBack}
+      />
+    );
+  } else if (isReplay && alreadyCompleted) {
+    // Returning to a completed day (replay)
     actionButton = (
       <ReadingCompletionFooter
-        completedToday={justCompleted || isReplay}
-        onReturn={goBack}
+        completedToday={true}
+        onReturn={isReplay ? goToPreviousDays : goBack}
       />
     );
   } else if (isReplay) {
     // Replay of an earlier day (older than today's progress) — not yet marked complete
     actionButton = (
-      <ReadingCompletionFooter completedToday={false} onReturn={goBack} />
+      <ReadingCompletionFooter completedToday={false} onReturn={goToPreviousDays} />
     );
   } else {
     // Live — first reading of today's step
@@ -180,7 +206,7 @@ export default function DailyRhythmDay() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-32">
+    <div className="min-h-[100dvh] bg-background pb-36">
 
       {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       <DevModeBanner />

@@ -325,7 +325,17 @@ function DiscoveryCard({
   );
 }
 
-function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onAction: () => void; starting: boolean }) {
+function DevotionalCard({
+  item,
+  onAction,
+  starting,
+  onViewPreviousDays,
+}: {
+  item: NextStepsItem;
+  onAction: () => void;
+  starting: boolean;
+  onViewPreviousDays?: () => void;
+}) {
   const dur = dayLabel(item.metadata.durationDays);
   return (
     <EmmausContentCard
@@ -336,6 +346,11 @@ function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onA
       primaryActionLabel={item.primaryActionLabel}
       onAction={onAction}
       loading={starting}
+      secondaryAction={
+        onViewPreviousDays
+          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+          : undefined
+      }
     />
   );
 }
@@ -345,11 +360,12 @@ function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onA
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
 function DevotionalsPanel({
-  items, onAction, startingId,
+  items, onAction, startingId, onViewPreviousDays,
 }: {
   items: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
   startingId: string | null;
+  onViewPreviousDays: (seriesId: string) => void;
 }) {
   if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
@@ -360,6 +376,11 @@ function DevotionalsPanel({
           item={item}
           onAction={() => onAction(item)}
           starting={startingId === item.id}
+          onViewPreviousDays={
+            item.memberProgressState !== 'not-started'
+              ? () => onViewPreviousDays(item.id)
+              : undefined
+          }
         />
       ))}
     </div>
@@ -577,7 +598,8 @@ export default function Journeys() {
 
   function handleSermonCompanionAction(item: NextStepsItem) {
     if (item.route.startsWith('/sermon-companion/')) {
-      setLocation(item.route);
+      // Append source so the reader knows to return to Next Steps
+      setLocation(item.route + '?source=nextSteps');
       return;
     }
     handleJourneyAction(item);
@@ -622,7 +644,7 @@ export default function Journeys() {
 
   function handleDevotionalAction(item: NextStepsItem) {
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route);
+      setLocation(item.route + '?source=nextSteps');
       return;
     }
     const activeDevotional = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');
@@ -639,7 +661,7 @@ export default function Journeys() {
     try {
       await startSeries(item.id, { userId: user.id });
       await reload();
-      setLocation(`/devotional/${item.id}/day/1`);
+      setLocation(`/devotional/${item.id}/day/1?source=nextSteps`);
     } catch { /* non-fatal */ }
     finally {
       setStartingDevId(null);
@@ -700,6 +722,7 @@ export default function Journeys() {
                 items={data.dailyDevotionals}
                 onAction={handleDevotionalAction}
                 startingId={startingDevId}
+                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous`)}
               />
             )}
 

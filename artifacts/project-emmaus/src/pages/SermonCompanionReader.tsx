@@ -3,6 +3,10 @@
  *
  * Route: /sermon-companion/:id/day/:day
  *
+ * Source-aware return (spec §4):
+ *   Pass ?source=today      → "Back to Today's Steps" → /walk
+ *   Pass ?source=nextSteps  → "Back to Next Steps"    → /journeys  (default)
+ *
  * Sermon companions are AI-generated 5-day devotionals linked to a specific sermon.
  * Progress is tracked via the sermon_companion_progress system (separate from
  * journey progress). The page auto-starts a progress record on first visit.
@@ -10,13 +14,21 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+// ─── Source-aware return helpers ──────────────────────────────────────────────
+
+function resolveReturn(source: string | null): { path: string; label: string } {
+  if (source === 'today') return { path: '/walk', label: "Back to Today's Steps" };
+  return { path: '/journeys', label: 'Back to Next Steps' };
+}
 
 // ─── API types ────────────────────────────────────────────────────────────────
 
@@ -85,6 +97,10 @@ export default function SermonCompanionReader() {
 
   const companionId = params.id ?? '';
   const day = parseInt(params.day ?? '1', 10);
+
+  // Read source once on mount — query string doesn't change during the page lifetime
+  const source = new URLSearchParams(window.location.search).get('source');
+  const { path: returnDest, label: returnLabel } = resolveReturn(source);
 
   const [companion, setCompanion]       = useState<MemberCompanion | null>(null);
   const [progress, setProgress]         = useState<SCProgress | null>(null);
@@ -158,10 +174,13 @@ export default function SermonCompanionReader() {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6 text-center pb-24">
         <p className="text-muted-foreground text-sm">
-          This sermon companion is not available.
+          This sermon companion is not available right now.
         </p>
-        <Button variant="outline" size="sm" onClick={() => setLocation('/journeys')}>
-          Back to Next Steps
+        <p className="text-xs text-muted-foreground/70">
+          The companion may still be generating. Please check back in a moment.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => setLocation(returnDest)}>
+          {returnLabel}
         </Button>
         <BottomNav />
       </div>
@@ -174,8 +193,13 @@ export default function SermonCompanionReader() {
         <p className="text-muted-foreground text-sm">
           Day {day} is not available yet.
         </p>
-        <Button variant="outline" size="sm" onClick={() => setLocation('/journeys')}>
-          Back to Next Steps
+        {day < companion.numberOfDays && (
+          <p className="text-xs text-muted-foreground/70">
+            Each day unlocks after you complete the previous one.
+          </p>
+        )}
+        <Button variant="outline" size="sm" onClick={() => setLocation(returnDest)}>
+          {returnLabel}
         </Button>
         <BottomNav />
       </div>
@@ -186,12 +210,13 @@ export default function SermonCompanionReader() {
 
   // Primary action button shown inside DevotionalReading
   const actionButton = isAlreadyCompleted ? (
+    // Already completed in a prior session — understated return button
     <Button
       variant="outline"
       className="w-full rounded-2xl"
-      onClick={() => setLocation('/journeys')}
+      onClick={() => setLocation(returnDest)}
     >
-      Back to Next Steps
+      {returnLabel}
     </Button>
   ) : (
     <Button
@@ -201,24 +226,22 @@ export default function SermonCompanionReader() {
     >
       {completing
         ? <><Loader2 size={16} className="animate-spin mr-2" />Saving…</>
-        : justCompleted
-          ? <><CheckCircle2 size={16} className="mr-2" />Completed</>
-          : 'Finished'
+        : 'Finished'
       }
     </Button>
   );
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-28">
+    <div className="min-h-[100dvh] bg-background pb-36">
       {/* Back navigation */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/40">
         <div className="max-w-[480px] mx-auto px-4 h-12 flex items-center gap-2">
           <button
-            onClick={() => setLocation('/journeys')}
+            onClick={() => setLocation(returnDest)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1"
           >
             <ChevronLeft size={16} />
-            Next Steps
+            {source === 'today' ? "Today's Steps" : 'Next Steps'}
           </button>
           <span className="text-muted-foreground/30 mx-1">·</span>
           <span className="text-sm text-muted-foreground truncate">{companion.title}</span>
@@ -249,30 +272,19 @@ export default function SermonCompanionReader() {
         </p>
       )}
 
-      {/* Completion footer */}
-      {justCompleted && (
+      {/* Standard completion panel (spec §5/7) */}
+      {justCompleted && companion && (
         <div className="max-w-[480px] mx-auto px-5 mt-6 mb-4">
-          <div className="bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4 text-center space-y-3">
-            <CheckCircle2 size={20} className="text-teal-600 mx-auto" />
-            <p className="text-sm font-medium text-teal-800">Day {day} complete</p>
-            {day < companion.numberOfDays ? (
-              <p className="text-xs text-teal-600">
-                Day {day + 1} will be here tomorrow.
-              </p>
-            ) : (
-              <p className="text-xs text-teal-600">
-                You've completed all {companion.numberOfDays} days. Well done.
-              </p>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl border-teal-300 text-teal-700 hover:bg-teal-100"
-              onClick={() => setLocation('/journeys')}
-            >
-              Back to Next Steps
-            </Button>
-          </div>
+          <JourneyCompletionPanel
+            heading={`Day ${day} complete`}
+            subMessage={
+              day < companion.numberOfDays
+                ? `Day ${day + 1} will be here tomorrow.`
+                : `You've completed all ${companion.numberOfDays} days. Well done.`
+            }
+            returnLabel={returnLabel}
+            onReturn={() => setLocation(returnDest)}
+          />
         </div>
       )}
 

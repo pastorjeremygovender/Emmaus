@@ -329,6 +329,42 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
+  // ── Sermon Companion (from sermon_companion table via API) ───────────────────
+  // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
+  // in localStorage. Loading it here (before early returns) satisfies Rules of Hooks.
+  const [scCompanion, setScCompanion] = useState<{
+    id: string;
+    title: string;
+    numberOfDays: number;
+    currentDay: number;
+    isStarted: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let companionId: string | null = null;
+    try {
+      const raw = localStorage.getItem('emmaus_admin_settings');
+      companionId = raw ? (JSON.parse(raw)?.currentWeeklySermonCompanionId ?? null) : null;
+    } catch { /* ignore */ }
+    if (!companionId) { setScCompanion(null); return; }
+
+    const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
+    fetch(`${BASE_URL}/api/sermon-companions/${companionId}/member`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { id: string; title: string; numberOfDays: number; progress: { currentDay: number } | null } | null) => {
+        if (!data) { setScCompanion(null); return; }
+        setScCompanion({
+          id: data.id,
+          title: data.title,
+          numberOfDays: data.numberOfDays,
+          currentDay: data.progress?.currentDay ?? 1,
+          isStarted: !!data.progress,
+        });
+      })
+      .catch(() => setScCompanion(null));
+  }, [user?.id]);
+
   if (!user) return null;
 
   if (loading) {
@@ -368,10 +404,6 @@ export default function Walk() {
     getStepsForJourney(coreJourney.id).some(
       s => s.status === 'Published' && s.day < coreCurrentDay
     );
-
-  // 2. Companion — This Week's Sermon Devotional
-  const companionJourney = publishedJourneys.find(j => j.journeyType === 'companion');
-  const companionProg    = companionJourney ? progress[companionJourney.id] : undefined;
 
   // 3. Your Journeys — journeys the member has already started.
   //    Includes: active growth journeys + started daily devotional.
@@ -497,10 +529,10 @@ export default function Walk() {
                 entryTitle={availableEntry?.title}
                 completedToday={completedToday}
                 onBeginToday={() =>
-                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}`)
+                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}?source=today`)
                 }
                 onReviewToday={() =>
-                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}`)
+                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}?source=today`)
                 }
                 onViewPreviousDays={
                   hasPrevDevotionalDays
@@ -537,7 +569,7 @@ export default function Walk() {
         </motion.div>
 
         {/* ── 3. This Week's Sermon Companion ────────────────────────────────── */}
-        {companionJourney && (
+        {scCompanion && (
           <motion.section
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -545,11 +577,15 @@ export default function Walk() {
           >
             <EmmausContentCard
               label="SERMON COMPANION"
-              title={companionJourney.sermon?.title ?? companionJourney.title}
+              title={scCompanion.title}
               description="Five short weekday devotionals based on Sunday's sermon."
-              metadata={companionJourney.durationDays ? `${companionJourney.durationDays} Days` : '5 Days'}
-              primaryActionLabel={!companionProg ? 'Open Companion' : 'Continue'}
-              onAction={() => goToJourney(companionJourney.id, companionProg ?? { currentDay: 1 })}
+              metadata={`${scCompanion.numberOfDays} Days`}
+              primaryActionLabel={scCompanion.isStarted ? 'Continue' : 'Open Companion'}
+              onAction={() =>
+                setLocation(
+                  `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
+                )
+              }
             />
           </motion.section>
         )}
