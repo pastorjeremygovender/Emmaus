@@ -1,0 +1,402 @@
+Project Emmaus — Fix Sermons List Quick Publish/Unpublish
+
+Current status:
+
+- Publish and Unpublish work correctly inside the Sermon editor.
+- The Sermons list now shows explicit Publish/Unpublish actions.
+- Clicking Publish or Unpublish on the Sermons list gives visual feedback as though the action ran.
+- However, the sermon status does not actually change.
+- The status badge remains unchanged.
+
+Fix only the Sermons list quick publish/unpublish workflow.
+
+Do not redesign the Sermons list.
+Do not change the working editor publish/unpublish flow.
+Do not alter Sermon Companion generation.
+Do not change member-facing content architecture.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+For a Draft sermon:
+
+Click Publish
+→ call the real sermon publish endpoint
+→ persist Published status in the database
+→ update the row badge to Published
+→ replace Publish with Unpublish
+→ update Overview counts
+→ show “Published successfully.”
+
+For a Published sermon:
+
+Click Unpublish
+→ show the existing confirmation if required
+→ call the real sermon unpublish endpoint
+→ persist Draft or Unpublished status according to the existing schema
+→ update the row badge
+→ replace Unpublish with Publish
+→ update Overview counts
+→ show “Unpublished successfully.”
+
+The list action must use the same canonical server logic as the working editor action.
+
+====================================================
+TASK 1 — COMPARE LIST AND EDITOR HANDLERS
+====================================================
+
+Inspect the working Sermon editor Publish/Unpublish implementation.
+
+Identify:
+
+- endpoint;
+- HTTP method;
+- request body;
+- status values;
+- authentication requirements;
+- API helper;
+- cache invalidation;
+- response shape;
+- local state updates.
+
+Then inspect the Sermons list quick-action handler.
+
+Find the exact difference.
+
+Likely failure points include:
+
+- list button only changing temporary UI state;
+- wrong sermon ID;
+- using slug instead of database ID;
+- incorrect endpoint;
+- wrong HTTP method;
+- missing credentials;
+- request not awaited;
+- response ignored;
+- errors swallowed;
+- wrong status value such as “published” versus “PUBLISHED”;
+- mutating a stale object;
+- list query not refreshed;
+- optimistic update rolling back silently;
+- event propagation opening another action;
+- companion ID being passed instead of sermon ID.
+
+Do not create a second publish implementation.
+
+====================================================
+TASK 2 — USE ONE SHARED PUBLISH SERVICE
+====================================================
+
+Extract or reuse one canonical sermon status service for both:
+
+- Sermon editor;
+- Sermons list.
+
+Suggested functions:
+
+publishSermon(sermonId)
+
+unpublishSermon(sermonId)
+
+or:
+
+updateSermonStatus({
+  sermonId,
+  status
+})
+
+Both interfaces must call exactly the same API/service.
+
+Do not duplicate fetch code with different request shapes.
+
+====================================================
+TASK 3 — VERIFY REAL DATABASE ID
+====================================================
+
+Ensure the row action receives the sermon’s actual database ID.
+
+Do not use:
+
+- title;
+- slug;
+- companion ID;
+- row index;
+- temporary client ID;
+- undefined.
+
+Add temporary development logging for:
+
+- clicked action;
+- sermon title;
+- sermon database ID;
+- current status;
+- requested status;
+- endpoint;
+- response status;
+- returned sermon status.
+
+Remove noisy logging after verification.
+
+====================================================
+TASK 4 — API REQUEST
+====================================================
+
+Use the same endpoint as the editor.
+
+If the established route is similar to:
+
+PATCH /api/sermons/{sermonId}/status
+
+send structured JSON such as:
+
+{
+  "status": "published"
+}
+
+Use the project’s actual canonical route and schema.
+
+Include authentication credentials using the shared API client.
+
+Await the response before reporting success.
+
+If the server returns an error:
+
+- do not change the badge;
+- restore the action button;
+- show a clean failure message;
+- log technical details server-side.
+
+====================================================
+TASK 5 — SERVER-SIDE STATUS UPDATE
+====================================================
+
+Verify the server handler:
+
+- authenticates the editor;
+- loads the real Sermon;
+- validates the requested transition;
+- updates the canonical status field;
+- sets or clears publishedAt where appropriate;
+- updates updatedAt;
+- returns the updated Sermon as JSON.
+
+Suggested response:
+
+{
+  "success": true,
+  "sermon": {
+    "id": "...",
+    "status": "published",
+    "publishedAt": "..."
+  }
+}
+
+Do not return only a generic success flag if the client needs the updated state.
+
+====================================================
+TASK 6 — COMPANION RULES
+====================================================
+
+Preserve the existing Emmaus publishing rules.
+
+Do not automatically publish or unpublish the Sermon Companion unless that is already the established editor behaviour.
+
+The list quick action must behave exactly like the editor action.
+
+If the Sermon and Companion have separate statuses, keep them separate.
+
+Do not display Published merely because the Companion is published.
+
+The Sermons list Status column must reflect the Sermon record’s actual status.
+
+====================================================
+TASK 7 — UPDATE LIST STATE
+====================================================
+
+After a successful response, update the row from the returned Sermon record.
+
+Preferred options:
+
+1. invalidate and refetch the Sermons list query; or
+2. update the cached Sermon record by ID.
+
+Do not rely only on button-local state.
+
+The following must update immediately:
+
+- Status badge;
+- Publish/Unpublish action label;
+- action styling;
+- row updated timestamp if displayed;
+- filtered Draft/Published views if present.
+
+The state must remain correct after a full browser refresh.
+
+====================================================
+TASK 8 — OVERVIEW REFRESH
+====================================================
+
+After success, invalidate or refresh:
+
+- Content Studio Overview totals;
+- Draft count;
+- Published count;
+- Recently Updated.
+
+Do not require manual refresh.
+
+Use the existing shared query/cache invalidation system.
+
+====================================================
+TASK 9 — LOADING AND DUPLICATE-CLICK SAFETY
+====================================================
+
+While a row status action is running:
+
+- disable only that row’s Publish/Unpublish action;
+- show a small loading state on that action;
+- prevent duplicate requests;
+- leave other rows usable.
+
+Do not disable the entire table.
+
+Clear the loading state after success or failure.
+
+====================================================
+TASK 10 — EVENT HANDLING
+====================================================
+
+Inspect whether the row itself is clickable.
+
+Ensure clicking Publish/Unpublish:
+
+- does not trigger Edit;
+- does not navigate;
+- does not activate another nested control.
+
+Use stopPropagation where required.
+
+Keep Status badges non-clickable and informational only.
+
+====================================================
+TASK 11 — FAILURE MESSAGES
+====================================================
+
+Use consistent messages.
+
+Success:
+
+Published successfully.
+
+Unpublished successfully.
+
+Failure:
+
+We couldn’t publish this sermon. Please try again.
+
+We couldn’t unpublish this sermon. Please try again.
+
+Never display:
+
+- raw API responses;
+- stack traces;
+- status codes;
+- HTML;
+- undefined.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Use the existing “Jesus at the Center” Sermon.
+
+Test from the Sermons list:
+
+✓ Current persisted status is confirmed.
+
+✓ Click Publish when Draft.
+
+✓ One authenticated API request is sent.
+
+✓ The real Sermon ID is used.
+
+✓ Database status changes to Published.
+
+✓ publishedAt is set if required.
+
+✓ Badge changes to Published.
+
+✓ Action changes to Unpublish.
+
+✓ Overview counts update.
+
+✓ Refresh keeps it Published.
+
+✓ Open editor shows Unpublish.
+
+Then:
+
+✓ Return to Sermons list.
+
+✓ Click Unpublish.
+
+✓ Confirmation appears if established.
+
+✓ One API request is sent.
+
+✓ Database status changes correctly.
+
+✓ publishedAt is cleared or preserved according to existing rules.
+
+✓ Badge changes to Draft/Unpublished.
+
+✓ Action changes to Publish.
+
+✓ Overview counts update.
+
+✓ Refresh keeps it Unpublished.
+
+✓ Open editor shows Publish.
+
+Also verify:
+
+✓ Editor Publish still works.
+
+✓ Editor Unpublish still works.
+
+✓ Status badge remains informational only.
+
+✓ Clicking quick action does not open the editor.
+
+✓ Duplicate clicks do not send duplicate requests.
+
+✓ A failed request does not falsely change the badge.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not remove quick Publish/Unpublish.
+
+Do not tell the user to publish only from the editor.
+
+Do not add another endpoint if the editor already has a working one.
+
+Do not use optimistic success without server confirmation.
+
+Do not report completion until the status survives a full refresh.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact root cause;
+2. the working editor endpoint/service reused;
+3. the incorrect list behaviour that was replaced;
+4. the files changed;
+5. how list and Overview caches are refreshed;
+6. the result of every test above;
+7. any remaining manual test.

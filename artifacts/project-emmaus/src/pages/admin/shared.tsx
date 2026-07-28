@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ArrowLeft, Save, CheckCircle2, Trash2, Loader2, EyeOff } from 'lucide-react';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -303,4 +304,157 @@ export function Th({ children, className = '' }: { children?: React.ReactNode; c
 
 export function Td({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 text-gray-700 ${className}`}>{children}</td>;
+}
+
+// ─── Content Studio Toolbar ───────────────────────────────────────────────────
+// Shared compact sticky bar used by every Content Studio editor.
+// Buttons always appear in this order: ← Back | Save Draft | Publish/Unpublish | Delete
+
+export interface ContentStudioToolbarProps {
+  onBack: () => void;
+  title: string;
+  subtitle?: string;
+  /** Current status string — 'Published'/'published' triggers Unpublish mode */
+  status?: string;
+  isSaving?: boolean;
+  isPublishing?: boolean;
+  successMessage?: string;
+  errorMessage?: string;
+  onSaveDraft: () => void;
+  /** When provided a Publish (or Unpublish) button appears */
+  onPublish?: () => void;
+  /** When provided, used for the confirmed Unpublish action; falls back to onPublish */
+  onUnpublish?: () => void;
+  /** When provided, a trash-icon Delete button appears */
+  onDelete?: () => void;
+  /** Slot rendered between the message area and Save Draft (e.g. Help Me Write) */
+  extraActions?: React.ReactNode;
+}
+
+export function ContentStudioToolbar({
+  onBack,
+  title,
+  subtitle,
+  status,
+  isSaving = false,
+  isPublishing = false,
+  successMessage,
+  errorMessage,
+  onSaveDraft,
+  onPublish,
+  onUnpublish,
+  onDelete,
+  extraActions,
+}: ContentStudioToolbarProps) {
+  const [showUnpublishDialog, setShowUnpublishDialog] = useState(false);
+  const isPublished = status === 'Published' || status === 'published';
+  const isDisabled = isSaving || isPublishing;
+
+  return (
+    <>
+      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 gap-4">
+        {/* Left: back + title */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+            aria-label="Back"
+          >
+            <ArrowLeft size={15} />
+          </button>
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-gray-700 truncate leading-tight">{title}</p>
+            {subtitle && <p className="text-[11px] text-gray-400 truncate leading-tight">{subtitle}</p>}
+          </div>
+        </div>
+
+        {/* Right: message + actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {successMessage && (
+            <span className="text-[12px] font-medium text-emerald-600 flex items-center gap-1">
+              <CheckCircle2 size={11} /> {successMessage}
+            </span>
+          )}
+          {!successMessage && errorMessage && (
+            <span className="text-[12px] text-red-500">{errorMessage}</span>
+          )}
+
+          {extraActions}
+
+          {/* Save Draft */}
+          <button
+            onClick={onSaveDraft}
+            disabled={isDisabled}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            Save Draft
+          </button>
+
+          {/* Publish / Unpublish */}
+          {(onPublish || onUnpublish) && (
+            isPublished ? (
+              <button
+                onClick={() => setShowUnpublishDialog(true)}
+                disabled={isDisabled}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 text-[13px] hover:bg-amber-50 transition-colors disabled:opacity-50"
+              >
+                {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <EyeOff size={12} />}
+                Unpublish
+              </button>
+            ) : (
+              <button
+                onClick={onPublish}
+                disabled={isDisabled || !onPublish}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
+              >
+                {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                Publish
+              </button>
+            )
+          )}
+
+          {/* Delete */}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              title="Delete"
+              disabled={isDisabled}
+              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Unpublish confirmation dialog */}
+      {showUnpublishDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this content?</h3>
+            <p className="text-sm text-gray-500 mb-4">Members will no longer see it.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowUnpublishDialog(false)}
+                disabled={isPublishing}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowUnpublishDialog(false); (onUnpublish ?? onPublish)?.(); }}
+                disabled={isPublishing}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isPublishing
+                  ? <><Loader2 size={13} className="animate-spin" /> Unpublishing…</>
+                  : 'Unpublish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }

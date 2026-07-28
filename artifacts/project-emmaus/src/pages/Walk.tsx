@@ -345,7 +345,7 @@ function YourJourneysSection({
 }) {
   return (
     <section className="space-y-2">
-      <SectionLabel>Your Journeys</SectionLabel>
+      <SectionLabel>Your Next Steps</SectionLabel>
 
       {startedJourneys.length === 0 ? (
         /* Empty state — no card, just a quiet invitation */
@@ -353,7 +353,7 @@ function YourJourneysSection({
           onClick={onExplore}
           className="text-[15px] text-primary hover:text-primary/80 transition-colors py-1"
         >
-          Explore Journeys →
+          Explore Next Steps →
         </button>
       ) : (
         <div className="space-y-1">

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Pencil, ExternalLink, BookOpen, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, ExternalLink, BookOpen, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
 import { StatusBadge, AdminBtn, AdminTable, Th, Td, PageHeader } from './shared';
-import { deleteServerSermon } from '@/lib/sermon-generator-api';
+import { deleteServerSermon, patchServerSermon } from '@/lib/sermon-generator-api';
 import type { Sermon } from '@/lib/admin-demo-data';
 
 type Props = {
@@ -22,7 +22,7 @@ function isUUID(id: string): boolean {
 }
 
 export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
-  const { sermons, removeSermon } = useAdmin();
+  const { sermons, removeSermon, updateSermon } = useAdmin();
   const { journeys } = useJourney();
   const { user } = useAuth();
 
@@ -30,6 +30,11 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Publish / Unpublish
+  const [publishing, setPublishing] = useState<Record<string, boolean>>({});
+  const [unpublishTarget, setUnpublishTarget] = useState<Sermon | null>(null);
 
   const auth = user ? { userId: user.id, userRole: user.role } : null;
 
@@ -55,6 +60,53 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     }
   };
 
+  const handlePublish = async (sermon: Sermon, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!auth) return;
+    setPublishing(prev => ({ ...prev, [sermon.id]: true }));
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const now = new Date().toISOString();
+      // Minimal payload — avoids 413 from large transcripts (same as editor)
+      await patchServerSermon(sermon.id, { status: 'published', updatedAt: now }, auth);
+      updateSermon({ ...sermon, status: 'published', updatedAt: now });
+      setSuccessMessage('Published successfully.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch {
+      setErrorMessage("We couldn't publish this sermon. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setPublishing(prev => ({ ...prev, [sermon.id]: false }));
+    }
+  };
+
+  const handleConfirmUnpublish = async () => {
+    if (!unpublishTarget || !auth) return;
+    setPublishing(prev => ({ ...prev, [unpublishTarget.id]: true }));
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const now = new Date().toISOString();
+      // Minimal payload — avoids 413 from large transcripts (same as editor)
+      await patchServerSermon(unpublishTarget.id, { status: 'draft', updatedAt: now }, auth);
+      updateSermon({ ...unpublishTarget, status: 'draft', updatedAt: now });
+      setUnpublishTarget(null);
+      setSuccessMessage('Unpublished successfully.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch {
+      setUnpublishTarget(null);
+      setErrorMessage("We couldn't unpublish this sermon. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setPublishing(prev => {
+        const copy = { ...prev };
+        if (unpublishTarget) delete copy[unpublishTarget.id];
+        return copy;
+      });
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-5xl">
       <PageHeader
@@ -68,8 +120,13 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
       />
 
       {successMessage && (
-        <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-          {successMessage}
+        <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 flex items-center gap-2">
+          <CheckCircle2 size={14} className="flex-shrink-0" /> {successMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          {errorMessage}
         </div>
       )}
 
@@ -132,6 +189,28 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                     <AdminBtn size="sm" variant="ghost" onClick={() => onEdit(s.id)}>
                       <Pencil size={13} /> Edit
                     </AdminBtn>
+                    {/* Quick Publish / Quick Unpublish */}
+                    {s.status !== 'published' ? (
+                      <button
+                        onClick={e => handlePublish(s, e)}
+                        disabled={!!publishing[s.id]}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[13px] text-teal-700 hover:text-teal-900 hover:bg-teal-50 rounded-lg transition-colors font-medium disabled:opacity-50"
+                      >
+                        {publishing[s.id]
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <CheckCircle2 size={13} />}
+                        {publishing[s.id] ? 'Publishing…' : 'Quick Publish'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); setUnpublishTarget(s); }}
+                        disabled={!!publishing[s.id]}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[13px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors font-medium disabled:opacity-50"
+                      >
+                        {publishing[s.id] ? <Loader2 size={13} className="animate-spin" /> : null}
+                        {publishing[s.id] ? 'Unpublishing…' : 'Quick Unpublish'}
+                      </button>
+                    )}
                     {s.youtubeUrl && (
                       <a
                         href={s.youtubeUrl}
@@ -162,6 +241,33 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           )}
         </tbody>
       </AdminTable>
+
+      {/* Unpublish confirmation dialog */}
+      {unpublishTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this content?</h3>
+            <p className="text-sm text-gray-500 mb-4">Members will no longer see it.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setUnpublishTarget(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmUnpublish}
+                disabled={!!publishing[unpublishTarget.id]}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {publishing[unpublishTarget.id]
+                  ? <><Loader2 size={13} className="animate-spin" /> Unpublishing…</>
+                  : 'Unpublish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation dialog */}
       {deleteTarget && (

@@ -1,0 +1,158 @@
+Project Emmaus — Fix Sermon Publishing UX
+
+The current Sermons list shows a Status column containing Draft and Published badges.
+
+Clicking the Draft badge performs no action, making the interface appear broken.
+
+Status badges must be informational only.
+
+==================================================
+GOAL
+==================================================
+
+Publishing and unpublishing must occur through explicit actions.
+
+Status must never be the action itself.
+
+==================================================
+SERMON LIST
+==================================================
+
+Keep the Status column.
+
+Display:
+
+🟡 Draft
+
+🟢 Published
+
+⚫ Archived
+
+These are visual indicators only.
+
+Do not attach click handlers.
+
+==================================================
+ACTIONS
+==================================================
+
+Every sermon row should expose actions.
+
+Minimum actions:
+
+Edit
+
+Publish (if Draft)
+
+Unpublish (if Published)
+
+Delete
+
+Do not require users to guess that Status is clickable.
+
+==================================================
+EDITOR
+==================================================
+
+The Sermon editor becomes the primary publishing location.
+
+Toolbar order:
+
+Back
+
+Save Draft
+
+Publish
+(or Unpublish)
+
+Delete
+
+Reuse the shared Content Studio actions component where possible.
+
+==================================================
+PUBLISH WORKFLOW
+==================================================
+
+When Publish is clicked:
+
+- validate required fields;
+- save pending edits;
+- publish the sermon;
+- publish the linked Sermon Companion if appropriate according to existing Emmaus rules;
+- refresh the editor;
+- update the list;
+- update the Overview counts;
+- show:
+
+"Sermon published successfully."
+
+==================================================
+UNPUBLISH
+==================================================
+
+If already published:
+
+replace Publish with:
+
+Unpublish
+
+Confirmation:
+
+Unpublish Sermon?
+
+Members will no longer see this sermon.
+
+Buttons:
+
+Cancel
+
+Unpublish
+
+==================================================
+LIST REFRESH
+==================================================
+
+Publishing or unpublishing from either:
+
+- list
+- editor
+
+must immediately update:
+
+Status badge
+
+Overview counts
+
+Published totals
+
+Draft totals
+
+==================================================
+TEST
+==================================================
+
+Verify:
+
+✓ Draft sermon publishes.
+
+✓ Status changes to Published.
+
+✓ Publish button becomes Unpublish.
+
+✓ Published sermon unpublishes.
+
+✓ Status updates immediately.
+
+✓ Overview statistics update.
+
+✓ No page refresh required.
+
+✓ Status badge is no longer clickable.
+
+==================================================
+SUCCESS
+==================================================
+
+The Status column communicates state only.
+
+All publishing actions are explicit, consistent and discoverable.

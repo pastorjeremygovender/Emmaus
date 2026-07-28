@@ -21,14 +21,17 @@ import {
   saveCompanionEntry,
   getCompanion,
   deleteServerSermon,
+  patchServerSermon,
+
   ApiError,
   type SermonDraftResult,
   type SermonDetectionSource,
   type CompanionEntry,
 } from '@/lib/sermon-generator-api';
 import {
-  UnsavedBanner, SaveMessage, ConfirmDialog, PageHeader,
+  ConfirmDialog,
   Field, TextInput, TextArea, Select, AdminBtn, StatusBadge,
+  ContentStudioToolbar,
 } from './shared';
 import {
   Loader2, RefreshCw, Check, X, ChevronRight,
@@ -51,7 +54,6 @@ interface TranscriptSource {
   thumbnailUrl?: string;
 }
 
-const STATUS_SEQ = ['draft', 'review', 'published'] as const;
 
 const EMPTY_SERMON: Omit<Sermon, 'id'> = {
   title: '',
@@ -716,7 +718,7 @@ function AdjustSermonPhase({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
-  const { sermons, addSermon, updateSermon, removeSermon } = useAdmin();
+  const { sermons, addSermon, updateSermon, removeSermon, settings, updateSettings } = useAdmin();
   const { user } = useAuth();
 
   const isNew = !sermonId;
@@ -746,6 +748,9 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState('');
+  const [publishError, setPublishError] = useState('');
 
   // Per-field regen state
   type RegenField = 'title' | 'speaker' | 'scriptureReference' | 'summary' | 'topics' | 'keywords';
@@ -795,14 +800,69 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const handleSave = useCallback(() => {
     if (!validate()) return;
     setSaveState('saving');
+    setPublishSuccess('');
+    setPublishError('');
     const id = sermonId_ ?? `sermon-${Date.now()}`;
     const sermon: Sermon = { ...form, id, updatedAt: new Date().toISOString() } as Sermon;
     if (!sermonId_) { addSermon(sermon); setSermonId_(id); }
     else updateSermon(sermon);
     setIsDirty(false);
     setSaveState('saved');
-    setTimeout(() => setSaveState('idle'), 2500);
+    setPublishSuccess('Draft saved successfully.');
+    setTimeout(() => { setSaveState('idle'); setPublishSuccess(''); }, 3000);
   }, [form, sermonId_]);
+
+  const handlePublish = useCallback(async () => {
+    if (!validate()) return;
+    if (!auth) return;
+    setPublishing(true);
+    setPublishError('');
+    setPublishSuccess('');
+    try {
+      const id = sermonId_ ?? `sermon-${Date.now()}`;
+      const now = new Date().toISOString();
+      const updated: Sermon = { ...form as Sermon, id, status: 'published', updatedAt: now };
+      if (!sermonId_) {
+        // New sermon — create it first (no transcript yet, so payload is small)
+        addSermon(updated);
+        setSermonId_(id);
+      } else {
+        // Use minimal status-only payload to avoid 413 from large transcripts
+        await patchServerSermon(id, { status: 'published', updatedAt: now }, auth);
+        updateSermon(updated);
+      }
+      setForm(f => ({ ...f, status: 'published' }));
+      setIsDirty(false);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2500);
+      setPublishSuccess('Published successfully.');
+      setTimeout(() => setPublishSuccess(''), 4000);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Failed to publish. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
+  }, [form, sermonId_, auth, validate, addSermon, updateSermon]);
+
+  const handleUnpublishConfirm = useCallback(async () => {
+    if (!auth || !sermonId_) return;
+    setPublishing(true);
+    setPublishError('');
+    try {
+      const now = new Date().toISOString();
+      // Minimal payload — status change only
+      await patchServerSermon(sermonId_, { status: 'draft', updatedAt: now }, auth);
+      const updated: Sermon = { ...form as Sermon, id: sermonId_, status: 'draft', updatedAt: now };
+      updateSermon(updated);
+      setForm(f => ({ ...f, status: 'draft' }));
+      setPublishSuccess('Unpublished successfully.');
+      setTimeout(() => setPublishSuccess(''), 3000);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Failed to unpublish. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
+  }, [form, sermonId_, auth, updateSermon]);
 
   // ── Generation flow ──────────────────────────────────────────────────────────
 
@@ -1084,30 +1144,24 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {isDirty && (
-        <UnsavedBanner
-          onDiscard={() => {
-            setIsDirty(false);
-            setForm(existing ? { ...existing } : { ...EMPTY_SERMON });
-          }}
-        />
-      )}
+      {/* Shared toolbar */}
+      <ContentStudioToolbar
+        onBack={() => { if (isDirty) { setConfirmBack(true); return; } onBack(); }}
+        title={isNew ? (form.title || 'New Sermon') : (form.title || 'Edit Sermon')}
+        status={form.status}
+        isSaving={saveState === 'saving'}
+        isPublishing={publishing}
+        successMessage={publishSuccess}
+        errorMessage={publishError}
+        onSaveDraft={handleSave}
+        onPublish={handlePublish}
+        onUnpublish={handleUnpublishConfirm}
+        onDelete={sermonId_ ? () => { setConfirmDelete(true); setDeleteError(''); } : undefined}
+      />
 
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 lg:px-8 pt-6 pb-0">
-        <PageHeader
-          title={isNew ? (form.title || 'New Sermon') : (form.title || 'Edit Sermon')}
-          onBack={() => { if (isDirty) { setConfirmBack(true); return; } onBack(); }}
-          action={
-            <div className="flex items-center gap-3 flex-wrap">
-              <SaveMessage state={saveState} />
-              <AdminBtn variant="secondary" onClick={handleSave}>Save</AdminBtn>
-            </div>
-          }
-        />
-
-        {/* Tabs */}
-        <div className="flex gap-0 mt-4 border-b border-gray-200">
+      {/* Tabs */}
+      <div className="flex-shrink-0 px-6 lg:px-8 border-b border-gray-200">
+        <div className="flex gap-0">
           {(['sermon', 'companion'] as const).filter(t => t === 'sermon' || showCompanionTab).map(tab => (
             <button
               key={tab}
@@ -1235,9 +1289,14 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Status">
-                  <Select value={form.status} onChange={e => patch('status', e.target.value)}>
-                    {STATUS_SEQ.map(s => <option key={s} value={s}>{s}</option>)}
-                  </Select>
+                  <div className="flex items-center gap-2 h-[38px] px-1">
+                    <StatusBadge status={form.status} />
+                    <span className="text-xs text-gray-400">
+                      {form.status === 'published'
+                        ? 'Use Unpublish in the toolbar to change.'
+                        : 'Use Publish in the toolbar to publish.'}
+                    </span>
+                  </div>
                 </Field>
                 <Field label="Transcript status">
                   <Select value={form.transcriptStatus} onChange={e => patch('transcriptStatus', e.target.value)}>
@@ -1253,18 +1312,6 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               </Field>
             </div>
 
-            <div className="flex gap-3 flex-wrap items-center">
-              <AdminBtn variant="secondary" onClick={() => { if (isDirty) { setConfirmBack(true); return; } onBack(); }}>Cancel</AdminBtn>
-              <AdminBtn variant="primary" onClick={handleSave}>Save Sermon</AdminBtn>
-              {sermonId_ && (
-                <button
-                  onClick={() => { setConfirmDelete(true); setDeleteError(''); }}
-                  className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-[13px] text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
-                >
-                  <Trash2 size={14} /> Delete
-                </button>
-              )}
-            </div>
           </div>
         )}
 
@@ -1321,12 +1368,33 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         })()}
 
         {activeTab === 'companion' && companionData && (
-          <CompanionDayEditor
-            companionId={companionData.id}
-            companionTitle={companionData.title}
-            entries={companionData.entries}
-            auth={auth!}
-          />
+          <>
+            {/* "This Week's Sermon" admin control */}
+            <div className="flex items-center justify-between gap-3 px-6 lg:px-8 py-3 bg-gray-50 border-b border-gray-200">
+              {settings.currentWeeklySermonCompanionId === companionData.id ? (
+                <span className="text-sm text-teal-700 font-medium flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-teal-500" />
+                  Currently set as This Week's Sermon
+                </span>
+              ) : (
+                <span className="text-sm text-gray-500">Not set as This Week's Sermon</span>
+              )}
+              {settings.currentWeeklySermonCompanionId !== companionData.id && (
+                <button
+                  onClick={() => updateSettings({ ...settings, currentWeeklySermonCompanionId: companionData.id })}
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 transition-colors shrink-0"
+                >
+                  Set as This Week's Sermon
+                </button>
+              )}
+            </div>
+            <CompanionDayEditor
+              companionId={companionData.id}
+              companionTitle={companionData.title}
+              entries={companionData.entries}
+              auth={auth!}
+            />
+          </>
         )}
 
         {activeTab === 'companion' && !companionData && (
@@ -1338,9 +1406,9 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
       {confirmBack && (
         <ConfirmDialog
-          title="Unsaved Changes"
-          message="You have unsaved changes. Leave without saving?"
-          confirmLabel="Leave"
+          title="Discard your unsaved changes?"
+          message="Your changes will be lost."
+          confirmLabel="Discard Changes"
           danger
           onConfirm={() => { setConfirmBack(false); onBack(); }}
           onCancel={() => setConfirmBack(false)}

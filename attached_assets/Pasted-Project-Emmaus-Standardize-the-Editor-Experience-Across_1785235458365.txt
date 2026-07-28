@@ -1,0 +1,412 @@
+Project Emmaus — Standardize the Editor Experience Across Content Studio
+
+The current editors have evolved independently.
+
+Daily Rhythm
+
+Daily Devotionals
+
+Sermons
+
+Journeys
+
+Collections
+
+all expose actions differently.
+
+This is now creating an inconsistent user experience.
+
+We are now establishing one permanent editor standard for the entire Emmaus Content Studio.
+
+This is a UI/UX standardisation task.
+
+Do NOT redesign the database.
+
+Do NOT change the member experience.
+
+Do NOT alter existing publishing rules.
+
+Do NOT remove any existing functionality.
+
+==================================================
+PRIMARY GOAL
+==================================================
+
+Every Content Studio editor must feel identical.
+
+Regardless of content type, an administrator should immediately know:
+
+• how to save
+
+• how to publish
+
+• how to delete
+
+• how to return
+
+without relearning the interface.
+
+==================================================
+EDITOR STANDARD
+==================================================
+
+Every editor will use the same toolbar.
+
+Top right.
+
+Buttons always appear in this order:
+
+← Back
+
+Save Draft
+
+Publish
+(or Unpublish)
+
+Delete
+
+This order is now the Emmaus standard.
+
+==================================================
+BACK
+==================================================
+
+Back always returns to the previous list.
+
+Example:
+
+Sermons
+
+↓
+
+Back returns to Sermons
+
+Journey
+
+↓
+
+Back returns to Journey
+
+Day
+
+↓
+
+Back returns to Day List
+
+Do not lose unsaved work.
+
+Warn only if changes exist.
+
+==================================================
+SAVE DRAFT
+==================================================
+
+Save Draft should:
+
+save changes
+
+remain on page
+
+show:
+
+Draft saved.
+
+No navigation.
+
+No page reload.
+
+==================================================
+PUBLISH
+==================================================
+
+Publish should:
+
+validate required fields
+
+save changes
+
+publish immediately
+
+refresh editor state
+
+change toolbar button to:
+
+Unpublish
+
+show:
+
+Published successfully.
+
+==================================================
+UNPUBLISH
+==================================================
+
+Confirmation:
+
+Unpublish?
+
+Members will no longer see this content.
+
+Buttons
+
+Cancel
+
+Unpublish
+
+==================================================
+DELETE
+==================================================
+
+Delete uses the shared delete component.
+
+Never delete immediately.
+
+Always confirm.
+
+==================================================
+STATUS
+==================================================
+
+Status badges are INFORMATION ONLY.
+
+Never clickable.
+
+Examples:
+
+🟡 Draft
+
+🟢 Published
+
+⚫ Archived
+
+Status is not an action.
+
+==================================================
+LIST PAGES
+==================================================
+
+Lists are for browsing.
+
+Editors are for editing.
+
+List pages should never hide the primary publishing workflow.
+
+Every row should expose:
+
+Edit
+
+Delete
+
+Optionally:
+
+Quick Publish
+
+Quick Unpublish
+
+if this already fits the architecture.
+
+==================================================
+SHARED COMPONENT
+==================================================
+
+Use one reusable component.
+
+Suggested:
+
+ContentStudioToolbar
+
+Props may include:
+
+status
+
+isDirty
+
+isSaving
+
+isPublishing
+
+isDeleting
+
+contentType
+
+callbacks
+
+Reuse everywhere.
+
+Do not duplicate button logic.
+
+==================================================
+APPLY TO
+==================================================
+
+Daily Rhythm
+
+Daily Devotionals
+
+Journey Collections
+
+Journeys
+
+Sermons
+
+Future editors should automatically use this toolbar.
+
+==================================================
+LIVE PREVIEW
+==================================================
+
+Where live preview exists
+
+(Daily Rhythm
+
+Daily Devotionals
+
+Journeys)
+
+preserve it.
+
+Toolbar remains above the editor.
+
+Preview remains on the right.
+
+Sermons continue using their existing layout.
+
+==================================================
+LOADING STATES
+==================================================
+
+Disable buttons while requests run.
+
+Prevent duplicate clicks.
+
+Spinner only on the active button.
+
+Never leave toolbar permanently disabled.
+
+==================================================
+SUCCESS MESSAGES
+==================================================
+
+Standardise messages.
+
+Draft saved.
+
+Published successfully.
+
+Unpublished successfully.
+
+Deleted successfully.
+
+Keep messages brief.
+
+==================================================
+OVERVIEW
+==================================================
+
+Whenever publish status changes:
+
+Overview statistics update
+
+Draft count
+
+Published count
+
+Recently Updated
+
+without manual refresh.
+
+==================================================
+TEST
+==================================================
+
+Verify on:
+
+Daily Rhythm
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Unpublish
+
+✓ Delete
+
+Daily Devotionals
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Delete
+
+Journeys
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Delete
+
+Journey Collections
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Delete
+
+Sermons
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Unpublish
+
+✓ Delete
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+Every editor now feels identical.
+
+Administrators never have to guess:
+
+How do I publish?
+
+How do I delete?
+
+How do I go back?
+
+Every content type follows the same workflow.
+
+==================================================
+EMMAUS DESIGN PRINCIPLE
+==================================================
+
+Content Studio should feel like using one application—not five different editors.
+
+Consistency is more important than adding new features.
+
+When future content types are created, they must automatically adopt this editor standard rather than inventing a new one.
+
+==================================================
+COMPLETION REPORT
+==================================================
+
+When complete report:
+
+1. Shared toolbar component created/reused.
+
+2. Editors updated.
+
+3. Files changed.
+
+4. Components removed through consolidation.
+
+5. Publish workflow standardised.
+
+6. Delete workflow standardised.
+
+7. Remaining manual tests.

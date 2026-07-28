@@ -11,7 +11,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  ArrowLeft, Save, CheckCircle, Copy, Trash2,
+  Save, CheckCircle, Copy, Trash2,
   AlertTriangle, Loader2, X, Wand2, ChevronDown, CornerDownLeft,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -20,6 +20,7 @@ import type { Journey, Step } from '@/lib/journeys-api';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { WritingAssistantPanel, type PreviousDayInfo } from '@/components/WritingAssistantPanel';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
+import { ContentStudioToolbar } from '../shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -314,7 +315,10 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const [form, setForm] = useState<DayForm>(() => ({ ...EMPTY_FORM, day: day ?? nextDay }));
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'published' | 'error'>('idle');
+  const [savingAs, setSavingAs] = useState<'draft' | 'published' | null>(null);
+  const [stepStatus, setStepStatus] = useState<'Draft' | 'Published'>('Draft');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [showDelete, setShowDelete] = useState(false);
   const [currentDay, setCurrentDay] = useState<number | null>(day); // tracks saved day number
   const [showAssistant, setShowAssistant] = useState(false);
@@ -335,6 +339,7 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
           closingText: existing.closingText ?? '',
         });
         setCurrentDay(existing.day);
+        setStepStatus(((existing as Step & { status?: string }).status as 'Draft' | 'Published') ?? 'Draft');
       }
     }
     setLoaded(true);
@@ -342,7 +347,6 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
 
   const patch = useCallback(<K extends keyof DayForm>(key: K, val: DayForm[K]) => {
     setForm(f => ({ ...f, [key]: val }));
-    setSaveStatus('idle');
   }, []);
 
   const buildStepData = (status: 'Draft' | 'Published') => ({
@@ -361,24 +365,27 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
   const handleSave = async (status: 'Draft' | 'Published' = 'Draft') => {
     if (saving) return;
     setSaving(true);
-    setSaveStatus('idle');
+    setSavingAs(status === 'Published' ? 'published' : 'draft');
+    setSuccessMsg('');
+    setErrorMsg('');
     try {
       const data = buildStepData(status);
       if (currentDay === null) {
-        // New step
         const created = await addStep(data);
         setCurrentDay(created.day);
       } else {
-        // Existing step — may renumber if day changed
         await updateStep(data, currentDay !== form.day ? currentDay : undefined);
         setCurrentDay(form.day);
       }
-      setSaveStatus(status === 'Published' ? 'published' : 'saved');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      setStepStatus(status);
+      setSuccessMsg(status === 'Published' ? 'Published successfully.' : 'Draft saved successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
     } catch {
-      setSaveStatus('error');
+      setErrorMsg('Save failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
     } finally {
       setSaving(false);
+      setSavingAs(null);
     }
   };
 
@@ -396,7 +403,8 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
       const created = await addStep(data);
       onDuplicated(created.day);
     } catch {
-      setSaveStatus('error');
+      setErrorMsg('Duplicate failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
     } finally {
       setSaving(false);
     }
@@ -478,90 +486,46 @@ export default function DailyRhythmDayEditor({ journeyId, day, onBack, onDuplica
         {/* ── Left panel: editor fields ──────────────────────────────────────── */}
         <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
 
-          {/* Sticky header */}
-          <div className="flex-shrink-0 px-6 py-3 bg-white border-b border-gray-100 flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              aria-label="Back"
-            >
-              <ArrowLeft size={16} />
-            </button>
-
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-gray-700 truncate">
-                {journey?.title ?? 'Daily Rhythm'} · Day {form.day}
-                {form.title ? ` — ${form.title}` : ''}
-              </p>
-            </div>
-
-            {/* Action buttons — Preview removed; Help Me Write, Save Draft, Publish remain */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Save status */}
-              {saveStatus === 'saved' && (
-                <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
-                  <CheckCircle size={12} /> Saved
-                </span>
-              )}
-              {saveStatus === 'published' && (
-                <span className="text-[12px] text-teal-600 font-medium flex items-center gap-1">
-                  <CheckCircle size={12} /> Published
-                </span>
-              )}
-              {saveStatus === 'error' && (
-                <span className="text-[12px] text-red-500 font-medium">Save failed</span>
-              )}
-
-              {isEditor && (
+          {/* Sticky header — ContentStudioToolbar */}
+          <ContentStudioToolbar
+            onBack={onBack}
+            title={journey?.title ?? 'Daily Rhythm'}
+            subtitle={`Day ${form.day}${form.title ? ` — ${form.title}` : ''}`}
+            status={stepStatus}
+            isSaving={savingAs === 'draft'}
+            isPublishing={savingAs === 'published'}
+            successMessage={successMsg}
+            errorMessage={errorMsg}
+            onSaveDraft={() => handleSave('Draft')}
+            onPublish={() => handleSave('Published')}
+            onUnpublish={() => handleSave('Draft')}
+            onDelete={() => setShowDelete(true)}
+            extraActions={
+              <div className="flex items-center gap-1.5">
+                {isEditor && (
+                  <button
+                    onClick={() => setShowAssistant(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
+                      showAssistant
+                        ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
+                        : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
+                    }`}
+                  >
+                    <Wand2 size={12} />
+                    Help Me Write
+                  </button>
+                )}
                 <button
-                  onClick={() => setShowAssistant(v => !v)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
-                    showAssistant
-                      ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
-                      : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
-                  }`}
+                  onClick={handleDuplicate}
+                  disabled={saving}
+                  title="Duplicate this day (Day +1)"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
                 >
-                  <Wand2 size={12} />
-                  Help Me Write
+                  <Copy size={15} />
                 </button>
-              )}
-
-              <button
-                onClick={() => handleSave('Draft')}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                Save Draft
-              </button>
-
-              <button
-                onClick={() => handleSave('Published')}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-                Publish
-              </button>
-
-              <button
-                onClick={handleDuplicate}
-                disabled={saving}
-                title="Duplicate this day (Day +1)"
-                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
-              >
-                <Copy size={15} />
-              </button>
-
-              <button
-                onClick={() => setShowDelete(true)}
-                title="Delete this day"
-                className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          </div>
+              </div>
+            }
+          />
 
           {/* Fields */}
           <div className="flex-1 p-6 space-y-7 max-w-2xl">

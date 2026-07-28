@@ -22,10 +22,11 @@ import {
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/contexts/JourneyContext';
-import { getJourney as fetchJourneyById } from '@/lib/journeys-api';
+import { getJourney as fetchJourneyById, deleteJourney as apiDeleteJourney } from '@/lib/journeys-api';
 import { Block, stepToBlocks, blocksToCanonical, createBlock } from '@/lib/blocks';
 import BlockCanvas from './BlockCanvas';
-import { ConfirmDialog, StatusBadge } from '../shared';
+import { ConfirmDialog, StatusBadge, ContentStudioToolbar } from '../shared';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -454,6 +455,7 @@ function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: (
 
 export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor }: Props) {
   const { getJourney, getStepsForJourney, updateJourney, updateStep, addStep, deleteStep } = useJourney();
+  const { user } = useAuth();
 
   // Try to find the journey in context first (fast path).
   // When navigating immediately after creation, React may not have committed the
@@ -492,6 +494,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [journeyForm, setJourneyForm] = useState<Partial<Journey>>({});
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [confirmBack, setConfirmBack] = useState(false);
+  // Journey-level toolbar state
+  const [journeySaving, setJourneySaving] = useState<'saving' | 'publishing' | 'unpublishing' | 'deleting' | null>(null);
+  const [journeySuccessMsg, setJourneySuccessMsg] = useState('');
+  const [journeyErrorMsg, setJourneyErrorMsg] = useState('');
+  const [confirmDeleteJourney, setConfirmDeleteJourney] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
@@ -616,6 +623,75 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     await updateJourney({ ...journey, ...journeyForm } as Journey);
   }, [journey, journeyForm, updateJourney]);
 
+  const handleSaveDraftJourney = useCallback(async () => {
+    if (!journey) return;
+    setJourneySaving('saving');
+    setJourneySuccessMsg('');
+    setJourneyErrorMsg('');
+    try {
+      await updateJourney({ ...journey, ...journeyForm } as Journey);
+      setJourneySuccessMsg('Draft saved successfully.');
+      setTimeout(() => setJourneySuccessMsg(''), 3000);
+    } catch {
+      setJourneyErrorMsg('Save failed — please try again.');
+      setTimeout(() => setJourneyErrorMsg(''), 4000);
+    } finally {
+      setJourneySaving(null);
+    }
+  }, [journey, journeyForm, updateJourney]);
+
+  const handlePublishJourney = useCallback(async () => {
+    if (!journey) return;
+    setJourneySaving('publishing');
+    setJourneySuccessMsg('');
+    setJourneyErrorMsg('');
+    try {
+      await updateJourney({ ...journey, ...journeyForm, status: 'Published' } as Journey);
+      setJourneyForm(f => ({ ...f, status: 'Published' }));
+      setJourneySuccessMsg('Published successfully.');
+      setTimeout(() => setJourneySuccessMsg(''), 3000);
+    } catch {
+      setJourneyErrorMsg('Failed to publish.');
+      setTimeout(() => setJourneyErrorMsg(''), 4000);
+    } finally {
+      setJourneySaving(null);
+    }
+  }, [journey, journeyForm, updateJourney]);
+
+  const handleUnpublishJourney = useCallback(async () => {
+    if (!journey) return;
+    setJourneySaving('unpublishing');
+    setJourneySuccessMsg('');
+    setJourneyErrorMsg('');
+    try {
+      await updateJourney({ ...journey, ...journeyForm, status: 'Draft' } as Journey);
+      setJourneyForm(f => ({ ...f, status: 'Draft' }));
+      setJourneySuccessMsg('Unpublished successfully.');
+      setTimeout(() => setJourneySuccessMsg(''), 3000);
+    } catch {
+      setJourneyErrorMsg('Failed to unpublish.');
+      setTimeout(() => setJourneyErrorMsg(''), 4000);
+    } finally {
+      setJourneySaving(null);
+    }
+  }, [journey, journeyForm, updateJourney]);
+
+  const handleDeleteJourney = useCallback(async () => {
+    if (!journey) return;
+    setJourneySaving('deleting');
+    try {
+      await apiDeleteJourney(journey.id, user?.id);
+      setConfirmDeleteJourney(false);
+      onBack();
+    } catch {
+      setJourneyErrorMsg('Failed to delete journey.');
+      setConfirmDeleteJourney(false);
+      setTimeout(() => setJourneyErrorMsg(''), 4000);
+    } finally {
+      setJourneySaving(null);
+    }
+  }, [journey, user?.id, onBack]);
+
   const handleBackClick = () => {
     if (hasUnsaved) setConfirmBack(true);
     else onBack();
@@ -651,20 +727,30 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-gray-50">
+    <div className="flex flex-col h-full min-h-0">
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <ContentStudioToolbar
+        onBack={handleBackClick}
+        title={journey?.title ?? 'Journey'}
+        status={journeyForm.status ?? journey?.status}
+        isSaving={journeySaving === 'saving'}
+        isPublishing={journeySaving === 'publishing' || journeySaving === 'unpublishing'}
+        successMessage={journeySuccessMsg}
+        errorMessage={journeyErrorMsg}
+        onSaveDraft={handleSaveDraftJourney}
+        onPublish={handlePublishJourney}
+        onUnpublish={handleUnpublishJourney}
+        onDelete={() => setConfirmDeleteJourney(true)}
+      />
+
+      <div className="flex flex-1 min-h-0 overflow-hidden bg-gray-50">
 
       {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
       <div className={`flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-0 transition-all duration-200 ${leftOpen ? 'w-60' : 'w-10'}`}>
         {leftOpen ? (
           <>
-            {/* Back + collapse */}
-            <div className="flex-shrink-0 flex items-center justify-between px-3 pt-3 pb-2">
-              <button
-                onClick={handleBackClick}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <ArrowLeft size={13} /> Back
-              </button>
+            {/* Collapse button */}
+            <div className="flex-shrink-0 flex items-center justify-end px-3 pt-3 pb-2">
               <button
                 onClick={() => setLeftOpen(false)}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
@@ -968,6 +1054,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
         </div>
       )}
 
+      </div>{/* end flex-1 min-h-0 panels wrapper */}
+
       {/* Dialogs */}
       {deleteTarget !== null && (
         <ConfirmDialog
@@ -981,12 +1069,22 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       )}
       {confirmBack && (
         <ConfirmDialog
-          title="Unsaved Changes"
-          message="Some steps have unsaved changes. Leave without saving?"
-          confirmLabel="Leave"
+          title="Discard your unsaved changes?"
+          message="Your changes will be lost."
+          confirmLabel="Discard Changes"
           danger
           onConfirm={() => { setConfirmBack(false); onBack(); }}
           onCancel={() => setConfirmBack(false)}
+        />
+      )}
+      {confirmDeleteJourney && (
+        <ConfirmDialog
+          title="Delete Journey?"
+          message="This journey and all its steps will be permanently deleted. This cannot be undone."
+          confirmLabel={journeySaving === 'deleting' ? 'Deleting…' : 'Delete Permanently'}
+          danger
+          onConfirm={handleDeleteJourney}
+          onCancel={() => setConfirmDeleteJourney(false)}
         />
       )}
     </div>

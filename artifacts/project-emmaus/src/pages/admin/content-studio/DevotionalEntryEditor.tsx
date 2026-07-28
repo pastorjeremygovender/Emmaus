@@ -6,19 +6,17 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  ArrowLeft, Eye, EyeOff, Check, Clock, AlertCircle,
-  PanelRightOpen, PanelRightClose, Loader2,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   getSeriesWithEntries,
   saveEntry,
+  deleteEntry,
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
-import { Field } from '../shared';
+import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -34,7 +32,6 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  const [rightOpen, setRightOpen] = useState(true);
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Entry fields
@@ -46,6 +43,13 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   const [nextStep, setNextStep] = useState('');
   const [closing, setClosing] = useState('');
   const [status, setStatus] = useState('Draft');
+
+  // Toolbar state
+  const [savingAs, setSavingAs] = useState<'draft' | 'publish' | 'unpublish' | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -108,6 +112,59 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
     await doSave({ ...currentFields(), status: next });
   };
 
+  const handleSaveDraft = async () => {
+    setSavingAs('draft');
+    setSuccessMsg('');
+    setErrorMsg('');
+    try {
+      await doSave(currentFields());
+      setSuccessMsg('Draft saved successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch {
+      setErrorMsg('Save failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
+  const handlePublish = async () => {
+    setSavingAs('publish');
+    setSuccessMsg('');
+    setStatus('Published');
+    try {
+      await doSave({ ...currentFields(), status: 'Published' });
+      setSuccessMsg('Published successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    setSavingAs('unpublish');
+    setSuccessMsg('');
+    setStatus('Draft');
+    try {
+      await doSave({ ...currentFields(), status: 'Draft' });
+      setSuccessMsg('Unpublished successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } finally {
+      setSavingAs(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteEntry(seriesId, day, auth);
+      setConfirmDelete(false);
+      onBack();
+    } catch {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48 text-gray-400 gap-2">
@@ -119,56 +176,39 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   const seriesTitle = seriesData?.title ?? '';
 
   return (
-    <div className="flex h-full min-h-0 bg-gray-50">
+    <div className="flex flex-col h-full min-h-0 bg-gray-50">
+
+      {/* Shared toolbar */}
+      <ContentStudioToolbar
+        onBack={onBack}
+        title={seriesTitle || 'Daily Devotionals'}
+        subtitle={`Day ${day}`}
+        status={status}
+        isSaving={savingAs === 'draft'}
+        isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
+        successMessage={successMsg}
+        onSaveDraft={handleSaveDraft}
+        onPublish={handlePublish}
+        onUnpublish={handleUnpublish}
+        onDelete={() => setConfirmDelete(true)}
+        errorMessage={errorMsg}
+      />
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Day?"
+          message={`Day ${day} will be permanently deleted. This cannot be undone.`}
+          confirmLabel={deleting ? 'Deleting…' : 'Delete Permanently'}
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
 
       {/* ── Editor panel ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0">
       <div className="flex flex-col flex-1 min-w-0 bg-white border-r border-gray-200 overflow-y-auto">
-        {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              <ArrowLeft size={13} /> {seriesTitle}
-            </button>
-            <span className="text-gray-200">·</span>
-            <span className="text-[13px] text-gray-500 font-medium">Day {day}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Save status */}
-            <span className={`text-xs transition-all ${
-              saveStatus === 'saving' ? 'text-gray-400' :
-              saveStatus === 'saved'  ? 'text-emerald-600' :
-              saveStatus === 'error'  ? 'text-red-500' : 'invisible'
-            }`}>
-              {saveStatus === 'saving' && <><Clock size={11} className="inline animate-spin mr-1" />Saving…</>}
-              {saveStatus === 'saved'  && <><Check size={11} className="inline mr-1" />Saved</>}
-              {saveStatus === 'error'  && <><AlertCircle size={11} className="inline mr-1" />Error</>}
-            </span>
-
-            {/* Publish toggle */}
-            <button
-              onClick={handleTogglePublish}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                status === 'Published'
-                  ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {status === 'Published' ? <><EyeOff size={12} /> Unpublish</> : <><Eye size={12} /> Publish</>}
-            </button>
-
-            {/* Preview toggle */}
-            <button
-              onClick={() => setRightOpen(!rightOpen)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
-            >
-              {rightOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-            </button>
-          </div>
-        </div>
 
         {/* Fields */}
         <div className="flex-1 p-6 space-y-5 max-w-2xl">
@@ -249,27 +289,26 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
       </div>
 
       {/* ── Preview panel ─────────────────────────────────────────────────────── */}
-      {rightOpen && (
-        <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
-          <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
-          </div>
-          <DevotionalReading
-            seriesTitle={seriesTitle}
-            dayNumber={day}
-            title={title}
-            greeting={greeting}
-            scripture={scriptureReference}
-            considerThis={considerThis}
-            prayer={prayer}
-            nextStep={nextStep}
-            closing={closing}
-            memberName={resolveDisplayName(user?.preferredName)}
-            previewMode
-            actionButton={<PreviewDevotionalContinueButton />}
-          />
+      <div className="w-[360px] flex-shrink-0 bg-background border-l border-gray-200 overflow-y-auto">
+        <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide text-center">Preview</p>
         </div>
-      )}
+        <DevotionalReading
+          seriesTitle={seriesTitle}
+          dayNumber={day}
+          title={title}
+          greeting={greeting}
+          scripture={scriptureReference}
+          considerThis={considerThis}
+          prayer={prayer}
+          nextStep={nextStep}
+          closing={closing}
+          memberName={resolveDisplayName(user?.preferredName)}
+          previewMode
+          actionButton={<PreviewDevotionalContinueButton />}
+        />
+      </div>
+      </div>{/* end flex-1 min-h-0 two-panel wrapper */}
     </div>
   );
 }

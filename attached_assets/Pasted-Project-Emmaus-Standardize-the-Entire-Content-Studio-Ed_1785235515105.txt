@@ -1,0 +1,369 @@
+Project Emmaus — Standardize the Entire Content Studio Editor Experience
+
+Emmaus has now reached the point where every content editor should behave identically.
+
+Currently:
+
+- Daily Rhythm
+- Daily Devotionals
+- Sermons
+- Journeys
+- Journey Collections
+
+all have different button layouts, publishing behaviour and editing workflows.
+
+This makes the admin experience inconsistent.
+
+From this point forward there will be ONE standard editor used throughout Emmaus.
+
+Do not redesign the database.
+
+Do not change any member-facing functionality.
+
+Do not alter existing publishing logic unless required to support this standard.
+
+This is a UI/UX consistency task.
+
+====================================================
+EMMAUS CONTENT STUDIO STANDARD
+====================================================
+
+Every editor must follow exactly the same layout.
+
+TOP BAR
+
+← Back
+
+Save Draft
+
+Publish
+(or Unpublish)
+
+Delete
+
+These buttons must appear in this order on every editor.
+
+Never invent a different layout for a specific content type.
+
+====================================================
+BACK
+====================================================
+
+Back returns to the previous screen.
+
+Examples
+
+Collections
+→ Collection List
+
+Journeys
+→ Journey List
+
+Journey Day
+→ Journey
+
+Daily Devotional
+→ Devotional Series
+
+Daily Rhythm Day
+→ Daily Rhythm
+
+Sermon
+→ Sermons
+
+If unsaved changes exist:
+
+Show:
+
+Discard your unsaved changes?
+
+Buttons
+
+Continue Editing
+
+Discard Changes
+
+====================================================
+SAVE DRAFT
+====================================================
+
+Save Draft
+
+• saves the record
+• remains on the current page
+• never publishes
+• never navigates away
+• displays
+
+Draft saved successfully.
+
+====================================================
+PUBLISH
+====================================================
+
+Publish
+
+• validates required fields
+• saves automatically
+• publishes immediately
+• updates status
+• updates overview statistics
+• updates list view
+• changes Publish button into Unpublish
+
+Display
+
+Published successfully.
+
+====================================================
+UNPUBLISH
+====================================================
+
+Confirmation
+
+Unpublish this content?
+
+Members will no longer see it.
+
+Buttons
+
+Cancel
+
+Unpublish
+
+====================================================
+DELETE
+====================================================
+
+Delete uses the shared Emmaus delete component.
+
+Delete is always the last button.
+
+Delete always asks for confirmation.
+
+Never delete immediately.
+
+====================================================
+STATUS
+====================================================
+
+Status badges are NOT buttons.
+
+Status is information only.
+
+Examples
+
+🟡 Draft
+
+🟢 Published
+
+⚫ Archived
+
+Do not attach click events.
+
+====================================================
+LIVE PREVIEW
+====================================================
+
+Editors that support previews must always display:
+
+LEFT
+
+Editor
+
+RIGHT
+
+Live Member Preview
+
+Remove Preview buttons.
+
+The preview updates automatically while editing.
+
+Apply this to:
+
+• Daily Rhythm
+
+• Daily Devotionals
+
+• Journeys
+
+Future content types should follow the same pattern.
+
+====================================================
+SERMONS
+====================================================
+
+The Sermon editor should follow the same toolbar.
+
+Back
+
+Save Draft
+
+Publish / Unpublish
+
+Delete
+
+The Sermon list should contain:
+
+Title
+
+Speaker
+
+Scripture
+
+Transcript
+
+Companion
+
+Status
+
+Actions
+
+Status is informational only.
+
+Actions should contain:
+
+Edit
+
+Delete
+
+Optional:
+
+Quick Publish
+
+Quick Unpublish
+
+====================================================
+JOURNEYS
+====================================================
+
+Journey editors must follow the same toolbar.
+
+Journey Days should inherit the same behaviour.
+
+====================================================
+COLLECTIONS
+====================================================
+
+Journey Collection editors must use the same toolbar.
+
+====================================================
+DAILY DEVOTIONALS
+====================================================
+
+Reuse the existing working editor.
+
+Only update it if required for consistency.
+
+====================================================
+DAILY RHYTHM
+====================================================
+
+Reuse the existing working editor.
+
+Only update the toolbar if required.
+
+====================================================
+BUTTON BEHAVIOUR
+====================================================
+
+Disable buttons while requests run.
+
+Prevent duplicate clicks.
+
+Show loading spinner only on the active button.
+
+Never leave buttons permanently disabled.
+
+====================================================
+SUCCESS MESSAGES
+====================================================
+
+Standardise all success messages.
+
+Draft saved successfully.
+
+Published successfully.
+
+Unpublished successfully.
+
+Deleted successfully.
+
+Keep wording identical everywhere.
+
+====================================================
+OVERVIEW
+====================================================
+
+Publishing or deleting content should automatically refresh:
+
+• Dashboard totals
+
+• Published count
+
+• Draft count
+
+• Recently Updated
+
+No manual refresh.
+
+====================================================
+DESIGN PRINCIPLE
+====================================================
+
+Every Content Studio editor should feel like the same application.
+
+If a pastor learns one editor, they automatically know how to use every other editor.
+
+Consistency is now a permanent Emmaus design principle.
+
+Future editors must reuse this shared editor rather than creating new layouts.
+
+====================================================
+TEST
+====================================================
+
+Verify:
+
+✓ Daily Rhythm editor
+
+✓ Daily Devotional editor
+
+✓ Journey editor
+
+✓ Journey Day editor
+
+✓ Collection editor
+
+✓ Sermon editor
+
+All use the identical toolbar.
+
+Verify:
+
+✓ Back
+
+✓ Save Draft
+
+✓ Publish
+
+✓ Unpublish
+
+✓ Delete
+
+work consistently.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+When complete report:
+
+1. Shared editor component created.
+2. Shared toolbar implemented.
+3. Editors updated.
+4. Files changed.
+5. Components consolidated.
+6. Publishing standardised.
+7. Delete workflow standardised.
+8. Remaining manual tests.

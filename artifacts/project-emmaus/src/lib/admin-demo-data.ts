@@ -64,6 +64,8 @@ export type ChurchSettings = {
   primaryAccentColor: string;
   defaultNotificationTime: string;
   weeklySermonCompanionEnabled: boolean;
+  /** Journey ID of the companion currently marked as "This Week's Sermon". */
+  currentWeeklySermonCompanionId?: string;
 };
 
 export type RecentActivity = {

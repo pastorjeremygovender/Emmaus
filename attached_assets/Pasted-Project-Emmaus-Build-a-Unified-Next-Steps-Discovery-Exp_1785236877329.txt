@@ -1,0 +1,738 @@
+Project Emmaus — Build a Unified Next Steps Discovery Experience
+
+The member experience currently has a discovery gap.
+
+Current problems:
+
+1. Published Daily Devotional series cannot be browsed or selected by members.
+2. Published Sermon Devotionals cannot be browsed or selected by members.
+3. A newly generated and published Sermon Devotional cannot be found anywhere unless it is already surfaced automatically.
+4. The Next Steps tab is still too Journey-focused.
+5. On Today’s Steps, the labels currently say:
+   - Your Journeys
+   - Explore Journeys
+
+These must become:
+
+- Your Next Steps
+- Explore Next Steps
+
+The Next Steps area must become the unified member discovery experience for:
+
+- Daily Devotionals
+- Sermon Devotionals
+- Journeys
+- Bible Studies
+- other future intentional discipleship content
+
+Do not merge the underlying content types.
+Do not merge their progress systems.
+Do not treat Daily Devotionals or Sermon Devotionals as Journeys.
+Do not redesign Daily Rhythm.
+Do not auto-start content for members.
+
+====================================================
+LOCKED MEMBER NAVIGATION
+====================================================
+
+Bottom navigation remains:
+
+Today’s Steps
+
+Next Steps
+
+My Bible
+
+My Journey
+
+Next Steps answers:
+
+“What could I intentionally begin next?”
+
+Today’s Steps answers:
+
+“What am I already walking through with Jesus today?”
+
+====================================================
+TASK 1 — UPDATE TODAY’S STEPS TERMINOLOGY
+====================================================
+
+On Today’s Steps, replace:
+
+Your Journeys
+
+with:
+
+Your Next Steps
+
+Replace:
+
+Explore Journeys →
+
+with:
+
+Explore Next Steps →
+
+The Explore Next Steps action must open the main Next Steps tab.
+
+Do not link it directly to Journeys only.
+
+====================================================
+TASK 2 — TODAY’S STEPS CONTENT RULES
+====================================================
+
+Today’s Steps must display only active or current content.
+
+Approved order:
+
+1. 10 Minutes with Jesus
+
+2. Active Daily Devotional
+
+3. Your Next Steps
+
+4. This Week’s Sermon Devotional
+
+5. Floating Ask Emmaus
+
+“Your Next Steps” may contain active content the member has intentionally started, including:
+
+- Journeys
+- Bible Studies
+- other structured pathways
+
+Do not automatically include every published item.
+
+If the member has not begun any structured Next Step, show only:
+
+Explore Next Steps →
+
+Daily Devotional remains its own card beneath 10 Minutes with Jesus when the member has started a series.
+
+The current church Sermon Devotional remains its own card lower on Today’s Steps when it has been marked as current and published.
+
+====================================================
+TASK 3 — REDESIGN THE NEXT STEPS TAB
+====================================================
+
+The Next Steps tab must no longer be a Journey-only page.
+
+Create a clean discovery page with the heading:
+
+Next Steps
+
+Supporting text:
+
+Choose something that will help you take your next step with Jesus.
+
+Use clearly separated sections.
+
+Recommended section order:
+
+1. Recommended for You
+
+2. Daily Devotionals
+
+3. This Week’s Sermon
+
+4. Journeys
+
+5. Bible Studies
+
+6. Recently Added
+
+Only show a section when it has eligible published content.
+
+Do not show empty sections.
+
+====================================================
+TASK 4 — RECOMMENDED FOR YOU
+====================================================
+
+This section may display a small number of relevant published items using existing recommendation logic.
+
+Do not introduce a complex recommendation algorithm.
+
+Initially use simple rules such as:
+
+- current church Sermon Devotional;
+- a beginner Journey if the member has not started one;
+- an available Daily Devotional series if none is active;
+- recently published content.
+
+Do not use popularity metrics, public rankings or social engagement.
+
+====================================================
+TASK 5 — DAILY DEVOTIONAL DISCOVERY
+====================================================
+
+Create a Daily Devotionals section inside Next Steps.
+
+It must list all member-visible published Daily Devotional series.
+
+Example:
+
+Psalms Daily Devotional
+
+Walk through the Psalms one day at a time, discovering how every season of life can draw you closer to God.
+
+14 Days or Ongoing
+
+Begin Devotional
+
+When more series are added, they must appear automatically.
+
+Possible future examples:
+
+- Proverbs Daily Devotional
+- Seasonal Devotional
+- General Daily Devotional
+- Church-Specific Devotional
+
+Do not hard-code only Psalms.
+
+Eligibility rules:
+
+- series status is Published;
+- at least one entry is Published;
+- publication window is valid where used;
+- series is marked available to members.
+
+====================================================
+TASK 6 — DAILY DEVOTIONAL START FLOW
+====================================================
+
+When a member opens a Daily Devotional series, show:
+
+- series title;
+- description;
+- available length or “Ongoing”;
+- first entry title where appropriate;
+- primary action.
+
+If not started:
+
+Begin Devotional
+
+If already active:
+
+Continue Devotional
+
+If completed for today:
+
+Review Today
+
+Starting must:
+
+- create or reuse a separate Daily Devotional progress record;
+- set the member’s local start date;
+- make Day 1 available;
+- add the Daily Devotional card to Today’s Steps;
+- never create Journey progress.
+
+A member should normally have one active Daily Devotional series displayed on Today’s Steps.
+
+If the architecture permits multiple started series, provide a clear method for choosing which one is current without losing progress.
+
+Do not silently replace an active series.
+
+====================================================
+TASK 7 — SERMON DEVOTIONAL DISCOVERY
+====================================================
+
+Create a section in Next Steps titled:
+
+This Week’s Sermon
+
+When there is a current published Sermon Devotional, show it prominently.
+
+Card content:
+
+This Week’s Sermon
+
+Sermon title
+
+Speaker
+
+Main Scripture
+
+Companion length
+
+Short summary
+
+Primary action:
+
+Begin Sermon Devotional
+
+or:
+
+Continue Sermon Devotional
+
+Secondary action:
+
+View Sermon
+
+The new “Jesus at the Center” Sermon Devotional must become visible here when:
+
+- the Sermon is published;
+- the Companion is published;
+- at least one Companion entry is published;
+- it is marked as current or member-visible;
+- its publication window is valid.
+
+Do not generate member visibility from Sermon Draft status.
+
+====================================================
+TASK 8 — PREVIOUS SERMON DEVOTIONALS
+====================================================
+
+Below the current Sermon section, provide a secondary action such as:
+
+Browse Previous Sermons →
+
+This opens a list of published member-visible Sermon Devotionals.
+
+Each item may show:
+
+- sermon title;
+- speaker;
+- date;
+- main Scripture;
+- companion length;
+- status for the member:
+  - Not Started
+  - In Progress
+  - Completed
+
+Members may intentionally begin an older Sermon Devotional.
+
+Do not automatically place every old Sermon Devotional on Today’s Steps.
+
+Only the member’s active companion or the officially current companion should surface there according to the established rules.
+
+====================================================
+TASK 9 — SERMON DEVOTIONAL START FLOW
+====================================================
+
+When a member begins a Sermon Devotional:
+
+- create a separate Sermon Companion progress record;
+- set Day 1 as the current available entry;
+- keep progress separate from Journeys;
+- add the active Sermon Devotional to Today’s Steps where appropriate;
+- preserve calendar or publication rules;
+- do not auto-publish;
+- do not create Journey progress.
+
+If the church marks a new sermon as current while a member is still completing an older one, do not silently erase the older progress.
+
+Use a safe rule such as:
+
+- Today’s Steps prioritises the current church Sermon Devotional;
+- previously started companions remain accessible from Next Steps or My Journey;
+- progress is preserved.
+
+Keep the member experience uncluttered.
+
+====================================================
+TASK 10 — JOURNEYS SECTION
+====================================================
+
+Journeys remain a distinct content type inside Next Steps.
+
+Show published Journeys grouped by Journey Collection where useful.
+
+Example:
+
+New to Faith
+
+- Coming to Jesus
+- Walking with Jesus
+- Learning to Pray
+
+Each Journey card should show:
+
+- title;
+- description;
+- number of days;
+- difficulty;
+- estimated daily time where available;
+- member status:
+  - Not Started
+  - In Progress
+  - Completed;
+- primary action:
+  - Begin Journey
+  - Continue Journey
+  - Review Journey
+
+Do not call the entire Next Steps page “Journeys.”
+
+====================================================
+TASK 11 — BIBLE STUDIES SECTION
+====================================================
+
+Bible Studies should appear as a distinct section in Next Steps.
+
+Initially this may use Journey records whose Journey Type is:
+
+Bible Study
+
+Display them under:
+
+Bible Studies
+
+Do not duplicate the underlying record.
+
+Example future content:
+
+Luke Bible Study
+
+The member should experience it as a Bible Study even if it shares Journey infrastructure internally.
+
+====================================================
+TASK 12 — RECENTLY ADDED
+====================================================
+
+Add a Recently Added section that may combine eligible content types:
+
+- Daily Devotional series;
+- Sermon Devotionals;
+- Journeys;
+- Bible Studies.
+
+Sort by publication date, newest first.
+
+Do not duplicate an item excessively if it is already prominently shown above.
+
+Use this section only when it adds value.
+
+====================================================
+TASK 13 — SHARED DISCOVERY CARD
+====================================================
+
+Create or reuse a shared member-facing discovery card.
+
+It should support different content types without making them look identical in meaning.
+
+Suggested properties:
+
+- contentType;
+- title;
+- description;
+- image or icon;
+- metadata;
+- status;
+- primaryAction;
+- secondaryAction;
+- badge where appropriate.
+
+Content-type labels may include:
+
+Daily Devotional
+
+Sermon Devotional
+
+Journey
+
+Bible Study
+
+Do not expose internal database terminology.
+
+====================================================
+TASK 14 — MEMBER-VISIBLE API
+====================================================
+
+Create or correct one canonical Next Steps discovery API or query layer.
+
+It should return grouped eligible content.
+
+Suggested response shape:
+
+{
+  "recommended": [],
+  "dailyDevotionals": [],
+  "currentSermonDevotional": null,
+  "previousSermonDevotionals": [],
+  "journeys": [],
+  "bibleStudies": [],
+  "recentlyAdded": []
+}
+
+Every item should include enough information for the card and correct action.
+
+Do not make the frontend independently reconstruct publication rules for every content type.
+
+Centralise eligibility and member-status logic in a shared service.
+
+====================================================
+TASK 15 — PUBLICATION AND VISIBILITY RULES
+====================================================
+
+A content item must never appear in Next Steps merely because an admin record exists.
+
+Daily Devotional requires:
+
+- Published series;
+- Published entry;
+- valid availability.
+
+Sermon Devotional requires:
+
+- Published Companion;
+- Published entry;
+- member-visible/current setting;
+- valid publication window.
+
+Journey requires:
+
+- Published Journey;
+- at least one valid Published day.
+
+Bible Study requires:
+
+- Published Journey with Journey Type Bible Study;
+- at least one valid Published day.
+
+Do not return Draft or Archived content to normal members.
+
+Development Mode may view all published test content according to existing bypass rules.
+
+====================================================
+TASK 16 — CURRENT SERMON SETTING
+====================================================
+
+Ensure Content Studio has a clear pastor-facing way to mark one published Sermon Companion as:
+
+This Week’s Sermon Devotional
+
+Possible control:
+
+Set as This Week’s Sermon
+
+Only one Sermon Companion should be current at a time.
+
+When a new one is set:
+
+- clear the previous current assignment;
+- preserve the previous content and member progress;
+- update Next Steps;
+- update Today’s Steps;
+- invalidate relevant caches.
+
+Do not make publication alone automatically mark it as current unless that is explicitly selected.
+
+====================================================
+TASK 17 — ACTIVE DAILY DEVOTIONAL MANAGEMENT
+====================================================
+
+When additional Daily Devotional series are added, members need a clear selection experience.
+
+In Next Steps:
+
+- all eligible published series are browseable;
+- one may be started;
+- active status is visible;
+- existing progress is preserved.
+
+If a member tries to begin another series while one is active, use gentle copy such as:
+
+You’re currently reading Psalms Daily Devotional.
+
+Would you like to make this your current Daily Devotional instead?
+
+Buttons:
+
+Keep Psalms
+
+Start This Devotional
+
+Do not delete or reset the old progress.
+
+Do not use guilt or pressure.
+
+====================================================
+TASK 18 — MY JOURNEY ACCESS
+====================================================
+
+Under My Journey, provide access to the member’s started content.
+
+Suggested grouping:
+
+My Next Steps
+
+- Active Daily Devotional
+- Active Sermon Devotionals
+- Active Journeys
+- Completed Content
+
+Do not rename the main bottom navigation label “My Journey.”
+
+This is only an internal section for member history and management.
+
+====================================================
+TASK 19 — EMPTY STATES
+====================================================
+
+Use gentle empty states.
+
+Daily Devotionals:
+
+No Daily Devotionals are available yet.
+
+Sermon Devotionals:
+
+This week’s Sermon Devotional will appear here when it is ready.
+
+Journeys:
+
+New Journeys will appear here as they are published.
+
+Do not display raw empty arrays or blank sections.
+
+====================================================
+TASK 20 — ROUTING
+====================================================
+
+Every discovery card must open the correct real member route.
+
+Daily Devotional:
+
+Series details or current entry.
+
+Sermon Devotional:
+
+Companion details or current entry.
+
+Journey:
+
+Journey details.
+
+Bible Study:
+
+Bible Study/Journey details.
+
+Use real database IDs.
+
+Do not route by title alone.
+
+No “not found” dead ends.
+
+====================================================
+TASK 21 — RESPONSIVE DESIGN
+====================================================
+
+The Next Steps page must work cleanly on mobile first.
+
+Use:
+
+- single-column cards on small screens;
+- comfortable spacing;
+- one clear primary action per card;
+- secondary links kept understated;
+- no horizontal scrolling;
+- no overcrowded filter controls.
+
+On desktop, sections may use a responsive card grid.
+
+Preserve the existing Emmaus visual language.
+
+====================================================
+TASK 22 — TEST WITH CURRENT CONTENT
+====================================================
+
+Use the current content:
+
+Daily Devotional:
+
+Psalms Daily Devotional
+
+Sermon Devotionals:
+
+God’s Kindness Restores the Broken
+
+Jesus at the Center
+
+Journeys:
+
+any existing published test Journey
+
+Verify as a normal member:
+
+✓ Today’s Steps says Your Next Steps.
+
+✓ Today’s Steps says Explore Next Steps.
+
+✓ Explore Next Steps opens the Next Steps tab.
+
+✓ Next Steps is not Journey-only.
+
+✓ Psalms Daily Devotional appears under Daily Devotionals.
+
+✓ Psalms can be intentionally started.
+
+✓ Starting Psalms adds it to Today’s Steps.
+
+✓ Future Daily Devotional series would appear automatically.
+
+✓ Jesus at the Center appears when published and marked current/member-visible.
+
+✓ God’s Kindness Restores the Broken remains browseable if published.
+
+✓ A Sermon Devotional can be intentionally begun.
+
+✓ Sermon Companion progress is separate from Journey progress.
+
+✓ Journeys appear in their own section.
+
+✓ Bible Study Journey types appear under Bible Studies.
+
+✓ Draft content remains hidden.
+
+✓ Archived content remains hidden.
+
+✓ Member progress survives refresh and sign-in.
+
+✓ Cards open correct routes.
+
+✓ No raw errors or “not found” pages appear.
+
+====================================================
+IMPORTANT GUARDRAILS
+====================================================
+
+Do not rename the bottom navigation item Next Steps.
+
+Do not turn Daily Devotionals into Journeys.
+
+Do not turn Sermon Devotionals into Journeys.
+
+Do not merge progress tables.
+
+Do not auto-start published content.
+
+Do not automatically erase old progress when a member chooses something new.
+
+Do not show all available content on Today’s Steps.
+
+Today’s Steps is for active/current content.
+
+Next Steps is for discovery and intentional selection.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the updated Today’s Steps labels;
+2. the Next Steps sections implemented;
+3. the discovery API/query used;
+4. the visibility rules for each content type;
+5. how a member selects a Daily Devotional;
+6. how a member selects a Sermon Devotional;
+7. how the current weekly Sermon is assigned;
+8. the progress tables or collections used;
+9. the files changed;
+10. the result of every test above;
+11. any remaining manual test.

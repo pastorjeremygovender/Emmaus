@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { getCollection, createCollection, updateCollection } from '@/lib/collections-api';
+import { Loader2 } from 'lucide-react';
+import { getCollection, createCollection, updateCollection, deleteCollection } from '@/lib/collections-api';
 import { useAuth } from '@/contexts/AuthContext';
-import { Field, AdminBtn, SaveMessage } from '../shared';
+import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
 
 interface Props {
   collectionId?: string;
@@ -10,12 +10,12 @@ interface Props {
   onSaved: () => void;
 }
 
-const STATUS_OPTIONS = ['Draft', 'Published', 'Archived'];
-
 export default function CollectionEditor({ collectionId, onBack, onSaved }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(!!collectionId);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Internal ID tracking — set after first create so subsequent saves use the right ID
+  const [collectionId_, setCollectionId_] = useState(collectionId);
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -23,6 +23,13 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
     status: 'Draft',
     tags: '',
   });
+
+  // Toolbar state
+  const [savingAs, setSavingAs] = useState<'draft' | 'publish' | 'unpublish' | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!collectionId) return;
@@ -42,27 +49,86 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
   const patch = <K extends keyof typeof form>(k: K, v: string) =>
     setForm(f => ({ ...f, [k]: v }));
 
-  const handleSave = async () => {
+  const handleSave = async (statusOverride?: string) => {
     if (!form.title.trim()) return;
-    setSaveState('saving');
+    const targetStatus = statusOverride ?? form.status;
     try {
       const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean);
       const payload = {
         title: form.title.trim(),
         description: form.description,
         coverImageUrl: form.coverImageUrl || undefined,
-        status: form.status,
+        status: targetStatus,
         tags,
       };
-      if (collectionId) {
-        await updateCollection(collectionId, payload, user?.id);
+      if (collectionId_) {
+        await updateCollection(collectionId_, payload, user?.id);
       } else {
-        await createCollection(payload, user?.id);
+        const created = await createCollection(payload, user?.id);
+        setCollectionId_((created as { id: string }).id);
       }
-      setSaveState('saved');
-      setTimeout(onSaved, 600);
+      // Keep status in form in sync
+      setForm(f => ({ ...f, status: targetStatus }));
+      return true;
     } catch {
-      setSaveState('error');
+      return false;
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    setSavingAs('draft');
+    setSuccessMsg('');
+    setErrorMsg('');
+    const ok = await handleSave();
+    if (ok) {
+      setSuccessMsg('Draft saved successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } else {
+      setErrorMsg('Save failed — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+    setSavingAs(null);
+  };
+
+  const handlePublish = async () => {
+    setSavingAs('publish');
+    setSuccessMsg('');
+    setErrorMsg('');
+    const ok = await handleSave('Published');
+    if (ok) {
+      setSuccessMsg('Published successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } else {
+      setErrorMsg('Failed to publish — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+    setSavingAs(null);
+  };
+
+  const handleUnpublish = async () => {
+    setSavingAs('unpublish');
+    setSuccessMsg('');
+    setErrorMsg('');
+    const ok = await handleSave('Draft');
+    if (ok) {
+      setSuccessMsg('Unpublished successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } else {
+      setErrorMsg('Failed to unpublish — please try again.');
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+    setSavingAs(null);
+  };
+
+  const handleDelete = async () => {
+    if (!collectionId_) { onBack(); return; }
+    setDeleting(true);
+    try {
+      await deleteCollection(collectionId_, user?.id);
+      setConfirmDelete(false);
+      onBack();
+    } catch {
+      setDeleting(false);
     }
   };
 
@@ -75,74 +141,72 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 rounded-lg text-gray-500">
-          <ArrowLeft size={18} />
-        </button>
-        <h2 className="text-lg font-semibold text-gray-900">
-          {collectionId ? 'Edit Collection' : 'New Collection'}
-        </h2>
-      </div>
+    <div className="flex flex-col h-full min-h-0">
+      <ContentStudioToolbar
+        onBack={onBack}
+        title={collectionId_ ? 'Edit Collection' : 'New Collection'}
+        subtitle={form.title || undefined}
+        status={form.status}
+        isSaving={savingAs === 'draft'}
+        isPublishing={savingAs === 'publish' || savingAs === 'unpublish'}
+        successMessage={successMsg}
+        errorMessage={errorMsg}
+        onSaveDraft={handleSaveDraft}
+        onPublish={handlePublish}
+        onUnpublish={handleUnpublish}
+        onDelete={collectionId_ ? () => setConfirmDelete(true) : undefined}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <Field label="Title *">
-          <input
-            type="text"
-            value={form.title}
-            onChange={e => patch('title', e.target.value)}
-            placeholder="e.g. Lent 2025 Series"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
-          />
-        </Field>
-        <Field label="Description">
-          <textarea
-            value={form.description}
-            onChange={e => patch('description', e.target.value)}
-            placeholder="Short description visible to users…"
-            rows={3}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
-          />
-        </Field>
-        <Field label="Status">
-          <select
-            value={form.status}
-            onChange={e => patch('status', e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-          >
-            {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </Field>
-        <Field label="Tags (comma-separated)">
-          <input
-            type="text"
-            value={form.tags}
-            onChange={e => patch('tags', e.target.value)}
-            placeholder="e.g. Lent, Prayer, Series"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
-          />
-        </Field>
-        <Field label="Cover Image URL">
-          <input
-            type="text"
-            value={form.coverImageUrl}
-            onChange={e => patch('coverImageUrl', e.target.value)}
-            placeholder="https://…"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
-          />
-        </Field>
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete Collection?"
+          message="This collection will be permanently deleted. Journeys inside it will not be deleted."
+          confirmLabel={deleting ? 'Deleting…' : 'Delete Permanently'}
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
 
-        {saveState === 'error' && (
-          <p className="text-sm text-red-600">Save failed — please try again.</p>
-        )}
-
-        <div className="flex items-center justify-between pt-2">
-          <AdminBtn variant="secondary" onClick={onBack}>Cancel</AdminBtn>
-          <div className="flex items-center gap-3">
-            <SaveMessage state={saveState} />
-            <AdminBtn variant="primary" onClick={handleSave} disabled={!form.title.trim() || saveState === 'saving'}>
-              {saveState === 'saving' ? 'Saving…' : collectionId ? 'Save Changes' : 'Create Collection'}
-            </AdminBtn>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+            <Field label="Title *">
+              <input
+                type="text"
+                value={form.title}
+                onChange={e => patch('title', e.target.value)}
+                placeholder="e.g. Lent 2025 Series"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
+            </Field>
+            <Field label="Description">
+              <textarea
+                value={form.description}
+                onChange={e => patch('description', e.target.value)}
+                placeholder="Short description visible to users…"
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
+              />
+            </Field>
+            <Field label="Tags (comma-separated)">
+              <input
+                type="text"
+                value={form.tags}
+                onChange={e => patch('tags', e.target.value)}
+                placeholder="e.g. Lent, Prayer, Series"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
+            </Field>
+            <Field label="Cover Image URL">
+              <input
+                type="text"
+                value={form.coverImageUrl}
+                onChange={e => patch('coverImageUrl', e.target.value)}
+                placeholder="https://…"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300"
+              />
+            </Field>
           </div>
         </div>
       </div>
