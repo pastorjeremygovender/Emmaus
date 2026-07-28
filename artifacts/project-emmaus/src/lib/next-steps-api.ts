@@ -1,25 +1,20 @@
 /**
- * next-steps-api.ts — client for the canonical /api/next-steps endpoint.
+ * Client for GET /api/next-steps
  *
- * The server determines eligibility, grouping, and memberProgressState.
- * No complex publication rules live on the client.
+ * Returns pre-grouped, eligibility-checked content for the three-tab Next Steps page.
+ * The server determines all grouping, progress state, and action labels.
  */
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { startSeries } from './devotionals-api';
+export { startSeries };
 
-function apiUrl(path: string) {
-  return `${BASE}/api${path}`;
-}
-
-// ─── Types (mirrored from backend) ────────────────────────────────────────────
-
-export type MemberProgressState = "not-started" | "in-progress" | "completed";
+export type MemberProgressState = 'not-started' | 'in-progress' | 'completed';
 
 export type ContentType =
-  | "journey"
-  | "bible-study"
-  | "sermon-devotional"
-  | "daily-devotional";
+  | 'journey'
+  | 'bible-study'
+  | 'sermon-devotional'
+  | 'daily-devotional';
 
 export interface NextStepsItem {
   id: string;
@@ -34,47 +29,38 @@ export interface NextStepsItem {
     coverImageUrl?: string;
     collectionId?: string;
     publishedAt?: string;
+    subtitle?: string;
   };
-  /** Member-facing route, e.g. /journey/:id/day/1 */
+  /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
   primaryActionLabel: string;
 }
 
-export interface NextStepsData {
-  recommended: NextStepsItem[];
-  dailyDevotionals: NextStepsItem[];
-  currentSermonDevotional: NextStepsItem | null;
-  previousSermonDevotionals: NextStepsItem[];
+export interface JourneyCollectionGroup {
+  id: string;
+  title: string;
+  description?: string;
   journeys: NextStepsItem[];
-  bibleStudies: NextStepsItem[];
-  recentlyAdded: NextStepsItem[];
 }
 
-// ─── Fetch ────────────────────────────────────────────────────────────────────
+export interface NextStepsData {
+  dailyDevotionals: NextStepsItem[];
+  journeyCollections: JourneyCollectionGroup[];
+  standaloneJourneys: NextStepsItem[];
+  currentSermonCompanion: NextStepsItem | null;
+  previousSermonCompanions: NextStepsItem[];
+}
 
-export async function fetchNextSteps(opts?: {
+export async function fetchNextSteps(params?: {
   userId?: string;
   currentCompanionId?: string;
 }): Promise<NextStepsData> {
-  const params = new URLSearchParams();
-  if (opts?.userId) params.set("userId", opts.userId);
-  if (opts?.currentCompanionId) params.set("currentCompanionId", opts.currentCompanionId);
+  const qs = new URLSearchParams();
+  if (params?.userId) qs.set('userId', params.userId);
+  if (params?.currentCompanionId) qs.set('currentCompanionId', params.currentCompanionId);
 
-  const qs = params.toString();
-  const url = apiUrl(`/next-steps${qs ? `?${qs}` : ""}`);
-
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (opts?.userId) headers["X-User-Id"] = opts.userId;
-
-  const res = await fetch(url, { credentials: "include", headers });
-  if (!res.ok) {
-    const body = await res.text();
-    const msg = body.startsWith("<") || body.startsWith("Cannot") ? `HTTP ${res.status}` : body;
-    throw new Error(msg || `HTTP ${res.status}`);
-  }
-  return res.json();
+  const url = `/api/next-steps${qs.toString() ? `?${qs}` : ''}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load Next Steps (${res.status})`);
+  return res.json() as Promise<NextStepsData>;
 }
-
-// ─── Re-export startSeries for convenience ────────────────────────────────────
-// The page still calls the devotionals endpoint to start a series.
-export { startSeries } from "./devotionals-api";

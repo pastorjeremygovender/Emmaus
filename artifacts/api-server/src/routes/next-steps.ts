@@ -2,18 +2,24 @@
  * GET /next-steps
  *
  * Canonical member discovery endpoint. Returns pre-grouped, eligibility-checked
- * content for the Next Steps page. The server determines grouping and progress
- * state — no complex publication rules need to live in the frontend.
+ * content for the three-tab Next Steps page.
+ *
+ * Response shape:
+ *   dailyDevotionals       – all published devotional series (at least 1 published entry)
+ *   journeyCollections     – published collections with their published journeys
+ *   standaloneJourneys     – published journeys with no collection
+ *   currentSermonCompanion – companion marked as This Week's (or most-recent)
+ *   previousSermonCompanions – all other published companions, newest first
  *
  * Query params:
- *   userId             — optional; when supplied, memberProgressState is personalised
- *   currentCompanionId — optional; the companion journey marked as This Week's Sermon
- *                        Falls back to most-recently-published companion.
+ *   userId             – optional; personalises memberProgressState
+ *   currentCompanionId – optional; overrides most-recent companion as "current"
  */
 
 import { Router, type Request, type Response } from "express";
 import * as journeyStore from "../lib/journey-store.js";
 import * as devStore from "../lib/devotional-store.js";
+import * as collectionsStore from "../lib/collections-store.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -40,45 +46,51 @@ export interface NextStepsItem {
     coverImageUrl?: string;
     collectionId?: string;
     publishedAt?: string;
+    subtitle?: string;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
   primaryActionLabel: string;
 }
 
-export interface NextStepsResponse {
-  recommended: NextStepsItem[];
-  dailyDevotionals: NextStepsItem[];
-  currentSermonDevotional: NextStepsItem | null;
-  previousSermonDevotionals: NextStepsItem[];
+export interface JourneyCollectionGroup {
+  id: string;
+  title: string;
+  description?: string;
   journeys: NextStepsItem[];
-  bibleStudies: NextStepsItem[];
-  recentlyAdded: NextStepsItem[];
+}
+
+export interface NextStepsResponse {
+  dailyDevotionals: NextStepsItem[];
+  journeyCollections: JourneyCollectionGroup[];
+  standaloneJourneys: NextStepsItem[];
+  currentSermonCompanion: NextStepsItem | null;
+  previousSermonCompanions: NextStepsItem[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const EXEMPT_JOURNEY_TYPES = new Set(["core", "companion", "devotional", "daily-rhythm"]);
-
 function primaryActionLabel(contentType: ContentType, state: MemberProgressState): string {
-  const noun =
-    contentType === "daily-devotional" ? "Devotional" :
-    contentType === "sermon-devotional" ? "Sermon Devotional" :
-    contentType === "bible-study" ? "Bible Study" :
-    "Journey";
+  if (contentType === "sermon-devotional") {
+    switch (state) {
+      case "not-started": return "Begin Sermon Companion";
+      case "in-progress": return "Continue Sermon Companion";
+      case "completed":   return "Review Today";
+    }
+  }
+  if (contentType === "daily-devotional") {
+    switch (state) {
+      case "not-started": return "Begin Devotional";
+      case "in-progress": return "Continue Devotional";
+      case "completed":   return "Review Today";
+    }
+  }
+  const noun = contentType === "bible-study" ? "Bible Study" : "Journey";
   switch (state) {
     case "not-started": return `Begin ${noun}`;
     case "in-progress": return `Continue ${noun}`;
     case "completed":   return `Review ${noun}`;
   }
-}
-
-function journeyRoute(id: string, currentDay: number): string {
-  return `/journey/${id}/day/${currentDay}`;
-}
-
-function devotionalRoute(id: string, currentDay: number): string {
-  return `/devotional/${id}/day/${currentDay}`;
 }
 
 function journeyProgressState(
@@ -123,8 +135,9 @@ function buildJourneyItem(
       coverImageUrl: j.coverImageUrl || undefined,
       collectionId: j.collectionId || undefined,
       publishedAt: j.publishedAt || undefined,
+      subtitle: j.subtitle || undefined,
     },
-    route: journeyRoute(j.id, currentDay),
+    route: `/journey/${j.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel(contentType, state),
   };
 }
@@ -147,7 +160,7 @@ function buildDevotionalItem(
       durationDays: publishedEntryCount || undefined,
       publishedAt: s.publishedAt?.toISOString?.() ?? (s.publishedAt as unknown as string) ?? undefined,
     },
-    route: devotionalRoute(s.id, currentDay),
+    route: `/devotional/${s.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel("daily-devotional", state),
   };
 }
@@ -165,9 +178,10 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
-    const [publishedJourneys, devSeries] = await Promise.all([
+    const [publishedJourneys, devSeries, allCollections] = await Promise.all([
       journeyStore.listPublishedJourneys(),
       devStore.listPublishedSeries(),
+      collectionsStore.listCollections(),
     ]);
 
     // Fetch user progress if available
@@ -194,11 +208,15 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       }),
     );
 
-    // ── Group journeys by content type ──────────────────────────────────────
+    // ── Daily Devotionals ────────────────────────────────────────────────────
+
+    const dailyDevotionals = devSeries
+      .filter(s => (entryCounts.get(s.id) ?? 0) > 0)
+      .map(s => buildDevotionalItem(s, entryCounts.get(s.id) ?? 0, devProgressMap));
+
+    // ── Sermon Companions (companion journeyType) ─────────────────────────────
 
     const companions = publishedJourneys.filter(j => j.journeyType === "companion");
-
-    // Determine current companion: explicit param > most-recently-published
     const sortedCompanions = [...companions].sort(
       (a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""),
     );
@@ -208,109 +226,57 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       null;
     const previousCompanions = companions.filter(j => j.id !== currentCompanion?.id);
 
-    const standardJourneys = publishedJourneys.filter(
-      j => !EXEMPT_JOURNEY_TYPES.has(j.journeyType) && j.journeyType !== "bible-study",
-    );
-    const bibleStudyJourneys = publishedJourneys.filter(
-      j => j.journeyType === "bible-study",
-    );
-
-    // ── Build section arrays ─────────────────────────────────────────────────
-
-    const dailyDevotionals = devSeries.map(s =>
-      buildDevotionalItem(s, entryCounts.get(s.id) ?? 0, devProgressMap),
-    );
-
-    const journeysSection = standardJourneys.map(j =>
-      buildJourneyItem(j, "journey", journeyProgress),
-    );
-
-    const bibleStudiesSection = bibleStudyJourneys.map(j =>
-      buildJourneyItem(j, "bible-study", journeyProgress),
-    );
-
-    const currentSermonDevotional = currentCompanion
+    const currentSermonCompanion = currentCompanion
       ? buildJourneyItem(currentCompanion, "sermon-devotional", journeyProgress)
       : null;
+    const previousSermonCompanions = [...previousCompanions]
+      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+      .map(j => buildJourneyItem(j, "sermon-devotional", journeyProgress));
 
-    const previousSermonDevotionals = previousCompanions.map(j =>
-      buildJourneyItem(j, "sermon-devotional", journeyProgress),
-    );
+    // ── Journey grouping ──────────────────────────────────────────────────────
+    // Exclude companion and daily-rhythm types — they live in their own tabs.
 
-    // ── Recommended (max 3) ──────────────────────────────────────────────────
-    //
-    // Rules:
-    //  - Companion (sermon devotional) is excluded — it always has its own dedicated
-    //    "This Week's Sermon" section and must not appear twice.
-    //  - Daily Devotionals are excluded — they always appear in their own dedicated
-    //    "Daily Devotionals" section. Showing Psalms in Recommended AND in Daily
-    //    Devotionals would duplicate it on the same screen.
-    //  - Only surface a Journey or Bible Study when there is no active growth content,
-    //    to avoid redundancy with those dedicated sections.
-    //  - Recommended is only populated when there is something a member would not
-    //    otherwise immediately see in a section below.
+    const JOURNEY_EXCLUDE = new Set(["companion", "daily-rhythm"]);
 
-    const recommended: NextStepsItem[] = [];
-    const recommendedIds = new Set<string>();
+    // Group by collectionId
+    const byCollection = new Map<string, journeyStore.FrontendJourney[]>();
+    const standaloneRaw: journeyStore.FrontendJourney[] = [];
 
-    // A beginner/first unstarted Journey or Bible Study if no active growth content
-    const allGrowth = [...journeysSection, ...bibleStudiesSection];
-    const hasActiveGrowth = allGrowth.some(j => j.memberProgressState === "in-progress");
-    if (!hasActiveGrowth) {
-      const target =
-        allGrowth.find(
-          j =>
-            j.memberProgressState === "not-started" &&
-            (j.metadata.difficulty?.toLowerCase().includes("begin") ||
-             j.metadata.difficulty?.toLowerCase().includes("intro")),
-        ) ??
-        allGrowth.find(j => j.memberProgressState === "not-started");
-      if (target) {
-        recommended.push(target);
-        recommendedIds.add(target.id);
+    for (const j of publishedJourneys) {
+      if (JOURNEY_EXCLUDE.has(j.journeyType)) continue;
+      if (j.collectionId) {
+        if (!byCollection.has(j.collectionId)) byCollection.set(j.collectionId, []);
+        byCollection.get(j.collectionId)!.push(j);
+      } else {
+        standaloneRaw.push(j);
       }
     }
 
-    // ── Recently Added (max 5, newest first, no duplicates of dedicated sections) ──
-    //
-    // Exclude anything already shown in a dedicated section above:
-    //   - dailyDevotionals are shown in full under "Daily Devotionals"
-    //   - currentCompanion is shown in full under "This Week's Sermon"
-    //   - items in recommended are shown in full under "Recommended for You"
-    //
-    // previousSermonDevotionals can appear here if they have a publishedAt date
-    // and are not already featured.
+    // Build collection groups — only Published collections that have journeys
+    const journeyCollections: JourneyCollectionGroup[] = allCollections
+      .filter(c => c.status === "Published" && byCollection.has(c.id))
+      .map(c => ({
+        id: c.id,
+        title: c.title,
+        description: c.description || undefined,
+        journeys: (byCollection.get(c.id) ?? []).map(j =>
+          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress),
+        ),
+      }));
 
-    const alreadyShowedIds = new Set<string>([
-      ...recommendedIds,
-      ...dailyDevotionals.map(d => d.id),     // always in Daily Devotionals section
-      ...(currentCompanion ? [currentCompanion.id] : []),  // always in This Week's Sermon
-    ]);
-
-    type Candidate = { item: NextStepsItem; publishedAt: string };
-    const candidates: Candidate[] = [
-      ...journeysSection,
-      ...bibleStudiesSection,
-      ...previousSermonDevotionals,
-    ]
-      .filter(item => !alreadyShowedIds.has(item.id) && !!item.metadata.publishedAt)
-      .map(item => ({ item, publishedAt: item.metadata.publishedAt! }));
-
-    const recentlyAdded = candidates
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-      .slice(0, 5)
-      .map(c => c.item);
+    // Standalone journeys (no collection, not companion/daily-rhythm)
+    const standaloneJourneys = standaloneRaw.map(j =>
+      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress),
+    );
 
     // ── Respond ──────────────────────────────────────────────────────────────
 
     const response: NextStepsResponse = {
-      recommended,
       dailyDevotionals,
-      currentSermonDevotional,
-      previousSermonDevotionals,
-      journeys: journeysSection,
-      bibleStudies: bibleStudiesSection,
-      recentlyAdded,
+      journeyCollections,
+      standaloneJourneys,
+      currentSermonCompanion,
+      previousSermonCompanions,
     };
 
     res.json(response);

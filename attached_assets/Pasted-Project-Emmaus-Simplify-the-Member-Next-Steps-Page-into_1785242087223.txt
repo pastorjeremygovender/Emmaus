@@ -1,0 +1,578 @@
+Project Emmaus — Simplify the Member Next Steps Page into Three Content Tabs
+
+The current member Next Steps page is still wrong.
+
+It currently displays Daily Devotionals, This Week’s Sermon and other content in one long mixed page.
+
+This is too complicated.
+
+Replace the current Next Steps discovery layout with a simple tabbed content library populated directly from Content Studio.
+
+Do not change Content Studio architecture.
+Do not merge content types.
+Do not change the underlying progress systems.
+Do not redesign Today’s Steps.
+Do not add recommendation algorithms or Recently Added sections.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+The member Next Steps page should have exactly three tabs:
+
+1. Daily Devotionals
+2. Journeys
+3. Sermon Companions
+
+Use these exact labels and this exact order.
+
+The selected tab displays only its corresponding published member-visible content.
+
+The page should feel like a simple library, not a dashboard.
+
+====================================================
+PAGE HEADER
+====================================================
+
+Heading:
+
+Next Steps
+
+Supporting text:
+
+Choose something that will help you take your next step with Jesus.
+
+Below this, show the three tabs:
+
+Daily Devotionals | Journeys | Sermon Companions
+
+Default tab:
+
+Daily Devotionals
+
+Remember the selected tab during the current session where practical.
+
+====================================================
+REMOVE THE CURRENT MIXED LAYOUT
+====================================================
+
+Remove the current continuous sections such as:
+
+- Recommended for You;
+- Daily Devotionals;
+- This Week’s Sermon;
+- Recently Added;
+- generic In Progress;
+- duplicated content cards.
+
+Do not show several content types together on the same tab.
+
+Do not show Psalms Daily Devotional more than once.
+
+Do not keep the current Sermon Devotional card beneath the Daily Devotional list when the Daily Devotionals tab is selected.
+
+====================================================
+TAB 1 — DAILY DEVOTIONALS
+====================================================
+
+The Daily Devotionals tab displays every eligible Daily Devotional series published from Content Studio.
+
+Source:
+
+Content Studio
+→ Daily Devotionals
+
+Do not hard-code Psalms.
+
+Current example:
+
+Psalms Daily Devotional
+
+Future examples should appear automatically:
+
+- Proverbs Daily Devotional;
+- Seasonal Devotional;
+- Church-Specific Devotional;
+- other published series.
+
+Each card should show:
+
+- content-type label: Daily Devotional;
+- series title;
+- description;
+- number of published days or Ongoing;
+- member state:
+  - Not Started
+  - Current
+  - Completed for Today;
+- one primary action:
+  - Begin Devotional
+  - Continue Devotional
+  - Review Today.
+
+Starting a series must use the existing separate Daily Devotional progress system.
+
+Do not create Journey progress.
+
+If one series is already active and the member chooses another, preserve the existing gentle switch-series confirmation and retain old progress.
+
+====================================================
+TAB 2 — JOURNEYS
+====================================================
+
+The Journeys tab displays all eligible published Journeys from Content Studio.
+
+Source:
+
+Content Studio
+→ Journeys
+
+The page must not use Collections as clickable tabs.
+
+Instead, render each Collection as a section heading.
+
+Example:
+
+NEW TO FAITH
+
+Coming to Jesus
+Walking with Jesus
+Learning to Pray
+
+GROWING IN FAITH
+
+Living by Faith
+Becoming Like Jesus
+
+BIBLE STUDIES
+
+Luke Bible Study
+
+Then, after all Collection sections, display:
+
+STANDALONE
+
+Under Standalone, show all published Journeys whose collectionId is empty or null.
+
+====================================================
+JOURNEY COLLECTION SECTIONS
+====================================================
+
+Load all member-visible published Collections that contain at least one eligible published Journey.
+
+For each Collection:
+
+- show Collection title as the section heading;
+- optionally show its short description;
+- list its published Journeys underneath;
+- sort Collections by display order;
+- sort Journeys within each Collection by display order.
+
+Do not display an empty Collection.
+
+Do not require members to open the Collection before seeing its Journeys.
+
+The Collection is a grouping heading, not another navigation level in the member experience.
+
+====================================================
+STANDALONE SECTION
+====================================================
+
+After the Collection sections, display:
+
+Standalone
+
+Only show this heading when at least one eligible Standalone Journey exists.
+
+Standalone Journeys are normal Journey records with no Collection.
+
+They must use the same Journey card and progress logic as collected Journeys.
+
+Do not create a separate Standalone content type or progress table.
+
+====================================================
+JOURNEY CARD
+====================================================
+
+Each Journey card should show:
+
+- content-type label:
+  Journey
+  or Bible Study where Journey Type is Bible Study;
+- title;
+- short description;
+- number of published days;
+- difficulty where available;
+- member state:
+  - Not Started
+  - In Progress
+  - Completed;
+- one primary action:
+  - Begin Journey
+  - Continue Journey
+  - Review Journey.
+
+Bible Study Journey types may remain under their assigned Collection heading.
+
+Do not create a separate top-level Bible Studies tab in this simplified design.
+
+If a Collection is named Bible Studies, display the Bible Studies there.
+
+====================================================
+TAB 3 — SERMON COMPANIONS
+====================================================
+
+The Sermon Companions tab displays published member-visible Sermon Companions from Content Studio.
+
+Source:
+
+Content Studio
+→ Sermon Companions
+
+At the top, show the Companion marked:
+
+This Week’s Sermon
+
+as the featured card.
+
+Featured card fields:
+
+- label: This Week’s Sermon;
+- sermon title;
+- speaker;
+- sermon date;
+- main Scripture;
+- short summary;
+- number of companion days;
+- member state;
+- primary action:
+  - Begin Sermon Companion
+  - Continue Sermon Companion
+  - Review Today;
+- secondary action:
+  View Sermon.
+
+Below the featured card, show:
+
+Previous Sermon Companions
+
+List all other eligible published Companions, newest first.
+
+Do not hide older Companions.
+
+Do not display Draft Companions.
+
+Do not place Sermon Companions under Journeys.
+
+====================================================
+SERMON COMPANION CARD
+====================================================
+
+Each card should show:
+
+- content-type label: Sermon Companion;
+- sermon title;
+- speaker;
+- date;
+- main Scripture;
+- short description or central message;
+- number of days;
+- member state;
+- one primary action.
+
+Use the separate Sermon Companion progress system.
+
+Do not create Journey progress.
+
+====================================================
+CONTENT STUDIO AS SOURCE OF TRUTH
+====================================================
+
+The member tabs must populate automatically from the corresponding Content Studio sections.
+
+Mapping:
+
+Content Studio Daily Devotionals
+→ member Daily Devotionals tab
+
+Content Studio Journeys
+→ member Journeys tab
+
+Content Studio Sermon Companions
+→ member Sermon Companions tab
+
+Do not maintain separate manual member lists.
+
+Do not hard-code current titles.
+
+When content is published, unpublished, archived or deleted in Content Studio, the member page must update automatically.
+
+====================================================
+ELIGIBILITY RULES
+====================================================
+
+Daily Devotional appears when:
+
+- series is Published;
+- member visibility is enabled;
+- at least one entry is Published;
+- publication window is valid.
+
+Journey appears when:
+
+- Journey is Published;
+- member visibility is enabled;
+- at least one Journey Day is Published;
+- Collection is Published or the Journey is Standalone.
+
+Sermon Companion appears when:
+
+- Companion is Published;
+- member visibility is enabled;
+- at least one Companion Day is Published;
+- publication window is valid where used.
+
+Draft and Archived content must not appear for normal members.
+
+Development Mode may follow existing tester rules.
+
+====================================================
+CANONICAL MEMBER API
+====================================================
+
+Replace the current mixed Next Steps response with a simple grouped response.
+
+Suggested structure:
+
+{
+  "dailyDevotionals": [],
+  "journeyCollections": [
+    {
+      "id": "...",
+      "title": "New to Faith",
+      "description": "...",
+      "journeys": []
+    }
+  ],
+  "standaloneJourneys": [],
+  "currentSermonCompanion": null,
+  "previousSermonCompanions": []
+}
+
+The server must determine:
+
+- publication eligibility;
+- grouping;
+- display order;
+- member progress state;
+- primary action label;
+- correct member route.
+
+Do not reconstruct these rules separately in each React component.
+
+====================================================
+TAB ROUTING
+====================================================
+
+Use one Next Steps route with a tab state, or clear subroutes such as:
+
+/next-steps/devotionals
+
+/next-steps/journeys
+
+/next-steps/sermon-companions
+
+Use the project’s existing route conventions.
+
+Clicking the bottom-navigation Next Steps icon should open:
+
+Daily Devotionals
+
+by default.
+
+Allow direct links to each tab.
+
+====================================================
+TODAY’S STEPS LINKS
+====================================================
+
+On Today’s Steps:
+
+Explore Next Steps →
+
+opens the main Next Steps page.
+
+Where context is known, optional deep links may open the corresponding tab.
+
+Examples:
+
+Browse Daily Devotionals
+→ Daily Devotionals tab
+
+Explore Journeys
+→ Journeys tab
+
+Browse Sermon Companions
+→ Sermon Companions tab
+
+However, retain the approved general label:
+
+Explore Next Steps →
+
+where it currently appears.
+
+====================================================
+VISUAL DESIGN
+====================================================
+
+Use a clean mobile-first tab layout.
+
+Top:
+
+Next Steps
+Supporting text
+Three tabs
+
+Content beneath the selected tab.
+
+Cards should use:
+
+- one clear primary action;
+- understated metadata;
+- no tables;
+- no horizontal overflow;
+- comfortable spacing;
+- existing Emmaus typography and card styling.
+
+Collection headings should be visually clear but understated.
+
+Do not make Collections look like separate content cards.
+
+====================================================
+EMPTY STATES
+====================================================
+
+Daily Devotionals:
+
+No Daily Devotionals are available yet.
+
+Journeys:
+
+No Journeys are available yet.
+
+Sermon Companions:
+
+No Sermon Companions are available yet.
+
+Do not display empty Collection or Standalone headings.
+
+====================================================
+DUPLICATION RULES
+====================================================
+
+A content item appears only in its own tab.
+
+Daily Devotional:
+only Daily Devotionals tab.
+
+Journey:
+only Journeys tab.
+
+Sermon Companion:
+only Sermon Companions tab.
+
+Do not duplicate the same item in recommendation, recent or progress sections.
+
+Member progress is shown on the card rather than by moving the item into a separate In Progress section.
+
+====================================================
+TEST WITH CURRENT CONTENT
+====================================================
+
+Use the current published content:
+
+Daily Devotional:
+
+Psalms Daily Devotional
+
+Journeys:
+
+existing published Collection and Standalone test records
+
+Sermon Companions:
+
+God’s Kindness Restores the Broken
+
+Jesus at the Center, if published and member-visible
+
+Verify:
+
+✓ Next Steps displays exactly three tabs.
+
+✓ Daily Devotionals is the default tab.
+
+✓ Daily Devotionals tab shows Psalms exactly once.
+
+✓ Sermon Companions do not appear under Daily Devotionals.
+
+✓ Journeys tab shows Collection headings.
+
+✓ Journeys appear directly beneath their Collection headings.
+
+✓ Standalone heading appears only when Standalone Journeys exist.
+
+✓ Standalone Journeys appear beneath Standalone.
+
+✓ No member needs to open a Collection to discover a Journey.
+
+✓ Sermon Companions tab shows This Week’s Sermon first.
+
+✓ Previous published Sermon Companions appear below.
+
+✓ Draft content remains hidden.
+
+✓ Published Content Studio changes appear automatically.
+
+✓ Every card opens the correct real member route.
+
+✓ Progress state survives refresh and sign-in.
+
+✓ No duplicate cards appear across tabs.
+
+✓ No raw errors or dead routes appear.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not retain the current mixed section layout.
+
+Do not add Recommended or Recently Added.
+
+Do not add a separate Bible Studies tab.
+
+Do not place Sermon Companions inside Journeys.
+
+Do not place Daily Devotionals inside Journeys.
+
+Do not merge progress systems.
+
+Do not hard-code Psalms or the current Sermon.
+
+The three tabs must populate directly from Content Studio.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the three tabs implemented;
+2. the default tab;
+3. the member API/query structure;
+4. how Journey Collections are rendered as headings;
+5. how Standalone Journeys are identified;
+6. how the current and previous Sermon Companions are selected;
+7. the files changed;
+8. the result of every test above;
+9. any remaining manual test.

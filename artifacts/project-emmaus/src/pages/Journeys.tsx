@@ -1,16 +1,13 @@
 /**
- * Next Steps — unified member discovery experience.
+ * Next Steps — three-tab member content library.
  *
- * All grouping and eligibility is determined by the server via GET /api/next-steps.
- * This component is responsible only for rendering sections and handling user actions.
+ * Tabs (exact order, spec-locked):
+ *   1. Daily Devotionals
+ *   2. Journeys
+ *   3. Sermon Companions
  *
- * Section order:
- *   1. Recommended for You
- *   2. Daily Devotionals
- *   3. This Week's Sermon  (+ Browse Previous Sermons)
- *   4. Journeys
- *   5. Bible Studies
- *   6. Recently Added
+ * All grouping and eligibility is determined server-side via GET /api/next-steps.
+ * This component renders only — no publication rules here.
  *
  * Route: /journeys
  */
@@ -26,8 +23,8 @@ import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import {
-  X, Pause, MoreHorizontal, ChevronDown, ChevronUp, Loader2,
-  BookOpen, Mic2, BookHeart, Map,
+  X, Pause, MoreHorizontal, Loader2,
+  BookHeart, Mic2, Map,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
@@ -37,17 +34,42 @@ import {
   type NextStepsData,
   type NextStepsItem,
   type ContentType,
+  type JourneyCollectionGroup,
 } from '@/lib/next-steps-api';
 
-// ─── Section label ────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function SectionLabel({
-  icon,
-  children,
-}: {
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+type TabId = 'devotionals' | 'journeys' | 'sermons';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
+  journey:             'Journey',
+  'bible-study':       'Bible Study',
+  'sermon-devotional': 'Sermon Companion',
+  'daily-devotional':  'Daily Devotional',
+};
+
+function dayLabel(n?: number): string | null {
+  if (!n) return null;
+  return `${n} ${n === 1 ? 'Day' : 'Days'}`;
+}
+
+function sessionTab(): TabId {
+  try {
+    const saved = sessionStorage.getItem('next-steps-tab');
+    if (saved === 'journeys' || saved === 'sermons') return saved;
+  } catch { /* ignore */ }
+  return 'devotionals';
+}
+
+function saveTab(tab: TabId) {
+  try { sessionStorage.setItem('next-steps-tab', tab); } catch { /* ignore */ }
+}
+
+// ─── Shared UI atoms ─────────────────────────────────────────────────────────
+
+function SectionLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
       {icon && <span className="text-muted-foreground/60">{icon}</span>}
@@ -58,14 +80,18 @@ function SectionLabel({
   );
 }
 
-// ─── Content-type chip ────────────────────────────────────────────────────────
-
-const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
-  journey:            'Journey',
-  'bible-study':      'Bible Study',
-  'sermon-devotional':'Sermon Devotional',
-  'daily-devotional': 'Daily Devotional',
-};
+function CollectionHeading({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-3">
+      <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+        {title}
+      </h3>
+      {description && (
+        <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">{description}</p>
+      )}
+    </div>
+  );
+}
 
 function ContentTypeChip({ contentType }: { contentType: ContentType }) {
   return (
@@ -74,8 +100,6 @@ function ContentTypeChip({ contentType }: { contentType: ContentType }) {
     </span>
   );
 }
-
-// ─── Member state pill ────────────────────────────────────────────────────────
 
 function StatePill({ state }: { state: NextStepsItem['memberProgressState'] }) {
   if (state === 'not-started') return null;
@@ -90,24 +114,9 @@ function StatePill({ state }: { state: NextStepsItem['memberProgressState'] }) {
   );
 }
 
-// ─── Cover thumbnail ──────────────────────────────────────────────────────────
-
-function CoverThumb({
-  url,
-  title,
-  className = '',
-}: {
-  url?: string;
-  title: string;
-  className?: string;
-}) {
+function CoverThumb({ url, title, className = '' }: { url?: string; title: string; className?: string }) {
   const [err, setErr] = useState(false);
-  const initials = title
-    .split(' ')
-    .slice(0, 2)
-    .map(w => w[0] ?? '')
-    .join('')
-    .toUpperCase();
+  const initials = title.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase();
   if (!url || err) {
     return (
       <div className={`bg-primary/8 flex items-center justify-center ${className}`}>
@@ -115,17 +124,8 @@ function CoverThumb({
       </div>
     );
   }
-  return (
-    <img
-      src={url}
-      alt=""
-      className={`object-cover ${className}`}
-      onError={() => setErr(true)}
-    />
-  );
+  return <img src={url} alt="" className={`object-cover ${className}`} onError={() => setErr(true)} />;
 }
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
@@ -138,15 +138,17 @@ function SkeletonCard() {
   );
 }
 
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="py-16 text-center">
+      <p className="text-[14px] text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
 // ─── More menu ────────────────────────────────────────────────────────────────
 
-function MoreMenu({
-  onPause,
-  onDetails,
-}: {
-  onPause: () => void;
-  onDetails: () => void;
-}) {
+function MoreMenu({ onPause, onDetails }: { onPause: () => void; onDetails: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -196,24 +198,14 @@ function MoreMenu({
   );
 }
 
-// ─── Pause dialog ─────────────────────────────────────────────────────────────
+// ─── Modal dialogs ────────────────────────────────────────────────────────────
 
-function PauseDialog({
-  title,
-  onPause,
-  onCancel,
-}: {
-  title: string;
-  onPause: () => void;
-  onCancel: () => void;
-}) {
+function PauseDialog({ title, onPause, onCancel }: { title: string; onPause: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
       <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
         <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
-            Pause {title}?
-          </h2>
+          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
           <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
             <X size={18} />
           </button>
@@ -230,8 +222,6 @@ function PauseDialog({
   );
 }
 
-// ─── Journey limit dialog ─────────────────────────────────────────────────────
-
 function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
@@ -247,11 +237,7 @@ function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
         <p className="text-[14px] text-muted-foreground leading-relaxed">
           To begin another one, pause or complete one of your current journeys.
         </p>
-        <Button
-          variant="ghost"
-          className="w-full h-11 rounded-xl text-muted-foreground"
-          onClick={onCancel}
-        >
+        <Button variant="ghost" className="w-full h-11 rounded-xl text-muted-foreground" onClick={onCancel}>
           Cancel
         </Button>
       </div>
@@ -259,19 +245,9 @@ function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
   );
 }
 
-// ─── Switch devotional dialog ─────────────────────────────────────────────────
-
 function SwitchDevotionalDialog({
-  currentTitle,
-  newTitle,
-  onKeep,
-  onSwitch,
-}: {
-  currentTitle: string;
-  newTitle: string;
-  onKeep: () => void;
-  onSwitch: () => void;
-}) {
+  currentTitle, newTitle, onKeep, onSwitch,
+}: { currentTitle: string; newTitle: string; onKeep: () => void; onSwitch: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
       <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-4 shadow-xl">
@@ -283,12 +259,8 @@ function SwitchDevotionalDialog({
           Your progress in {currentTitle} will be kept.
         </p>
         <div className="flex flex-col gap-2.5">
-          <Button variant="outline" className="w-full h-11 rounded-xl" onClick={onKeep}>
-            Keep {currentTitle}
-          </Button>
-          <Button className="w-full h-11 rounded-xl" onClick={onSwitch}>
-            Start {newTitle}
-          </Button>
+          <Button variant="outline" className="w-full h-11 rounded-xl" onClick={onKeep}>Keep {currentTitle}</Button>
+          <Button className="w-full h-11 rounded-xl" onClick={onSwitch}>Start {newTitle}</Button>
         </div>
       </div>
     </div>
@@ -298,10 +270,7 @@ function SwitchDevotionalDialog({
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 
 function ProgressBar({ item }: { item: NextStepsItem }) {
-  const { memberProgressState, metadata } = item;
-  if (memberProgressState !== 'in-progress' || !metadata.durationDays) return null;
-  // We don't have exact completedDays count from the server response,
-  // so just show a subtle "in progress" indicator without a specific %.
+  if (item.memberProgressState !== 'in-progress' || !item.metadata.durationDays) return null;
   return (
     <div className="mx-4 mt-0.5">
       <div className="h-0.5 rounded-full bg-primary/20 overflow-hidden">
@@ -311,17 +280,10 @@ function ProgressBar({ item }: { item: NextStepsItem }) {
   );
 }
 
-// ─── Standard discovery card ──────────────────────────────────────────────────
-// Used for: Journeys, Bible Studies, and in-section Recommended items.
+// ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item,
-  onAction,
-  onPause,
-  onDetails,
-  isGated,
-  onGate,
-  enrollmentState,
+  item, onAction, onPause, onDetails, isGated, onGate, enrollmentState,
 }: {
   item: NextStepsItem;
   onAction: () => void;
@@ -331,10 +293,7 @@ function DiscoveryCard({
   onGate?: () => void;
   enrollmentState?: string | null;
 }) {
-  const dur = item.metadata.durationDays
-    ? `${item.metadata.durationDays} ${item.metadata.durationDays === 1 ? 'Day' : 'Days'}`
-    : null;
-
+  const dur = dayLabel(item.metadata.durationDays);
   const actionLabel = enrollmentState === 'paused' && item.memberProgressState === 'in-progress'
     ? `Resume ${CONTENT_TYPE_LABELS[item.contentType]}`
     : item.primaryActionLabel;
@@ -343,11 +302,7 @@ function DiscoveryCard({
     <div className="bg-card rounded-2xl border border-border overflow-hidden">
       <div className="flex">
         <div className="w-14 shrink-0 min-h-[68px]">
-          <CoverThumb
-            url={item.metadata.coverImageUrl}
-            title={item.title}
-            className="w-full h-full rounded-l-2xl"
-          />
+          <CoverThumb url={item.metadata.coverImageUrl} title={item.title} className="w-full h-full rounded-l-2xl" />
         </div>
         <div className="flex-1 min-w-0 px-4 pt-3.5 pb-3">
           <div className="flex items-start justify-between gap-2">
@@ -356,16 +311,11 @@ function DiscoveryCard({
                 <ContentTypeChip contentType={item.contentType} />
                 <StatePill state={item.memberProgressState} />
               </div>
-              <h3 className="text-[15px] font-medium text-foreground leading-snug">
-                {item.title}
-              </h3>
+              <h3 className="text-[15px] font-medium text-foreground leading-snug">{item.title}</h3>
               <div className="flex items-center gap-x-2 text-[12px] text-muted-foreground flex-wrap">
                 {dur && <span>{dur}</span>}
                 {item.metadata.difficulty && (
-                  <>
-                    <span className="opacity-30">·</span>
-                    <span>{item.metadata.difficulty}</span>
-                  </>
+                  <><span className="opacity-30">·</span><span>{item.metadata.difficulty}</span></>
                 )}
               </div>
             </div>
@@ -375,16 +325,10 @@ function DiscoveryCard({
           </div>
         </div>
       </div>
-
       <ProgressBar item={item} />
-
       <div className="px-4 pb-4 pt-3">
         {isGated && item.memberProgressState === 'in-progress' ? (
-          <Button
-            variant="outline"
-            className="w-full h-10 rounded-xl text-[13px]"
-            onClick={onGate}
-          >
+          <Button variant="outline" className="w-full h-10 rounded-xl text-[13px]" onClick={onGate}>
             Complete today's 10 Minutes with Jesus first
           </Button>
         ) : (
@@ -401,21 +345,8 @@ function DiscoveryCard({
   );
 }
 
-// ─── Daily Devotional card ────────────────────────────────────────────────────
-
-function DevotionalCard({
-  item,
-  onAction,
-  starting,
-}: {
-  item: NextStepsItem;
-  onAction: () => void;
-  starting: boolean;
-}) {
-  const dur = item.metadata.durationDays
-    ? `${item.metadata.durationDays} Days`
-    : null;
-
+function DevotionalCard({ item, onAction, starting }: { item: NextStepsItem; onAction: () => void; starting: boolean }) {
+  const dur = dayLabel(item.metadata.durationDays);
   return (
     <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
       <div className="space-y-1">
@@ -428,9 +359,7 @@ function DevotionalCard({
         </div>
         <p className="text-[16px] font-medium text-foreground leading-snug">{item.title}</p>
         {item.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">
-            {item.description}
-          </p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
         )}
         {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
       </div>
@@ -446,112 +375,192 @@ function DevotionalCard({
   );
 }
 
-// ─── Sermon devotional card ────────────────────────────────────────────────────
-
-function SermonCard({
-  item,
-  onAction,
-}: {
-  item: NextStepsItem;
-  onAction: () => void;
-}) {
-  const dur = item.metadata.durationDays
-    ? `${item.metadata.durationDays} Days`
-    : null;
-
+function SermonCard({ item, onAction, featured = false }: { item: NextStepsItem; onAction: () => void; featured?: boolean }) {
+  const dur = dayLabel(item.metadata.durationDays);
   return (
-    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
+    <div className={`bg-card rounded-2xl border border-border p-5 space-y-3 ${featured ? 'border-primary/20 bg-primary/[0.02]' : ''}`}>
       <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Mic2 size={12} className="text-primary shrink-0" />
           <ContentTypeChip contentType="sermon-devotional" />
           <StatePill state={item.memberProgressState} />
         </div>
-        <p className="text-[17px] font-medium text-foreground leading-snug">{item.title}</p>
+        <p className={`font-medium text-foreground leading-snug ${featured ? 'text-[18px]' : 'text-[15px]'}`}>
+          {item.title}
+        </p>
+        {item.metadata.subtitle && (
+          <p className="text-[12px] text-muted-foreground font-medium">{item.metadata.subtitle}</p>
+        )}
         {item.metadata.scriptureReference && (
-          <p className="text-[12px] text-muted-foreground font-medium">
-            {item.metadata.scriptureReference}
-          </p>
+          <p className="text-[12px] text-muted-foreground font-medium">{item.metadata.scriptureReference}</p>
         )}
         {item.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">
-            {item.description}
-          </p>
+          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{item.description}</p>
         )}
         {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
       </div>
-      <Button className="w-full h-10 rounded-xl text-[14px]" onClick={onAction}>
+      <Button
+        className="w-full h-10 rounded-xl text-[14px]"
+        variant={featured ? 'default' : (item.memberProgressState === 'not-started' ? 'outline' : 'default')}
+        onClick={onAction}
+      >
         {item.primaryActionLabel}
       </Button>
     </div>
   );
 }
 
-// ─── Compact row (Previous Sermons, Recently Added) ───────────────────────────
+// ─── Tab content panels ───────────────────────────────────────────────────────
 
-function CompactRow({
-  item,
-  onAction,
-  starting,
+function DevotionalsPanel({
+  items, onAction, startingId,
 }: {
-  item: NextStepsItem;
-  onAction: () => void;
-  starting?: boolean;
+  items: NextStepsItem[];
+  onAction: (item: NextStepsItem) => void;
+  startingId: string | null;
 }) {
+  if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
-    <div className="px-4 py-3 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <ContentTypeChip contentType={item.contentType} />
-        <p className="text-[14px] font-medium text-foreground truncate">{item.title}</p>
-        {item.memberProgressState !== 'not-started' && (
-          <div className="mt-0.5">
-            <StatePill state={item.memberProgressState} />
-          </div>
-        )}
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-9 rounded-xl text-[13px] shrink-0"
-        onClick={onAction}
-        disabled={starting}
-      >
-        {starting
-          ? <Loader2 size={13} className="animate-spin" />
-          : item.memberProgressState === 'completed' ? 'Review'
-          : item.memberProgressState === 'in-progress' ? 'Continue'
-          : 'Begin'}
-      </Button>
+    <div className="space-y-4 pt-6">
+      {items.map(item => (
+        <DevotionalCard
+          key={item.id}
+          item={item}
+          onAction={() => onAction(item)}
+          starting={startingId === item.id}
+        />
+      ))}
     </div>
   );
 }
 
-// ─── Recommended item — thin wrapper that picks the right card ────────────────
-
-function RecommendedCard({
-  item,
-  onJourneyAction,
-  onDevotionalAction,
-  starting,
+function JourneysPanel({
+  collections, standalone, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
 }: {
-  item: NextStepsItem;
-  onJourneyAction: (item: NextStepsItem) => void;
-  onDevotionalAction: (item: NextStepsItem) => void;
-  starting: boolean;
+  collections: JourneyCollectionGroup[];
+  standalone: NextStepsItem[];
+  onAction: (item: NextStepsItem) => void;
+  onPause: (id: string) => void;
+  onDetails: (id: string) => void;
+  isGated: (item: NextStepsItem) => boolean;
+  onGate: () => void;
+  getEnrollmentState: (id: string) => string | null;
 }) {
-  if (item.contentType === 'daily-devotional') {
-    return (
-      <DevotionalCard
-        item={item}
-        onAction={() => onDevotionalAction(item)}
-        starting={starting}
-      />
-    );
+  const hasContent = collections.length > 0 || standalone.length > 0;
+  if (!hasContent) return <EmptyState message="No Journeys are available yet." />;
+
+  return (
+    <div className="space-y-8 pt-6">
+      {collections.map(col => (
+        <section key={col.id}>
+          <CollectionHeading title={col.title} description={col.description} />
+          <div className="space-y-3">
+            {col.journeys.map(item => (
+              <DiscoveryCard
+                key={item.id}
+                item={item}
+                onAction={() => onAction(item)}
+                onPause={() => onPause(item.id)}
+                onDetails={() => onDetails(item.id)}
+                isGated={isGated(item)}
+                onGate={onGate}
+                enrollmentState={getEnrollmentState(item.id)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      {standalone.length > 0 && (
+        <section>
+          <div className="mb-3">
+            <SectionLabel>Standalone</SectionLabel>
+          </div>
+          <div className="space-y-3">
+            {standalone.map(item => (
+              <DiscoveryCard
+                key={item.id}
+                item={item}
+                onAction={() => onAction(item)}
+                onPause={() => onPause(item.id)}
+                onDetails={() => onDetails(item.id)}
+                isGated={isGated(item)}
+                onGate={onGate}
+                enrollmentState={getEnrollmentState(item.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SermonCompanionsPanel({
+  current, previous, onAction,
+}: {
+  current: NextStepsItem | null;
+  previous: NextStepsItem[];
+  onAction: (item: NextStepsItem) => void;
+}) {
+  if (!current && previous.length === 0) {
+    return <EmptyState message="No Sermon Companions are available yet." />;
   }
-  if (item.contentType === 'sermon-devotional') {
-    return <SermonCard item={item} onAction={() => onJourneyAction(item)} />;
-  }
-  return <DiscoveryCard item={item} onAction={() => onJourneyAction(item)} />;
+
+  return (
+    <div className="space-y-8 pt-6">
+      {current && (
+        <section className="space-y-3">
+          <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
+          <SermonCard item={current} onAction={() => onAction(current)} featured />
+        </section>
+      )}
+
+      {previous.length > 0 && (
+        <section className="space-y-3">
+          <SectionLabel>Previous Sermon Companions</SectionLabel>
+          <div className="space-y-3">
+            {previous.map(item => (
+              <SermonCard key={item.id} item={item} onAction={() => onAction(item)} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'devotionals', label: 'Daily Devotionals' },
+  { id: 'journeys',    label: 'Journeys'           },
+  { id: 'sermons',     label: 'Sermon Companions'  },
+];
+
+function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
+  return (
+    <div className="flex border-b border-border -mx-5 px-5 mt-6 overflow-x-auto scrollbar-none" role="tablist">
+      {TABS.map(({ id, label }) => {
+        const isActive = active === id;
+        return (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(id)}
+            className={`flex-shrink-0 pb-2.5 pt-1 px-1 mr-6 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
+              isActive
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -563,6 +572,15 @@ export default function Journeys() {
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
   const { gateClear } = useDailyGate();
+
+  // ── Tab state ─────────────────────────────────────────────────────────────
+
+  const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
+
+  const handleTabChange = (id: TabId) => {
+    setActiveTab(id);
+    saveTab(id);
+  };
 
   // ── API data ─────────────────────────────────────────────────────────────
 
@@ -581,10 +599,7 @@ export default function Journeys() {
     setApiLoading(true);
     setApiError(null);
     try {
-      const result = await fetchNextSteps({
-        userId: user?.id,
-        currentCompanionId,
-      });
+      const result = await fetchNextSteps({ userId: user?.id, currentCompanionId });
       setData(result);
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Failed to load');
@@ -597,28 +612,22 @@ export default function Journeys() {
 
   // ── Journey dialog state ──────────────────────────────────────────────────
 
-  const [pendingItem,      setPendingItem]      = useState<NextStepsItem | null>(null);
-  const [pauseTargetId,    setPauseTargetId]    = useState<string | null>(null);
-  const [showLimitDialog,  setShowLimitDialog]  = useState(false);
+  const [pendingItem,     setPendingItem]     = useState<NextStepsItem | null>(null);
+  const [pauseTargetId,   setPauseTargetId]   = useState<string | null>(null);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   // ── Devotional state ──────────────────────────────────────────────────────
 
-  const [startingDevId,   setStartingDevId]   = useState<string | null>(null);
-  const [switchTarget,    setSwitchTarget]    = useState<NextStepsItem | null>(null);
-
-  // ── Sermon section ────────────────────────────────────────────────────────
-
-  const [showPreviousSermons, setShowPreviousSermons] = useState(false);
+  const [startingDevId, setStartingDevId] = useState<string | null>(null);
+  const [switchTarget,  setSwitchTarget]  = useState<NextStepsItem | null>(null);
 
   // ── Journey action handler ────────────────────────────────────────────────
 
   function handleJourneyAction(item: NextStepsItem) {
-    // Navigate directly if already started
     if (item.memberProgressState !== 'not-started') {
       setLocation(item.route);
       return;
     }
-    // Check enrollment limit for non-exempt journey types
     const journey = journeys.find(j => j.id === item.id);
     if (journey && !isExemptJourney(journey)) {
       const startedIds = new Set(Object.keys(progress));
@@ -650,15 +659,11 @@ export default function Journeys() {
   // ── Devotional action handler ─────────────────────────────────────────────
 
   function handleDevotionalAction(item: NextStepsItem) {
-    // If already in progress or completed, navigate directly
     if (item.memberProgressState !== 'not-started') {
       setLocation(item.route);
       return;
     }
-    // If another devotional is already active, show switch dialog
-    const activeDevotional = data?.dailyDevotionals.find(
-      d => d.memberProgressState === 'in-progress',
-    );
+    const activeDevotional = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');
     if (activeDevotional && activeDevotional.id !== item.id) {
       setSwitchTarget(item);
       return;
@@ -673,9 +678,8 @@ export default function Journeys() {
       await startSeries(item.id, { userId: user.id });
       await reload();
       setLocation(`/devotional/${item.id}/day/1`);
-    } catch {
-      // non-fatal
-    } finally {
+    } catch { /* non-fatal */ }
+    finally {
       setStartingDevId(null);
       setSwitchTarget(null);
     }
@@ -693,9 +697,9 @@ export default function Journeys() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
-      <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-10">
+      <main className="px-5 pt-10 max-w-[480px] mx-auto">
 
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* Header */}
         <header className="space-y-1">
           <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
             Next Steps
@@ -705,18 +709,20 @@ export default function Journeys() {
           </p>
         </header>
 
-        {/* ── Loading ──────────────────────────────────────────────────────── */}
+        {/* Tab bar */}
+        <TabBar active={activeTab} onChange={handleTabChange} />
+
+        {/* Loading */}
         {apiLoading && (
-          <>
+          <div className="space-y-4 pt-6">
             <SkeletonCard />
             <SkeletonCard />
-            <SkeletonCard />
-          </>
+          </div>
         )}
 
-        {/* ── Error ────────────────────────────────────────────────────────── */}
+        {/* Error */}
         {!apiLoading && apiError && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-6">
             <p className="text-[14px] text-destructive">{apiError}</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
               Try again
@@ -724,146 +730,37 @@ export default function Journeys() {
           </div>
         )}
 
-        {/* ── Content ──────────────────────────────────────────────────────── */}
+        {/* Tab content */}
         {!apiLoading && data && (
           <>
-            {/* 1. Recommended for You */}
-            {data.recommended.length > 0 && (
-              <section className="space-y-3">
-                <SectionLabel>Recommended for You</SectionLabel>
-                <div className="space-y-3">
-                  {data.recommended.map(item => (
-                    <RecommendedCard
-                      key={item.id}
-                      item={item}
-                      onJourneyAction={handleJourneyAction}
-                      onDevotionalAction={handleDevotionalAction}
-                      starting={startingDevId === item.id}
-                    />
-                  ))}
-                </div>
-              </section>
+            {activeTab === 'devotionals' && (
+              <DevotionalsPanel
+                items={data.dailyDevotionals}
+                onAction={handleDevotionalAction}
+                startingId={startingDevId}
+              />
             )}
 
-            {/* 2. Daily Devotionals */}
-            {data.dailyDevotionals.length > 0 && (
-              <section className="space-y-3">
-                <SectionLabel icon={<BookHeart size={13} />}>Daily Devotionals</SectionLabel>
-                <div className="space-y-3">
-                  {data.dailyDevotionals.map(item => (
-                    <DevotionalCard
-                      key={item.id}
-                      item={item}
-                      onAction={() => handleDevotionalAction(item)}
-                      starting={startingDevId === item.id}
-                    />
-                  ))}
-                </div>
-              </section>
+            {activeTab === 'journeys' && (
+              <JourneysPanel
+                collections={data.journeyCollections}
+                standalone={data.standaloneJourneys}
+                onAction={handleJourneyAction}
+                onPause={(id) => setPauseTargetId(id)}
+                onDetails={(id) => setLocation(`/journeys/${id}`)}
+                isGated={isItemGated}
+                onGate={() => setLocation('/walk')}
+                getEnrollmentState={(id) => getState(id)}
+              />
             )}
 
-            {/* 3. This Week's Sermon */}
-            {data.currentSermonDevotional && (
-              <section className="space-y-3">
-                <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-                <SermonCard
-                  item={data.currentSermonDevotional}
-                  onAction={() => handleJourneyAction(data.currentSermonDevotional!)}
-                />
-                {data.previousSermonDevotionals.length > 0 && (
-                  <div>
-                    <button
-                      onClick={() => setShowPreviousSermons(p => !p)}
-                      className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
-                    >
-                      Browse Previous Sermons
-                      {showPreviousSermons ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    </button>
-                    <AnimatePresence>
-                      {showPreviousSermons && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden mt-2 space-y-2"
-                        >
-                          {data.previousSermonDevotionals.map(item => (
-                            <CompactRow
-                              key={item.id}
-                              item={item}
-                              onAction={() => handleJourneyAction(item)}
-                            />
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </section>
+            {activeTab === 'sermons' && (
+              <SermonCompanionsPanel
+                current={data.currentSermonCompanion}
+                previous={data.previousSermonCompanions}
+                onAction={handleJourneyAction}
+              />
             )}
-
-            {/* 4. Journeys */}
-            {data.journeys.length > 0 && (
-              <section className="space-y-3">
-                <SectionLabel icon={<Map size={13} />}>Journeys</SectionLabel>
-                <div className="space-y-3">
-                  {data.journeys.map(item => (
-                    <DiscoveryCard
-                      key={item.id}
-                      item={item}
-                      onAction={() => handleJourneyAction(item)}
-                      onPause={() => setPauseTargetId(item.id)}
-                      onDetails={() => setLocation(`/journeys/${item.id}`)}
-                      isGated={isItemGated(item)}
-                      onGate={() => setLocation('/walk')}
-                      enrollmentState={getState(item.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* 5. Bible Studies */}
-            {data.bibleStudies.length > 0 && (
-              <section className="space-y-3">
-                <SectionLabel icon={<BookOpen size={13} />}>Bible Studies</SectionLabel>
-                <div className="space-y-3">
-                  {data.bibleStudies.map(item => (
-                    <DiscoveryCard
-                      key={item.id}
-                      item={item}
-                      onAction={() => handleJourneyAction(item)}
-                      onPause={() => setPauseTargetId(item.id)}
-                      onDetails={() => setLocation(`/journeys/${item.id}`)}
-                      enrollmentState={getState(item.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* 6. Recently Added */}
-            {data.recentlyAdded.length > 0 && (
-              <section className="space-y-3">
-                <SectionLabel>Recently Added</SectionLabel>
-                <div className="space-y-2">
-                  {data.recentlyAdded.map(item => (
-                    <CompactRow
-                      key={item.id}
-                      item={item}
-                      onAction={() =>
-                        item.contentType === 'daily-devotional'
-                          ? handleDevotionalAction(item)
-                          : handleJourneyAction(item)
-                      }
-                      starting={startingDevId === item.id}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
           </>
         )}
 
@@ -885,16 +782,14 @@ export default function Journeys() {
       {/* Pause dialog */}
       {pauseTargetId && (
         <PauseDialog
-          title={journeys.find(j => j.id === pauseTargetId)?.title ?? 'this journey'}
+          title={journeys.find((j: Journey) => j.id === pauseTargetId)?.title ?? 'this journey'}
           onPause={() => { pauseJourney(pauseTargetId); setPauseTargetId(null); }}
           onCancel={() => setPauseTargetId(null)}
         />
       )}
 
       {/* Journey limit dialog */}
-      {showLimitDialog && (
-        <JourneyLimitDialog onCancel={() => setShowLimitDialog(false)} />
-      )}
+      {showLimitDialog && <JourneyLimitDialog onCancel={() => setShowLimitDialog(false)} />}
 
       {/* Switch devotional dialog */}
       {switchTarget && (() => {
@@ -909,7 +804,6 @@ export default function Journeys() {
           />
         );
       })()}
-
     </div>
   );
 }
