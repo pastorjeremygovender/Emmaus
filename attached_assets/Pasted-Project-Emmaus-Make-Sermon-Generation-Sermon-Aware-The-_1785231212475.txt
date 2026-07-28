@@ -1,0 +1,533 @@
+Project Emmaus — Make Sermon Generation Sermon-Aware
+
+The current YouTube generation workflow is functioning correctly from a technical perspective.
+
+It successfully:
+
+✓ accepts a YouTube URL
+✓ retrieves video metadata
+✓ retrieves a transcript
+✓ identifies title
+✓ identifies speaker
+✓ generates a sermon draft
+✓ generates companion devotionals
+
+However, the AI is currently analysing the ENTIRE CHURCH SERVICE transcript.
+
+This is incorrect.
+
+Emmaus does NOT generate Service Companions.
+
+Emmaus generates Sermon Companions.
+
+The AI must ignore:
+
+- welcome
+- notices
+- announcements
+- offering
+- worship
+- communion
+- testimonies
+- special items
+- closing blessing
+
+unless they are actually part of the sermon itself.
+
+==================================================
+NEW GENERATION PIPELINE
+==================================================
+
+Replace the current workflow:
+
+YouTube URL
+
+↓
+
+Retrieve Transcript
+
+↓
+
+Generate Companion
+
+with:
+
+YouTube URL
+
+↓
+
+Retrieve Full Transcript
+
+↓
+
+Identify Sermon
+
+↓
+
+Extract Sermon Only
+
+↓
+
+Pastor Confirmation (if required)
+
+↓
+
+Generate Sermon Draft
+
+↓
+
+Generate Sermon Companion
+
+==================================================
+STEP 1
+SERMON DETECTION
+==================================================
+
+Before any AI generation occurs, Emmaus must first analyse the transcript and identify the sermon section.
+
+Determine:
+
+• sermon start timestamp
+
+• sermon end timestamp
+
+• sermon duration
+
+• confidence score
+
+The detection should consider cues such as:
+
+Beginning:
+
+- "Let's turn in our Bibles..."
+
+- "Today's message..."
+
+- "This morning I want to speak..."
+
+- "Open with me to..."
+
+- "Our Scripture today..."
+
+- first sustained biblical teaching
+
+Ending:
+
+- closing prayer after sermon
+
+- altar call
+
+- ministry response
+
+- "Let's pray"
+
+- blessing
+
+- dismissal
+
+The goal is NOT perfect timestamp detection.
+
+The goal is isolating the preached message.
+
+==================================================
+STEP 2
+SERMON TRANSCRIPT
+==================================================
+
+Create a new internal object:
+
+Sermon Transcript
+
+containing ONLY the sermon.
+
+Do not analyse the full service transcript.
+
+The sermon transcript becomes the ONLY source used for:
+
+• sermon title
+
+• Scripture
+
+• summary
+
+• topics
+
+• keywords
+
+• central truth
+
+• key points
+
+• companion devotionals
+
+• future Ask Emmaus references
+
+==================================================
+STEP 3
+CONFIDENCE
+==================================================
+
+If confidence is HIGH
+
+(example above 90%)
+
+continue automatically.
+
+If confidence is LOW
+
+show a confirmation screen.
+
+==================================================
+PASTOR CONFIRMATION SCREEN
+==================================================
+
+Heading
+
+Confirm Sermon
+
+Supporting text
+
+Emmaus identified the sermon section below.
+
+Please confirm before generating the companion.
+
+Display
+
+Start
+
+00:34:18
+
+End
+
+01:19:42
+
+Duration
+
+45 min
+
+Preview
+
+(first paragraph)
+
+Buttons
+
+Looks Correct
+
+Adjust
+
+==================================================
+STEP 4
+MANUAL ADJUSTMENT
+==================================================
+
+If the pastor selects Adjust
+
+allow:
+
+Start Timestamp
+
+End Timestamp
+
+These may be:
+
+• draggable handles
+
+or
+
+• timestamp fields
+
+or
+
+simple trim controls.
+
+The pastor should NOT edit transcript text manually.
+
+Only adjust the sermon boundaries.
+
+==================================================
+STEP 5
+REBUILD SERMON TRANSCRIPT
+==================================================
+
+After adjustment
+
+recreate
+
+Sermon Transcript
+
+using the chosen boundaries.
+
+Discard all content outside those timestamps.
+
+==================================================
+STEP 6
+AI GENERATION
+==================================================
+
+Only now generate:
+
+Sermon Draft
+
+using
+
+Sermon Transcript
+
+NOT
+
+Full Service Transcript
+
+The AI should completely ignore:
+
+welcome
+
+announcements
+
+offering
+
+worship
+
+closing blessing
+
+unless they genuinely occur inside the sermon.
+
+==================================================
+STEP 7
+SERMON ANALYSIS
+==================================================
+
+Analyse ONLY the sermon.
+
+Extract:
+
+Main Scripture
+
+Supporting Scriptures
+
+Central Message
+
+Big Idea
+
+Main Teaching Points
+
+Illustrations
+
+Applications
+
+Calls to Response
+
+Summary
+
+Topics
+
+Keywords
+
+Do not allow opening service content to influence these.
+
+==================================================
+STEP 8
+COMPANION GENERATION
+==================================================
+
+Generate all companion devotionals exclusively from:
+
+Sermon Transcript.
+
+Never use:
+
+welcome
+
+offering
+
+announcements
+
+communion
+
+service introduction
+
+closing blessing
+
+unless inside the sermon boundaries.
+
+==================================================
+STEP 9
+DATABASE
+==================================================
+
+Store BOTH:
+
+Full Transcript
+
+Sermon Transcript
+
+The Full Transcript is retained only for reference.
+
+The Sermon Transcript is the canonical source for all AI generation.
+
+Suggested schema:
+
+fullTranscript
+
+sermonTranscript
+
+sermonStartTime
+
+sermonEndTime
+
+detectionConfidence
+
+detectionMethod
+
+==================================================
+STEP 10
+MEMBER EXPERIENCE
+==================================================
+
+Members should NEVER know this process exists.
+
+They simply receive:
+
+accurate sermon summary
+
+accurate companion devotionals
+
+accurate Scripture references
+
+accurate key truths
+
+==================================================
+STEP 11
+EDITOR EXPERIENCE
+==================================================
+
+In the Sermon editor show:
+
+Video
+
+Transcript
+
+Sermon Transcript
+
+The Sermon Transcript should be collapsible.
+
+Provide:
+
+Re-detect Sermon
+
+if required.
+
+==================================================
+STEP 12
+QUALITY IMPROVEMENTS
+==================================================
+
+The AI should identify the sermon using:
+
+semantic analysis
+
+topic continuity
+
+biblical exposition
+
+rather than simply searching for
+
+"Let's pray"
+
+or
+
+"Good morning."
+
+Use multiple signals.
+
+==================================================
+STEP 13
+FUTURE READY
+==================================================
+
+This Sermon Transcript should become the canonical source for future Emmaus features including:
+
+• Ask Emmaus sermon answers
+
+• timestamped sermon references
+
+• sermon search
+
+• quote extraction
+
+• discussion questions
+
+• sermon study guides
+
+• sermon clips
+
+All future sermon AI features must use Sermon Transcript rather than Full Service Transcript.
+
+==================================================
+STEP 14
+TEST
+==================================================
+
+Test using a normal ICC Sunday service containing:
+
+welcome
+
+worship
+
+announcements
+
+offering
+
+sermon
+
+closing prayer
+
+Verify:
+
+✓ Sermon start detected correctly.
+
+✓ Sermon end detected correctly.
+
+✓ Sermon transcript excludes announcements.
+
+✓ Sermon transcript excludes offering.
+
+✓ Sermon transcript excludes worship.
+
+✓ Summary reflects only the sermon.
+
+✓ Main Scripture comes from the sermon.
+
+✓ Companion Day 1 matches the sermon.
+
+✓ Companion does not mention opening service content.
+
+✓ Companion title reflects the preached message.
+
+✓ Pastor can adjust sermon boundaries.
+
+✓ Regeneration uses the adjusted sermon transcript.
+
+==================================================
+COMPLETION REPORT
+==================================================
+
+When complete report:
+
+1. Detection method.
+
+2. Confidence calculation.
+
+3. Sermon transcript schema.
+
+4. New database fields.
+
+5. Files changed.
+
+6. Test results.
+
+7. Remaining manual tests.
+
+The goal is simple:
+
+Emmaus must become sermon-aware.
+
+It should never generate devotionals from the entire church service again.

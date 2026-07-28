@@ -30,6 +30,11 @@ export interface AdminSermonRecord {
   topics: string[];
   keywords: string[];
   transcript?: string;
+  sermonTranscript?: string;
+  sermonStartTime?: string;
+  sermonEndTime?: string;
+  detectionConfidence?: number;
+  detectionMethod?: "ai-auto" | "ai-confirmed" | "manual" | "none";
   transcriptStatus: "none" | "pending" | "complete";
   aiIndexStatus: "none" | "pending" | "indexed";
   companionJourneyId?: string;

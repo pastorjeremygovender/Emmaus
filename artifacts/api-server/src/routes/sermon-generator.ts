@@ -11,7 +11,8 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { generateFromUrl, regenerateSermonField, GenerationError } from "../lib/sermon-generator.js";
+import { generateFromUrl, regenerateSermonField, redetectSermon, GenerationError } from "../lib/sermon-generator.js";
+import { getAdminSermonById, upsertAdminSermon } from "../lib/admin-sermon-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
@@ -34,27 +35,40 @@ async function guardAdmin(req: Request, res: Response): Promise<string | null> {
 
 function httpStatusForCode(code: string): number {
   switch (code) {
-    case "INVALID_YOUTUBE_URL": return 400;
-    case "TRANSCRIPT_REQUIRED":  return 200;  // structured "needs input", not a server error
-    case "AI_NOT_CONFIGURED":    return 503;
-    case "VIDEO_UNAVAILABLE":    return 422;
-    case "GENERATION_TIMEOUT":   return 504;
-    default:                     return 500;
+    case "INVALID_YOUTUBE_URL":          return 400;
+    case "TRANSCRIPT_REQUIRED":          return 200;  // structured "needs input"
+    case "SERMON_CONFIRMATION_REQUIRED": return 200;  // structured "needs confirmation"
+    case "AI_NOT_CONFIGURED":            return 503;
+    case "VIDEO_UNAVAILABLE":            return 422;
+    case "GENERATION_TIMEOUT":           return 504;
+    default:                             return 500;
   }
 }
 
 // ─── POST /api/sermon-generator/generate ─────────────────────────────────────
 //
-// Body: { youtubeUrl, transcript?, videoId?, companionDays? }
-//   - transcript + videoId: pastor-pasted fallback (skips OAuth retrieval)
+// Body: { youtubeUrl, transcript?, sermonStartSec?, sermonEndSec?, sermonStartWord?, sermonEndWord? }
+//   - transcript: pastor-pasted fallback (skips OAuth retrieval)
+//   - sermon*: pastor-confirmed boundaries (skips detection or applies adjusted result)
 
 router.post("/sermon-generator/generate", async (req: Request, res: Response) => {
   const userId = await guardAdmin(req, res);
   if (!userId) return;
 
-  const { youtubeUrl, transcript: providedTranscript } = req.body as {
+  const {
+    youtubeUrl,
+    transcript: providedTranscript,
+    sermonStartSec,
+    sermonEndSec,
+    sermonStartWord,
+    sermonEndWord,
+  } = req.body as {
     youtubeUrl?: string;
     transcript?: string;
+    sermonStartSec?: number;
+    sermonEndSec?: number;
+    sermonStartWord?: number;
+    sermonEndWord?: number;
   };
 
   if (!youtubeUrl?.trim()) {
@@ -62,48 +76,72 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
     return;
   }
 
-  logger.info({ youtubeUrl, userId, hasProvidedTranscript: !!providedTranscript }, "sermon-generator: starting generation");
+  logger.info({
+    youtubeUrl, userId,
+    hasProvidedTranscript: !!providedTranscript,
+    hasBoundaries: sermonStartWord !== undefined,
+  }, "sermon-generator: starting generation");
 
   try {
-    const result = await generateFromUrl(youtubeUrl.trim(), { providedTranscript });
-    logger.info({
-      sermonId: result.sermon.id,
-      companionId: result.companion.id,
-      userId,
-    }, "sermon-generator: generation complete");
+    const result = await generateFromUrl(youtubeUrl.trim(), {
+      providedTranscript,
+      sermonStartSec:  typeof sermonStartSec  === "number" ? sermonStartSec  : undefined,
+      sermonEndSec:    typeof sermonEndSec    === "number" ? sermonEndSec    : undefined,
+      sermonStartWord: typeof sermonStartWord === "number" ? sermonStartWord : undefined,
+      sermonEndWord:   typeof sermonEndWord   === "number" ? sermonEndWord   : undefined,
+    });
+
+    logger.info({ sermonId: result.sermon.id, companionId: result.companion.id, userId },
+      "sermon-generator: generation complete");
 
     res.json({
       success: true,
       sermon: result.sermon,
-      companion: {
-        ...result.companion,
-        status: "draft",
-        entryCount: result.companion.entries?.length ?? 0,
-      },
-      source: {
-        videoId: result.sermon.youtubeUrl,
-        transcriptStatus: result.sermon.transcriptStatus,
-      },
-      // Keep full result for frontend backward compat
+      companion: { ...result.companion, status: "draft", entryCount: result.companion.entries?.length ?? 0 },
+      source: { videoId: result.sermon.youtubeUrl, transcriptStatus: result.sermon.transcriptStatus },
       _full: result,
     });
   } catch (err) {
     if (err instanceof GenerationError) {
       const status = httpStatusForCode(err.code);
       logger.info({ code: err.code, message: err.message }, "sermon-generator: structured generation result");
-      res.status(status).json({
-        success: false,
-        code: err.code,
-        message: err.message,
-        source: err.source ?? null,
-      });
+      res.status(status).json({ success: false, code: err.code, message: err.message, source: err.source ?? null });
       return;
     }
-    // Unexpected errors — never expose internals
     const safe = (err instanceof Error ? err.message : "An unexpected error occurred")
       .replace(/sk-[a-zA-Z0-9]+/g, "[redacted]");
     logger.error({ err }, "sermon-generator: unexpected generation error");
     res.status(500).json({ success: false, code: "GENERATION_FAILED", error: safe });
+  }
+});
+
+// ─── POST /api/sermon-generator/:sermonId/redetect ────────────────────────────
+//
+// Re-runs sermon boundary detection on the stored full transcript and updates
+// the sermon record in place. Used by the "Re-detect Sermon" button in the editor.
+
+router.post("/sermon-generator/:sermonId/redetect", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const sermonId = String(req.params.sermonId);
+
+  const existing = await getAdminSermonById(sermonId);
+  if (!existing) {
+    res.status(404).json({ error: "Sermon not found" });
+    return;
+  }
+  if (!existing.transcript) {
+    res.status(422).json({ error: "This sermon has no stored transcript to analyse." });
+    return;
+  }
+
+  try {
+    const detection = await redetectSermon(existing.transcript);
+    await upsertAdminSermon({ ...existing, ...detection });
+    logger.info({ sermonId, confidence: detection.detectionConfidence }, "sermon-generator: re-detection complete");
+    res.json({ success: true, detection });
+  } catch (err) {
+    logger.error({ err, sermonId }, "sermon-generator: re-detection failed");
+    res.status(500).json({ error: "Re-detection failed. Please try again." });
   }
 });
 

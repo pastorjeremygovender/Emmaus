@@ -17,10 +17,12 @@ import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components
 import {
   generateSermonDraft,
   regenerateField,
+  redetectSermon,
   saveCompanionEntry,
   getCompanion,
   ApiError,
   type SermonDraftResult,
+  type SermonDetectionSource,
   type CompanionEntry,
 } from '@/lib/sermon-generator-api';
 import {
@@ -38,7 +40,7 @@ type Props = {
   onOpenCompanion: (journeyId: string, fresh?: boolean) => void;
 };
 
-type Phase = 'url-input' | 'generating' | 'transcript-required' | 'review';
+type Phase = 'url-input' | 'generating' | 'transcript-required' | 'confirm-sermon' | 'adjust-sermon' | 'review';
 
 /** Video metadata returned when transcript is unavailable */
 interface TranscriptSource {
@@ -506,6 +508,220 @@ function TranscriptFallbackPhase({
   );
 }
 
+// ─── Confirm Sermon Phase ─────────────────────────────────────────────────────
+// Shown when AI detection confidence < 0.85. Asks pastor to confirm or adjust
+// the detected sermon boundaries before generation continues.
+
+function formatHMS(secs: number | null): string {
+  if (secs == null) return '—';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatDuration(secs: number | null): string {
+  if (secs == null) return '—';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}m ${s}s`;
+}
+
+function ConfirmSermonPhase({
+  detection,
+  youtubeUrl,
+  onConfirm,
+  onAdjust,
+  onBack,
+}: {
+  detection: SermonDetectionSource;
+  youtubeUrl: string;
+  onConfirm: (src: SermonDetectionSource) => void;
+  onAdjust: (src: SermonDetectionSource) => void;
+  onBack: () => void;
+}) {
+  const confidencePct = Math.round(detection.confidence * 100);
+
+  return (
+    <div className="max-w-xl mx-auto px-6 py-12 space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-[18px] font-semibold text-gray-900">Confirm Sermon Section</h2>
+        <p className="text-sm text-gray-500">
+          Emmaus identified the sermon portion of this recording. Please confirm the boundaries before generating the companion.
+        </p>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
+        {/* Confidence badge */}
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
+            ${confidencePct >= 70 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            <AlertCircle size={11} />
+            {confidencePct}% confidence
+          </span>
+          <span className="text-xs text-gray-400">Manual confirmation requested</span>
+        </div>
+
+        {/* Times */}
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs text-gray-400 mb-0.5">Start</p>
+            <p className="text-[15px] font-semibold text-gray-900 font-mono">{formatHMS(detection.startSecs)}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs text-gray-400 mb-0.5">End</p>
+            <p className="text-[15px] font-semibold text-gray-900 font-mono">{formatHMS(detection.endSecs)}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs text-gray-400 mb-0.5">Duration</p>
+            <p className="text-[15px] font-semibold text-gray-900">{formatDuration(detection.durationSecs)}</p>
+          </div>
+        </div>
+
+        {/* Preview */}
+        {detection.previewText && (
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Detected sermon opening</p>
+            <p className="text-sm text-gray-700 leading-relaxed line-clamp-4 italic">
+              "{detection.previewText}…"
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-3 flex-wrap">
+        <AdminBtn variant="primary" onClick={() => onConfirm(detection)}>
+          <Check size={14} className="mr-1" />
+          Looks Correct — Generate
+        </AdminBtn>
+        <AdminBtn variant="secondary" onClick={() => onAdjust(detection)}>
+          Adjust Boundaries
+        </AdminBtn>
+        <AdminBtn variant="ghost" onClick={onBack}>
+          Cancel
+        </AdminBtn>
+      </div>
+
+      <p className="text-xs text-gray-400">
+        Emmaus analysed {detection.segmentCount} transcript segments ({detection.segmentCount * 200}-word blocks).
+        Confirming means generation will use only the detected sermon section.
+      </p>
+    </div>
+  );
+}
+
+// ─── Adjust Sermon Phase ──────────────────────────────────────────────────────
+// Lets the pastor manually enter corrected start/end timestamps.
+
+function AdjustSermonPhase({
+  detection,
+  youtubeUrl,
+  onApply,
+  onBack,
+}: {
+  detection: SermonDetectionSource;
+  youtubeUrl: string;
+  onApply: (updated: SermonDetectionSource) => void;
+  onBack: () => void;
+}) {
+  function secsToInput(secs: number | null): string {
+    if (secs == null) return '';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  function inputToSecs(str: string): number | null {
+    const parts = str.split(':').map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
+  }
+
+  const [startStr, setStartStr] = useState(secsToInput(detection.startSecs));
+  const [endStr, setEndStr] = useState(secsToInput(detection.endSecs));
+  const [error, setError] = useState('');
+
+  const handleApply = () => {
+    const startSecs = inputToSecs(startStr);
+    const endSecs = inputToSecs(endStr);
+    if (startSecs == null || endSecs == null) {
+      setError('Enter times as M:SS or H:MM:SS (e.g. 12:30 or 1:05:00)');
+      return;
+    }
+    if (endSecs <= startSecs) {
+      setError('End time must be after start time');
+      return;
+    }
+    // Compute approximate word boundaries proportional to time
+    const totalWords = detection.endWord + detection.startWord; // rough proxy
+    const videoDuration = (detection.endSecs ?? 0) + (detection.startSecs ?? 0);
+    const totalWords2 = detection.segmentCount > 0
+      ? detection.segmentCount * 200 : totalWords || 10000;
+    const estimatedDuration = videoDuration > 0 ? videoDuration : totalWords2 / 2.5;
+    const startWord = Math.round((startSecs / estimatedDuration) * totalWords2);
+    const endWord   = Math.round((endSecs   / estimatedDuration) * totalWords2);
+
+    onApply({
+      ...detection,
+      startSecs,
+      endSecs,
+      durationSecs: endSecs - startSecs,
+      startWord,
+      endWord,
+    });
+  };
+
+  return (
+    <div className="max-w-xl mx-auto px-6 py-12 space-y-6">
+      <div className="space-y-1">
+        <h2 className="text-[18px] font-semibold text-gray-900">Adjust Sermon Boundaries</h2>
+        <p className="text-sm text-gray-500">
+          Enter the correct start and end times for the sermon portion of this recording.
+        </p>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Sermon start (M:SS)">
+            <TextInput
+              value={startStr}
+              onChange={e => { setStartStr(e.target.value); setError(''); }}
+              placeholder="e.g. 15:30"
+              error={!!error}
+            />
+          </Field>
+          <Field label="Sermon end (M:SS)">
+            <TextInput
+              value={endStr}
+              onChange={e => { setEndStr(e.target.value); setError(''); }}
+              placeholder="e.g. 55:00"
+              error={!!error}
+            />
+          </Field>
+        </div>
+        {error && (
+          <p className="text-sm text-red-600">{error}</p>
+        )}
+        <p className="text-xs text-gray-400">
+          Formats: <span className="font-mono">12:30</span>, <span className="font-mono">1:05:00</span>
+        </p>
+      </div>
+
+      <div className="flex gap-3">
+        <AdminBtn variant="primary" onClick={handleApply}>Apply & Generate</AdminBtn>
+        <AdminBtn variant="ghost" onClick={onBack}>Back</AdminBtn>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Props) {
@@ -519,7 +735,10 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [generatingUrl, setGeneratingUrl] = useState('');
   const [generationError, setGenerationError] = useState('');
   const [transcriptSource, setTranscriptSource] = useState<TranscriptSource | null>(null);
+  const [detectionSource, setDetectionSource] = useState<SermonDetectionSource | null>(null);
   const [activeTab, setActiveTab] = useState<'sermon' | 'companion'>('sermon');
+  const [sermonTranscriptOpen, setSermonTranscriptOpen] = useState(false);
+  const [redetecting, setRedetecting] = useState(false);
 
   // Companion state (from generation result or loaded for existing)
   const [companionData, setCompanionData] = useState<SermonDraftResult['companion'] | null>(null);
@@ -641,26 +860,40 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     setPhase('review');
   }, [addSermon]);
 
-  const handleGenerate = useCallback(async (url: string) => {
+  const handleGenerate = useCallback(async (
+    url: string,
+    opts?: {
+      transcript?: string;
+      sermonStartSec?: number;
+      sermonEndSec?: number;
+      sermonStartWord?: number;
+      sermonEndWord?: number;
+    }
+  ) => {
     if (!auth) return;
     setGeneratingUrl(url);
     setGenerationError('');
     setPhase('generating');
 
     try {
-      const result = await generateSermonDraft(url, auth);
+      const result = await generateSermonDraft(url, auth, opts);
       applyGenerationResult(result);
     } catch (err) {
-      // TRANSCRIPT_REQUIRED — show the paste fallback, not an error
       if (err instanceof ApiError && err.code === 'TRANSCRIPT_REQUIRED') {
         const src = err.source as TranscriptSource | null;
         setTranscriptSource({
           youtubeUrl: url,
-          videoId: src?.videoId as string ?? '',
+          videoId: (src?.videoId as string) ?? '',
           title: src?.title as string | undefined,
           thumbnailUrl: src?.thumbnailUrl as string | undefined,
         });
         setPhase('transcript-required');
+        return;
+      }
+      if (err instanceof ApiError && err.code === 'SERMON_CONFIRMATION_REQUIRED') {
+        setDetectionSource(err.source as unknown as SermonDetectionSource);
+        setGeneratingUrl(url);
+        setPhase('confirm-sermon');
         return;
       }
       setGenerationError(errorMessage(err));
@@ -672,7 +905,6 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     if (!auth || !transcriptSource) return;
     setGenerationError('');
     setPhase('generating');
-
     try {
       const result = await generateSermonDraft(transcriptSource.youtubeUrl, auth, {
         transcript,
@@ -680,10 +912,54 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       });
       applyGenerationResult(result);
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'SERMON_CONFIRMATION_REQUIRED') {
+        setDetectionSource(err.source as unknown as SermonDetectionSource);
+        setPhase('confirm-sermon');
+        return;
+      }
       setGenerationError(errorMessage(err));
-      setPhase('transcript-required'); // return to fallback so pastor can re-try
+      setPhase('transcript-required');
     }
   }, [auth, transcriptSource, applyGenerationResult]);
+
+  const handleSermonConfirm = useCallback((src: SermonDetectionSource) => {
+    handleGenerate(generatingUrl, {
+      sermonStartSec:  src.startSecs  ?? undefined,
+      sermonEndSec:    src.endSecs    ?? undefined,
+      sermonStartWord: src.startWord,
+      sermonEndWord:   src.endWord,
+    });
+  }, [generatingUrl, handleGenerate]);
+
+  const handleSermonAdjust = useCallback((updated: SermonDetectionSource) => {
+    handleGenerate(generatingUrl, {
+      sermonStartSec:  updated.startSecs  ?? undefined,
+      sermonEndSec:    updated.endSecs    ?? undefined,
+      sermonStartWord: updated.startWord,
+      sermonEndWord:   updated.endWord,
+    });
+  }, [generatingUrl, handleGenerate]);
+
+  const handleRedetect = useCallback(async () => {
+    if (!auth || !sermonId_) return;
+    setRedetecting(true);
+    try {
+      const detection = await redetectSermon(sermonId_, auth);
+      setForm(f => ({
+        ...f,
+        sermonTranscript: detection.sermonTranscript,
+        sermonStartTime: detection.sermonStartTime,
+        sermonEndTime: detection.sermonEndTime,
+        detectionConfidence: detection.detectionConfidence,
+        detectionMethod: detection.detectionMethod,
+      } as typeof f));
+      setIsDirty(true);
+    } catch {
+      // non-fatal — user can retry
+    } finally {
+      setRedetecting(false);
+    }
+  }, [auth, sermonId_]);
 
   // ── Field-level regeneration ─────────────────────────────────────────────────
 
@@ -758,6 +1034,33 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
           source={transcriptSource}
           onContinue={handleTranscriptContinue}
           onBack={() => { setPhase('url-input'); setGenerationError(''); }}
+        />
+      </div>
+    );
+  }
+
+  if (phase === 'confirm-sermon' && detectionSource) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <ConfirmSermonPhase
+          detection={detectionSource}
+          youtubeUrl={generatingUrl}
+          onConfirm={handleSermonConfirm}
+          onAdjust={(src) => { setDetectionSource(src); setPhase('adjust-sermon'); }}
+          onBack={() => setPhase('url-input')}
+        />
+      </div>
+    );
+  }
+
+  if (phase === 'adjust-sermon' && detectionSource) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <AdjustSermonPhase
+          detection={detectionSource}
+          youtubeUrl={generatingUrl}
+          onApply={handleSermonAdjust}
+          onBack={() => setPhase('confirm-sermon')}
         />
       </div>
     );
@@ -944,6 +1247,59 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
             </div>
           </div>
         )}
+
+        {/* Sermon transcript section (collapsible) */}
+        {activeTab === 'sermon' && (() => {
+          const f = form as Record<string, unknown>;
+          const st = f.sermonTranscript as string | undefined;
+          const conf = f.detectionConfidence as number | undefined;
+          const startT = f.sermonStartTime as string | undefined;
+          const endT = f.sermonEndTime as string | undefined;
+          if (!st) return null;
+          return (
+            <div className="px-6 lg:px-8 pb-2 max-w-3xl">
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setSermonTranscriptOpen(o => !o)}
+                >
+                  <span className="flex items-center gap-2">
+                    Sermon Transcript
+                    {conf != null && (
+                      <span className="text-xs text-gray-400 font-normal">
+                        · {Math.round(conf * 100)}% confidence
+                        {startT ? ` · ${startT} → ${endT}` : ''}
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    {sermonId_ && (
+                      <button
+                        className="text-xs text-teal-700 hover:text-teal-900 flex items-center gap-1 px-2 py-1 bg-teal-50 rounded-md"
+                        onClick={e => { e.stopPropagation(); handleRedetect(); }}
+                        disabled={redetecting}
+                      >
+                        {redetecting ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                        Re-detect Sermon
+                      </button>
+                    )}
+                    <ChevronRight size={14} className={`text-gray-400 transition-transform ${sermonTranscriptOpen ? 'rotate-90' : ''}`} />
+                  </div>
+                </button>
+                {sermonTranscriptOpen && (
+                  <div className="border-t border-gray-100 px-5 py-4">
+                    <p className="text-xs text-gray-500 mb-3">
+                      This is the portion Emmaus identified as the sermon. All AI generation (topics, summary, companion) is based on this text only — not the full service recording.
+                    </p>
+                    <pre className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-4 max-h-72 overflow-y-auto font-sans">
+                      {st}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {activeTab === 'companion' && companionData && (
           <CompanionDayEditor

@@ -97,6 +97,12 @@ function safeParseJson(raw: string, finishReason?: string | null): Record<string
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** A single VTT caption cue with its start time in seconds */
+export interface TimedCue {
+  startSecs: number;
+  text: string;
+}
+
 export interface SermonDraftFields {
   id: string;
   title: string;
@@ -108,7 +114,14 @@ export interface SermonDraftFields {
   summary: string;
   topics: string[];
   keywords: string[];
+  /** Full church-service transcript (retained for reference only) */
   transcript: string;
+  /** Sermon-only transcript — canonical source for all AI generation */
+  sermonTranscript: string;
+  sermonStartTime: string;     // "HH:MM:SS" or "" if untimed
+  sermonEndTime: string;       // "HH:MM:SS" or "" if untimed
+  detectionConfidence: number; // 0.0 → 1.0
+  detectionMethod: 'ai-auto' | 'ai-confirmed' | 'manual' | 'none';
   transcriptStatus: 'none' | 'pending' | 'complete';
   aiIndexStatus: 'none' | 'pending' | 'indexed';
   companionJourneyId: string;
@@ -165,32 +178,74 @@ export function extractVideoId(url: string): string | null {
   }
 }
 
-// ─── VTT transcript parser ─────────────────────────────────────────────────────
+// ─── VTT transcript parser (plain text + timed cues) ─────────────────────────
 
-function parseVtt(vtt: string): string {
-  // Remove WEBVTT header and cue metadata, keep only text lines
-  return vtt
-    .split("\n")
-    .filter(line => {
-      const t = line.trim();
-      if (!t) return false;
-      if (t.startsWith("WEBVTT")) return false;
-      if (/^\d+$/.test(t)) return false;               // cue number
-      if (/^\d{2}:\d{2}/.test(t)) return false;        // timestamp
-      if (t.startsWith("NOTE")) return false;
-      if (t.startsWith("STYLE")) return false;
-      return true;
-    })
-    .map(line => line.replace(/<[^>]+>/g, "").trim())   // strip inline tags
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+/** Convert "HH:MM:SS.mmm" or "HH:MM:SS,mmm" → seconds */
+function parseVttTimestamp(ts: string): number {
+  const clean = ts.split(/[.,]/)[0];          // drop milliseconds
+  const parts = clean.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+/** Seconds → "HH:MM:SS" */
+export function secsToHHMMSS(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Parse a VTT string into timed cues AND a plain-text transcript.
+ * YouTube auto-captions repeat content in overlapping cues; we deduplicate
+ * consecutive entries whose text is a subset of the previous cue.
+ */
+function parseVttTimed(vtt: string): { text: string; timedCues: TimedCue[] } {
+  const lines = vtt.split("\n");
+  const raw: TimedCue[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    const tsMatch = line.match(/^(\d{2}:\d{2}:\d{2}[.,]\d{3})\s*-->/);
+    if (tsMatch) {
+      const startSecs = parseVttTimestamp(tsMatch[1]);
+      const textParts: string[] = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== "") {
+        const tl = lines[i].replace(/<[^>]+>/g, "").trim();
+        if (tl && !/^WEBVTT/.test(tl) && !/^\d+$/.test(tl) && !/^\d{2}:\d{2}/.test(tl)) {
+          textParts.push(tl);
+        }
+        i++;
+      }
+      const text = textParts.join(" ").replace(/\s{2,}/g, " ").trim();
+      if (text) raw.push({ startSecs, text });
+    } else {
+      i++;
+    }
+  }
+
+  // Deduplicate: skip cues whose text is fully contained in the previous cue
+  const deduped = raw.filter((cue, idx) => {
+    if (idx === 0) return true;
+    const prev = raw[idx - 1];
+    return !(prev.text.includes(cue.text) && cue.text.length <= prev.text.length);
+  });
+
+  const text = deduped.map(c => c.text).join(" ").replace(/\s{2,}/g, " ").trim();
+  return { text, timedCues: deduped };
 }
 
 // ─── Transcript retrieval ─────────────────────────────────────────────────────
 
-async function fetchTranscript(videoId: string): Promise<{ text: string; source: string } | null> {
+async function fetchTranscript(videoId: string): Promise<{
+  text: string;
+  source: string;
+  timedCues: TimedCue[];
+} | null> {
   try {
     const accessToken = await getValidAccessToken();
     if (!accessToken) return null;
@@ -198,7 +253,6 @@ async function fetchTranscript(videoId: string): Promise<{ text: string; source:
     const tracks = await listCaptionTracks(videoId, accessToken);
     if (!tracks.length) return null;
 
-    // Prefer: manual (standard) English > any standard > auto-generated (asr)
     const ranked = [...tracks].sort((a, b) => {
       const score = (t: typeof a) =>
         (t.language.startsWith("en") ? 10 : 0) +
@@ -209,12 +263,216 @@ async function fetchTranscript(videoId: string): Promise<{ text: string; source:
 
     const best = ranked[0];
     const vtt = await downloadCaptionTrack(best.id, accessToken);
-    const text = parseVtt(vtt);
-    return { text, source: best.trackKind === "asr" ? "youtube-auto" : "youtube-manual" };
+    const { text, timedCues } = parseVttTimed(vtt);
+    return { text, timedCues, source: best.trackKind === "asr" ? "youtube-auto" : "youtube-manual" };
   } catch (err) {
     logger.warn({ err: String(err) }, "sermon-generator: transcript retrieval failed (non-fatal)");
     return null;
   }
+}
+
+// ─── Sermon detection ─────────────────────────────────────────────────────────
+
+const CONFIDENCE_THRESHOLD = 0.85;
+const WORDS_PER_SEGMENT = 200;
+
+const SERMON_DETECTION_SYSTEM = `You are analysing a church service transcript to identify only the sermon section.
+
+A Sunday service typically contains these NON-SERMON elements:
+• Welcome / greetings
+• Worship songs and singing
+• Announcements and notices
+• Offering / giving
+• Testimonies
+• Communion / Lord's Supper
+• Closing prayer and blessing
+
+The SERMON is: sustained biblical teaching and exposition by the preacher, grounded in a specific scripture text, with application.
+
+Signs the sermon has STARTED:
+- "Let us turn in our Bibles to..." / "Open with me to..."
+- "This morning / evening I want to..."
+- "Today's message is from..." / "Our text today is..."
+- First sustained reading and teaching from a biblical passage
+- Consistent exposition of one passage or theme
+
+Signs the sermon has ENDED:
+- Closing prayer that follows the teaching (not a transition)
+- Altar call or ministry response time
+- "Let's pray" after the main teaching is complete
+- Worship team returning / a worship song following the teaching
+- Dismissal or closing blessing
+
+You are given numbered transcript segments (each ≈200 words) with approximate timestamps.
+
+Use MULTIPLE signals:
+1. Semantic cues (explicit transition phrases)
+2. Topic continuity (consistent biblical exposition)
+3. Format shift (from narrative to exposition)
+
+If the ENTIRE transcript appears to be only the sermon (no service content), set confidence to 0.95 and cover all segments.
+If you cannot reliably detect a sermon, set confidence to 0.30.
+
+Return ONLY this JSON (no markdown, no explanation):
+{
+  "sermonStartSegment": <integer>,
+  "sermonEndSegment": <integer>,
+  "confidence": <float 0.0–1.0>,
+  "reasoning": "<1–2 sentence explanation>"
+}`;
+
+interface TranscriptSegment {
+  index: number;
+  startSecs: number | null;
+  words: string[];
+}
+
+interface SermonDetectionResult {
+  sermonTranscript: string;
+  startSecs: number | null;
+  endSecs: number | null;
+  durationSecs: number | null;
+  startWord: number;
+  endWord: number;
+  confidence: number;
+  previewText: string;
+  segmentCount: number;
+}
+
+function buildSegments(fullText: string, timedCues?: TimedCue[]): TranscriptSegment[] {
+  const words = fullText.split(/\s+/).filter(Boolean);
+  const segments: TranscriptSegment[] = [];
+
+  // Build a word-index → seconds lookup from timed cues
+  let wordToSecs: (idx: number) => number | null = () => null;
+  if (timedCues && timedCues.length > 0) {
+    const entries: Array<{ wordStart: number; secs: number }> = [];
+    let w = 0;
+    for (const cue of timedCues) {
+      entries.push({ wordStart: w, secs: cue.startSecs });
+      w += cue.text.split(/\s+/).filter(Boolean).length;
+    }
+    wordToSecs = (idx: number) => {
+      let lo = 0, hi = entries.length - 1, result: number | null = null;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (entries[mid].wordStart <= idx) { result = entries[mid].secs; lo = mid + 1; }
+        else hi = mid - 1;
+      }
+      return result;
+    };
+  }
+
+  for (let i = 0; i < words.length; i += WORDS_PER_SEGMENT) {
+    segments.push({
+      index: segments.length,
+      startSecs: wordToSecs(i),
+      words: words.slice(i, i + WORDS_PER_SEGMENT),
+    });
+  }
+  return segments;
+}
+
+async function detectSermonSection(
+  fullText: string,
+  timedCues?: TimedCue[]
+): Promise<SermonDetectionResult> {
+  const segments = buildSegments(fullText, timedCues);
+  const totalWords = fullText.split(/\s+/).filter(Boolean).length;
+
+  // Too short — probably just the sermon itself
+  if (segments.length <= 3) {
+    return {
+      sermonTranscript: fullText,
+      startSecs: segments[0]?.startSecs ?? null,
+      endSecs: segments[segments.length - 1]?.startSecs ?? null,
+      durationSecs: null,
+      startWord: 0, endWord: totalWords,
+      confidence: 0.95,
+      previewText: fullText.split(/\s+/).slice(0, 60).join(" "),
+      segmentCount: segments.length,
+    };
+  }
+
+  // Build compact timeline for the model
+  const timeline = segments.map(seg => {
+    const ts = seg.startSecs !== null
+      ? secsToHHMMSS(seg.startSecs)
+      : `~${seg.index * 3}min`;
+    const preview = seg.words.slice(0, 20).join(" ");
+    return `[${seg.index}] ${ts} — ${preview}`;
+  }).join("\n");
+
+  logger.info({ segmentCount: segments.length }, "sermon-generator: running sermon detection");
+
+  const res = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: SERMON_DETECTION_SYSTEM },
+      { role: "user", content: `Total segments: ${segments.length}\n\n${timeline}` },
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 400,
+  });
+
+  const raw = res.choices[0]?.message?.content ?? "{}";
+  const parsed = safeParseJson(raw, res.choices[0]?.finish_reason) as {
+    sermonStartSegment?: number;
+    sermonEndSegment?: number;
+    confidence?: number;
+    reasoning?: string;
+  };
+
+  const n = segments.length;
+  const rawStart = typeof parsed.sermonStartSegment === "number" ? parsed.sermonStartSegment : Math.floor(n * 0.30);
+  const rawEnd   = typeof parsed.sermonEndSegment   === "number" ? parsed.sermonEndSegment   : Math.floor(n * 0.85);
+  const startSeg = Math.max(0, Math.min(rawStart, n - 1));
+  const endSeg   = Math.max(startSeg, Math.min(rawEnd, n - 1));
+  const confidence = typeof parsed.confidence === "number"
+    ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5;
+
+  logger.info({ startSeg, endSeg, confidence, reasoning: parsed.reasoning },
+    "sermon-generator: sermon detection result");
+
+  const sermonSegs = segments.slice(startSeg, endSeg + 1);
+  const sermonTranscript = sermonSegs.flatMap(s => s.words).join(" ");
+
+  const startSecs = segments[startSeg]?.startSecs ?? null;
+  // Estimate end time: last segment start + its words at ~2.5 words/sec
+  const lastSeg = segments[endSeg];
+  const endSecs = lastSeg?.startSecs != null
+    ? Math.round(lastSeg.startSecs + lastSeg.words.length / 2.5)
+    : null;
+
+  return {
+    sermonTranscript,
+    startSecs,
+    endSecs,
+    durationSecs: startSecs != null && endSecs != null ? endSecs - startSecs : null,
+    startWord: startSeg * WORDS_PER_SEGMENT,
+    endWord: Math.min((endSeg + 1) * WORDS_PER_SEGMENT, totalWords),
+    confidence,
+    previewText: sermonTranscript.split(/\s+/).slice(0, 60).join(" "),
+    segmentCount: n,
+  };
+}
+
+/** Re-run sermon detection on a stored sermon record (for the Re-detect button) */
+export async function redetectSermon(fullTranscript: string): Promise<{
+  sermonTranscript: string;
+  sermonStartTime: string;
+  sermonEndTime: string;
+  detectionConfidence: number;
+  detectionMethod: 'ai-auto';
+}> {
+  const result = await detectSermonSection(fullTranscript);
+  return {
+    sermonTranscript: result.sermonTranscript,
+    sermonStartTime: result.startSecs != null ? secsToHHMMSS(result.startSecs) : "",
+    sermonEndTime: result.endSecs != null ? secsToHHMMSS(result.endSecs) : "",
+    detectionConfidence: result.confidence,
+    detectionMethod: "ai-auto",
+  };
 }
 
 // ─── OpenAI: sermon draft ─────────────────────────────────────────────────────
@@ -436,15 +694,18 @@ Description: ${context.description.slice(0, 600)}${transcriptSnippet}`;
 export interface GenerationOptions {
   /** Pastor-pasted transcript — skips OAuth retrieval when provided */
   providedTranscript?: string;
+  /** Pastor-confirmed sermon boundaries (seconds, from timed VTT) */
+  sermonStartSec?: number;
+  sermonEndSec?: number;
+  /** Pastor-confirmed sermon boundaries (word offsets into full transcript) */
+  sermonStartWord?: number;
+  sermonEndWord?: number;
 }
 
 export async function generateFromUrl(youtubeUrl: string, options: GenerationOptions = {}): Promise<GenerationResult> {
   const videoId = extractVideoId(youtubeUrl);
   if (!videoId) {
-    throw new GenerationError(
-      "INVALID_YOUTUBE_URL",
-      "Please enter a valid YouTube video link."
-    );
+    throw new GenerationError("INVALID_YOUTUBE_URL", "Please enter a valid YouTube video link.");
   }
 
   // 1. Fetch metadata
@@ -454,106 +715,138 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   } catch (err) {
     const msg = String(err);
     if (msg.includes("403") || msg.includes("API key")) {
-      throw new GenerationError(
-        "VIDEO_UNAVAILABLE",
-        "Couldn't reach YouTube — check that the YouTube API key is configured."
-      );
+      throw new GenerationError("VIDEO_UNAVAILABLE", "Couldn't reach YouTube — check that the YouTube API key is configured.");
     }
-    throw new GenerationError(
-      "VIDEO_UNAVAILABLE",
-      "We couldn't access this YouTube video. Check that it is public and try again."
-    );
+    throw new GenerationError("VIDEO_UNAVAILABLE", "We couldn't access this YouTube video. Check that it is public and try again.");
   }
 
-  if (!metaList.length) {
-    throw new GenerationError(
-      "VIDEO_UNAVAILABLE",
-      "We couldn't access this YouTube video. Check that it is public and try again."
-    );
+  if (!metaList.length || metaList[0].privacyStatus === "private") {
+    throw new GenerationError("VIDEO_UNAVAILABLE", "We couldn't access this YouTube video. Check that it is public and try again.");
   }
 
   const meta = metaList[0];
-  if (meta.privacyStatus === "private") {
-    throw new GenerationError(
-      "VIDEO_UNAVAILABLE",
-      "We couldn't access this YouTube video. Check that it is public and try again."
-    );
-  }
-
   const thumbnailUrl = meta.thumbnailUrl ?? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-  // 2. Resolve transcript — pastor-paste takes priority, then OAuth retrieval
-  let transcriptText: string;
-  let transcriptStatus: "none" | "pending" | "complete";
+  // 2. Resolve full transcript — pastor-paste takes priority, then OAuth
+  let fullTranscript: string;
+  let timedCues: TimedCue[] | undefined;
 
   if (options.providedTranscript && options.providedTranscript.trim().length > 50) {
-    // Pastor pasted the transcript — use it directly
-    transcriptText = options.providedTranscript.trim();
-    transcriptStatus = "complete";
-    logger.info({ videoId, length: transcriptText.length }, "sermon-generator: using pastor-provided transcript");
+    fullTranscript = options.providedTranscript.trim();
+    timedCues = undefined;
+    logger.info({ videoId, length: fullTranscript.length }, "sermon-generator: using pastor-provided transcript");
   } else {
-    // Attempt OAuth transcript retrieval
     const transcriptResult = await fetchTranscript(videoId);
     if (!transcriptResult) {
-      // No transcript available — ask the pastor to paste it
       logger.info({ videoId }, "sermon-generator: transcript unavailable, returning TRANSCRIPT_REQUIRED");
-      throw new GenerationError(
-        "TRANSCRIPT_REQUIRED",
-        "We couldn't retrieve a transcript from this video.",
-        {
-          youtubeUrl,
-          videoId,
-          title: meta.title,
-          thumbnailUrl,
-        }
-      );
+      throw new GenerationError("TRANSCRIPT_REQUIRED", "We couldn't retrieve a transcript from this video.", {
+        youtubeUrl, videoId, title: meta.title, thumbnailUrl,
+      });
     }
-    transcriptText = transcriptResult.text;
-    transcriptStatus = "complete";
-    logger.info({ videoId, source: transcriptResult.source, length: transcriptText.length }, "sermon-generator: transcript retrieved");
+    fullTranscript = transcriptResult.text;
+    timedCues = transcriptResult.timedCues;
+    logger.info({ videoId, source: transcriptResult.source, length: fullTranscript.length, cues: timedCues.length },
+      "sermon-generator: transcript retrieved");
   }
 
   // 3. Check AI configuration
   if (!process.env.OPENAI_API_KEY) {
-    throw new GenerationError(
-      "AI_NOT_CONFIGURED",
-      "Sermon generation is not configured yet."
-    );
+    throw new GenerationError("AI_NOT_CONFIGURED", "Sermon generation is not configured yet.");
   }
 
-  // 4. Generate sermon draft fields
+  // 4. Extract sermon-only transcript
+  const hasBoundaries = options.sermonStartWord !== undefined && options.sermonEndWord !== undefined;
+
+  let sermonTranscript: string;
+  let detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none";
+  let detectionStartSecs: number | null = null;
+  let detectionEndSecs: number | null = null;
+  let detectionConfidence: number;
+
+  if (hasBoundaries) {
+    // Pastor already confirmed or adjusted boundaries — slice by word offset
+    const words = fullTranscript.split(/\s+/).filter(Boolean);
+    sermonTranscript = words.slice(options.sermonStartWord, options.sermonEndWord).join(" ");
+    detectionStartSecs = options.sermonStartSec ?? null;
+    detectionEndSecs   = options.sermonEndSec   ?? null;
+    detectionConfidence = 1.0;
+    detectionMethod = "ai-confirmed";
+    logger.info({ startWord: options.sermonStartWord, endWord: options.sermonEndWord },
+      "sermon-generator: using pastor-confirmed sermon boundaries");
+  } else {
+    let detection: SermonDetectionResult;
+    try {
+      detection = await detectSermonSection(fullTranscript, timedCues);
+    } catch (err) {
+      // Detection failure is non-fatal — fall back to full transcript with low confidence
+      logger.warn({ err }, "sermon-generator: sermon detection failed, using full transcript");
+      detection = {
+        sermonTranscript: fullTranscript,
+        startSecs: null, endSecs: null, durationSecs: null,
+        startWord: 0, endWord: fullTranscript.split(/\s+/).filter(Boolean).length,
+        confidence: 0.4,
+        previewText: fullTranscript.split(/\s+/).slice(0, 60).join(" "),
+        segmentCount: 0,
+      };
+    }
+
+    if (detection.confidence < CONFIDENCE_THRESHOLD) {
+      // Ask pastor to confirm before generating
+      logger.info({ confidence: detection.confidence }, "sermon-generator: low confidence, returning SERMON_CONFIRMATION_REQUIRED");
+      throw new GenerationError(
+        "SERMON_CONFIRMATION_REQUIRED",
+        "Emmaus identified the sermon section below. Please confirm before generating the companion.",
+        {
+          startSecs: detection.startSecs,
+          endSecs: detection.endSecs,
+          durationSecs: detection.durationSecs,
+          startWord: detection.startWord,
+          endWord: detection.endWord,
+          confidence: detection.confidence,
+          previewText: detection.previewText,
+          segmentCount: detection.segmentCount,
+          youtubeUrl,
+        }
+      );
+    }
+
+    sermonTranscript = detection.sermonTranscript;
+    detectionStartSecs = detection.startSecs;
+    detectionEndSecs   = detection.endSecs;
+    detectionConfidence = detection.confidence;
+    detectionMethod = "ai-auto";
+  }
+
+  logger.info({ sermonWords: sermonTranscript.split(/\s+/).length, detectionConfidence, detectionMethod },
+    "sermon-generator: sermon transcript extracted");
+
+  // 5. Generate sermon draft fields from sermon-only transcript
   let draftFields;
   try {
     draftFields = await generateSermonDraft({
       title: meta.title,
       description: meta.description,
-      transcript: transcriptText,
+      transcript: sermonTranscript,   // ← sermon only, never full service
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI sermon draft failed");
     if (err instanceof GenerationError) throw err;
-    throw new GenerationError(
-      "GENERATION_FAILED",
-      "We couldn't prepare the sermon draft. Your sermon has not been saved."
-    );
+    throw new GenerationError("GENERATION_FAILED", "We couldn't prepare the sermon draft. Your sermon has not been saved.");
   }
 
-  // 5. Generate 5-day companion
+  // 6. Generate 5-day companion from sermon-only transcript
   let companionDraft;
   try {
     companionDraft = await generateCompanion({
       sermonTitle: draftFields.title,
       scriptureReference: draftFields.scriptureReference,
       summary: draftFields.summary,
-      transcript: transcriptText,
+      transcript: sermonTranscript,   // ← sermon only
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
     if (err instanceof GenerationError) throw err;
-    throw new GenerationError(
-      "GENERATION_FAILED",
-      "We couldn't prepare the sermon draft. Your sermon has not been saved."
-    );
+    throw new GenerationError("GENERATION_FAILED", "We couldn't prepare the sermon draft. Your sermon has not been saved.");
   }
 
   // 5. Save companion to DB
@@ -565,7 +858,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     entries: companionDraft.days,
   });
 
-  // 6. Build sermon draft record
+  // 7. Build sermon draft record — store both full and sermon-only transcripts
   const sermon: SermonDraftFields = {
     id: sermonId,
     title: draftFields.title,
@@ -577,11 +870,16 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     summary: draftFields.summary,
     topics: draftFields.topics,
     keywords: draftFields.keywords,
-    transcript: transcriptText,
-    transcriptStatus: transcriptText ? 'complete' : 'none',
-    aiIndexStatus: 'none',
-    companionJourneyId: savedCompanion.id,  // DB UUID of the companion record
-    status: 'draft',
+    transcript: fullTranscript,
+    sermonTranscript,
+    sermonStartTime: detectionStartSecs != null ? secsToHHMMSS(detectionStartSecs) : "",
+    sermonEndTime:   detectionEndSecs   != null ? secsToHHMMSS(detectionEndSecs)   : "",
+    detectionConfidence,
+    detectionMethod,
+    transcriptStatus: fullTranscript ? "complete" : "none",
+    aiIndexStatus: "none",
+    companionJourneyId: savedCompanion.id,
+    status: "draft",
     pastorEdited: false,
     updatedAt: new Date().toISOString(),
   };

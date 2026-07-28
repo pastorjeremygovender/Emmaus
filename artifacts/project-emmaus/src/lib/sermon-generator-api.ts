@@ -137,6 +137,19 @@ export interface Companion {
 
 // ─── Generation ───────────────────────────────────────────────────────────────
 
+/** Metadata returned with a SERMON_CONFIRMATION_REQUIRED error */
+export interface SermonDetectionSource {
+  startSecs: number | null;
+  endSecs: number | null;
+  durationSecs: number | null;
+  startWord: number;
+  endWord: number;
+  confidence: number;
+  previewText: string;
+  segmentCount: number;
+  youtubeUrl: string;
+}
+
 export interface SermonDraftResult {
   sermon: {
     id: string;
@@ -150,6 +163,11 @@ export interface SermonDraftResult {
     topics: string[];
     keywords: string[];
     transcript: string;
+    sermonTranscript: string;
+    sermonStartTime: string;
+    sermonEndTime: string;
+    detectionConfidence: number;
+    detectionMethod: 'ai-auto' | 'ai-confirmed' | 'manual' | 'none';
     transcriptStatus: 'none' | 'complete';
     aiIndexStatus: 'none';
     companionJourneyId: string;
@@ -167,18 +185,49 @@ export interface SermonDraftResult {
 export async function generateSermonDraft(
   youtubeUrl: string,
   auth: AuthHeaders,
-  opts?: { transcript?: string; videoId?: string }
+  opts?: {
+    transcript?: string;
+    videoId?: string;
+    sermonStartSec?: number;
+    sermonEndSec?: number;
+    sermonStartWord?: number;
+    sermonEndWord?: number;
+  }
 ): Promise<SermonDraftResult> {
   const body: Record<string, unknown> = { youtubeUrl };
-  if (opts?.transcript) body.transcript = opts.transcript;
-  if (opts?.videoId) body.videoId = opts.videoId;
-  // Server now returns { success: true, ..., _full: { sermon, companion } }
-  // or throws ApiError for structured failures (TRANSCRIPT_REQUIRED etc.)
+  if (opts?.transcript)         body.transcript        = opts.transcript;
+  if (opts?.videoId)            body.videoId           = opts.videoId;
+  if (opts?.sermonStartSec   != null) body.sermonStartSec   = opts.sermonStartSec;
+  if (opts?.sermonEndSec     != null) body.sermonEndSec     = opts.sermonEndSec;
+  if (opts?.sermonStartWord  != null) body.sermonStartWord  = opts.sermonStartWord;
+  if (opts?.sermonEndWord    != null) body.sermonEndWord    = opts.sermonEndWord;
   const raw = await post<{ _full?: SermonDraftResult; sermon?: unknown; companion?: unknown } & SermonDraftResult>(
     "/sermon-generator/generate", body, auth
   );
-  // Unwrap _full envelope if present (new response shape)
   return raw._full ?? raw;
+}
+
+export async function redetectSermon(
+  sermonId: string,
+  auth: AuthHeaders,
+): Promise<{
+  sermonTranscript: string;
+  sermonStartTime: string;
+  sermonEndTime: string;
+  detectionConfidence: number;
+  detectionMethod: 'ai-auto';
+}> {
+  const res = await post<{
+    success: boolean;
+    detection: {
+      sermonTranscript: string;
+      sermonStartTime: string;
+      sermonEndTime: string;
+      detectionConfidence: number;
+      detectionMethod: 'ai-auto';
+    };
+  }>(`/sermon-generator/${sermonId}/redetect`, {}, auth);
+  return res.detection;
 }
 
 export async function regenerateField(
