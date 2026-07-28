@@ -110,11 +110,11 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   return (
     <div className="p-6 lg:p-8 max-w-5xl">
       <PageHeader
-        title="Sermons"
+        title="Sermon Companions"
         subtitle={`${sermons.length} sermon${sermons.length !== 1 ? 's' : ''}`}
         action={
           <AdminBtn onClick={onNew} variant="primary">
-            <Plus size={15} /> New Sermon
+            <Plus size={15} /> New Sermon Companion
           </AdminBtn>
         }
       />
@@ -235,7 +235,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           {sermons.length === 0 && (
             <tr>
               <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
-                No sermons yet. Click "New Sermon" to generate your first draft.
+                No Sermon Companions yet. Click "New Sermon Companion" to generate your first draft.
               </td>
             </tr>
           )}

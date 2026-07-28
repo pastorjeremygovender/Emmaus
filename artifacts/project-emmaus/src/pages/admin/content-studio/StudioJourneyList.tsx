@@ -13,6 +13,8 @@ import DeleteJourneyDialog from './DeleteJourneyDialog';
 
 interface Props {
   collectionId?: string;
+  /** When true, show only journeys that have no collection assigned. */
+  standaloneOnly?: boolean;
   autoOpenNew?: boolean;
   onEdit: (id: string) => void;
   onLegacyEdit: (id: string) => void;
@@ -38,7 +40,7 @@ function JourneyTypeCell({ type }: { type: string }) {
   );
 }
 
-export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, onLegacyEdit }: Props) {
+export default function StudioJourneyList({ collectionId, standaloneOnly, autoOpenNew, onEdit, onLegacyEdit }: Props) {
   const { journeys, refreshJourneys, updateJourney, duplicateJourney, permanentDeleteJourney } = useJourney();
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superAdmin';
@@ -71,7 +73,11 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
     let list = journeys as Journey[];
     // Daily Rhythm journeys are managed separately in the Daily Rhythm tab — exclude them here.
     list = list.filter(j => j.journeyType !== 'daily-rhythm');
+    // Companion journeys are managed inside Sermon Companions — exclude them here.
+    list = list.filter(j => j.journeyType !== 'companion');
     if (collectionId) list = list.filter(j => (j as any).collectionId === collectionId);
+    // Standalone subtab: show only journeys without a collection assigned.
+    if (standaloneOnly) list = list.filter(j => !(j as any).collectionId);
     if (statusTab !== 'All') list = list.filter(j => j.status === statusTab);
     if (typeFilter !== 'All Types') list = list.filter(j => j.journeyType === typeFilter);
     if (query.trim()) {

@@ -1,27 +1,25 @@
 /**
- * Content Studio — complete publishing and discipleship content workspace.
+ * Content Studio — publishing workspace for Emmaus content.
  *
- * Tabs: Overview | Collections | Journeys | Sermons | YouTube Archive | Media
+ * Five top-level tabs (spec-locked):
+ *   1. Daily Rhythm
+ *   2. Daily Devotionals
+ *   3. Journeys  (Collections | Standalone subtabs)
+ *   4. Sermon Companions
+ *   5. Media Studio  (YouTube Archive | Media Library subtabs)
  *
- * All navigation is internal state; Admin.tsx only knows "content-studio" section.
- * Legacy journey editor is embedded here so Admin.tsx has no need of a standalone
- * 'journeys' section in the navigation.
+ * Navigation is internal state. Admin.tsx only knows the "content-studio" section.
+ * All existing editors, list views and deep links are preserved; only the
+ * information architecture and tab labels change.
  */
 
 import React, { useState } from 'react';
 import {
-  LayoutGrid,
-  FolderOpen,
-  BookOpen,
-  Video,
-  Clapperboard,
-  ImagePlay,
+  Sun, BookHeart, Map, Mic2, Film,
+  FolderOpen, BookOpen, Clapperboard, ImagePlay,
   ChevronRight,
-  Sun,
-  BookHeart,
 } from 'lucide-react';
 
-import StudioOverview from './StudioOverview';
 import DailyRhythmStudio from './DailyRhythmStudio';
 import DevotionalSeriesList from './DevotionalSeriesList';
 import DevotionalSeriesEditor from './DevotionalSeriesEditor';
@@ -43,94 +41,112 @@ import JourneyEditor from '../JourneyEditor';
 import DayEditor from '../DayEditor';
 import DayPreview from '../DayPreview';
 
+// ─── View types ───────────────────────────────────────────────────────────────
+
 type StudioView =
-  | { id: 'overview' }
-  | { id: 'collections' }
-  | { id: 'collection-editor'; collectionId?: string }
-  // ── Collection → Journey hierarchy ──────────────────────────────────────────
-  | { id: 'collection-detail'; collectionId: string; collectionTitle?: string }
-  | { id: 'journey-detail'; journeyId: string; journeyTitle?: string; collectionId?: string; collectionTitle?: string }
-  | { id: 'journey-day-editor'; journeyId: string; journeyTitle?: string; day: number | null; collectionId?: string; collectionTitle?: string }
-  | { id: 'journeys'; collectionId?: string; openNew?: boolean }
-  | { id: 'journey-editor'; journeyId: string; collectionId?: string }
-  // Legacy journey editor (full-page, block-based)
-  | { id: 'legacy-journey-editor'; journeyId?: string; freshlyGenerated?: boolean }
-  | { id: 'legacy-day-editor'; journeyId: string; day?: number }
-  | { id: 'legacy-day-preview'; journeyId: string; day: number }
-  // Daily Rhythm
+  // ── Daily Rhythm ──────────────────────────────────────────────────────────
   | { id: 'daily-rhythm' }
   | { id: 'daily-rhythm-editor'; journeyId: string }
   | { id: 'daily-rhythm-day-editor'; journeyId: string; day: number | null }
-  // Daily Devotionals
+  // ── Daily Devotionals ─────────────────────────────────────────────────────
   | { id: 'devotionals' }
   | { id: 'devotional-editor'; seriesId: string }
   | { id: 'devotional-entry-editor'; seriesId: string; day: number }
-  // Sermons
+  // ── Journeys — Collections hierarchy ─────────────────────────────────────
+  | { id: 'journeys-collections' }
+  | { id: 'collection-editor'; collectionId?: string }
+  | { id: 'collection-detail'; collectionId: string; collectionTitle?: string }
+  | { id: 'journey-detail'; journeyId: string; journeyTitle?: string; collectionId?: string; collectionTitle?: string }
+  | { id: 'journey-day-editor'; journeyId: string; journeyTitle?: string; day: number | null; collectionId?: string; collectionTitle?: string; fromStandalone?: boolean }
+  // ── Journeys — Standalone ─────────────────────────────────────────────────
+  | { id: 'journeys-standalone'; openNew?: boolean }
+  | { id: 'journey-editor'; journeyId: string; collectionId?: string; fromStandalone?: boolean }
+  // ── Legacy journey editors (preserve deep links) ──────────────────────────
+  | { id: 'legacy-journey-editor'; journeyId?: string; freshlyGenerated?: boolean }
+  | { id: 'legacy-day-editor'; journeyId: string; day?: number }
+  | { id: 'legacy-day-preview'; journeyId: string; day: number }
+  // ── Sermon Companions ─────────────────────────────────────────────────────
   | { id: 'sermons' }
   | { id: 'sermon-editor'; sermonId?: string | null }
-  // YouTube Archive
+  // ── Media Studio ──────────────────────────────────────────────────────────
   | { id: 'youtube-archive' }
-  // Media Studio
   | { id: 'media' }
   | { id: 'kit-wizard' }
   | { id: 'kit-editor'; kitId: string | null };
 
-type NavTab = { id: string; label: string; Icon: React.ElementType };
+// ─── Top-level navigation ─────────────────────────────────────────────────────
 
-const TOP_NAV: NavTab[] = [
-  { id: 'overview',       label: 'Overview',         Icon: LayoutGrid  },
-  { id: 'collections',    label: 'Collections',      Icon: FolderOpen  },
-  { id: 'daily-rhythm',   label: 'Daily Rhythm',     Icon: Sun         },
-  { id: 'devotionals',    label: 'Devotionals',      Icon: BookHeart   },
-  { id: 'journeys',       label: 'Journeys',         Icon: BookOpen    },
-  { id: 'sermons',        label: 'Sermons',          Icon: Video       },
-  { id: 'youtube-archive',label: 'YouTube Archive',  Icon: Clapperboard},
-  { id: 'media',          label: 'Media',            Icon: ImagePlay   },
+type TopTab = { id: string; label: string; Icon: React.ElementType };
+
+const TOP_NAV: TopTab[] = [
+  { id: 'daily-rhythm',    label: 'Daily Rhythm',      Icon: Sun      },
+  { id: 'devotionals',     label: 'Daily Devotionals', Icon: BookHeart },
+  { id: 'journeys',        label: 'Journeys',          Icon: Map       },
+  { id: 'sermons',         label: 'Sermon Companions', Icon: Mic2      },
+  { id: 'media-studio',    label: 'Media Studio',      Icon: Film      },
 ];
 
-// Map each view.id to the tab that should appear active
+// Map view.id → top-tab id
 const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
-  'overview':                   'overview',
-  'collections':                'collections',
-  'collection-editor':          'collections',
-  'collection-detail':          'collections',
-  'journey-detail':             'collections',
-  'journey-day-editor':         'collections',
   'daily-rhythm':               'daily-rhythm',
   'daily-rhythm-editor':        'daily-rhythm',
   'daily-rhythm-day-editor':    'daily-rhythm',
   'devotionals':                'devotionals',
   'devotional-editor':          'devotionals',
   'devotional-entry-editor':    'devotionals',
-  'journeys':                   'journeys',
+  'journeys-collections':       'journeys',
+  'collection-editor':          'journeys',
+  'collection-detail':          'journeys',
+  'journey-detail':             'journeys',
+  'journey-day-editor':         'journeys',
+  'journeys-standalone':        'journeys',
   'journey-editor':             'journeys',
   'legacy-journey-editor':      'journeys',
   'legacy-day-editor':          'journeys',
   'legacy-day-preview':         'journeys',
   'sermons':                    'sermons',
   'sermon-editor':              'sermons',
-  'youtube-archive':            'youtube-archive',
-  'media':                      'media',
-  'kit-wizard':                 'media',
-  'kit-editor':                 'media',
+  'youtube-archive':            'media-studio',
+  'media':                      'media-studio',
+  'kit-wizard':                 'media-studio',
+  'kit-editor':                 'media-studio',
 };
 
-// Navigate to the default view for a top-tab click
+// Default view when a top tab is clicked
 const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
-  overview:         { id: 'overview' },
-  collections:      { id: 'collections' },
-  'daily-rhythm':   { id: 'daily-rhythm' },
-  devotionals:      { id: 'devotionals' },
-  journeys:         { id: 'journeys' },
-  sermons:          { id: 'sermons' },
-  'youtube-archive':{ id: 'youtube-archive' },
-  media:            { id: 'media' },
+  'daily-rhythm':  { id: 'daily-rhythm' },
+  'devotionals':   { id: 'devotionals' },
+  'journeys':      { id: 'journeys-collections' },
+  'sermons':       { id: 'sermons' },
+  'media-studio':  { id: 'youtube-archive' },
 };
+
+// ─── Subtab helpers ───────────────────────────────────────────────────────────
+
+type JourneysSubTab = 'collections' | 'standalone';
+type MediaSubTab    = 'youtube' | 'library';
+
+function getJourneysSubTab(view: StudioView): JourneysSubTab {
+  const standaloneIds: StudioView['id'][] = ['journeys-standalone'];
+  if (standaloneIds.includes(view.id)) return 'standalone';
+  if (
+    (view.id === 'journey-editor'   && (view as { fromStandalone?: boolean }).fromStandalone) ||
+    (view.id === 'journey-day-editor' && (view as { fromStandalone?: boolean }).fromStandalone)
+  ) return 'standalone';
+  return 'collections';
+}
+
+function getMediaSubTab(view: StudioView): MediaSubTab {
+  return view.id === 'youtube-archive' ? 'youtube' : 'library';
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
   initialSubView?: string;
   initialJourneyId?: string;
-  onOpenLegacyEditor: (journeyId: string) => void;
+  /** kept for API compat with Admin.tsx callers — unused */
+  onOpenLegacyEditor?: (journeyId: string) => void;
 }
 
 export default function ContentStudio({ initialSubView, initialJourneyId }: Props) {
@@ -138,7 +154,8 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     if (initialSubView === 'studio-editor' && initialJourneyId) {
       return { id: 'journey-editor', journeyId: initialJourneyId };
     }
-    return { id: 'overview' };
+    // Legacy: old 'overview' default → land on Daily Rhythm
+    return { id: 'daily-rhythm' };
   });
 
   const navigate = (v: StudioView) => {
@@ -146,185 +163,249 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     window.scrollTo(0, 0);
   };
 
-  const activeTabId = VIEW_TO_TAB[view.id] ?? 'overview';
+  const activeTabId = VIEW_TO_TAB[view.id] ?? 'daily-rhythm';
 
-  // ─── Breadcrumb ─────────────────────────────────────────────────────────────
+  // ── Breadcrumb ──────────────────────────────────────────────────────────────
 
   const renderBreadcrumb = () => {
-    const crumbs: { label: string; onClick?: () => void }[] = [{ label: 'Content Studio' }];
-    if (view.id === 'collections')
-      crumbs.push({ label: 'Collections' });
-    if (view.id === 'collection-editor') {
-      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
-      crumbs.push({ label: view.collectionId ? 'Edit Collection' : 'New Collection' });
-    }
-    if (view.id === 'collection-detail') {
-      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
-      crumbs.push({ label: view.collectionTitle ?? 'Collection' });
-    }
-    if (view.id === 'journey-detail') {
-      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
-      if (view.collectionId) {
+    const crumbs: { label: string; onClick?: () => void }[] = [
+      { label: 'Content Studio' },
+    ];
+
+    switch (view.id) {
+      // Daily Rhythm
+      case 'daily-rhythm':
+        crumbs.push({ label: 'Daily Rhythm' });
+        break;
+      case 'daily-rhythm-editor':
+        crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
+        crumbs.push({ label: 'Edit Track' });
+        break;
+      case 'daily-rhythm-day-editor':
+        crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
+        crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
+        break;
+
+      // Daily Devotionals
+      case 'devotionals':
+        crumbs.push({ label: 'Daily Devotionals' });
+        break;
+      case 'devotional-editor':
+        crumbs.push({ label: 'Daily Devotionals', onClick: () => navigate({ id: 'devotionals' }) });
+        crumbs.push({ label: 'Series' });
+        break;
+      case 'devotional-entry-editor':
+        crumbs.push({ label: 'Daily Devotionals', onClick: () => navigate({ id: 'devotionals' }) });
+        crumbs.push({ label: 'Series', onClick: () => navigate({ id: 'devotional-editor', seriesId: view.seriesId }) });
+        crumbs.push({ label: `Day ${view.day}` });
+        break;
+
+      // Journeys — Collections
+      case 'journeys-collections':
+        crumbs.push({ label: 'Journeys' });
+        crumbs.push({ label: 'Collections' });
+        break;
+      case 'collection-editor':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: view.collectionId ? 'Edit Collection' : 'New Collection' });
+        break;
+      case 'collection-detail':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: view.collectionTitle ?? 'Collection' });
+        break;
+      case 'journey-detail':
         crumbs.push({
-          label: view.collectionTitle ?? 'Collection',
-          onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+          label: 'Journeys',
+          onClick: () => navigate(view.collectionId ? { id: 'journeys-collections' } : { id: 'journeys-standalone' }),
         });
-      }
-      crumbs.push({ label: view.journeyTitle ?? 'Journey' });
-    }
-    if (view.id === 'journey-day-editor') {
-      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
-      if (view.collectionId) {
+        if (view.collectionId) {
+          crumbs.push({
+            label: view.collectionTitle ?? 'Collection',
+            onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+          });
+        } else {
+          crumbs.push({ label: 'Standalone', onClick: () => navigate({ id: 'journeys-standalone' }) });
+        }
+        crumbs.push({ label: view.journeyTitle ?? 'Journey' });
+        break;
+      case 'journey-day-editor':
         crumbs.push({
-          label: view.collectionTitle ?? 'Collection',
-          onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+          label: 'Journeys',
+          onClick: () => navigate(view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }),
         });
-      }
-      crumbs.push({
-        label: view.journeyTitle ?? 'Journey',
-        onClick: () => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle }),
-      });
-      crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
-    }
-    if (view.id === 'journeys')
-      crumbs.push({ label: 'Journeys' });
-    if (view.id === 'journey-editor') {
-      crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys' }) });
-      crumbs.push({ label: 'Journey Editor' });
-    }
-    if (view.id === 'legacy-journey-editor') {
-      crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys' }) });
-      crumbs.push({ label: 'Legacy Editor' });
-    }
-    if (view.id === 'legacy-day-editor') {
-      crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys' }) });
-      crumbs.push({ label: 'Legacy Editor', onClick: () => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId }) });
-      crumbs.push({ label: 'Day Editor' });
-    }
-    if (view.id === 'legacy-day-preview') {
-      crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys' }) });
-      crumbs.push({ label: 'Preview' });
-    }
-    if (view.id === 'devotionals')
-      crumbs.push({ label: 'Devotionals' });
-    if (view.id === 'devotional-editor') {
-      crumbs.push({ label: 'Devotionals', onClick: () => navigate({ id: 'devotionals' }) });
-      crumbs.push({ label: 'Series' });
-    }
-    if (view.id === 'devotional-entry-editor') {
-      crumbs.push({ label: 'Devotionals', onClick: () => navigate({ id: 'devotionals' }) });
-      crumbs.push({ label: 'Series', onClick: () => navigate({ id: 'devotional-editor', seriesId: view.seriesId }) });
-      crumbs.push({ label: `Day ${view.day}` });
-    }
-    if (view.id === 'daily-rhythm')
-      crumbs.push({ label: 'Daily Rhythm' });
-    if (view.id === 'daily-rhythm-editor') {
-      crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
-      crumbs.push({ label: 'Edit Track' });
-    }
-    if (view.id === 'daily-rhythm-day-editor') {
-      crumbs.push({ label: 'Daily Rhythm', onClick: () => navigate({ id: 'daily-rhythm' }) });
-      crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
-    }
-    if (view.id === 'sermons')
-      crumbs.push({ label: 'Sermons' });
-    if (view.id === 'sermon-editor') {
-      crumbs.push({ label: 'Sermons', onClick: () => navigate({ id: 'sermons' }) });
-      crumbs.push({ label: view.sermonId ? 'Edit Sermon' : 'New Sermon' });
-    }
-    if (view.id === 'youtube-archive')
-      crumbs.push({ label: 'YouTube Archive' });
-    if (view.id === 'media')
-      crumbs.push({ label: 'Media' });
-    if (view.id === 'kit-wizard') {
-      crumbs.push({ label: 'Media', onClick: () => navigate({ id: 'media' }) });
-      crumbs.push({ label: 'New Media Kit' });
-    }
-    if (view.id === 'kit-editor') {
-      crumbs.push({ label: 'Media', onClick: () => navigate({ id: 'media' }) });
-      crumbs.push({ label: 'Media Kit' });
+        if (view.collectionId) {
+          crumbs.push({
+            label: view.collectionTitle ?? 'Collection',
+            onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+          });
+        }
+        crumbs.push({
+          label: view.journeyTitle ?? 'Journey',
+          onClick: () => navigate({
+            id: 'journey-detail',
+            journeyId: view.journeyId,
+            journeyTitle: view.journeyTitle,
+            collectionId: view.collectionId,
+            collectionTitle: view.collectionTitle,
+          }),
+        });
+        crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
+        break;
+
+      // Journeys — Standalone
+      case 'journeys-standalone':
+        crumbs.push({ label: 'Journeys' });
+        crumbs.push({ label: 'Standalone' });
+        break;
+      case 'journey-editor':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate(view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }) });
+        crumbs.push({ label: view.fromStandalone ? 'Standalone' : 'Collections', onClick: () => navigate(view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }) });
+        crumbs.push({ label: 'Journey Editor' });
+        break;
+
+      // Legacy editors
+      case 'legacy-journey-editor':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-standalone' }) });
+        crumbs.push({ label: 'Legacy Editor' });
+        break;
+      case 'legacy-day-editor':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-standalone' }) });
+        crumbs.push({ label: 'Legacy Editor', onClick: () => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId }) });
+        crumbs.push({ label: 'Day Editor' });
+        break;
+      case 'legacy-day-preview':
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-standalone' }) });
+        crumbs.push({ label: 'Preview' });
+        break;
+
+      // Sermon Companions
+      case 'sermons':
+        crumbs.push({ label: 'Sermon Companions' });
+        break;
+      case 'sermon-editor':
+        crumbs.push({ label: 'Sermon Companions', onClick: () => navigate({ id: 'sermons' }) });
+        crumbs.push({ label: view.sermonId ? 'Edit Companion' : 'New Sermon Companion' });
+        break;
+
+      // Media Studio
+      case 'youtube-archive':
+        crumbs.push({ label: 'Media Studio' });
+        crumbs.push({ label: 'YouTube Archive' });
+        break;
+      case 'media':
+        crumbs.push({ label: 'Media Studio' });
+        crumbs.push({ label: 'Media Library' });
+        break;
+      case 'kit-wizard':
+        crumbs.push({ label: 'Media Studio', onClick: () => navigate({ id: 'media' }) });
+        crumbs.push({ label: 'Media Library', onClick: () => navigate({ id: 'media' }) });
+        crumbs.push({ label: 'New Media Kit' });
+        break;
+      case 'kit-editor':
+        crumbs.push({ label: 'Media Studio', onClick: () => navigate({ id: 'media' }) });
+        crumbs.push({ label: 'Media Library', onClick: () => navigate({ id: 'media' }) });
+        crumbs.push({ label: 'Media Kit' });
+        break;
     }
     return crumbs;
   };
 
-  // ─── View renderer ──────────────────────────────────────────────────────────
+  // ── Subtab renderers ────────────────────────────────────────────────────────
+
+  function renderJourneysSubTabs() {
+    const sub = getJourneysSubTab(view);
+    const tabs: { id: JourneysSubTab; label: string; Icon: React.ElementType }[] = [
+      { id: 'collections', label: 'Collections', Icon: FolderOpen },
+      { id: 'standalone',  label: 'Standalone',  Icon: BookOpen   },
+    ];
+    return (
+      <div className="flex items-center gap-4 px-6 pt-2 pb-2 border-b border-gray-100 bg-gray-50">
+        {tabs.map(({ id, label, Icon }) => {
+          const active = sub === id;
+          return (
+            <button
+              key={id}
+              onClick={() => navigate(id === 'collections' ? { id: 'journeys-collections' } : { id: 'journeys-standalone' })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                active
+                  ? 'bg-teal-50 text-teal-700'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderMediaSubTabs() {
+    const sub = getMediaSubTab(view);
+    const tabs: { id: MediaSubTab; label: string; Icon: React.ElementType }[] = [
+      { id: 'youtube',  label: 'YouTube Archive', Icon: Clapperboard },
+      { id: 'library',  label: 'Media Library',   Icon: ImagePlay    },
+    ];
+    return (
+      <div className="flex items-center gap-4 px-6 pt-2 pb-2 border-b border-gray-100 bg-gray-50">
+        {tabs.map(({ id, label, Icon }) => {
+          const active = sub === id;
+          return (
+            <button
+              key={id}
+              onClick={() => navigate(id === 'youtube' ? { id: 'youtube-archive' } : { id: 'media' })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                active
+                  ? 'bg-teal-50 text-teal-700'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── View renderer ────────────────────────────────────────────────────────────
 
   const renderView = () => {
     switch (view.id) {
-      // ── Overview ──
-      case 'overview':
+      // ── Daily Rhythm ──────────────────────────────────────────────────────
+      case 'daily-rhythm':
         return (
-          <StudioOverview
-            onNavigateCollections={() => navigate({ id: 'collections' })}
-            onNavigateJourneys={() => navigate({ id: 'journeys' })}
-            onNavigateDevotionals={() => navigate({ id: 'devotionals' })}
-            onOpenJourney={(id) => navigate({ id: 'journey-editor', journeyId: id })}
-            onOpenDevotional={(id) => navigate({ id: 'devotional-editor', seriesId: id })}
-            onNewJourney={() => navigate({ id: 'journeys', openNew: true })}
+          <DailyRhythmStudio
+            onNewDay={(id) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day: null })}
+            onEditDay={(id, day) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day })}
           />
         );
-      // ── Collections ──
-      case 'collections':
+      case 'daily-rhythm-editor':
         return (
-          <CollectionsList
-            onNew={() => navigate({ id: 'collection-editor' })}
-            onEdit={(id) => navigate({ id: 'collection-editor', collectionId: id })}
-            onViewJourneys={(id, title) => navigate({ id: 'collection-detail', collectionId: id, collectionTitle: title })}
-          />
-        );
-      case 'collection-editor':
-        return (
-          <CollectionEditor
-            collectionId={view.collectionId}
-            onBack={() => navigate({ id: 'collections' })}
-            onSaved={() => navigate({ id: 'collections' })}
-          />
-        );
-      // ── Collection → Journey hierarchy ──────────────────────────────────────
-      case 'collection-detail':
-        return (
-          <CollectionDetailView
-            collectionId={view.collectionId}
-            onBack={() => navigate({ id: 'collections' })}
-            onNewJourney={(collId) => navigate({ id: 'journeys', collectionId: collId, openNew: true })}
-            onOpenJourney={(journeyId, journeyTitle, collectionTitle) =>
-              navigate({ id: 'journey-detail', journeyId, journeyTitle, collectionId: view.collectionId, collectionTitle })
-            }
-            onEditCollection={(collId) => navigate({ id: 'collection-editor', collectionId: collId })}
-          />
-        );
-      case 'journey-detail':
-        return (
-          <JourneyDetailView
+          <StudioJourneyEditor
+            key={view.journeyId}
             journeyId={view.journeyId}
-            onBack={() =>
-              view.collectionId
-                ? navigate({ id: 'collection-detail', collectionId: view.collectionId, collectionTitle: view.collectionTitle })
-                : navigate({ id: 'journeys' })
-            }
-            onEditJourney={(jId) => navigate({ id: 'journey-editor', journeyId: jId, collectionId: view.collectionId })}
-            onAddDay={(jId) =>
-              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day: null, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
-            }
-            onEditDay={(jId, day) =>
-              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
-            }
+            onBack={() => navigate({ id: 'daily-rhythm' })}
+            onLegacyEditor={() => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId })}
           />
         );
-      case 'journey-day-editor':
+      case 'daily-rhythm-day-editor':
         return (
           <DailyRhythmDayEditor
             key={`${view.journeyId}-${view.day}`}
             journeyId={view.journeyId}
             day={view.day}
-            onBack={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
-            onDuplicated={(newDay) =>
-              navigate({ id: 'journey-day-editor', journeyId: view.journeyId, journeyTitle: view.journeyTitle, day: newDay, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
-            }
-            onDeleted={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
+            onBack={() => navigate({ id: 'daily-rhythm' })}
+            onDuplicated={(newDay) => navigate({ id: 'daily-rhythm-day-editor', journeyId: view.journeyId, day: newDay })}
+            onDeleted={() => navigate({ id: 'daily-rhythm' })}
           />
         );
-      // ── Daily Devotionals ──
+
+      // ── Daily Devotionals ─────────────────────────────────────────────────
       case 'devotionals':
         return (
           <DevotionalSeriesList
@@ -349,44 +430,75 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onBack={() => navigate({ id: 'devotional-editor', seriesId: view.seriesId })}
           />
         );
-      // ── Daily Rhythm ──
-      case 'daily-rhythm':
+
+      // ── Journeys — Collections ────────────────────────────────────────────
+      case 'journeys-collections':
         return (
-          <DailyRhythmStudio
-            onNewDay={(id) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day: null })}
-            onEditDay={(id, day) => navigate({ id: 'daily-rhythm-day-editor', journeyId: id, day })}
+          <CollectionsList
+            onNew={() => navigate({ id: 'collection-editor' })}
+            onEdit={(id) => navigate({ id: 'collection-editor', collectionId: id })}
+            onViewJourneys={(id, title) => navigate({ id: 'collection-detail', collectionId: id, collectionTitle: title })}
           />
         );
-      case 'daily-rhythm-editor':
-        // Legacy block editor path — kept for back-compat
+      case 'collection-editor':
         return (
-          <StudioJourneyEditor
-            key={view.journeyId}
+          <CollectionEditor
+            collectionId={view.collectionId}
+            onBack={() => navigate({ id: 'journeys-collections' })}
+            onSaved={() => navigate({ id: 'journeys-collections' })}
+          />
+        );
+      case 'collection-detail':
+        return (
+          <CollectionDetailView
+            collectionId={view.collectionId}
+            onBack={() => navigate({ id: 'journeys-collections' })}
+            onNewJourney={(collId) => navigate({ id: 'journeys-standalone', openNew: true })}
+            onOpenJourney={(journeyId, journeyTitle, collectionTitle) =>
+              navigate({ id: 'journey-detail', journeyId, journeyTitle, collectionId: view.collectionId, collectionTitle })
+            }
+            onEditCollection={(collId) => navigate({ id: 'collection-editor', collectionId: collId })}
+          />
+        );
+      case 'journey-detail':
+        return (
+          <JourneyDetailView
             journeyId={view.journeyId}
-            onBack={() => navigate({ id: 'daily-rhythm' })}
-            onLegacyEditor={() =>
-              navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId })
+            onBack={() =>
+              view.collectionId
+                ? navigate({ id: 'collection-detail', collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+                : navigate({ id: 'journeys-standalone' })
+            }
+            onEditJourney={(jId) => navigate({ id: 'journey-editor', journeyId: jId, collectionId: view.collectionId, fromStandalone: !view.collectionId })}
+            onAddDay={(jId) =>
+              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day: null, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+            }
+            onEditDay={(jId, day) =>
+              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
             }
           />
         );
-      case 'daily-rhythm-day-editor':
+      case 'journey-day-editor':
         return (
           <DailyRhythmDayEditor
             key={`${view.journeyId}-${view.day}`}
             journeyId={view.journeyId}
             day={view.day}
-            onBack={() => navigate({ id: 'daily-rhythm' })}
-            onDuplicated={(newDay) => navigate({ id: 'daily-rhythm-day-editor', journeyId: view.journeyId, day: newDay })}
-            onDeleted={() => navigate({ id: 'daily-rhythm' })}
+            onBack={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
+            onDuplicated={(newDay) =>
+              navigate({ id: 'journey-day-editor', journeyId: view.journeyId, journeyTitle: view.journeyTitle, day: newDay, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+            }
+            onDeleted={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
           />
         );
-      // ── Journeys (block editor) ──
-      case 'journeys':
+
+      // ── Journeys — Standalone ─────────────────────────────────────────────
+      case 'journeys-standalone':
         return (
           <StudioJourneyList
-            collectionId={view.collectionId}
+            standaloneOnly
             autoOpenNew={view.openNew}
-            onEdit={(id) => navigate({ id: 'journey-editor', journeyId: id })}
+            onEdit={(id) => navigate({ id: 'journey-editor', journeyId: id, fromStandalone: true })}
             onLegacyEdit={(id) => navigate({ id: 'legacy-journey-editor', journeyId: id })}
           />
         );
@@ -395,17 +507,18 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           <StudioJourneyEditor
             key={view.journeyId}
             journeyId={view.journeyId}
-            onBack={() => navigate({ id: 'journeys' })}
+            onBack={() => navigate(view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' })}
             onLegacyEditor={() => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId })}
           />
         );
-      // ── Legacy Journey Editor ──
+
+      // ── Legacy Journey Editors (preserve deep links) ──────────────────────
       case 'legacy-journey-editor':
         return (
           <JourneyEditor
             journeyId={view.journeyId ?? null}
             freshlyGenerated={view.freshlyGenerated}
-            onBack={() => navigate({ id: 'journeys' })}
+            onBack={() => navigate({ id: 'journeys-standalone' })}
             onEditDay={(jId, d) => navigate({ id: 'legacy-day-editor', journeyId: jId, day: d })}
             onPreviewDay={(jId, d) => navigate({ id: 'legacy-day-preview', journeyId: jId, day: d })}
           />
@@ -426,15 +539,14 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onBack={() => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId })}
           />
         );
-      // ── Sermons ──
+
+      // ── Sermon Companions ─────────────────────────────────────────────────
       case 'sermons':
         return (
           <SermonsList
             onEdit={(id) => navigate({ id: 'sermon-editor', sermonId: id })}
             onNew={() => navigate({ id: 'sermon-editor', sermonId: null })}
             onOpenCompanion={(sermonId, companionId) => {
-              // New-style companions are UUIDs → open sermon editor (shows companion tab)
-              // Legacy companions are journey IDs → open legacy journey editor
               const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companionId);
               if (isUUID) {
                 navigate({ id: 'sermon-editor', sermonId });
@@ -454,10 +566,12 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             }
           />
         );
-      // ── YouTube Archive ──
+
+      // ── Media Studio — YouTube Archive ────────────────────────────────────
       case 'youtube-archive':
         return <YoutubeArchive />;
-      // ── Media Studio ──
+
+      // ── Media Studio — Media Library ──────────────────────────────────────
       case 'media':
         return (
           <MediaStudioDashboard
@@ -483,12 +597,15 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
   };
 
   const crumbs = renderBreadcrumb();
+  const showJourneysSubTabs  = activeTabId === 'journeys'      && !['journey-editor', 'journey-day-editor', 'journey-detail', 'collection-editor', 'collection-detail', 'legacy-journey-editor', 'legacy-day-editor', 'legacy-day-preview'].includes(view.id);
+  const showMediaSubTabs     = activeTabId === 'media-studio'  && !['kit-wizard', 'kit-editor'].includes(view.id);
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Top nav + breadcrumb */}
+      {/* ── Top nav + subtabs + breadcrumb ────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white border-b border-gray-200">
-        {/* Tab bar */}
+
+        {/* Primary tab bar — 5 tabs */}
         <div
           className="flex items-center gap-1 px-6 pt-4 pb-0 overflow-x-auto scrollbar-none"
           role="tablist"
@@ -501,7 +618,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
                 key={id}
                 role="tab"
                 aria-selected={active}
-                onClick={() => navigate(TAB_DEFAULT_VIEW[id] ?? { id: 'overview' })}
+                onClick={() => navigate(TAB_DEFAULT_VIEW[id] ?? { id: 'daily-rhythm' })}
                 className={`flex items-center gap-2 px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   active
                     ? 'border-teal-600 text-teal-700'
@@ -514,6 +631,12 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             );
           })}
         </div>
+
+        {/* Journeys subtabs */}
+        {showJourneysSubTabs && renderJourneysSubTabs()}
+
+        {/* Media Studio subtabs */}
+        {showMediaSubTabs && renderMediaSubTabs()}
 
         {/* Breadcrumb */}
         {crumbs.length > 1 && (
@@ -536,7 +659,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         )}
       </div>
 
-      {/* Content area */}
+      {/* ── Content area ──────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto" role="tabpanel">
         {renderView()}
       </div>

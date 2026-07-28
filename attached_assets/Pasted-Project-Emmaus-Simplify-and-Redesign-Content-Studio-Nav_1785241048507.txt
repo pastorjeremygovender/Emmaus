@@ -1,0 +1,705 @@
+Project Emmaus — Simplify and Redesign Content Studio Navigation
+
+The current Content Studio has become too complicated.
+
+There are too many top-level areas, overlapping concepts and administrative screens that do not help Pastor Jeremy create and publish content efficiently.
+
+Simplify Content Studio around the actual Emmaus content workflow.
+
+This is a focused information-architecture and navigation redesign.
+
+Do not change member-facing navigation.
+Do not change the underlying content types or progress systems.
+Do not merge Daily Devotionals, Journeys or Sermon Companions.
+Do not delete content records.
+Do not rebuild working editors unnecessarily.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+Content Studio should contain only these five top-level tabs:
+
+1. Daily Rhythm
+2. Daily Devotionals
+3. Journeys
+4. Sermon Companions
+5. Media Studio
+
+Remove the current Overview tab and dashboard in its existing form.
+
+Remove standalone top-level tabs that are now included elsewhere.
+
+The new Content Studio should feel simple enough that a pastor immediately knows where to go.
+
+====================================================
+LOCKED TOP-LEVEL NAVIGATION
+====================================================
+
+Use this exact order and terminology:
+
+Daily Rhythm
+
+Daily Devotionals
+
+Journeys
+
+Sermon Companions
+
+Media Studio
+
+Do not show these as separate top-level Content Studio tabs:
+
+- Overview
+- Collections
+- Sermons
+- YouTube Archive
+- Media
+
+Collections must live inside Journeys.
+
+Sermons and their companion content must live inside Sermon Companions.
+
+YouTube Archive must live inside Media Studio.
+
+====================================================
+1. REMOVE THE CURRENT OVERVIEW
+====================================================
+
+Remove Overview from the Content Studio top navigation.
+
+Remove the current Overview screen containing:
+
+- total counts;
+- published counts;
+- draft counts;
+- collection counts;
+- quick cards;
+- recently updated;
+- duplicated navigation links.
+
+Do not redirect users to a blank Overview route.
+
+When Content Studio opens, default directly to:
+
+Daily Rhythm
+
+Use the existing Daily Rhythm route where possible.
+
+Old Overview URLs should safely redirect to Daily Rhythm.
+
+====================================================
+2. DAILY RHYTHM
+====================================================
+
+Daily Rhythm opens directly to:
+
+10 Minutes with Jesus
+
+Show:
+
+- title;
+- short description;
+- existing day list;
+- published/draft state;
+- Add Day where valid;
+- Development Mode controls where already supported.
+
+Do not introduce collections or multiple Daily Rhythm tracks.
+
+There remains only one Daily Rhythm:
+
+10 Minutes with Jesus
+
+Preserve:
+
+- working editor;
+- live preview;
+- embedded Scripture;
+- personalised greeting;
+- publication workflow;
+- Previous Days;
+- calendar locking;
+- Development Mode;
+- completion and replay rules.
+
+====================================================
+3. DAILY DEVOTIONALS
+====================================================
+
+Daily Devotionals opens directly to the existing devotional-series list.
+
+Show:
+
+- series title;
+- series type;
+- status;
+- published-entry count;
+- total-entry count;
+- Edit;
+- Publish/Unpublish where supported;
+- Delete.
+
+Primary action:
+
++ New Series
+
+Selecting a series opens its entry list and editor.
+
+Do not place Daily Devotionals under Journeys.
+
+Preserve:
+
+- separate progress;
+- member discovery;
+- active-series selection;
+- calendar locking;
+- live preview;
+- existing publication rules.
+
+====================================================
+4. JOURNEYS
+====================================================
+
+Journeys becomes one top-level area with two internal subtabs:
+
+Collections
+
+Standalone
+
+Use these exact labels.
+
+Default subtab:
+
+Collections
+
+----------------------------------------------------
+JOURNEYS — COLLECTIONS
+----------------------------------------------------
+
+Collections contains grouped Journey pathways.
+
+Examples:
+
+New to Faith
+
+Growing in Faith
+
+Bible Studies
+
+Christian Living
+
+Opening a Collection displays the Journeys inside it.
+
+Hierarchy:
+
+Collection
+→ Journey
+→ Days
+
+Actions:
+
++ New Collection
+
+Inside a Collection:
+
++ New Journey
+
+Inside a Journey:
+
++ Add Day
+
+Do not expose Collections as a separate top-level Content Studio area.
+
+----------------------------------------------------
+JOURNEYS — STANDALONE
+----------------------------------------------------
+
+Standalone contains Journeys that do not belong to a Collection.
+
+Use this for content that is intentionally independent.
+
+Primary action:
+
++ New Standalone Journey
+
+A Standalone Journey still contains Days and uses normal Journey progress.
+
+Do not create a second Journey architecture.
+
+Use the same Journey entity with a nullable collectionId or the project’s established equivalent.
+
+----------------------------------------------------
+JOURNEY CLASSIFICATION
+----------------------------------------------------
+
+Journey Type may still distinguish:
+
+- Standard Journey;
+- Bible Study;
+- Foundations;
+- Topical;
+- other existing types.
+
+This is metadata, not another top-level Content Studio tab.
+
+Member-facing Next Steps may group Bible Studies separately even though they share Journey infrastructure internally.
+
+====================================================
+5. SERMON COMPANIONS
+====================================================
+
+Rename the current top-level Sermons area to:
+
+Sermon Companions
+
+This area manages both:
+
+- the source Sermon;
+- the generated Companion.
+
+Do not separate these into competing top-level sections.
+
+The default list should focus on the companion workflow.
+
+Recommended columns or card information:
+
+- Sermon title;
+- speaker;
+- sermon date;
+- main Scripture;
+- transcript status;
+- sermon detection status;
+- companion status;
+- current-week status;
+- actions.
+
+Primary action:
+
++ New Sermon Companion
+
+This opens the existing URL-first generation workflow:
+
+Paste YouTube URL
+→ detect sermon boundaries
+→ confirm sermon section
+→ generate source Sermon draft
+→ generate five-day Companion draft
+→ pastoral review
+→ explicit publishing
+
+Preserve separate Sermon and Companion records internally.
+
+Do not store companions as Journeys.
+
+----------------------------------------------------
+SERMON COMPANION INTERNAL VIEWS
+----------------------------------------------------
+
+Inside a Sermon Companion record, use two subtabs:
+
+Sermon Source
+
+Companion
+
+Sermon Source contains:
+
+- YouTube URL;
+- metadata;
+- full service transcript;
+- sermon-only transcript;
+- sermon boundaries;
+- sermon title;
+- speaker;
+- date;
+- Scriptures;
+- summary;
+- central message;
+- key truths.
+
+Companion contains:
+
+- companion title;
+- companion status;
+- current-week setting;
+- daily entry tabs/list;
+- editor;
+- live preview;
+- publication controls.
+
+Do not expose technical relationship IDs.
+
+----------------------------------------------------
+CURRENT WEEK
+----------------------------------------------------
+
+Provide one clear action:
+
+Set as This Week’s Sermon
+
+Only one published Sermon Companion may be current at a time.
+
+Preserve previous content and member progress when the current companion changes.
+
+====================================================
+6. MEDIA STUDIO
+====================================================
+
+Create one top-level area:
+
+Media Studio
+
+Move the current:
+
+- YouTube Archive;
+- Media
+
+into Media Studio as internal subtabs.
+
+Use these subtabs:
+
+YouTube Archive
+
+Media Library
+
+Default:
+
+YouTube Archive
+
+----------------------------------------------------
+YOUTUBE ARCHIVE
+----------------------------------------------------
+
+Preserve the current YouTube Archive functionality.
+
+This area contains imported or connected church videos and related metadata.
+
+It may support:
+
+- video title;
+- YouTube URL;
+- thumbnail;
+- date;
+- transcript status;
+- linked Sermon Companion;
+- processing state.
+
+Do not duplicate Sermon Companion editing here.
+
+Use a clear action such as:
+
+Create Sermon Companion
+
+when an archive item has not yet been used.
+
+----------------------------------------------------
+MEDIA LIBRARY
+----------------------------------------------------
+
+Media Library contains reusable media assets such as:
+
+- images;
+- thumbnails;
+- audio where supported later;
+- uploaded files;
+- generated visual assets where supported.
+
+Do not add advanced media-production features in this sprint.
+
+This task is only to consolidate existing Media functionality under Media Studio.
+
+====================================================
+7. CONTENT STUDIO HEADER
+====================================================
+
+Use one clean Content Studio header.
+
+Recommended structure:
+
+Emmaus Admin
+Isipingo Community Church
+
+Content Studio navigation:
+
+Daily Rhythm
+Daily Devotionals
+Journeys
+Sermon Companions
+Media Studio
+
+Do not repeat a second horizontal navigation bar containing obsolete tabs.
+
+Do not show Dashboard as a competing Content Studio destination.
+
+The wider admin sidebar may still contain:
+
+- Content Studio;
+- People;
+- Settings.
+
+When Content Studio is selected, the five content tabs control the workspace.
+
+====================================================
+8. ROUTING
+====================================================
+
+Create or preserve clear canonical routes.
+
+Suggested structure:
+
+/admin/content-studio/daily-rhythm
+
+/admin/content-studio/devotionals
+
+/admin/content-studio/journeys/collections
+
+/admin/content-studio/journeys/standalone
+
+/admin/content-studio/sermon-companions
+
+/admin/content-studio/media/youtube
+
+/admin/content-studio/media/library
+
+Use the existing project route conventions where possible.
+
+Add redirects from obsolete routes:
+
+Overview
+→ Daily Rhythm
+
+Collections
+→ Journeys / Collections
+
+Sermons
+→ Sermon Companions
+
+YouTube Archive
+→ Media Studio / YouTube Archive
+
+Media
+→ Media Studio / Media Library
+
+Preserve deep links to existing records.
+
+Do not break saved editor URLs.
+
+====================================================
+9. SHARED LIST AND EDITOR PATTERN
+====================================================
+
+Every top-level area should use the same simple pattern:
+
+List
+→ Editor
+→ Live Preview where relevant
+
+Use the already approved shared editor toolbar:
+
+Back
+
+Save Draft
+
+Publish / Unpublish
+
+Delete
+
+Status badges remain informational only.
+
+Do not add dashboard widgets inside individual sections unless they directly help with content creation.
+
+Small useful counts are allowed, for example:
+
+7 Published
+3 Draft
+
+Do not recreate the removed Overview dashboard inside each section.
+
+====================================================
+10. MOBILE AND DESKTOP BEHAVIOUR
+====================================================
+
+On desktop:
+
+Display the five Content Studio tabs clearly in one row where space allows.
+
+On smaller screens:
+
+Use a compact horizontal scroll, dropdown or menu that remains easy to understand.
+
+Do not allow tab labels to become cut off or overlap.
+
+Internal subtabs should remain visibly subordinate to the five top-level tabs.
+
+Example:
+
+Journeys
+
+Collections | Standalone
+
+Not:
+
+Collections appearing equal to Daily Rhythm.
+
+====================================================
+11. EMPTY STATES
+====================================================
+
+Use clear, practical empty states.
+
+Daily Devotionals:
+
+No devotional series yet.
+
+Create a series to begin adding daily entries.
+
+Journeys — Collections:
+
+No Journey Collections yet.
+
+Create a Collection to organise related Journeys.
+
+Journeys — Standalone:
+
+No Standalone Journeys yet.
+
+Create one when a Journey does not belong to a Collection.
+
+Sermon Companions:
+
+No Sermon Companions yet.
+
+Paste a sermon URL to prepare a companion draft.
+
+Media Studio:
+
+No media available yet.
+
+Do not use abstract marketing language.
+
+====================================================
+12. REMOVE DUPLICATION
+====================================================
+
+After the redesign, remove duplicated navigation controls and obsolete views.
+
+There should not be separate top-level access to:
+
+- Collections and Journeys;
+- Sermons and Sermon Companions;
+- YouTube Archive and Media Studio;
+- Overview and content-list quick cards.
+
+Do not delete shared components still used by the new structure.
+
+Remove only routes/components that are truly obsolete after redirects and migration.
+
+====================================================
+13. DATA SAFETY
+====================================================
+
+This redesign must not delete, migrate or alter content unnecessarily.
+
+Preserve:
+
+- Daily Rhythm entries;
+- Daily Devotional series and entries;
+- Collections;
+- Journeys and Journey days;
+- Sermons;
+- Sermon Companions and entries;
+- YouTube Archive records;
+- Media records;
+- publication statuses;
+- member progress;
+- current-week Sermon assignment.
+
+This is primarily a navigation and information-architecture change.
+
+====================================================
+14. TEST
+====================================================
+
+Verify:
+
+✓ Content Studio opens directly to Daily Rhythm.
+
+✓ Overview is removed from navigation.
+
+✓ Old Overview route redirects safely.
+
+✓ Top-level tabs are exactly:
+  Daily Rhythm
+  Daily Devotionals
+  Journeys
+  Sermon Companions
+  Media Studio
+
+✓ Collections is no longer a top-level tab.
+
+✓ Journeys contains Collections and Standalone subtabs.
+
+✓ Existing Collections appear under Journeys / Collections.
+
+✓ Existing ungrouped Journeys appear under Journeys / Standalone.
+
+✓ Sermons is renamed Sermon Companions.
+
+✓ Existing Sermon records and Companions remain accessible.
+
+✓ New Sermon Companion opens the URL-first workflow.
+
+✓ YouTube Archive appears under Media Studio.
+
+✓ Existing Media appears under Media Library.
+
+✓ Obsolete routes redirect correctly.
+
+✓ Deep links to existing editors still work.
+
+✓ Publishing remains functional.
+
+✓ Delete remains functional.
+
+✓ Live previews remain functional.
+
+✓ No content or progress is lost.
+
+✓ Mobile navigation is usable.
+
+✓ Desktop navigation is uncluttered.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not preserve the current Overview simply because it already exists.
+
+Delete it from the active Content Studio experience.
+
+Do not add another dashboard to replace it during this sprint.
+
+Do not create more top-level tabs.
+
+Do not merge distinct content types.
+
+Do not change member-facing navigation.
+
+Do not introduce analytics, reports or unnecessary management features.
+
+The goal is radical simplicity.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the final top-level Content Studio tabs;
+2. the internal subtabs added;
+3. the obsolete tabs and screens removed;
+4. the redirect mapping;
+5. the files changed;
+6. confirmation that all existing content was preserved;
+7. the result of every test above;
+8. any remaining manual test.
