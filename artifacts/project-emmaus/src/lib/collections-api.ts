@@ -19,6 +19,7 @@ export interface Collection {
   tags: string[];
   displayOrder: number;
   journeyCount: number;
+  publishedJourneyCount: number;
   createdAt: string;
   updatedAt: string;
 }

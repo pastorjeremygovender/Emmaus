@@ -28,6 +28,8 @@ import DevotionalSeriesEditor from './DevotionalSeriesEditor';
 import DevotionalEntryEditor from './DevotionalEntryEditor';
 import CollectionsList from './CollectionsList';
 import CollectionEditor from './CollectionEditor';
+import CollectionDetailView from './CollectionDetailView';
+import JourneyDetailView from './JourneyDetailView';
 import StudioJourneyList from './StudioJourneyList';
 import StudioJourneyEditor from './StudioJourneyEditor';
 import DailyRhythmDayEditor from './DailyRhythmDayEditor';
@@ -45,6 +47,10 @@ type StudioView =
   | { id: 'overview' }
   | { id: 'collections' }
   | { id: 'collection-editor'; collectionId?: string }
+  // ── Collection → Journey hierarchy ──────────────────────────────────────────
+  | { id: 'collection-detail'; collectionId: string; collectionTitle?: string }
+  | { id: 'journey-detail'; journeyId: string; journeyTitle?: string; collectionId?: string; collectionTitle?: string }
+  | { id: 'journey-day-editor'; journeyId: string; journeyTitle?: string; day: number | null; collectionId?: string; collectionTitle?: string }
   | { id: 'journeys'; collectionId?: string; openNew?: boolean }
   | { id: 'journey-editor'; journeyId: string; collectionId?: string }
   // Legacy journey editor (full-page, block-based)
@@ -87,6 +93,9 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'overview':                   'overview',
   'collections':                'collections',
   'collection-editor':          'collections',
+  'collection-detail':          'collections',
+  'journey-detail':             'collections',
+  'journey-day-editor':         'collections',
   'daily-rhythm':               'daily-rhythm',
   'daily-rhythm-editor':        'daily-rhythm',
   'daily-rhythm-day-editor':    'daily-rhythm',
@@ -148,6 +157,34 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     if (view.id === 'collection-editor') {
       crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
       crumbs.push({ label: view.collectionId ? 'Edit Collection' : 'New Collection' });
+    }
+    if (view.id === 'collection-detail') {
+      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
+      crumbs.push({ label: view.collectionTitle ?? 'Collection' });
+    }
+    if (view.id === 'journey-detail') {
+      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
+      if (view.collectionId) {
+        crumbs.push({
+          label: view.collectionTitle ?? 'Collection',
+          onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+        });
+      }
+      crumbs.push({ label: view.journeyTitle ?? 'Journey' });
+    }
+    if (view.id === 'journey-day-editor') {
+      crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'collections' }) });
+      if (view.collectionId) {
+        crumbs.push({
+          label: view.collectionTitle ?? 'Collection',
+          onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
+        });
+      }
+      crumbs.push({
+        label: view.journeyTitle ?? 'Journey',
+        onClick: () => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle }),
+      });
+      crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
     }
     if (view.id === 'journeys')
       crumbs.push({ label: 'Journeys' });
@@ -232,7 +269,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           <CollectionsList
             onNew={() => navigate({ id: 'collection-editor' })}
             onEdit={(id) => navigate({ id: 'collection-editor', collectionId: id })}
-            onViewJourneys={(id) => navigate({ id: 'journeys', collectionId: id })}
+            onViewJourneys={(id, title) => navigate({ id: 'collection-detail', collectionId: id, collectionTitle: title })}
           />
         );
       case 'collection-editor':
@@ -241,6 +278,50 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             collectionId={view.collectionId}
             onBack={() => navigate({ id: 'collections' })}
             onSaved={() => navigate({ id: 'collections' })}
+          />
+        );
+      // ── Collection → Journey hierarchy ──────────────────────────────────────
+      case 'collection-detail':
+        return (
+          <CollectionDetailView
+            collectionId={view.collectionId}
+            onBack={() => navigate({ id: 'collections' })}
+            onNewJourney={(collId) => navigate({ id: 'journeys', collectionId: collId, openNew: true })}
+            onOpenJourney={(journeyId, journeyTitle, collectionTitle) =>
+              navigate({ id: 'journey-detail', journeyId, journeyTitle, collectionId: view.collectionId, collectionTitle })
+            }
+            onEditCollection={(collId) => navigate({ id: 'collection-editor', collectionId: collId })}
+          />
+        );
+      case 'journey-detail':
+        return (
+          <JourneyDetailView
+            journeyId={view.journeyId}
+            onBack={() =>
+              view.collectionId
+                ? navigate({ id: 'collection-detail', collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+                : navigate({ id: 'journeys' })
+            }
+            onEditJourney={(jId) => navigate({ id: 'journey-editor', journeyId: jId, collectionId: view.collectionId })}
+            onAddDay={(jId) =>
+              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day: null, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+            }
+            onEditDay={(jId, day) =>
+              navigate({ id: 'journey-day-editor', journeyId: jId, journeyTitle: view.journeyTitle, day, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+            }
+          />
+        );
+      case 'journey-day-editor':
+        return (
+          <DailyRhythmDayEditor
+            key={`${view.journeyId}-${view.day}`}
+            journeyId={view.journeyId}
+            day={view.day}
+            onBack={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
+            onDuplicated={(newDay) =>
+              navigate({ id: 'journey-day-editor', journeyId: view.journeyId, journeyTitle: view.journeyTitle, day: newDay, collectionId: view.collectionId, collectionTitle: view.collectionTitle })
+            }
+            onDeleted={() => navigate({ id: 'journey-detail', journeyId: view.journeyId, journeyTitle: view.journeyTitle, collectionId: view.collectionId, collectionTitle: view.collectionTitle })}
           />
         );
       // ── Daily Devotionals ──

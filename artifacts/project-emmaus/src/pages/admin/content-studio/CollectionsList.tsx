@@ -8,7 +8,7 @@ import { AdminBtn, ConfirmDialog } from '../shared';
 interface Props {
   onNew: () => void;
   onEdit: (id: string) => void;
-  onViewJourneys: (id: string) => void;
+  onViewJourneys: (id: string, title: string) => void;
 }
 
 export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props) {
@@ -101,7 +101,7 @@ export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props
                         </button>
                         <button
                           className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
-                          onClick={() => { setOpenMenu(null); onViewJourneys(c.id); }}
+                          onClick={() => { setOpenMenu(null); onViewJourneys(c.id, c.title); }}
                         >
                           <BookOpen size={13} /> View Journeys
                         </button>

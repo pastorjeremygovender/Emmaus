@@ -21,13 +21,18 @@ export interface CollectionSummary {
   tags: string[];
   displayOrder: number;
   journeyCount: number;
+  publishedJourneyCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toSummary(row: Collection, journeyCount = 0): CollectionSummary {
+function toSummary(
+  row: Collection,
+  journeyCount = 0,
+  publishedJourneyCount = 0,
+): CollectionSummary {
   return {
     id: row.id,
     title: row.title,
@@ -37,6 +42,7 @@ function toSummary(row: Collection, journeyCount = 0): CollectionSummary {
     tags: (row.tags ?? []) as string[],
     displayOrder: row.displayOrder ?? 0,
     journeyCount,
+    publishedJourneyCount,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -50,19 +56,23 @@ export async function listCollections(): Promise<CollectionSummary[]> {
     .from(collectionsTable)
     .orderBy(asc(collectionsTable.displayOrder), desc(collectionsTable.createdAt));
 
-  // Count journeys per collection
+  // Count journeys per collection (all statuses + published-only)
   const journeys = await db
-    .select({ id: journeysTable.id, collectionId: journeysTable.collectionId })
+    .select({ id: journeysTable.id, collectionId: journeysTable.collectionId, status: journeysTable.status })
     .from(journeysTable);
 
   const countMap: Record<string, number> = {};
+  const publishedCountMap: Record<string, number> = {};
   for (const j of journeys) {
     if (j.collectionId) {
       countMap[j.collectionId] = (countMap[j.collectionId] ?? 0) + 1;
+      if (j.status === 'Published') {
+        publishedCountMap[j.collectionId] = (publishedCountMap[j.collectionId] ?? 0) + 1;
+      }
     }
   }
 
-  return rows.map(r => toSummary(r, countMap[r.id] ?? 0));
+  return rows.map(r => toSummary(r, countMap[r.id] ?? 0, publishedCountMap[r.id] ?? 0));
 }
 
 export async function getCollection(id: string): Promise<CollectionSummary | null> {
@@ -73,11 +83,12 @@ export async function getCollection(id: string): Promise<CollectionSummary | nul
   if (!rows[0]) return null;
 
   const journeys = await db
-    .select({ id: journeysTable.id })
+    .select({ id: journeysTable.id, status: journeysTable.status })
     .from(journeysTable)
     .where(eq(journeysTable.collectionId, id));
 
-  return toSummary(rows[0], journeys.length);
+  const publishedCount = journeys.filter(j => j.status === 'Published').length;
+  return toSummary(rows[0], journeys.length, publishedCount);
 }
 
 // ─── Write ────────────────────────────────────────────────────────────────────
