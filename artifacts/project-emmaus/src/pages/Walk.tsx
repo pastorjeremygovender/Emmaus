@@ -15,12 +15,18 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, BookHeart } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
+import {
+  getAllProgress,
+  listPublishedSeries,
+  type DevotionalSeries,
+  type DevotionalProgress,
+} from '@/lib/devotionals-api';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ lines = 3 }: { lines?: number }) {
@@ -41,6 +47,38 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
       {children}
     </h2>
+  );
+}
+
+// ─── Daily Devotional card ────────────────────────────────────────────────────
+// Shows the first active devotional series the member has started (or the first
+// published series if they haven't started any yet).
+function DevotionalCard({
+  series,
+  progress,
+  onContinue,
+}: {
+  series: DevotionalSeries;
+  progress: DevotionalProgress | null;
+  onContinue: () => void;
+}) {
+  const day = progress?.currentDay ?? 1;
+  return (
+    <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <BookHeart size={14} className="text-primary" />
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+          Daily Devotional
+        </span>
+      </div>
+      <p className="text-[18px] font-semibold text-foreground leading-snug">
+        {series.title}
+      </p>
+      <p className="text-[14px] text-muted-foreground">Day {day}</p>
+      <Button className="w-full h-12 text-[15px] font-semibold rounded-xl" onClick={onContinue}>
+        Continue
+      </Button>
+    </div>
   );
 }
 
@@ -258,6 +296,29 @@ export default function Walk() {
     [journeys]
   );
 
+  // Daily Devotionals — load active series + progress for the member
+  const [activeDevotional, setActiveDevotional] = useState<{
+    series: DevotionalSeries;
+    progress: DevotionalProgress | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([listPublishedSeries(), getAllProgress()])
+      .then(([seriesList, progressList]) => {
+        if (seriesList.length === 0) return;
+        // Find first series the member has started; fall back to first published
+        const withProg = seriesList.map(s => ({
+          series: s,
+          progress: progressList.find(p => p.seriesId === s.id) ?? null,
+        }));
+        const started = withProg.find(x => x.progress !== null);
+        // Only show if already started (don't auto-start)
+        if (started) setActiveDevotional(started);
+      })
+      .catch(() => {/* ignore — devotionals are supplementary */});
+  }, [user?.id]);
+
   if (!user) return null;
 
   if (loading) {
@@ -396,7 +457,26 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. Your Journeys ───────────────────────────────────────────────── */}
+        {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
+        {activeDevotional && (
+          <motion.section
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.09 }}
+          >
+            <DevotionalCard
+              series={activeDevotional.series}
+              progress={activeDevotional.progress}
+              onContinue={() =>
+                setLocation(
+                  `/devotional/${activeDevotional.series.id}/day/${activeDevotional.progress?.currentDay ?? 1}`
+                )
+              }
+            />
+          </motion.section>
+        )}
+
+        {/* ── 3. Your Journeys ───────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}

@@ -85,10 +85,14 @@ export default function StudioJourneyList({ collectionId, autoOpenNew, onEdit, o
     return [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
   }, [journeys, query, statusTab, typeFilter, collectionId]);
 
-  const handleCreated = useCallback(async (id: string) => {
+  const handleCreated = useCallback((id: string) => {
     setShowNew(false);
-    await refreshJourneys?.();
+    // Navigate immediately — addJourney already added the new Journey to context.
+    // Fire refresh in the background to keep the list fresh; do not await it
+    // before opening the editor (awaiting caused a race where the editor opened
+    // before React applied the queued setJourneys state update).
     onEdit(id);
+    refreshJourneys?.();
   }, [onEdit, refreshJourneys]);
 
   const handleArchive = async (j: Journey) => {

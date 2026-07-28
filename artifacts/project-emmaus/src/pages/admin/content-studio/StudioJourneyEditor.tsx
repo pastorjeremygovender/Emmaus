@@ -18,10 +18,11 @@ import {
   Settings, ChevronLeft, ChevronRight, PanelLeftClose,
   PanelLeftOpen, PanelRightClose, PanelRightOpen, BookOpen,
   FileText, Smartphone, Tablet, Monitor, GripVertical, ImageIcon,
-  Sparkles, X as XIcon, ChevronDown, ChevronUp, Headphones, Layers,
+  Sparkles, X as XIcon, ChevronDown, ChevronUp, Headphones, Layers, Loader2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/contexts/JourneyContext';
+import { getJourney as fetchJourneyById } from '@/lib/journeys-api';
 import { Block, stepToBlocks, blocksToCanonical, createBlock } from '@/lib/blocks';
 import BlockCanvas from './BlockCanvas';
 import { ConfirmDialog, StatusBadge } from '../shared';
@@ -454,7 +455,33 @@ function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: (
 export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor }: Props) {
   const { getJourney, getStepsForJourney, updateJourney, updateStep, addStep, deleteStep } = useJourney();
 
-  const journey = getJourney(journeyId);
+  // Try to find the journey in context first (fast path).
+  // When navigating immediately after creation, React may not have committed the
+  // setJourneys state update yet, so we fall back to a direct API fetch.
+  const contextJourney = getJourney(journeyId);
+  const [localJourney, setLocalJourney] = useState<Journey | null>(null);
+  const [journeyLoading, setJourneyLoading] = useState(!contextJourney);
+  const [journeyNotFound, setJourneyNotFound] = useState(false);
+
+  useEffect(() => {
+    if (contextJourney) {
+      setJourneyLoading(false);
+      return;
+    }
+    setJourneyLoading(true);
+    setJourneyNotFound(false);
+    fetchJourneyById(journeyId)
+      .then(j => {
+        setLocalJourney(j as unknown as Journey);
+        setJourneyLoading(false);
+      })
+      .catch(() => {
+        setJourneyNotFound(true);
+        setJourneyLoading(false);
+      });
+  }, [journeyId, contextJourney]);
+
+  const journey = contextJourney ?? localJourney;
   const rawSteps = getStepsForJourney(journeyId);
 
   const [stepsWithBlocks, setStepsWithBlocks] = useState<StepWithBlocks[]>([]);
@@ -607,7 +634,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   // Show unsaved indicator only when actively dirty (not during save cycle)
   const showUnsaved = selectedStep?.isDirty && currentSaveStatus === 'idle';
 
-  if (!journey) {
+  if (journeyLoading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-400 text-sm gap-2">
+        <Loader2 size={16} className="animate-spin" /> Loading journey…
+      </div>
+    );
+  }
+
+  if (!journey || journeyNotFound) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
         Journey not found.

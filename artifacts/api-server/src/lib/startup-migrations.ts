@@ -5,11 +5,63 @@
  * so it is safe to re-run any number of times.
  */
 
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { journeysTable } from "@workspace/db/schema";
 import { and, eq, ne } from "drizzle-orm";
 import { logger } from "./logger.js";
 export async function runStartupMigrations(): Promise<void> {
+  // ── Daily Devotionals tables (2026-07) ───────────────────────────────────────
+  // Create the three devotional tables idempotently. Drizzle schema is the source
+  // of truth for column definitions; this migration only ensures the tables exist.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS devotional_series (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title text NOT NULL,
+        description text DEFAULT '',
+        series_type text NOT NULL DEFAULT 'general',
+        status text NOT NULL DEFAULT 'Draft',
+        published_at timestamp,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        created_by text
+      );
+
+      CREATE TABLE IF NOT EXISTS devotional_entries (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        series_id uuid NOT NULL REFERENCES devotional_series(id) ON DELETE CASCADE,
+        day_number integer NOT NULL,
+        title text NOT NULL DEFAULT '',
+        scripture_reference text DEFAULT '',
+        greeting text DEFAULT '',
+        consider_this text DEFAULT '',
+        prayer text DEFAULT '',
+        next_step text DEFAULT '',
+        closing text DEFAULT '',
+        status text NOT NULL DEFAULT 'Draft',
+        published_at timestamp,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (series_id, day_number)
+      );
+
+      CREATE TABLE IF NOT EXISTS devotional_progress (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id text NOT NULL,
+        series_id uuid NOT NULL REFERENCES devotional_series(id) ON DELETE CASCADE,
+        current_day integer NOT NULL DEFAULT 1,
+        completed_days jsonb NOT NULL DEFAULT '[]',
+        started_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, series_id)
+      );
+    `);
+    logger.info("Startup migration: devotional tables created (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: devotional tables failed (non-fatal)");
+  }
+
+
   // ── Daily Rhythm Architecture (2026-07) ──────────────────────────────────────
   // Promote "15-minutes-with-jesus" from journeyType "core" → "daily-rhythm".
   // The 'daily-rhythm' type is a permanent, never-ending daily practice;

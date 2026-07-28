@@ -17,6 +17,8 @@ import Walk from '@/pages/Walk';
 import JourneyDay from '@/pages/JourneyDay';
 import DailyRhythmDay from '@/pages/DailyRhythmDay';
 import PreviousDays from '@/pages/PreviousDays';
+import DevotionalDay from '@/pages/DevotionalDay';
+import DevotionalPreviousDays from '@/pages/DevotionalPreviousDays';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
 import JourneyDetail from '@/pages/journeys/JourneyDetail';
@@ -70,6 +72,9 @@ function Router() {
       {/* Canonical Daily Rhythm routes */}
       <Route path="/daily-rhythm/previous" component={PreviousDays} />
       <Route path="/daily-rhythm/day/:dayNumber" component={DailyRhythmDay} />
+      {/* Daily Devotionals */}
+      <Route path="/devotional/:seriesId/previous" component={DevotionalPreviousDays} />
+      <Route path="/devotional/:seriesId/day/:day" component={DevotionalDay} />
       {/* Legacy redirect — /journey/15-minutes-with-jesus/day/:day → canonical */}
       <Route path="/journey/15-minutes-with-jesus/day/:day">
         {(params) => <LegacyDailyRhythmRedirect day={params?.day ?? '1'} />}

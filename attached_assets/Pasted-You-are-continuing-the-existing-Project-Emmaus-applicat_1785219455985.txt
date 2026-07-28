@@ -1,0 +1,708 @@
+You are continuing the existing Project Emmaus application.
+
+This is one focused sprint with two related objectives:
+
+1. Fix the broken Journey creation flow that currently ends on “Journey not found.”
+2. Add a dedicated Daily Devotionals section to Content Studio.
+
+Do not redesign unrelated areas.
+
+Do not change Daily Rhythm.
+
+Do not change member progress.
+
+Do not modify existing published Journeys or Sermon Companions.
+
+Do not begin another sprint after completing these two objectives.
+
+=====================================================
+SPRINT NAME
+
+Fix Journey Creation + Add Daily Devotionals
+
+=====================================================
+PART 1 — FIX “JOURNEY NOT FOUND”
+=====================================================
+
+CURRENT BUG
+
+Reproduction:
+
+Content Studio
+→ Journeys
+→ New Journey
+→ Start from Scratch
+→ Enter title
+→ Create Journey
+
+Actual result:
+
+The app navigates to the Journey Editor, but displays:
+
+Journey not found.
+
+Expected result:
+
+The Journey record is created successfully, the new Journey ID is returned, and the editor opens that exact Journey.
+
+=====================================================
+INVESTIGATION
+
+Trace the complete creation flow.
+
+Check:
+
+- Form submission
+- Create Journey mutation or API request
+- Database insert
+- Returned Journey object
+- Returned Journey ID
+- Route construction
+- Editor query
+- Cache invalidation
+- Loading and error states
+
+Determine whether:
+
+- the database write fails
+- the returned ID is undefined
+- navigation occurs before creation completes
+- the route uses the wrong ID field
+- the editor queries a different ID format
+- stale query cache causes “not found”
+
+Do not guess.
+
+Report the root cause after fixing it.
+
+=====================================================
+REQUIRED FIX
+
+When Create Journey is selected:
+
+1. Validate required fields.
+2. Disable the button while creating.
+3. Create the Journey record.
+4. Wait for confirmed success.
+5. Obtain the real persisted Journey ID.
+6. Refresh or invalidate the Journey list.
+7. Navigate to the editor using the persisted ID.
+8. Load the newly created Journey.
+
+If creation fails:
+
+- Do not navigate.
+- Preserve the entered form content.
+- Show:
+
+We couldn’t create this Journey. Please try again.
+
+- Do not expose raw database errors.
+
+Prevent duplicate records from double-clicking.
+
+=====================================================
+JOURNEY CREATION TESTS
+
+Verify:
+
+- A new Journey is inserted into the database.
+- A valid ID is returned.
+- The editor opens the correct Journey.
+- The Journey appears immediately in the list.
+- Refreshing the browser still loads the Journey.
+- Creating two Journeys produces two unique records.
+- Failed creation does not navigate.
+- No duplicate Journey is created.
+- No TypeScript or runtime errors remain.
+
+=====================================================
+PART 2 — DAILY DEVOTIONALS
+=====================================================
+
+ARCHITECTURAL DECISION
+
+Daily Devotionals must no longer be created as Journeys.
+
+Examples:
+
+- Psalms Daily Devotional
+- Proverbs Daily Devotional
+- General Daily Devotional
+- Seasonal Daily Devotional series
+
+These are recurring devotional collections, not completion-based Journeys.
+
+Add a dedicated Daily Devotionals section inside Content Studio.
+
+Do not place Daily Devotionals under Journeys.
+
+=====================================================
+CONTENT STUDIO NAVIGATION
+
+Add a new top-level Content Studio tab:
+
+Daily Devotionals
+
+Recommended order:
+
+Overview
+
+Collections
+
+Daily Rhythm
+
+Daily Devotionals
+
+Journeys
+
+Sermons
+
+Preserve the existing navigation design.
+
+=====================================================
+DAILY DEVOTIONALS HOME
+
+The Daily Devotionals page should display:
+
+Heading:
+
+Daily Devotionals
+
+Supporting text:
+
+Create and manage recurring devotional collections.
+
+Primary action:
+
++ New Devotional Series
+
+Display existing devotional series as a clean list.
+
+Each series should show:
+
+- Title
+- Description
+- Number of entries
+- Draft / Published status
+- Last updated
+- Actions
+
+Actions:
+
+- Open
+- Preview
+- Edit
+- Duplicate
+- Archive
+- Delete Permanently
+
+Use the existing permissions and permanent-delete behaviour.
+
+=====================================================
+NEW DEVOTIONAL SERIES
+
+Selecting:
+
++ New Devotional Series
+
+opens a simple creation dialog.
+
+Fields:
+
+Title
+
+Example:
+
+Psalms Daily Devotional
+
+Description
+
+Optional.
+
+Example:
+
+Daily reflections through the Psalms to help people pray, trust and worship God.
+
+Series Type
+
+Options:
+
+- Psalms
+- Proverbs
+- General
+- Seasonal
+- Church-Specific
+
+Default:
+
+General
+
+Status:
+
+Draft
+
+Buttons:
+
+Cancel
+
+Create Series
+
+Creation must use the same corrected create-record pattern as Journeys:
+
+- wait for successful persistence
+- use the real returned ID
+- only then navigate to the editor
+- never navigate to a missing record
+
+=====================================================
+DEVOTIONAL SERIES EDITOR
+
+After creation, open the Devotional Series Editor.
+
+Header should show:
+
+Series title
+
+Status
+
+Number of entries
+
+Primary action:
+
++ New Entry
+
+Display a list of entries ordered by day number.
+
+Example:
+
+Day 1 — Blessed Is the One
+
+Day 2 — Delight in God’s Word
+
+=====================================================
+DEVOTIONAL ENTRY FIELDS
+
+Each Daily Devotional entry should contain:
+
+Day Number
+
+Title
+
+Scripture Reference
+
+Greeting
+
+Consider This
+
+Prayer
+
+Your Next Step
+
+Closing
+
+Status
+
+Published At
+
+Updated At
+
+Store Scripture reference only.
+
+Do not hard-code Bible text.
+
+Member view must dynamically load the passage from the member’s chosen Bible translation.
+
+=====================================================
+APPROVED PSALMS DEVOTIONAL STRUCTURE
+
+The devotional reader must display:
+
+Series title
+
+Day number
+
+Entry title
+
+Personalised greeting
+
+Today’s Reading
+
+Embedded Scripture
+
+Consider This
+
+Prayer
+
+Your Next Step
+
+Closing
+
+Continue
+
+Use the shared Emmaus reading typography and paragraph system.
+
+Do not create a visually unrelated reader.
+
+=====================================================
+BEHAVIOUR
+
+Daily Devotional series are recurring content collections.
+
+They are not standard Journeys.
+
+They should not use:
+
+- Journey enrolment
+- Journey completion percentage
+- Journey certificates
+- Journey collections
+- Journey step blocks
+- Journey-specific progress language
+
+They may use their own simple day progression and completion records.
+
+=====================================================
+MEMBER EXPERIENCE
+
+Add Daily Devotionals to the appropriate member experience.
+
+For the first version:
+
+Today’s Steps should display one current Daily Devotional card when the member has an active devotional series.
+
+Example:
+
+Psalms Daily Devotional
+
+Day 1
+
+Continue
+
+The card should appear below 10 Minutes with Jesus and above active Journeys, unless the current Today’s Steps hierarchy already has a stronger locked order.
+
+Only one Daily Devotional card should be prominent at a time in the pilot.
+
+If multiple series are active later, use a calm compact treatment rather than stacking many large cards.
+
+=====================================================
+NEXT STEPS DISCOVERY
+
+Daily Devotional series may be discoverable from Next Steps.
+
+Use a category or section:
+
+Daily Devotionals
+
+Examples:
+
+Psalms Daily Devotional
+
+Proverbs Daily Devotional
+
+Members may begin a devotional series intentionally.
+
+Do not mix them into standard Journey completion logic.
+
+=====================================================
+PREVIOUS ENTRIES
+
+Members should be able to revisit previously unlocked devotional entries.
+
+Use the same pattern as 10 Minutes with Jesus:
+
+Primary action:
+
+Continue Day X
+
+Secondary action:
+
+View Previous Entries →
+
+Previous entries must not change current progress.
+
+Future entries remain locked for normal members.
+
+Development Mode may bypass scheduling for authorised testers.
+
+=====================================================
+CONTENT STUDIO WORKFLOW
+
+The editor must support:
+
+- Create entry
+- Save Draft
+- Preview
+- Publish
+- Edit
+- Duplicate
+- Archive
+- Delete Permanently
+
+Publishing must update immediately and appear on the member side.
+
+Preview and member view must use the same shared renderer.
+
+=====================================================
+MIGRATION SAFETY
+
+Do not automatically convert existing Journeys into Daily Devotional series.
+
+Do not change:
+
+God’s Kindness Restores the Broken
+
+or any existing Sermon Companion.
+
+If a test Journey named:
+
+Psalms Daily Devotional
+
+was partially created, leave it untouched unless it is clearly an empty failed test record.
+
+If a broken empty test record exists, report it and allow the administrator to delete it using the existing permanent delete function.
+
+=====================================================
+DATABASE
+
+Create appropriate models or tables for:
+
+DevotionalSeries
+
+DevotionalEntry
+
+DevotionalProgress
+
+Use the project’s actual naming conventions.
+
+Suggested fields:
+
+DevotionalSeries:
+
+- id
+- title
+- description
+- seriesType
+- status
+- createdBy
+- createdAt
+- updatedAt
+- publishedAt
+
+DevotionalEntry:
+
+- id
+- seriesId
+- dayNumber
+- title
+- scriptureReference
+- greeting
+- reflection or considerThis
+- prayer
+- nextStep
+- closing
+- status
+- createdAt
+- updatedAt
+- publishedAt
+
+DevotionalProgress:
+
+- id
+- userId
+- seriesId
+- currentDay
+- completedEntryIds or equivalent normalized records
+- startedAt
+- updatedAt
+
+Avoid storing duplicated Bible text.
+
+Enforce unique day numbers within each series.
+
+=====================================================
+PERMISSIONS
+
+Use existing Content Studio permissions.
+
+At minimum:
+
+- Authorised content editors may create and edit.
+- Reviewers may review if that workflow exists.
+- Publishers may publish.
+- Super Administrators may permanently delete.
+- Members may never access admin routes.
+
+Enforce permissions server-side.
+
+=====================================================
+EMPTY STATES
+
+Daily Devotionals home:
+
+No Daily Devotional series have been created yet.
+
+[ + New Devotional Series ]
+
+Devotional Series Editor:
+
+No entries have been created yet.
+
+[ + New Entry ]
+
+Do not leave permanent loading states.
+
+=====================================================
+ERROR HANDLING
+
+Use clear messages:
+
+We couldn’t create this devotional series. Please try again.
+
+We couldn’t save this devotional entry. Your content has been preserved.
+
+We couldn’t publish this devotional entry. Please try again.
+
+Never expose raw database details.
+
+=====================================================
+ACCEPTANCE TEST
+
+Create this test series:
+
+Title:
+
+Psalms Daily Devotional
+
+Description:
+
+Daily reflections through the Psalms to help people pray, trust and worship God.
+
+Type:
+
+Psalms
+
+Then create Entry 1:
+
+Day Number:
+
+1
+
+Title:
+
+Blessed Is the One
+
+Scripture Reference:
+
+Psalm 1:1
+
+Greeting:
+
+Good morning.
+
+Welcome to today’s Psalm devotional.
+
+Let’s spend a few quiet moments reflecting on God’s Word together.
+
+Consider This:
+
+Psalm 1 begins with a beautiful promise.
+
+God delights in blessing those who choose His ways.
+
+The psalmist starts by reminding us that the direction of our lives matters. The people we listen to, the places we go and the choices we make all shape the kind of person we become.
+
+Sin often promises happiness but quietly steals our peace, our joy and our closeness with God. Sometimes we don’t realise how much it is costing us until we begin walking in obedience instead.
+
+If there is a habit or attitude that you know doesn’t honour God, don’t ignore it. Bring it honestly before Him. He is not looking for perfection, but for hearts that are willing to repent and keep following Him.
+
+As we choose His way day by day, we place ourselves in a position to enjoy the life He desires for us.
+
+Prayer:
+
+Lord,
+
+Thank You for showing me the way that leads to life.
+
+Help me recognise anything in my life that is pulling me away from You.
+
+Give me the courage to turn from sin and the desire to walk closely with You each day.
+
+Amen.
+
+Your Next Step:
+
+Ask God to show you one area of your life where He wants to bring change.
+
+Don’t become discouraged.
+
+Take one faithful step towards obedience today and trust Him to continue His work in you.
+
+Closing:
+
+Tomorrow we’ll continue reflecting on the Psalms together.
+
+Verify that:
+
+- Series creation works
+- No “Journey not found” error occurs
+- Entry creation works
+- Preview works
+- Publishing works
+- Scripture loads dynamically
+- Member view displays correctly
+- Previous entries work
+- Progress is separate from Journeys
+
+=====================================================
+DO NOT
+
+Do not rebuild Daily Rhythm.
+
+Do not turn Daily Devotionals into Journey Steps.
+
+Do not create a bulk importer.
+
+Do not auto-generate content.
+
+Do not auto-publish.
+
+Do not redesign the full Content Studio.
+
+Do not modify Rooms.
+
+Do not modify Ask Emmaus.
+
+Do not begin Luke Bible Study work in this sprint.
+
+=====================================================
+DEFINITION OF DONE
+
+This sprint is complete when:
+
+1. Creating a standard Journey no longer ends in “Journey not found.”
+2. A Daily Devotionals tab exists.
+3. Psalms Daily Devotional can be created as its own series.
+4. A devotional entry can be created, previewed and published.
+5. The published devotional appears in the member experience.
+6. Daily Devotional progress is separate from Journey progress.
+7. Existing Daily Rhythm and Journey functionality remains intact.
+8. No TypeScript, lint or runtime errors remain.
+
+=====================================================
+FINAL REPORT
+
+When complete, report only:
+
+1. Root cause of Journey creation failure
+2. Journey creation fix
+3. Daily Devotionals navigation added
+4. Series and entry models created
+5. Editor workflow
+6. Member-facing placement
+7. Progress model
+8. Database or migration changes
+9. Tests completed
+10. Known limitations
+
+Stop after completing this sprint.
