@@ -1,0 +1,527 @@
+Project Emmaus — Correct the Next Steps Page into a Sectioned Discovery Experience
+
+The current Next Steps page is incorrect.
+
+Current problems:
+
+- The page opens with “In Progress” as the main emphasis.
+- Psalms Daily Devotional appears again without a clear content category.
+- Published Bible devotional/Bible Study content is not visible.
+- The page still feels like a progress screen instead of a discovery screen.
+- The sectioned layout previously approved has not been implemented correctly.
+
+Fix the Next Steps page completely.
+
+Do not redesign Today’s Steps.
+Do not merge content types.
+Do not treat Daily Devotionals, Sermon Devotionals or Bible Studies as Journeys.
+Do not show duplicate cards.
+
+====================================================
+LOCKED PURPOSE
+====================================================
+
+Next Steps answers:
+
+“What could I intentionally begin next?”
+
+It is a discovery page.
+
+It is not primarily:
+
+- an In Progress page;
+- a completion-history page;
+- a Journey-only page;
+- a duplicate of Today’s Steps.
+
+Member progress belongs under My Journey or within the individual content cards.
+
+====================================================
+PAGE HEADER
+====================================================
+
+Use:
+
+Next Steps
+
+Supporting text:
+
+Choose something that will help you take your next step with Jesus.
+
+Remove “In Progress” as the main page heading.
+
+Do not begin the page with a generic progress list.
+
+====================================================
+SECTIONED LAYOUT
+====================================================
+
+Build the page using clearly separated content sections.
+
+Approved section order:
+
+1. Recommended for You
+2. Daily Devotionals
+3. This Week’s Sermon
+4. Journeys
+5. Bible Studies
+6. Recently Added
+
+Only render sections containing eligible content.
+
+Do not render empty headings.
+
+====================================================
+1. RECOMMENDED FOR YOU
+====================================================
+
+Show no more than two or three relevant items.
+
+Use simple existing rules:
+
+- current weekly Sermon Devotional;
+- a Daily Devotional if none is active;
+- a beginner Journey or Bible Study;
+- recently published content.
+
+Do not repeat the same item again in this section and its main section on the same screen unless there is a strong reason.
+
+Prefer no duplication.
+
+====================================================
+2. DAILY DEVOTIONALS
+====================================================
+
+Show every published, member-visible Daily Devotional series.
+
+Current example:
+
+Psalms Daily Devotional
+
+Card content:
+
+Daily Devotional
+
+Psalms Daily Devotional
+
+Series description
+
+Member state:
+
+- Not Started
+- Current
+- Completed for Today
+
+Primary action:
+
+- Begin Devotional
+- Continue Devotional
+- Review Today
+
+Do not show Psalms more than once on the page.
+
+When future series are published, such as Proverbs Daily Devotional, they must appear automatically in this section.
+
+Do not hard-code Psalms.
+
+====================================================
+3. THIS WEEK’S SERMON
+====================================================
+
+Show the one Sermon Companion marked as the current weekly Sermon Devotional.
+
+Card content:
+
+This Week’s Sermon
+
+Sermon title
+
+Speaker
+
+Main Scripture
+
+Short summary
+
+Companion length
+
+Primary action:
+
+- Begin Sermon Devotional
+- Continue Sermon Devotional
+- Review Today
+
+Secondary action:
+
+View Sermon
+
+Below the card, include:
+
+Browse Previous Sermons →
+
+Published older Sermon Devotionals remain available through that link.
+
+Do not place Sermon Devotionals under Journeys.
+
+====================================================
+4. JOURNEYS
+====================================================
+
+Show published standard Journeys.
+
+Group by Collection where useful.
+
+Example:
+
+New to Faith
+
+Coming to Jesus
+
+Card content:
+
+Journey
+
+Title
+
+Description
+
+Number of days
+
+Difficulty
+
+Member state
+
+Primary action:
+
+- Begin Journey
+- Continue Journey
+- Review Journey
+
+Do not show Bible Study Journey types here.
+
+====================================================
+5. BIBLE STUDIES
+====================================================
+
+Create a dedicated Bible Studies section.
+
+Any published Journey whose Journey Type is:
+
+Bible Study
+
+must appear here automatically.
+
+This is where the new Bible devotional/Bible Study must be accessible.
+
+Use the actual content type currently created in the database.
+
+Examples:
+
+Luke Bible Study
+
+Foundational Christian Concepts
+
+Coming to Jesus only if it is intentionally classified as a Bible Study; otherwise keep it under Journeys.
+
+Card content:
+
+Bible Study
+
+Title
+
+Description
+
+Number of lessons or days
+
+Primary Scripture/book where available
+
+Member state
+
+Primary action:
+
+- Begin Bible Study
+- Continue Bible Study
+- Review Bible Study
+
+Do not require users to search through Journeys to find Bible Studies.
+
+====================================================
+6. RECENTLY ADDED
+====================================================
+
+Show newly published content from all eligible types.
+
+Possible items:
+
+- Daily Devotional series;
+- Sermon Devotional;
+- Journey;
+- Bible Study.
+
+Sort newest first.
+
+Avoid duplicating content already displayed prominently above.
+
+If every item would be duplicated, hide this section.
+
+====================================================
+REMOVE THE CURRENT “IN PROGRESS” BLOCK
+====================================================
+
+Remove the current generic In Progress section from the top of Next Steps.
+
+Started content should instead display its state inside its correct content section.
+
+Examples:
+
+Psalms Daily Devotional
+Current
+
+Coming to Jesus
+In Progress
+
+Luke Bible Study
+Not Started
+
+Do not combine unrelated content into one generic In Progress list.
+
+The full list of active and completed content belongs under:
+
+My Journey
+→ My Next Steps
+
+====================================================
+CONTENT ELIGIBILITY
+====================================================
+
+Only return member-visible content.
+
+Daily Devotional:
+
+- series Published;
+- at least one entry Published;
+- member visibility enabled;
+- valid publication window.
+
+Sermon Devotional:
+
+- Companion Published;
+- at least one entry Published;
+- member visibility enabled;
+- current flag for This Week’s Sermon section.
+
+Journey:
+
+- Journey Published;
+- at least one day Published;
+- Journey Type is not Bible Study.
+
+Bible Study:
+
+- Journey Published;
+- at least one day Published;
+- Journey Type is Bible Study.
+
+Draft and Archived records must not appear for normal members.
+
+Development Mode may follow existing testing permissions.
+
+====================================================
+FIX THE MISSING BIBLE CONTENT
+====================================================
+
+Trace the new Bible devotional/Bible Study record.
+
+Inspect:
+
+- its database ID;
+- status;
+- Journey Type or content type;
+- member-visible setting;
+- published days;
+- collection;
+- publication dates;
+- discovery API filtering.
+
+Identify why it is excluded.
+
+Possible causes:
+
+- record still Draft;
+- day entries still Draft;
+- missing member-visible flag;
+- wrong Journey Type;
+- discovery query only loads standard Journeys;
+- content incorrectly classified as Daily Devotional;
+- API filters by an obsolete content type;
+- missing Collection relationship.
+
+Correct the real cause.
+
+Do not hard-code this one record into the frontend.
+
+All future published Bible Studies must appear automatically.
+
+====================================================
+DISCOVERY API
+====================================================
+
+Use one canonical member Next Steps query or endpoint.
+
+Suggested response:
+
+{
+  "recommended": [],
+  "dailyDevotionals": [],
+  "currentSermonDevotional": null,
+  "journeys": [],
+  "bibleStudies": [],
+  "recentlyAdded": []
+}
+
+Do not return one mixed “inProgress” array as the main response.
+
+Each item should include:
+
+- id;
+- contentType;
+- title;
+- description;
+- status;
+- memberProgressState;
+- metadata;
+- route;
+- primaryActionLabel.
+
+The server should determine eligibility and grouping.
+
+Do not duplicate complex publication rules in the frontend.
+
+====================================================
+VISUAL LAYOUT
+====================================================
+
+Use a mobile-first sectioned layout.
+
+Each section should have:
+
+Section title
+
+Optional short supporting line
+
+Card list or responsive grid
+
+Cards should use:
+
+- one clear primary action;
+- understated secondary action;
+- content-type label;
+- no unnecessary horizontal scrolling;
+- no dense table layout.
+
+Keep the existing Emmaus visual language.
+
+Do not make every content type look identical, but keep the card system consistent.
+
+====================================================
+ROUTING
+====================================================
+
+Each card must open its correct route using the real database ID.
+
+Daily Devotional:
+
+series details or current entry
+
+Sermon Devotional:
+
+companion details or current entry
+
+Journey:
+
+journey details
+
+Bible Study:
+
+Bible Study/Journey details
+
+No route may use only the title.
+
+No “not found” pages.
+
+====================================================
+TEST WITH CURRENT CONTENT
+====================================================
+
+Use the actual current records.
+
+Verify:
+
+✓ Main heading is Next Steps.
+
+✓ Supporting text is correct.
+
+✓ “In Progress” is removed as the main section.
+
+✓ Daily Devotionals section appears.
+
+✓ Psalms Daily Devotional appears exactly once.
+
+✓ Psalms shows the correct member state.
+
+✓ This Week’s Sermon section appears when a current Companion exists.
+
+✓ The new Sermon Devotional is accessible when published and marked current/member-visible.
+
+✓ Journeys appear under Journeys.
+
+✓ Bible Studies appear under Bible Studies.
+
+✓ The new Bible devotional/Bible Study appears in Bible Studies.
+
+✓ Draft content remains hidden.
+
+✓ Archived content remains hidden.
+
+✓ Empty sections are hidden.
+
+✓ Recently Added avoids duplicates.
+
+✓ Every card opens the correct route.
+
+✓ Member state survives refresh.
+
+✓ No content is auto-started.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not use “In Progress” as the main Next Steps experience.
+
+Do not show Psalms more than once.
+
+Do not hide Bible Studies inside Journeys.
+
+Do not place Sermon Devotionals under Journeys.
+
+Do not merge progress systems.
+
+Do not hard-code current records.
+
+The page must work automatically as more content is published.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. why the current page displayed “In Progress”;
+2. why Psalms appeared in the wrong layout or more than once;
+3. why the new Bible content was missing;
+4. the final sections implemented;
+5. the discovery API or query used;
+6. the classification used for Bible Studies;
+7. the files changed;
+8. the result of every test above;
+9. any remaining manual test.

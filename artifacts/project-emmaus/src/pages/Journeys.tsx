@@ -1,10 +1,13 @@
 /**
  * Next Steps — unified member discovery experience.
  *
+ * All grouping and eligibility is determined by the server via GET /api/next-steps.
+ * This component is responsible only for rendering sections and handling user actions.
+ *
  * Section order:
  *   1. Recommended for You
  *   2. Daily Devotionals
- *   3. This Week's Sermon (+ Browse Previous Sermons)
+ *   3. This Week's Sermon  (+ Browse Previous Sermons)
  *   4. Journeys
  *   5. Bible Studies
  *   6. Recently Added
@@ -12,7 +15,7 @@
  * Route: /journeys
  */
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
@@ -23,53 +26,88 @@ import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import {
-  BookHeart, X, Pause, MoreHorizontal,
-  ChevronDown, ChevronUp, Loader2, Mic2,
+  X, Pause, MoreHorizontal, ChevronDown, ChevronUp, Loader2,
+  BookOpen, Mic2, BookHeart, Map,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
-  getAllProgress,
-  listPublishedSeries,
+  fetchNextSteps,
   startSeries,
-  type DevotionalSeries,
-  type DevotionalProgress,
-} from '@/lib/devotionals-api';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type MemberStatus = 'not-started' | 'in-progress' | 'completed';
+  type NextStepsData,
+  type NextStepsItem,
+  type ContentType,
+} from '@/lib/next-steps-api';
 
 // ─── Section label ────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({
+  icon,
+  children,
+}: {
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
+    <div className="flex items-center gap-2">
+      {icon && <span className="text-muted-foreground/60">{icon}</span>}
+      <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+        {children}
+      </h2>
+    </div>
   );
 }
 
-// ─── Status pill ──────────────────────────────────────────────────────────────
+// ─── Content-type chip ────────────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: MemberStatus }) {
-  if (status === 'not-started') return null;
+const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
+  journey:            'Journey',
+  'bible-study':      'Bible Study',
+  'sermon-devotional':'Sermon Devotional',
+  'daily-devotional': 'Daily Devotional',
+};
+
+function ContentTypeChip({ contentType }: { contentType: ContentType }) {
+  return (
+    <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">
+      {CONTENT_TYPE_LABELS[contentType]}
+    </span>
+  );
+}
+
+// ─── Member state pill ────────────────────────────────────────────────────────
+
+function StatePill({ state }: { state: NextStepsItem['memberProgressState'] }) {
+  if (state === 'not-started') return null;
   return (
     <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
-      status === 'completed'
+      state === 'completed'
         ? 'bg-primary/10 text-primary'
         : 'bg-amber-50 text-amber-700 border border-amber-200'
     }`}>
-      {status === 'completed' ? 'Completed' : 'In Progress'}
+      {state === 'completed' ? 'Completed' : 'In Progress'}
     </span>
   );
 }
 
 // ─── Cover thumbnail ──────────────────────────────────────────────────────────
 
-function CoverThumb({ url, title, className = '' }: { url?: string; title: string; className?: string }) {
+function CoverThumb({
+  url,
+  title,
+  className = '',
+}: {
+  url?: string;
+  title: string;
+  className?: string;
+}) {
   const [err, setErr] = useState(false);
-  const initials = title.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase();
+  const initials = title
+    .split(' ')
+    .slice(0, 2)
+    .map(w => w[0] ?? '')
+    .join('')
+    .toUpperCase();
   if (!url || err) {
     return (
       <div className={`bg-primary/8 flex items-center justify-center ${className}`}>
@@ -77,10 +115,17 @@ function CoverThumb({ url, title, className = '' }: { url?: string; title: strin
       </div>
     );
   }
-  return <img src={url} alt="" className={`object-cover ${className}`} onError={() => setErr(true)} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      className={`object-cover ${className}`}
+      onError={() => setErr(true)}
+    />
+  );
 }
 
-// ─── Skeleton card ────────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
@@ -93,82 +138,15 @@ function SkeletonCard() {
   );
 }
 
-// ─── Pause dialog ─────────────────────────────────────────────────────────────
-
-function PauseDialog({ journeyTitle, onPause, onCancel }: {
-  journeyTitle: string; onPause: () => void; onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {journeyTitle}?</h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close"><X size={18} /></button>
-        </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress and responses will be kept exactly as they are. You can resume whenever you're ready.
-        </p>
-        <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause Journey</Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Journey limit dialog ─────────────────────────────────────────────────────
-
-function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
-            You're already walking through five journeys.
-          </h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close"><X size={18} /></button>
-        </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          To begin another one, pause or complete one of your current journeys.
-        </p>
-        <Button variant="ghost" className="w-full h-11 rounded-xl text-muted-foreground" onClick={onCancel}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Switch devotional dialog ─────────────────────────────────────────────────
-
-function SwitchDevotionalDialog({ currentTitle, newTitle, onKeep, onSwitch }: {
-  currentTitle: string; newTitle: string; onKeep: () => void; onSwitch: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-4 shadow-xl">
-        <h2 className="text-[18px] font-medium text-foreground leading-snug">
-          You're currently reading {currentTitle}.
-        </h2>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Would you like to make <strong>{newTitle}</strong> your current Daily Devotional instead?
-          Your progress in {currentTitle} will be kept.
-        </p>
-        <div className="flex flex-col gap-2.5">
-          <Button variant="outline" className="w-full h-11 rounded-xl" onClick={onKeep}>
-            Keep {currentTitle}
-          </Button>
-          <Button className="w-full h-11 rounded-xl" onClick={onSwitch}>
-            Start {newTitle}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── More menu ────────────────────────────────────────────────────────────────
 
-function MoreMenu({ onPause, onDetails }: { onPause: () => void; onDetails: () => void }) {
+function MoreMenu({
+  onPause,
+  onDetails,
+}: {
+  onPause: () => void;
+  onDetails: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -218,13 +196,134 @@ function MoreMenu({ onPause, onDetails }: { onPause: () => void; onDetails: () =
   );
 }
 
-// ─── Journey discovery card ───────────────────────────────────────────────────
+// ─── Pause dialog ─────────────────────────────────────────────────────────────
 
-function JourneyDiscoveryCard({
-  journey, status, onAction, onPause, onDetails, isGated, onGate, enrollmentState,
+function PauseDialog({
+  title,
+  onPause,
+  onCancel,
 }: {
-  journey: Journey & { _completedCount?: number };
-  status: MemberStatus;
+  title: string;
+  onPause: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
+      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
+        <div className="flex items-start justify-between">
+          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
+            Pause {title}?
+          </h2>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-[14px] text-muted-foreground leading-relaxed">
+          Your progress and responses will be kept exactly as they are. You can resume whenever you're ready.
+        </p>
+        <div className="flex gap-3">
+          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause Journey</Button>
+          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Journey limit dialog ─────────────────────────────────────────────────────
+
+function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
+      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
+        <div className="flex items-start justify-between">
+          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">
+            You're already walking through five journeys.
+          </h2>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-[14px] text-muted-foreground leading-relaxed">
+          To begin another one, pause or complete one of your current journeys.
+        </p>
+        <Button
+          variant="ghost"
+          className="w-full h-11 rounded-xl text-muted-foreground"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Switch devotional dialog ─────────────────────────────────────────────────
+
+function SwitchDevotionalDialog({
+  currentTitle,
+  newTitle,
+  onKeep,
+  onSwitch,
+}: {
+  currentTitle: string;
+  newTitle: string;
+  onKeep: () => void;
+  onSwitch: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
+      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-4 shadow-xl">
+        <h2 className="text-[18px] font-medium text-foreground leading-snug">
+          You're currently reading {currentTitle}.
+        </h2>
+        <p className="text-[14px] text-muted-foreground leading-relaxed">
+          Would you like to make <strong>{newTitle}</strong> your current Daily Devotional instead?
+          Your progress in {currentTitle} will be kept.
+        </p>
+        <div className="flex flex-col gap-2.5">
+          <Button variant="outline" className="w-full h-11 rounded-xl" onClick={onKeep}>
+            Keep {currentTitle}
+          </Button>
+          <Button className="w-full h-11 rounded-xl" onClick={onSwitch}>
+            Start {newTitle}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+
+function ProgressBar({ item }: { item: NextStepsItem }) {
+  const { memberProgressState, metadata } = item;
+  if (memberProgressState !== 'in-progress' || !metadata.durationDays) return null;
+  // We don't have exact completedDays count from the server response,
+  // so just show a subtle "in progress" indicator without a specific %.
+  return (
+    <div className="mx-4 mt-0.5">
+      <div className="h-0.5 rounded-full bg-primary/20 overflow-hidden">
+        <div className="h-full rounded-full bg-primary/40 w-1/3" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Standard discovery card ──────────────────────────────────────────────────
+// Used for: Journeys, Bible Studies, and in-section Recommended items.
+
+function DiscoveryCard({
+  item,
+  onAction,
+  onPause,
+  onDetails,
+  isGated,
+  onGate,
+  enrollmentState,
+}: {
+  item: NextStepsItem;
   onAction: () => void;
   onPause?: () => void;
   onDetails?: () => void;
@@ -232,61 +331,66 @@ function JourneyDiscoveryCard({
   onGate?: () => void;
   enrollmentState?: string | null;
 }) {
-  const dur = journey.durationDays > 0 ? `${journey.durationDays} ${journey.durationDays === 1 ? 'Day' : 'Days'}` : null;
-  const pct = status === 'in-progress' && journey.durationDays > 0
-    ? Math.round(((journey._completedCount ?? 0) / journey.durationDays) * 100)
-    : 0;
-  const typeLabel = journey.journeyType === 'bible-study' ? 'Bible Study' : 'Journey';
+  const dur = item.metadata.durationDays
+    ? `${item.metadata.durationDays} ${item.metadata.durationDays === 1 ? 'Day' : 'Days'}`
+    : null;
 
-  const actionLabel = status === 'completed'
-    ? 'Review Journey'
-    : status === 'in-progress'
-      ? (enrollmentState === 'paused' ? 'Resume Journey' : 'Continue Journey')
-      : 'Begin Journey';
+  const actionLabel = enrollmentState === 'paused' && item.memberProgressState === 'in-progress'
+    ? `Resume ${CONTENT_TYPE_LABELS[item.contentType]}`
+    : item.primaryActionLabel;
 
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">
       <div className="flex">
         <div className="w-14 shrink-0 min-h-[68px]">
-          <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full rounded-l-2xl" />
+          <CoverThumb
+            url={item.metadata.coverImageUrl}
+            title={item.title}
+            className="w-full h-full rounded-l-2xl"
+          />
         </div>
         <div className="flex-1 min-w-0 px-4 pt-3.5 pb-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">{typeLabel}</span>
-                <StatusPill status={status} />
+                <ContentTypeChip contentType={item.contentType} />
+                <StatePill state={item.memberProgressState} />
               </div>
-              <h3 className="text-[15px] font-medium text-foreground leading-snug">{journey.title}</h3>
+              <h3 className="text-[15px] font-medium text-foreground leading-snug">
+                {item.title}
+              </h3>
               <div className="flex items-center gap-x-2 text-[12px] text-muted-foreground flex-wrap">
                 {dur && <span>{dur}</span>}
-                {journey.difficulty && <><span className="opacity-30">·</span><span>{journey.difficulty}</span></>}
+                {item.metadata.difficulty && (
+                  <>
+                    <span className="opacity-30">·</span>
+                    <span>{item.metadata.difficulty}</span>
+                  </>
+                )}
               </div>
             </div>
-            {status === 'in-progress' && onPause && onDetails && (
+            {item.memberProgressState === 'in-progress' && onPause && onDetails && (
               <MoreMenu onPause={onPause} onDetails={onDetails} />
             )}
           </div>
         </div>
       </div>
 
-      {pct > 0 && (
-        <div className="mx-4 mt-0.5">
-          <div className="h-1 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      )}
+      <ProgressBar item={item} />
 
       <div className="px-4 pb-4 pt-3">
-        {isGated && status === 'in-progress' ? (
-          <Button variant="outline" className="w-full h-10 rounded-xl text-[13px]" onClick={onGate}>
+        {isGated && item.memberProgressState === 'in-progress' ? (
+          <Button
+            variant="outline"
+            className="w-full h-10 rounded-xl text-[13px]"
+            onClick={onGate}
+          >
             Complete today's 10 Minutes with Jesus first
           </Button>
         ) : (
           <Button
             className="w-full h-10 rounded-xl text-[14px]"
-            variant={status === 'not-started' ? 'outline' : 'default'}
+            variant={item.memberProgressState === 'not-started' ? 'outline' : 'default'}
             onClick={onAction}
           >
             {actionLabel}
@@ -297,405 +401,295 @@ function JourneyDiscoveryCard({
   );
 }
 
-// ─── Daily Devotional discovery card ─────────────────────────────────────────
+// ─── Daily Devotional card ────────────────────────────────────────────────────
 
-function DevotionalDiscoveryCard({
-  series, isActive, onAction, starting,
+function DevotionalCard({
+  item,
+  onAction,
+  starting,
 }: {
-  series: DevotionalSeries;
-  isActive: boolean;
+  item: NextStepsItem;
   onAction: () => void;
   starting: boolean;
 }) {
+  const dur = item.metadata.durationDays
+    ? `${item.metadata.durationDays} Days`
+    : null;
+
   return (
     <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
       <div className="space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <BookHeart size={12} className="text-primary shrink-0" />
-            <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">Daily Devotional</span>
+            <ContentTypeChip contentType="daily-devotional" />
           </div>
-          {isActive && <StatusPill status="in-progress" />}
+          <StatePill state={item.memberProgressState} />
         </div>
-        <p className="text-[16px] font-medium text-foreground leading-snug">{series.title}</p>
-        {series.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{series.description}</p>
+        <p className="text-[16px] font-medium text-foreground leading-snug">{item.title}</p>
+        {item.description && (
+          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">
+            {item.description}
+          </p>
         )}
+        {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
       </div>
       <Button
         className="w-full h-10 rounded-xl text-[14px]"
-        variant={isActive ? 'default' : 'outline'}
+        variant={item.memberProgressState === 'not-started' ? 'outline' : 'default'}
         onClick={onAction}
         disabled={starting}
       >
-        {starting
-          ? <Loader2 size={14} className="animate-spin" />
-          : isActive ? 'Continue Devotional' : 'Begin Devotional'}
+        {starting ? <Loader2 size={14} className="animate-spin" /> : item.primaryActionLabel}
       </Button>
     </div>
   );
 }
 
-// ─── Sermon companion card ────────────────────────────────────────────────────
+// ─── Sermon devotional card ────────────────────────────────────────────────────
 
-function SermonCompanionCard({
-  journey, memberProgress, onBegin,
+function SermonCard({
+  item,
+  onAction,
 }: {
-  journey: Journey;
-  memberProgress?: { currentDay: number; completedDays: number[] };
-  onBegin: () => void;
+  item: NextStepsItem;
+  onAction: () => void;
 }) {
-  const started = memberProgress && memberProgress.completedDays.length > 0;
-  const dur = journey.durationDays > 0 ? `${journey.durationDays} Days` : null;
+  const dur = item.metadata.durationDays
+    ? `${item.metadata.durationDays} Days`
+    : null;
 
   return (
     <div className="bg-card rounded-2xl border border-border p-5 space-y-3">
       <div className="space-y-1">
         <div className="flex items-center gap-1.5">
           <Mic2 size={12} className="text-primary shrink-0" />
-          <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">Sermon Devotional</span>
+          <ContentTypeChip contentType="sermon-devotional" />
+          <StatePill state={item.memberProgressState} />
         </div>
-        <p className="text-[17px] font-medium text-foreground leading-snug">
-          {(journey as any).sermon?.title ?? journey.title}
-        </p>
-        {(journey as any).sermon?.speaker && (
-          <p className="text-[13px] text-muted-foreground">{(journey as any).sermon.speaker}</p>
+        <p className="text-[17px] font-medium text-foreground leading-snug">{item.title}</p>
+        {item.metadata.scriptureReference && (
+          <p className="text-[12px] text-muted-foreground font-medium">
+            {item.metadata.scriptureReference}
+          </p>
         )}
-        <div className="flex items-center gap-x-2 text-[12px] text-muted-foreground flex-wrap">
-          {dur && <span>{dur}</span>}
-          {started && memberProgress && (
-            <><span className="opacity-30">·</span><span>Day {memberProgress.currentDay} of {journey.durationDays}</span></>
-          )}
-        </div>
-        {journey.description && (
-          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">{journey.description}</p>
+        {item.description && (
+          <p className="text-[13px] text-muted-foreground leading-relaxed line-clamp-2">
+            {item.description}
+          </p>
         )}
+        {dur && <p className="text-[12px] text-muted-foreground">{dur}</p>}
       </div>
-      <Button className="w-full h-10 rounded-xl text-[14px]" onClick={onBegin}>
-        {started ? 'Continue Sermon Devotional' : 'Begin Sermon Devotional'}
+      <Button className="w-full h-10 rounded-xl text-[14px]" onClick={onAction}>
+        {item.primaryActionLabel}
       </Button>
     </div>
   );
 }
 
-// ─── Previous sermon row ──────────────────────────────────────────────────────
+// ─── Compact row (Previous Sermons, Recently Added) ───────────────────────────
 
-function PreviousSermonRow({
-  journey, status, onBegin,
+function CompactRow({
+  item,
+  onAction,
+  starting,
 }: {
-  journey: Journey;
-  status: MemberStatus;
-  onBegin: () => void;
+  item: NextStepsItem;
+  onAction: () => void;
+  starting?: boolean;
 }) {
   return (
     <div className="px-4 py-3 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium text-foreground truncate">
-          {(journey as any).sermon?.title ?? journey.title}
-        </p>
-        <div className="flex items-center gap-2 text-[12px] text-muted-foreground flex-wrap">
-          {(journey as any).sermon?.speaker && <span>{(journey as any).sermon.speaker}</span>}
-          {journey.durationDays > 0 && (
-            <><span className="opacity-30">·</span><span>{journey.durationDays} Days</span></>
-          )}
-          {status !== 'not-started' && (
-            <><span className="opacity-30">·</span><StatusPill status={status} /></>
-          )}
-        </div>
+        <ContentTypeChip contentType={item.contentType} />
+        <p className="text-[14px] font-medium text-foreground truncate">{item.title}</p>
+        {item.memberProgressState !== 'not-started' && (
+          <div className="mt-0.5">
+            <StatePill state={item.memberProgressState} />
+          </div>
+        )}
       </div>
-      <Button variant="outline" size="sm" className="h-9 rounded-xl text-[13px] shrink-0" onClick={onBegin}>
-        {status === 'completed' ? 'Review' : status === 'in-progress' ? 'Continue' : 'Begin'}
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-9 rounded-xl text-[13px] shrink-0"
+        onClick={onAction}
+        disabled={starting}
+      >
+        {starting
+          ? <Loader2 size={13} className="animate-spin" />
+          : item.memberProgressState === 'completed' ? 'Review'
+          : item.memberProgressState === 'in-progress' ? 'Continue'
+          : 'Begin'}
       </Button>
     </div>
   );
 }
 
-// ─── Compact row for Recently Added ──────────────────────────────────────────
+// ─── Recommended item — thin wrapper that picks the right card ────────────────
 
-function RecentRow({
-  typeLabel, title, actionLabel, onAction,
+function RecommendedCard({
+  item,
+  onJourneyAction,
+  onDevotionalAction,
+  starting,
 }: {
-  typeLabel: string; title: string; actionLabel: string; onAction: () => void;
+  item: NextStepsItem;
+  onJourneyAction: (item: NextStepsItem) => void;
+  onDevotionalAction: (item: NextStepsItem) => void;
+  starting: boolean;
 }) {
-  return (
-    <div className="px-4 py-3 rounded-xl border border-border bg-card flex items-center justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <span className="text-[10px] font-semibold text-primary uppercase tracking-widest">{typeLabel}</span>
-        <p className="text-[14px] font-medium text-foreground truncate">{title}</p>
-      </div>
-      <Button variant="outline" size="sm" className="h-9 rounded-xl text-[13px] shrink-0" onClick={onAction}>
-        {actionLabel}
-      </Button>
-    </div>
-  );
+  if (item.contentType === 'daily-devotional') {
+    return (
+      <DevotionalCard
+        item={item}
+        onAction={() => onDevotionalAction(item)}
+        starting={starting}
+      />
+    );
+  }
+  if (item.contentType === 'sermon-devotional') {
+    return <SermonCard item={item} onAction={() => onJourneyAction(item)} />;
+  }
+  return <DiscoveryCard item={item} onAction={() => onJourneyAction(item)} />;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Journeys() {
-  const { journeys, progress, startJourney, loading } = useJourney();
+  const { journeys, progress, startJourney } = useJourney();
   const { user } = useAuth();
   const { startSharedJourney } = useRooms();
-
-  // Read the admin-set "current weekly sermon" ID from localStorage.
-  // AdminContext is not available on member pages — read directly from storage.
-  const currentWeeklySermonCompanionId = useMemo<string | undefined>(() => {
-    try {
-      const raw = localStorage.getItem('emmaus_admin_settings');
-      if (!raw) return undefined;
-      return JSON.parse(raw)?.currentWeeklySermonCompanionId ?? undefined;
-    } catch {
-      return undefined;
-    }
-  }, []);
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
   const { gateClear } = useDailyGate();
 
-  // Journey dialog state
-  const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
+  // ── API data ─────────────────────────────────────────────────────────────
+
+  const [data, setData] = useState<NextStepsData | null>(null);
+  const [apiLoading, setApiLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const currentCompanionId = useMemo<string | undefined>(() => {
+    try {
+      const raw = localStorage.getItem('emmaus_admin_settings');
+      return raw ? (JSON.parse(raw)?.currentWeeklySermonCompanionId ?? undefined) : undefined;
+    } catch { return undefined; }
+  }, []);
+
+  const reload = useCallback(async () => {
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const result = await fetchNextSteps({
+        userId: user?.id,
+        currentCompanionId,
+      });
+      setData(result);
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setApiLoading(false);
+    }
+  }, [user?.id, currentCompanionId]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  // ── Journey dialog state ──────────────────────────────────────────────────
+
+  const [pendingItem,      setPendingItem]      = useState<NextStepsItem | null>(null);
   const [pauseTargetId,    setPauseTargetId]    = useState<string | null>(null);
   const [showLimitDialog,  setShowLimitDialog]  = useState(false);
 
-  // Daily Devotionals state
-  const [devSeries,      setDevSeries]      = useState<DevotionalSeries[]>([]);
-  const [devProgress,    setDevProgress]    = useState<DevotionalProgress[]>([]);
-  const [devLoading,     setDevLoading]     = useState(true);
-  const [startingDevId,  setStartingDevId]  = useState<string | null>(null);
-  const [switchTarget,   setSwitchTarget]   = useState<DevotionalSeries | null>(null);
+  // ── Devotional state ──────────────────────────────────────────────────────
 
-  // Sermon section
+  const [startingDevId,   setStartingDevId]   = useState<string | null>(null);
+  const [switchTarget,    setSwitchTarget]    = useState<NextStepsItem | null>(null);
+
+  // ── Sermon section ────────────────────────────────────────────────────────
+
   const [showPreviousSermons, setShowPreviousSermons] = useState(false);
 
-  const startedIds = useMemo(() => new Set(Object.keys(progress)), [progress]);
+  // ── Journey action handler ────────────────────────────────────────────────
 
-  // ── Fetch devotionals ────────────────────────────────────────────────────
-
-  const reloadDevotionals = useCallback(async (userId?: string) => {
-    const auth = userId ? { userId } : undefined;
-    try {
-      const [series, prog] = await Promise.all([
-        listPublishedSeries(auth),
-        getAllProgress(auth),
-      ]);
-      setDevSeries(series);
-      setDevProgress(prog);
-    } catch {
-      // non-fatal — devotionals are supplementary
-    } finally {
-      setDevLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    reloadDevotionals(user?.id).catch(() => {});
-  }, [user?.id, reloadDevotionals]);
-
-  // ── Content filtering ────────────────────────────────────────────────────
-
-  const publishedJourneys = useMemo(
-    () => journeys.filter(j => j.status === 'Published'),
-    [journeys],
-  );
-
-  const companions = useMemo(
-    () => publishedJourneys.filter(j => j.journeyType === 'companion'),
-    [publishedJourneys],
-  );
-
-  // The "current" companion is the explicitly-set one, or the most recently published.
-  const currentCompanion = useMemo<Journey | null>(() => {
-    if (currentWeeklySermonCompanionId) {
-      const explicit = companions.find(j => j.id === currentWeeklySermonCompanionId);
-      if (explicit) return explicit;
-    }
-    return companions.reduce<Journey | null>((best, j) => {
-      if (!best) return j;
-      const bDate = (best.publishedAt ?? best.updatedAt ?? '');
-      const jDate = (j.publishedAt ?? j.updatedAt ?? '');
-      return jDate > bDate ? j : best;
-    }, null);
-  }, [companions, currentWeeklySermonCompanionId]);
-
-  const previousCompanions = useMemo(
-    () => companions.filter(j => j.id !== currentCompanion?.id),
-    [companions, currentCompanion],
-  );
-
-  const regularJourneys = useMemo(
-    () => publishedJourneys.filter(j =>
-      !isExemptJourney(j) &&
-      j.journeyType !== 'bible-study' &&
-      j.journeyType !== 'companion',
-    ),
-    [publishedJourneys],
-  );
-
-  const bibleStudies = useMemo(
-    () => publishedJourneys.filter(j => j.journeyType === 'bible-study'),
-    [publishedJourneys],
-  );
-
-  // ── Devotional helpers ───────────────────────────────────────────────────
-
-  const activeDevotional = useMemo(
-    () => devSeries.find(s => devProgress.some(p => p.seriesId === s.id)) ?? null,
-    [devSeries, devProgress],
-  );
-
-  // ── Member status helpers ────────────────────────────────────────────────
-
-  function journeyMemberStatus(j: Journey): MemberStatus {
-    const p = progress[j.id];
-    if (!p) return 'not-started';
-    if (j.durationDays > 0 && p.completedDays.length >= j.durationDays) return 'completed';
-    return 'in-progress';
-  }
-
-  // ── Recommended section ──────────────────────────────────────────────────
-
-  const activeGrowth = useMemo(
-    () => regularJourneys.filter(j => startedIds.has(j.id) && getState(j.id) === 'active'),
-    [regularJourneys, startedIds, getState],
-  );
-
-  type RecItem =
-    | { kind: 'companion';   journey: Journey }
-    | { kind: 'devotional';  series:  DevotionalSeries }
-    | { kind: 'journey';     journey: Journey };
-
-  const recommended = useMemo<RecItem[]>(() => {
-    const items: RecItem[] = [];
-    // Companion always has its own "This Week's Sermon" section — skip here to avoid duplication.
-    if (!activeDevotional && devSeries.length > 0) {
-      items.push({ kind: 'devotional', series: devSeries[0] });
-    }
-    if (activeGrowth.length === 0) {
-      const starter =
-        regularJourneys.find(j =>
-          !startedIds.has(j.id) &&
-          (j.difficulty?.toLowerCase().includes('beginner') ||
-           j.difficulty?.toLowerCase().includes('introductory'))
-        ) ?? regularJourneys.find(j => !startedIds.has(j.id));
-      if (starter) items.push({ kind: 'journey', journey: starter });
-    }
-    return items.slice(0, 3);
-  }, [currentCompanion, progress, activeDevotional, devSeries, activeGrowth, regularJourneys, startedIds]);
-
-  // ── Recently Added ───────────────────────────────────────────────────────
-
-  type RecentItem =
-    | { kind: 'companion';  journey: Journey;        date: string }
-    | { kind: 'devotional'; series:  DevotionalSeries; date: string }
-    | { kind: 'journey';    journey: Journey;        date: string };
-
-  const recentlyAdded = useMemo<RecentItem[]>(() => {
-    // Exclude items already prominently shown in dedicated sections above.
-    const recIds = new Set([
-      ...recommended.map(r => r.kind === 'devotional' ? r.series.id : r.journey.id),
-      ...(currentCompanion ? [currentCompanion.id] : []),
-    ]);
-    const items: RecentItem[] = [];
-    for (const j of companions) {
-      if (!recIds.has(j.id))
-        items.push({ kind: 'companion', journey: j, date: j.publishedAt ?? j.updatedAt ?? '' });
-    }
-    for (const s of devSeries) {
-      if (!recIds.has(s.id))
-        items.push({ kind: 'devotional', series: s, date: s.publishedAt ?? s.updatedAt ?? '' });
-    }
-    for (const j of [...regularJourneys, ...bibleStudies]) {
-      if (!recIds.has(j.id))
-        items.push({ kind: 'journey', journey: j, date: j.publishedAt ?? j.updatedAt ?? '' });
-    }
-    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-  }, [recommended, companions, devSeries, regularJourneys, bibleStudies]);
-
-  // ── Journey handlers ─────────────────────────────────────────────────────
-
-  function handleStartJourney(journeyId: string) {
-    const j = journeys.find(x => x.id === journeyId);
-    if (!j) return;
-    if (startedIds.has(journeyId)) {
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
+  function handleJourneyAction(item: NextStepsItem) {
+    // Navigate directly if already started
+    if (item.memberProgressState !== 'not-started') {
+      setLocation(item.route);
       return;
     }
-    if (!isExemptJourney(j) && !canActivateMore(journeys, startedIds)) {
-      setShowLimitDialog(true);
-      return;
+    // Check enrollment limit for non-exempt journey types
+    const journey = journeys.find(j => j.id === item.id);
+    if (journey && !isExemptJourney(journey)) {
+      const startedIds = new Set(Object.keys(progress));
+      if (!canActivateMore(journeys, startedIds)) {
+        setShowLimitDialog(true);
+        return;
+      }
     }
-    setPendingJourneyId(journeyId);
+    setPendingItem(item);
   }
 
   function handleStartAlone() {
-    if (!pendingJourneyId) return;
-    startJourney(pendingJourneyId);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
-    setPendingJourneyId(null);
+    if (!pendingItem) return;
+    startJourney(pendingItem.id);
+    setLocation(`/journey/${pendingItem.id}/day/1`);
+    setPendingItem(null);
+    reload();
   }
 
   function handleStartWithRoom(roomId: string) {
-    if (!pendingJourneyId || !user) return;
-    startJourney(pendingJourneyId);
-    startSharedJourney(roomId, pendingJourneyId, user.id);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
-    setPendingJourneyId(null);
+    if (!pendingItem || !user) return;
+    startJourney(pendingItem.id);
+    startSharedJourney(roomId, pendingItem.id, user.id);
+    setLocation(`/journey/${pendingItem.id}/day/1`);
+    setPendingItem(null);
+    reload();
   }
 
-  // ── Devotional handlers ──────────────────────────────────────────────────
+  // ── Devotional action handler ─────────────────────────────────────────────
 
-  async function handleBeginDevotional(series: DevotionalSeries) {
-    if (!user) return;
-    if (activeDevotional && activeDevotional.id !== series.id) {
-      setSwitchTarget(series);
+  function handleDevotionalAction(item: NextStepsItem) {
+    // If already in progress or completed, navigate directly
+    if (item.memberProgressState !== 'not-started') {
+      setLocation(item.route);
       return;
     }
-    if (activeDevotional?.id === series.id) {
-      const prog = devProgress.find(p => p.seriesId === series.id);
-      setLocation(`/devotional/${series.id}/day/${prog?.currentDay ?? 1}`);
+    // If another devotional is already active, show switch dialog
+    const activeDevotional = data?.dailyDevotionals.find(
+      d => d.memberProgressState === 'in-progress',
+    );
+    if (activeDevotional && activeDevotional.id !== item.id) {
+      setSwitchTarget(item);
       return;
     }
-    await doStartDevotional(series);
+    doStartDevotional(item);
   }
 
-  async function doStartDevotional(series: DevotionalSeries) {
+  async function doStartDevotional(item: NextStepsItem) {
     if (!user) return;
-    setStartingDevId(series.id);
+    setStartingDevId(item.id);
     try {
-      await startSeries(series.id, { userId: user.id });
-      await reloadDevotionals(user.id);
-      setLocation(`/devotional/${series.id}/day/1`);
+      await startSeries(item.id, { userId: user.id });
+      await reload();
+      setLocation(`/devotional/${item.id}/day/1`);
     } catch {
-      // non-fatal — member can retry
+      // non-fatal
     } finally {
       setStartingDevId(null);
       setSwitchTarget(null);
     }
   }
 
-  // ── Derived dialog state ─────────────────────────────────────────────────
+  // ── Daily-gate check ──────────────────────────────────────────────────────
 
-  const pendingJourney = pendingJourneyId ? journeys.find(j => j.id === pendingJourneyId) : null;
-  const pauseTarget    = pauseTargetId    ? journeys.find(j => j.id === pauseTargetId)    : null;
-
-  // ── Loading ──────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="min-h-[100dvh] bg-background pb-24">
-        <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
-          <div className="space-y-1.5">
-            <div className="h-8 w-32 rounded-lg bg-muted animate-pulse" />
-            <div className="h-4 w-64 rounded bg-muted animate-pulse" />
-          </div>
-          <SkeletonCard /><SkeletonCard /><SkeletonCard />
-        </main>
-        <BottomNav />
-      </div>
-    );
+  function isItemGated(item: NextStepsItem): boolean {
+    if (gateClear || item.memberProgressState !== 'in-progress') return false;
+    const journey = journeys.find(j => j.id === item.id);
+    return !!journey && isGatedByDailyGate(journey) && getState(item.id) === 'active';
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -711,211 +705,166 @@ export default function Journeys() {
           </p>
         </header>
 
-        {/* ── 1. Recommended for You ──────────────────────────────────────── */}
-        {recommended.length > 0 && (
-          <section className="space-y-3">
-            <SectionLabel>Recommended for You</SectionLabel>
-            <div className="space-y-3">
-              {recommended.map(item => {
-                if (item.kind === 'companion') {
-                  return (
-                    <SermonCompanionCard
-                      key={item.journey.id}
-                      journey={item.journey}
-                      memberProgress={progress[item.journey.id]}
-                      onBegin={() => handleStartJourney(item.journey.id)}
-                    />
-                  );
-                }
-                if (item.kind === 'devotional') {
-                  return (
-                    <DevotionalDiscoveryCard
-                      key={item.series.id}
-                      series={item.series}
-                      isActive={false}
-                      onAction={() => handleBeginDevotional(item.series)}
-                      starting={startingDevId === item.series.id}
-                    />
-                  );
-                }
-                // journey
-                const p = progress[item.journey.id];
-                const isGated = !gateClear && isGatedByDailyGate(item.journey) && getState(item.journey.id) === 'active';
-                return (
-                  <JourneyDiscoveryCard
-                    key={item.journey.id}
-                    journey={{ ...item.journey, _completedCount: p?.completedDays.length ?? 0 }}
-                    status={journeyMemberStatus(item.journey)}
-                    onAction={() => handleStartJourney(item.journey.id)}
-                    onPause={() => setPauseTargetId(item.journey.id)}
-                    onDetails={() => setLocation(`/journeys/${item.journey.id}`)}
-                    isGated={isGated}
-                    onGate={() => setLocation('/walk')}
-                    enrollmentState={getState(item.journey.id)}
-                  />
-                );
-              })}
-            </div>
-          </section>
+        {/* ── Loading ──────────────────────────────────────────────────────── */}
+        {apiLoading && (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
         )}
 
-        {/* ── 2. Daily Devotionals ────────────────────────────────────────── */}
-        {!devLoading && (
-          <section className="space-y-3">
-            <SectionLabel>Daily Devotionals</SectionLabel>
-            {devSeries.length > 0 ? (
-              <div className="space-y-3">
-                {devSeries.map(s => (
-                  <DevotionalDiscoveryCard
-                    key={s.id}
-                    series={s}
-                    isActive={s.id === activeDevotional?.id}
-                    onAction={() => handleBeginDevotional(s)}
-                    starting={startingDevId === s.id}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-[14px] text-muted-foreground">No Daily Devotionals are available yet.</p>
-            )}
-          </section>
+        {/* ── Error ────────────────────────────────────────────────────────── */}
+        {!apiLoading && apiError && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3">
+            <p className="text-[14px] text-destructive">{apiError}</p>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
+              Try again
+            </Button>
+          </div>
         )}
 
-        {/* ── 3. This Week's Sermon ────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <SectionLabel>This Week's Sermon</SectionLabel>
-          {currentCompanion ? (
-            <>
-              <SermonCompanionCard
-                journey={currentCompanion}
-                memberProgress={progress[currentCompanion.id]}
-                onBegin={() => handleStartJourney(currentCompanion.id)}
-              />
-
-              {previousCompanions.length > 0 && (
-                <div>
-                  <button
-                    onClick={() => setShowPreviousSermons(p => !p)}
-                    className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
-                  >
-                    Browse Previous Sermons
-                    {showPreviousSermons ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-                  <AnimatePresence>
-                    {showPreviousSermons && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden mt-2 space-y-2"
-                      >
-                        {previousCompanions.map(j => (
-                          <PreviousSermonRow
-                            key={j.id}
-                            journey={j}
-                            status={journeyMemberStatus(j)}
-                            onBegin={() => handleStartJourney(j.id)}
-                          />
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+        {/* ── Content ──────────────────────────────────────────────────────── */}
+        {!apiLoading && data && (
+          <>
+            {/* 1. Recommended for You */}
+            {data.recommended.length > 0 && (
+              <section className="space-y-3">
+                <SectionLabel>Recommended for You</SectionLabel>
+                <div className="space-y-3">
+                  {data.recommended.map(item => (
+                    <RecommendedCard
+                      key={item.id}
+                      item={item}
+                      onJourneyAction={handleJourneyAction}
+                      onDevotionalAction={handleDevotionalAction}
+                      starting={startingDevId === item.id}
+                    />
+                  ))}
                 </div>
-              )}
-            </>
-          ) : (
-            <p className="text-[14px] text-muted-foreground">
-              This week's Sermon Devotional will appear here when it is ready.
-            </p>
-          )}
-        </section>
+              </section>
+            )}
 
-        {/* ── 4. Journeys ─────────────────────────────────────────────────── */}
-        <section className="space-y-3">
-          <SectionLabel>Journeys</SectionLabel>
-          {regularJourneys.length > 0 ? (
-            <div className="space-y-3">
-              {regularJourneys.map(j => {
-                const p = progress[j.id];
-                const isGated = !gateClear && isGatedByDailyGate(j) && getState(j.id) === 'active';
-                return (
-                  <JourneyDiscoveryCard
-                    key={j.id}
-                    journey={{ ...j, _completedCount: p?.completedDays.length ?? 0 }}
-                    status={journeyMemberStatus(j)}
-                    onAction={() => handleStartJourney(j.id)}
-                    onPause={() => setPauseTargetId(j.id)}
-                    onDetails={() => setLocation(`/journeys/${j.id}`)}
-                    isGated={isGated}
-                    onGate={() => setLocation('/walk')}
-                    enrollmentState={getState(j.id)}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-[14px] text-muted-foreground">New Journeys will appear here as they are published.</p>
-          )}
-        </section>
-
-        {/* ── 5. Bible Studies ────────────────────────────────────────────── */}
-        {bibleStudies.length > 0 && (
-          <section className="space-y-3">
-            <SectionLabel>Bible Studies</SectionLabel>
-            <div className="space-y-3">
-              {bibleStudies.map(j => {
-                const p = progress[j.id];
-                return (
-                  <JourneyDiscoveryCard
-                    key={j.id}
-                    journey={{ ...j, _completedCount: p?.completedDays.length ?? 0 }}
-                    status={journeyMemberStatus(j)}
-                    onAction={() => handleStartJourney(j.id)}
-                    onPause={() => setPauseTargetId(j.id)}
-                    onDetails={() => setLocation(`/journeys/${j.id}`)}
-                    enrollmentState={getState(j.id)}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* ── 6. Recently Added ───────────────────────────────────────────── */}
-        {recentlyAdded.length > 0 && (
-          <section className="space-y-3">
-            <SectionLabel>Recently Added</SectionLabel>
-            <div className="space-y-2">
-              {recentlyAdded.map(item => {
-                if (item.kind === 'devotional') {
-                  const isActive = item.series.id === activeDevotional?.id;
-                  return (
-                    <RecentRow
-                      key={item.series.id}
-                      typeLabel="Daily Devotional"
-                      title={item.series.title}
-                      actionLabel={isActive ? 'Continue' : 'Begin'}
-                      onAction={() => handleBeginDevotional(item.series)}
+            {/* 2. Daily Devotionals */}
+            {data.dailyDevotionals.length > 0 && (
+              <section className="space-y-3">
+                <SectionLabel icon={<BookHeart size={13} />}>Daily Devotionals</SectionLabel>
+                <div className="space-y-3">
+                  {data.dailyDevotionals.map(item => (
+                    <DevotionalCard
+                      key={item.id}
+                      item={item}
+                      onAction={() => handleDevotionalAction(item)}
+                      starting={startingDevId === item.id}
                     />
-                  );
-                }
-                const typeLabel =
-                  item.journey.journeyType === 'companion' ? 'Sermon Devotional' :
-                  item.journey.journeyType === 'bible-study' ? 'Bible Study' : 'Journey';
-                const st = journeyMemberStatus(item.journey);
-                return (
-                  <RecentRow
-                    key={item.journey.id}
-                    typeLabel={typeLabel}
-                    title={(item.journey as any).sermon?.title ?? item.journey.title}
-                    actionLabel={st === 'in-progress' ? 'Continue' : st === 'completed' ? 'Review' : 'Begin'}
-                    onAction={() => handleStartJourney(item.journey.id)}
-                  />
-                );
-              })}
-            </div>
-          </section>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 3. This Week's Sermon */}
+            {data.currentSermonDevotional && (
+              <section className="space-y-3">
+                <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
+                <SermonCard
+                  item={data.currentSermonDevotional}
+                  onAction={() => handleJourneyAction(data.currentSermonDevotional!)}
+                />
+                {data.previousSermonDevotionals.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowPreviousSermons(p => !p)}
+                      className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
+                    >
+                      Browse Previous Sermons
+                      {showPreviousSermons ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    </button>
+                    <AnimatePresence>
+                      {showPreviousSermons && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden mt-2 space-y-2"
+                        >
+                          {data.previousSermonDevotionals.map(item => (
+                            <CompactRow
+                              key={item.id}
+                              item={item}
+                              onAction={() => handleJourneyAction(item)}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 4. Journeys */}
+            {data.journeys.length > 0 && (
+              <section className="space-y-3">
+                <SectionLabel icon={<Map size={13} />}>Journeys</SectionLabel>
+                <div className="space-y-3">
+                  {data.journeys.map(item => (
+                    <DiscoveryCard
+                      key={item.id}
+                      item={item}
+                      onAction={() => handleJourneyAction(item)}
+                      onPause={() => setPauseTargetId(item.id)}
+                      onDetails={() => setLocation(`/journeys/${item.id}`)}
+                      isGated={isItemGated(item)}
+                      onGate={() => setLocation('/walk')}
+                      enrollmentState={getState(item.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 5. Bible Studies */}
+            {data.bibleStudies.length > 0 && (
+              <section className="space-y-3">
+                <SectionLabel icon={<BookOpen size={13} />}>Bible Studies</SectionLabel>
+                <div className="space-y-3">
+                  {data.bibleStudies.map(item => (
+                    <DiscoveryCard
+                      key={item.id}
+                      item={item}
+                      onAction={() => handleJourneyAction(item)}
+                      onPause={() => setPauseTargetId(item.id)}
+                      onDetails={() => setLocation(`/journeys/${item.id}`)}
+                      enrollmentState={getState(item.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 6. Recently Added */}
+            {data.recentlyAdded.length > 0 && (
+              <section className="space-y-3">
+                <SectionLabel>Recently Added</SectionLabel>
+                <div className="space-y-2">
+                  {data.recentlyAdded.map(item => (
+                    <CompactRow
+                      key={item.id}
+                      item={item}
+                      onAction={() =>
+                        item.contentType === 'daily-devotional'
+                          ? handleDevotionalAction(item)
+                          : handleJourneyAction(item)
+                      }
+                      starting={startingDevId === item.id}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+          </>
         )}
 
       </main>
@@ -923,20 +872,20 @@ export default function Journeys() {
       <BottomNav />
 
       {/* Journey start modal */}
-      {pendingJourneyId && pendingJourney && (
+      {pendingItem && (
         <JourneyStartModal
-          journeyId={pendingJourneyId}
-          journeyTitle={pendingJourney.title}
-          onClose={() => setPendingJourneyId(null)}
+          journeyId={pendingItem.id}
+          journeyTitle={pendingItem.title}
+          onClose={() => setPendingItem(null)}
           onStartAlone={handleStartAlone}
           onStartWithRoom={handleStartWithRoom}
         />
       )}
 
       {/* Pause dialog */}
-      {pauseTargetId && pauseTarget && (
+      {pauseTargetId && (
         <PauseDialog
-          journeyTitle={pauseTarget.title}
+          title={journeys.find(j => j.id === pauseTargetId)?.title ?? 'this journey'}
           onPause={() => { pauseJourney(pauseTargetId); setPauseTargetId(null); }}
           onCancel={() => setPauseTargetId(null)}
         />
@@ -948,14 +897,19 @@ export default function Journeys() {
       )}
 
       {/* Switch devotional dialog */}
-      {switchTarget && activeDevotional && (
-        <SwitchDevotionalDialog
-          currentTitle={activeDevotional.title}
-          newTitle={switchTarget.title}
-          onKeep={() => setSwitchTarget(null)}
-          onSwitch={() => doStartDevotional(switchTarget)}
-        />
-      )}
+      {switchTarget && (() => {
+        const active = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');
+        if (!active) return null;
+        return (
+          <SwitchDevotionalDialog
+            currentTitle={active.title}
+            newTitle={switchTarget.title}
+            onKeep={() => setSwitchTarget(null)}
+            onSwitch={() => doStartDevotional(switchTarget)}
+          />
+        );
+      })()}
+
     </div>
   );
 }
