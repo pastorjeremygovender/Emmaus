@@ -80,13 +80,17 @@ export function extractUserId(req: Request): string | null {
     if (userId) return userId;
   }
 
-  // 2. X-User-Id header (demo mode / pre-cookie bootstrap)
-  const header = req.headers["x-user-id"];
-  if (header && typeof header === "string" && header.trim()) {
-    return header.trim();
-  }
-  if (Array.isArray(header) && header[0]) {
-    return header[0].trim();
+  // 2. X-User-Id header — ONLY accepted outside production (dev / demo mode).
+  //    In production, signed cookies are the only trusted identity source.
+  //    Accepting this header in production would let any caller claim any userId.
+  if (process.env.NODE_ENV !== "production") {
+    const header = req.headers["x-user-id"];
+    if (header && typeof header === "string" && header.trim()) {
+      return header.trim();
+    }
+    if (Array.isArray(header) && header[0]) {
+      return header[0].trim();
+    }
   }
 
   return null;

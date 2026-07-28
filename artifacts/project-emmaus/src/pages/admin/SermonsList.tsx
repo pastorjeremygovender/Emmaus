@@ -7,11 +7,16 @@ import { StatusBadge, AdminBtn, AdminTable, Th, Td, PageHeader } from './shared'
 type Props = {
   onEdit: (id: string) => void;
   onNew: () => void;
-  onOpenCompanion: (journeyId: string) => void;
+  /** Opens the companion for a sermon. Receives (sermonId, companionId). */
+  onOpenCompanion: (sermonId: string, companionId: string) => void;
 };
 
 const TRANSCRIPT_LABELS = { none: 'None', pending: 'Pending', complete: 'Complete' };
-const AI_LABELS = { none: 'None', pending: 'Indexing', indexed: 'Indexed' };
+
+/** A companionJourneyId is a new-style UUID if it matches the UUID pattern. */
+function isUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
 
 export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const { sermons } = useAdmin();
@@ -43,9 +48,13 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
         </thead>
         <tbody className="divide-y divide-gray-50">
           {sermons.map(s => {
-            const companion = s.companionJourneyId
+            // Legacy companions use a journey ID; new companions are UUIDs.
+            const hasCompanion = !!s.companionJourneyId;
+            const companionIsNew = hasCompanion && isUUID(s.companionJourneyId!);
+            const legacyCompanion = !companionIsNew && s.companionJourneyId
               ? journeys.find(j => j.id === s.companionJourneyId)
               : null;
+
             return (
               <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
                 <Td>
@@ -55,15 +64,24 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                 <Td>{s.speaker}</Td>
                 <Td>{s.scriptureReference}</Td>
                 <Td>
-                  <span className="text-xs text-gray-500">{TRANSCRIPT_LABELS[s.transcriptStatus]}</span>
+                  <span className="text-xs text-gray-500">
+                    {TRANSCRIPT_LABELS[s.transcriptStatus] ?? s.transcriptStatus}
+                  </span>
                 </Td>
                 <Td>
-                  {companion ? (
+                  {companionIsNew ? (
                     <button
-                      onClick={() => onOpenCompanion(companion.id)}
+                      onClick={() => onOpenCompanion(s.id, s.companionJourneyId!)}
                       className="text-xs text-teal-700 hover:underline flex items-center gap-1"
                     >
-                      <BookOpen size={11} /> {companion.title}
+                      <BookOpen size={11} /> View Companion
+                    </button>
+                  ) : legacyCompanion ? (
+                    <button
+                      onClick={() => onOpenCompanion(s.id, legacyCompanion.id)}
+                      className="text-xs text-teal-700 hover:underline flex items-center gap-1"
+                    >
+                      <BookOpen size={11} /> {legacyCompanion.title}
                     </button>
                   ) : (
                     <span className="text-xs text-gray-400">—</span>
@@ -75,14 +93,16 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                     <AdminBtn size="sm" variant="ghost" onClick={() => onEdit(s.id)}>
                       <Pencil size={13} /> Edit
                     </AdminBtn>
-                    <a
-                      href={s.youtubeUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-1.5 text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
+                    {s.youtubeUrl && (
+                      <a
+                        href={s.youtubeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
                   </div>
                 </Td>
               </tr>
@@ -91,7 +111,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           {sermons.length === 0 && (
             <tr>
               <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
-                No sermons yet.
+                No sermons yet. Click "New Sermon" to generate your first draft.
               </td>
             </tr>
           )}

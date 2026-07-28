@@ -3,6 +3,24 @@ import { isDemoMode } from '../lib/firebase';
 import { DEMO_USER, DEMO_ADMIN, DEMO_SUPER_ADMIN } from '../lib/demo-data';
 import { DEMO_USER_2 } from '../lib/rooms-demo-data';
 
+// ── Session cookie bootstrap ──────────────────────────────────────────────────
+// Issues a signed server-side session cookie for the given userId so that
+// privileged API routes (admin/generator/companions) can verify identity via
+// the cookie, removing the need to trust the X-User-Id header in production.
+async function issueSessionCookie(userId: string): Promise<void> {
+  try {
+    const base = (import.meta.env?.BASE_URL ?? '').replace(/\/$/, '');
+    await fetch(`${base}/api/auth/session`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+  } catch {
+    // Non-fatal in demo/dev: X-User-Id header fallback still works
+  }
+}
+
 export type User = {
   id: string;
   email: string;
@@ -42,35 +60,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, pass: string): Promise<'admin' | 'user' | 'superAdmin'> => {
     // Demo only — exact match for known demo accounts
+    type DemoUser = typeof DEMO_USER | typeof DEMO_ADMIN | typeof DEMO_SUPER_ADMIN | typeof DEMO_USER_2;
+    let u: DemoUser = DEMO_USER;
+    let role: 'admin' | 'user' | 'superAdmin' = 'user';
     if (email === 'superadmin@emmaus.church' && pass === 'admin123') {
-      setUser(DEMO_SUPER_ADMIN);
-      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_SUPER_ADMIN));
-      return 'superAdmin';
+      u = DEMO_SUPER_ADMIN; role = 'superAdmin';
     } else if ((email === 'admin@emmaus.demo' || email === 'pastor@emmaus.church') && pass === 'admin123') {
-      setUser(DEMO_ADMIN);
-      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_ADMIN));
-      return 'admin';
+      u = DEMO_ADMIN; role = 'admin';
     } else if (email === 'friend@emmaus.church') {
-      setUser(DEMO_USER_2);
-      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_USER_2));
-      return 'user';
-    } else {
-      setUser(DEMO_USER);
-      localStorage.setItem('emmaus_demo_user', JSON.stringify(DEMO_USER));
-      return 'user';
+      u = DEMO_USER_2;
     }
+    setUser(u as User);
+    localStorage.setItem('emmaus_demo_user', JSON.stringify(u));
+    // Establish server-side signed cookie so admin API routes work in production
+    await issueSessionCookie(u.id);
+    return role;
   };
 
   const signUp = async (email: string, pass: string, name: string) => {
     const newUser: User = { ...DEMO_USER, email, preferredName: name, id: 'demo-' + Date.now() };
     setUser(newUser);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(newUser));
+    await issueSessionCookie(newUser.id);
   };
 
-  const signInDemo = (as: boolean | 'superAdmin' = false) => {
+  const signInDemo = async (as: boolean | 'superAdmin' = false) => {
     const u = as === 'superAdmin' ? DEMO_SUPER_ADMIN : as ? DEMO_ADMIN : DEMO_USER;
     setUser(u);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(u));
+    // Establish server-side signed cookie so admin API routes work in production
+    await issueSessionCookie(u.id);
   };
 
   const signOut = () => {

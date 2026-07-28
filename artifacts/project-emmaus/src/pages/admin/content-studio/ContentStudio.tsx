@@ -351,7 +351,16 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           <SermonsList
             onEdit={(id) => navigate({ id: 'sermon-editor', sermonId: id })}
             onNew={() => navigate({ id: 'sermon-editor', sermonId: null })}
-            onOpenCompanion={(jId) => navigate({ id: 'legacy-journey-editor', journeyId: jId })}
+            onOpenCompanion={(sermonId, companionId) => {
+              // New-style companions are UUIDs → open sermon editor (shows companion tab)
+              // Legacy companions are journey IDs → open legacy journey editor
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(companionId);
+              if (isUUID) {
+                navigate({ id: 'sermon-editor', sermonId });
+              } else {
+                navigate({ id: 'legacy-journey-editor', journeyId: companionId });
+              }
+            }}
           />
         );
       case 'sermon-editor':

@@ -10,6 +10,55 @@ import { journeysTable } from "@workspace/db/schema";
 import { and, eq, ne } from "drizzle-orm";
 import { logger } from "./logger.js";
 export async function runStartupMigrations(): Promise<void> {
+  // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
+  // Three tables for AI-generated sermon companions. sermon_id is text (not FK)
+  // because sermons are stored in a JSON file, not a DB table.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sermon_companion (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        sermon_id text NOT NULL,
+        title text NOT NULL DEFAULT '',
+        number_of_days integer NOT NULL DEFAULT 5,
+        status text NOT NULL DEFAULT 'Draft',
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS sermon_companion_entry (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        companion_id uuid NOT NULL REFERENCES sermon_companion(id) ON DELETE CASCADE,
+        day_number integer NOT NULL,
+        title text NOT NULL DEFAULT '',
+        scripture_reference text DEFAULT '',
+        greeting text DEFAULT '',
+        reflection text DEFAULT '',
+        prayer text DEFAULT '',
+        next_step text DEFAULT '',
+        closing text DEFAULT '',
+        status text NOT NULL DEFAULT 'Draft',
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (companion_id, day_number)
+      );
+
+      CREATE TABLE IF NOT EXISTS sermon_companion_progress (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id text NOT NULL,
+        companion_id uuid NOT NULL REFERENCES sermon_companion(id) ON DELETE CASCADE,
+        current_day integer NOT NULL DEFAULT 1,
+        completed_days jsonb NOT NULL DEFAULT '[]',
+        started_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, companion_id)
+      );
+    `);
+    logger.info("Startup migration: sermon companion tables created (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: sermon companion tables failed (non-fatal)");
+  }
+
+
   // ── Daily Devotionals tables (2026-07) ───────────────────────────────────────
   // Create the three devotional tables idempotently. Drizzle schema is the source
   // of truth for column definitions; this migration only ensures the tables exist.
