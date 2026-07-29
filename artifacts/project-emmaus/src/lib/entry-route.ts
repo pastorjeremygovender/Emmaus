@@ -30,16 +30,25 @@ import type { Journey, Progress } from '@/contexts/JourneyContext';
 
 type JourneyLike = Pick<Journey, 'id' | 'journeyType' | 'status'>;
 
+/** Minimal step shape needed to validate day existence. */
+type StepLike = { day: number; status: string };
+
 /**
  * Returns the correct member entry route for today.
  *
- * @param journeys  — published journey list from JourneyContext
- * @param progress  — member progress map from JourneyContext
- * @returns         — one of: /daily-rhythm/day/:n   or   /walk
+ * @param journeys           — published journey list from JourneyContext
+ * @param progress           — member progress map from JourneyContext
+ * @param getStepsForJourney — optional callback to load published steps;
+ *                             when provided, the resolved day is clamped to
+ *                             the highest real published entry so phantom
+ *                             arithmetic days (e.g. Day 8 when only 1–7 exist)
+ *                             never appear in the launch URL.
+ * @returns — one of: /daily-rhythm/day/:n   or   /walk
  */
 export function resolveEntryRoute(
   journeys: JourneyLike[],
   progress: Record<string, Progress>,
+  getStepsForJourney?: (journeyId: string) => StepLike[],
 ): string {
   // Find the published Daily Rhythm journey (journeyType 'daily-rhythm' or legacy 'core').
   const journey = journeys.find(
@@ -53,15 +62,34 @@ export function resolveEntryRoute(
 
   const prog = progress[journey.id];
 
-  // New member: no progress record. Open day 1.
-  if (!prog) return '/daily-rhythm/day/1';
+  // New member: no progress record. Open day 1 only if it is published.
+  if (!prog) {
+    if (getStepsForJourney) {
+      const steps = getStepsForJourney(journey.id).filter(s => s.status === 'Published');
+      return steps.some(s => s.day === 1) ? '/daily-rhythm/day/1' : '/walk';
+    }
+    return '/daily-rhythm/day/1';
+  }
 
   // KEY CHECK: if today's rhythm is already complete (lastCompletedAt is today's
   // local calendar date) → return to Today's Steps, never to the next day.
-  // This prevents the "You're ahead of the rhythm" screen from appearing on
-  // every app reopen after the member finishes their daily reading.
   if (isCompletedToday(prog.lastCompletedAt)) return '/walk';
 
-  // Rhythm not yet complete today → open the current day.
+  // Clamp the arithmetic currentDay to the highest real published entry.
+  // This prevents routing to phantom days (e.g. Day 8 when only 1–7 are published).
+  if (getStepsForJourney) {
+    const publishedSteps = getStepsForJourney(journey.id).filter(s => s.status === 'Published');
+    if (publishedSteps.length > 0) {
+      const maxPublishedDay = Math.max(...publishedSteps.map(s => s.day));
+      const effectiveDay    = Math.min(prog.currentDay, maxPublishedDay);
+      // If the entry for effectiveDay doesn't exist (content gap), return /walk.
+      if (!publishedSteps.some(s => s.day === effectiveDay)) return '/walk';
+      return `/daily-rhythm/day/${effectiveDay}`;
+    }
+    // No published entries at all — safe fallback.
+    return '/walk';
+  }
+
+  // Rhythm not yet complete today → open the current day (no step validation).
   return `/daily-rhythm/day/${prog.currentDay}`;
 }

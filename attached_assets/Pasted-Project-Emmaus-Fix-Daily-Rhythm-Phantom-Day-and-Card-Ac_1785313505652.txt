@@ -1,0 +1,393 @@
+Project Emmaus — Fix Daily Rhythm Phantom Day and Card Action
+
+Current bug:
+
+Today’s Steps displays:
+
+Daily Rhythm
+Day 8
+Continue
+
+However:
+
+- only Days 1–7 exist;
+- Day 8 has not been authored or published;
+- clicking Continue only refreshes the current page;
+- Daily Rhythm should automatically load the current valid day;
+- members should never manually “continue” Daily Rhythm to a nonexistent day.
+
+Fix this completely.
+
+Do not redesign Today’s Steps.
+Do not change Daily Devotional behaviour.
+Do not alter the one-per-day Daily Rhythm rule.
+Do not create Day 8 automatically.
+Do not hide the problem with a fallback route.
+
+====================================================
+LOCKED DAILY RHYTHM BEHAVIOUR
+====================================================
+
+Daily Rhythm is system-led daily content.
+
+The member does not manually choose the next day.
+
+Emmaus determines the correct available day using:
+
+- published Daily Rhythm entries;
+- member progress;
+- local calendar date;
+- completion state;
+- Development Mode rules.
+
+The card must only reference a real published entry.
+
+If no new published day is available, it must not display a phantom next day.
+
+====================================================
+TASK 1 — FIND THE ROOT CAUSE
+====================================================
+
+Trace how Today’s Steps calculates the Daily Rhythm day number.
+
+Inspect:
+
+- member Daily Rhythm progress;
+- lastCompletedDay;
+- currentDay;
+- availableDay;
+- authored/published day count;
+- local-date calculation;
+- Development Mode bypass;
+- Today’s Steps card mapper;
+- card route;
+- action label.
+
+The likely incorrect logic is:
+
+lastCompletedDay + 1
+
+without checking whether that entry exists and is published.
+
+Identify the exact source and replace it.
+
+====================================================
+TASK 2 — USE REAL PUBLISHED ENTRIES
+====================================================
+
+Load the ordered list of actual published Daily Rhythm entries.
+
+Determine the current entry only from this list.
+
+Never display a day number based only on arithmetic.
+
+Suggested logic:
+
+publishedEntries = all published Daily Rhythm entries ordered by dayNumber
+
+candidateDay = calendar/progress-derived available day
+
+currentEntry =
+  publishedEntries.find(entry => entry.dayNumber === candidateDay)
+
+If no matching published entry exists:
+
+- do not display candidateDay;
+- do not create a route to it;
+- use the safe completed/waiting state described below.
+
+Do not fall forward to a draft day.
+
+Do not skip to a later day.
+
+====================================================
+TASK 3 — HANDLE THE END OF LOADED CONTENT
+====================================================
+
+Current test condition:
+
+- Days 1–7 exist;
+- no Day 8 exists;
+- member has reached the point where the old calculation returns Day 8.
+
+Display a safe state such as:
+
+10 Minutes with Jesus
+
+You’re up to date.
+
+The next reading will appear when it is ready.
+
+Primary action:
+
+Review Today
+
+Secondary action:
+
+View Previous Days →
+
+If the member has already completed the latest published day today, use:
+
+Today’s time with Jesus is complete.
+
+Come back tomorrow.
+
+Primary action:
+
+Review
+
+Secondary action:
+
+View Previous Days →
+
+Do not display:
+
+- Day 8;
+- Continue;
+- Open Today’s Time linked to a nonexistent entry;
+- an empty card;
+- a broken route.
+
+====================================================
+TASK 4 — CORRECT CARD TITLE
+====================================================
+
+When a real current day exists and is not complete, show the authored entry title where available.
+
+Example:
+
+10 Minutes with Jesus
+
+Born Again
+
+or:
+
+Day 7 — Born Again
+
+Do not use a generic title such as:
+
+Begin your daily walk
+
+Do not show only:
+
+Day 8
+
+The card should describe the real content that will open.
+
+====================================================
+TASK 5 — STANDARDIZE THE ACTION LABEL
+====================================================
+
+Daily Rhythm should not use:
+
+Continue
+
+as a generic action on Today’s Steps.
+
+Daily Rhythm automatically opens today’s valid entry.
+
+Use these labels:
+
+Current day available and not completed:
+
+Open Today’s Time
+
+Current day partially opened but not completed:
+
+Return to Today’s Time
+
+Current day completed:
+
+Review
+
+No newer published entry available:
+
+Review Latest Reading
+
+or:
+
+Review Today
+
+Use one of the established labels consistently.
+
+Do not use:
+
+- Begin Day 1;
+- Continue;
+- Continue Day 8;
+- Begin your daily walk.
+
+====================================================
+TASK 6 — ROUTING
+====================================================
+
+The primary action must navigate directly to the real current Daily Rhythm entry ID or valid day route.
+
+Do not route to:
+
+- /daily-rhythm/day/8 when Day 8 does not exist;
+- the Today’s Steps page itself;
+- a generic Daily Rhythm landing page that redirects back;
+- a computed day without validating it.
+
+If no new entry is available, Review must open the latest valid published entry in replay mode.
+
+====================================================
+TASK 7 — DEVELOPMENT MODE
+====================================================
+
+Development Mode may allow authorised testers to open any existing published Daily Rhythm entry.
+
+It must not invent or expose nonexistent days.
+
+Even in Development Mode:
+
+- Day 8 must not appear unless a Day 8 record exists;
+- unpublished/draft entries follow the existing tester rules;
+- the card route must point to a real record.
+
+Do not let Development Mode corrupt normal member progress.
+
+====================================================
+TASK 8 — CALENDAR AND COMPLETION RULES
+====================================================
+
+Preserve the established rules:
+
+- one new Daily Rhythm entry per eligible local calendar day;
+- replay allowed;
+- completion does not automatically advance to a nonexistent entry;
+- local midnight may unlock the next published entry;
+- normal members cannot manually skip forward.
+
+The maximum available day must always be clamped to the highest eligible published entry.
+
+====================================================
+TASK 9 — LOADING AND EMPTY STATES
+====================================================
+
+While Daily Rhythm data is loading:
+
+- do not briefly flash Day 8;
+- show a stable skeleton or loading state.
+
+If no Daily Rhythm entries exist:
+
+Show:
+
+10 Minutes with Jesus
+
+Today’s reading is not available yet.
+
+Do not display Day 1 unless it exists.
+
+====================================================
+TASK 10 — REGRESSION TESTS
+====================================================
+
+Add automated tests for these cases.
+
+CASE A — Days 1–7 published, member eligible for Day 7
+
+Expected:
+
+- card shows Day 7/title;
+- action opens Day 7.
+
+CASE B — Days 1–7 published, calculation would produce Day 8
+
+Expected:
+
+- Day 8 is never displayed;
+- safe up-to-date/completed state appears;
+- Review opens Day 7.
+
+CASE C — Day 8 later published
+
+Expected:
+
+- card automatically updates to Day 8 when calendar rules allow;
+- action opens the real Day 8 record.
+
+CASE D — Day 8 exists as Draft only
+
+Expected:
+
+- normal member does not see Day 8;
+- latest published state remains safe.
+
+CASE E — Development Mode
+
+Expected:
+
+- existing test entries are accessible;
+- nonexistent Day 8 is never shown.
+
+CASE F — Refresh
+
+Expected:
+
+- card remains correct;
+- no phantom day briefly appears;
+- button does not refresh the same page.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Using the current database with only Days 1–7 loaded, verify:
+
+✓ Today’s Steps does not display Day 8.
+
+✓ The card uses the real latest available entry.
+
+✓ The action does not say Continue.
+
+✓ The action opens a real Daily Rhythm reading.
+
+✓ If Day 7 is complete, Review opens Day 7 in replay mode.
+
+✓ View Previous Days still works.
+
+✓ No progress is advanced.
+
+✓ Refresh preserves the correct state.
+
+✓ Signing out and back in preserves the correct state.
+
+✓ Publishing a real Day 8 later makes it available according to the calendar rules.
+
+✓ A draft Day 8 remains hidden from normal members.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not create Day 8 automatically.
+
+Do not reset the member’s progress.
+
+Do not change the Daily Rhythm schedule to loop back to Day 1.
+
+Do not use a hard-coded maximum of 7.
+
+Use the actual published entries as the source of truth.
+
+The permanent rule is:
+
+Daily Rhythm may only display and open a real eligible published entry.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact cause of the phantom Day 8;
+2. the previous calculation;
+3. the new current-entry resolution logic;
+4. the final action labels used;
+5. the route used for the card;
+6. the files changed;
+7. the result of every test above;
+8. any remaining manual test.

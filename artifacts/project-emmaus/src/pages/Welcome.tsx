@@ -28,7 +28,7 @@ const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves 
 
 export default function Welcome() {
   const { user, loading: authLoading } = useAuth();
-  const { journeys, progress, loading: journeyLoading } = useJourney();
+  const { journeys, progress, loading: journeyLoading, getStepsForJourney } = useJourney();
   const [, setLocation] = useLocation();
 
   // Has this splash already been shown in the current browser session?
@@ -49,12 +49,12 @@ export default function Welcome() {
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation(resolveEntryRoute(journeys, progress));
+        setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, authLoading, user, journeys, progress]);
+  }, [alreadyShown, authLoading, user, journeys, progress, getStepsForJourney]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -79,12 +79,12 @@ export default function Welcome() {
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation(resolveEntryRoute(journeys, progress));
+        setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, timerDone, authLoading, journeyLoading, user, journeys, progress]);
+  }, [alreadyShown, timerDone, authLoading, journeyLoading, user, journeys, progress, getStepsForJourney]);
 
   // ── If already shown, render nothing while redirecting ───────────────────
   if (alreadyShown) return null;

@@ -11,6 +11,12 @@ description: How completion panels, return navigation, and sermon companion rout
 - `DevotionalPreviousDays` + `SermonCompanionPreviousDays` read `?from=journeys|walk` to resolve back destination.
 - `JourneyPreviousDays` + `PreviousDays` always return to `/journeys` and `/walk` respectively.
 
+## Phantom Day prevention (platform rule)
+**Rule:** Daily Rhythm may only display and route to a real published entry. Never trust `progress.currentDay` raw — always clamp to `maxPublishedDay` from the published steps list.
+- `Walk.tsx`: computes `coreSteps`, `coreMaxPublishedDay`, `coreCaughtUp`, `effectiveCoreDay`, `coreCurrentEntry`. All routing uses `effectiveCoreDay`.
+- `entry-route.ts`: `resolveEntryRoute` accepts optional `getStepsForJourney` callback; when provided, clamps launch URL to max published day.
+- `FifteenMinutesCard`: `caughtUp` prop + `uptodate`/`waitlatest` states — shows "You're up to date" safe state, never a phantom day number.
+
 ## EmmausCompletionCard (design-locked)
 Single canonical completion component at `src/components/EmmausCompletionCard.tsx`.
 - **Visual**: `bg-teal-50 border-teal-200 rounded-2xl px-5 py-6` card; `CheckCircle2 size=28 text-green-500`; heading `text-[16px] font-medium text-teal-900`; subMessage `text-[13px] text-teal-700`; primary Button `rounded-xl h-11`.

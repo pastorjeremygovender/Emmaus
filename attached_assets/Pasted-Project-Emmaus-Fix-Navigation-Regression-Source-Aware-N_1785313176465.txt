@@ -1,0 +1,135 @@
+Project Emmaus — Fix Navigation Regression (Source-Aware Navigation)
+
+This is a regression of previously approved behaviour.
+
+Current bug:
+
+Next Steps
+→ Daily Devotionals
+→ Psalms Daily Devotional
+→ View Previous Days
+
+incorrectly returns the member to Today's Steps.
+
+This must NEVER happen.
+
+==================================================
+
+RULE
+
+Emmaus must always return the member to the screen they launched the content from.
+
+Navigation must be source-aware.
+
+Do NOT hardcode navigation destinations.
+
+==================================================
+
+REQUIRED BEHAVIOUR
+
+10 Minutes with Jesus
+
+Launch:
+Today's Steps
+
+Return after:
+• Review
+• View Previous Days
+• Previous Day Review
+• Done
+• Continue
+
+Destination:
+
+Today's Steps
+
+--------------------------------------------------
+
+Daily Devotionals
+
+Launch:
+
+Next Steps
+→ Daily Devotionals
+
+Return after:
+• Review
+• View Previous Days
+• Previous Day Review
+• Done
+• Continue
+
+Destination:
+
+Next Steps
+→ Daily Devotionals
+
+--------------------------------------------------
+
+Sermon Companions
+
+Launch:
+
+Next Steps
+→ Sermon Companions
+
+Return to:
+
+Next Steps
+→ Sermon Companions
+
+--------------------------------------------------
+
+Journeys
+
+Launch:
+
+Next Steps
+→ Journeys
+
+Return to:
+
+Next Steps
+→ Journeys
+
+==================================================
+
+IMPLEMENTATION
+
+Pass the launch source when opening any content.
+
+Examples:
+
+source = todays-steps
+
+source = next-steps-devotionals
+
+source = next-steps-sermons
+
+source = next-steps-journeys
+
+When the member exits Review or Previous Days, navigate back using this stored source instead of a hardcoded route.
+
+==================================================
+
+IMPORTANT
+
+This behaviour must be implemented once in the shared navigation layer.
+
+Do NOT create separate fixes for Psalms, Sermons, Journeys, etc.
+
+Every current and future content type must inherit this behaviour automatically.
+
+==================================================
+
+SUCCESS CRITERIA
+
+✓ Psalms Previous Days returns to Next Steps → Daily Devotionals.
+
+✓ Sermon Companion returns to Next Steps → Sermon Companions.
+
+✓ Journeys return to Next Steps → Journeys.
+
+✓ Daily Rhythm returns to Today's Steps.
+
+✓ No future content requires custom navigation logic.

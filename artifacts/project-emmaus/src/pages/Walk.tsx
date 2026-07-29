@@ -133,78 +133,126 @@ function DevotionalDiscoveryCard({
 
 // ─── 10 Minutes with Jesus card ───────────────────────────────────────────────
 // Highest-priority card. Always first.
-// For daily-rhythm journeys: never shows "of X" total or any "complete" language.
-// onViewPreviousDays — when provided, a "View Previous Days →" text link is shown
-// beneath the primary action. Only supply when the member actually has previous days.
+// CRITICAL: must never reference a day that has no published entry.
+//   currentEntry — the actual published step the member should open today
+//                  (null = all published content is already complete)
+//   caughtUp     — true when progress.currentDay exceeds the highest published day;
+//                  the member has finished all available content and must wait for
+//                  new entries to be published before continuing.
+//   onViewPreviousDays — when provided, a "View Previous Days →" text link is shown.
 function FifteenMinutesCard({
   journey,
   prog,
+  currentEntry,
+  caughtUp = false,
   onContinue,
   onViewPreviousDays,
   devMode = false,
 }: {
   journey: import('@/contexts/JourneyContext').Journey;
   prog: import('@/contexts/JourneyContext').Progress | undefined;
+  /**
+   * The real published entry the card should reference.
+   * Null means all published content is done and the member is waiting for more.
+   */
+  currentEntry: { day: number; title: string } | null;
+  /**
+   * True when the member's arithmetic currentDay exceeds the highest published day.
+   * Walk.tsx computes this and must clamp all routing before passing it here.
+   */
+  caughtUp?: boolean;
   onContinue: () => void;
   onViewPreviousDays?: () => void;
   /** When true (admin / super-admin), the daily release schedule is bypassed. */
   devMode?: boolean;
 }) {
   // In dev mode the calendar lock is lifted: treat every day as immediately
-  // available so Continue advances freely without waiting for tomorrow.
-  const completedToday  = devMode ? false : isCompletedToday(prog?.lastCompletedAt);
-  const nextDayAvail    = devMode ? true  : isNextDayAvailable(prog?.lastCompletedAt);
-  const currentDay      = prog?.currentDay ?? 1;
-  const started         = !!prog;
-  const isDailyRhythm   = journey.journeyType === 'daily-rhythm';
+  // available so devs can advance freely without waiting for tomorrow.
+  const completedToday = devMode ? false : isCompletedToday(prog?.lastCompletedAt);
+  const nextDayAvail   = devMode ? true  : isNextDayAvailable(prog?.lastCompletedAt);
+  const started        = !!prog;
 
-  let state: 'start' | 'ready' | 'complete' | 'tomorrow';
-  if (!started)                             state = 'start';
-  else if (completedToday && !nextDayAvail) state = 'complete';
-  else if (completedToday)                  state = 'tomorrow';
-  else                                      state = 'ready';
+  /**
+   * State machine — exhaustive:
+   *   start      — member has never started
+   *   ready      — today's entry is available and unread
+   *   complete   — completed today; next day is coming soon
+   *   tomorrow   — completed today; next day is not yet available (normal end-of-day)
+   *   uptodate   — not completed today but caught up to end of published content
+   *   waitlatest — completed today AND caught up (nothing more published yet)
+   *
+   * "waitlatest" is treated identically to "tomorrow" in the UI — both show
+   * the done state with a "Review" action — but the description differs slightly.
+   */
+  type CardState = 'start' | 'ready' | 'complete' | 'tomorrow' | 'uptodate' | 'waitlatest';
 
-  const cfg = {
-    start:    { label: "Open Today's Time",  variant: 'default'  as const, disabled: false },
-    ready:    {
+  let state: CardState;
+  if (!started)                              state = 'start';
+  else if (caughtUp && completedToday)       state = 'waitlatest';
+  else if (caughtUp && !completedToday)      state = 'uptodate';
+  else if (completedToday && !nextDayAvail)  state = 'tomorrow';
+  else if (completedToday)                   state = 'complete';
+  else                                       state = 'ready';
+
+  const cfg: Record<CardState, { label: string; variant: 'default'; disabled: boolean }> = {
+    start:      { label: "Open Today's Time",      variant: 'default', disabled: false },
+    ready:      {
       label:   prog && prog.completedDays.length > 0
-                 ? 'Continue'
+                 ? "Return to Today's Time"
                  : "Open Today's Time",
-      variant: 'default' as const,
+      variant: 'default',
       disabled: false,
     },
-    complete: { label: 'Review',             variant: 'default'  as const, disabled: false },
-    tomorrow: { label: 'Available tomorrow', variant: 'default'  as const, disabled: true  },
-  }[state];
+    complete:   { label: 'Review',                 variant: 'default', disabled: false },
+    tomorrow:   { label: 'Review',                 variant: 'default', disabled: false },
+    uptodate:   { label: 'Review Latest Reading',  variant: 'default', disabled: false },
+    waitlatest: { label: 'Review',                 variant: 'default', disabled: false },
+  };
 
-  // Title line — never shows "of Y" for daily-rhythm; shows day number only.
+  const done =
+    state === 'complete' ||
+    state === 'tomorrow' ||
+    state === 'uptodate' ||
+    state === 'waitlatest';
+
+  // ── Title line ──
+  // Always references the real published entry — never a phantom day number.
   const titleLine = (() => {
     if (state === 'start') return "Today's time with Jesus is ready.";
-    const doneDay = currentDay - 1 > 0 ? currentDay - 1 : currentDay;
-    if (state === 'complete' || state === 'tomorrow') {
-      return isDailyRhythm ? `Day ${doneDay} — done for today` : `Day ${doneDay} — Complete`;
+    if (state === 'uptodate') {
+      // Show the last published entry the member has completed
+      return currentEntry
+        ? `Day ${currentEntry.day} — ${currentEntry.title}`
+        : "You're up to date.";
     }
-    return isDailyRhythm
-      ? `Day ${currentDay}`
-      : `Day ${currentDay} of ${journey.durationDays}`;
+    if (done) {
+      // Completed state: show the entry the member just read
+      return currentEntry
+        ? `Day ${currentEntry.day} — done for today`
+        : "Today's time with Jesus is complete.";
+    }
+    // ready — show the entry they are about to open
+    return currentEntry
+      ? `Day ${currentEntry.day} — ${currentEntry.title}`
+      : "Today's time with Jesus is ready.";
   })();
 
-  const done = state === 'complete' || state === 'tomorrow';
+  // ── Description line ──
+  const descriptionLine = (() => {
+    if (state === 'uptodate') return "You're up to date. The next reading will appear when it is ready.";
+    if (state === 'waitlatest') return "Today's time with Jesus is complete. New content will appear when it is ready.";
+    if (state === 'tomorrow' || state === 'complete') return "Today's time with Jesus is complete. Come back tomorrow.";
+    return undefined;
+  })();
 
   return (
     <EmmausContentCard
       label="DAILY RHYTHM"
-      title={titleLine}
-      description={
-        done
-          ? isDailyRhythm
-            ? "Today's time with Jesus is complete. Come back tomorrow."
-            : "Today's time with Jesus is complete. Come back tomorrow for the next step."
-          : undefined
-      }
-      primaryActionLabel={cfg.label}
+      title={journey.title}
+      description={done ? descriptionLine : titleLine}
+      primaryActionLabel={cfg[state].label}
       onAction={onContinue}
-      disabled={cfg.disabled}
+      disabled={cfg[state].disabled}
       variant={done ? 'default' : 'featured'}
       headerTrailing={
         done
@@ -390,20 +438,38 @@ export default function Walk() {
   );
   const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
 
-  // Does the member have any published previous days to revisit?
-  const coreCurrentDay    = coreProg?.currentDay ?? 1;
-  const devMode           = isDevelopmentMode(user);
-  // In dev mode the calendar lock is lifted, so "completed today" is always
-  // false — Continue navigates to the next day rather than "Review today".
-  const coreCompletedToday = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
-  // The day the member just finished — one behind currentDay after completeStep runs.
-  const coreCompletedDay  = Math.max(1, coreCurrentDay - 1);
+  const devMode = isDevelopmentMode(user);
+
+  // ── Daily Rhythm published-entry resolution ───────────────────────────────
+  // RULE: the card must only ever reference a real published entry.
+  //   1. Load all published steps for the Daily Rhythm journey.
+  //   2. Determine the highest published day (maxPublishedDay).
+  //   3. Clamp progress.currentDay to maxPublishedDay — "caughtUp" when rawCurrentDay exceeds it.
+  //   4. Find the concrete entry for the effective day.
+  //   5. All routing uses the validated effectiveCoreDay — never the raw arithmetic value.
+  const coreSteps = coreJourney
+    ? getStepsForJourney(coreJourney.id).filter(s => s.status === 'Published')
+    : [];
+  const coreMaxPublishedDay = coreSteps.length > 0
+    ? Math.max(...coreSteps.map(s => s.day))
+    : 0;
+  const rawCoreCurrentDay   = coreProg?.currentDay ?? 1;
+  // "Caught up" = the member's progress has advanced past all published content.
+  const coreCaughtUp        = coreMaxPublishedDay > 0 && rawCoreCurrentDay > coreMaxPublishedDay;
+  // The day we actually show and route to — clamped to real published content.
+  const effectiveCoreDay    = coreCaughtUp ? coreMaxPublishedDay : rawCoreCurrentDay;
+  // The concrete published entry for effectiveCoreDay (null if no entries loaded yet).
+  const coreCurrentEntry    = coreSteps.find(s => s.day === effectiveCoreDay) ?? null;
+
+  // In dev mode the calendar lock is lifted, so "completed today" is always false —
+  // the card advances freely without waiting for tomorrow.
+  const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
+
+  // "View Previous Days →" appears when at least one earlier published day exists.
   const hasPreviousDays =
     !!coreJourney &&
-    coreCurrentDay > 1 &&
-    getStepsForJourney(coreJourney.id).some(
-      s => s.status === 'Published' && s.day < coreCurrentDay
-    );
+    effectiveCoreDay > 1 &&
+    coreSteps.some(s => s.day < effectiveCoreDay);
 
   // 3. Your Journeys — journeys the member has already started.
   //    Includes: active growth journeys + started daily devotional.
@@ -480,12 +546,19 @@ export default function Walk() {
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
+              currentEntry={coreCurrentEntry}
+              caughtUp={coreCaughtUp}
               devMode={devMode}
-              onContinue={() =>
-                // "Review today" must reopen the completed day, never advance to the next.
-                // In dev mode coreCompletedToday is always false so this always continues.
-                goToDailyRhythmDay(coreCompletedToday ? coreCompletedDay : coreCurrentDay)
-              }
+              onContinue={() => {
+                // Route to the validated effective day — never a phantom arithmetic day.
+                // Caught up or completed today → review the real last published entry.
+                // Otherwise → open today's available entry directly.
+                if (coreCaughtUp || coreCompletedToday) {
+                  goToDailyRhythmDay(coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay);
+                } else {
+                  goToDailyRhythmDay(effectiveCoreDay);
+                }
+              }}
               onViewPreviousDays={
                 hasPreviousDays ? () => setLocation('/daily-rhythm/previous') : undefined
               }

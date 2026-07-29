@@ -1,0 +1,562 @@
+Project Emmaus — Fix Global Back Navigation Across the Member App
+
+This is a global navigation regression.
+
+Current behaviour:
+
+The back arrow on content pages, Previous Days pages, review pages and other member screens always sends the member to Today’s Steps.
+
+This is incorrect.
+
+The back arrow must return the member to the exact page and tab from which the navigation was initiated.
+
+Do not fix this only for Daily Rhythm.
+Do not add separate hard-coded fixes for each content type.
+Do not redesign any screens.
+Do not change content, progress, publishing or completion logic.
+
+====================================================
+PERMANENT NAVIGATION PRINCIPLE
+====================================================
+
+Emmaus must use source-aware navigation.
+
+The back arrow means:
+
+Return to the previous meaningful Emmaus screen.
+
+It must not mean:
+
+Go to Today’s Steps.
+
+Today’s Steps may only be the destination when that is genuinely the screen the member came from.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+Example 1:
+
+Today’s Steps
+→ 10 Minutes with Jesus
+→ View Previous Days
+
+Back returns to:
+
+Today’s Steps
+
+Example 2:
+
+Next Steps
+→ Daily Devotionals
+→ Psalms Daily Devotional
+→ View Previous Days
+
+Back returns to:
+
+Next Steps
+→ Daily Devotionals
+
+Example 3:
+
+Next Steps
+→ Sermon Companions
+→ Jesus at the Center
+→ Previous Days or Review
+
+Back returns to:
+
+Next Steps
+→ Sermon Companions
+
+Example 4:
+
+Next Steps
+→ Journeys
+→ New to Faith
+→ Coming to Jesus
+→ Day 1
+
+Back returns to:
+
+Coming to Jesus
+
+A second Back returns to:
+
+Next Steps
+→ Journeys
+
+Example 5:
+
+My Journey
+→ Active Content
+→ Psalms Daily Devotional
+
+Back returns to:
+
+My Journey
+→ the same section or scroll position where practical
+
+Example 6:
+
+My Bible
+→ a passage opened from a devotional
+
+Back returns to:
+
+the exact devotional entry that opened My Bible
+
+====================================================
+TASK 1 — FIND ALL HARDCODED BACK ROUTES
+====================================================
+
+Search the full member application for back controls that navigate directly to:
+
+- /walk
+- Today’s Steps
+- home
+- root member route
+- a fixed content list
+- a generic fallback route
+
+Inspect:
+
+- top-left arrows;
+- Back links;
+- close buttons;
+- Previous Days headers;
+- Review pages;
+- Daily Rhythm pages;
+- Daily Devotional pages;
+- Journey pages;
+- Sermon Companion pages;
+- My Bible deep links;
+- completion footers;
+- mobile headers.
+
+Replace hard-coded navigation with the shared source-aware navigation system.
+
+Do not leave isolated fixed routes behind.
+
+====================================================
+TASK 2 — CREATE ONE SHARED RETURN CONTEXT
+====================================================
+
+Create or reuse one shared navigation context, utility or route-state structure.
+
+Suggested concept:
+
+ReturnContext
+
+Possible fields:
+
+{
+  sourceRoute: string,
+  sourceTab?: string,
+  sourceContentId?: string,
+  sourceSection?: string,
+  sourceScrollPosition?: number,
+  fallbackRoute: string
+}
+
+Use the project’s established router and state conventions.
+
+Do not build a separate return system for every content type.
+
+====================================================
+TASK 3 — PASS RETURN CONTEXT ON ENTRY
+====================================================
+
+Whenever a member opens content, preserve the source.
+
+Examples:
+
+From Today’s Steps:
+
+{
+  sourceRoute: "/walk",
+  fallbackRoute: "/walk"
+}
+
+From Next Steps Daily Devotionals:
+
+{
+  sourceRoute: "/next-steps",
+  sourceTab: "daily-devotionals",
+  fallbackRoute: "/next-steps?tab=daily-devotionals"
+}
+
+From Next Steps Journeys:
+
+{
+  sourceRoute: "/next-steps",
+  sourceTab: "journeys",
+  fallbackRoute: "/next-steps?tab=journeys"
+}
+
+From Next Steps Sermon Companions:
+
+{
+  sourceRoute: "/next-steps",
+  sourceTab: "sermon-companions",
+  fallbackRoute: "/next-steps?tab=sermon-companions"
+}
+
+From a Journey details page:
+
+{
+  sourceRoute: "/journey/{journeyId}",
+  fallbackRoute: "/next-steps?tab=journeys"
+}
+
+From My Journey:
+
+{
+  sourceRoute: "/my-journey",
+  sourceSection: "active-content",
+  fallbackRoute: "/my-journey"
+}
+
+Use the actual canonical routes in the project.
+
+====================================================
+TASK 4 — BACK ARROW PRIORITY
+====================================================
+
+The shared Back action should resolve in this order:
+
+1. Valid explicit return context passed by the source screen.
+2. Valid internal router history entry.
+3. Content-specific safe parent route.
+4. Final fallback to Today’s Steps only when no better context exists.
+
+Do not blindly use browser history when it could leave the Emmaus app or return to authentication, an external browser page or a stale admin screen.
+
+Use safe internal-app history.
+
+====================================================
+TASK 5 — PRESERVE NEXT STEPS TAB
+====================================================
+
+Returning to Next Steps must preserve the selected tab.
+
+Supported tabs:
+
+- Daily Devotionals
+- Journeys
+- Sermon Companions
+
+The member must not return to the default Daily Devotionals tab when they came from Sermon Companions or Journeys.
+
+Persist the tab using:
+
+- route query parameter;
+- route segment;
+- router state;
+- session state;
+
+according to the existing implementation.
+
+Prefer a URL-addressable tab so refresh and browser Back remain reliable.
+
+====================================================
+TASK 6 — NESTED NAVIGATION
+====================================================
+
+Back must respect the content hierarchy.
+
+Journey example:
+
+Next Steps → Journeys
+→ Coming to Jesus
+→ Day 2
+→ Previous Days
+→ Review Day 1
+
+Back from Review Day 1:
+
+Previous Days
+
+Back from Previous Days:
+
+Coming to Jesus or the Journey Day, according to the entry path
+
+Back from Coming to Jesus:
+
+Next Steps → Journeys
+
+Do not skip every intermediate screen and return directly to Today’s Steps.
+
+Daily Devotional example:
+
+Next Steps → Daily Devotionals
+→ Psalms Daily Devotional
+→ Previous Days
+→ Review Day 1
+
+Back should unwind the same meaningful hierarchy.
+
+====================================================
+TASK 7 — COMPLETION FOOTERS
+====================================================
+
+Completion footer actions may have explicit destinations according to existing approved rules.
+
+Examples:
+
+Back to Today’s Steps
+
+may remain explicit where the member completed today’s content from Today’s Steps.
+
+However, the top-left Back arrow must remain source-aware.
+
+Do not force the completion-footer destination onto every Back control.
+
+If the content was launched from Next Steps, a generic Back action should return to Next Steps and the correct tab.
+
+====================================================
+TASK 8 — MY BIBLE RETURN CONTEXT
+====================================================
+
+When “Open in My Bible” is selected from content:
+
+- open the exact passage;
+- preserve the originating content route;
+- preserve content ID and day;
+- Back returns to the same content entry;
+- a second Back continues through the original hierarchy.
+
+Do not return to My Bible home or Today’s Steps unless that was the true source.
+
+====================================================
+TASK 9 — REFRESH SAFETY
+====================================================
+
+Route state may disappear after a hard refresh.
+
+Ensure a safe fallback remains encoded in the URL or recoverable from session storage.
+
+After refresh on:
+
+- Previous Days;
+- Review;
+- Journey Day;
+- Sermon Companion Day;
+- My Bible passage;
+
+the Back arrow must still return to the most appropriate parent screen.
+
+Do not depend solely on ephemeral component state.
+
+====================================================
+TASK 10 — EXTERNAL ENTRY SAFETY
+====================================================
+
+If a member opens a deep link directly from:
+
+- a notification;
+- a shared link;
+- an external browser;
+- an app shortcut;
+
+there may be no internal source history.
+
+Use a sensible content-specific fallback:
+
+Daily Rhythm:
+Today’s Steps
+
+Daily Devotional:
+Next Steps → Daily Devotionals
+
+Journey:
+Next Steps → Journeys or the parent Journey
+
+Sermon Companion:
+Next Steps → Sermon Companions
+
+My Bible:
+My Bible home
+
+Do not send every deep link to Today’s Steps.
+
+====================================================
+TASK 11 — SCROLL POSITION
+====================================================
+
+Where practical, preserve scroll position on the source list.
+
+Example:
+
+The member scrolls through Previous Sermon Companions, opens one, then presses Back.
+
+Return to the same section rather than the top of the page.
+
+This is desirable but secondary to correct route and tab restoration.
+
+Do not delay the core fix for complex scroll restoration.
+
+====================================================
+TASK 12 — SHARED BACK COMPONENT
+====================================================
+
+Create or reuse one shared member Back component, such as:
+
+EmmausBackButton
+
+It should receive or resolve ReturnContext.
+
+Use it across every member-facing page.
+
+Do not maintain individual navigation logic inside each screen.
+
+The component must:
+
+- have an accessible label;
+- support keyboard interaction;
+- use the existing arrow styling;
+- perform one safe navigation action per click;
+- prevent double activation.
+
+====================================================
+TASK 13 — REGRESSION TESTS
+====================================================
+
+Add automated navigation tests.
+
+TEST A — Daily Rhythm
+
+Today’s Steps
+→ Daily Rhythm
+→ Previous Days
+→ Back
+
+Expected:
+
+Today’s Steps
+
+TEST B — Daily Devotional from Next Steps
+
+Next Steps → Daily Devotionals
+→ Psalms
+→ Previous Days
+→ Back
+
+Expected:
+
+Psalms or Next Steps → Daily Devotionals, according to the immediate parent
+
+It must never return directly to Today’s Steps unless Today’s Steps was the source.
+
+TEST C — Sermon Companion
+
+Next Steps → Sermon Companions
+→ Jesus at the Center
+→ Review
+→ Back
+
+Expected:
+
+Jesus at the Center or Next Steps → Sermon Companions according to hierarchy
+
+TEST D — Journey
+
+Next Steps → Journeys
+→ Coming to Jesus
+→ Day 1
+→ Back
+
+Expected:
+
+Coming to Jesus
+
+Second Back:
+
+Next Steps → Journeys
+
+TEST E — My Bible
+
+Daily Devotional
+→ Open in My Bible
+→ Back
+
+Expected:
+
+same Daily Devotional entry
+
+TEST F — Refresh
+
+Open Previous Days, refresh, then Back.
+
+Expected:
+
+correct content-specific parent or tab.
+
+TEST G — Direct deep link
+
+Open a Sermon Companion day directly with no internal history.
+
+Back fallback:
+
+Next Steps → Sermon Companions
+
+====================================================
+MANUAL TEST MATRIX
+====================================================
+
+Manually verify the visible back arrow on:
+
+- Daily Rhythm entry;
+- Daily Rhythm Previous Days;
+- Daily Rhythm review;
+- Daily Devotional entry;
+- Daily Devotional Previous Days;
+- Daily Devotional review;
+- Journey details;
+- Journey day;
+- Journey Previous Days;
+- Sermon Companion details;
+- Sermon Companion day;
+- Sermon Companion Previous Days;
+- My Bible passage opened from content;
+- My Journey content detail.
+
+For each page, test entry from every available source.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not patch only the screen in the screenshot.
+
+Do not route every Back action to Today’s Steps.
+
+Do not rely only on document.referrer.
+
+Do not use a generic navigate(-1) without safe-app checks and fallbacks.
+
+Do not break deep links.
+
+Do not change bottom navigation.
+
+Do not change completion or progress logic.
+
+The permanent rule is:
+
+The Back arrow returns the member to the same meaningful place from which the movement was initiated.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. all hard-coded Today’s Steps back routes found;
+2. the shared ReturnContext structure;
+3. the shared Back component created or reused;
+4. the routing priority used;
+5. how Next Steps tabs are preserved;
+6. the content-specific deep-link fallbacks;
+7. the files changed;
+8. the result of every automated and manual test above;
+9. any remaining page not yet using the shared Back component.
