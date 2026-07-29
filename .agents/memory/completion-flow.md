@@ -3,11 +3,20 @@ name: Completion flow standardisation
 description: How completion panels, return navigation, and sermon companion routing work across all member reading pages.
 ---
 
+## PreviousDaysScreen (platform standard)
+`src/components/PreviousDaysScreen.tsx` — shared Previous Days UI for ALL sequential content.
+- Props: `contentTitle`, `entries: PreviousDayEntry[]`, `loading`, `onBack`, `onReviewDay`, `backLabel`, `emptyMessage`.
+- `PreviousDayEntry.status`: `'completed' | 'current' | 'locked'` — only 'completed' gets a "Review →" link.
+- Routes: `/daily-rhythm/previous`, `/devotional/:seriesId/previous`, `/sermon-companion/:id/previous`, `/journey/:journeyId/previous`.
+- `DevotionalPreviousDays` + `SermonCompanionPreviousDays` read `?from=journeys|walk` to resolve back destination.
+- `JourneyPreviousDays` + `PreviousDays` always return to `/journeys` and `/walk` respectively.
+
 ## EmmausCompletionCard (design-locked)
 Single canonical completion component at `src/components/EmmausCompletionCard.tsx`.
 - **Visual**: `bg-teal-50 border-teal-200 rounded-2xl px-5 py-6` card; `CheckCircle2 size=28 text-green-500`; heading `text-[16px] font-medium text-teal-900`; subMessage `text-[13px] text-teal-700`; primary Button `rounded-xl h-11`.
 - **`fullScreen` prop**: wraps card in `min-h-[100dvh] flex items-center justify-center` — used by JourneyDay.tsx; default false for inline reading pages.
-- DO NOT redesign, add secondary buttons, use gamification language, or create a page-level layout.
+- `onPreviousDays?: () => void` — when provided, renders "See Previous Days →" teal text link beneath primary button. Only pass when `day > 1` and in live completion mode (not replay).
+- DO NOT redesign, add secondary buttons (other than See Previous Days), use gamification language, or create a page-level layout.
 - Replaces: `JourneyCompletionPanel.tsx` (deleted) and `ReadingCompletionFooter.tsx` (deleted).
 - Button wording: 10 Minutes → "Back to Today's Steps"; all others → "Back to Next Steps".
 - Mockup preview at `artifacts/mockup-sandbox/src/components/mockups/EmmausCompletionCardPreview.tsx`.

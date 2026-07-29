@@ -65,6 +65,12 @@ interface EmmausCompletionCardProps {
   /** Navigation callback fired when the primary button is tapped. */
   onReturn: () => void;
   /**
+   * When provided, renders a "See Previous Days →" secondary link beneath
+   * the primary button. Only supply this when previous completed days exist.
+   * Platform standard: every sequential content type supports previous-day review.
+   */
+  onPreviousDays?: () => void;
+  /**
    * When true the card is centred in a full-screen container (for post-reading
    * completion screens in JourneyDay). When false (default) it renders as an
    * inline card suitable for use inside a reading page's action-button area.
@@ -79,8 +85,9 @@ function CompletionCardInner({
   subMessage,
   returnLabel,
   onReturn,
+  onPreviousDays,
   className = '',
-}: Pick<EmmausCompletionCardProps, 'heading' | 'subMessage' | 'returnLabel' | 'onReturn' | 'className'>) {
+}: Pick<EmmausCompletionCardProps, 'heading' | 'subMessage' | 'returnLabel' | 'onReturn' | 'onPreviousDays' | 'className'>) {
   return (
     <div
       className={`bg-teal-50 border border-teal-200 rounded-2xl px-5 py-6 text-center space-y-4 ${className}`}
@@ -107,6 +114,16 @@ function CompletionCardInner({
       >
         {returnLabel}
       </Button>
+
+      {/* Secondary link — "See Previous Days →" (platform standard) */}
+      {onPreviousDays && (
+        <button
+          onClick={onPreviousDays}
+          className="text-[13px] text-teal-600 font-medium hover:text-teal-800 transition-colors"
+        >
+          See Previous Days →
+        </button>
+      )}
     </div>
   );
 }
@@ -116,6 +133,7 @@ export function EmmausCompletionCard({
   subMessage,
   returnLabel,
   onReturn,
+  onPreviousDays,
   fullScreen = false,
   className = '',
 }: EmmausCompletionCardProps) {
@@ -128,6 +146,7 @@ export function EmmausCompletionCard({
             subMessage={subMessage}
             returnLabel={returnLabel}
             onReturn={onReturn}
+            onPreviousDays={onPreviousDays}
             className={className}
           />
         </div>
@@ -141,6 +160,7 @@ export function EmmausCompletionCard({
       subMessage={subMessage}
       returnLabel={returnLabel}
       onReturn={onReturn}
+      onPreviousDays={onPreviousDays}
       className={className}
     />
   );

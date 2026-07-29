@@ -208,6 +208,11 @@ export default function SermonCompanionReader() {
 
   // ── Main reading view ──
 
+  // Previous days URL — encode back destination so the list knows where to return.
+  const prevDaysFrom = source === 'today' ? 'walk' : 'journeys';
+  const prevDaysUrl  = `/sermon-companion/${companionId}/previous?from=${prevDaysFrom}`;
+  const hasPreviousDays = day > 1;
+
   // Primary action button shown inside DevotionalReading
   let actionButton: React.ReactNode;
   if (justCompleted) {
@@ -221,9 +226,11 @@ export default function SermonCompanionReader() {
         }
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnDest)}
+        onPreviousDays={hasPreviousDays ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else if (isAlreadyCompleted) {
+    // Replay mode — member came from Previous Days; no secondary link needed
     actionButton = (
       <EmmausCompletionCard
         heading={`Day ${day} complete.`}

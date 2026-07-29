@@ -151,6 +151,10 @@ export default function DevotionalDay() {
   if (justCompleted || alreadyCompleted) {
     // Completed this session or returning to an already-completed day (replay)
     const hasNextDay = day < totalEntries;
+    // Previous days navigation — encode the back destination so the list
+    // knows where to return to when the member taps its back arrow.
+    const prevDaysFrom = source === 'nextSteps' ? 'journeys' : 'walk';
+    const prevDaysUrl  = `/devotional/${seriesId}/previous?from=${prevDaysFrom}`;
     actionButton = (
       <EmmausCompletionCard
         heading="Devotional complete."
@@ -161,6 +165,7 @@ export default function DevotionalDay() {
         }
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnPath)}
+        onPreviousDays={justCompleted && day > 1 ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else {

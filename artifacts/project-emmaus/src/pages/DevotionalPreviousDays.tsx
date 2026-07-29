@@ -1,16 +1,18 @@
 /**
- * DevotionalPreviousDays — member's history of completed/unlocked devotional entries.
+ * DevotionalPreviousDays — Previous Days list for a Daily Devotional series.
  *
  * Route: /devotional/:seriesId/previous
  *
- * Shows only entries the member has calendar-unlocked (dayNumber <= availableDay).
- * In Development Mode all published entries are shown.
+ * Thin page: loads devotional data from the API and renders the shared
+ * PreviousDaysScreen component.
+ *
+ * Back navigation:
+ *   ?from=journeys → /journeys (Next Steps)
+ *   default        → /walk     (Today's Steps)
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { ChevronLeft, BookHeart, Loader2 } from 'lucide-react';
-import { BottomNav } from '@/components/BottomNav';
 import { useAuth } from '@/contexts/AuthContext';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { calcAvailableDay } from '@/lib/devotional-calendar';
@@ -20,6 +22,7 @@ import {
   type SeriesWithEntries,
   type DevotionalProgress,
 } from '@/lib/devotionals-api';
+import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
 
 export default function DevotionalPreviousDays() {
   const params = useParams<{ seriesId: string }>();
@@ -27,9 +30,13 @@ export default function DevotionalPreviousDays() {
   const { user } = useAuth();
   const seriesId = params.seriesId;
 
+  const from = new URLSearchParams(window.location.search).get('from');
+  const backPath  = from === 'journeys' ? '/journeys' : '/walk';
+  const backLabel = from === 'journeys' ? 'Next Steps' : "Today's Steps";
+
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
-  const [progress, setProgress] = useState<DevotionalProgress | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [progress, setProgress]     = useState<DevotionalProgress | null>(null);
+  const [loading, setLoading]       = useState(true);
 
   const load = useCallback(async () => {
     if (!seriesId) return;
@@ -42,7 +49,7 @@ export default function DevotionalPreviousDays() {
       setSeriesData(d);
       setProgress(p);
     } catch {
-      // ignore
+      // ignore — empty-state handled below
     } finally {
       setLoading(false);
     }
@@ -52,7 +59,6 @@ export default function DevotionalPreviousDays() {
 
   const devMode = isDevelopmentMode(user ?? undefined);
 
-  // Calendar-derived available day — same rule used by Walk.tsx
   const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
   const maxPublishedDay  = publishedEntries.length > 0
     ? Math.max(...publishedEntries.map(e => e.dayNumber))
@@ -61,91 +67,29 @@ export default function DevotionalPreviousDays() {
     ? calcAvailableDay(progress.startedAt, maxPublishedDay, devMode)
     : 1;
 
-  // Only show entries the member has unlocked; sort most-recent first.
-  const visibleEntries = publishedEntries
+  const completedSet = new Set(progress?.completedDays ?? []);
+
+  const entries: PreviousDayEntry[] = publishedEntries
     .filter(e => e.dayNumber <= availableDay)
-    .sort((a, b) => b.dayNumber - a.dayNumber);
-
-  const completedDays = new Set(progress?.completedDays ?? []);
-
-  if (loading) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+    .sort((a, b) => b.dayNumber - a.dayNumber)
+    .map(e => ({
+      dayNumber: e.dayNumber,
+      title: e.title || `Day ${e.dayNumber}`,
+      subtitle: e.scriptureReference || undefined,
+      status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
+    }));
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
-      {/* Nav */}
-      <div className="flex items-center px-5 pt-4 pb-2 max-w-[480px] mx-auto">
-        <button
-          onClick={() => setLocation('/walk')}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft size={16} /> Today
-        </button>
-      </div>
-
-      <main className="px-5 pt-6 pb-8 max-w-[480px] mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2.5 mb-1">
-            <BookHeart size={18} className="text-primary" />
-            <p className="text-[13px] font-medium text-muted-foreground">
-              {seriesData?.title ?? 'Devotionals'}
-            </p>
-          </div>
-          <h1 className="text-[24px] font-semibold text-foreground leading-snug">
-            Previous Days
-          </h1>
-        </div>
-
-        {/* Entry list */}
-        {visibleEntries.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border p-8 text-center">
-            <p className="text-sm text-muted-foreground">No entries available yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {visibleEntries.map(entry => {
-              const done = completedDays.has(entry.dayNumber);
-              return (
-                <button
-                  key={entry.id}
-                  onClick={() => setLocation(`/devotional/${seriesId}/day/${entry.dayNumber}`)}
-                  className="w-full flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
-                >
-                  {/* Day number */}
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 text-[12px] font-semibold text-muted-foreground">
-                    {entry.dayNumber}
-                  </div>
-
-                  {/* Entry info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-medium text-foreground leading-snug truncate">
-                      {entry.title || `Day ${entry.dayNumber}`}
-                    </p>
-                    {entry.scriptureReference && (
-                      <p className="text-[13px] text-muted-foreground mt-0.5">
-                        {entry.scriptureReference}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Completion indicator */}
-                  {done && (
-                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </main>
-
-      <BottomNav />
-    </div>
+    <PreviousDaysScreen
+      contentTitle={seriesData?.title ?? 'Daily Devotional'}
+      entries={entries}
+      loading={loading}
+      onBack={() => setLocation(backPath)}
+      onReviewDay={(day) =>
+        setLocation(`/devotional/${seriesId}/day/${day}${from ? `?source=${from === 'journeys' ? 'nextSteps' : 'today'}` : ''}`)
+      }
+      backLabel={backLabel}
+      emptyMessage="No previous entries are available yet."
+    />
   );
 }

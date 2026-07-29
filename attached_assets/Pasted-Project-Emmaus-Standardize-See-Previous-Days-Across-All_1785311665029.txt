@@ -1,0 +1,116 @@
+Project Emmaus — Standardize "See Previous Days" Across All Sequential Content
+
+We are establishing a permanent Emmaus standard.
+
+"See Previous Days" is NOT a Daily Rhythm feature.
+
+It is a platform feature.
+
+Every sequential content type should automatically support reviewing previous completed days.
+
+==================================================
+
+APPLIES TO
+
+• 10 Minutes with Jesus
+• Daily Devotionals
+• Sermon Companions
+• Journeys
+• Bible Studies
+• Courses
+• Any future day-by-day content
+
+==================================================
+
+COMPLETION COMPONENT
+
+After today's content is completed, the card should display:
+
+Primary Button
+
+Review
+
+Secondary Link
+
+See Previous Days →
+
+The secondary link should always appear beneath the primary button using the existing Emmaus styling.
+
+==================================================
+
+PREVIOUS DAYS SCREEN
+
+Clicking "See Previous Days" opens a standard reusable screen.
+
+Show:
+
+Day 1
+
+Completed ✓
+
+Review →
+
+------------------------
+
+Day 2
+
+Completed ✓
+
+Review →
+
+------------------------
+
+Day 3
+
+Locked
+
+(or In Progress)
+
+Only completed days may be reopened.
+
+Future days remain locked according to the content's progression rules.
+
+==================================================
+
+IMPLEMENTATION
+
+Create a shared Previous Days component.
+
+Do not build separate implementations for:
+
+• Daily Rhythm
+• Psalms
+• Sermon Companion
+• Journeys
+
+All should use the same reusable component.
+
+The only data that changes is the content source.
+
+==================================================
+
+NAVIGATION
+
+When the user reviews a previous day and taps Continue or Done,
+
+return them to the screen they originally came from.
+
+Do NOT advance progress.
+
+Do NOT unlock new days.
+
+Review mode is read-only.
+
+==================================================
+
+SUCCESS CRITERIA
+
+✓ "See Previous Days" appears on every completed sequential content card.
+
+✓ Uses one shared component.
+
+✓ Works identically across all content types.
+
+✓ Navigation returns to the correct screen.
+
+✓ Review mode never advances progression.

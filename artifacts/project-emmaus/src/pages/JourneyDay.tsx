@@ -224,6 +224,10 @@ export default function JourneyDay() {
 
   // Completion screens — both routes use EmmausCompletionCard (design locked)
   if (isCompleting) {
+    const prevDaysUrl = journeyId && day > 1
+      ? `/journey/${journeyId}/previous`
+      : undefined;
+
     if (isFinalStep) {
       return (
         <EmmausCompletionCard
@@ -232,6 +236,7 @@ export default function JourneyDay() {
           subMessage="May the Lord continue His work in your heart today."
           returnLabel="Back to Next Steps"
           onReturn={() => setLocation('/journeys')}
+          onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
         />
       );
     }
@@ -243,6 +248,7 @@ export default function JourneyDay() {
         subMessage="We'll continue walking together tomorrow."
         returnLabel="Back to Next Steps"
         onReturn={() => setLocation('/journeys')}
+        onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   }

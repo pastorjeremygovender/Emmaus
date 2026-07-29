@@ -187,6 +187,7 @@ export default function DailyRhythmDay() {
         subMessage="We'll continue walking together tomorrow."
         returnLabel="Back to Today's Steps"
         onReturn={() => setLocation('/walk', { replace: true })}
+        onPreviousDays={hasPreviousDays ? goToPreviousDays : undefined}
       />
     );
   } else if (isReplay) {
