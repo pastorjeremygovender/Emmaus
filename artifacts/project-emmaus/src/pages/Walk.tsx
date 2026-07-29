@@ -15,13 +15,13 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
-import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, MoreHorizontal, Pause, Trash2, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
   listPublishedSeries,
@@ -32,6 +32,102 @@ import {
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
+
+const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+/** Fire-and-forget engagement action (pause / remove). */
+async function callEngagementAction(
+  type: 'devotional' | 'sermon-companion',
+  id: string,
+  action: 'pause' | 'remove',
+): Promise<void> {
+  try {
+    await fetch(
+      `${BASE_URL}/api/engagements/${type}/${encodeURIComponent(id)}/${action}`,
+      { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+    );
+  } catch { /* network errors are non-fatal */ }
+}
+
+// ─── Walk-specific MoreMenu ────────────────────────────────────────────────────
+
+function WalkMoreMenu({ onPause, onRemove }: { onPause: () => void; onRemove: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+        aria-label="More actions"
+      >
+        <MoreHorizontal size={17} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-44"
+          >
+            <button
+              onClick={() => { setOpen(false); onPause(); }}
+              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
+            >
+              <Pause size={13} className="text-muted-foreground" /> Pause
+            </button>
+            <button
+              onClick={() => { setOpen(false); onRemove(); }}
+              className="w-full text-left px-4 py-2.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2"
+            >
+              <Trash2 size={13} className="text-destructive/70" /> Remove
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Walk-specific PauseDialog ────────────────────────────────────────────────
+
+function WalkPauseDialog({
+  title,
+  onPause,
+  onCancel,
+}: { title: string; onPause: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
+      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
+        <div className="flex items-start justify-between">
+          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-[14px] text-muted-foreground leading-relaxed">
+          Your progress will be kept exactly as it is. You can resume from the Next Steps tab whenever you're ready.
+        </p>
+        <div className="flex gap-3">
+          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause</Button>
+          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ lines = 3 }: { lines?: number }) {
@@ -72,6 +168,8 @@ function DevotionalCard({
   allComplete,
   onOpen,
   onViewPreviousEntries,
+  onPause,
+  onRemove,
 }: {
   series: DevotionalSeries;
   /** Number of entries the member has completed. */
@@ -87,6 +185,8 @@ function DevotionalCard({
   /** Navigate to the next available entry. */
   onOpen: () => void;
   onViewPreviousEntries?: () => void;
+  onPause?: () => void;
+  onRemove?: () => void;
 }) {
   const description = allComplete
     ? `${totalPublished} of ${totalPublished} completed`
@@ -108,7 +208,9 @@ function DevotionalCard({
       headerTrailing={
         allComplete
           ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-          : undefined
+          : (onPause && onRemove)
+            ? <WalkMoreMenu onPause={onPause} onRemove={onRemove} />
+            : undefined
       }
       secondaryAction={
         onViewPreviousEntries
@@ -387,6 +489,14 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
+  // ── Pause / Remove dialog state ──────────────────────────────────────────────
+  // Tracks which card is showing the confirm-pause dialog.
+  const [pauseTarget, setPauseTarget] = useState<
+    { type: 'devotional'; id: string; title: string }
+    | { type: 'sermon-companion'; id: string; title: string }
+    | null
+  >(null);
+
   // ── Sermon Companion (from sermon_companion table via API) ───────────────────
   // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
   // in localStorage. Loading it here (before early returns) satisfies Rules of Hooks.
@@ -400,7 +510,6 @@ export default function Walk() {
 
   useEffect(() => {
     if (!user?.id) return;
-    const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
     fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then((data: { id: string; title: string; numberOfDays: number; progress: { currentDay: number } | null } | null) => {
@@ -632,6 +741,17 @@ export default function Walk() {
                     ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
                     : undefined
                 }
+                onPause={() => setPauseTarget({
+                  type: 'devotional',
+                  id: activeDevotional.series.id,
+                  title: activeDevotional.series.title,
+                })}
+                onRemove={() => {
+                  // Optimistic: hide the card immediately
+                  setActiveDevotional(null);
+                  // Fire-and-forget
+                  void callEngagementAction('devotional', activeDevotional.series.id, 'remove');
+                }}
               />
             </motion.section>
           );
@@ -679,6 +799,25 @@ export default function Walk() {
                   `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
                 )
               }
+              headerTrailing={
+                scCompanion.isStarted
+                  ? (
+                    <WalkMoreMenu
+                      onPause={() => setPauseTarget({
+                        type: 'sermon-companion',
+                        id: scCompanion.id,
+                        title: scCompanion.title,
+                      })}
+                      onRemove={() => {
+                        // Optimistic: hide the card immediately
+                        setScCompanion(null);
+                        // Fire-and-forget
+                        void callEngagementAction('sermon-companion', scCompanion.id, 'remove');
+                      }}
+                    />
+                  )
+                  : undefined
+              }
               secondaryAction={
                 scCompanion.isStarted && scCompanion.currentDay > 1
                   ? {
@@ -694,6 +833,27 @@ export default function Walk() {
       </main>
 
       <BottomNav />
+
+      {/* ── Pause confirmation dialog ─────────────────────────────────────────── */}
+      {pauseTarget && (
+        <WalkPauseDialog
+          title={pauseTarget.title}
+          onCancel={() => setPauseTarget(null)}
+          onPause={() => {
+            const target = pauseTarget;
+            setPauseTarget(null);
+            if (target.type === 'devotional') {
+              // Optimistic: hide card
+              setActiveDevotional(null);
+              void callEngagementAction('devotional', target.id, 'pause');
+            } else {
+              // Optimistic: hide card
+              setScCompanion(null);
+              void callEngagementAction('sermon-companion', target.id, 'pause');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
