@@ -1,0 +1,567 @@
+PROJECT EMMAUS — IMPLEMENT THE ACTIVE ENGAGEMENT PLATFORM RULE
+
+IMPORTANT
+
+The published application is currently working.
+
+Protect this state before making any change.
+
+Before implementation:
+
+1. Create a checkpoint named:
+
+PRE-ACTIVE-ENGAGEMENT-WORKING-BASELINE
+
+2. Record the current deployed commit.
+3. Confirm Today’s Steps, Next Steps, Daily Rhythm, Daily Devotional, Sermon Companion and My Bible currently load in the published app.
+4. Preserve all existing content, progress and completion records.
+5. Do not modify Bible translations, onboarding, Ask Emmaus or Sermon Companion generation.
+6. Do not create a database migration until the existing data model has been inspected and a migration is proven necessary.
+7. Do not perform a broad refactor.
+
+This is a platform rule, not a Sermon Companion-specific fix.
+
+====================================================
+CORE EMMAUS RULE
+====================================================
+
+Any content a user intentionally begins from Next Steps must automatically become an active item on Today’s Steps until it is:
+
+- completed;
+- paused;
+- removed;
+- unpublished;
+- or no longer available to that user.
+
+The universal Emmaus content flow is:
+
+DISCOVER
+→ START
+→ CONTINUE
+→ COMPLETE
+
+Next Steps is where users discover content.
+
+Today’s Steps is where users continue content they are actively doing.
+
+My Journey is where users can see their history, completed content and paused content.
+
+====================================================
+PRIMARY OBJECTIVE
+====================================================
+
+Create or reuse one canonical Active Engagement system that works across all eligible Emmaus content types.
+
+Do not continue building separate Today’s Steps logic for:
+
+- Sermon Companions;
+- Journeys;
+- Daily Devotionals;
+- Made Free;
+- Bible Studies;
+- future courses or programmes.
+
+All eligible content should plug into the same engagement lifecycle.
+
+====================================================
+INSPECT EXISTING IMPLEMENTATION FIRST
+====================================================
+
+Before writing code, inspect the current data model and identify any existing tables or records for:
+
+- journey enrolment;
+- journey progress;
+- user content progress;
+- devotional subscriptions;
+- sermon companion progress;
+- active journeys;
+- user programme membership;
+- completion records.
+
+Report:
+
+1. Existing progress or enrolment models found.
+2. Whether one can become the canonical Active Engagement source.
+3. Which content types already create progress records.
+4. Which content types currently rely on local storage.
+5. Which content types use custom Today’s Steps queries.
+6. Whether a schema change is genuinely necessary.
+7. The smallest safe implementation plan.
+
+Reuse existing structures wherever practical.
+
+Do not create duplicate progress systems.
+
+====================================================
+ACTIVE ENGAGEMENT DATA
+====================================================
+
+Each active engagement must identify at least:
+
+- userId;
+- contentType;
+- contentId;
+- status;
+- currentStep or currentDay where applicable;
+- startedAt;
+- lastEngagedAt;
+- completedAt where applicable;
+- pausedAt where applicable;
+- removedAt where applicable.
+
+Suggested statuses:
+
+- active;
+- paused;
+- completed;
+- removed.
+
+Use existing project naming conventions.
+
+Do not create conflicting fields or multiple names for the same concept.
+
+The server-side engagement record must be the source of truth.
+
+Local storage may support temporary UI convenience but must not decide whether an item appears on Today’s Steps.
+
+====================================================
+SUPPORTED CONTENT TYPES
+====================================================
+
+Implement the common lifecycle for:
+
+1. Daily Devotionals
+2. Journeys
+3. Sermon Companions
+4. Made Free
+5. Future eligible Next Steps content
+
+Daily Rhythm remains a special core feature and must keep its existing rules.
+
+Do not force Daily Rhythm into the generic engagement system if that risks changing:
+
+- one-per-day gating;
+- Review;
+- Previous Days;
+- current-day loading;
+- completion behaviour.
+
+====================================================
+WHEN AN ENGAGEMENT IS CREATED
+====================================================
+
+Create or activate an engagement only when the user intentionally begins content.
+
+Examples:
+
+- Start Journey
+- Begin Companion
+- Follow Devotional
+- Join Programme
+- Resume
+
+Merely opening a preview or browsing a content card must not activate it.
+
+If a user begins content that already has a paused or existing engagement:
+
+- reuse the existing record;
+- preserve progress;
+- change status back to active;
+- update lastEngagedAt.
+
+Do not create duplicate engagement records.
+
+====================================================
+TODAY’S STEPS
+====================================================
+
+Today’s Steps must query active engagements for the signed-in user.
+
+Each active item should display:
+
+- content title;
+- content type where useful;
+- current progress;
+- correct primary action;
+- correct destination route.
+
+Examples:
+
+Journey:
+Continue Step 3
+
+Sermon Companion:
+Continue Day 2
+
+Daily Devotional:
+Read Today’s Devotional
+
+Paused item after resuming:
+Resume Journey
+
+Do not use generic links that open the beginning of the content.
+
+Always continue from the correct current step or day.
+
+====================================================
+APPROVED TODAY’S STEPS PRIORITY
+====================================================
+
+Preserve this order:
+
+1. 10 Minutes with Jesus
+2. This Week’s Sermon Companion
+3. Daily Devotional
+4. Other active Journeys
+5. Other active programmes
+
+Within the same category, order by:
+
+1. next due action;
+2. most recently engaged;
+3. administrator-defined priority where supported.
+
+Do not allow an unlimited list to overwhelm Today’s Steps.
+
+Where necessary, show the highest-priority items with a link to view all active content in My Journey.
+
+====================================================
+THIS WEEK’S SERMON RULE
+====================================================
+
+A published Sermon Companion marked as This Week’s Sermon remains a church-wide Today’s Steps item according to the approved current behaviour.
+
+It should appear even before an individual engagement exists if that is the existing approved rule.
+
+When the user begins it:
+
+- create or update their active engagement;
+- track their current day;
+- continue from the correct day;
+- preserve progress across devices.
+
+Do not break the currently working This Week’s Sermon card.
+
+====================================================
+DAILY DEVOTIONAL RULE
+====================================================
+
+A user who intentionally follows or begins a Daily Devotional should see it on Today’s Steps.
+
+The card should open the correct current devotional entry.
+
+Daily Devotionals must remain free from the one-per-day restriction applied to Daily Rhythm unless a specific devotional has an approved schedule.
+
+Previous Days must remain available.
+
+Do not delete devotional progress when the user removes it from Today’s Steps.
+
+====================================================
+JOURNEY RULE
+====================================================
+
+When a user starts a Journey:
+
+- create or activate the engagement;
+- record the current step;
+- show it on Today’s Steps;
+- continue from the next unfinished step;
+- preserve progress if paused or removed;
+- mark completed only after the final required step is completed.
+
+Collection membership must not affect the engagement lifecycle.
+
+A Journey with no collection must behave identically.
+
+====================================================
+MADE FREE AND FUTURE PROGRAMMES
+====================================================
+
+Made Free and future programmes should use the same Active Engagement interface.
+
+Each new eligible content type should only need to define:
+
+- content type identifier;
+- start action;
+- continue route;
+- progress resolver;
+- completion rule;
+- Today’s Steps card metadata.
+
+Adding a new content type should not require rewriting the Today’s Steps page.
+
+====================================================
+PAUSE
+====================================================
+
+Users must be able to pause eligible active content.
+
+Pausing should:
+
+- remove the item from Today’s Steps;
+- preserve all progress;
+- preserve notes and bookmarks;
+- place it in a paused section in My Journey;
+- allow the user to resume later.
+
+Resuming should:
+
+- return status to active;
+- restore the item to Today’s Steps;
+- continue from the saved position.
+
+====================================================
+REMOVE FROM TODAY’S STEPS
+====================================================
+
+Removing an item from Today’s Steps must not mean deleting the user’s history.
+
+It should:
+
+- remove the active status;
+- preserve progress;
+- preserve completion records;
+- preserve notes;
+- preserve bookmarks;
+- allow future restart or resume according to content rules.
+
+Use clear wording so users understand that removing an item does not erase their progress.
+
+====================================================
+COMPLETION
+====================================================
+
+When content is completed:
+
+- mark the engagement completed;
+- record completedAt;
+- remove it from the active Today’s Steps list;
+- retain it in My Journey or History;
+- preserve all progress and notes.
+
+Where Review is approved, the completed item may offer Review from My Journey.
+
+Do not leave completed journeys permanently displayed as active work.
+
+====================================================
+UNPUBLISHED OR UNAVAILABLE CONTENT
+====================================================
+
+If active content becomes unpublished or unavailable:
+
+- do not show a broken card;
+- do not delete the engagement;
+- preserve the user’s progress;
+- hide it from Today’s Steps;
+- show an appropriate status in My Journey where relevant.
+
+Never route the user to:
+
+- Journey Not Found;
+- blank pages;
+- invalid content IDs.
+
+====================================================
+NAVIGATION
+====================================================
+
+Expected flow:
+
+Next Steps
+→ Start Content
+→ Content opens
+→ Active engagement created
+→ Item appears on Today’s Steps
+→ Continue from Today’s Steps
+→ Correct step/day opens
+→ Finish or pause
+→ Return to Today’s Steps
+
+Back navigation must return to the screen from which the content was opened.
+
+Completion actions must return to Today’s Steps unless another approved destination applies.
+
+====================================================
+CROSS-DEVICE CONSISTENCY
+====================================================
+
+The same signed-in user must see the same active content and progress on:
+
+- desktop;
+- phone;
+- tablet;
+- Replit preview;
+- published deployment.
+
+Do not use device-specific local storage as the source of truth.
+
+After progress changes:
+
+- update the server record;
+- invalidate the relevant user engagement query;
+- refresh Today’s Steps;
+- reflect the change on other devices after normal reload.
+
+====================================================
+NO DESTRUCTIVE MIGRATION
+====================================================
+
+If the existing data model cannot support this feature and a migration is necessary:
+
+1. Stop before applying it.
+2. Explain the exact schema change.
+3. Explain why existing structures cannot be reused.
+4. Confirm it is additive and backward compatible.
+5. Show how all current records will be preserved.
+6. Request approval before publishing the migration.
+
+Never:
+
+- reset the database;
+- drop progress tables;
+- delete user history;
+- reseed production;
+- replace existing records;
+- create duplicate engagement rows.
+
+====================================================
+IMPLEMENTATION BOUNDARIES
+====================================================
+
+Do not change:
+
+- Daily Rhythm gating;
+- Daily Rhythm Review;
+- View Previous Days;
+- Bible translation loading;
+- Ask Emmaus animation or routing;
+- onboarding;
+- Sermon Companion generation rules;
+- Journey Editor layout;
+- collection management;
+- existing published content.
+
+This task is specifically about the user engagement lifecycle and Today’s Steps population.
+
+====================================================
+ACCEPTANCE TESTS
+====================================================
+
+TEST 1 — JOURNEY
+
+1. Open Next Steps.
+2. Start a Journey.
+3. Confirm one engagement record is created.
+4. Confirm the Journey appears on Today’s Steps.
+5. Continue from Today’s Steps.
+6. Confirm the correct step opens.
+7. Complete a step.
+8. Confirm progress updates.
+9. Open the app on another device.
+10. Confirm the same progress appears.
+11. Pause the Journey.
+12. Confirm it leaves Today’s Steps.
+13. Resume it.
+14. Confirm it returns at the correct step.
+15. Complete the Journey.
+16. Confirm it leaves the active list and appears in history.
+
+TEST 2 — SERMON COMPANION
+
+1. Begin the current Sermon Companion.
+2. Confirm it appears on Today’s Steps.
+3. Complete Day 1.
+4. Confirm Today’s Steps now offers the correct next day.
+5. Confirm the church-wide This Week’s Sermon behaviour remains intact.
+6. Confirm the card opens correctly on desktop and mobile.
+
+TEST 3 — DAILY DEVOTIONAL
+
+1. Begin or follow a Daily Devotional.
+2. Confirm it appears on Today’s Steps.
+3. Open today’s entry.
+4. Confirm Previous Days remains available.
+5. Remove it from Today’s Steps.
+6. Confirm progress is retained.
+7. Resume it.
+8. Confirm it returns.
+
+TEST 4 — MADE FREE
+
+1. Join Made Free.
+2. Confirm it appears on Today’s Steps.
+3. Continue from the correct current step.
+4. Pause and resume.
+5. Confirm progress is preserved.
+
+TEST 5 — DUPLICATES
+
+1. Start the same content twice.
+2. Confirm only one engagement record exists.
+3. Confirm existing progress is reused.
+
+TEST 6 — UNPUBLISHED CONTENT
+
+1. Start eligible draft/test content in a safe test environment.
+2. Unpublish it.
+3. Confirm the user does not see a broken Today’s Steps card.
+4. Confirm progress remains stored.
+
+TEST 7 — REGRESSION
+
+Confirm all of these remain working:
+
+- Today’s Steps loads;
+- Next Steps loads;
+- Daily Rhythm opens;
+- Review Latest Reading works;
+- Previous Days works;
+- This Week’s Sermon appears;
+- Psalms Daily Devotional appears;
+- My Bible opens;
+- bottom navigation works;
+- no HTTP 500 errors;
+- no Journey Not Found errors;
+- no new database migration unless explicitly approved.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+This work is complete only when:
+
+- Next Steps is the discovery area;
+- Today’s Steps is the universal continuation dashboard;
+- active content is driven by one canonical server-side engagement system;
+- current progress is preserved across devices;
+- pause, resume, remove and complete work consistently;
+- new content types can integrate without custom Today’s Steps logic;
+- the published app passes all acceptance and regression tests.
+
+Do not declare completion based only on compilation or preview behaviour.
+
+Verify the published application.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Before completion provide:
+
+1. Pre-change checkpoint.
+2. Existing progress systems found.
+3. Canonical model selected.
+4. Schema changes, if any.
+5. Files changed.
+6. Content types integrated.
+7. Duplicate prevention method.
+8. Cross-device test results.
+9. Published application test results.
+10. Regression test results.
+11. Confirmation that no data was deleted.
+12. Post-change checkpoint.
+13. Exact rollback instructions.
+
+Stop after this platform rule is implemented and verified.
+
+Do not begin unrelated suggested tasks.
