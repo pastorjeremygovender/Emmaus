@@ -1,0 +1,497 @@
+PROJECT EMMAUS — PERMANENT REGRESSION PREVENTION AND SAFE DEVELOPMENT PROTOCOL
+
+This instruction applies to every task from this point forward.
+
+CURRENT PROBLEM
+
+Previously working Emmaus features are repeatedly breaking after unrelated changes.
+
+This is causing:
+
+- repeated testing,
+- repeated repair prompts,
+- wasted development time,
+- unnecessary Replit usage charges,
+- loss of confidence in completed work,
+- delays to the Emmaus pilot.
+
+Examples include:
+
+- the Journey Editor working one day and appearing unavailable the next,
+- the Sermon Companion generator working previously and later returning HTTP 502,
+- navigation fixes regressing after later changes,
+- previously corrected buttons and routes reverting to incorrect behaviour.
+
+This must stop.
+
+The goal is not merely to make the newly requested feature work.
+
+The goal is:
+
+THE REQUESTED CHANGE WORKS, AND EVERYTHING THAT WORKED BEFORE STILL WORKS.
+
+--------------------------------------------------
+1. STOP AND AUDIT BEFORE NEW FEATURE WORK
+--------------------------------------------------
+
+Do not begin new feature work immediately.
+
+First perform a regression and source-control audit.
+
+Inspect:
+
+- Git history,
+- Replit checkpoints,
+- recent commits,
+- uncommitted changes,
+- recently modified files,
+- server logs,
+- browser console errors,
+- failed network requests,
+- database migrations,
+- shared route and component changes.
+
+Identify the most recent known-good checkpoint where the major Emmaus workflows were operating correctly.
+
+Specifically check the last version where these worked:
+
+- Daily Rhythm editor,
+- Daily Devotionals editor,
+- Journey Collections,
+- Journey Builder,
+- lesson/step editor,
+- Standalone Journeys,
+- Sermon Companion generator,
+- publish and draft workflows,
+- delete workflows,
+- public-app navigation.
+
+Before changing code, report:
+
+1. The current Git branch.
+2. The most recent checkpoint or commit.
+3. Whether there are uncommitted changes.
+4. The last known-good checkpoint.
+5. Files changed since that checkpoint.
+6. Any broad refactor or shared-file change that could have caused regressions.
+7. Any previously working feature currently failing.
+
+Do not guess.
+
+Use the repository history, logs and running application.
+
+--------------------------------------------------
+2. CREATE A SAFE CHECKPOINT BEFORE EVERY TASK
+--------------------------------------------------
+
+Before changing any code for any future task:
+
+1. Confirm the application builds.
+2. Create a named Git commit or Replit checkpoint.
+3. Record what is known to be working.
+4. Only then begin the requested change.
+
+Use a clear checkpoint name such as:
+
+pre-change-journey-navigation-working
+
+or:
+
+pre-change-sermon-companion-fix
+
+Do not start editing without a recoverable checkpoint.
+
+If the repository has uncommitted work, inspect and safely commit or stash it first.
+
+Never overwrite working code without a rollback point.
+
+--------------------------------------------------
+3. STRICT CHANGE-SCOPE CONTROL
+--------------------------------------------------
+
+For every task:
+
+- modify only the files directly required,
+- do not refactor unrelated areas,
+- do not rename unrelated routes, components, fields or APIs,
+- do not replace working components with new versions,
+- do not reorganize directories unless explicitly requested,
+- do not change shared infrastructure casually,
+- do not rewrite large files when a small repair is sufficient.
+
+Before modifying a shared file, report:
+
+1. Why the shared file must change.
+2. Which features depend on it.
+3. What regression tests will be run afterward.
+
+Examples of shared files requiring special caution:
+
+- admin router,
+- public-app router,
+- API route registration,
+- database schema,
+- authentication middleware,
+- shared form components,
+- shared content editors,
+- draft/publish helpers,
+- deletion helpers,
+- navigation utilities,
+- AI-generation services,
+- JSON parsing and validation,
+- global types and interfaces.
+
+Prefer the smallest safe patch.
+
+Do not perform “cleanup,” “modernization,” or “improvements” outside the requested scope.
+
+--------------------------------------------------
+4. PRESERVE EXISTING IMPLEMENTATIONS
+--------------------------------------------------
+
+Before creating a new component, route, editor, table or API:
+
+Search the current codebase and Git history for an existing implementation.
+
+Do not create duplicates of:
+
+- Journey Builder,
+- lesson/step editor,
+- Sermon Companion editor,
+- collection manager,
+- standalone journey editor,
+- publish logic,
+- delete logic,
+- media tools,
+- shared content fields.
+
+If a previously working implementation has become disconnected, restore its route or connection rather than rebuilding it.
+
+If working code was overwritten, restore it from the last known-good checkpoint and carefully reapply only the intended later change.
+
+--------------------------------------------------
+5. NO DATABASE DESTRUCTION
+--------------------------------------------------
+
+Never:
+
+- reset the database,
+- drop tables,
+- delete existing content,
+- replace production records with seed data,
+- rename database fields without a safe migration,
+- make collection relationships incompatible with existing records,
+- remove nullable support needed by Standalone Journeys,
+- clear drafts or published content during troubleshooting.
+
+Before any schema change:
+
+1. Explain why it is necessary.
+2. Confirm that the needed field does not already exist.
+3. Provide a backward-compatible migration.
+4. Preserve all existing records.
+5. Confirm rollback safety.
+
+Do not use a database migration to solve a navigation or rendering problem.
+
+--------------------------------------------------
+6. DEFINITION OF DONE
+--------------------------------------------------
+
+A task is not complete merely because:
+
+- the code compiles,
+- one page opens,
+- a button appears,
+- a placeholder was added,
+- one API request succeeds,
+- the requested change works once.
+
+A task is complete only when:
+
+1. The requested workflow works from beginning to end.
+2. Existing related workflows still work.
+3. Browser refresh works on affected routes.
+4. Back navigation works correctly.
+5. Draft, publish and delete behaviour remains correct.
+6. Existing records are still visible.
+7. There are no browser console errors.
+8. There are no unhandled server errors.
+9. There are no unexpected failed API requests.
+10. The application passes the regression checklist below.
+
+Do not declare completion without testing the running application.
+
+--------------------------------------------------
+7. PERMANENT EMMAUS REGRESSION CHECKLIST
+--------------------------------------------------
+
+Run the relevant section after every task.
+
+If a shared file was changed, run the full checklist.
+
+A. DAILY RHYTHM
+
+Confirm:
+
+- list opens,
+- existing content appears,
+- create opens,
+- edit opens,
+- Scripture displays,
+- save draft works,
+- publish works,
+- preview works,
+- permanent delete works,
+- previous days remain available,
+- replay/review does not advance the user incorrectly,
+- daily gating has not changed unexpectedly,
+- completion returns to Today’s Steps,
+- current day loads correctly,
+- no blank or missing day appears.
+
+B. DAILY DEVOTIONALS
+
+Confirm:
+
+- list opens,
+- existing devotionals appear,
+- create opens,
+- edit opens,
+- save draft works,
+- publish works,
+- delete works,
+- previous days are available where required,
+- opening from Next Steps returns to Next Steps,
+- bottom navigation is correct,
+- no one-per-day restriction exists unless explicitly required.
+
+C. JOURNEYS
+
+Confirm:
+
+- Collections tab opens,
+- Standalone tab opens,
+- existing collections appear,
+- collection details open,
+- collection management opens,
+- journeys inside a collection appear,
+- New Journey works,
+- existing Journey Builder opens,
+- lessons/steps are visible,
+- Add Lesson/Step works,
+- editing a lesson/step works,
+- save and reopen preserves content,
+- correct ordering is preserved,
+- Standalone Journeys remain separate,
+- collection assignment works,
+- browser refresh works,
+- no “Journey not found” occurs during valid workflows.
+
+D. SERMON COMPANIONS
+
+Confirm:
+
+- list opens,
+- all published and draft companions appear,
+- New Sermon Companion opens,
+- valid YouTube URL is accepted,
+- video information is retrieved,
+- captions/transcript are retrieved,
+- sermon slice only is analysed,
+- title and speaker are detected,
+- one-sentence Main Theme appears,
+- “That’s Correct” works,
+- “Edit Main Theme” works,
+- Monday–Friday content generates only after confirmation,
+- draft saves,
+- editor opens,
+- publish/unpublish works,
+- published status updates everywhere,
+- second and later companions remain visible,
+- no HTTP 502 occurs,
+- no blank AI content is saved.
+
+E. MEDIA STUDIO
+
+Confirm:
+
+- YouTube Archive opens,
+- Media Library opens,
+- Uploads opens,
+- existing media remains visible,
+- navigation between sections works.
+
+F. PUBLIC APP
+
+Confirm:
+
+- splash screen displays,
+- app opens to 10 Minutes with Jesus,
+- current Daily Rhythm day loads,
+- finishing Daily Rhythm returns to Today’s Steps,
+- Today’s Steps cards display correctly,
+- “See Previous Days” works,
+- sermon devotional opens,
+- Daily Devotional opens,
+- green button labels remain correct,
+- Daily Rhythm is not labelled “Continue” inappropriately,
+- back arrows return to the originating screen,
+- bottom navigation works,
+- Ask Emmaus remains available where required,
+- no content unexpectedly disappears,
+- no route leads to “Journey not found.”
+
+G. GENERAL ADMIN FUNCTIONS
+
+Confirm:
+
+- Save Draft works,
+- Publish works,
+- Unpublish works,
+- Delete works,
+- Permanent Delete works where approved,
+- status labels update immediately,
+- browser refresh preserves the page,
+- error messages are useful,
+- form data is preserved after recoverable errors,
+- no admin back button routes to the public app incorrectly.
+
+--------------------------------------------------
+8. AUTOMATED TESTS
+--------------------------------------------------
+
+Create or restore automated smoke tests for critical workflows wherever practical.
+
+At minimum, add route and API tests for:
+
+- opening each Content Studio section,
+- retrieving collections,
+- retrieving journeys by collection,
+- opening a journey by ID,
+- saving a journey,
+- retrieving lessons/steps,
+- sermon generation response states,
+- theme-confirmation response handling,
+- publish/draft status,
+- invalid ID handling.
+
+Add browser-level smoke tests for:
+
+- collection → journey → lesson workflow,
+- standalone journey workflow,
+- sermon URL → theme confirmation → draft workflow,
+- Daily Rhythm completion → Today’s Steps,
+- Previous Days navigation.
+
+Tests must use test data or safe existing draft records.
+
+Do not modify or delete production content during testing.
+
+--------------------------------------------------
+9. STRUCTURED ERROR HANDLING
+--------------------------------------------------
+
+Do not show administrators raw errors such as:
+
+- HTTP 500,
+- HTTP 502,
+- undefined,
+- null,
+- generic “Something went wrong.”
+
+Log technical details safely, but show clear user-facing messages.
+
+Do not swallow errors.
+
+Do not return false success responses.
+
+Do not save empty AI output.
+
+Do not redirect failed creation attempts to “Journey not found.”
+
+Preserve form data after failure and allow retry.
+
+Expected structured states must not be thrown as server errors.
+
+For example, theme confirmation is a normal workflow state, not an exception.
+
+--------------------------------------------------
+10. CHANGE REPORT REQUIRED AFTER EVERY TASK
+--------------------------------------------------
+
+At the end of every task, report:
+
+1. Checkpoint created before the change.
+2. Root cause of the issue.
+3. Files changed.
+4. Why each file was changed.
+5. Shared files changed, if any.
+6. Existing features that depended on those files.
+7. Tests performed.
+8. Regression checklist results.
+9. Any test that could not be completed.
+10. Confirmation that existing content was preserved.
+11. New checkpoint or Git commit created after successful testing.
+
+Do not simply say “Done” or “Implemented.”
+
+--------------------------------------------------
+11. FAILURE RULE
+--------------------------------------------------
+
+If a regression is found during testing:
+
+- stop,
+- do not continue new feature work,
+- repair the regression,
+- rerun the tests,
+- only then proceed.
+
+If the new change cannot be completed without breaking existing functionality:
+
+- restore the pre-change checkpoint,
+- explain the conflict,
+- do not leave the application in a partially broken state.
+
+--------------------------------------------------
+12. COST AND PROMPT-EFFICIENCY RULE
+--------------------------------------------------
+
+Replit usage has a real financial cost.
+
+Do not use additional prompts or repeated work to repair damage caused by incomplete testing.
+
+For each task:
+
+- investigate fully before editing,
+- make one focused implementation,
+- test comprehensively,
+- repair all issues found within the same task,
+- do not stop at the first visible symptom,
+- do not require the administrator to discover regressions manually.
+
+When a failure is reported, inspect logs and code directly instead of asking the administrator to perform unnecessary diagnostic steps that the development environment can perform itself.
+
+--------------------------------------------------
+13. CURRENT IMMEDIATE TASK
+--------------------------------------------------
+
+Before doing any queued Journeys or Sermon Companion work:
+
+1. Audit the current application against the last known-good checkpoint.
+2. Identify why the previously working Journey Editor became inaccessible.
+3. Identify why the previously working Sermon Companion generator now returns HTTP 502.
+4. Restore both features from the existing implementation or last known-good checkpoint.
+5. Preserve the intended newer requirements:
+   - sermon slice only,
+   - Main Theme confirmation,
+   - collection and standalone journey support.
+6. Run the complete Content Studio regression checklist.
+7. Create a stable post-repair checkpoint.
+
+Do not rebuild these features from scratch unless repository history proves that no implementation exists.
+
+Do not begin new feature development until the current application is stable.
+
+Begin by reporting the audit findings and proposed smallest safe restoration plan.
