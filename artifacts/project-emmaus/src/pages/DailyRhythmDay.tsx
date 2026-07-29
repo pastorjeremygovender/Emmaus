@@ -86,13 +86,18 @@ function AheadOfRhythmDevOnly({
 
 export default function DailyRhythmDay() {
   const { dayNumber } = useParams<{ dayNumber: string }>();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const { journeys, progress, getStepsForJourney, completeStep } = useJourney();
 
   const journeyId = '15-minutes-with-jesus';
   const day = parseInt(dayNumber ?? '1', 10);
   const devMode = isDevelopmentMode(user);
+
+  // When navigating from Walk's Review button, ?from=walk is set.
+  // Back arrow and completion card return to Today's Steps in that case;
+  // otherwise (accessed from Previous Days) they stay in the previous-days flow.
+  const fromWalk = new URLSearchParams(location.split('?')[1] ?? '').get('from') === 'walk';
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = progress[journeyId];
@@ -165,8 +170,13 @@ export default function DailyRhythmDay() {
   // Replay: day already completed in a prior session (read-only).
   const isReplay = day < currentDay || alreadyCompleted;
 
-  // Header back arrow: replay goes back to Previous Days; live goes back to Today's Steps.
-  const handleBack = isReplay ? goToPreviousDays : goBack;
+  // Header back arrow:
+  //   - Live (not yet completed) → Today's Steps
+  //   - Replay via Review button (?from=walk) → Today's Steps
+  //   - Replay via Previous Days → Previous Days
+  const handleBack = isReplay
+    ? (fromWalk ? goBack : goToPreviousDays)
+    : goBack;
 
   const handleComplete = () => {
     completeStep(journeyId, day, '');
@@ -191,13 +201,14 @@ export default function DailyRhythmDay() {
       />
     );
   } else if (isReplay) {
-    // Returning to a completed day from Previous Days — read-only
+    // Review from Today's Steps (?from=walk) → return to Today's Steps.
+    // Review from Previous Days → return to Previous Days.
     actionButton = (
       <EmmausCompletionCard
         heading={`Day ${day} complete.`}
         subMessage="May the Lord continue His work in your heart today."
-        returnLabel="Back to Previous Days"
-        onReturn={goToPreviousDays}
+        returnLabel={fromWalk ? "Back to Today's Steps" : "Back to Previous Days"}
+        onReturn={fromWalk ? goBack : goToPreviousDays}
       />
     );
   } else {

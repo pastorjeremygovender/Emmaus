@@ -560,11 +560,17 @@ export default function Walk() {
               caughtUp={coreCaughtUp}
               devMode={devMode}
               onContinue={() => {
-                // Route to the validated effective day — never a phantom arithmetic day.
-                // Caught up or completed today → review the real last published entry.
-                // Otherwise → open today's available entry directly.
-                if (coreCaughtUp || coreCompletedToday) {
-                  goToDailyRhythmDay(coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay);
+                if (coreCaughtUp) {
+                  // Caught up past all published content → review the last published entry.
+                  // ?from=walk keeps the back arrow pointing to Today's Steps (not Previous Days).
+                  const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
+                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
+                } else if (coreCompletedToday) {
+                  // Completed today's entry. After completeStep runs, currentDay advances by 1,
+                  // so the day just finished is rawCoreCurrentDay - 1.
+                  // ?from=walk keeps the back arrow pointing to Today's Steps.
+                  const reviewDay = Math.max(1, rawCoreCurrentDay - 1);
+                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
                 } else {
                   goToDailyRhythmDay(effectiveCoreDay);
                 }
