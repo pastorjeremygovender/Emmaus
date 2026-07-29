@@ -16,6 +16,27 @@
   to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
+/* ── Daily Rhythm heartbeat ──────────────────────────────────────────────────
+   Gentle double-pulse: slight scale + soft primary-green glow.
+   Applied only when today's reading is still actionable (not done).
+   Never changes background, text, button, or icon colours.
+   Double-pulse pattern: strong pulse → brief pause → softer pulse → long rest. */
+@keyframes emmaus-heartbeat {
+  0%   { transform: scale(1);     box-shadow: 0 0  0px  0px hsl(var(--primary) / 0);    }
+  7%   { transform: scale(1.013); box-shadow: 0 0 16px  5px hsl(var(--primary) / 0.17); }
+  16%  { transform: scale(1);     box-shadow: 0 0  0px  0px hsl(var(--primary) / 0);    }
+  25%  { transform: scale(1.007); box-shadow: 0 0 11px  3px hsl(var(--primary) / 0.10); }
+  34%  { transform: scale(1);     box-shadow: 0 0  0px  0px hsl(var(--primary) / 0);    }
+  100% { transform: scale(1);     box-shadow: 0 0  0px  0px hsl(var(--primary) / 0);    }
+}
+
+.emmaus-heartbeat {
+  /* 5.8 s cycle — ~2 s double-pulse, ~3.8 s rest.
+     1 s delay lets the entrance animation fully settle first. */
+  animation: emmaus-heartbeat 5.8s ease-in-out 1s infinite;
+  border-radius: 1rem; /* matches rounded-2xl so the glow follows card corners */
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

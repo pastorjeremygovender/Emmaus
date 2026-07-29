@@ -578,6 +578,10 @@ export default function Walk() {
   // the card advances freely without waiting for tomorrow.
   const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
 
+  // True when the member has nothing left to act on today — used to suppress
+  // the heartbeat animation so it only pulses when there is something to open.
+  const coreDone = coreCompletedToday || coreCaughtUp;
+
   // "View Previous Days →" appears when at least one earlier published day exists.
   const hasPreviousDays =
     !!coreJourney &&
@@ -665,6 +669,10 @@ export default function Walk() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05 }}
           >
+            {/* Heartbeat wrapper — animates as a single unit when actionable.
+                Separate from motion.section so scale never conflicts with the
+                entrance translateY. Suppressed once the member has read today. */}
+            <div className={coreDone ? undefined : 'emmaus-heartbeat'}>
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
@@ -691,6 +699,7 @@ export default function Walk() {
                 hasPreviousDays ? () => setLocation('/daily-rhythm/previous?from=walk') : undefined
               }
             />
+            </div>
           </motion.section>
         ) : (
           <div className="rounded-2xl border border-dashed border-border p-6 text-center">
