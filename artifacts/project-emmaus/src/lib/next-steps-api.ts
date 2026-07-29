@@ -8,7 +8,7 @@
 import { startSeries } from './devotionals-api';
 export { startSeries };
 
-export type MemberProgressState = 'not-started' | 'in-progress' | 'completed';
+export type MemberProgressState = 'not-started' | 'in-progress' | 'completed' | 'paused';
 
 export type ContentType =
   | 'journey'
@@ -49,6 +49,14 @@ export interface NextStepsData {
   standaloneJourneys: NextStepsItem[];
   currentSermonCompanion: NextStepsItem | null;
   previousSermonCompanions: NextStepsItem[];
+}
+
+export async function resumeEngagement(
+  type: 'devotional' | 'sermon-companion',
+  id: string,
+): Promise<void> {
+  const res = await fetch(`/api/engagements/${type}/${id}/resume`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Resume failed (${res.status})`);
 }
 
 export async function fetchNextSteps(params?: {

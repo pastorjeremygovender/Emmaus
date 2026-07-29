@@ -32,6 +32,7 @@ import type { Journey } from '@/contexts/JourneyContext';
 import {
   fetchNextSteps,
   startSeries,
+  resumeEngagement,
   type NextStepsData,
   type NextStepsItem,
   type ContentType,
@@ -110,6 +111,13 @@ function ContentTypeChip({ contentType }: { contentType: ContentType }) {
 
 function StatePill({ state }: { state: NextStepsItem['memberProgressState'] }) {
   if (state === 'not-started') return null;
+  if (state === 'paused') {
+    return (
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 bg-slate-100 text-slate-500 border border-slate-200">
+        Paused
+      </span>
+    );
+  }
   return (
     <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
       state === 'completed'
@@ -350,6 +358,7 @@ function DevotionalCard({
   onViewPreviousDays?: () => void;
 }) {
   const dur = dayLabel(item.metadata.durationDays);
+  const isPaused = item.memberProgressState === 'paused';
   return (
     <EmmausContentCard
       label="DAILY DEVOTIONAL"
@@ -359,6 +368,7 @@ function DevotionalCard({
       primaryActionLabel={item.primaryActionLabel}
       onAction={onAction}
       loading={starting}
+      headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
       secondaryAction={
         onViewPreviousDays
           ? { label: 'View Previous Entries →', onPress: onViewPreviousDays }
@@ -491,20 +501,28 @@ function SermonCompanionsPanel({
     return { label: 'View Previous Reflections →', onPress: () => onViewPreviousDays(item.id) };
   }
 
+  function companionCard(item: NextStepsItem) {
+    const isPaused = item.memberProgressState === 'paused';
+    return (
+      <EmmausContentCard
+        label="SERMON COMPANION"
+        title={item.title}
+        description={item.description}
+        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
+        primaryActionLabel={item.primaryActionLabel}
+        onAction={() => onAction(item)}
+        headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
+        secondaryAction={previousDaysAction(item)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8 pt-6">
       {current && (
         <section className="space-y-3">
           <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          <EmmausContentCard
-            label="SERMON COMPANION"
-            title={current.title}
-            description={current.description}
-            metadata={current.metadata.durationDays ? `${current.metadata.durationDays} Days` : '5 Days'}
-            primaryActionLabel={current.primaryActionLabel}
-            onAction={() => onAction(current)}
-            secondaryAction={previousDaysAction(current)}
-          />
+          {companionCard(current)}
         </section>
       )}
 
@@ -513,16 +531,7 @@ function SermonCompanionsPanel({
           <SectionLabel>Previous Sermon Companions</SectionLabel>
           <div className="space-y-3">
             {previous.map(item => (
-              <EmmausContentCard
-                key={item.id}
-                label="SERMON COMPANION"
-                title={item.title}
-                description={item.description}
-                metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
-                primaryActionLabel={item.primaryActionLabel}
-                onAction={() => onAction(item)}
-                secondaryAction={previousDaysAction(item)}
-              />
+              <div key={item.id}>{companionCard(item)}</div>
             ))}
           </div>
         </section>
@@ -621,8 +630,13 @@ export default function Journeys() {
   // Companions that are journeys-table-based (slug IDs, /journey/ routes) fall
   // through to handleJourneyAction which uses the standard journey flow.
 
-  function handleSermonCompanionAction(item: NextStepsItem) {
+  async function handleSermonCompanionAction(item: NextStepsItem) {
     if (item.route.startsWith('/sermon-companion/')) {
+      if (item.memberProgressState === 'paused') {
+        try { await resumeEngagement('sermon-companion', item.id); } catch { /* non-fatal */ }
+        await reload();
+        return;
+      }
       // Append source so the reader knows to return to Next Steps (Sermon Companions tab)
       setLocation(item.route + '?source=nextStepsSermons');
       return;
@@ -667,7 +681,12 @@ export default function Journeys() {
 
   // ── Devotional action handler ─────────────────────────────────────────────
 
-  function handleDevotionalAction(item: NextStepsItem) {
+  async function handleDevotionalAction(item: NextStepsItem) {
+    if (item.memberProgressState === 'paused') {
+      try { await resumeEngagement('devotional', item.id); } catch { /* non-fatal */ }
+      await reload();
+      return;
+    }
     if (item.memberProgressState !== 'not-started') {
       setLocation(item.route + '?source=nextStepsDevotionals');
       return;

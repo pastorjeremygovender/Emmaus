@@ -26,7 +26,7 @@ const router = Router();
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
-export type MemberProgressState = "not-started" | "in-progress" | "completed";
+export type MemberProgressState = "not-started" | "in-progress" | "completed" | "paused";
 export type ContentType =
   | "journey"
   | "bible-study"
@@ -75,10 +75,12 @@ export interface NextStepsResponse {
  *
  * Rule (mirrors devotional-calendar.ts on the client):
  *   All self-paced content → "Continue" regardless of state.
+ *   Paused content → "Resume".
  *   Daily Rhythm is calendar-paced and never appears in Next Steps, so it
  *   has no entry here.
  */
-function primaryActionLabel(_contentType: ContentType, _state: MemberProgressState): string {
+function primaryActionLabel(_contentType: ContentType, state: MemberProgressState): string {
+  if (state === "paused") return "Resume";
   return "Continue";
 }
 
@@ -100,6 +102,7 @@ function devotionalMemberState(
   const p = devProgressMap.get(seriesId);
   if (!p) return "not-started";
   if (publishedEntryCount > 0 && p.completedDays.length >= publishedEntryCount) return "completed";
+  if ((p as unknown as { status?: string }).status === "paused") return "paused";
   return "in-progress";
 }
 
@@ -272,10 +275,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       const prog = scProgressMap[c.id];
       let state: MemberProgressState = "not-started";
       if (prog) {
-        state =
-          c.numberOfDays > 0 && prog.completedDays.length >= c.numberOfDays
-            ? "completed"
-            : "in-progress";
+        if (c.numberOfDays > 0 && prog.completedDays.length >= c.numberOfDays) {
+          state = "completed";
+        } else if (prog.status === "paused") {
+          state = "paused";
+        } else {
+          state = "in-progress";
+        }
       }
       const currentDay = prog?.currentDay ?? 1;
       // Strip any subtitle appended to the companion title by AI generation
