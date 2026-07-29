@@ -400,15 +400,8 @@ export default function Walk() {
 
   useEffect(() => {
     if (!user?.id) return;
-    let companionId: string | null = null;
-    try {
-      const raw = localStorage.getItem('emmaus_admin_settings');
-      companionId = raw ? (JSON.parse(raw)?.currentWeeklySermonCompanionId ?? null) : null;
-    } catch { /* ignore */ }
-    if (!companionId) { setScCompanion(null); return; }
-
     const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
-    fetch(`${BASE_URL}/api/sermon-companions/${companionId}/member`, { credentials: 'include' })
+    fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then((data: { id: string; title: string; numberOfDays: number; progress: { currentDay: number } | null } | null) => {
         if (!data) { setScCompanion(null); return; }

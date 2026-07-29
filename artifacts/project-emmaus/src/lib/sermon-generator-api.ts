@@ -139,6 +139,7 @@ export interface Companion {
   title: string;
   numberOfDays: number;
   status: string;
+  isCurrentWeek?: boolean;
   entries?: CompanionEntry[];
 }
 
@@ -203,6 +204,7 @@ export interface SermonDraftResult {
   companion: {
     id: string;
     title: string;
+    isCurrentWeek?: boolean;
     entries: CompanionEntry[];
   };
 }
@@ -441,4 +443,15 @@ export async function unpublishSermonCompanion(
   auth: AuthHeaders,
 ): Promise<void> {
   await post<{ ok: boolean }>(`/sermon-companions/${companionId}/unpublish`, {}, auth);
+}
+
+/**
+ * Mark this companion as This Week's Sermon in the database.
+ * Atomically clears the flag on all other companions.
+ */
+export async function setCurrentWeekCompanion(
+  companionId: string,
+  auth: AuthHeaders,
+): Promise<void> {
+  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/set-current-week`, {}, auth);
 }

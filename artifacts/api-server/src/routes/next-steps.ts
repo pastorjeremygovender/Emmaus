@@ -12,8 +12,7 @@
  *   previousSermonCompanions – all other published companions, newest first
  *
  * Query params:
- *   userId             – optional; personalises memberProgressState
- *   currentCompanionId – optional; overrides most-recent companion as "current"
+ *   userId – optional; personalises memberProgressState
  */
 
 import { Router, type Request, type Response } from "express";
@@ -170,8 +169,6 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       (req.headers["x-user-id"] as string | undefined) ||
       (req.query.userId as string | undefined) ||
       null;
-    const currentCompanionId =
-      (req.query.currentCompanionId as string | undefined) || null;
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
@@ -251,11 +248,12 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       return bDate.localeCompare(aDate);
     });
 
-    // Current = explicit admin override OR most recently published.
+    // Current = companion explicitly marked is_current_week = true in the DB.
+    // Returns null when none is set; the card is omitted gracefully on the client.
     const currentCompanionUnified =
-      (currentCompanionId ? allCompanions.find(c => c.data.id === currentCompanionId) : null) ??
-      allCompanions[0] ??
-      null;
+      allCompanions.find(
+        c => c.source === "sermon-table" && (c.data as sermonCompanionStore.Companion).isCurrentWeek,
+      ) ?? null;
     const previousCompanionsUnified = allCompanions.filter(
       c => c.data.id !== currentCompanionUnified?.data.id,
     );

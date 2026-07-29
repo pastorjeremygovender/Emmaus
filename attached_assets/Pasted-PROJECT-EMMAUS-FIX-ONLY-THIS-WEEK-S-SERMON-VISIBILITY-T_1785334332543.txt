@@ -1,0 +1,109 @@
+PROJECT EMMAUS — FIX ONLY THIS WEEK’S SERMON VISIBILITY
+
+The published application is now back in a working state.
+
+Create a checkpoint first:
+
+WORKING-PRODUCTION-BASELINE-2026-07-29
+
+Do not modify Bible translations.
+Do not modify Daily Rhythm.
+Do not modify Journeys.
+Do not modify onboarding.
+Do not change the database schema.
+Do not generate migrations.
+Do not refactor shared infrastructure.
+
+CURRENT ISSUE
+
+A published Sermon Companion is marked in Admin as:
+
+“Currently set as This Week’s Sermon”
+
+but it does not appear on Today’s Steps in the published app.
+
+The production database now contains:
+
+sermon_companion.is_current_week
+BOOLEAN DEFAULT false NOT NULL
+
+Trace only this workflow:
+
+Admin selection
+→ production database
+→ Today’s Steps API
+→ Today’s Steps card
+
+VERIFY FIRST
+
+1. Confirm the selected companion’s production row.
+2. Show the values of:
+   - id
+   - title
+   - status/published field
+   - is_current_week
+   - archived/deleted fields
+3. Confirm whether Admin actually writes is_current_week = true.
+4. Confirm all other companions are set to false when a new one is selected.
+5. Run the exact production query used by Today’s Steps.
+6. Identify the precise condition excluding the selected companion.
+
+SMALLEST SAFE FIX
+
+Use the canonical field:
+
+is_current_week
+
+consistently in:
+
+- Admin selection write
+- Admin status display
+- public API query
+- Today’s Steps response
+
+Do not create another alias such as:
+
+featured
+current
+isFeatured
+thisWeeksSermon
+
+Do not hard-code a companion ID.
+
+The public query should return the published, non-archived companion where:
+
+is_current_week = true
+
+If no current sermon exists, omit the card gracefully.
+
+CACHE
+
+Ensure selecting, publishing, unpublishing or replacing the current sermon invalidates only the relevant Today’s Steps/current-sermon cache.
+
+Do not change global caching.
+
+PRODUCTION TEST
+
+Verify in the published app:
+
+1. Select a published Sermon Companion as This Week’s Sermon.
+2. Confirm its production database row has is_current_week = true.
+3. Confirm the Today’s Steps production endpoint returns it.
+4. Confirm the card appears.
+5. Confirm the card opens the correct companion.
+6. Select another published companion.
+7. Confirm the first becomes false and the second becomes true.
+8. Confirm the new card appears without a code republish.
+9. Confirm Daily Rhythm and Daily Devotional remain unchanged.
+10. Confirm no migration was created.
+
+Stop after this issue is fixed.
+
+Provide:
+
+- root cause
+- files changed
+- query corrected
+- production database verification
+- published-browser verification
+- new checkpoint after success

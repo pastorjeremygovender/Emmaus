@@ -33,6 +33,46 @@ async function guardAdmin(req: Request, res: Response): Promise<string | null> {
   return userId;
 }
 
+// ─── GET /current-week/member ─────────────────────────────────────────────────
+// Must be registered before GET /:companionId to prevent path-param capture.
+// Any authenticated member. Returns the Published companion marked is_current_week=true
+// with the caller's progress. 404 when no companion is currently marked.
+
+sermonCompanionsRouter.get("/current-week/member", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const companion = await store.getCurrentWeekPublicCompanion();
+    if (!companion) {
+      res.status(404).json({ error: "No current week sermon companion" });
+      return;
+    }
+    const progress = await store.getProgressForUser(userId, companion.id);
+    res.json({ ...companion, progress: progress ?? null });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: getCurrentWeekMember failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /:companionId/set-current-week ──────────────────────────────────────
+// Admin only. Atomically marks this companion as This Week's Sermon and clears
+// the flag on all others.
+
+sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+
+  try {
+    await store.setCurrentWeekCompanion(String(req.params.companionId));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: setCurrentWeek failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── GET /by-sermon/:sermonId ─────────────────────────────────────────────────
 
 sermonCompanionsRouter.get("/by-sermon/:sermonId", async (req: Request, res: Response) => {

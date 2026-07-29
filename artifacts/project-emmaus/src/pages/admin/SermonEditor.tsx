@@ -24,6 +24,7 @@ import {
   patchServerSermon,
   publishSermonCompanion,
   unpublishSermonCompanion,
+  setCurrentWeekCompanion,
   suggestAlternativeTheme,
   regenerateSermonTheme,
 
@@ -1167,6 +1168,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       setCompanionData({
         id: c.id,
         title: c.title,
+        isCurrentWeek: c.isCurrentWeek ?? false,
         entries: c.entries ?? [],
       });
       setCompanionStatusLocal(c.status ?? 'Draft');
@@ -1206,6 +1208,16 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       setCompanionStatusLocal('Draft');
     } finally {
       setCompanionPublishing(false);
+    }
+  }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSetCurrentWeek = useCallback(async () => {
+    if (!companionData?.id || !auth) return;
+    try {
+      await setCurrentWeekCompanion(companionData.id, auth);
+      setCompanionData(prev => prev ? { ...prev, isCurrentWeek: true } : null);
+    } catch (err) {
+      console.error('Failed to set current week companion', err);
     }
   }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1872,7 +1884,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
           <>
             {/* "This Week's Sermon" admin control */}
             <div className="flex items-center justify-between gap-3 px-6 lg:px-8 py-3 bg-gray-50 border-b border-gray-200">
-              {settings.currentWeeklySermonCompanionId === companionData.id ? (
+              {companionData.isCurrentWeek ? (
                 <span className="text-sm text-teal-700 font-medium flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 rounded-full bg-teal-500" />
                   Currently set as This Week's Sermon
@@ -1880,9 +1892,9 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               ) : (
                 <span className="text-sm text-gray-500">Not set as This Week's Sermon</span>
               )}
-              {settings.currentWeeklySermonCompanionId !== companionData.id && (
+              {!companionData.isCurrentWeek && (
                 <button
-                  onClick={() => updateSettings({ ...settings, currentWeeklySermonCompanionId: companionData.id })}
+                  onClick={handleSetCurrentWeek}
                   className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 transition-colors shrink-0"
                 >
                   Set as This Week's Sermon

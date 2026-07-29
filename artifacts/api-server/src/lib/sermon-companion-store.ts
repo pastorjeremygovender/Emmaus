@@ -36,6 +36,7 @@ export interface Companion {
   title: string;
   numberOfDays: number;
   status: string;
+  isCurrentWeek: boolean;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -439,6 +440,7 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     title: String(row.title ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
     status: String(row.status ?? 'Draft'),
+    isCurrentWeek: row.is_current_week === true || row.is_current_week === 'true',
     publishedAt: row.published_at ? String(row.published_at) : null,
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
@@ -479,12 +481,62 @@ export async function listPublishedSermonCompanions(): Promise<
     WHERE  sc.status = 'Published'
     GROUP  BY sc.id
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
-    ORDER  BY COALESCE(sc.published_at, sc.updated_at) DESC
+    ORDER  BY sc.is_current_week DESC, COALESCE(sc.published_at, sc.updated_at) DESC
   `);
   return res.rows.map(row => ({
     ...rowToCompanion(row),
     publishedEntryCount: Number(row.published_entry_count ?? 0),
   }));
+}
+
+/**
+ * Atomically mark one companion as This Week's Sermon.
+ * Clears is_current_week on all others in the same transaction.
+ */
+export async function setCurrentWeekCompanion(id: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE sermon_companion SET is_current_week = false, updated_at = NOW()
+       WHERE is_current_week = true AND id != $1`,
+      [id],
+    );
+    await client.query(
+      `UPDATE sermon_companion SET is_current_week = true, updated_at = NOW()
+       WHERE id = $1`,
+      [id],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Return the single Published companion marked as This Week's Sermon,
+ * with only its Published entries. Returns null when none is set.
+ */
+export async function getCurrentWeekPublicCompanion(): Promise<
+  (Companion & { entries: CompanionEntry[] }) | null
+> {
+  const cRes = await pool.query(
+    `SELECT * FROM sermon_companion
+     WHERE is_current_week = true AND status = 'Published'
+     LIMIT 1`,
+  );
+  if (!cRes.rows[0]) return null;
+  const companion = rowToCompanion(cRes.rows[0]);
+  const eRes = await pool.query(
+    `SELECT * FROM sermon_companion_entry
+     WHERE companion_id = $1 AND status = 'Published'
+     ORDER BY day_number ASC`,
+    [companion.id],
+  );
+  return { ...companion, entries: eRes.rows.map(rowToEntry) };
 }
 
 /**

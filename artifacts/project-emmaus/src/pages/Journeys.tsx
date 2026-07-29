@@ -588,25 +588,18 @@ export default function Journeys() {
   const [apiLoading, setApiLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const currentCompanionId = useMemo<string | undefined>(() => {
-    try {
-      const raw = localStorage.getItem('emmaus_admin_settings');
-      return raw ? (JSON.parse(raw)?.currentWeeklySermonCompanionId ?? undefined) : undefined;
-    } catch { return undefined; }
-  }, []);
-
   const reload = useCallback(async () => {
     setApiLoading(true);
     setApiError(null);
     try {
-      const result = await fetchNextSteps({ userId: user?.id, currentCompanionId });
+      const result = await fetchNextSteps({ userId: user?.id });
       setData(result);
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setApiLoading(false);
     }
-  }, [user?.id, currentCompanionId]);
+  }, [user?.id]);
 
   useEffect(() => { reload(); }, [reload]);
 
