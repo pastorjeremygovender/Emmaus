@@ -37,6 +37,7 @@ devotionalsRouter.get("/", async (req: Request, res: Response) => {
   if (!userId) return;
   try {
     const series = await store.listPublishedSeries();
+    res.set("Cache-Control", "no-store");
     res.json(series);
   } catch (err) {
     logger.error({ err }, "listPublishedSeries failed");
@@ -64,6 +65,7 @@ devotionalsRouter.get("/progress/all", async (req: Request, res: Response) => {
   if (!userId) return;
   try {
     const progress = await store.getAllProgressForUser(userId);
+    res.set("Cache-Control", "no-store");
     res.json(progress);
   } catch (err) {
     logger.error({ err }, "getAllProgress failed");

@@ -1,0 +1,195 @@
+PROJECT EMMAUS — FIX ONLY TODAY’S STEPS DEVICE CONSISTENCY
+
+The published app is working again. Protect the current working state.
+
+Create a checkpoint first:
+
+WORKING-BASELINE-BEFORE-TODAYS-STEPS-FIX
+
+Do not change the database schema.
+Do not create migrations.
+Do not modify Bible translations.
+Do not modify Journeys.
+Do not modify Daily Rhythm progression.
+Do not modify onboarding.
+Do not refactor shared application infrastructure.
+
+CURRENT VERIFIED BEHAVIOUR
+
+DESKTOP PUBLISHED APP
+
+- Daily Rhythm appears.
+- Psalms Daily Devotional does not appear.
+- This Week’s Sermon Companion does not appear.
+- Ask Emmaus button appears but is not animated.
+
+MOBILE PUBLISHED APP
+
+- Psalms Daily Devotional does appear.
+- This Week’s Sermon Companion still does not appear.
+
+This indicates two separate problems:
+
+1. Device/session/cache inconsistency affecting Daily Devotional display.
+2. Current Sermon Companion data is not reaching Today’s Steps.
+3. Ask Emmaus desktop animation is not running.
+
+Fix only these issues.
+
+====================================================
+1. COMPARE THE ACTUAL TODAY’S STEPS API RESPONSE
+====================================================
+
+In both desktop and mobile published sessions, inspect the exact request used by Today’s Steps.
+
+Record:
+
+- endpoint URL;
+- HTTP status;
+- response body;
+- cache headers;
+- user/session identifier;
+- church/tenant identifier;
+- completion-state fields.
+
+Determine whether the Daily Devotional is present in both API responses.
+
+If the API responses differ, identify why:
+
+- different account/session;
+- different tenant;
+- stale server cache;
+- stale client query cache;
+- local-storage state;
+- completion filters;
+- device-specific request parameters.
+
+If the API responses are identical but desktop rendering differs, fix only the desktop rendering condition.
+
+Do not guess.
+
+====================================================
+2. DAILY DEVOTIONAL DEVICE CONSISTENCY
+====================================================
+
+The Psalms Daily Devotional card must appear consistently on all devices when it is published and eligible.
+
+Check:
+
+- browser local storage;
+- service worker cache;
+- React/query cache;
+- completion-state filtering;
+- responsive CSS;
+- conditional rendering;
+- hidden overflow;
+- desktop breakpoint rules;
+- stale cached API response.
+
+Do not permanently solve this by asking the user to clear cache.
+
+Correct cache invalidation and rendering so normal refresh displays current content.
+
+Confirm the same account receives the same Today’s Steps cards on desktop and mobile.
+
+====================================================
+3. THIS WEEK’S SERMON COMPANION
+====================================================
+
+Trace only:
+
+Admin selection
+→ production database
+→ Today’s Steps API
+→ card rendering
+
+The production database already contains:
+
+sermon_companion.is_current_week
+
+Verify the selected companion’s production record contains:
+
+- published status;
+- is_current_week = true;
+- not archived;
+- not deleted;
+- correct church/tenant ID;
+- valid companion days.
+
+Do not rely on the Admin label as proof.
+
+Run the exact production query used by Today’s Steps.
+
+Show whether the selected companion is returned.
+
+If not, identify the exact filter excluding it.
+
+Use is_current_week as the single canonical field.
+
+Do not create another field or alias.
+Do not hard-code a companion ID.
+Do not generate a migration.
+
+After the fix, the current published Sermon Companion must appear on desktop and mobile and open correctly.
+
+====================================================
+4. ASK EMMAUS DESKTOP ANIMATION
+====================================================
+
+The Ask Emmaus floating button appears on desktop but does not animate.
+
+Compare desktop and mobile styling.
+
+Check:
+
+- media queries;
+- animation class assignment;
+- prefers-reduced-motion;
+- animation-play-state;
+- missing keyframes in production bundle;
+- hover-only behaviour;
+- breakpoint-specific CSS;
+- browser console warnings.
+
+The animation should remain gentle and subtle.
+
+Do not create distracting movement.
+
+Respect a genuine operating-system reduced-motion setting, but do not incorrectly disable animation for all desktop users.
+
+Do not modify Ask Emmaus functionality or routing.
+
+====================================================
+5. PRODUCTION TESTING
+====================================================
+
+Test the published application using the same account in:
+
+- desktop normal browser;
+- desktop incognito browser;
+- mobile browser.
+
+Confirm:
+
+1. Daily Rhythm appears on all devices.
+2. Psalms Daily Devotional appears on all devices.
+3. This Week’s Sermon Companion appears on all devices.
+4. The sermon card opens the correct companion.
+5. Ask Emmaus has the approved gentle animation on desktop.
+6. Ask Emmaus still works when clicked.
+7. No browser cache clearing is required.
+8. No database migration was created.
+9. No unrelated feature changed.
+10. Preview and published deployment produce equivalent Today’s Steps data.
+
+Stop after these issues are fixed.
+
+Provide:
+
+- root cause of the Daily Devotional device difference;
+- root cause of the missing sermon card;
+- root cause of the missing desktop animation;
+- files changed;
+- production API evidence;
+- desktop and mobile verification;
+- post-fix checkpoint.

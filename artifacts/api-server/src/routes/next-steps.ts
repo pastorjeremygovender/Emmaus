@@ -342,6 +342,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       previousSermonCompanions,
     };
 
+    res.set("Cache-Control", "no-store");
     res.json(response);
   } catch (err) {
     logger.error({ err }, "GET /next-steps failed");

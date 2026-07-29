@@ -24,6 +24,7 @@ async function request<T>(url: string, options?: RequestOptions): Promise<T> {
 
   const res = await fetch(url, {
     credentials: "include",
+    cache: "no-store",
     ...fetchOptions,
     headers,
   });
