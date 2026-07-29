@@ -17,7 +17,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
-import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
+import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -209,27 +209,43 @@ export default function SermonCompanionReader() {
   // ── Main reading view ──
 
   // Primary action button shown inside DevotionalReading
-  const actionButton = isAlreadyCompleted ? (
-    // Already completed in a prior session — understated return button
-    <Button
-      variant="outline"
-      className="w-full rounded-2xl"
-      onClick={() => setLocation(returnDest)}
-    >
-      {returnLabel}
-    </Button>
-  ) : (
-    <Button
-      className="w-full rounded-2xl"
-      onClick={handleFinish}
-      disabled={completing || justCompleted}
-    >
-      {completing
-        ? <><Loader2 size={16} className="animate-spin mr-2" />Saving…</>
-        : 'Finished'
-      }
-    </Button>
-  );
+  let actionButton: React.ReactNode;
+  if (justCompleted) {
+    actionButton = (
+      <EmmausCompletionCard
+        heading={`Day ${day} complete.`}
+        subMessage={
+          companion && day < companion.numberOfDays
+            ? `Day ${day + 1} will be here tomorrow.`
+            : 'May the Lord continue His work in your heart today.'
+        }
+        returnLabel={returnLabel}
+        onReturn={() => setLocation(returnDest)}
+      />
+    );
+  } else if (isAlreadyCompleted) {
+    actionButton = (
+      <EmmausCompletionCard
+        heading={`Day ${day} complete.`}
+        subMessage="May the Lord continue His work in your heart today."
+        returnLabel={returnLabel}
+        onReturn={() => setLocation(returnDest)}
+      />
+    );
+  } else {
+    actionButton = (
+      <Button
+        className="w-full rounded-2xl"
+        onClick={handleFinish}
+        disabled={completing}
+      >
+        {completing
+          ? <><Loader2 size={16} className="animate-spin mr-2" />Saving…</>
+          : 'Finished'
+        }
+      </Button>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background pb-36">
@@ -270,22 +286,6 @@ export default function SermonCompanionReader() {
         <p className="text-center text-sm text-destructive px-5 mt-2">
           Could not save progress — tap Finished again.
         </p>
-      )}
-
-      {/* Standard completion panel (spec §5/7) */}
-      {justCompleted && companion && (
-        <div className="max-w-[480px] mx-auto px-5 mt-6 mb-4">
-          <JourneyCompletionPanel
-            heading={`Day ${day} complete`}
-            subMessage={
-              day < companion.numberOfDays
-                ? `Day ${day + 1} will be here tomorrow.`
-                : `You've completed all ${companion.numberOfDays} days. Well done.`
-            }
-            returnLabel={returnLabel}
-            onReturn={() => setLocation(returnDest)}
-          />
-        </div>
       )}
 
       <BottomNav />

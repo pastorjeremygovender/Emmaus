@@ -21,8 +21,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
-import { ReadingCompletionFooter } from '@/components/ReadingCompletionFooter';
-import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
+import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -152,28 +151,18 @@ export default function DevotionalDay() {
   if (justCompleted || alreadyCompleted) {
     // Completed this session or returning to an already-completed day (replay)
     const hasNextDay = day < totalEntries;
-    const heading = 'Today\'s devotional complete';
-    const subMessage = hasNextDay ? "Tomorrow's devotional will be here tomorrow." : undefined;
-
-    if (justCompleted) {
-      // Show the standard completion panel (spec §5/7)
-      actionButton = (
-        <JourneyCompletionPanel
-          heading={heading}
-          subMessage={subMessage}
-          returnLabel={returnLabel}
-          onReturn={() => setLocation(returnPath)}
-        />
-      );
-    } else {
-      // Replay mode (revisiting an already-completed day) — understated link
-      actionButton = (
-        <ReadingCompletionFooter
-          completedToday={true}
-          onReturn={() => setLocation(returnPath)}
-        />
-      );
-    }
+    actionButton = (
+      <EmmausCompletionCard
+        heading="Devotional complete."
+        subMessage={
+          hasNextDay
+            ? "Tomorrow's devotional will be ready."
+            : 'May the Lord continue His work in your heart today.'
+        }
+        returnLabel={returnLabel}
+        onReturn={() => setLocation(returnPath)}
+      />
+    );
   } else {
     // First-time reading — show "Finished" button with loading + error states
     actionButton = (

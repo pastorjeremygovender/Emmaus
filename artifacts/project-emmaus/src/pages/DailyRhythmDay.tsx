@@ -35,8 +35,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
-import { ReadingCompletionFooter } from '@/components/ReadingCompletionFooter';
-import { JourneyCompletionPanel } from '@/components/JourneyCompletionPanel';
+import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { BottomNav } from '@/components/BottomNav';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
@@ -173,7 +172,7 @@ export default function DailyRhythmDay() {
     completeStep(journeyId, day, '');
     setJustCompleted(true);
     // Auto-navigation is handled by the useEffect above (2 s replace).
-    // JourneyCompletionPanel gives an immediate tap-to-return option.
+    // EmmausCompletionCard gives an immediate tap-to-return option.
   };
 
   // ── Action button / footer ────────────────────────────────────────────────
@@ -181,27 +180,24 @@ export default function DailyRhythmDay() {
   let actionButton: React.ReactNode;
 
   if (justCompleted) {
-    // Just completed this session — show standard panel; auto-returns in 2 s
+    // Just completed this session — auto-returns in 2 s (see useEffect above)
     actionButton = (
-      <JourneyCompletionPanel
-        heading={`Day ${day} complete`}
-        subMessage={`Come back tomorrow for Day ${day + 1}.`}
+      <EmmausCompletionCard
+        heading={`Day ${day} complete.`}
+        subMessage="We'll continue walking together tomorrow."
         returnLabel="Back to Today's Steps"
         onReturn={() => setLocation('/walk', { replace: true })}
       />
     );
-  } else if (isReplay && alreadyCompleted) {
-    // Returning to a completed day (replay)
-    actionButton = (
-      <ReadingCompletionFooter
-        completedToday={true}
-        onReturn={isReplay ? goToPreviousDays : goBack}
-      />
-    );
   } else if (isReplay) {
-    // Replay of an earlier day (older than today's progress) — not yet marked complete
+    // Returning to a completed day from Previous Days — read-only
     actionButton = (
-      <ReadingCompletionFooter completedToday={false} onReturn={goToPreviousDays} />
+      <EmmausCompletionCard
+        heading={`Day ${day} complete.`}
+        subMessage="May the Lord continue His work in your heart today."
+        returnLabel="Back to Previous Days"
+        onReturn={goToPreviousDays}
+      />
     );
   } else {
     // Live — first reading of today's step

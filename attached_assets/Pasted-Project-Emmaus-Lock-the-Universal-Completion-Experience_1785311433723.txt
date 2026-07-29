@@ -1,0 +1,257 @@
+Project Emmaus — Lock the Universal Completion Experience
+
+This is a permanent Emmaus design standard.
+
+The completion experience shown in the current member app (soft blue/teal completion card with centred success icon) has been approved.
+
+We are NOT redesigning it.
+
+We are making it the ONE universal completion component used throughout Emmaus.
+
+==================================================
+DESIGN IS LOCKED
+==================================================
+
+The existing completion card design is now the official Emmaus completion design.
+
+Do NOT redesign it.
+
+Do NOT replace it with a white card.
+
+Do NOT introduce a different success screen.
+
+Do NOT create different completion layouts for different content.
+
+Keep exactly the same:
+
+• soft blue/teal background
+• centred green success icon
+• rounded corners
+• spacing
+• visual hierarchy
+• generous white space
+• calm minimalist appearance
+
+The visual design is approved.
+
+Only the text and destination button may change depending on context.
+
+==================================================
+CREATE ONE SHARED COMPONENT
+==================================================
+
+Create one reusable component named something similar to:
+
+EmmausCompletionCard
+
+Every completion screen in Emmaus must use this component.
+
+No page may create its own completion layout.
+
+==================================================
+USE THIS COMPONENT FOR
+==================================================
+
+• 10 Minutes with Jesus
+• Daily Devotionals
+• Journeys
+• Sermon Companions
+• Bible Studies
+• Future Courses
+• Any future content added to Emmaus
+
+There must only be ONE completion component in the entire project.
+
+==================================================
+CARD LAYOUT
+==================================================
+
+Success icon
+
+↓
+
+Completion heading
+
+↓
+
+One gentle pastoral sentence
+
+↓
+
+Green primary button
+
+Nothing else.
+
+No additional buttons.
+
+No secondary actions.
+
+No progress bars.
+
+No achievements.
+
+No XP.
+
+No streaks.
+
+No confetti.
+
+==================================================
+HEADINGS
+==================================================
+
+Examples
+
+Today's time with Jesus is complete.
+
+Day 2 complete.
+
+Journey complete.
+
+Companion complete.
+
+Devotional complete.
+
+The heading changes.
+
+The design never changes.
+
+==================================================
+SUPPORTING TEXT
+==================================================
+
+One short pastoral sentence.
+
+Examples
+
+We'll continue walking together tomorrow.
+
+Tomorrow's reading will be ready.
+
+May the Lord continue His work in your heart today.
+
+Keep the tone warm.
+
+Keep the tone gentle.
+
+Never use productivity language.
+
+Never use "Great job!"
+
+Never use gamification.
+
+==================================================
+BUTTONS
+==================================================
+
+Use the standard Emmaus primary green button.
+
+Same width.
+
+Same height.
+
+Same corner radius.
+
+Same typography.
+
+Navigation depends on where the member came from.
+
+10 Minutes with Jesus
+
+Back to Today's Steps
+
+Daily Devotional
+
+Back to Next Steps
+
+Journey
+
+Back to Next Steps
+
+Sermon Companion
+
+Back to Next Steps
+
+Bible Study
+
+Back to Next Steps
+
+==================================================
+REMOVE DUPLICATION
+==================================================
+
+Search the project for every completion screen.
+
+Remove all duplicate completion implementations.
+
+Replace them with EmmausCompletionCard.
+
+Future content must automatically inherit this component.
+
+==================================================
+DO NOT CHANGE
+==================================================
+
+Do not redesign the approved completion card.
+
+Do not change its colours.
+
+Do not change the blue/soft teal background.
+
+Do not change its overall appearance.
+
+Only standardize its use.
+
+==================================================
+TEST EVERY FLOW
+==================================================
+
+Complete:
+
+• Daily Rhythm
+• Daily Devotional
+• Journey
+• Sermon Companion
+• Bible Study
+
+Verify each one shows the exact same completion card.
+
+Only the heading, supporting sentence and button destination should differ.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+✓ There is only ONE completion component in Emmaus.
+
+✓ Every content type uses it.
+
+✓ The approved blue/soft teal completion card has been preserved exactly.
+
+✓ Buttons are standardised.
+
+✓ Wording follows the Emmaus language principles.
+
+✓ Navigation returns to the correct screen.
+
+==================================================
+FINAL REPORT
+==================================================
+
+When complete, provide:
+
+1. The name and location of the new shared EmmausCompletionCard component.
+
+2. Every old completion screen that was removed.
+
+3. Every screen now using the shared component.
+
+4. Confirmation that the approved blue/soft teal design has been preserved exactly.
+
+5. Screenshots of the completion experience for:
+   • 10 Minutes with Jesus
+   • Daily Devotional
+   • Journey
+   • Sermon Companion
+
+Do not mark the task complete until all four screenshots match the same visual design.
