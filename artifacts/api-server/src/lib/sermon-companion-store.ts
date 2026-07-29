@@ -481,7 +481,7 @@ export async function listPublishedSermonCompanions(): Promise<
     WHERE  sc.status = 'Published'
     GROUP  BY sc.id
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
-    ORDER  BY sc.is_current_week DESC, COALESCE(sc.published_at, sc.updated_at) DESC
+    ORDER  BY COALESCE(sc.published_at, sc.updated_at) DESC
   `);
   return res.rows.map(row => ({
     ...rowToCompanion(row),
@@ -518,14 +518,47 @@ export async function setCurrentWeekCompanion(id: string): Promise<void> {
 
 /**
  * Return the single Published companion marked as This Week's Sermon,
- * with only its Published entries. Returns null when none is set.
+ * with only its Published entries.
+ *
+ * Falls back to the most-recently-published companion when:
+ *   • no companion has is_current_week = true (flag not yet set), OR
+ *   • the is_current_week column does not yet exist in the DB (PostgreSQL
+ *     error 42703: undefined_column — occurs before the startup migration runs).
+ *
+ * Returns null only when no Published companion exists at all.
  */
 export async function getCurrentWeekPublicCompanion(): Promise<
   (Companion & { entries: CompanionEntry[] }) | null
 > {
+  // Try the canonical flag-based query first.
+  try {
+    const cRes = await pool.query(
+      `SELECT * FROM sermon_companion
+       WHERE is_current_week = true AND status = 'Published'
+       LIMIT 1`,
+    );
+    if (cRes.rows[0]) {
+      const companion = rowToCompanion(cRes.rows[0]);
+      const eRes = await pool.query(
+        `SELECT * FROM sermon_companion_entry
+         WHERE companion_id = $1 AND status = 'Published'
+         ORDER BY day_number ASC`,
+        [companion.id],
+      );
+      return { ...companion, entries: eRes.rows.map(rowToEntry) };
+    }
+    // No companion explicitly flagged — fall through to most-recently-published.
+  } catch (err: unknown) {
+    const pg = err as { code?: string };
+    if (pg?.code !== '42703') throw err; // unexpected error — re-throw
+    // 42703 = undefined_column: is_current_week not yet added — fall through.
+  }
+
+  // Fallback: return the most recently published companion.
   const cRes = await pool.query(
     `SELECT * FROM sermon_companion
-     WHERE is_current_week = true AND status = 'Published'
+     WHERE status = 'Published'
+     ORDER BY COALESCE(published_at, updated_at) DESC
      LIMIT 1`,
   );
   if (!cRes.rows[0]) return null;

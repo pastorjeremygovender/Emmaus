@@ -249,11 +249,15 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     });
 
     // Current = companion explicitly marked is_current_week = true in the DB.
-    // Returns null when none is set; the card is omitted gracefully on the client.
+    // Falls back to the most-recently-published companion (first in the sorted list)
+    // when no companion has the flag set — covers the window between the column
+    // being added (startup migration) and the admin clicking Set as This Week's Sermon.
+    const sermonTableCompanions = allCompanions.filter(c => c.source === "sermon-table");
     const currentCompanionUnified =
-      allCompanions.find(
-        c => c.source === "sermon-table" && (c.data as sermonCompanionStore.Companion).isCurrentWeek,
-      ) ?? null;
+      sermonTableCompanions.find(
+        c => (c.data as sermonCompanionStore.Companion).isCurrentWeek,
+      ) ??
+      (sermonTableCompanions[0] ?? null);
     const previousCompanionsUnified = allCompanions.filter(
       c => c.data.id !== currentCompanionUnified?.data.id,
     );
