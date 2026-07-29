@@ -13,6 +13,7 @@ import sermonGeneratorRouter from "./sermon-generator";
 import { sermonCompanionsRouter } from "./sermon-companions";
 import { adminSermonsRouter } from "./admin-sermons";
 import nextStepsRouter from "./next-steps";
+import { engagementsRouter } from "./engagements";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(sermonGeneratorRouter);
 router.use("/sermon-companions", sermonCompanionsRouter);
 router.use("/admin-sermons", adminSermonsRouter);
 router.use(nextStepsRouter);
+router.use("/engagements", engagementsRouter);
 
 export default router;

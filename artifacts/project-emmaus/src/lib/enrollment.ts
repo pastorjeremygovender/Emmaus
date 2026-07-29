@@ -1,9 +1,12 @@
 /**
  * Journey enrollment state — active / paused / saved-for-later.
  *
- * Stored in localStorage under 'emmaus_enrollment'.
- * Components use the useEnrollment() hook; all calls share the same storage key
- * so state is consistent across the app without a new context.
+ * Primary source of truth: server-side user_journey_progress.status column
+ * (set via POST /api/engagements/journey/:id/pause|resume).
+ *
+ * localStorage (emmaus_enrollment) is kept as an optimistic UI cache so the
+ * cards on Walk.tsx and Journeys.tsx update instantly without waiting for the
+ * network round-trip. The server state is always the authoritative value.
  *
  * Exempt journey types do NOT count toward the five-active-Journey limit:
  *   - 'daily-rhythm' / 'core' (10 Minutes with Jesus)
@@ -20,6 +23,8 @@ export type EnrollmentMap = Record<string, EnrollmentState>;
 
 const STORAGE_KEY = 'emmaus_enrollment';
 export const MAX_ACTIVE_JOURNEYS = 5;
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 /** Types that are always exempt from the active-Journey limit. */
 const EXEMPT_TYPES = new Set(['core', 'companion', 'devotional', 'daily-rhythm']);
@@ -46,6 +51,29 @@ function persist(map: EnrollmentMap) {
 /** Custom event name used to sync across hook instances on the same page. */
 const SYNC_EVENT = 'emmaus_enrollment_change';
 
+/**
+ * Call the engagements API to persist pause/resume server-side.
+ * Fire-and-forget — the optimistic localStorage update is already applied.
+ */
+async function callEngagementApi(
+  journeyId: string,
+  action: 'pause' | 'resume'
+): Promise<void> {
+  try {
+    await fetch(
+      `${BASE}/api/engagements/journey/${encodeURIComponent(journeyId)}/${action}`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  } catch {
+    // Network errors are non-fatal — localStorage has the optimistic state.
+    // The server will reflect the correct status once connectivity is restored.
+  }
+}
+
 export function useEnrollment() {
   const [enrollment, setEnrollmentState] = useState<EnrollmentMap>(() => load());
 
@@ -70,8 +98,25 @@ export function useEnrollment() {
     [enrollment]
   );
 
-  const pauseJourney = useCallback((id: string) => mutate(id, 'paused'), [mutate]);
-  const resumeJourney = useCallback((id: string) => mutate(id, 'active'), [mutate]);
+  /**
+   * Pause a journey: optimistic localStorage update + server-side persist.
+   * Walk.tsx and Journeys.tsx also read progress[j.id]?.status from JourneyContext
+   * (which refreshes on next mount) but the localStorage cache keeps the UI
+   * in sync immediately.
+   */
+  const pauseJourney = useCallback((id: string) => {
+    mutate(id, 'paused');
+    void callEngagementApi(id, 'pause');
+  }, [mutate]);
+
+  /**
+   * Resume a journey: optimistic localStorage update + server-side persist.
+   */
+  const resumeJourney = useCallback((id: string) => {
+    mutate(id, 'active');
+    void callEngagementApi(id, 'resume');
+  }, [mutate]);
+
   const saveForLater = useCallback((id: string) => mutate(id, 'saved'), [mutate]);
 
   /**

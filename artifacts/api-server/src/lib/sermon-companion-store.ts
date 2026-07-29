@@ -51,6 +51,8 @@ export interface CompanionProgress {
   completedDays: number[];
   startedAt: string;
   updatedAt: string;
+  /** Engagement lifecycle status — active | paused */
+  status: string;
 }
 
 // ─── Companion CRUD ───────────────────────────────────────────────────────────
@@ -642,5 +644,34 @@ function rowToProgress(row: Record<string, unknown>): CompanionProgress {
     completedDays: Array.isArray(row.completed_days) ? row.completed_days as number[] : [],
     startedAt: String(row.started_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
+    status: String(row.status ?? 'active'),
   };
+}
+
+// ─── Engagement lifecycle ─────────────────────────────────────────────────────
+
+export async function pauseCompanion(userId: string, companionId: string): Promise<void> {
+  await pool.query(
+    `UPDATE sermon_companion_progress
+     SET status = 'paused', updated_at = NOW()
+     WHERE user_id = $1 AND companion_id = $2`,
+    [userId, companionId],
+  );
+}
+
+export async function resumeCompanion(userId: string, companionId: string): Promise<void> {
+  await pool.query(
+    `UPDATE sermon_companion_progress
+     SET status = 'active', updated_at = NOW()
+     WHERE user_id = $1 AND companion_id = $2`,
+    [userId, companionId],
+  );
+}
+
+export async function removeCompanion(userId: string, companionId: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM sermon_companion_progress
+     WHERE user_id = $1 AND companion_id = $2`,
+    [userId, companionId],
+  );
 }

@@ -7,7 +7,7 @@
  */
 
 import { eq, and, asc, desc } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   devotionalSeriesTable,
   devotionalEntriesTable,
@@ -230,6 +230,34 @@ export async function startSeries(
   // Already started — return existing progress
   const existing = await getProgress(userId, seriesId);
   return existing!;
+}
+
+// ─── Engagement lifecycle ─────────────────────────────────────────────────────
+
+export async function pauseSeries(userId: string, seriesId: string): Promise<void> {
+  await pool.query(
+    `UPDATE devotional_progress
+     SET status = 'paused', updated_at = NOW()
+     WHERE user_id = $1 AND series_id = $2`,
+    [userId, seriesId],
+  );
+}
+
+export async function resumeSeries(userId: string, seriesId: string): Promise<void> {
+  await pool.query(
+    `UPDATE devotional_progress
+     SET status = 'active', updated_at = NOW()
+     WHERE user_id = $1 AND series_id = $2`,
+    [userId, seriesId],
+  );
+}
+
+export async function removeSeries(userId: string, seriesId: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM devotional_progress
+     WHERE user_id = $1 AND series_id = $2`,
+    [userId, seriesId],
+  );
 }
 
 export async function markDayComplete(

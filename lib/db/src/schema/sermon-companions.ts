@@ -56,6 +56,9 @@ export const sermonCompanionProgressTable = pgTable("sermon_companion_progress",
   companionId: uuid("companion_id").notNull(),
   currentDay: integer("current_day").notNull().default(1),
   completedDays: jsonb("completed_days").$type<number[]>().notNull().default([]),
+  // Engagement lifecycle status — active | paused
+  // Added via startup migration; DEFAULT 'active' for existing rows.
+  status: text("status").notNull().default("active"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

@@ -85,6 +85,7 @@ export async function runStartupMigrations(): Promise<void> {
         companion_id uuid NOT NULL REFERENCES sermon_companion(id) ON DELETE CASCADE,
         current_day integer NOT NULL DEFAULT 1,
         completed_days jsonb NOT NULL DEFAULT '[]',
+        status text NOT NULL DEFAULT 'active',
         started_at timestamp NOT NULL DEFAULT NOW(),
         updated_at timestamp NOT NULL DEFAULT NOW(),
         UNIQUE (user_id, companion_id)
@@ -137,6 +138,7 @@ export async function runStartupMigrations(): Promise<void> {
         series_id uuid NOT NULL REFERENCES devotional_series(id) ON DELETE CASCADE,
         current_day integer NOT NULL DEFAULT 1,
         completed_days jsonb NOT NULL DEFAULT '[]',
+        status text NOT NULL DEFAULT 'active',
         started_at timestamp NOT NULL DEFAULT NOW(),
         updated_at timestamp NOT NULL DEFAULT NOW(),
         UNIQUE (user_id, series_id)
@@ -147,6 +149,31 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: devotional tables failed (non-fatal)");
   }
 
+  // ── Active Engagement Platform Rule: status columns (2026-07) ───────────────
+  // Add engagement lifecycle status to the two progress tables that were created
+  // without it. The user_journey_progress table already has this column.
+  // Running AFTER both CREATE TABLE blocks so both tables exist on fresh installs.
+  // The CREATE TABLE definitions above already include `status`, so these ALTER
+  // TABLE calls are no-ops on fresh DBs; they backfill existing production rows.
+  try {
+    await pool.query(`
+      ALTER TABLE devotional_progress
+        ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+    `);
+    logger.info("Startup migration: devotional_progress.status column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: devotional_progress.status column failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      ALTER TABLE sermon_companion_progress
+        ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+    `);
+    logger.info("Startup migration: sermon_companion_progress.status column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: sermon_companion_progress.status column failed (non-fatal)");
+  }
 
   // ── Daily Rhythm Architecture (2026-07) ──────────────────────────────────────
   // Promote "15-minutes-with-jesus" from journeyType "core" → "daily-rhythm".

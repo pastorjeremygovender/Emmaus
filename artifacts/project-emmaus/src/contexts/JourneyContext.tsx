@@ -92,6 +92,8 @@ export type Progress = {
   completedDays: number[];
   startedAt: string;
   lastCompletedAt: string | null;
+  /** Engagement lifecycle status — active | paused | completed | dropped */
+  status?: string;
 };
 
 type JourneyContextType = {

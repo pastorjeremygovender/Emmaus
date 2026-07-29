@@ -477,8 +477,17 @@ export default function Walk() {
   // 3. Your Journeys — journeys the member has already started.
   //    Includes: active growth journeys + started daily devotional.
   //    Excludes: Daily Rhythm (shown above), Companion (shown below).
+  //    Status check: prefer server-backed progress[j.id]?.status; fall back to
+  //    localStorage (enrollment.ts optimistic cache) for instant UI updates.
   const activeGrowthJourneys = publishedJourneys
-    .filter(j => !isExemptJourney(j) && progress[j.id] && getState(j.id) === 'active')
+    .filter(j => {
+      if (!progress[j.id]) return false;
+      if (isExemptJourney(j)) return false;
+      // Server status wins when present; optimistic localStorage cache as fallback.
+      const serverStatus = progress[j.id]?.status;
+      if (serverStatus) return serverStatus === 'active';
+      return getState(j.id) === 'active';
+    })
     .map(j => ({ journey: j, prog: progress[j.id]! }));
 
   const devotionalJourney = publishedJourneys.find(j => j.journeyType === 'devotional');

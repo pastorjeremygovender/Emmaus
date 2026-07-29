@@ -129,6 +129,8 @@ export interface FrontendProgress {
   completedDays: number[];
   startedAt: string;
   lastCompletedAt: string | null;
+  /** Engagement lifecycle status — active | paused | completed | dropped */
+  status: string;
 }
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -231,6 +233,7 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
     completedDays: (row.completedDays as number[]) ?? [],
     startedAt: row.startedAt.toISOString(),
     lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+    status: row.status ?? "active",
   };
 }
 
@@ -615,6 +618,39 @@ async function refreshJourneyDuration(journeyId: string, now: Date): Promise<voi
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────────
+
+// ─── Journey engagement lifecycle ────────────────────────────────────────────
+
+export async function pauseJourney(userId: string, journeyId: string): Promise<void> {
+  const now = new Date();
+  await db
+    .update(userJourneyProgressTable)
+    .set({ status: "paused", updatedAt: now })
+    .where(and(
+      eq(userJourneyProgressTable.userId, userId),
+      eq(userJourneyProgressTable.journeyId, journeyId),
+    ));
+}
+
+export async function resumeJourney(userId: string, journeyId: string): Promise<void> {
+  const now = new Date();
+  await db
+    .update(userJourneyProgressTable)
+    .set({ status: "active", updatedAt: now })
+    .where(and(
+      eq(userJourneyProgressTable.userId, userId),
+      eq(userJourneyProgressTable.journeyId, journeyId),
+    ));
+}
+
+export async function removeJourneyProgress(userId: string, journeyId: string): Promise<void> {
+  await db
+    .delete(userJourneyProgressTable)
+    .where(and(
+      eq(userJourneyProgressTable.userId, userId),
+      eq(userJourneyProgressTable.journeyId, journeyId),
+    ));
+}
 
 export async function getAllProgress(userId: string): Promise<Record<string, FrontendProgress>> {
   const rows = await db
