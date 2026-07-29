@@ -1,0 +1,516 @@
+PROJECT EMMAUS — REBUILD THE SERMON COMPANION GENERATION RULES
+
+IMPORTANT
+
+The current Sermon Companion output is unacceptable.
+
+It is taking broad sermon themes and then generating its own:
+
+- ideas,
+- explanations,
+- Scriptures,
+- references,
+- applications,
+- illustrations,
+- spiritual advice,
+- devotional content.
+
+This must stop.
+
+A Sermon Companion is not an independent AI devotional.
+
+It must be a faithful, traceable continuation of the actual sermon.
+
+Before making changes:
+
+1. Create a Git commit or Replit checkpoint.
+2. Preserve all existing sermon companion records.
+3. Inspect the existing generator before replacing anything.
+4. Make the smallest safe change necessary.
+5. Do not break the existing URL, transcript, theme-confirmation, draft, publish or editor workflows.
+
+====================================================
+CORE NON-NEGOTIABLE RULE
+====================================================
+
+The Sermon Companion may only use material that is explicitly present in the sermon transcript.
+
+It may:
+
+- extract,
+- shorten,
+- organise,
+- clarify,
+- reinforce,
+- restate,
+- connect,
+- and help the user reflect on
+
+ideas that the preacher actually expressed.
+
+It may not introduce material from outside the sermon.
+
+The sermon transcript is the closed source boundary.
+
+If an idea, Scripture, reference, illustration, claim, application or instruction is not supported by the sermon transcript, it must not appear in the Sermon Companion.
+
+====================================================
+CLOSED-SOURCE GENERATION
+====================================================
+
+Treat sermon generation as a closed-source task.
+
+The AI must operate only from:
+
+- the sermon transcript,
+- the sermon title,
+- the identified preacher,
+- timestamps from the source video,
+- administrator-confirmed Main Theme.
+
+Do not use:
+
+- general Bible knowledge,
+- theological knowledge,
+- outside sermons,
+- web sources,
+- denominational knowledge,
+- common Christian phrases,
+- assumed context,
+- related Bible passages,
+- additional cross-references,
+- AI-generated illustrations,
+- AI-generated examples,
+- AI-generated applications.
+
+Do not expand beyond the preacher’s own content.
+
+When the transcript does not provide enough content for a requested section, return:
+
+“Not enough sermon material was found for this section.”
+
+Do not fill the gap using model knowledge.
+
+====================================================
+SCRIPTURE RULE
+====================================================
+
+Every Scripture reference used in the Sermon Companion must have been explicitly mentioned, quoted or clearly preached from in the sermon.
+
+The system may not add supporting Scriptures.
+
+The system may not add “related verses.”
+
+The system may not add cross-references.
+
+The system may not quote a verse merely because it fits the theme.
+
+For each Scripture included, store:
+
+- reference,
+- transcript evidence,
+- start timestamp,
+- end timestamp if available,
+- source wording from the sermon.
+
+If a Scripture reference cannot be traced to the sermon transcript, exclude it.
+
+====================================================
+IDEA AND CONCEPT RULE
+====================================================
+
+Every main idea must be traceable to a specific sermon segment.
+
+For each generated idea, store:
+
+- the idea in concise language,
+- transcript evidence,
+- start timestamp,
+- end timestamp if available,
+- confidence that the idea is directly supported.
+
+Do not generate an idea from the broad sermon theme alone.
+
+Do not infer a doctrine or conclusion that the preacher did not state.
+
+Do not strengthen, correct or complete the preacher’s point using outside knowledge.
+
+====================================================
+TIMESTAMPED SERMON LINKS
+====================================================
+
+Every daily Sermon Companion entry should include at least one timestamped link to the exact point in the sermon where the relevant idea is preached.
+
+Preferred display:
+
+Hear this part of the sermon →
+[Open sermon at 18:42]
+
+For YouTube URLs, generate a timestamped URL using the relevant start time.
+
+Example:
+
+https://www.youtube.com/watch?v=VIDEO_ID&t=1122s
+
+Do not show a timestamp unless it has been mapped to the transcript segment supporting the content.
+
+Each daily entry may include more than one timestamped link when multiple sermon sections are being reinforced.
+
+The links must open the original sermon at the correct point.
+
+====================================================
+SERMON SLICE RULE
+====================================================
+
+The generator must use the sermon portion only.
+
+It must exclude:
+
+- worship,
+- announcements,
+- notices,
+- offering,
+- prayer ministry not part of the sermon,
+- introductions unrelated to the message,
+- closing service material,
+- unrelated conversation.
+
+The sermon slice must be identified before Main Theme confirmation and companion generation.
+
+The administrator must be able to review:
+
+- detected sermon start,
+- detected sermon end,
+- sermon duration,
+- transcript excerpt used.
+
+Allow the administrator to correct the sermon start and end timestamps before generation.
+
+====================================================
+MAIN THEME CONFIRMATION
+====================================================
+
+Before generating the Monday–Friday companion, display:
+
+Main Theme
+
+A single sentence derived strictly from the sermon.
+
+Buttons:
+
+✓ That’s Correct
+
+✏ Edit Main Theme
+
+The administrator-confirmed Main Theme may organise the companion, but it must not be used as permission to invent content beyond the sermon transcript.
+
+After the Main Theme is confirmed, all generated sections must still pass transcript-grounding checks.
+
+====================================================
+MONDAY–FRIDAY STRUCTURE
+====================================================
+
+Generate up to five daily entries from actual sermon content.
+
+Each day should focus on a distinct idea that was clearly preached.
+
+Every day should include only:
+
+1. Day title
+
+Derived from the sermon.
+
+2. From the Sermon
+
+A concise restatement of what the preacher actually said.
+
+3. Sermon Scripture
+
+Only when that Scripture was used in the sermon.
+
+4. Consider This
+
+A short reflection that stays inside the preacher’s point.
+
+It may help the user think about what was preached, but may not add new teaching.
+
+5. Prayer
+
+A short prayer using only themes and language supported by the sermon.
+
+6. Next Step
+
+One simple application clearly derived from the preacher’s own instruction or emphasis.
+
+7. Sermon Link
+
+A timestamped link to the relevant sermon segment.
+
+If the sermon does not contain five sufficiently distinct ideas, generate fewer than five days.
+
+Do not stretch weak material or invent additional days merely to reach five.
+
+====================================================
+STRICT PRESCRIPTION RULE
+====================================================
+
+Remove all arbitrary, formulaic and mechanical spiritual prescriptions.
+
+The generator must never produce instructions such as:
+
+- pray this three times,
+- repeat this seven times,
+- write this verse three times,
+- say this aloud a certain number of times,
+- read this every hour,
+- write this on a card,
+- put this in your phone,
+- make a list of five things,
+- complete three actions,
+- follow a numbered spiritual formula,
+- perform an arbitrary ritual,
+- use repetition as though it creates spiritual power.
+
+Do not invent counts, frequencies, routines or exercises.
+
+Do not turn faith into a technique.
+
+This rule applies even when the suggested activity appears harmless.
+
+====================================================
+ALLOWED NEXT STEPS
+====================================================
+
+A Next Step must be:
+
+- directly connected to the sermon,
+- gentle,
+- natural,
+- practical,
+- non-formulaic,
+- free of arbitrary counts,
+- free of invented spiritual rituals.
+
+Examples of acceptable forms:
+
+- “Take a moment today to speak honestly with Jesus about this.”
+- “Consider where this truth meets your life right now.”
+- “Ask God to help you respond to what you heard.”
+- “Return to this part of the sermon and listen again.”
+- “Think about the step the preacher encouraged you to take.”
+
+Only use these forms when they fit what the preacher actually said.
+
+Do not add an application that was not present or reasonably explicit in the sermon.
+
+====================================================
+GROUNDING VALIDATION
+====================================================
+
+Before saving generated content, validate every section.
+
+For each sentence or content block, confirm:
+
+- Is this supported by the sermon transcript?
+- Can it be traced to a transcript segment?
+- Does it add a new Scripture?
+- Does it add a new theological claim?
+- Does it add a new illustration?
+- Does it introduce a prescription or formula?
+- Does it go beyond the preacher’s wording or intent?
+
+Reject or regenerate any block that fails validation.
+
+Every generated content block should internally store:
+
+- source transcript segment ID,
+- source start timestamp,
+- source end timestamp,
+- grounding confidence.
+
+Do not publish ungrounded content.
+
+====================================================
+ADMIN REVIEW MODE
+====================================================
+
+Inside the Sermon Companion editor, add a grounding review option.
+
+For each generated section, allow the administrator to view:
+
+- generated text,
+- supporting transcript excerpt,
+- source timestamp,
+- timestamped sermon link.
+
+Include a warning when:
+
+- transcript support is weak,
+- no Scripture source was found,
+- a section may contain inferred material,
+- a timestamp could not be confirmed.
+
+The administrator must be able to edit or delete any generated section before publishing.
+
+====================================================
+AI PROMPT REQUIREMENTS
+====================================================
+
+Rewrite the underlying generation prompt so it clearly states:
+
+“You are not writing a new devotional.
+
+You are creating a faithful companion to one specific sermon.
+
+Use only the supplied sermon transcript.
+
+Do not use outside biblical, theological or general knowledge.
+
+Do not add Scriptures, references, illustrations, examples, applications or claims that are not present in the sermon.
+
+Every statement must be traceable to the transcript.
+
+When the transcript does not support something, omit it.
+
+Never fill gaps using your own knowledge.
+
+Never prescribe arbitrary repetition, counts, writing exercises or spiritual formulas.”
+
+Use a low-creativity generation setting.
+
+Prefer extraction and controlled summarisation over creative generation.
+
+====================================================
+STRUCTURED GENERATION OUTPUT
+====================================================
+
+Require structured output similar to:
+
+{
+  "mainTheme": {
+    "text": "",
+    "sourceStartSeconds": 0,
+    "sourceEndSeconds": 0,
+    "transcriptEvidence": ""
+  },
+  "days": [
+    {
+      "dayNumber": 1,
+      "title": "",
+      "sermonIdea": "",
+      "scriptures": [
+        {
+          "reference": "",
+          "sourceStartSeconds": 0,
+          "sourceEndSeconds": 0,
+          "transcriptEvidence": ""
+        }
+      ],
+      "reflection": "",
+      "prayer": "",
+      "nextStep": "",
+      "sources": [
+        {
+          "startSeconds": 0,
+          "endSeconds": 0,
+          "transcriptEvidence": "",
+          "timestampUrl": ""
+        }
+      ]
+    }
+  ]
+}
+
+Do not accept generated sections without source evidence.
+
+Scriptures may be an empty array.
+
+Generating no Scripture is better than inventing one.
+
+====================================================
+EXISTING CONTENT AUDIT
+====================================================
+
+Audit all existing draft and published Sermon Companions.
+
+Flag content that contains:
+
+- Scriptures not used in the sermon,
+- ideas not traceable to the transcript,
+- invented references,
+- invented illustrations,
+- unsupported applications,
+- arbitrary repetition,
+- numerical prescriptions,
+- writing-on-cards or phone instructions,
+- formulaic spiritual exercises.
+
+Do not silently overwrite published content.
+
+Provide an administrator review list showing:
+
+- Companion title,
+- affected day,
+- problematic text,
+- reason it was flagged,
+- supporting transcript found or not found.
+
+Allow the administrator to regenerate individual days using the new strict rules.
+
+====================================================
+TESTING
+====================================================
+
+Test the generator with at least three real sermons.
+
+For every test confirm:
+
+1. No Scripture was introduced unless it appeared in the sermon.
+2. Every major idea maps to a transcript segment.
+3. Every daily entry contains a valid timestamped sermon link.
+4. Links open at the correct sermon point.
+5. No arbitrary counts or repetitions appear.
+6. No “write this on a card” or similar instruction appears.
+7. No outside theological explanation appears.
+8. Fewer than five days are generated when the sermon does not support five.
+9. The administrator can review transcript evidence.
+10. Draft and publish workflows still work.
+11. No HTTP 502 or unhandled error occurs.
+12. Existing sermon companion records remain intact.
+
+====================================================
+DEFINITION OF SUCCESS
+====================================================
+
+The Sermon Companion should make the user think:
+
+“I remember this. This is what was preached on Sunday, and this is where I can hear it again.”
+
+It must never make the user think:
+
+“This sounds like a different AI-written devotional based loosely on the same subject.”
+
+The sermon is the authority and boundary for the companion.
+
+The AI is only permitted to organise and reinforce what the preacher actually preached.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Before declaring completion, provide:
+
+1. Checkpoint created.
+2. Root cause of the existing ungrounded output.
+3. AI prompts changed.
+4. Files changed.
+5. Grounding validation added.
+6. Timestamp generation added.
+7. Prescription filtering added.
+8. Existing companions flagged for review.
+9. Test sermons used.
+10. Examples showing generated content beside supporting transcript evidence.
+11. Confirmation that no outside Scriptures or ideas were introduced.
+12. Post-change checkpoint created.
+
+Do not proceed to additional Sermon Companion features until this strict grounding system is implemented and verified.
