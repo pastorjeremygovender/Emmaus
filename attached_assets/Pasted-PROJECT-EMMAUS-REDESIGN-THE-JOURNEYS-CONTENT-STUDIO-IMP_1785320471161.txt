@@ -1,0 +1,384 @@
+PROJECT EMMAUS – REDESIGN THE JOURNEYS CONTENT STUDIO
+
+IMPORTANT
+
+This is an architecture improvement, not a rebuild.
+
+Before making changes:
+
+- Create a Git commit or Replit checkpoint.
+- Preserve all existing journey, lesson, collection and database records.
+- Do not rebuild the Journey Editor if one already exists.
+- Reuse existing APIs, routes and components wherever possible.
+
+====================================================
+GOAL
+====================================================
+
+The Journeys section currently opens to Collections.
+
+This is unintuitive.
+
+Collections are an organisational feature, not the primary content.
+
+The primary object in Emmaus is the Journey.
+
+The Journeys section should therefore open to the Journey Library.
+
+Collections should become a secondary organisational view.
+
+====================================================
+NEW INFORMATION ARCHITECTURE
+====================================================
+
+Content Studio
+
+• Daily Rhythm
+• Daily Devotionals
+• Journeys
+• Sermon Companions
+• Media Studio
+
+When the administrator clicks:
+
+Journeys
+
+they should land on
+
+JOURNEY LIBRARY
+
+NOT Collections.
+
+====================================================
+NEW JOURNEY LIBRARY
+====================================================
+
+The default Journeys screen should display:
+
+Heading
+
+Journeys
+
+Primary button
+
++ New Journey
+
+Search box
+
+Filters
+
+All
+Draft
+Published
+Archived
+
+Journey cards/list
+
+Each journey should display:
+
+• Title
+• Description
+• Status
+• Collection (if assigned)
+• Last modified
+• Edit
+• Publish/Draft
+• More menu
+
+Exactly like the Sermon Companion list.
+
+The administrator should immediately see every journey regardless of whether it belongs to a collection.
+
+====================================================
+REMOVE COLLECTION VS STANDALONE
+====================================================
+
+Do NOT separate journeys into
+
+Collections
+Standalone
+
+Every journey is simply a Journey.
+
+A journey may optionally belong to one Collection.
+
+Therefore remove:
+
+Collection tab
+Standalone tab
+
+from the primary Journeys view.
+
+====================================================
+COLLECTION ASSIGNMENT
+====================================================
+
+Inside the Journey Editor add:
+
+Collection
+
+None ▼
+
+Dropdown should contain
+
+None
+Foundations
+Christian Living
+Leadership
+Made Free
+etc.
+
+Below the dropdown:
+
++ Create New Collection
+
+If selected:
+
+Open a small dialog
+
+Collection Name
+
+Description (optional)
+
+Create
+
+Immediately assign the new collection to the journey.
+
+====================================================
+COLLECTIONS SUBTAB
+====================================================
+
+Journeys should contain two subtabs only:
+
+Journey Library
+Collections
+
+Journey Library is the default.
+
+Collections becomes an organisational page.
+
+====================================================
+COLLECTIONS PAGE
+====================================================
+
+Collections page should display:
+
++ New Collection
+
+Collection cards
+
+Each card displays
+
+Collection Name
+
+Description
+
+Number of journeys
+
+Edit
+
+Delete
+
+Clicking a collection opens
+
+Collection Details
+
+Showing
+
+Collection information
+
+List of journeys inside the collection
+
+Ability to:
+
+Open journey
+
+Remove journey from collection
+
+Reorder journeys (future-ready)
+
+====================================================
+JOURNEY EDITOR
+====================================================
+
+The Journey Editor remains the primary editing experience.
+
+At the top include:
+
+Journey Title
+
+Description
+
+Collection dropdown
+
+Status
+
+Everything else remains unchanged.
+
+No separate editor should exist for collection journeys.
+
+====================================================
+STANDALONE JOURNEYS
+====================================================
+
+A Standalone Journey is simply:
+
+Collection = None
+
+No special workflow.
+
+No separate navigation.
+
+No duplicate code.
+
+====================================================
+DATABASE
+====================================================
+
+Do NOT redesign the database.
+
+Reuse existing relationships.
+
+If necessary:
+
+Journey
+
+collectionId (nullable)
+
+Collection
+
+id
+name
+description
+
+This allows
+
+Collection assigned
+
+or
+
+Standalone
+
+without different object types.
+
+====================================================
+MIGRATION
+====================================================
+
+Automatically migrate existing data.
+
+Every existing journey should remain.
+
+Existing collection assignments should remain.
+
+Standalone journeys become
+
+collectionId = null
+
+No content loss.
+
+====================================================
+NAVIGATION
+====================================================
+
+Click Journeys
+
+↓
+
+Journey Library
+
+↓
+
+New Journey
+
+or
+
+Edit Journey
+
+↓
+
+Assign Collection
+
+Collections are no longer the entry point.
+
+====================================================
+REGRESSION REQUIREMENTS
+====================================================
+
+Confirm after implementation:
+
+✓ Existing journeys still appear
+
+✓ Existing lessons remain
+
+✓ Existing collections remain
+
+✓ Collection assignment preserved
+
+✓ Create Journey works
+
+✓ Edit Journey works
+
+✓ Save works
+
+✓ Publish works
+
+✓ Draft works
+
+✓ Delete works
+
+✓ Collection assignment works
+
+✓ Creating a collection from inside a journey works
+
+✓ Collection page displays correct journey counts
+
+✓ Browser refresh works
+
+✓ No broken routes
+
+✓ No duplicate journeys
+
+✓ No duplicate collections
+
+✓ No content loss
+
+====================================================
+DESIGN PRINCIPLE
+====================================================
+
+The Emmaus administrator thinks:
+
+"I want to create a Journey."
+
+NOT
+
+"I want to create a Collection."
+
+Collections exist only to organise journeys.
+
+Journeys are the primary content.
+
+Design every screen around that principle.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Before completion provide:
+
+1. Files modified.
+
+2. Existing components reused.
+
+3. Any new components created.
+
+4. Database changes (if any).
+
+5. Migration performed.
+
+6. Regression test results.
+
+7. Confirmation that no existing content or relationships were lost.
+
+Do not begin implementing additional Journey features until this redesign is complete and verified.
