@@ -1,0 +1,231 @@
+PROJECT EMMAUS — REMOVE SERMON COMPANION CONTINUE BUTTON AFTER FINAL DAY IN NEXT STEPS
+
+IMPORTANT
+
+Today’s Steps has already been fixed.
+
+Do not change Today’s Steps.
+
+The published app is currently working.
+
+Create a checkpoint first:
+
+PRE-NEXT-STEPS-SERMON-FINAL-STATE-FIX
+
+Do not modify:
+
+- Today’s Steps
+- Daily Rhythm
+- Daily Devotionals
+- Journeys
+- Active Engagement architecture
+- Sermon Companion generation
+- Bible translations
+- onboarding
+- Ask Emmaus
+- database schema
+
+Do not create a migration.
+
+This task applies only to Sermon Companion cards inside Next Steps.
+
+====================================================
+CURRENT PROBLEM
+====================================================
+
+In Next Steps, the Sermon Companion card still shows:
+
+Continue
+
+after the user has completed the final available day.
+
+Clicking Continue then attempts to open a nonexistent next day and shows a message such as:
+
+Day 6 not available
+
+This is incorrect.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+When the user has not completed all available published days:
+
+- show Continue;
+- Continue must open the correct next incomplete day;
+- keep View Previous Reflections →.
+
+When the user has completed the final available published day:
+
+- remove the Continue button completely;
+- do not calculate another day;
+- do not link to a nonexistent day;
+- do not request Day 6 or any day beyond the available content;
+- keep View Previous Reflections →;
+- retain the card and its completed state.
+
+The completed card should display:
+
+- Sermon Companion label;
+- title;
+- description or completion status;
+- View Previous Reflections →.
+
+There must be no empty button space.
+
+====================================================
+USE ACTUAL PUBLISHED DAY COUNT
+====================================================
+
+Do not hard-code five days.
+
+Determine the final available day from the actual published Sermon Companion entries.
+
+For example:
+
+finalAvailableDay = highest published day number
+
+If:
+
+userCompletedDay >= finalAvailableDay
+
+then:
+
+- isComplete = true;
+- hide Continue;
+- nextDay = null.
+
+If there is an unfinished valid day:
+
+- isComplete = false;
+- show Continue;
+- open the correct next valid day.
+
+Ignore unpublished or deleted days when calculating the final available day.
+
+====================================================
+REUSE EXISTING PROGRESS LOGIC
+====================================================
+
+Today’s Steps already has the correct completed-state behaviour.
+
+Reuse the same final-day resolver or progress calculation where possible.
+
+Do not create a separate conflicting calculation for Next Steps.
+
+Both surfaces must agree for the same user and Sermon Companion.
+
+Do not alter the already-working Today’s Steps UI.
+
+====================================================
+NEXT STEPS CARD BEHAVIOUR
+====================================================
+
+For an incomplete Sermon Companion:
+
+Continue
+View Previous Reflections →
+
+For a completed Sermon Companion:
+
+View Previous Reflections →
+
+only.
+
+Do not replace Continue with:
+
+- Review;
+- Restart;
+- Completed button;
+- Continue Anyway.
+
+The primary button should simply be absent.
+
+====================================================
+ROUTE PROTECTION
+====================================================
+
+Protect the Sermon Companion route from invalid next-day navigation.
+
+If a user manually requests a day greater than the final available published day:
+
+- do not show a broken “Day not available” page;
+- redirect safely to the final available day, the companion overview, or Next Steps;
+- preserve user progress;
+- do not create a new completion record.
+
+This route protection must not alter valid day navigation.
+
+====================================================
+LAYOUT
+====================================================
+
+When Continue is hidden:
+
+- remove the button container;
+- tighten the card vertically;
+- keep View Previous Reflections clearly visible;
+- preserve existing styling;
+- do not leave blank space.
+
+Do not redesign the entire Next Steps page.
+
+====================================================
+TESTING
+====================================================
+
+Test in the published app.
+
+1. Open Next Steps.
+2. Open Sermon Companions.
+3. Use a companion with unfinished days.
+4. Confirm Continue appears.
+5. Confirm Continue opens the correct next valid day.
+6. Complete the final available day.
+7. Return to Next Steps.
+8. Confirm Continue is absent.
+9. Confirm View Previous Reflections remains.
+10. Confirm clicking View Previous Reflections works.
+11. Confirm no request is made for a nonexistent day.
+12. Test a companion with a different number of published days.
+13. Confirm the actual published day count is used.
+14. Refresh the page.
+15. Confirm the completed state remains correct.
+16. Confirm Today’s Steps remains unchanged.
+17. Confirm Daily Rhythm remains unchanged.
+18. Confirm no HTTP errors.
+19. Confirm no migration was created.
+20. Confirm desktop and mobile production behaviour match.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+This task is complete only when:
+
+- completed Sermon Companions in Next Steps no longer show Continue;
+- incomplete Sermon Companions still show Continue;
+- Continue opens the correct next valid day;
+- View Previous Reflections remains available;
+- no nonexistent day is requested;
+- Today’s Steps remains unchanged;
+- published desktop and mobile tests pass.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Files changed.
+3. Existing shared resolver reused, if applicable.
+4. Final-day calculation used.
+5. Route protection added.
+6. Published desktop test results.
+7. Published mobile test results.
+8. Confirmation that Today’s Steps was not modified.
+9. Confirmation that no migration was created.
+10. Post-change checkpoint.
+
+Stop after this Next Steps fix is complete and verified.

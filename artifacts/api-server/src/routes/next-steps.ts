@@ -50,7 +50,11 @@ export interface NextStepsItem {
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
-  primaryActionLabel: string;
+  /**
+   * Label for the primary action button.
+   * null means the content is fully complete — no primary action should be shown.
+   */
+  primaryActionLabel: string | null;
 }
 
 export interface JourneyCollectionGroup {
@@ -273,9 +277,16 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       // sermon-table companion
       const c = u.data;
       const prog = scProgressMap[c.id];
+
+      // Use the actual published entry count as the final-day threshold.
+      // publishedEntryCount is returned by listPublishedSermonCompanions() and
+      // reflects only published (not draft) entries — the same value Today's Steps
+      // uses via numberOfDays on the scCompanion object.
+      const publishedEntryCount = c.publishedEntryCount;
+
       let state: MemberProgressState = "not-started";
       if (prog) {
-        if (c.numberOfDays > 0 && prog.completedDays.length >= c.numberOfDays) {
+        if (publishedEntryCount > 0 && prog.completedDays.length >= publishedEntryCount) {
           state = "completed";
         } else if (prog.status === "paused") {
           state = "paused";
@@ -284,6 +295,12 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         }
       }
       const currentDay = prog?.currentDay ?? 1;
+
+      // "All days complete" when the user's arithmetic next-day pointer has
+      // advanced past the last available published entry — matches the same
+      // check used by the Today's Steps card (currentDay > numberOfDays).
+      const isAllComplete = publishedEntryCount > 0 && currentDay > publishedEntryCount;
+
       // Strip any subtitle appended to the companion title by AI generation
       // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
       const title = c.title.includes(": ") ? c.title.split(": ")[0].trim() : c.title;
@@ -296,8 +313,14 @@ router.get("/next-steps", async (req: Request, res: Response) => {
           durationDays: c.numberOfDays,
           publishedAt: c.publishedAt ?? undefined,
         },
-        route: `/sermon-companion/${c.id}/day/${currentDay}`,
-        primaryActionLabel: primaryActionLabel("sermon-devotional", state),
+        // When all days are complete, point to the previous-days page rather than
+        // a nonexistent next day; the primary button will be absent so navigation
+        // from the card only happens via "View Previous Reflections →".
+        route: isAllComplete
+          ? `/sermon-companion/${c.id}/previous`
+          : `/sermon-companion/${c.id}/day/${currentDay}`,
+        // null → EmmausContentCard renders no primary button (no "Continue").
+        primaryActionLabel: isAllComplete ? null : primaryActionLabel("sermon-devotional", state),
       };
     }
 

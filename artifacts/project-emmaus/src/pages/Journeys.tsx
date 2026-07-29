@@ -503,14 +503,18 @@ function SermonCompanionsPanel({
 
   function companionCard(item: NextStepsItem) {
     const isPaused = item.memberProgressState === 'paused';
+    // item.primaryActionLabel is null when all published days are complete.
+    // EmmausContentCard expects string | undefined — convert null → undefined
+    // so the primary button is omitted entirely (no empty button space).
+    const actionLabel = item.primaryActionLabel ?? undefined;
     return (
       <EmmausContentCard
         label="SERMON COMPANION"
         title={item.title}
         description={item.description}
         metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
-        primaryActionLabel={item.primaryActionLabel}
-        onAction={() => onAction(item)}
+        primaryActionLabel={actionLabel}
+        onAction={actionLabel ? () => onAction(item) : undefined}
         headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
         secondaryAction={previousDaysAction(item)}
       />

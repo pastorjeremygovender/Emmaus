@@ -33,7 +33,11 @@ export interface NextStepsItem {
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
-  primaryActionLabel: string;
+  /**
+   * Label for the primary action button.
+   * null means the content is fully complete — no primary action should be shown.
+   */
+  primaryActionLabel: string | null;
 }
 
 export interface JourneyCollectionGroup {
