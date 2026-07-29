@@ -19,10 +19,13 @@ import {
   PanelLeftOpen, PanelRightClose, PanelRightOpen, BookOpen,
   FileText, Smartphone, Tablet, Monitor, GripVertical, ImageIcon,
   Sparkles, X as XIcon, ChevronDown, ChevronUp, Headphones, Layers, Loader2,
+  FolderOpen,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/contexts/JourneyContext';
 import { getJourney as fetchJourneyById, deleteJourney as apiDeleteJourney } from '@/lib/journeys-api';
+import { listCollections, createCollection } from '@/lib/collections-api';
+import type { Collection } from '@/lib/collections-api';
 import { Block, stepToBlocks, blocksToCanonical, createBlock } from '@/lib/blocks';
 import BlockCanvas from './BlockCanvas';
 import { ConfirmDialog, StatusBadge, ContentStudioToolbar } from '../shared';
@@ -319,6 +322,40 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
   onPatch: (k: keyof Journey, v: string | boolean) => void;
   onBlur: () => void;
 }) {
+  const { user } = useAuth();
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [showNewCollection, setShowNewCollection] = useState(false);
+  const [newColTitle, setNewColTitle] = useState('');
+  const [newColDesc, setNewColDesc] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  useEffect(() => {
+    listCollections().then(setCollections).catch(() => {});
+  }, []);
+
+  const handleCreateCollection = async () => {
+    if (!newColTitle.trim()) { setCreateError('Collection name is required.'); return; }
+    setCreating(true); setCreateError('');
+    try {
+      const created = await createCollection(
+        { title: newColTitle.trim(), description: newColDesc.trim() || undefined, status: 'Draft' },
+        user?.id
+      );
+      setCollections(prev => [...prev, created]);
+      onPatch('collectionId' as keyof Journey, created.id);
+      onBlur();
+      setShowNewCollection(false);
+      setNewColTitle(''); setNewColDesc('');
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Could not create collection');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const currentCollectionId = (form as any).collectionId ?? (journey as any).collectionId ?? '';
+
   return (
     <div className="p-5 space-y-6">
       <div>
@@ -336,6 +373,79 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
           ).map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
+
+      {/* Collection assignment — not shown for Daily Rhythm (it's a single track) */}
+      {journey.journeyType !== 'daily-rhythm' && (
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Collection</label>
+          <select
+            value={currentCollectionId}
+            onChange={e => { onPatch('collectionId' as keyof Journey, e.target.value); onBlur(); }}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
+          >
+            <option value="">None (standalone)</option>
+            {collections.map(c => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+          {currentCollectionId && collections.find(c => c.id === currentCollectionId) && (
+            <p className="text-[11px] text-purple-600 mt-1.5 flex items-center gap-1">
+              <FolderOpen size={10} />
+              {collections.find(c => c.id === currentCollectionId)!.title}
+            </p>
+          )}
+
+          {/* Inline "Create New Collection" */}
+          {!showNewCollection ? (
+            <button
+              type="button"
+              onClick={() => setShowNewCollection(true)}
+              className="mt-2 text-[11px] text-teal-600 hover:text-teal-800 font-medium flex items-center gap-1 transition-colors"
+            >
+              <Plus size={11} /> Create New Collection
+            </button>
+          ) : (
+            <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2.5">
+              <p className="text-xs font-semibold text-gray-700">New Collection</p>
+              <input
+                type="text"
+                value={newColTitle}
+                onChange={e => setNewColTitle(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreateCollection()}
+                placeholder="Collection name *"
+                autoFocus
+                className="w-full px-2.5 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+              />
+              <input
+                type="text"
+                value={newColDesc}
+                onChange={e => setNewColDesc(e.target.value)}
+                placeholder="Description (optional)"
+                className="w-full px-2.5 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+              />
+              {createError && <p className="text-[11px] text-red-600">{createError}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateCollection}
+                  disabled={creating || !newColTitle.trim()}
+                  className="flex-1 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                >
+                  {creating ? 'Creating…' : 'Create'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewCollection(false); setNewColTitle(''); setNewColDesc(''); setCreateError(''); }}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Journey Type</label>
         <select

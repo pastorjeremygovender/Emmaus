@@ -2,11 +2,12 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   Plus, Search, BookOpen, Layers, X,
   Heart, GraduationCap, Tag, MoreHorizontal,
-  Archive, Copy, Download, Trash2,
+  Archive, Copy, Download, Trash2, FolderOpen,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey } from '@/lib/journeys-api';
+import { listCollections } from '@/lib/collections-api';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
@@ -37,6 +38,9 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'superAdmin';
 
+  // Library mode = no collection filter, no standalone-only filter → shows all journeys
+  const isLibrary = !collectionId && !standaloneOnly;
+
   const [query, setQuery]           = useState('');
   const [statusTab, setStatusTab]   = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState('All Types');
@@ -45,6 +49,14 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
   const menuRef                     = useRef<HTMLDivElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<Journey | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState('');
+
+  // Fetch collections to show the collection name badge on each journey card
+  const [collectionMap, setCollectionMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    listCollections()
+      .then(cols => setCollectionMap(Object.fromEntries(cols.map(c => [c.id, c.title]))))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -115,10 +127,10 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
-  const pageTitle = standaloneOnly ? 'Standalone Journeys' : 'Journeys';
-  const pageDescription = standaloneOnly
-    ? 'Journeys without a collection assignment.'
-    : 'All journeys in this collection.';
+  const pageTitle = isLibrary ? 'Journeys' : (standaloneOnly ? 'Standalone Journeys' : 'Journeys');
+  const pageDescription = isLibrary
+    ? 'Every journey across all collections and standalone.'
+    : (standaloneOnly ? 'Journeys without a collection assignment.' : 'All journeys in this collection.');
 
   return (
     <>
@@ -221,9 +233,19 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
                       <span>{p}</span>
                     </React.Fragment>
                   ))}
-                  {j.tags && j.tags.length > 0 && (
+                  {/* Collection badge — only shown in library mode where all journeys are listed */}
+                  {isLibrary && (j as any).collectionId && collectionMap[(j as any).collectionId] && (
                     <>
                       {metaParts.length > 0 && <span className="text-gray-300">·</span>}
+                      <span className="flex items-center gap-1 text-purple-600">
+                        <FolderOpen size={10} />
+                        {collectionMap[(j as any).collectionId]}
+                      </span>
+                    </>
+                  )}
+                  {j.tags && j.tags.length > 0 && (
+                    <>
+                      {(metaParts.length > 0 || ((j as any).collectionId && collectionMap[(j as any).collectionId])) && <span className="text-gray-300">·</span>}
                       <span className="flex items-center gap-1">
                         <Tag size={10} />
                         {j.tags.slice(0, 2).join(', ')}
