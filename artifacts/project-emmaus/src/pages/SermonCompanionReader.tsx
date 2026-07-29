@@ -176,7 +176,8 @@ export default function SermonCompanionReader() {
     }
   };
 
-  const firstName = user?.preferredName?.split(' ')[0] ?? 'Friend';
+  const rawName = user?.preferredName?.trim();
+  const firstName = (rawName && !rawName.includes('@')) ? rawName.split(' ')[0] : undefined;
   const entry     = companion?.entries.find(e => e.dayNumber === day);
   const isAlreadyCompleted = (progress?.completedDays ?? []).includes(day) && !justCompleted;
 

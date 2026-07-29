@@ -631,6 +631,13 @@ export default function Walk() {
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
+  // Derive a safe first name — never show 'Friend' or empty strings.
+  const rawPreferredName = user.preferredName?.trim();
+  const greetingFirstName =
+    rawPreferredName && !rawPreferredName.includes('@')
+      ? rawPreferredName.split(' ')[0]
+      : null;
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -658,7 +665,7 @@ export default function Walk() {
             className="text-[30px] font-sans font-medium tracking-tight leading-tight text-foreground"
             data-testid="text-greeting"
           >
-            {greeting}, {user.preferredName}.
+            {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
           </motion.h1>
         </header>
 

@@ -14,6 +14,7 @@ import { sermonCompanionsRouter } from "./sermon-companions";
 import { adminSermonsRouter } from "./admin-sermons";
 import nextStepsRouter from "./next-steps";
 import { engagementsRouter } from "./engagements";
+import adminResetRouter from "./admin-reset";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use("/sermon-companions", sermonCompanionsRouter);
 router.use("/admin-sermons", adminSermonsRouter);
 router.use(nextStepsRouter);
 router.use("/engagements", engagementsRouter);
+router.use(adminResetRouter);
 
 export default router;

@@ -335,7 +335,7 @@ function CompanionDayEditor({
           prayer={current.prayer}
           nextStep={current.nextStep}
           closing={current.closing}
-          memberName="Friend"
+          memberName={undefined}
           previewMode
           actionButton={<PreviewDevotionalContinueButton />}
         />

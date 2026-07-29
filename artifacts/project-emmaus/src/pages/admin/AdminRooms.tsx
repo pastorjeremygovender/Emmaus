@@ -3,7 +3,7 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
 
 const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Friend',
+  'demo-user-1': 'Member',
   'demo-user-2': DEMO_USER_2.preferredName,
   'demo-admin-1': 'Jeremy (Admin)',
 };

@@ -124,7 +124,7 @@ export const DEMO_PRAYER_REQUESTS: PrayerRequest[] = [
   {
     id: 'prayer-1',
     userId: 'demo-user-1',
-    userName: 'Friend',
+    userName: 'Member',
     content:
       'Please pray for my family situation. Things have been difficult at home and I need wisdom.',
     status: 'new',
@@ -158,7 +158,7 @@ export const DEMO_ADMIN_USERS: AdminUser[] = [
   {
     id: 'demo-user-1',
     email: 'demo@emmaus.church',
-    preferredName: 'Friend',
+    preferredName: 'Member',
     role: 'user',
     currentJourneyId: '15-minutes-with-jesus',
     currentDay: 3,

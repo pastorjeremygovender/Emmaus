@@ -34,6 +34,7 @@ const BLOCKED_DISPLAY_NAMES = new Set([
   'administrator',
   'member',
   'user',
+  'friend',
 ]);
 
 function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {

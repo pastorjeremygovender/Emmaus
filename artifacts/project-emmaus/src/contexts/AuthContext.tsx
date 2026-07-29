@@ -41,6 +41,8 @@ type AuthContextType = {
   signInDemo: (as?: boolean | 'superAdmin') => void;
   signOut: () => void;
   updateFeeling: (feeling: string) => void;
+  /** Update the signed-in user's preferred display name and persist it. */
+  updateName: (name: string) => void;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -53,7 +55,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check local storage for demo session
     const saved = localStorage.getItem('emmaus_demo_user');
     if (saved) {
-      setUser(JSON.parse(saved));
+      try {
+        const parsed = JSON.parse(saved) as User;
+        // Migrate legacy 'Friend' placeholder — normalise to empty string so
+        // the name-collection prompt appears on next onboarding visit.
+        if (parsed?.preferredName === 'Friend') {
+          parsed.preferredName = '';
+          localStorage.setItem('emmaus_demo_user', JSON.stringify(parsed));
+        }
+        setUser(parsed);
+      } catch {
+        // Corrupted session — clear it so the user can sign in fresh
+        localStorage.removeItem('emmaus_demo_user');
+      }
     }
     setLoading(false);
   }, []);
@@ -104,6 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
   };
 
+  const updateName = (name: string) => {
+    if (!user) return;
+    const trimmed = name.trim();
+    const updated = { ...user, preferredName: trimmed };
+    setUser(updated);
+    localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -114,7 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signInDemo,
         signOut,
-        updateFeeling
+        updateFeeling,
+        updateName,
       }}
     >
       {children}

@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Users, ChevronRight } from 'lucide-react';
+import { LogOut, Users, ChevronRight, Pencil, Check, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,13 +19,15 @@ function streakLabel(n: number): string {
 }
 
 export default function Personal() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateName } = useAuth();
   const { progress, reflections, journeys } = useJourney();
   const { getMyRooms, getUnreadCount } = useRooms();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [prayerRequest, setPrayerRequest] = useState('');
   const [notifs, setNotifs] = useState(true);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
 
   if (!user) return null;
 
@@ -57,12 +59,27 @@ export default function Personal() {
     toast({ title: 'Saved', description: 'Your prayer request has been saved.' });
   };
 
-  const initials = user.preferredName
-    .split(' ')
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const displayedName = user.preferredName?.trim() || '';
+  const initials = displayedName
+    ? displayedName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
+
+  const handleOpenNameEdit = () => {
+    setNameInput(displayedName);
+    setEditingName(true);
+  };
+
+  const handleSaveName = () => {
+    const name = nameInput.trim();
+    updateName(name);
+    setEditingName(false);
+    toast({ title: 'Name updated', description: name ? `We'll call you ${name}.` : 'Your name has been cleared.' });
+  };
+
+  const handleCancelNameEdit = () => {
+    setEditingName(false);
+    setNameInput('');
+  };
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -76,10 +93,39 @@ export default function Personal() {
           >
             {initials}
           </div>
-          <div>
-            <h1 className="text-[26px] font-sans font-medium leading-tight">
-              {user.preferredName}
-            </h1>
+          <div className="flex-1 min-w-0">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') handleCancelNameEdit(); }}
+                  placeholder="Your name"
+                  autoFocus
+                  className="flex-1 h-9 px-3 rounded-lg border border-input bg-background text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
+                />
+                <button onClick={handleSaveName} className="text-primary hover:text-primary/80 transition-colors shrink-0" aria-label="Save name">
+                  <Check size={17} />
+                </button>
+                <button onClick={handleCancelNameEdit} className="text-muted-foreground hover:text-foreground transition-colors shrink-0" aria-label="Cancel">
+                  <X size={17} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-[26px] font-sans font-medium leading-tight truncate">
+                  {displayedName || 'Set your name'}
+                </h1>
+                <button
+                  onClick={handleOpenNameEdit}
+                  className="text-muted-foreground/50 hover:text-primary active:text-primary transition-colors shrink-0"
+                  aria-label="Edit name"
+                >
+                  <Pencil size={14} />
+                </button>
+              </div>
+            )}
             <p
               className="text-[15px] text-muted-foreground mt-0.5"
               data-testid="text-streak"

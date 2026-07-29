@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Menu,
   PenSquare,
+  FlaskConical,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -18,6 +19,7 @@ import AdminSettings from './admin/Settings';
 import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
 import type { PeopleTab } from './admin/People';
+import Testing from './admin/Testing';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,8 @@ export type AdminSection =
   | 'dashboard'
   | 'content-studio'
   | 'people'
-  | 'settings';
+  | 'settings'
+  | 'testing';
 
 export type AdminNav = {
   section: AdminSection;
@@ -43,6 +46,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
   { id: 'content-studio', label: 'Content Studio',  Icon: PenSquare },
   { id: 'people',         label: 'People',          Icon: Users },
   { id: 'settings',       label: 'Settings',        Icon: Settings2 },
+  { id: 'testing',        label: 'Testing',         Icon: FlaskConical },
 ];
 
 // ─── Admin shell ──────────────────────────────────────────────────────────────
@@ -76,6 +80,7 @@ export default function Admin() {
     'content-studio': 'Content Studio',
     people:         'People',
     settings:       'Settings',
+    testing:        'Testing',
   };
 
   // ─── Content renderer ─────────────────────────────────────────────────────
@@ -101,6 +106,8 @@ export default function Admin() {
         );
       case 'settings':
         return <AdminSettings />;
+      case 'testing':
+        return <Testing />;
       default:
         return <AdminDashboard onNavigate={navigate} />;
     }

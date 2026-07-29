@@ -15,3 +15,5 @@
 - [Dev Mode Architecture](dev-mode-architecture.md) — two-part gate: role + explicit localStorage toggle; isDevelopmentMode requires {id,role}; Admin→Settings→Development is the control surface.
 - [Writing Assistant](writing-assistant.md) — "Help Me Write" panel in Day Editor; generate/refine endpoints; Scripture retrieved client-side before generation; content stays Draft always; admin/superAdmin only.
 - [EmmausContentEditor shared layout](emmaus-content-editor.md) — shared two-panel shell for all four editors; variant prop for Journey labels; companion status tracked separately in SermonEditor.
+- [Admin Testing — Reset Progress](admin-testing-reset.md) — Admin→Testing page; three reset actions; admin-reset route; clearLocalProgressCache clears emmaus_* localStorage keys.
+- [Preferred name & greeting](preferred-name-greeting.md) — updateName in AuthContext; onboarding step 0; greeting falls back gracefully; 'friend' blocked in BLOCKED_DISPLAY_NAMES; DEMO_USER.preferredName is ''.

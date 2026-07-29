@@ -11,14 +11,20 @@ import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
 import type { SharedReflection } from '@/lib/rooms-types';
 
 const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Friend',
+  'demo-user-1': 'Member',
   'demo-user-2': DEMO_USER_2.preferredName,
   'demo-admin-1': 'Jeremy',
 };
 
-function displayName(userId: string, currentUserId: string) {
-  const name = DEMO_NAMES[userId] || 'Member';
-  return userId === currentUserId ? `${name} (you)` : name;
+function displayName(
+  userId: string,
+  currentUser: { id: string; preferredName: string } | null
+) {
+  if (currentUser && userId === currentUser.id) {
+    const name = currentUser.preferredName?.trim();
+    return name ? `${name} (you)` : 'You';
+  }
+  return DEMO_NAMES[userId] || 'Member';
 }
 
 export default function RoomDiscussion() {
@@ -112,7 +118,7 @@ export default function RoomDiscussion() {
               {sharedReflections.map(sr => {
                 const srReflText = sr.userId === user.id ? reflections[sr.userReflectionKey] : undefined;
                 const isOwn = sr.userId === user.id;
-                const name = displayName(sr.userId, user.id);
+                const name = displayName(sr.userId, user);
                 const initials = name.replace(' (you)', '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
                 return (
                   <div key={sr.id} className="p-4 rounded-xl border border-primary/15 bg-primary/5 space-y-2.5">
@@ -188,7 +194,7 @@ export default function RoomDiscussion() {
           )}
 
           {posts.map(post => {
-            const name = displayName(post.userId, user.id);
+            const name = displayName(post.userId, user);
             const initials = name.replace(' (you)', '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
             const canRemove = post.userId === user.id || isLeaderOrOwner;
             return (

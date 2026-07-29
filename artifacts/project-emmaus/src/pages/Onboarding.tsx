@@ -5,7 +5,11 @@
  * Does NOT show on subsequent logins.
  *
  * Flow:
- *   Step 1: Welcome, {First Name}
+ *   Step 0: "What would you like us to call you?" — shown only when no name is set.
+ *           Input: First name
+ *           [Continue] button → Step 1
+ *
+ *   Step 1: Welcome, {firstName}. (or just "Welcome." if no name was given)
  *           What would you like to begin with?
  *           ☑ 10 Minutes with Jesus (pre-selected)
  *           [Explore Journeys] button (optional — opens /journeys/explore)
@@ -27,20 +31,44 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { markOnboarded } from '@/lib/onboarding';
 
 export default function Onboarding() {
-  const { user } = useAuth();
+  const { user, updateName } = useAuth();
   const { journeys, startJourney } = useJourney();
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState<1 | 2>(1);
 
-  const firstName = user?.preferredName?.split(' ')[0] ?? 'Friend';
+  // Determine whether name is already known from auth / profile.
+  // Start on step 0 (name collection) only when no name has been set.
+  const hasName = !!(user?.preferredName?.trim());
+  const [step, setStep] = useState<0 | 1 | 2>(hasName ? 1 : 0);
+  const [nameInput, setNameInput] = useState('');
+
+  // Derive first name for display (safe — never falls back to 'Friend')
+  const firstName = user?.preferredName?.trim().split(' ')[0] || nameInput.trim().split(' ')[0] || undefined;
 
   const coreJourney = journeys.find(
     j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
   );
 
+  // ── Step 0 handlers ─────────────────────────────────────────────────────────
+
+  function handleNameContinue() {
+    const name = nameInput.trim();
+    if (name) {
+      updateName(name);
+    }
+    setStep(1);
+  }
+
+  // ── Step 1 handlers ─────────────────────────────────────────────────────────
+
   function handleContinue() {
     setStep(2);
   }
+
+  function handleExploreJourneys() {
+    setLocation('/journeys/explore');
+  }
+
+  // ── Step 2 handler ───────────────────────────────────────────────────────────
 
   function handleBegin() {
     markOnboarded();
@@ -52,14 +80,58 @@ export default function Onboarding() {
     }
   }
 
-  function handleExploreJourneys() {
-    setLocation('/journeys/explore');
-  }
-
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center px-6">
       <AnimatePresence mode="wait">
 
+        {/* ── Step 0: Name collection ──────────────────────────────────────── */}
+        {step === 0 && (
+          <motion.div
+            key="step0"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="w-full max-w-[380px] space-y-8"
+          >
+            <div className="space-y-2">
+              <h1 className="text-[32px] font-sans font-medium tracking-tight text-foreground leading-tight">
+                What would you like us to call you?
+              </h1>
+              <p className="text-[17px] text-muted-foreground leading-relaxed">
+                We'll use your name to personalise your experience.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && nameInput.trim() && handleNameContinue()}
+              placeholder="First name"
+              autoFocus
+              className="w-full h-12 px-4 rounded-xl border border-input bg-background text-[16px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/60 transition-all"
+            />
+
+            <div className="space-y-3">
+              <Button
+                className="w-full h-12 rounded-xl text-[16px] font-medium"
+                onClick={handleNameContinue}
+                disabled={!nameInput.trim()}
+              >
+                Continue
+              </Button>
+              <button
+                onClick={() => setStep(1)}
+                className="w-full text-center text-[14px] text-muted-foreground hover:text-foreground transition-colors py-1"
+              >
+                Skip for now
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Step 1: Choose what to begin ─────────────────────────────────── */}
         {step === 1 && (
           <motion.div
             key="step1"
@@ -72,7 +144,7 @@ export default function Onboarding() {
             {/* Title */}
             <div className="space-y-2">
               <h1 className="text-[32px] font-sans font-medium tracking-tight text-foreground leading-tight">
-                Welcome, {firstName}.
+                {firstName ? `Welcome, ${firstName}.` : 'Welcome.'}
               </h1>
               <p className="text-[17px] text-muted-foreground leading-relaxed">
                 What would you like to begin with?
@@ -117,6 +189,7 @@ export default function Onboarding() {
           </motion.div>
         )}
 
+        {/* ── Step 2: Begin ────────────────────────────────────────────────── */}
         {step === 2 && (
           <motion.div
             key="step2"

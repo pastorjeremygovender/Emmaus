@@ -1,7 +1,7 @@
 export const DEMO_USER = {
   id: 'demo-user-1',
   email: 'demo@emmaus.church',
-  preferredName: 'Friend',
+  preferredName: '',
   role: 'user' as const,
   createdAt: new Date().toISOString(),
   lastActiveAt: new Date().toISOString(),

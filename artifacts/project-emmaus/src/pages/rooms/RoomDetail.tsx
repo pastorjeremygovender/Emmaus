@@ -14,14 +14,17 @@ import type { RoomJourneyInvitation } from '@/lib/rooms-types';
 
 // Map known user IDs to display names for demo mode
 const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Friend',
+  'demo-user-1': 'Member',
   'demo-user-2': DEMO_USER_2.preferredName,
   'demo-admin-1': 'Jeremy',
 };
 
 function displayName(userId: string, currentUser: { id: string; preferredName: string } | null) {
-  if (currentUser && userId === currentUser.id) return `${currentUser.preferredName} (you)`;
-  return DEMO_NAMES[userId] || `Member`;
+  if (currentUser && userId === currentUser.id) {
+    const name = currentUser.preferredName?.trim();
+    return name ? `${name} (you)` : 'You';
+  }
+  return DEMO_NAMES[userId] || 'Member';
 }
 
 export default function RoomDetail() {
