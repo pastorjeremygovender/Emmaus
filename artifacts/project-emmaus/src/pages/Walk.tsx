@@ -560,7 +560,7 @@ export default function Walk() {
                 }
               }}
               onViewPreviousDays={
-                hasPreviousDays ? () => setLocation('/daily-rhythm/previous') : undefined
+                hasPreviousDays ? () => setLocation('/daily-rhythm/previous?from=walk') : undefined
               }
             />
           </motion.section>

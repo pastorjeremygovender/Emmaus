@@ -7,8 +7,8 @@
  * PreviousDaysScreen component.
  *
  * Back navigation:
- *   ?from=journeys → /journeys (Next Steps)
- *   default        → /walk     (Today's Steps)
+ *   ?from=walk  → /walk     (Today's Steps)
+ *   default     → /journeys (Next Steps)
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -31,8 +31,8 @@ export default function DevotionalPreviousDays() {
   const seriesId = params.seriesId;
 
   const from = new URLSearchParams(window.location.search).get('from');
-  const backPath  = from === 'journeys' ? '/journeys' : '/walk';
-  const backLabel = from === 'journeys' ? 'Next Steps' : "Today's Steps";
+  const backPath  = from === 'walk' ? '/walk' : '/journeys';
+  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress]     = useState<DevotionalProgress | null>(null);
@@ -86,7 +86,7 @@ export default function DevotionalPreviousDays() {
       loading={loading}
       onBack={() => setLocation(backPath)}
       onReviewDay={(day) =>
-        setLocation(`/devotional/${seriesId}/day/${day}${from ? `?source=${from === 'journeys' ? 'nextSteps' : 'today'}` : ''}`)
+        setLocation(`/devotional/${seriesId}/day/${day}?source=${from === 'walk' ? 'today' : 'nextSteps'}`)
       }
       backLabel={backLabel}
       emptyMessage="No previous entries are available yet."

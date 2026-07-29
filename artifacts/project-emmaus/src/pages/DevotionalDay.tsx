@@ -201,7 +201,7 @@ export default function DevotionalDay() {
         </button>
         {totalEntries > 1 && (
           <button
-            onClick={() => setLocation(`/devotional/${seriesId}/previous`)}
+            onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source === 'nextSteps' ? 'journeys' : 'walk'}`)}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Previous days

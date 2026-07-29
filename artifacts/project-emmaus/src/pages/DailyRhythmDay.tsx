@@ -124,7 +124,7 @@ export default function DailyRhythmDay() {
   }, [day]);
 
   const goBack = () => setLocation('/walk');
-  const goToPreviousDays = () => setLocation('/daily-rhythm/previous');
+  const goToPreviousDays = () => setLocation('/daily-rhythm/previous?from=walk');
 
   const hasPreviousDays =
     currentDay > 1 &&

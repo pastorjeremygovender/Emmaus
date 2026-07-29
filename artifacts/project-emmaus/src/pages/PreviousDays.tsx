@@ -6,7 +6,9 @@
  * Thin page: loads Daily Rhythm data from JourneyContext and
  * renders the shared PreviousDaysScreen component.
  *
- * Back navigation always returns to Today's Steps (/walk).
+ * Back navigation:
+ *   ?from=walk  → /walk     (Today's Steps)
+ *   default     → /journeys (Next Steps)
  */
 
 import { useLocation } from 'wouter';
@@ -19,6 +21,10 @@ export default function PreviousDays() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
+
+  const from      = new URLSearchParams(window.location.search).get('from');
+  const backPath  = from === 'walk' ? '/walk' : '/journeys';
+  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
 
   const devMode = isDevelopmentMode(user);
 
@@ -46,9 +52,9 @@ export default function PreviousDays() {
       contentTitle="10 Minutes with Jesus"
       entries={entries}
       loading={loading}
-      onBack={() => setLocation('/walk')}
+      onBack={() => setLocation(backPath)}
       onReviewDay={(day) => setLocation(`/daily-rhythm/day/${day}`)}
-      backLabel="Today's Steps"
+      backLabel={backLabel}
       emptyMessage="No previous days are available yet."
     />
   );
