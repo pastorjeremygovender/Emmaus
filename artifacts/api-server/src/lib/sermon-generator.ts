@@ -136,11 +136,14 @@ export interface CompanionEntryDraft {
   dayNumber: number;
   title: string;
   scriptureReference: string;
+  /** Stores the "From the Sermon" idea — what the preacher actually said. */
   greeting: string;
   reflection: string;
   prayer: string;
   nextStep: string;
   closing: string;
+  /** Timestamped YouTube URL for the relevant sermon segment. */
+  sermonLink: string;
 }
 
 export interface GenerationResult {
@@ -661,46 +664,110 @@ async function generateSermonDraft(meta: {
   };
 }
 
+// ─── Prescription filter ──────────────────────────────────────────────────────
+
+/**
+ * Patterns that indicate formulaic spiritual prescriptions.
+ * The spec prohibits generated content containing arbitrary counts, repetitions,
+ * writing-on-cards, phone reminders, or multi-step spiritual formulas.
+ */
+const PRESCRIPTION_PATTERNS = [
+  /\b(write|copy|print)\s+(this|it|the\s+verse?)(\s+out)?\s+\d+\s+times?/i,
+  /\brepeat\s+(this|it|the\s+verse?)\s+\d+\s+times?/i,
+  /\bsay\s+(this|it|the\s+verse?)\s+(aloud\s+)?\d+\s+times?/i,
+  /\bpray\s+(this|it)\s+\d+\s+times?/i,
+  /\bread\s+(this|it)\s+every\s+hour/i,
+  /\bwrite\s+(this|it|the\s+verse?|that)\s+on\s+a\s+card/i,
+  /\bput\s+(this|it|the\s+verse?|that)\s+in\s+your\s+phone/i,
+  /\bmake\s+a\s+list\s+of\s+(three|four|five|six|seven|\d+)/i,
+  /\bcomplete\s+\d+\s+actions?/i,
+  /\d+\s+times?\s+(a\s+day|per\s+day|daily)/i,
+  /\bset\s+(a\s+)?reminder/i,
+  /\bschedule\s+(a\s+time|time)\s+to/i,
+];
+
+export function hasPrescription(text: string): boolean {
+  return PRESCRIPTION_PATTERNS.some(p => p.test(text));
+}
+
+// ─── Sermon-link builder ──────────────────────────────────────────────────────
+
+/**
+ * Build a timestamped YouTube URL from a videoId and start time in seconds.
+ * Returns '' when either input is missing or startSeconds is invalid.
+ */
+export function buildSermonLink(videoId: string, startSeconds: number | null | undefined): string {
+  if (!videoId || startSeconds == null || !isFinite(startSeconds) || startSeconds < 0) return '';
+  return `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(startSeconds)}s`;
+}
+
 // ─── OpenAI: companion generation ────────────────────────────────────────────
 
-const COMPANION_SYSTEM = `You are a pastoral content writer for a church.
-Generate a 5-day devotional companion to a sermon.
+const COMPANION_SYSTEM = `You are NOT writing a new devotional.
+You are creating a faithful companion to ONE specific sermon.
 
-CRITICAL: A confirmed Main Theme is provided. This is the pastor's chosen Big Idea — the single sentence that defines the heart of the sermon. Every day must reflect this theme, not by repeating the sentence, but by approaching it from a different angle each day. The theme is the unifying thread that makes the companion feel like one continuous walk.
+CLOSED SOURCE RULE:
+Use ONLY the supplied sermon transcript.
+Do not use outside biblical, theological or general knowledge.
+Do not add Scriptures, references, illustrations, examples, applications or claims
+not present in the sermon transcript.
+Every statement must be traceable to the transcript.
+When the transcript does not provide enough content for a section, omit that section or that day entirely.
+Never fill gaps with your own knowledge.
 
-Example: If the theme is "Putting Jesus at the centre changes everything":
-- Day 1: Why Jesus belongs at the centre
-- Day 2: Removing competing priorities
-- Day 3: Trusting Him in difficult decisions
-- Day 4: Following Him daily
-- Day 5: Living with Jesus at the centre
+PRESCRIPTION RULE:
+Never produce instructions like "pray this three times", "write this verse three times",
+"write this on a card", "put this in your phone", "make a list of five things",
+"read this every hour", or any arbitrary count, frequency, routine or formula.
+Do not turn faith into a technique.
 
-Return ONLY JSON — no markdown, no explanation.
+SCRIPTURE RULE:
+Only include a Scripture reference if the preacher explicitly mentioned, quoted or
+preached from it in THIS sermon.
+Leave scriptureReference as "" if uncertain.
+Never add "supporting verses" or "related passages".
+Never quote a verse merely because it fits the theme.
 
-JSON shape:
+DAYS RULE:
+Generate between 1 and 5 days based on the number of distinct ideas the preacher actually preached.
+Do not stretch weak material. Do not invent extra days merely to reach 5.
+If the sermon has only 2 or 3 clear ideas, generate only 2 or 3 days.
+
+EACH DAY MUST CONTAIN:
+- title: derived from what the preacher said, not invented
+- sermonIdea: 2–3 sentences that closely restate what the preacher actually said;
+  quote or closely paraphrase; no new teaching added
+- scriptureReference: ONLY if explicitly used in the sermon; leave "" if uncertain
+- reflection: 2–3 paragraphs helping the reader think about what was preached;
+  do not add new teaching; stay strictly inside the preacher's own point
+- prayer: 3–4 sentences, first person, using only themes from this sermon;
+  begin with "Lord," or "Father,"; never "Dear God"
+- nextStep: 1 sentence; one gentle, non-formulaic action directly from the
+  preacher's emphasis; no counts, no repetition, no cards, no rituals
+- sources: at least one object identifying the sermon segment for this day
+
+Return ONLY valid JSON — no markdown, no explanation.
+
 {
-  "companionTitle": "...",   // A short title for the whole companion series (e.g. "Walking in Grace: 5 Days from Sunday")
+  "companionTitle": "...",
   "days": [
     {
       "dayNumber": 1,
-      "title": "...",              // Day title that connects to ONE angle of the main theme
-      "scriptureReference": "...", // 1 scripture reference for the day (may differ from sermon's main text)
-      "greeting": "...",           // 2-3 sentences. Warm, personal opening. Use [name] for the member.
-      "reflection": "...",         // 3-4 paragraphs. Devotional reflection grounded in the scripture AND the confirmed main theme.
-      "prayer": "...",             // 4-6 sentences. Written in first person for the member to pray aloud.
-      "nextStep": "...",           // 1 sentence. One concrete, doable action for today.
-      "closing": "..."             // 1 sentence. Warm send-off.
-    },
-    ... (days 2-5)
+      "title": "...",
+      "sermonIdea": "...",
+      "scriptureReference": "...",
+      "reflection": "...",
+      "prayer": "...",
+      "nextStep": "...",
+      "sources": [
+        {
+          "startSeconds": 0,
+          "transcriptEvidence": "..."
+        }
+      ]
+    }
   ]
-}
-
-Guidelines:
-- Each day explores a different angle of the confirmed main theme
-- Prayers begin "Lord," or "Father," — never "Dear God"
-- Reflections never repeat the same illustration twice
-- [name] placeholder is used in greeting only
-- All content is gentle, encouraging, and pastoral in tone`;
+}`;
 
 async function generateCompanion(context: {
   sermonTitle: string;
@@ -708,12 +775,15 @@ async function generateCompanion(context: {
   summary: string;
   transcript: string;
   mainTheme: string;
+  videoId: string;
 }): Promise<{
   companionTitle: string;
   days: CompanionEntryDraft[];
 }> {
+  // Send the full sermon transcript (up to 8 000 words).
+  // The old 2 000-word limit forced the model to fill gaps with its own knowledge.
   const transcriptSnippet = context.transcript
-    ? `\n\nSermon transcript (first 2000 words):\n${context.transcript.split(/\s+/).slice(0, 2000).join(" ")}`
+    ? `\n\nSermon transcript:\n${context.transcript.split(/\s+/).slice(0, 8000).join(" ")}`
     : "";
 
   const userMsg = `Confirmed Main Theme: ${context.mainTheme}
@@ -724,12 +794,14 @@ Summary: ${context.summary}${transcriptSnippet}`;
 
   const res = await openai.chat.completions.create({
     model: MODEL,
+    // Low temperature: extraction and controlled summarisation, not creative generation.
+    temperature: 0.2,
     messages: [
       { role: "system", content: COMPANION_SYSTEM },
       { role: "user", content: userMsg },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 6000,
+    max_completion_tokens: 8000,
   });
 
   const finishReason = res.choices[0]?.finish_reason;
@@ -741,24 +813,65 @@ Summary: ${context.summary}${transcriptSnippet}`;
   const days: CompanionEntryDraft[] = [];
   const rawDays = Array.isArray(parsed.days) ? parsed.days : [];
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < rawDays.length && i < 5; i++) {
     const d = (rawDays[i] ?? {}) as Record<string, unknown>;
+
+    // Extract the first source object for the timestamped sermon link.
+    const rawSources = Array.isArray(d.sources) ? d.sources : [];
+    const firstSource = (rawSources[0] ?? {}) as Record<string, unknown>;
+    const startSeconds = typeof firstSource.startSeconds === "number"
+      ? firstSource.startSeconds
+      : null;
+    const sermonLink = buildSermonLink(context.videoId, startSeconds);
+
+    // sermonIdea is stored in the `greeting` field (repurposed from personal greeting).
+    const sermonIdea = typeof d.sermonIdea === "string" ? d.sermonIdea : "";
+
+    // Scripture: only accept what the model returned — do NOT fall back to
+    // the sermon-level scripture reference, which was the source of invented references.
+    const scriptureReference = typeof d.scriptureReference === "string"
+      ? d.scriptureReference
+      : "";
+
+    const nextStep = typeof d.nextStep === "string" ? d.nextStep : "";
+
+    // Log a warning if the model still produced a prescription pattern.
+    if (hasPrescription(nextStep)) {
+      logger.warn(
+        { dayNumber: i + 1, sample: nextStep.slice(0, 120) },
+        "sermon-generator: prescription pattern in nextStep — admin review required",
+      );
+    }
+    if (hasPrescription(typeof d.reflection === "string" ? d.reflection : "")) {
+      logger.warn(
+        { dayNumber: i + 1 },
+        "sermon-generator: prescription pattern in reflection — admin review required",
+      );
+    }
+
     days.push({
       dayNumber: i + 1,
       title: typeof d.title === "string" ? d.title : `Day ${i + 1}`,
-      scriptureReference: typeof d.scriptureReference === "string" ? d.scriptureReference : context.scriptureReference,
-      greeting: typeof d.greeting === "string" ? d.greeting : "",
+      scriptureReference,
+      greeting: sermonIdea,
       reflection: typeof d.reflection === "string" ? d.reflection : "",
       prayer: typeof d.prayer === "string" ? d.prayer : "",
-      nextStep: typeof d.nextStep === "string" ? d.nextStep : "",
-      closing: typeof d.closing === "string" ? d.closing : "",
+      nextStep,
+      closing: "",  // closing field removed from grounded companion output
+      sermonLink,
     });
   }
+
+  const actualDayCount = days.length;
+  logger.info(
+    { daysGenerated: actualDayCount, videoId: context.videoId },
+    "sermon-generator: companion days extracted",
+  );
 
   return {
     companionTitle: typeof parsed.companionTitle === "string"
       ? parsed.companionTitle
-      : `5 Days with "${context.sermonTitle}"`,
+      : `${actualDayCount} Days with "${context.sermonTitle}"`,
     days,
   };
 }
@@ -1057,7 +1170,9 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     );
   }
 
-  // 6. Generate 5-day companion from sermon-only transcript, anchored to mainTheme
+  // 6. Generate companion from sermon-only transcript, anchored to mainTheme.
+  //    The model may generate 1–5 days depending on how many distinct ideas
+  //    the preacher actually preached. We no longer force exactly 5 days.
   let companionDraft;
   try {
     companionDraft = await generateCompanion({
@@ -1066,6 +1181,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       summary: draftFields.summary,
       transcript: sermonTranscript,   // ← sermon only
       mainTheme,
+      videoId,                         // ← needed for timestamped sermon links
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
@@ -1078,18 +1194,21 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     companionTitle: companionDraft.companionTitle,
     entryCount: companionDraft.days.length,
     sampleReflectionLength: companionDraft.days[0]?.reflection?.length ?? 0,
+    sermonLinksGenerated: companionDraft.days.filter(d => d.sermonLink).length,
   }, "sermon-generator: companion draft parsed");
 
-  // Validate companion — all 5 entries must have substantive reflection text.
+  // Validate companion — must have at least 1 entry with substantive reflection.
+  // No longer enforces exactly 5 days: the model generates as many days as the
+  // sermon content genuinely supports.
   const emptyEntries = companionDraft.days.filter(
     d => !d.reflection || d.reflection.trim().length < 30,
   );
-  if (companionDraft.days.length !== 5 || emptyEntries.length > 0) {
+  if (companionDraft.days.length < 1 || companionDraft.days.length > 5 || emptyEntries.length > 0) {
     logger.error({
       entryCount: companionDraft.days.length,
       emptyEntryCount: emptyEntries.length,
       emptyDayNumbers: emptyEntries.map(d => d.dayNumber),
-    }, "sermon-generator: AI returned empty companion entries — rejecting false draft");
+    }, "sermon-generator: AI returned empty or invalid companion entries — rejecting false draft");
     throw new GenerationError(
       "GENERATION_FAILED",
       "Emmaus couldn't generate the Companion entries. Nothing was published.",
@@ -1102,7 +1221,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   const savedCompanion = await createCompanion({
     sermonId,
     title: companionDraft.companionTitle,
-    numberOfDays: 5,
+    numberOfDays: companionDraft.days.length,  // store actual days, not a fixed 5
     entries: companionDraft.days,
   });
 

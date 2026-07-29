@@ -120,11 +120,14 @@ export interface CompanionEntry {
   dayNumber: number;
   title: string;
   scriptureReference: string;
+  /** Stores the "From the Sermon" idea — what the preacher actually said. */
   greeting: string;
   reflection: string;
   prayer: string;
   nextStep: string;
   closing: string;
+  /** Timestamped YouTube URL linking to the relevant sermon segment. */
+  sermonLink: string;
   status: string;
   createdAt: string;
   updatedAt: string;

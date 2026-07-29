@@ -1,0 +1,416 @@
+PROJECT EMMAUS — RESTORE THE STANDARD CONTENT CREATOR/EDITOR INSIDE JOURNEYS
+
+IMPORTANT
+
+The current Journey layout is acceptable, but the actual editing experience is not clear.
+
+The Journey Editor currently shows:
+
+- Journey navigation
+- a list of Untitled Steps
+- Settings
+
+But it is not obvious how to open and edit a step.
+
+We previously standardized the Emmaus content creation and editing experience. Journeys must use the same clear creator/editor pattern rather than introducing a separate or hidden editing method.
+
+Before making changes:
+
+1. Create a Git commit or Replit checkpoint.
+2. Preserve all existing journeys, steps, collections and relationships.
+3. Inspect the existing standardized editor components already used in:
+   - Daily Rhythm
+   - Daily Devotionals
+   - Sermon Companions
+4. Reuse existing components and patterns wherever possible.
+5. Do not rebuild the entire Journey Editor.
+6. Do not change unrelated Journey Library or collection work.
+
+====================================================
+CURRENT PROBLEM
+====================================================
+
+The Journey Editor displays a list of steps such as:
+
+1 Untitled Step
+2 Untitled Step
+3 Untitled Step
+
+However:
+
+- there is no clear Edit button,
+- the selected step is not visually obvious,
+- the content editor is not visible,
+- administrators must guess where to click,
+- the current layout does not match the standardized Emmaus editor experience.
+
+A list of steps is not an editor.
+
+The administrator must be able to immediately understand:
+
+- which step is selected,
+- where to edit it,
+- where to add content,
+- where to save it.
+
+====================================================
+REQUIRED JOURNEY EDITOR STRUCTURE
+====================================================
+
+Keep the existing three-area layout if needed, but make the roles clear.
+
+LEFT PANEL
+
+Journey navigation:
+
+- Overview
+- Journey Settings
+- Steps list
+- + Add Step
+
+Each step row must display:
+
+- step number,
+- step title,
+- status if needed,
+- clear selected state,
+- optional more menu.
+
+Clicking anywhere on a step row must open that step in the content editor.
+
+Do not require clicking tiny hidden icons.
+
+====================================================
+MAIN EDITOR PANEL
+====================================================
+
+The centre/main panel must become the actual Step Editor.
+
+When a step is selected, display a clear heading:
+
+Edit Step 1
+
+or:
+
+Step 1 — [Step Title]
+
+Then show the standardized content editor fields.
+
+At minimum:
+
+STEP TITLE
+
+Required text field.
+
+SHORT DESCRIPTION
+
+Optional short supporting description if already part of the data model.
+
+CONTENT
+
+Use the standardized Emmaus content block editor or form pattern.
+
+The exact available sections should follow the existing Journey step data model. Do not invent a completely new schema without checking current implementation.
+
+Where the existing model supports structured sections, display the relevant fields clearly, for example:
+
+- Scripture
+- Main Content
+- Prayer
+- Next Step
+- Closing
+
+Only display fields that are already approved for Journey content or currently supported.
+
+Do not add a Reflection Question merely because other content types use one.
+
+The user has already said not to add a reflection question where there is no approved place for it.
+
+====================================================
+STANDARD CONTENT EDITOR RULES
+====================================================
+
+Match the established Emmaus creator/editor pattern:
+
+- clear field labels,
+- full-width editable areas,
+- smaller clean typography,
+- no Times New Roman,
+- comfortable spacing,
+- selected content remains visible,
+- Save Draft and Publish actions remain obvious,
+- no hidden edit mode,
+- no modal for normal step editing unless absolutely necessary,
+- no need to navigate away from the Journey Editor to edit a step.
+
+The administrator should not need to click an “Edit” button after selecting a step.
+
+Selecting the step should open it directly in edit mode.
+
+====================================================
+EMPTY STEP STATE
+====================================================
+
+When a newly created step is selected, do not leave the main panel blank.
+
+Show editable fields immediately with sensible placeholders:
+
+Step Title
+Enter step title
+
+Content
+Begin writing this step...
+
+Do not display only “Untitled Step” with no visible editor.
+
+====================================================
+SELECTED STEP STATE
+====================================================
+
+The selected step in the left list must be visually obvious.
+
+Use the same selected-state styling already used for:
+
+- Overview
+- Journey Settings
+- other Content Studio navigation.
+
+Only one step should appear selected at a time.
+
+When the page first opens:
+
+- open the last edited step if available,
+- otherwise open Step 1,
+- otherwise show an empty state prompting the administrator to add the first step.
+
+====================================================
+ADD STEP FLOW
+====================================================
+
+Clicking:
+
++ Add Step
+
+should:
+
+1. Create a new draft step.
+2. Add it to the end of the list.
+3. Select it automatically.
+4. Open its editor immediately.
+5. Focus the Step Title field.
+
+Do not create a step and leave the administrator wondering where it went.
+
+====================================================
+SAVE BEHAVIOUR
+====================================================
+
+Clarify the difference between:
+
+- saving the selected step,
+- saving the overall journey,
+- publishing the journey.
+
+Preferred behaviour:
+
+- changes to the selected step are saved with the main Save Draft action,
+- Publish validates all required Journey fields and step content,
+- switching steps must not silently discard unsaved edits.
+
+If autosave already exists, show a clear state such as:
+
+Saving...
+Saved
+
+Do not introduce autosave if it does not already exist unless it can be added safely.
+
+If there are unsaved changes and the administrator switches steps, either:
+
+- save automatically, or
+- show a clear unsaved-changes prompt.
+
+Do not lose content.
+
+====================================================
+PREVIEW AND SETTINGS
+====================================================
+
+Keep Preview and Settings available, but they must not replace the main editor.
+
+The normal default view after selecting a step should be the content editor.
+
+Settings should remain for metadata such as:
+
+- Collection
+- Journey Type
+- Duration
+- Church-wide
+- other existing settings.
+
+Do not place normal step content inside Settings.
+
+====================================================
+OVERVIEW BEHAVIOUR
+====================================================
+
+Overview should contain journey-level information only, such as:
+
+- title,
+- description,
+- cover image,
+- summary,
+- collection assignment if appropriate.
+
+Do not use Overview as the only place to edit individual steps.
+
+====================================================
+REUSE EXISTING STANDARDIZED COMPONENTS
+====================================================
+
+Search the codebase for the current standardized creator/editor used by other Content Studio sections.
+
+Reuse:
+
+- field components,
+- rich text editor,
+- Scripture input,
+- save controls,
+- validation messages,
+- layout patterns,
+- typography,
+- selected-state styling,
+- draft/publish controls.
+
+Do not create a visually different Journey-only editor unless a Journey-specific difference is required.
+
+====================================================
+NAVIGATION
+====================================================
+
+Expected workflow:
+
+Journeys
+→ Journey Library
+→ Edit Journey
+→ Select Step
+→ Step opens in main editor
+→ Edit
+→ Save Draft
+→ Select another step
+→ Edit
+→ Preview
+→ Publish
+
+The user must never need to guess how to edit a step.
+
+====================================================
+RESPONSIVE BEHAVIOUR
+====================================================
+
+The current narrow multi-column layout is cramped.
+
+Improve the layout so the content editor has enough width.
+
+On desktop:
+
+- left step navigation remains visible,
+- main editor receives the majority of width,
+- Settings/Preview may be collapsible or tabbed.
+
+Do not force three narrow permanent columns if that makes the editor unusable.
+
+Preferred desktop option:
+
+- left sidebar: journey navigation and steps,
+- main area: content editor,
+- right settings panel: collapsible.
+
+On smaller screens:
+
+- step list may become a drawer,
+- editor remains the primary view,
+- settings may open as a panel or tab.
+
+The content editor must never be squeezed into an unusably narrow column.
+
+====================================================
+DO NOT CHANGE
+====================================================
+
+Do not alter:
+
+- Journey Library as the default Journeys page,
+- Collections as the secondary subtab,
+- collection assignment behaviour,
+- existing journey records,
+- existing step order,
+- draft/publish status,
+- sermon companion code,
+- Daily Rhythm code,
+- Daily Devotionals code.
+
+This task is specifically about making the existing Journey step editing flow clear and standardized.
+
+====================================================
+TESTING
+====================================================
+
+Test the following in the running application:
+
+1. Open Journey Library.
+2. Open an existing journey.
+3. Step 1 is selected automatically.
+4. Step 1 content editor is visible.
+5. Click Step 2.
+6. Step 2 becomes selected.
+7. Step 2 content editor opens.
+8. Edit title and content.
+9. Save Draft.
+10. Refresh the browser.
+11. Confirm changes remain.
+12. Add a new step.
+13. Confirm it is selected automatically.
+14. Confirm the title field receives focus.
+15. Add content and save.
+16. Reorder steps if existing functionality supports it.
+17. Preview the journey.
+18. Publish the journey.
+19. Reopen the journey.
+20. Confirm all steps and content remain intact.
+21. Confirm no console errors.
+22. Confirm no failed API requests.
+23. Confirm no existing journey or collection records were lost.
+
+====================================================
+DEFINITION OF SUCCESS
+====================================================
+
+When the administrator opens a Journey, it must be immediately obvious:
+
+- where the steps are,
+- which step is selected,
+- where to edit the selected step,
+- where to save,
+- how to add another step.
+
+The Journey Editor should feel like the same Emmaus Content Studio used everywhere else, not a separate technical builder.
+
+Do not declare this complete until the selected step can be edited clearly in the running application.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Before completion provide:
+
+1. Pre-change checkpoint.
+2. Existing standardized editor components found.
+3. Components reused.
+4. Files modified.
+5. Any layout changes made.
+6. Step-selection behaviour implemented.
+7. Save behaviour confirmed.
+8. Responsive behaviour confirmed.
+9. Regression test results.
+10. Confirmation that no existing Journey content was lost.
+11. Post-change checkpoint.

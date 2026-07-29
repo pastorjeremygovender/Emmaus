@@ -17,11 +17,14 @@ export interface CompanionEntry {
   dayNumber: number;
   title: string;
   scriptureReference: string;
+  /** Stores the "From the Sermon" idea (what the preacher actually said). */
   greeting: string;
   reflection: string;
   prayer: string;
   nextStep: string;
   closing: string;
+  /** Timestamped YouTube URL linking to the relevant sermon segment. */
+  sermonLink: string;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -78,11 +81,11 @@ export async function createCompanion(data: {
       const eid = randomUUID();
       await client.query(
         `INSERT INTO sermon_companion_entry
-           (id, companion_id, day_number, title, scripture_reference, greeting, reflection, prayer, next_step, closing, status, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Draft',NOW(),NOW())`,
+           (id, companion_id, day_number, title, scripture_reference, greeting, reflection, prayer, next_step, closing, sermon_link, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Draft',NOW(),NOW())`,
         [eid, id, entry.dayNumber, entry.title, entry.scriptureReference ?? '',
          entry.greeting ?? '', entry.reflection ?? '', entry.prayer ?? '',
-         entry.nextStep ?? '', entry.closing ?? '']
+         entry.nextStep ?? '', entry.closing ?? '', entry.sermonLink ?? '']
       );
       entryRows.push({
         id: eid,
@@ -95,6 +98,7 @@ export async function createCompanion(data: {
         prayer: entry.prayer ?? '',
         nextStep: entry.nextStep ?? '',
         closing: entry.closing ?? '',
+        sermonLink: entry.sermonLink ?? '',
         status: 'Draft',
         createdAt: now,
         updatedAt: now,
@@ -361,6 +365,7 @@ export async function updateEntry(
     prayer: 'prayer',
     nextStep: 'next_step',
     closing: 'closing',
+    sermonLink: 'sermon_link',
     status: 'status',
   };
 
@@ -536,6 +541,7 @@ function rowToEntry(row: Record<string, unknown>): CompanionEntry {
     prayer: String(row.prayer ?? ''),
     nextStep: String(row.next_step ?? ''),
     closing: String(row.closing ?? ''),
+    sermonLink: String(row.sermon_link ?? ''),
     status: String(row.status ?? 'Draft'),
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),

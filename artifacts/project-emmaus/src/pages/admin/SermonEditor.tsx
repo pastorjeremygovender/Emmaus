@@ -129,6 +129,7 @@ function CompanionDayEditor({
           prayer: entry.prayer,
           nextStep: entry.nextStep,
           closing: entry.closing,
+          sermonLink: entry.sermonLink,
         };
       }
       return updated;
@@ -173,6 +174,7 @@ function CompanionDayEditor({
           prayer: entry.prayer,
           nextStep: entry.nextStep,
           closing: entry.closing,
+          sermonLink: entry.sermonLink,
         }, auth);
       }
       setSuccessMsg('Draft saved successfully.');
@@ -280,16 +282,16 @@ function CompanionDayEditor({
               placeholder="e.g. Psalm 23:1-6" className={InputCls} />
           </Field>
 
-          <Field label="Greeting">
+          <Field label="From the Sermon">
             <textarea value={current.greeting} onChange={e => patchEntry('greeting', e.target.value)}
-              rows={3} placeholder="Good morning, [name]. Today we begin…" className={TextareaCls} />
-            <p className="mt-1 text-[11px] text-gray-400">Use [name] — replaced with the member's first name.</p>
+              rows={3} placeholder="A concise restatement of what the preacher actually said on this day's theme…" className={TextareaCls} />
+            <p className="mt-1 text-[11px] text-gray-400">What the preacher actually said — quote or close paraphrase only. No new teaching.</p>
           </Field>
 
           <Field label="Reflection">
             <textarea value={current.reflection} onChange={e => patchEntry('reflection', e.target.value)}
-              rows={7} placeholder="The devotional reflection…" className={`${InputCls} resize-y`} />
-            <p className="mt-1 text-[11px] text-gray-400">2–4 paragraphs grounded in the day's scripture.</p>
+              rows={7} placeholder="Help the reader think about what was preached — stay inside the preacher's point…" className={`${InputCls} resize-y`} />
+            <p className="mt-1 text-[11px] text-gray-400">2–3 paragraphs grounded in the sermon. No outside teaching or Scriptures.</p>
           </Field>
 
           <Field label="Prayer">
@@ -306,6 +308,18 @@ function CompanionDayEditor({
           <Field label="Closing">
             <textarea value={current.closing} onChange={e => patchEntry('closing', e.target.value)}
               rows={2} placeholder="Walk with grace today." className={TextareaCls} />
+          </Field>
+
+          <Field label="Sermon Link (timestamped)">
+            <input value={current.sermonLink ?? ''} onChange={e => patchEntry('sermonLink', e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=…&t=…s" className={InputCls} />
+            {current.sermonLink && (
+              <a href={current.sermonLink} target="_blank" rel="noopener noreferrer"
+                className="mt-1 text-[11px] text-teal-600 hover:underline block">
+                ↗ Open sermon at this point
+              </a>
+            )}
+            <p className="mt-1 text-[11px] text-gray-400">Auto-generated timestamped link to the relevant sermon segment.</p>
           </Field>
         </div>
       }

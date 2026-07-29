@@ -110,30 +110,28 @@ export function DevotionalReading({
         </h1>
       </section>
 
-      {/* ── Greeting ────────────────────────────────────────────────────────── */}
+      {/* ── From the Sermon ─────────────────────────────────────────────────── */}
       {(greeting || previewMode) && (
         <section className="mb-10">
-          {previewMode && (
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Greeting · personalised automatically per member
-            </p>
-          )}
-          {greeting ? (
-            <>
-              <p className="text-[17px] font-medium text-foreground leading-[1.65]">
-                {greetingLead}
+          <SectionLabel>From the Sermon</SectionLabel>
+          <div className="mt-3">
+            {greeting ? (
+              <>
+                <p className="text-[17px] font-medium text-foreground leading-[1.65]">
+                  {greetingLead}
+                </p>
+                {greetingRest && (
+                  <div className="mt-[0.65em]">
+                    <BodyParagraphs text={greetingRest} />
+                  </div>
+                )}
+              </>
+            ) : previewMode ? (
+              <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
+                What the preacher said will appear here…
               </p>
-              {greetingRest && (
-                <div className="mt-[0.65em]">
-                  <BodyParagraphs text={greetingRest} />
-                </div>
-              )}
-            </>
-          ) : previewMode ? (
-            <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
-              Greeting will appear here…
-            </p>
-          ) : null}
+            ) : null}
+          </div>
         </section>
       )}
 

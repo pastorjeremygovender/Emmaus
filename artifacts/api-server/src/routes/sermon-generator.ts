@@ -13,9 +13,10 @@
 import { Router, type Request, type Response } from "express";
 import {
   generateFromUrl, regenerateSermonField, redetectSermon, GenerationError,
-  generateMainTheme, suggestAlternativeTheme,
+  generateMainTheme, suggestAlternativeTheme, hasPrescription, buildSermonLink,
 } from "../lib/sermon-generator.js";
-import { getAdminSermonById, upsertAdminSermon } from "../lib/admin-sermon-store.js";
+import { getAdminSermonById, upsertAdminSermon, getAllAdminSermons } from "../lib/admin-sermon-store.js";
+import { getCompanionBySermonId } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
@@ -255,6 +256,82 @@ router.post("/sermon-generator/:sermonId/regenerate-theme", async (req: Request,
   } catch (err) {
     logger.error({ err, sermonId }, "sermon-generator: regenerate-theme failed");
     res.status(500).json({ error: "Theme regeneration failed. Please try again." });
+  }
+});
+
+// ─── GET /api/sermon-generator/audit ──────────────────────────────────────────
+//
+// Returns a grounding audit report for all sermon companions.
+// Flags entries that contain prescription patterns or were generated
+// before the grounding rules were introduced (sermon_link is empty).
+//
+// Response: { flags: Array<{ sermonId, companionTitle, dayNumber, title, field, text, reason }> }
+
+router.get("/sermon-generator/audit", async (req: Request, res: Response) => {
+  const userId = await guardAdmin(req, res);
+  if (!userId) return;
+
+  try {
+    const sermons = await getAllAdminSermons();
+    const flags: Array<{
+      sermonId: string;
+      companionTitle: string;
+      companionId: string;
+      dayNumber: number;
+      dayTitle: string;
+      field: string;
+      text: string;
+      reason: string;
+    }> = [];
+
+    for (const sermon of sermons) {
+      if (!sermon.companionJourneyId) continue;
+      const companion = await getCompanionBySermonId(sermon.id);
+      if (!companion) continue;
+
+      for (const entry of companion.entries ?? []) {
+        const fields: Array<{ key: string; value: string }> = [
+          { key: 'nextStep',  value: entry.nextStep  },
+          { key: 'reflection', value: entry.reflection },
+          { key: 'prayer',    value: entry.prayer    },
+        ];
+
+        for (const { key, value } of fields) {
+          if (value && hasPrescription(value)) {
+            flags.push({
+              sermonId: sermon.id,
+              companionTitle: companion.title,
+              companionId: companion.id,
+              dayNumber: entry.dayNumber,
+              dayTitle: entry.title,
+              field: key,
+              text: value.slice(0, 200),
+              reason: 'prescription_pattern',
+            });
+          }
+        }
+
+        // Flag entries generated before grounding rules (no sermon link)
+        if (!entry.sermonLink) {
+          flags.push({
+            sermonId: sermon.id,
+            companionTitle: companion.title,
+            companionId: companion.id,
+            dayNumber: entry.dayNumber,
+            dayTitle: entry.title,
+            field: 'sermonLink',
+            text: '',
+            reason: 'pre_grounding_rules_no_sermon_link',
+          });
+        }
+      }
+    }
+
+    logger.info({ flagCount: flags.length }, "sermon-generator: audit completed");
+    res.json({ flags, sermonCount: sermons.length });
+  } catch (err) {
+    logger.error({ err }, "sermon-generator: audit failed");
+    res.status(500).json({ error: "Audit failed. Please try again." });
   }
 });
 
