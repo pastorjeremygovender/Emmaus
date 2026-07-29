@@ -14,15 +14,18 @@
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
+import { resolveReturn, encodeSource } from '@/lib/return-context';
 
 export default function JourneyPreviousDays() {
   const { journeyId } = useParams<{ journeyId: string }>();
   const [, setLocation] = useLocation();
   const { getStepsForJourney, getJourney, progress, loading } = useJourney();
 
-  const from      = new URLSearchParams(window.location.search).get('from');
-  const backPath  = from === 'walk' ? '/walk' : '/journeys';
-  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
+  const params2   = new URLSearchParams(window.location.search);
+  const from      = params2.get('from');
+  const fromId    = params2.get('fromId');
+  // resolveReturn needs sourceId for 'journeyDetail' to reconstruct the exact detail page URL.
+  const { path: backPath, label: backLabel } = resolveReturn(from, fromId, '/journeys?tab=journeys');
 
   const journey   = getJourney(journeyId ?? '');
   const prog      = journeyId ? progress[journeyId] : undefined;
@@ -46,7 +49,13 @@ export default function JourneyPreviousDays() {
       entries={entries}
       loading={loading}
       onBack={() => setLocation(backPath)}
-      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}`)}
+      onReviewDay={(day) => {
+        // Carry the full source context into the reviewed day so its back arrow
+        // also returns to the originating screen (e.g. Journey Detail).
+        const src = from ?? 'nextStepsJourneys';
+        const qs  = fromId ? `${encodeSource(src, fromId)}` : encodeSource(src);
+        setLocation(`/journey/${journeyId}/day/${day}${qs}`);
+      }}
       backLabel={backLabel}
       emptyMessage="No previous steps are available yet."
     />

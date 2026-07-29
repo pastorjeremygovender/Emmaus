@@ -1,0 +1,742 @@
+Project Emmaus — Make All Content Self-Paced Except Daily Rhythm
+
+We are changing the Emmaus progression policy.
+
+Current behaviour applies calendar-based or one-entry-per-day limits to multiple content types.
+
+This is no longer the approved approach.
+
+Members should be trusted to choose their own pace.
+
+====================================================
+LOCKED PROGRESSION PRINCIPLE
+====================================================
+
+Daily Rhythm:
+
+- remains one new entry per local calendar day;
+- members cannot advance early;
+- replay remains available;
+- the next real published day unlocks according to the established calendar rules.
+
+All other content:
+
+- is self-paced;
+- members may complete more than one entry in a day;
+- completing one entry immediately makes the next published entry available;
+- no artificial waiting until tomorrow;
+- no calendar-based daily limit;
+- no arbitrary pacing restrictions.
+
+Apply this to:
+
+- Daily Devotionals;
+- Sermon Companions;
+- Journeys;
+- Bible Studies;
+- Standalone Journeys;
+- Collection-based Journeys;
+- future sequential content unless explicitly configured otherwise.
+
+Do not change Daily Rhythm.
+
+====================================================
+PERMANENT RULE
+====================================================
+
+The content type determines progression:
+
+DAILY RHYTHM
+calendar-paced
+
+DAILY DEVOTIONAL
+self-paced
+
+SERMON COMPANION
+self-paced
+
+JOURNEY
+self-paced
+
+BIBLE STUDY
+self-paced
+
+Future content defaults to self-paced unless Pastor Jeremy explicitly chooses calendar-paced delivery.
+
+Do not infer pacing from the existence of day numbers.
+
+“Day 1,” “Day 2” and similar labels describe sequence, not mandatory calendar dates.
+
+====================================================
+TASK 1 — FIND ALL NON-DAILY-RHYTHM GATING
+====================================================
+
+Search the frontend, backend, database services and shared progress utilities for logic that restricts content to one entry per day.
+
+Inspect:
+
+- local calendar comparisons;
+- startedAt calculations;
+- availableDay calculations;
+- lastCompletedDate;
+- completedToday;
+- unlockDate;
+- nextAvailableAt;
+- “come back tomorrow” states;
+- “completed for today” states;
+- daily completion locks;
+- one-per-day API validation;
+- card action labels;
+- previous-days logic;
+- progress-store helpers;
+- shared sequential-content utilities.
+
+Classify every gating rule by content type.
+
+Remove daily gating only from non-Daily-Rhythm content.
+
+Do not accidentally remove the Daily Rhythm limit.
+
+====================================================
+TASK 2 — EXPLICIT PACING MODE
+====================================================
+
+Create or reuse a clear pacing-mode definition.
+
+Suggested values:
+
+calendar-paced
+
+self-paced
+
+Map current content types as follows:
+
+Daily Rhythm:
+calendar-paced
+
+Daily Devotional:
+self-paced
+
+Sermon Companion:
+self-paced
+
+Journey:
+self-paced
+
+Bible Study:
+self-paced
+
+Do not rely on scattered content-type conditionals throughout the app.
+
+Use one shared progression-policy utility such as:
+
+getPacingMode(contentType)
+
+or:
+
+resolveProgressionPolicy(content)
+
+Future content should default to:
+
+self-paced
+
+unless explicitly configured otherwise.
+
+====================================================
+TASK 3 — DAILY DEVOTIONALS
+====================================================
+
+Remove calendar gating from Daily Devotionals.
+
+Current or previous behaviour may include:
+
+- one devotional entry per day;
+- “Completed for today”;
+- waiting until local midnight;
+- start-date-based day calculation;
+- next day remaining locked.
+
+Replace it with self-paced progression.
+
+When a member completes an entry:
+
+- save completion;
+- immediately unlock the next published entry;
+- show a clear next action;
+- preserve Review and View Previous Days;
+- allow the member to stop and return later.
+
+Do not automatically force-open the next entry.
+
+Do not auto-complete it.
+
+The member chooses whether to continue.
+
+====================================================
+TASK 4 — SERMON COMPANIONS
+====================================================
+
+Remove one-per-day gating from Sermon Companions.
+
+A member may read all five entries in one sitting or spread them across the week.
+
+When an entry is completed:
+
+- save progress;
+- immediately unlock the next published entry;
+- offer a gentle next action;
+- preserve completed-entry review;
+- preserve the Sermon Companion’s ordered flow.
+
+Do not require Monday–Friday calendar matching.
+
+“Five weekday devotionals” may remain descriptive copy where pastor-approved, but it must not impose technical weekday locks.
+
+Do not alter current-week visibility rules.
+
+====================================================
+TASK 5 — JOURNEYS AND BIBLE STUDIES
+====================================================
+
+Ensure Journeys and Bible Studies are fully self-paced.
+
+When a Journey Day or Bible Study entry is completed:
+
+- unlock the next published entry immediately;
+- update Journey progress;
+- allow continued reading;
+- preserve the member’s place if they leave.
+
+Do not impose:
+
+- one lesson per day;
+- a midnight reset;
+- a forced waiting period;
+- calendar-derived current-day numbers.
+
+Journey prerequisites between separate Journeys may remain where explicitly configured in the future, but do not introduce them in this task.
+
+====================================================
+TASK 6 — COMPLETION SCREEN ACTIONS
+====================================================
+
+Non-Daily-Rhythm completion screens must no longer end only with:
+
+Back to Today’s Steps
+
+or:
+
+Come back tomorrow.
+
+Use a self-paced completion footer.
+
+For a completed entry with another eligible published entry:
+
+You’ve completed this step.
+
+Primary action:
+
+Continue to Next Step
+
+Secondary actions:
+
+Back to Next Steps
+
+View Previous Steps →
+
+Use content-appropriate wording where needed:
+
+Daily Devotional:
+Continue to Next Devotional
+
+Sermon Companion:
+Continue to Next Reflection
+
+Journey:
+Continue to Next Step
+
+Bible Study:
+Continue to Next Study
+
+Keep the wording gentle and invitational.
+
+Do not use:
+
+- You must continue;
+- Complete the next task;
+- Start Day 2 now;
+- Come back tomorrow.
+
+If there is no next published entry:
+
+You’ve reached the end of the available content.
+
+Primary action:
+
+Back to Next Steps
+
+Secondary action:
+
+Review Previous Steps →
+
+For completed full content:
+
+You’ve completed this devotional/companion/journey/study.
+
+Use the approved calm, non-gamified completion style.
+
+====================================================
+TASK 7 — TODAY’S STEPS CARD BEHAVIOUR
+====================================================
+
+Daily Rhythm remains the only card with a daily completion state such as:
+
+Today’s time with Jesus is complete.
+
+Come back tomorrow.
+
+Daily Devotionals and Sermon Companions must not say:
+
+Completed for today
+
+when more published entries remain.
+
+Instead show their overall progress.
+
+Examples:
+
+Psalms Daily Devotional
+
+Day 2 of 7
+
+Continue
+
+or, after completing Day 2:
+
+2 of 7 completed
+
+Continue
+
+Sermon Companion:
+
+2 of 5 completed
+
+Continue
+
+If the full series is complete:
+
+Completed
+
+Review
+
+Do not imply a daily lock.
+
+====================================================
+TASK 8 — NEXT STEPS CARD BEHAVIOUR
+====================================================
+
+On Next Steps:
+
+Not started:
+Open Devotional
+Open Companion
+Open Journey
+Open Bible Study
+
+In progress:
+Continue
+
+Completed:
+Review
+
+Metadata may show:
+
+2 of 7 completed
+
+3 of 5 completed
+
+Do not show:
+
+Completed for today
+
+for self-paced content.
+
+Do not calculate progress from calendar dates.
+
+====================================================
+TASK 9 — PREVIOUS DAYS TERMINOLOGY
+====================================================
+
+Because non-Daily-Rhythm content is self-paced, “Previous Days” may be misleading.
+
+Preserve the established feature but use content-appropriate labels.
+
+Daily Rhythm:
+
+View Previous Days →
+
+Daily Devotional:
+
+View Previous Entries →
+
+Sermon Companion:
+
+View Previous Reflections →
+
+Journey:
+
+View Previous Steps →
+
+Bible Study:
+
+View Previous Studies →
+
+If changing terminology now would cause excessive regression risk, keep the existing shared route internally but update the visible labels through content-type configuration.
+
+Do not change Daily Rhythm’s “View Previous Days.”
+
+====================================================
+TASK 10 — PROGRESS DATA
+====================================================
+
+Preserve all existing progress.
+
+Do not reset:
+
+- completed entries;
+- current entry;
+- start dates;
+- completion dates;
+- active content selection.
+
+For self-paced content, progression should derive from:
+
+- ordered published entries;
+- completed entry IDs or numbers;
+- highest valid completed position;
+- next eligible published entry.
+
+Do not derive the next entry from elapsed calendar days.
+
+Existing startDate and completionDate fields may remain for history, but they must not gate access.
+
+====================================================
+TASK 11 — PUBLISHED ENTRY VALIDATION
+====================================================
+
+Self-paced does not mean unrestricted access to nonexistent or draft content.
+
+The next entry becomes available only when it:
+
+- exists;
+- belongs to the correct parent content;
+- is Published;
+- is member-visible;
+- follows the current entry in display order.
+
+Do not expose:
+
+- Draft entries;
+- Archived entries;
+- nonexistent future entries;
+- entries from another series.
+
+Clamp progression to the actual published-entry list.
+
+====================================================
+TASK 12 — DIRECT ENTRY ACCESS
+====================================================
+
+Prevent members from manually changing a URL to skip to an unpublished entry.
+
+For self-paced content, they may access:
+
+- any completed entry;
+- the next eligible published entry;
+- any earlier published entry in review mode.
+
+Choose whether members may freely jump ahead across all published entries based on the existing sequential-content rule.
+
+Approved default for this task:
+
+- progression remains sequential;
+- completion unlocks the next entry immediately;
+- members cannot skip uncompleted entries through URL manipulation.
+
+This preserves a coherent Journey while removing calendar restrictions.
+
+====================================================
+TASK 13 — NOTIFICATIONS
+====================================================
+
+Do not introduce new notifications.
+
+Existing reminders remain off by default.
+
+Daily Rhythm reminder behaviour remains unchanged.
+
+Self-paced content must not send repeated alerts encouraging members to continue.
+
+Room notifications remain off by default.
+
+====================================================
+TASK 14 — ADMIN EXPERIENCE
+====================================================
+
+Do not require pastors to configure a release date for every Daily Devotional, Sermon Companion or Journey entry.
+
+Publishing an entry makes it eligible in sequence.
+
+If a publication window already exists, preserve it.
+
+The content may be unavailable before its publication window, but once available it is self-paced.
+
+Daily Rhythm remains calendar-paced regardless of entry publication.
+
+====================================================
+TASK 15 — LANGUAGE PRINCIPLE
+====================================================
+
+Apply the Emmaus Invitation Principle.
+
+The app should respect member choice.
+
+Use wording such as:
+
+Continue when you’re ready.
+
+The next reflection is available.
+
+You can keep going or return later.
+
+Avoid:
+
+You must complete the next lesson.
+
+Your next task is waiting.
+
+Stay on track.
+
+Don’t break your streak.
+
+Complete one every day.
+
+Do not introduce pressure, streaks, guilt or productivity language.
+
+====================================================
+TASK 16 — SHARED PROGRESSION SERVICE
+====================================================
+
+Create or update one shared progression service.
+
+Suggested interface:
+
+resolveSequentialProgress({
+  contentType,
+  entries,
+  progress,
+  localDate
+})
+
+Return:
+
+{
+  pacingMode,
+  currentEntry,
+  nextEntry,
+  completedEntries,
+  isCurrentComplete,
+  isParentComplete,
+  canContinue,
+  canReview,
+  isWaitingForCalendar
+}
+
+Expected:
+
+Daily Rhythm:
+isWaitingForCalendar may be true.
+
+All self-paced content:
+isWaitingForCalendar must always be false.
+
+Use this shared service on:
+
+- Today’s Steps;
+- Next Steps;
+- content detail screens;
+- completion footers;
+- direct-route guards;
+- progress APIs.
+
+Do not keep competing progression calculations.
+
+====================================================
+TASK 17 — BACKWARD COMPATIBILITY
+====================================================
+
+Existing members who were previously waiting for tomorrow must immediately be able to continue to the next published entry after deployment.
+
+Do not require them to restart the content.
+
+Do not mark waiting entries complete.
+
+Do not skip an entry.
+
+Use their existing completed progress to resolve the next available entry.
+
+====================================================
+TEST DAILY RHYTHM
+====================================================
+
+Verify:
+
+✓ One new entry per local calendar day remains enforced.
+
+✓ Completing today’s entry does not unlock tomorrow’s entry early.
+
+✓ Replay remains available.
+
+✓ View Previous Days remains available.
+
+✓ No phantom unpublished day appears.
+
+✓ Daily Rhythm alone may show Come back tomorrow.
+
+====================================================
+TEST DAILY DEVOTIONALS
+====================================================
+
+Using Psalms Daily Devotional:
+
+✓ Complete the current entry.
+
+✓ The next published entry becomes available immediately.
+
+✓ No midnight wait exists.
+
+✓ Continue opens the next real published entry.
+
+✓ Member may complete multiple entries in one day.
+
+✓ Progress survives refresh and sign-in.
+
+✓ Completed entries remain reviewable.
+
+✓ Draft entries remain inaccessible.
+
+✓ The card does not say Completed for today while entries remain.
+
+====================================================
+TEST SERMON COMPANIONS
+====================================================
+
+Using a published five-entry Sermon Companion:
+
+✓ Complete Entry 1.
+
+✓ Entry 2 unlocks immediately.
+
+✓ All five may be completed in one sitting.
+
+✓ Sequence remains ordered.
+
+✓ No weekday/date gate remains.
+
+✓ Current-week and publication visibility remain unchanged.
+
+✓ Progress is separate from Journeys.
+
+====================================================
+TEST JOURNEYS
+====================================================
+
+Using Coming to Jesus or another test Journey:
+
+✓ Complete Day 1.
+
+✓ Day 2 unlocks immediately.
+
+✓ Multiple steps may be completed in one day.
+
+✓ No calendar calculation is used.
+
+✓ Collection and Standalone relationships remain unchanged.
+
+✓ Journey completion is recorded correctly.
+
+====================================================
+TEST BIBLE STUDIES
+====================================================
+
+✓ Bible Study entries are self-paced.
+
+✓ Completion immediately unlocks the next published study.
+
+✓ No daily lock remains.
+
+✓ Bible Study classification and display remain unchanged.
+
+====================================================
+REGRESSION TESTS
+====================================================
+
+Verify:
+
+✓ Daily Rhythm is still calendar-paced.
+
+✓ No other content is calendar-paced by default.
+
+✓ Today’s Steps cards show correct progress wording.
+
+✓ Next Steps cards show correct progress wording.
+
+✓ Completion footers offer the next eligible entry.
+
+✓ Source-aware Back navigation remains correct.
+
+✓ Previous-entry review never advances progress.
+
+✓ Published/unpublished changes update availability.
+
+✓ No existing progress is lost.
+
+✓ No draft content is exposed.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not remove the one-per-day limit from Daily Rhythm.
+
+Do not auto-open the next entry after completion.
+
+Do not auto-complete content.
+
+Do not expose unpublished entries.
+
+Do not reset existing progress.
+
+Do not turn self-paced content into unordered content.
+
+The permanent rule is:
+
+Daily Rhythm follows the day.
+
+Everything else follows the member’s chosen pace.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. every calendar-gating rule found;
+2. the shared pacing-mode implementation;
+3. the content types set to calendar-paced and self-paced;
+4. the progression service used;
+5. the card and completion wording changed;
+6. how existing progress was preserved;
+7. the files changed;
+8. the result of every test above;
+9. any remaining content type still incorrectly calendar-gated.

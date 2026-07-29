@@ -23,6 +23,7 @@ import {
   ChevronLeft, Bookmark, BookmarkCheck, Clock, Calendar,
   Footprints, BookOpen, ExternalLink, PlayCircle, Headphones,
 } from 'lucide-react';
+import { resolveReturn } from '@/lib/return-context';
 import type { Journey } from '@/contexts/JourneyContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -160,6 +161,9 @@ export default function JourneyDetail() {
   const { gateClear, coreJourney: coreJ } = useDailyGate();
   const { startSharedJourney } = useRooms();
 
+  // Read return context from URL — set by the navigation caller.
+  const source = new URLSearchParams(window.location.search).get('source');
+
   const [pendingStart, setPendingStart]       = useState(false);
   const [showLimitMsg, setShowLimitMsg]       = useState(false);
   const [collectionName, setCollectionName]   = useState<string | null>(null);
@@ -236,22 +240,22 @@ export default function JourneyDetail() {
     if (!coreJ) { setLocation('/walk'); return; }
     if (!progress[coreJ.id]) startJourney(coreJ.id);
     const p = progress[coreJ.id];
-    setLocation(`/journey/${coreJ.id}/day/${p?.currentDay ?? 1}`);
+    setLocation(`/journey/${coreJ.id}/day/${p?.currentDay ?? 1}?source=journeyDetail&sourceId=${coreJ.id}`);
   }
 
   function handlePrimaryAction() {
     if (!journey) return;
     // Gate check — before core is done, redirect non-exempt journeys to core
     if (isGated && !isCompleted) { openCore(); return; }
-    if (isActive) { setLocation(`/journey/${journey.id}/day/${prog!.currentDay}`); return; }
+    if (isActive) { setLocation(`/journey/${journey.id}/day/${prog!.currentDay}?source=journeyDetail&sourceId=${journey.id}`); return; }
     if (isPaused) {
       if (canActivateMore(journeys, startedIds)) {
         resumeJourney(journey.id);
-        setLocation(`/journey/${journey.id}/day/${prog!.currentDay}`);
+        setLocation(`/journey/${journey.id}/day/${prog!.currentDay}?source=journeyDetail&sourceId=${journey.id}`);
       } else { setShowLimitMsg(true); }
       return;
     }
-    if (isCompleted) { setLocation(`/journey/${journey.id}/day/1`); return; }
+    if (isCompleted) { setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`); return; }
     if (!isExemptJourney(journey) && !canActivateMore(journeys, startedIds)) {
       setShowLimitMsg(true); return;
     }
@@ -261,7 +265,7 @@ export default function JourneyDetail() {
   function handleStartAlone() {
     if (!journey) return;
     startJourney(journey.id);
-    setLocation(`/journey/${journey.id}/day/1`);
+    setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);
   }
 
@@ -269,7 +273,7 @@ export default function JourneyDetail() {
     if (!journey || !user) return;
     startJourney(journey.id);
     startSharedJourney(roomId, journey.id, user.id);
-    setLocation(`/journey/${journey.id}/day/1`);
+    setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);
   }
 
@@ -279,12 +283,12 @@ export default function JourneyDetail() {
     else saveForLater(journey.id);
   }
 
+  // All self-paced journeys use "Continue" regardless of started/paused/completed state.
+  // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core'),
+  // which uses a different label to prompt the member to complete their daily reading first.
   const primaryLabel =
     (isGated && !isCompleted) ? 'Complete today\'s 10 Minutes with Jesus' :
-    isActive                   ? 'Continue'          :
-    isPaused                   ? 'Continue Journey'  :
-    isCompleted                ? 'Review Journey'    :
-                                 'Open Journey';
+                                 'Continue';
 
   const rhythm = rhythmLabel(journey);
   const time   = timeLabel(journey);
@@ -296,7 +300,7 @@ export default function JourneyDetail() {
 
         {/* ── Back button ───────────────────────────────────────────── */}
         <button
-          onClick={() => setLocation('/journeys')}
+          onClick={() => setLocation(resolveReturn(source, null, '/journeys?tab=journeys').path)}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
           aria-label="Back to Next Steps"
         >

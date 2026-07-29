@@ -9,6 +9,22 @@ description: Root causes, fixes, and architecture of the URL-first sermon draft 
 
 **Fix:** 1500 tokens for sermon draft, 6000 tokens for companion (5 days × full devotionals).
 
+## Critical: THEME_CONFIRMATION_REQUIRED must return HTTP 200
+
+`httpStatusForCode()` in `routes/sermon-generator.ts` must include `"THEME_CONFIRMATION_REQUIRED": return 200`. If missing, the route returns HTTP 500, the `post<T>()` client discards `source` (hardcodes `null`), `themeSource` is null in SermonEditor, and `handleThemeConfirm` silently does nothing — the pipeline appears frozen.
+
+**Why:** `post<T>()` only forwards `source` on `res.ok` (200) responses; non-ok responses lose it entirely. Even with the HTTP fix in place, `post<T>()` now preserves `source` from non-ok bodies as a defence.
+
+**How to apply:** Any new structured-confirmation error code must be added to `httpStatusForCode` returning 200.
+
+## Output validation before saving
+
+`generateFromUrl` now validates AI output before saving to DB:
+- Sermon: `summary.length >= 30` — if empty, throws `GENERATION_FAILED` without saving.
+- Companion: all 5 entries must have `reflection.length >= 30` — if any blank, throws `GENERATION_FAILED`.
+
+This prevents `safeParseJson` returning `{}` (empty AI content) from flowing through to a saved blank draft.
+
 ## `safeParseJson()` — truncation repair
 
 When `finish_reason === "length"`, the response was cut off. `safeParseJson()` in `sermon-generator.ts` tries:

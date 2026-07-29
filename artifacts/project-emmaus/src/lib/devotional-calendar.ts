@@ -1,42 +1,79 @@
 /**
- * devotional-calendar.ts — calendar-based unlock rules for Daily Devotionals.
+ * devotional-calendar.ts — progression and action-label helpers for self-paced content.
  *
- * Day 1 is available on the day the member starts the series.
- * Day 2 becomes available on the next local calendar day.
- * Day N is available (N - 1) local calendar days after the start date.
+ * ═══ PACING RULE ════════════════════════════════════════════════════════════
+ * Daily Devotionals are SELF-PACED.
+ * Members advance by completing entries — not by waiting for the calendar.
+ * Completing one entry immediately unlocks the next published entry.
  *
- * The calculation uses the member's local calendar date, not elapsed hours,
- * so a member who starts at 10 PM can read Day 2 after local midnight.
- *
- * In Development Mode all published entries are immediately unlocked.
+ * Daily Rhythm (10 Minutes with Jesus) remains CALENDAR-PACED; its gating
+ * lives in daily-lock.ts and is unaffected by this module.
+ * ═════════════════════════════════════════════════════════════════════════════
  */
 
+export type PacingMode = 'calendar-paced' | 'self-paced';
+
 /**
- * Returns the day number the member currently has access to.
+ * Returns the pacing mode for a given journey/content type.
  *
- * @param startedAt       ISO timestamp or Date when the member started the series.
- * @param maxPublishedDay Highest day number that has a Published entry (0 → returns 1).
- * @param devMode         When true, bypasses the calendar lock — all days unlock immediately.
+ * Only Daily Rhythm (daily-rhythm / core legacy alias) is calendar-paced.
+ * Everything else is self-paced by default.
  */
-export function calcAvailableDay(
-  startedAt: string | Date,
+export function getPacingMode(contentType: string): PacingMode {
+  if (contentType === 'daily-rhythm' || contentType === 'core') return 'calendar-paced';
+  return 'self-paced';
+}
+
+/**
+ * Self-paced available day — derived from the member's completed entries,
+ * not the calendar.
+ *
+ * Rules:
+ *   - If no days have been completed: day 1 is available.
+ *   - After completing day N: day N+1 is immediately available.
+ *   - Clamped to the highest published day number (cannot go beyond published content).
+ *   - In Development Mode all published entries are immediately unlocked.
+ *
+ * @param completedDays    Array of day numbers the member has already completed.
+ * @param maxPublishedDay  Highest day number with a Published entry (0 → returns 1).
+ * @param devMode          When true bypasses the lock — all days unlock immediately.
+ */
+export function calcAvailableDaySelfPaced(
+  completedDays: number[],
   maxPublishedDay: number,
   devMode: boolean,
 ): number {
   const cap = Math.max(maxPublishedDay, 1);
   if (devMode) return cap;
-
-  const startDate = toLocalDateString(new Date(startedAt));
-  const todayDate = toLocalDateString(new Date());
-  const daysDiff  = localDateDiff(startDate, todayDate);
-  const available = daysDiff + 1;
-
-  return Math.max(1, Math.min(available, cap));
+  if (completedDays.length === 0) return 1;
+  const highest = Math.max(...completedDays);
+  return Math.min(highest + 1, cap);
 }
+
+// ─── Action-label resolver ────────────────────────────────────────────────────
+
+/**
+ * Returns the single canonical green-button label for sequential content.
+ *
+ * Rule:
+ *   self-paced  →  "Continue"  (always, regardless of started/in-progress/completed)
+ *   calendar-paced (Daily Rhythm)  →  caller must supply its own state-aware label
+ *
+ * Usage:
+ *   primaryActionLabel={getSelfPacedActionLabel(getPacingMode(journey.journeyType))}
+ *   // or simply: primaryActionLabel="Continue"
+ *   // for any place where the content is known to be self-paced at compile time.
+ */
+export function getSelfPacedActionLabel(mode: PacingMode = 'self-paced'): string {
+  if (mode === 'self-paced') return 'Continue';
+  // calendar-paced: caller (Daily Rhythm card) provides its own label — this is a safety fallback.
+  return 'Continue';
+}
+
+// ─── Calendar helpers (kept for Daily Rhythm usage if ever needed) ────────────
 
 /** Returns a YYYY-MM-DD string in the user's local timezone. */
 export function toLocalDateString(d: Date): string {
-  // en-CA locale reliably produces YYYY-MM-DD in every browser and Node environment.
   return d.toLocaleDateString('en-CA');
 }
 

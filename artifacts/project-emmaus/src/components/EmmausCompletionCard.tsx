@@ -9,46 +9,45 @@
  *
  * Do NOT:
  *   • Redesign or replace the teal card.
- *   • Add secondary buttons, progress bars, achievements, streaks, or confetti.
+ *   • Add progress bars, achievements, streaks, or confetti.
  *   • Use productivity or gamification language ("Great job!", "You did it!", XP, etc.).
  *   • Create a separate completion layout on any page.
  * ═════════════════════════════════════════════════════════════════════════════════
  *
- * Usage — inline (reading pages):
+ * Self-paced content (Devotionals, Sermon Companions, Journeys):
+ *   When `onContinue` + `continueLabel` are supplied, Continue becomes the primary
+ *   action and `returnLabel` / `onReturn` render as a secondary text link below.
+ *   This preserves the locked card design while offering the Emmaus Invitation
+ *   Principle: "Continue when you're ready."
+ *
+ * Usage — self-paced with next entry available:
  *   <EmmausCompletionCard
- *     heading="Today's time with Jesus is complete."
- *     subMessage="We'll continue walking together tomorrow."
- *     returnLabel="Back to Today's Steps"
- *     onReturn={() => setLocation('/walk')}
+ *     heading="Day 2 complete."
+ *     subMessage="Continue when you're ready."
+ *     continueLabel="Continue to Next Devotional"
+ *     onContinue={() => setLocation('/devotional/series/day/3?source=today')}
+ *     returnLabel="Back to Next Steps"
+ *     onReturn={() => setLocation('/journeys')}
+ *     previousDaysLabel="View Previous Entries →"
+ *     onPreviousDays={() => setLocation('/devotional/series/previous')}
  *   />
  *
- * Usage — full screen (journey completion after final step):
+ * Usage — series complete / no next entry:
  *   <EmmausCompletionCard
+ *     heading="Devotional complete."
+ *     subMessage="May the Lord continue His work in your heart today."
+ *     returnLabel="Back to Next Steps"
+ *     onReturn={() => setLocation('/journeys')}
+ *   />
+ *
+ * Usage — full screen (journey final-step completion):
+ *   <EmmausCompletionCard
+ *     fullScreen
  *     heading="Journey complete."
  *     subMessage="May the Lord continue His work in your heart today."
  *     returnLabel="Back to Next Steps"
  *     onReturn={() => setLocation('/journeys')}
- *     fullScreen
  *   />
- *
- * Heading examples (from spec):
- *   "Today's time with Jesus is complete."
- *   "Day 2 complete."
- *   "Journey complete."
- *   "Companion complete."
- *   "Devotional complete."
- *
- * Supporting sentence tone: warm, gentle, pastoral — never productivity language.
- *   "We'll continue walking together tomorrow."
- *   "Tomorrow's reading will be ready."
- *   "May the Lord continue His work in your heart today."
- *
- * Button destinations (spec):
- *   10 Minutes with Jesus   → "Back to Today's Steps" → /walk
- *   Daily Devotional        → "Back to Next Steps"    → /journeys
- *   Journey                 → "Back to Next Steps"    → /journeys
- *   Sermon Companion        → "Back to Next Steps"    → /journeys
- *   Bible Study             → "Back to Next Steps"    → /journeys
  */
 
 import React from 'react';
@@ -60,16 +59,33 @@ interface EmmausCompletionCardProps {
   heading: string;
   /** One gentle pastoral sentence. Optional — omit for final days where no "next" exists. */
   subMessage?: string;
-  /** Button label. E.g. "Back to Today's Steps" or "Back to Next Steps". */
+  /** Button label for the primary return action. */
   returnLabel: string;
-  /** Navigation callback fired when the primary button is tapped. */
+  /** Navigation callback fired when the return button/link is tapped. */
   onReturn: () => void;
   /**
-   * When provided, renders a "See Previous Days →" secondary link beneath
-   * the primary button. Only supply this when previous completed days exist.
-   * Platform standard: every sequential content type supports previous-day review.
+   * When provided together with `continueLabel`, renders a "Continue to Next…"
+   * primary button. `onReturn` then becomes a secondary text link.
+   * Self-paced content only — do NOT supply for Daily Rhythm.
+   */
+  onContinue?: () => void;
+  /** Label for the Continue primary button (e.g. "Continue to Next Devotional"). */
+  continueLabel?: string;
+  /**
+   * When provided, renders a previous-entries secondary link beneath the action buttons.
+   * Supply only when completed entries exist.
    */
   onPreviousDays?: () => void;
+  /**
+   * Label for the previous-entries link.
+   * Defaults to "See Previous Days →".
+   * Use content-appropriate wording:
+   *   Daily Rhythm:       "See Previous Days →"
+   *   Daily Devotional:   "View Previous Entries →"
+   *   Sermon Companion:   "View Previous Reflections →"
+   *   Journey:            "View Previous Steps →"
+   */
+  previousDaysLabel?: string;
   /**
    * When true the card is centred in a full-screen container (for post-reading
    * completion screens in JourneyDay). When false (default) it renders as an
@@ -85,9 +101,17 @@ function CompletionCardInner({
   subMessage,
   returnLabel,
   onReturn,
+  onContinue,
+  continueLabel,
   onPreviousDays,
+  previousDaysLabel = 'See Previous Days →',
   className = '',
-}: Pick<EmmausCompletionCardProps, 'heading' | 'subMessage' | 'returnLabel' | 'onReturn' | 'onPreviousDays' | 'className'>) {
+}: Pick<EmmausCompletionCardProps,
+  'heading' | 'subMessage' | 'returnLabel' | 'onReturn' |
+  'onContinue' | 'continueLabel' | 'onPreviousDays' | 'previousDaysLabel' | 'className'
+>) {
+  const hasContinue = !!onContinue && !!continueLabel;
+
   return (
     <div
       className={`bg-teal-50 border border-teal-200 rounded-2xl px-5 py-6 text-center space-y-4 ${className}`}
@@ -107,22 +131,44 @@ function CompletionCardInner({
         </p>
       )}
 
-      {/* Primary return button — locked, do not change to outline or ghost */}
-      <Button
-        className="w-full rounded-xl h-11 text-[15px]"
-        onClick={onReturn}
-      >
-        {returnLabel}
-      </Button>
-
-      {/* Secondary link — "See Previous Days →" (platform standard) */}
-      {onPreviousDays && (
-        <button
-          onClick={onPreviousDays}
-          className="text-[13px] text-teal-600 font-medium hover:text-teal-800 transition-colors"
+      {/* Primary action — Continue when available, otherwise Return */}
+      {hasContinue ? (
+        <Button
+          className="w-full rounded-xl h-11 text-[15px]"
+          onClick={onContinue}
         >
-          See Previous Days →
-        </button>
+          {continueLabel}
+        </Button>
+      ) : (
+        <Button
+          className="w-full rounded-xl h-11 text-[15px]"
+          onClick={onReturn}
+        >
+          {returnLabel}
+        </Button>
+      )}
+
+      {/* Secondary links — shown below the primary action */}
+      {(hasContinue || onPreviousDays) && (
+        <div className="flex flex-col items-center gap-2 pt-0.5">
+          {/* When Continue is primary, Back becomes a secondary link */}
+          {hasContinue && (
+            <button
+              onClick={onReturn}
+              className="text-[13px] text-teal-600 font-medium hover:text-teal-800 transition-colors"
+            >
+              {returnLabel}
+            </button>
+          )}
+          {onPreviousDays && (
+            <button
+              onClick={onPreviousDays}
+              className="text-[13px] text-teal-600 font-medium hover:text-teal-800 transition-colors"
+            >
+              {previousDaysLabel}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -133,7 +179,10 @@ export function EmmausCompletionCard({
   subMessage,
   returnLabel,
   onReturn,
+  onContinue,
+  continueLabel,
   onPreviousDays,
+  previousDaysLabel,
   fullScreen = false,
   className = '',
 }: EmmausCompletionCardProps) {
@@ -146,7 +195,10 @@ export function EmmausCompletionCard({
             subMessage={subMessage}
             returnLabel={returnLabel}
             onReturn={onReturn}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
             onPreviousDays={onPreviousDays}
+            previousDaysLabel={previousDaysLabel}
             className={className}
           />
         </div>
@@ -160,7 +212,10 @@ export function EmmausCompletionCard({
       subMessage={subMessage}
       returnLabel={returnLabel}
       onReturn={onReturn}
+      onContinue={onContinue}
+      continueLabel={continueLabel}
       onPreviousDays={onPreviousDays}
+      previousDaysLabel={previousDaysLabel}
       className={className}
     />
   );

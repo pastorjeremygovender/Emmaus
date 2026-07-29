@@ -106,11 +106,8 @@ function JourneyCard({
   const rhythm = rhythmLabel(journey);
   const time   = timeLabel(journey);
 
-  const actionLabel =
-    enrollState === 'active'    ? 'Continue'         :
-    enrollState === 'paused'    ? 'Continue Journey' :
-    enrollState === 'completed' ? 'Review'           :
-    'Open Journey';
+  // Self-paced content always uses "Continue" regardless of enrollment state.
+  const actionLabel = 'Continue';
 
   return (
     <div className="bg-card rounded-2xl border border-border overflow-hidden">

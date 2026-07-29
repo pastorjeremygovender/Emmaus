@@ -202,7 +202,7 @@ export default function SharedJourneyView() {
               setLocation(`/journey/${journeyId}/day/${day}`);
             }}
           >
-            Continue Journey
+            Continue
           </Button>
         )}
       </main>

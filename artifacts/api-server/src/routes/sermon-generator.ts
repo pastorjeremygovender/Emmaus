@@ -41,6 +41,7 @@ function httpStatusForCode(code: string): number {
     case "INVALID_YOUTUBE_URL":          return 400;
     case "TRANSCRIPT_REQUIRED":          return 200;  // structured "needs input"
     case "SERMON_CONFIRMATION_REQUIRED": return 200;  // structured "needs confirmation"
+    case "THEME_CONFIRMATION_REQUIRED":  return 200;  // structured "needs confirmation"
     case "AI_NOT_CONFIGURED":            return 503;
     case "VIDEO_UNAVAILABLE":            return 422;
     case "GENERATION_TIMEOUT":           return 504;

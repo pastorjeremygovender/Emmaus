@@ -71,27 +71,16 @@ export interface NextStepsResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function primaryActionLabel(contentType: ContentType, state: MemberProgressState): string {
-  if (contentType === "sermon-devotional") {
-    switch (state) {
-      case "not-started": return "Open Companion";
-      case "in-progress": return "Continue";
-      case "completed":   return "Review";
-    }
-  }
-  if (contentType === "daily-devotional") {
-    switch (state) {
-      case "not-started": return "Open Devotional";
-      case "in-progress": return "Continue";
-      case "completed":   return "Review";
-    }
-  }
-  const noun = contentType === "bible-study" ? "Bible Study" : "Journey";
-  switch (state) {
-    case "not-started": return `Open ${noun}`;
-    case "in-progress": return `Continue ${noun}`;
-    case "completed":   return `Review ${noun}`;
-  }
+/**
+ * Canonical primary-action label for sequential content.
+ *
+ * Rule (mirrors devotional-calendar.ts on the client):
+ *   All self-paced content → "Continue" regardless of state.
+ *   Daily Rhythm is calendar-paced and never appears in Next Steps, so it
+ *   has no entry here.
+ */
+function primaryActionLabel(_contentType: ContentType, _state: MemberProgressState): string {
+  return "Continue";
 }
 
 function journeyProgressState(

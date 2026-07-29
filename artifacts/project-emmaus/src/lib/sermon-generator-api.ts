@@ -53,7 +53,11 @@ async function post<T>(path: string, body: Record<string, unknown>, auth: AuthHe
   if (!res.ok) {
     const code = typeof parsed.code === "string" ? parsed.code : `HTTP_${res.status}`;
     const msg = (parsed.message ?? parsed.error ?? text) as string;
-    throw new ApiError(code, msg.startsWith("<") ? `HTTP ${res.status}` : msg || `HTTP ${res.status}`, null);
+    // Preserve `source` even on non-ok responses — the server may return HTTP 5xx
+    // for structured "needs confirmation" codes if httpStatusForCode mapping is ever
+    // mis-configured. Without source, the frontend cannot pass sermon boundaries back.
+    const source = (parsed.source ?? null) as Record<string, unknown> | null;
+    throw new ApiError(code, msg.startsWith("<") ? `HTTP ${res.status}` : msg || `HTTP ${res.status}`, source);
   }
 
   return parsed as T;

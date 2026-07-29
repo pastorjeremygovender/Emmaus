@@ -15,7 +15,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { isDevelopmentMode } from '@/lib/dev-mode';
-import { calcAvailableDay } from '@/lib/devotional-calendar';
+import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
+import { resolveReturn } from '@/lib/return-context';
 import {
   getSeriesWithEntries,
   getProgress,
@@ -31,8 +32,7 @@ export default function DevotionalPreviousDays() {
   const seriesId = params.seriesId;
 
   const from = new URLSearchParams(window.location.search).get('from');
-  const backPath  = from === 'walk' ? '/walk' : '/journeys';
-  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
+  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=devotionals');
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress]     = useState<DevotionalProgress | null>(null);
@@ -63,9 +63,9 @@ export default function DevotionalPreviousDays() {
   const maxPublishedDay  = publishedEntries.length > 0
     ? Math.max(...publishedEntries.map(e => e.dayNumber))
     : 1;
-  const availableDay = progress
-    ? calcAvailableDay(progress.startedAt, maxPublishedDay, devMode)
-    : 1;
+  // Self-paced: show all entries up to and including the member's next available day.
+  const completedDays = progress?.completedDays ?? [];
+  const availableDay = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
 
   const completedSet = new Set(progress?.completedDays ?? []);
 
@@ -86,7 +86,7 @@ export default function DevotionalPreviousDays() {
       loading={loading}
       onBack={() => setLocation(backPath)}
       onReviewDay={(day) =>
-        setLocation(`/devotional/${seriesId}/day/${day}?source=${from === 'walk' ? 'today' : 'nextSteps'}`)
+        setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`)
       }
       backLabel={backLabel}
       emptyMessage="No previous entries are available yet."

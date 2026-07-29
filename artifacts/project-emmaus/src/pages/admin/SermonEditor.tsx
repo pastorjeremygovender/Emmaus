@@ -1407,7 +1407,13 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   }, [auth, transcriptSource, applyGenerationResult]);
 
   const handleThemeConfirm = useCallback((confirmedTheme: string) => {
-    if (!themeSource) return;
+    if (!themeSource) {
+      // Defensive: themeSource should always be set when ConfirmThemePhase is shown.
+      // If boundaries were lost (e.g. source was null due to a prior HTTP status mismatch),
+      // retry with just the confirmed theme — the server will re-detect boundaries.
+      handleGenerate(generatingUrl, { confirmedTheme });
+      return;
+    }
     handleGenerate(generatingUrl, {
       sermonStartWord: themeSource.startWord,
       sermonEndWord:   themeSource.endWord,
@@ -1639,8 +1645,11 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'sermon' && (
           <div className="h-full overflow-y-auto px-6 lg:px-8 py-6 max-w-3xl space-y-6">
-            {/* AI notice for new sermons */}
-            {isNew && (
+            {/* AI draft banner — only when generation produced real content.
+                isNew = was created in this session (sermonId prop was null at mount).
+                We also check summary and companion to guard against false-success:
+                a blank record must never show this banner. */}
+            {isNew && !!form.summary && (companionData?.entries?.length ?? 0) >= 5 && (
               <div className="flex items-start gap-2 p-3 bg-teal-50 border border-teal-200 rounded-xl text-sm text-teal-700">
                 <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
                 <span>AI draft generated. Review all fields carefully — use Regenerate to get a new suggestion for any field.</span>

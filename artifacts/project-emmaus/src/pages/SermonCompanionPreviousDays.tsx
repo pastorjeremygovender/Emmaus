@@ -15,6 +15,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
+import { resolveReturn } from '@/lib/return-context';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -46,8 +47,7 @@ export default function SermonCompanionPreviousDays() {
   const companionId = params.id ?? '';
 
   const from = new URLSearchParams(window.location.search).get('from');
-  const backPath  = from === 'walk' ? '/walk' : '/journeys';
-  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
+  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=sermons');
 
   const [companion, setCompanion] = useState<MemberCompanion | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -81,7 +81,7 @@ export default function SermonCompanionPreviousDays() {
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
-  const sourceParam = from === 'walk' ? '?source=today' : '?source=nextSteps';
+  const sourceParam = `?source=${from ?? 'nextStepsSermons'}`;
 
   return (
     <PreviousDaysScreen

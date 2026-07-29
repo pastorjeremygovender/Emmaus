@@ -26,8 +26,14 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
 function resolveReturn(source: string | null): { path: string; label: string } {
-  if (source === 'today') return { path: '/walk', label: "Back to Today's Steps" };
-  return { path: '/journeys', label: 'Back to Next Steps' };
+  if (source === 'today' || source === 'walk')
+    return { path: '/walk', label: "Back to Today's Steps" };
+  if (source === 'nextStepsDevotionals')
+    return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
+  if (source === 'nextStepsJourneys')
+    return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
+  // nextStepsSermons, nextSteps (legacy), or unknown → Sermon Companions tab
+  return { path: '/journeys?tab=sermons', label: 'Back to Next Steps' };
 }
 
 // ─── API types ────────────────────────────────────────────────────────────────
@@ -209,28 +215,39 @@ export default function SermonCompanionReader() {
   // ── Main reading view ──
 
   // Previous days URL — encode back destination so the list knows where to return.
-  const prevDaysFrom = source === 'today' ? 'walk' : 'journeys';
+  const prevDaysFrom = source ?? 'nextStepsSermons';
   const prevDaysUrl  = `/sermon-companion/${companionId}/previous?from=${prevDaysFrom}`;
   const hasPreviousDays = day > 1;
 
   // Primary action button shown inside DevotionalReading
   let actionButton: React.ReactNode;
   if (justCompleted) {
+    // Self-paced: next published entry is immediately available after completion.
+    const nextEntry = companion?.entries
+      .filter(e => e.status === 'Published' && e.dayNumber > day)
+      .sort((a, b) => a.dayNumber - b.dayNumber)[0];
+    const hasNextEntry = !!nextEntry;
+    const nextUrl = hasNextEntry
+      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`
+      : '';
     actionButton = (
       <EmmausCompletionCard
         heading={`Day ${day} complete.`}
         subMessage={
-          companion && day < companion.numberOfDays
-            ? `Day ${day + 1} will be here tomorrow.`
+          hasNextEntry
+            ? 'The next reflection is available when you\'re ready.'
             : 'May the Lord continue His work in your heart today.'
         }
+        onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
+        continueLabel={hasNextEntry ? 'Continue to Next Reflection' : undefined}
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnDest)}
+        previousDaysLabel="View Previous Reflections →"
         onPreviousDays={hasPreviousDays ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else if (isAlreadyCompleted) {
-    // Replay mode — member came from Previous Days; no secondary link needed
+    // Replay mode — member came from Previous Reflections; no secondary link needed
     actionButton = (
       <EmmausCompletionCard
         heading={`Day ${day} complete.`}
@@ -264,7 +281,7 @@ export default function SermonCompanionReader() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1"
           >
             <ChevronLeft size={16} />
-            {source === 'today' ? "Today's Steps" : 'Next Steps'}
+            {source === 'today' || source === 'walk' ? "Today's Steps" : 'Next Steps'}
           </button>
           <span className="text-muted-foreground/30 mx-1">·</span>
           <span className="text-sm text-muted-foreground truncate">{companion.title}</span>

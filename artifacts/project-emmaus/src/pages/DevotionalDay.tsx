@@ -37,7 +37,16 @@ import { resolveDisplayName } from '@/components/DailyRhythmReading';
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
 function resolveReturn(source: string | null): { path: string; label: string } {
-  if (source === 'nextSteps') return { path: '/journeys', label: 'Back to Next Steps' };
+  if (source === 'nextStepsDevotionals' || source === 'nextSteps')
+    return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
+  if (source === 'nextStepsJourneys')
+    return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
+  if (source === 'nextStepsSermons')
+    return { path: '/journeys?tab=sermons', label: 'Back to Next Steps' };
+  if (source === 'today' || source === 'walk')
+    return { path: '/walk', label: "Back to Today's Steps" };
+  // Fallback for deep links with no source — default to devotionals tab
+  if (!source) return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
   return { path: '/walk', label: "Back to Today's Steps" };
 }
 
@@ -150,21 +159,30 @@ export default function DevotionalDay() {
 
   if (justCompleted || alreadyCompleted) {
     // Completed this session or returning to an already-completed day (replay)
-    const hasNextDay = day < totalEntries;
-    // Previous days navigation — encode the back destination so the list
-    // knows where to return to when the member taps its back arrow.
-    const prevDaysFrom = source === 'nextSteps' ? 'journeys' : 'walk';
+    // Self-paced: next published entry is available immediately after completion.
+    const nextEntry = publishedEntries
+      .filter(e => e.dayNumber > day)
+      .sort((a, b) => a.dayNumber - b.dayNumber)[0];
+    const hasNextEntry = !!nextEntry;
+    // Previous entries navigation — encode the back destination.
+    const prevDaysFrom = source ?? 'nextStepsDevotionals';
     const prevDaysUrl  = `/devotional/${seriesId}/previous?from=${prevDaysFrom}`;
+    const nextUrl = hasNextEntry
+      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`
+      : '';
     actionButton = (
       <EmmausCompletionCard
         heading="Devotional complete."
         subMessage={
-          hasNextDay
-            ? "Tomorrow's devotional will be ready."
+          hasNextEntry
+            ? 'Continue when you\'re ready.'
             : 'May the Lord continue His work in your heart today.'
         }
+        onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
+        continueLabel={hasNextEntry ? 'Continue to Next Devotional' : undefined}
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnPath)}
+        previousDaysLabel="View Previous Entries →"
         onPreviousDays={justCompleted && day > 1 ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
@@ -197,11 +215,11 @@ export default function DevotionalDay() {
           onClick={() => setLocation(returnPath)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ChevronLeft size={16} /> {source === 'nextSteps' ? 'Next Steps' : 'Today'}
+          <ChevronLeft size={16} /> {source?.startsWith('nextSteps') ? 'Next Steps' : "Today's Steps"}
         </button>
         {totalEntries > 1 && (
           <button
-            onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source === 'nextSteps' ? 'journeys' : 'walk'}`)}
+            onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Previous days

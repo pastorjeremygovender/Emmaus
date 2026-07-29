@@ -1,0 +1,653 @@
+Project Emmaus — Fix Sermon Companion Generator Returning a Blank “Successful” Draft
+
+Current bug:
+
+Content Studio
+→ Sermon Companions
+→ New Sermon Companion
+→ generate from YouTube sermon
+
+The app navigates to the Sermon editor and displays:
+
+“AI draft generated. Review all fields carefully…”
+
+However, the generated fields are blank.
+
+Visible examples:
+
+- Title is empty;
+- Speaker is empty;
+- Scripture is empty;
+- generated sermon analysis is missing;
+- Companion content may also be missing;
+- the editor is behaving as though generation succeeded.
+
+This is a false-success state.
+
+Fix the complete generation pipeline.
+
+Do not redesign the Sermon Companion editor.
+Do not remove the URL-first workflow.
+Do not auto-publish.
+Do not create another generator endpoint.
+Do not display a success message unless a valid generated draft has been saved and loaded.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+After a pastor generates a Sermon Companion, Emmaus must:
+
+1. retrieve or accept the sermon transcript;
+2. isolate the sermon portion;
+3. confirm the Main Theme;
+4. generate valid sermon fields;
+5. generate the Companion entries;
+6. save the records as Draft;
+7. navigate using the real saved Sermon ID;
+8. load the saved values into the editor;
+9. display the success banner only after the editor confirms valid data is present.
+
+If any stage fails, remain in the generation workflow and show an accurate error or fallback.
+
+====================================================
+TASK 1 — TRACE THE EXACT CURRENT REQUEST
+====================================================
+
+Trace the generation from the initial form to the blank editor.
+
+Inspect:
+
+- Generate Draft click handler;
+- request endpoint;
+- request payload;
+- generation-job response;
+- transcript result;
+- sermon-boundary result;
+- Main Theme confirmation state;
+- AI provider response;
+- structured-output parsing;
+- database insert/update;
+- returned Sermon ID;
+- frontend navigation;
+- editor data query;
+- editor form initialisation;
+- success-banner condition.
+
+Temporarily log in development:
+
+- generation request ID;
+- YouTube video ID;
+- transcript length;
+- sermon transcript length;
+- confirmed Main Theme;
+- AI response received;
+- parsed title;
+- parsed speaker;
+- parsed Scripture;
+- parsed summary;
+- generated Companion entry count;
+- saved Sermon ID;
+- saved Companion ID;
+- editor fetch response;
+- editor form values after hydration.
+
+Do not expose these details in the pastor-facing UI.
+
+Identify exactly where valid data becomes empty.
+
+====================================================
+TASK 2 — REMOVE FALSE SUCCESS
+====================================================
+
+Find the logic that displays:
+
+“AI draft generated.”
+
+It must not be triggered merely because:
+
+- the editor route opened;
+- a generation request returned HTTP 200;
+- a draft record exists;
+- a query parameter such as generated=true is present;
+- an empty Sermon record was created.
+
+Display the banner only when all of the following are true:
+
+- a real Sermon ID exists;
+- the Sermon record was loaded successfully;
+- title or an explicitly reviewable fallback value exists;
+- generated analysis exists;
+- the linked Companion exists;
+- the expected Companion entries exist;
+- generation status is complete.
+
+Suggested condition:
+
+generationStatus === "complete"
+AND sermon.id exists
+AND sermon.generatedAt exists
+AND companion.id exists
+AND companionEntries.length === expectedEntryCount
+
+Do not show success for an incomplete or failed draft.
+
+====================================================
+TASK 3 — VERIFY THE GENERATION RESPONSE
+====================================================
+
+Inspect the server response before navigation.
+
+A successful response should contain real IDs and generated values.
+
+Suggested shape:
+
+{
+  "success": true,
+  "generationStatus": "complete",
+  "sermon": {
+    "id": "...",
+    "title": "...",
+    "speaker": "...",
+    "date": "...",
+    "scriptureReference": "...",
+    "summary": "...",
+    "mainTheme": "...",
+    "status": "draft"
+  },
+  "companion": {
+    "id": "...",
+    "title": "...",
+    "status": "draft",
+    "entryCount": 5
+  }
+}
+
+Do not return success when the object contains empty placeholder fields.
+
+If generation is incomplete, return:
+
+{
+  "success": false,
+  "code": "GENERATION_INCOMPLETE",
+  "message": "Emmaus couldn’t complete this Sermon Companion draft."
+}
+
+====================================================
+TASK 4 — CHECK WHETHER AN EMPTY RECORD IS CREATED TOO EARLY
+====================================================
+
+Inspect whether the workflow currently creates an empty Sermon before AI generation completes.
+
+Possible current failure:
+
+1. empty Sermon row is created;
+2. generation begins;
+3. AI or parsing fails;
+4. app navigates to the empty Sermon;
+5. generated=true causes the success banner.
+
+Replace this with a safe workflow.
+
+Preferred order:
+
+1. validate source;
+2. retrieve transcript;
+3. isolate sermon;
+4. confirm Main Theme;
+5. generate structured result;
+6. validate result;
+7. create Sermon;
+8. create Companion;
+9. create Companion entries;
+10. return IDs;
+11. navigate to editor.
+
+If a placeholder/job record is required, keep it separate from the final Sermon record and do not open it as a completed draft.
+
+====================================================
+TASK 5 — VALIDATE AI STRUCTURED OUTPUT
+====================================================
+
+Before saving, validate the AI result.
+
+Required Sermon output:
+
+- title;
+- speaker or explicit blank-for-review;
+- date or explicit blank-for-review;
+- main Scripture or explicit blank-for-review;
+- summary;
+- Main Theme;
+- central message;
+- key truths;
+- status: draft.
+
+Required Companion output:
+
+- title;
+- exactly the requested number of entries;
+- each entry includes:
+  - day number;
+  - title;
+  - Scripture reference;
+  - greeting;
+  - reflection;
+  - prayer;
+  - next step;
+  - closing;
+  - status: draft.
+
+Do not accept:
+
+- null output;
+- empty object;
+- empty strings for every field;
+- malformed JSON;
+- prose surrounding JSON;
+- zero Companion entries;
+- an array with undefined entries.
+
+Use schema validation.
+
+If the output is close but malformed, attempt one structured repair.
+
+If repair fails, do not save a false completed draft.
+
+====================================================
+TASK 6 — CHECK AI PROVIDER AND MODEL CONFIGURATION
+====================================================
+
+Confirm the actual provider call is working.
+
+Verify:
+
+- API key exists;
+- environment-variable name matches;
+- selected model exists;
+- model supports requested structured output;
+- transcript is not exceeding context limits;
+- timeout is sufficient;
+- response is not truncated;
+- provider refusal or error is not being swallowed;
+- parser reads the correct response property.
+
+If configuration is missing, return:
+
+{
+  "success": false,
+  "code": "AI_NOT_CONFIGURED",
+  "message": "Sermon Companion generation is not configured yet."
+}
+
+Do not create an empty Sermon.
+
+Do not show the success banner.
+
+====================================================
+TASK 7 — VERIFY MAIN THEME CONFIRMATION FLOW
+====================================================
+
+The approved workflow requires:
+
+sermon boundaries
+→ one-sentence Main Theme
+→ pastor confirms or edits
+→ Companion generation
+
+Confirm that Companion generation does not run with:
+
+- undefined Main Theme;
+- empty Main Theme;
+- stale theme from another Sermon;
+- an unconfirmed suggestion.
+
+Store the confirmed Main Theme and pass it explicitly to generation.
+
+If confirmation has not occurred, return to the Main Theme step rather than opening the blank editor.
+
+====================================================
+TASK 8 — VERIFY DATABASE MAPPING
+====================================================
+
+Inspect whether generated fields use names different from the database schema.
+
+Possible mismatches:
+
+- generatedTitle → title;
+- mainScripture → scriptureReference;
+- centralTheme → mainTheme;
+- speakerName → speaker;
+- sermonSummary → summary;
+- companionDays → entries;
+- reflectionText → reflection;
+- nextStep → actionStep.
+
+Map every generated field explicitly.
+
+Do not spread an untrusted AI object directly into the database record.
+
+Confirm saved values by re-reading the records after insertion.
+
+====================================================
+TASK 9 — DATABASE TRANSACTION
+====================================================
+
+Save the Sermon, Companion and Companion entries in one safe transaction where supported.
+
+The transaction should:
+
+1. create the Sermon with generated fields;
+2. create the linked Companion;
+3. create all Companion entries;
+4. confirm entry count;
+5. mark generationStatus complete;
+6. commit;
+7. return the saved records.
+
+If any operation fails:
+
+- roll back;
+- do not leave an empty Sermon in the Content Studio list;
+- return a structured failure;
+- remain in the generator.
+
+====================================================
+TASK 10 — NAVIGATE WITH THE REAL SERMON ID
+====================================================
+
+After a valid save, navigate using the real database Sermon ID.
+
+Do not use:
+
+- “new”;
+- undefined;
+- temporary job ID;
+- title;
+- slug alone;
+- Companion ID where a Sermon ID is expected.
+
+The route must load the exact saved Sermon.
+
+Verify the URL and editor loader use the same identifier type.
+
+====================================================
+TASK 11 — FIX EDITOR HYDRATION
+====================================================
+
+Even if the database contains the generated fields, the editor may be resetting them to blank defaults.
+
+Inspect:
+
+- initial form state;
+- useEffect/reset logic;
+- query loading state;
+- controlled inputs;
+- defaultValue versus value;
+- stale empty draft object;
+- route changes;
+- Strict Mode double effects;
+- form reset after data load;
+- generation query parameter effects.
+
+Correct sequence:
+
+1. show loading state;
+2. fetch saved Sermon;
+3. hydrate the form from fetched data;
+4. hydrate Companion data;
+5. mark form clean;
+6. show editor;
+7. show success banner if generation is complete.
+
+Do not initialise empty form values and then prevent fetched data from replacing them.
+
+Do not reset populated form values after hydration.
+
+====================================================
+TASK 12 — DISTINGUISH LOADING FROM EMPTY
+====================================================
+
+While the editor query is loading, do not show blank form fields.
+
+Show a stable editor-loading state.
+
+If the saved record cannot be found, show:
+
+“We couldn’t load this Sermon Companion draft.”
+
+Provide:
+
+Back to Sermon Companions
+
+Do not silently fall back to a New Sermon form.
+
+A missing ID must not create a blank record.
+
+====================================================
+TASK 13 — COMPANION TAB VALIDATION
+====================================================
+
+After generation, confirm the Companion tab contains:
+
+- Companion title;
+- five entry selectors;
+- populated fields for each entry;
+- live preview;
+- Draft status.
+
+If the Sermon fields load but the Companion does not, do not call the full generation successful.
+
+Show a specific incomplete-generation state and offer:
+
+Retry Companion Generation
+
+Preserve the valid Sermon record.
+
+Do not regenerate or overwrite the Sermon without confirmation.
+
+====================================================
+TASK 14 — RETRY SAFETY
+====================================================
+
+If generation fails after source extraction or Main Theme confirmation:
+
+- preserve the YouTube URL;
+- preserve metadata;
+- preserve sermon boundaries;
+- preserve confirmed Main Theme;
+- allow Retry Generation;
+- prevent duplicate records.
+
+Do not make the pastor repeat the complete workflow unnecessarily.
+
+Use the generation request ID or existing draft ID for idempotency.
+
+====================================================
+TASK 15 — CLEAN ERROR STATES
+====================================================
+
+Use accurate messages.
+
+Transcript unavailable:
+
+“We couldn’t retrieve a transcript from this video. Paste the sermon transcript to continue.”
+
+Main Theme missing:
+
+“Confirm the sermon’s Main Theme before creating the Companion.”
+
+AI failure:
+
+“Emmaus couldn’t generate this Sermon Companion draft. Nothing was published.”
+
+Save failure:
+
+“The draft was generated but couldn’t be saved. Please try again.”
+
+Load failure:
+
+“We couldn’t load this Sermon Companion draft.”
+
+Never show:
+
+- success with blank fields;
+- raw JSON;
+- stack traces;
+- provider messages;
+- undefined;
+- “Cannot POST”;
+- generic success after partial failure.
+
+====================================================
+TASK 16 — REMOVE EMPTY FAILED RECORDS
+====================================================
+
+Inspect whether the current failed attempt created a blank Sermon record titled:
+
+New Sermon
+
+or an equivalent empty record.
+
+If it contains no meaningful pastor-authored or generated data and is clearly the product of this failed generation attempt:
+
+- remove it safely during development cleanup;
+- do not remove any valid Sermon;
+- do not identify it by title alone;
+- use generation status and field validation.
+
+Prevent future failed attempts from appearing in the Sermon Companions list.
+
+====================================================
+END-TO-END TEST
+====================================================
+
+Use a new disposable sermon URL with an accessible transcript.
+
+Verify:
+
+✓ URL is accepted.
+
+✓ Full transcript is retrieved.
+
+✓ Sermon boundaries are detected.
+
+✓ Pastor confirms or edits Main Theme.
+
+✓ AI returns structured Sermon data.
+
+✓ AI returns five Companion entries.
+
+✓ Structured output passes validation.
+
+✓ Sermon is saved with non-empty fields.
+
+✓ Companion is saved.
+
+✓ Five entries are saved.
+
+✓ Transaction commits.
+
+✓ Response returns real IDs.
+
+✓ Editor navigates using the real Sermon ID.
+
+✓ Loading state appears before data is ready.
+
+✓ Title is populated.
+
+✓ Speaker is populated or clearly left for review.
+
+✓ Scripture is populated or clearly left for review.
+
+✓ Summary and Main Theme are populated.
+
+✓ Companion tab contains five populated entries.
+
+✓ All statuses remain Draft.
+
+✓ Success banner appears only after valid hydration.
+
+✓ Refresh preserves every generated field.
+
+✓ Returning to the list shows one valid new record.
+
+✓ No empty duplicate record exists.
+
+====================================================
+FAILURE TESTS
+====================================================
+
+Test:
+
+A. Missing AI key
+
+Expected:
+
+- no empty Sermon;
+- no navigation to blank editor;
+- accurate configuration error.
+
+B. Malformed AI output
+
+Expected:
+
+- one repair attempt;
+- no invalid save if repair fails;
+- accurate generation error.
+
+C. Database failure
+
+Expected:
+
+- transaction rollback;
+- no partial record;
+- accurate save error.
+
+D. Editor load failure
+
+Expected:
+
+- load error screen;
+- no blank New Sermon form;
+- no success banner.
+
+E. Duplicate Generate click
+
+Expected:
+
+- one job;
+- one Sermon;
+- one Companion.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not merely hide the success banner.
+
+Do not populate the fields with placeholder text.
+
+Do not tell the pastor to enter all fields manually.
+
+Do not create a blank Sermon before valid generation is ready.
+
+Do not auto-publish.
+
+Do not report completion until a real generated draft is populated, survives refresh and contains its Companion entries.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact point where generated data was lost;
+2. whether the cause was AI output, parsing, database mapping, navigation or editor hydration;
+3. the previous false-success condition;
+4. the new validation condition;
+5. the generated Sermon ID and Companion ID used in the test;
+6. the fields confirmed after refresh;
+7. the files changed;
+8. the result of every test above;
+9. any external provider limitation still remaining.

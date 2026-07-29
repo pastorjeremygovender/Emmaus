@@ -16,6 +16,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
+import { resolveReturn } from '@/lib/return-context';
 
 export default function PreviousDays() {
   const [, setLocation] = useLocation();
@@ -23,8 +24,8 @@ export default function PreviousDays() {
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
 
   const from      = new URLSearchParams(window.location.search).get('from');
-  const backPath  = from === 'walk' ? '/walk' : '/journeys';
-  const backLabel = from === 'walk' ? "Today's Steps" : 'Next Steps';
+  // Daily Rhythm is Walk-first content — default to /walk when no ?from= param
+  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/walk');
 
   const devMode = isDevelopmentMode(user);
 

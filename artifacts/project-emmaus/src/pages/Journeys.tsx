@@ -20,7 +20,7 @@ import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
+// daily-gate import removed — all non-Daily-Rhythm content is now self-paced.
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import {
@@ -57,9 +57,15 @@ function dayLabel(n?: number): string | null {
 }
 
 function sessionTab(): TabId {
+  // Prefer ?tab= URL param — set when returning from content so the right tab opens.
+  try {
+    const urlTab = new URLSearchParams(window.location.search).get('tab');
+    if (urlTab === 'devotionals' || urlTab === 'journeys' || urlTab === 'sermons') return urlTab as TabId;
+  } catch { /* ignore */ }
+  // Fall back to last-used tab from sessionStorage.
   try {
     const saved = sessionStorage.getItem('next-steps-tab');
-    if (saved === 'journeys' || saved === 'sermons') return saved;
+    if (saved === 'devotionals' || saved === 'journeys' || saved === 'sermons') return saved as TabId;
   } catch { /* ignore */ }
   return 'devotionals';
 }
@@ -297,9 +303,10 @@ function DiscoveryCard({
 }) {
   const dur = dayLabel(item.metadata.durationDays);
   const metaParts = [dur, item.metadata.difficulty].filter(Boolean);
-  const actionLabel = enrollmentState === 'paused' && item.memberProgressState === 'in-progress'
-    ? 'Continue Journey'
-    : item.primaryActionLabel;
+  // Self-paced content always uses "Continue" regardless of enrollment state.
+  // The backend already returns "Continue" from next-steps.ts; this ensures
+  // the paused-override no longer replaces it with "Continue Journey".
+  const actionLabel = item.primaryActionLabel;
   const label = (CONTENT_TYPE_LABELS[item.contentType] ?? item.contentType).toUpperCase();
 
   return (
@@ -354,7 +361,7 @@ function DevotionalCard({
       loading={starting}
       secondaryAction={
         onViewPreviousDays
-          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+          ? { label: 'View Previous Entries →', onPress: onViewPreviousDays }
           : undefined
       }
     />
@@ -481,7 +488,7 @@ function SermonCompanionsPanel({
   function previousDaysAction(item: NextStepsItem) {
     if (!item.route.startsWith('/sermon-companion/')) return undefined;
     if (item.memberProgressState === 'not-started') return undefined;
-    return { label: 'View Previous Days →', onPress: () => onViewPreviousDays(item.id) };
+    return { label: 'View Previous Reflections →', onPress: () => onViewPreviousDays(item.id) };
   }
 
   return (
@@ -565,7 +572,6 @@ export default function Journeys() {
   const { startSharedJourney } = useRooms();
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
-  const { gateClear } = useDailyGate();
 
   // ── Tab state ─────────────────────────────────────────────────────────────
 
@@ -624,8 +630,8 @@ export default function Journeys() {
 
   function handleSermonCompanionAction(item: NextStepsItem) {
     if (item.route.startsWith('/sermon-companion/')) {
-      // Append source so the reader knows to return to Next Steps
-      setLocation(item.route + '?source=nextSteps');
+      // Append source so the reader knows to return to Next Steps (Sermon Companions tab)
+      setLocation(item.route + '?source=nextStepsSermons');
       return;
     }
     handleJourneyAction(item);
@@ -635,7 +641,7 @@ export default function Journeys() {
 
   function handleJourneyAction(item: NextStepsItem) {
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route);
+      setLocation(item.route + '?source=nextStepsJourneys');
       return;
     }
     const journey = journeys.find(j => j.id === item.id);
@@ -652,7 +658,7 @@ export default function Journeys() {
   function handleStartAlone() {
     if (!pendingItem) return;
     startJourney(pendingItem.id);
-    setLocation(`/journey/${pendingItem.id}/day/1`);
+    setLocation(`/journey/${pendingItem.id}/day/1?source=nextStepsJourneys`);
     setPendingItem(null);
     reload();
   }
@@ -661,7 +667,7 @@ export default function Journeys() {
     if (!pendingItem || !user) return;
     startJourney(pendingItem.id);
     startSharedJourney(roomId, pendingItem.id, user.id);
-    setLocation(`/journey/${pendingItem.id}/day/1`);
+    setLocation(`/journey/${pendingItem.id}/day/1?source=nextStepsJourneys`);
     setPendingItem(null);
     reload();
   }
@@ -670,7 +676,7 @@ export default function Journeys() {
 
   function handleDevotionalAction(item: NextStepsItem) {
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route + '?source=nextSteps');
+      setLocation(item.route + '?source=nextStepsDevotionals');
       return;
     }
     const activeDevotional = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');
@@ -687,7 +693,7 @@ export default function Journeys() {
     try {
       await startSeries(item.id, { userId: user.id });
       await reload();
-      setLocation(`/devotional/${item.id}/day/1?source=nextSteps`);
+      setLocation(`/devotional/${item.id}/day/1?source=nextStepsDevotionals`);
     } catch { /* non-fatal */ }
     finally {
       setStartingDevId(null);
@@ -695,12 +701,14 @@ export default function Journeys() {
     }
   }
 
-  // ── Daily-gate check ──────────────────────────────────────────────────────
-
-  function isItemGated(item: NextStepsItem): boolean {
-    if (gateClear || item.memberProgressState !== 'in-progress') return false;
-    const journey = journeys.find(j => j.id === item.id);
-    return !!journey && isGatedByDailyGate(journey) && getState(item.id) === 'active';
+  // ── Pacing: all content (except Daily Rhythm) is self-paced ──────────────
+  // The daily gate (requiring 10 Minutes with Jesus before other journeys)
+  // has been removed per the permanent self-paced progression rule.
+  // Daily Rhythm remains calendar-paced in its own card; Growth Journeys,
+  // Devotionals, and Sermon Companions are never gated here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function isItemGated(_item: NextStepsItem): boolean {
+    return false;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -748,7 +756,7 @@ export default function Journeys() {
                 items={data.dailyDevotionals}
                 onAction={handleDevotionalAction}
                 startingId={startingDevId}
-                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous`)}
+                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
               />
             )}
 
@@ -758,12 +766,12 @@ export default function Journeys() {
                 standalone={data.standaloneJourneys}
                 onAction={handleJourneyAction}
                 onPause={(id) => setPauseTargetId(id)}
-                onDetails={(id) => setLocation(`/journeys/${id}`)}
+                onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsJourneys`)}
                 isGated={isItemGated}
                 onGate={() => setLocation('/walk')}
                 getEnrollmentState={(id) => getState(id)}
                 getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous`)}
+                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsJourneys`)}
               />
             )}
 
@@ -772,7 +780,7 @@ export default function Journeys() {
                 current={data.currentSermonCompanion}
                 previous={data.previousSermonCompanions}
                 onAction={handleSermonCompanionAction}
-                onViewPreviousDays={(id) => setLocation(`/sermon-companion/${id}/previous?from=walk`)}
+                onViewPreviousDays={(id) => setLocation(`/sermon-companion/${id}/previous?from=nextStepsSermons`)}
               />
             )}
           </>

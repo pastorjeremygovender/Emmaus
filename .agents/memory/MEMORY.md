@@ -3,6 +3,7 @@
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
 - [Completion flow standardisation](completion-flow.md) — JourneyCompletionPanel shared component; source param pattern for return-destination routing; sermon companion routes from sermon_companion table not journeys table.
+- [Back navigation system](back-navigation.md) — unified return-context.ts + EmmausBackButton; SourceKey union; tab-specific nextSteps sources; ?tab= URL param on /journeys; all content pages updated.
 - [Bible module architecture](bible-module.md) — full Bible module shipped; KJV John 1–3 seed data, BibleProvider (localStorage), 5 routes, verse-tap sheets, Preached Here links to admin sermons via JOHN_SERMON_LINKS.
 - [Ask Emmaus backend](ask-emmaus-backend.md) — conversation service at POST /api/emmaus/conversation; SSE streaming; mock+OpenAI providers; safety layer; in-memory store; system-instructions.ts is the single source of truth.
 - [YouTube Sermon Archive](youtube-archive.md) — file-based import pipeline; YouTube Data API v3 working; ICC channel 375 videos; caption search needs OAuth; req.params quirk requires String() cast; route mounted bare (no /api prefix).

@@ -1,0 +1,372 @@
+Project Emmaus — Standardize Self-Paced Content Buttons to “Continue”
+
+We are finalising the member-facing navigation language for sequential content.
+
+The current app uses several different green-button labels across self-paced content, including:
+
+- Open Devotional
+- Open Companion
+- Open Journey
+- Begin Sermon Companion
+- Review
+- Resume
+- Continue
+
+This is unnecessarily inconsistent.
+
+From now on, every green primary action for self-paced sequential content should use one simple label:
+
+Continue
+
+Daily Rhythm is the only exception.
+
+Do not change Daily Rhythm wording in this task.
+Do not change progress logic.
+Do not change routes.
+Do not change card design.
+Do not remove View Previous Days / Previous Entries navigation.
+
+====================================================
+LOCKED BUTTON RULE
+====================================================
+
+For all self-paced content, the green primary button reads:
+
+Continue
+
+Apply this to:
+
+- Daily Devotionals
+- Sermon Companions
+- Journeys
+- Bible Studies
+- Standalone Journeys
+- Collection-based Journeys
+- future self-paced sequential content
+
+Use Continue regardless of whether the member is:
+
+- opening the content for the first time;
+- returning to an unfinished entry;
+- moving to the next available entry;
+- returning after completing a previous entry.
+
+The app should resolve the correct destination from progress.
+
+The button label does not need to explain the internal state.
+
+====================================================
+DAILY RHYTHM EXCEPTION
+====================================================
+
+Daily Rhythm remains system-led and calendar-paced.
+
+Do not replace its button with Continue.
+
+Daily Rhythm should use state-aware wording such as:
+
+- Open Today’s Time
+- Return to Today’s Time
+- Review
+- Review Latest Reading
+
+according to the established Daily Rhythm rules.
+
+Daily Rhythm automatically resolves the correct real published day.
+
+====================================================
+CARD BEHAVIOUR
+====================================================
+
+For self-paced content, clicking Continue must:
+
+1. load the member’s progress;
+2. determine the correct real published entry;
+3. open the first uncompleted eligible entry;
+4. if all entries are complete, open the latest completed entry in review mode;
+5. never open a draft or nonexistent entry;
+6. never refresh the same page without navigation.
+
+Examples:
+
+Psalms Daily Devotional
+Continue
+→ opens the next uncompleted published devotional entry.
+
+Jesus at the Center
+Continue
+→ opens the next uncompleted published Sermon Companion reflection.
+
+Coming to Jesus
+Continue
+→ opens the next uncompleted published Journey step.
+
+If no progress exists:
+
+Continue
+→ opens Entry or Day 1.
+
+====================================================
+COMPLETED CONTENT
+====================================================
+
+Even when the full self-paced content is completed, keep the green button label:
+
+Continue
+
+In this state, Continue may open:
+
+- the content overview;
+- the latest completed entry;
+- the first entry in review mode;
+
+according to the existing content-detail flow.
+
+Do not use a separate green Review button on the card.
+
+Review navigation is already available through:
+
+- View Previous Entries;
+- View Previous Reflections;
+- View Previous Steps;
+- the content detail screen.
+
+The card should stay simple.
+
+====================================================
+SECONDARY REVIEW LINKS
+====================================================
+
+Preserve the secondary link beneath the green button.
+
+Use content-specific wording:
+
+Daily Devotional:
+View Previous Entries →
+
+Sermon Companion:
+View Previous Reflections →
+
+Journey:
+View Previous Steps →
+
+Bible Study:
+View Previous Studies →
+
+Daily Rhythm:
+View Previous Days →
+
+These links must open the shared historical/review experience.
+
+They must not change progress.
+
+They must use source-aware navigation and return to the exact page and tab from which they were opened.
+
+====================================================
+TODAY’S STEPS
+====================================================
+
+Apply Continue to self-paced cards shown on Today’s Steps.
+
+Examples:
+
+Psalms Daily Devotional
+Continue
+
+Jesus at the Center
+Continue
+
+Coming to Jesus
+Continue
+
+Do not display:
+
+- Open Devotional
+- Open Companion
+- Open Journey
+- Begin
+- Resume
+- Review
+
+as the green primary label for self-paced content.
+
+Daily Rhythm remains the exception.
+
+====================================================
+NEXT STEPS
+====================================================
+
+Apply Continue to all self-paced cards in:
+
+Next Steps
+→ Daily Devotionals
+
+Next Steps
+→ Journeys
+
+Next Steps
+→ Sermon Companions
+
+Do not vary the label based on:
+
+- started/not started;
+- current/completed;
+- card location;
+- content type.
+
+The content card may still show muted progress metadata such as:
+
+- 2 of 7 completed
+- Not started
+- Completed
+
+but the green action remains:
+
+Continue
+
+====================================================
+MY JOURNEY
+====================================================
+
+Apply the same rule to self-paced content cards under My Journey.
+
+Green action:
+
+Continue
+
+Do not introduce separate Resume or Review labels.
+
+====================================================
+SHARED COMPONENT
+====================================================
+
+Update the shared Emmaus content-card/action-label logic.
+
+Use one resolver such as:
+
+getPrimaryActionLabel({
+  contentType,
+  pacingMode
+})
+
+Expected result:
+
+if pacingMode === "self-paced":
+  return "Continue"
+
+if contentType === "daily-rhythm":
+  return the established Daily Rhythm state-aware label
+
+Do not hard-code Continue separately in every page.
+
+====================================================
+SERVER RESPONSE
+====================================================
+
+If the member discovery API currently returns primaryActionLabel values such as:
+
+- Open Devotional
+- Open Companion
+- Begin Journey
+- Review
+
+update the shared server or client resolver so self-paced content consistently returns:
+
+Continue
+
+Do not maintain competing label logic in both the API and card component.
+
+Choose one canonical source.
+
+====================================================
+ROUTING SAFETY
+====================================================
+
+Continue must always route to a real content record.
+
+For self-paced content:
+
+- first uncompleted published entry;
+- otherwise the correct review destination.
+
+Do not calculate routes from day arithmetic alone.
+
+Do not route by title.
+
+Use real IDs and published-entry order.
+
+====================================================
+TEST
+====================================================
+
+Verify on Today’s Steps:
+
+✓ Psalms Daily Devotional says Continue.
+
+✓ Sermon Companion says Continue.
+
+✓ Active Journey says Continue.
+
+✓ Daily Rhythm does not use Continue.
+
+Verify on Next Steps:
+
+✓ Daily Devotional cards say Continue.
+
+✓ Journey cards say Continue.
+
+✓ Sermon Companion cards say Continue.
+
+✓ Not-started content still opens Day/Entry 1.
+
+✓ In-progress content opens the next correct entry.
+
+✓ Completed content opens a valid review/content destination.
+
+Verify secondary links:
+
+✓ Daily Devotional uses View Previous Entries.
+
+✓ Sermon Companion uses View Previous Reflections.
+
+✓ Journey uses View Previous Steps.
+
+✓ Daily Rhythm keeps View Previous Days.
+
+✓ Review links never advance progress.
+
+✓ Back returns to the correct source tab/page.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not replace Daily Rhythm actions with Continue.
+
+Do not change the one-per-day Daily Rhythm rule.
+
+Do not remove progress metadata.
+
+Do not remove secondary review links.
+
+Do not use Begin, Open, Resume or Review as green primary labels for self-paced content.
+
+The permanent rule is:
+
+Daily Rhythm follows the current day.
+
+All other sequential content uses Continue and follows the member’s progress.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the shared action-label resolver changed;
+2. every previous self-paced label removed;
+3. the final Daily Rhythm labels preserved;
+4. the secondary review labels used by each content type;
+5. the files changed;
+6. the result of every test above;
+7. any screen still using an incorrect self-paced primary label.

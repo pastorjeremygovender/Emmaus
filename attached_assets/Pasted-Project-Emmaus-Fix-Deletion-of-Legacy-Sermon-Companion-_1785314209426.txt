@@ -1,0 +1,489 @@
+Project Emmaus — Fix Deletion of Legacy Sermon Companion Records
+
+Current bug:
+
+Content Studio
+→ Sermon Companions
+→ God’s Kindness Restores the Broken
+→ Delete
+→ Delete Permanently
+
+returns:
+
+“Failed to delete. Please try again.”
+
+The newer Sermon Companion record:
+
+Jesus at the Center
+
+exists in a different generation/data path.
+
+Previous investigation already identified that Emmaus currently has two Sermon Companion systems or storage paths:
+
+1. older Journey-based or legacy companion records;
+2. newer Sermon + Sermon Companion + Companion Entry records.
+
+God’s Kindness Restores the Broken appears to use the older system.
+
+Fix deletion so both legacy and current Sermon Companion records can be removed safely through the same pastor-facing Delete workflow.
+
+Do not hide the error.
+Do not hard-code this sermon title.
+Do not manually delete only this one record.
+Do not remove unrelated Journeys.
+Do not redesign the Sermon Companions screen.
+
+====================================================
+PRIMARY GOAL
+====================================================
+
+Delete Permanently must correctly remove:
+
+God’s Kindness Restores the Broken
+
+including all records linked exclusively to that Sermon Companion.
+
+After deletion:
+
+- it must disappear from Content Studio;
+- it must disappear from Today’s Steps;
+- it must disappear from Next Steps;
+- no dead route may remain;
+- no orphaned records may remain;
+- unrelated content must remain untouched.
+
+====================================================
+TASK 1 — CAPTURE THE REAL SERVER FAILURE
+====================================================
+
+Trace the Delete Permanently request end to end.
+
+Inspect:
+
+- frontend delete handler;
+- record ID passed;
+- record type passed;
+- delete endpoint;
+- HTTP method;
+- authentication;
+- server logs;
+- database error;
+- foreign-key constraints;
+- transaction result;
+- returned response body.
+
+Temporarily log:
+
+- sermon ID;
+- companion ID;
+- legacy Journey ID where applicable;
+- companion storage type;
+- linked entry IDs;
+- member progress count;
+- Room assignment count;
+- current-week assignment;
+- failing database operation;
+- exact internal error code.
+
+Do not expose technical details in the UI.
+
+Identify the exact operation that fails before changing code.
+
+====================================================
+TASK 2 — IDENTIFY THE RECORD MODEL
+====================================================
+
+For God’s Kindness Restores the Broken, determine whether it is stored as:
+
+A. current Sermon Companion model:
+
+sermon
+→ sermonCompanion
+→ sermonCompanionEntries
+
+B. legacy Journey-based companion model:
+
+sermon
+→ linked Journey
+→ Journey Days
+
+C. a hybrid containing records in both systems.
+
+Inspect the actual relationships and IDs.
+
+Do not infer the model only from its title or UI label.
+
+Add or use a reliable internal discriminator such as:
+
+companionStorageType:
+- current
+- legacyJourney
+- hybrid
+
+If no discriminator exists, resolve the model safely from actual linked records.
+
+====================================================
+TASK 3 — ONE CANONICAL DELETE SERVICE
+====================================================
+
+Create or fix one shared server-side service such as:
+
+deleteSermonCompanionContent({
+  sermonId,
+  companionId
+})
+
+The service must detect the storage model and execute the correct deletion plan.
+
+Do not put legacy-specific deletion logic only in the React component.
+
+Do not maintain unrelated delete endpoints with inconsistent behaviour.
+
+====================================================
+TASK 4 — CURRENT MODEL DELETE PLAN
+====================================================
+
+For current-model records, safely handle:
+
+- Sermon Companion progress;
+- Companion entries;
+- current-week assignment;
+- member visibility references;
+- Companion record;
+- Sermon record;
+- transcript data;
+- sermon-only transcript;
+- sermon-boundary metadata;
+- AI generation metadata;
+- exclusive source metadata.
+
+Preserve shared YouTube Archive or Media records unless they are explicitly owned only by this Sermon and the established model requires deletion.
+
+Use real IDs and database relationships.
+
+====================================================
+TASK 5 — LEGACY JOURNEY MODEL DELETE PLAN
+====================================================
+
+For legacy Journey-based Sermon Companions, safely handle:
+
+- Journey progress connected to the legacy companion;
+- Journey room/member assignments connected only to this companion;
+- Journey days;
+- Collection relationship if present;
+- Today’s Steps references;
+- current-week sermon reference;
+- Sermon-to-Journey link;
+- legacy Journey record;
+- Sermon record;
+- transcript and generation metadata owned by the Sermon.
+
+Do not delete the containing Collection merely because the legacy Journey belonged to it.
+
+If the Collection becomes empty, leave it intact unless the user separately deletes it.
+
+Do not delete unrelated Journeys in the same Collection.
+
+====================================================
+TASK 6 — HYBRID MODEL DELETE PLAN
+====================================================
+
+If a Sermon has both:
+
+- a legacy Journey companion;
+- and a current Sermon Companion record;
+
+remove both only when they are linked to the same Sermon and represent the same companion content.
+
+Validate relationships by IDs.
+
+Do not delete another companion because its title is similar.
+
+====================================================
+TASK 7 — MEMBER PROGRESS AND ASSIGNMENTS
+====================================================
+
+Before deleting the parent record, remove or archive dependent progress according to existing Permanent Delete rules.
+
+Inspect:
+
+- Sermon Companion progress;
+- Journey progress;
+- active content references;
+- member current Companion selection;
+- Room assignment links;
+- recommendation links.
+
+The delete operation must not fail because progress rows still reference the content.
+
+Do not leave progress records pointing to missing content.
+
+====================================================
+TASK 8 — CURRENT-WEEK SAFETY
+====================================================
+
+God’s Kindness Restores the Broken is currently or was previously used as:
+
+This Week’s Sermon Devotional
+
+Before deletion:
+
+- clear current-week assignment if it points to this record;
+- invalidate Today’s Steps;
+- select no replacement automatically unless that is already an established rule;
+- preserve other published companions.
+
+If Jesus at the Center is already current, do not alter it.
+
+====================================================
+TASK 9 — DATABASE TRANSACTION
+====================================================
+
+Perform the full operation atomically where supported.
+
+Recommended order:
+
+1. authenticate and authorise;
+2. load Sermon and all companion relationships;
+3. determine storage type;
+4. clear current/member-facing assignments;
+5. delete dependent progress and assignment rows;
+6. delete child entries/days;
+7. delete Companion or legacy Journey;
+8. delete the Sermon;
+9. invalidate caches;
+10. commit transaction;
+11. return structured success JSON.
+
+If any required deletion fails:
+
+- roll back the full operation;
+- keep all data intact;
+- return structured failure JSON;
+- log the internal cause.
+
+Do not leave partial deletion.
+
+====================================================
+TASK 10 — FOREIGN-KEY ORDER
+====================================================
+
+Inspect foreign-key constraints and delete children before parents.
+
+Likely dependencies may include:
+
+- progress → Companion;
+- progress → Journey;
+- entries → Companion;
+- days → Journey;
+- Sermon → linked Journey;
+- current assignment → Sermon/Companion;
+- Room assignment → Journey.
+
+Fix the actual ordering rather than disabling constraints.
+
+Do not use unsafe global cascade settings without understanding their effect.
+
+====================================================
+TASK 11 — API RESPONSE
+====================================================
+
+Return JSON only.
+
+Success:
+
+{
+  "success": true,
+  "deleted": {
+    "sermonId": "...",
+    "companionId": "...",
+    "legacyJourneyId": "...",
+    "storageType": "legacyJourney"
+  }
+}
+
+Omit IDs that do not apply.
+
+Failure:
+
+{
+  "success": false,
+  "code": "DELETE_FAILED",
+  "message": "We couldn’t delete this Sermon Companion. Nothing was removed."
+}
+
+Never return:
+
+- raw database errors;
+- stack traces;
+- HTML;
+- undefined;
+- partial-success claims.
+
+====================================================
+TASK 12 — FRONTEND FAILURE HANDLING
+====================================================
+
+On deletion failure:
+
+- keep the dialog open;
+- stop the spinner;
+- show:
+
+“We couldn’t delete this Sermon Companion. Nothing was removed. Please try again.”
+
+Do not use the generic “Failed to delete” wording.
+
+On success:
+
+- close dialog;
+- return to Sermon Companions;
+- refresh list;
+- update Today’s Steps and Next Steps;
+- show:
+
+“Sermon Companion deleted successfully.”
+
+====================================================
+TASK 13 — CACHE INVALIDATION
+====================================================
+
+After successful deletion invalidate:
+
+- Content Studio Sermon Companions list;
+- Content Studio counts where still used;
+- Today’s Steps;
+- Next Steps → Sermon Companions;
+- My Journey active/completed content;
+- current-week Sermon query;
+- legacy Journey lists if a legacy Journey was removed.
+
+The record must remain deleted after full refresh and sign-in.
+
+====================================================
+TASK 14 — TEST CURRENT AND LEGACY MODELS
+====================================================
+
+Test with disposable records where possible.
+
+TEST A — Legacy model
+
+Use God’s Kindness Restores the Broken.
+
+Verify:
+
+✓ Storage model is detected correctly.
+
+✓ Linked legacy Journey ID is identified.
+
+✓ Dependent Journey progress is handled.
+
+✓ Journey Days are removed.
+
+✓ Legacy Journey is removed.
+
+✓ Sermon is removed.
+
+✓ Collection remains.
+
+✓ Unrelated Journeys remain.
+
+✓ Today’s Steps no longer references it.
+
+✓ Next Steps no longer lists it.
+
+✓ No orphan records remain.
+
+✓ Refresh confirms deletion.
+
+TEST B — Current model
+
+Use a disposable current-model Sermon Companion, not Jesus at the Center unless explicitly approved for deletion.
+
+Verify:
+
+✓ Companion entries delete.
+
+✓ Companion progress deletes or is safely handled.
+
+✓ Companion deletes.
+
+✓ Sermon deletes.
+
+✓ No orphan records remain.
+
+TEST C — Published/current safety
+
+Verify:
+
+✓ Published warning appears.
+
+✓ Current-week assignment clears only when applicable.
+
+✓ Other current Companion remains unchanged.
+
+TEST D — Failure rollback
+
+Simulate or force one child deletion failure.
+
+Verify:
+
+✓ Transaction rolls back.
+
+✓ Parent remains.
+
+✓ Children remain.
+
+✓ UI says nothing was removed.
+
+TEST E — Duplicate click
+
+Verify:
+
+✓ One delete request is sent.
+
+✓ No repeated or conflicting deletion occurs.
+
+====================================================
+TASK 15 — PREVENT FUTURE DUAL-SYSTEM FAILURES
+====================================================
+
+Do not migrate or rewrite all legacy content in this task unless required.
+
+However, ensure all pastor-facing delete actions call the same canonical delete service.
+
+Add regression tests for both storage types.
+
+Document the legacy model internally so future changes do not assume every Sermon Companion uses the new schema.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not delete Jesus at the Center during testing.
+
+Do not solve this by changing the status to Archived.
+
+Do not remove only the Content Studio row while leaving database records.
+
+Do not disable foreign keys.
+
+Do not identify records by title.
+
+Do not report completion until God’s Kindness Restores the Broken has been successfully deleted and remains absent after refresh.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact server/database error that caused deletion to fail;
+2. the storage type used by God’s Kindness Restores the Broken;
+3. every linked record type found;
+4. the canonical delete service implemented;
+5. the deletion order used;
+6. the files changed;
+7. confirmation that Jesus at the Center was untouched;
+8. the result of every test above;
+9. any remaining legacy Sermon Companion limitation.

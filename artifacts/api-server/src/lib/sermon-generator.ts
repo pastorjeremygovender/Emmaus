@@ -1034,6 +1034,29 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     throw new GenerationError("GENERATION_FAILED", "We couldn't prepare the sermon draft. Your sermon has not been saved.");
   }
 
+  // Log parsed sermon fields for debugging (Task 1 of the spec)
+  logger.info({
+    parsedTitle: draftFields.title,
+    parsedSpeaker: draftFields.speaker || "(empty)",
+    parsedScripture: draftFields.scriptureReference || "(empty)",
+    parsedSummaryLength: draftFields.summary?.length ?? 0,
+    mainTheme,
+  }, "sermon-generator: sermon draft fields parsed");
+
+  // Validate — if AI returned an empty/trivial result, reject rather than saving a false draft.
+  // A real sermon summary must have meaningful content. Title is allowed to fall back to the
+  // YouTube video title, but summary blank means the AI call failed entirely.
+  if (!draftFields.summary || draftFields.summary.trim().length < 30) {
+    logger.error({
+      title: draftFields.title,
+      summaryLength: draftFields.summary?.length ?? 0,
+    }, "sermon-generator: AI returned empty sermon summary — rejecting false draft");
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "Emmaus couldn't generate this Sermon Companion draft. Nothing was published.",
+    );
+  }
+
   // 6. Generate 5-day companion from sermon-only transcript, anchored to mainTheme
   let companionDraft;
   try {
@@ -1050,8 +1073,32 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     throw new GenerationError("GENERATION_FAILED", "We couldn't prepare the sermon draft. Your sermon has not been saved.");
   }
 
-  // 5. Save companion to DB
+  // Log companion output for debugging
+  logger.info({
+    companionTitle: companionDraft.companionTitle,
+    entryCount: companionDraft.days.length,
+    sampleReflectionLength: companionDraft.days[0]?.reflection?.length ?? 0,
+  }, "sermon-generator: companion draft parsed");
+
+  // Validate companion — all 5 entries must have substantive reflection text.
+  const emptyEntries = companionDraft.days.filter(
+    d => !d.reflection || d.reflection.trim().length < 30,
+  );
+  if (companionDraft.days.length !== 5 || emptyEntries.length > 0) {
+    logger.error({
+      entryCount: companionDraft.days.length,
+      emptyEntryCount: emptyEntries.length,
+      emptyDayNumbers: emptyEntries.map(d => d.dayNumber),
+    }, "sermon-generator: AI returned empty companion entries — rejecting false draft");
+    throw new GenerationError(
+      "GENERATION_FAILED",
+      "Emmaus couldn't generate the Companion entries. Nothing was published.",
+    );
+  }
+
+  // 7. Save companion to DB — only reached when both AI outputs passed validation
   const sermonId = randomUUID();
+  logger.info({ sermonId }, "sermon-generator: saving companion to DB");
   const savedCompanion = await createCompanion({
     sermonId,
     title: companionDraft.companionTitle,
@@ -1090,9 +1137,19 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
   //    The companion (step 5) is already in PostgreSQL. If sermon persistence
   //    fails we must delete the companion to avoid an orphaned DB record.
   //    Both records being present is the only valid "draft exists" state.
+  logger.info({
+    sermonId,
+    companionId: savedCompanion.id,
+    title: sermon.title,
+    speaker: sermon.speaker || "(empty — for pastor review)",
+    scriptureReference: sermon.scriptureReference || "(empty — for pastor review)",
+    mainTheme: sermon.mainTheme,
+    summaryLength: sermon.summary?.length ?? 0,
+    companionEntryCount: savedCompanion.entries?.length ?? 0,
+  }, "sermon-generator: persisting sermon record");
   try {
     await upsertAdminSermon({ ...sermon, createdAt: sermon.updatedAt });
-    logger.info({ sermonId }, "sermon-generator: sermon record persisted server-side");
+    logger.info({ sermonId, companionId: savedCompanion.id }, "sermon-generator: sermon record persisted server-side");
   } catch (sermonErr) {
     logger.error({ err: sermonErr, sermonId }, "sermon-generator: sermon persistence failed — rolling back companion");
     try {

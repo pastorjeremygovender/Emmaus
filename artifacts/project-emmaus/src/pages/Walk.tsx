@@ -31,7 +31,7 @@ import {
   type DevotionalProgress,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
-import { calcAvailableDay } from '@/lib/devotional-calendar';
+import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 function SkeletonCard({ lines = 3 }: { lines?: number }) {
@@ -57,52 +57,62 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Daily Devotional card — active (member has started) ─────────────────────
 //
+// Daily Devotionals are SELF-PACED — members advance by completing entries,
+// not by waiting for the next calendar day.
 // States:
-//   complete  — today's available day has already been marked done
-//   ready     — today's day is unlocked and unread
-//
-// Day availability is calendar-derived (see devotional-calendar.ts).
-// currentDay stored in the progress record is intentionally ignored here.
+//   not-started — no entries completed yet
+//   in-progress — some entries completed, more available
+//   complete    — all published entries completed
 function DevotionalCard({
   series,
-  availableDay,
-  entryTitle,
-  completedToday,
-  onBeginToday,
-  onReviewToday,
-  onViewPreviousDays,
+  completedCount,
+  totalPublished,
+  nextDay,
+  nextEntryTitle,
+  allComplete,
+  onOpen,
+  onViewPreviousEntries,
 }: {
   series: DevotionalSeries;
-  /** Calendar-derived day the member has access to today. */
-  availableDay: number;
-  entryTitle?: string;
-  /** True when the member has already completed today's available day. */
-  completedToday: boolean;
-  onBeginToday: () => void;
-  onReviewToday: () => void;
-  onViewPreviousDays?: () => void;
+  /** Number of entries the member has completed. */
+  completedCount: number;
+  /** Total number of published entries in the series. */
+  totalPublished: number;
+  /** Next available day number (self-paced: last completed + 1). */
+  nextDay: number;
+  /** Title of the next entry to read, if available. */
+  nextEntryTitle?: string;
+  /** True when all published entries have been completed. */
+  allComplete: boolean;
+  /** Navigate to the next available entry. */
+  onOpen: () => void;
+  onViewPreviousEntries?: () => void;
 }) {
-  const description = completedToday
-    ? 'Completed for today.'
-    : entryTitle
-      ? `Day ${availableDay} · ${entryTitle}`
-      : `Day ${availableDay}`;
+  const description = allComplete
+    ? `${totalPublished} of ${totalPublished} completed`
+    : completedCount > 0
+      ? nextEntryTitle
+        ? `Day ${nextDay} of ${totalPublished} · ${nextEntryTitle}`
+        : `Day ${nextDay} of ${totalPublished}`
+      : totalPublished > 0
+        ? `Day 1 of ${totalPublished}`
+        : 'Day 1';
 
   return (
     <EmmausContentCard
       label="DAILY DEVOTIONAL"
       title={series.title}
       description={description}
-      primaryActionLabel={completedToday ? 'Review' : "Open Today's Time"}
-      onAction={completedToday ? onReviewToday : onBeginToday}
+      primaryActionLabel="Continue"
+      onAction={onOpen}
       headerTrailing={
-        completedToday
+        allComplete
           ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
           : undefined
       }
       secondaryAction={
-        onViewPreviousDays
-          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+        onViewPreviousEntries
+          ? { label: 'View Previous Entries →', onPress: onViewPreviousEntries }
           : undefined
       }
     />
@@ -124,7 +134,7 @@ function DevotionalDiscoveryCard({
       label="DAILY DEVOTIONAL"
       title={series.title}
       description="A new devotional series is available."
-      primaryActionLabel="Open Devotional"
+      primaryActionLabel="Continue"
       onAction={onBegin}
       loading={starting}
     />
@@ -369,7 +379,7 @@ export default function Walk() {
     try {
       await startSeries(seriesId, { userId: user.id });
       await reloadDevotionals(user.id);
-      setLocation(`/devotional/${seriesId}/day/1`);
+      setLocation(`/devotional/${seriesId}/day/1?source=today`);
     } catch {
       // ignore — user can retry
     } finally {
@@ -496,7 +506,7 @@ export default function Walk() {
   function goToJourney(journeyId: string, prog: { currentDay: number }) {
     const day = prog.currentDay ?? 1;
     if (!progress[journeyId]) startJourney(journeyId);
-    setLocation(`/journey/${journeyId}/day/${day}`);
+    setLocation(`/journey/${journeyId}/day/${day}?source=walk`);
   }
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
@@ -572,23 +582,26 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. Daily Devotional ────────────────────────────────────────────── */}
+        {/* ── 2. Daily Devotional — self-paced ──────────────────────────────── */}
         {activeDevotional ? (() => {
           const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
           const maxPublishedDay  = publishedEntries.length > 0
             ? Math.max(...publishedEntries.map(e => e.dayNumber))
             : 1;
-          const availableDay    = calcAvailableDay(
-            activeDevotional.progress.startedAt,
-            maxPublishedDay,
-            devMode,
+          const completedDays   = activeDevotional.progress.completedDays ?? [];
+          // Self-paced: next available day is derived from completions, not calendar.
+          const nextDay         = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
+          const nextEntry       = activeDevotional.entries.find(
+            e => e.dayNumber === nextDay && e.status === 'Published',
           );
-          const availableEntry  = activeDevotional.entries.find(
-            e => e.dayNumber === availableDay && e.status === 'Published',
-          );
-          const completedToday  = (activeDevotional.progress.completedDays ?? []).includes(availableDay);
-          // Show "View Previous Days" once the member has completed at least one day
-          const hasPrevDevotionalDays = (activeDevotional.progress.completedDays ?? []).length > 0;
+          const completedCount  = completedDays.length;
+          const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
+          // For review when all complete, navigate to the highest completed day.
+          const openDay         = allComplete
+            ? Math.max(...completedDays)
+            : nextDay;
+          // Show "View Previous Entries" once the member has completed at least one.
+          const hasPrevEntries  = completedCount > 0;
 
           return (
             <motion.section
@@ -598,17 +611,16 @@ export default function Walk() {
             >
               <DevotionalCard
                 series={activeDevotional.series}
-                availableDay={availableDay}
-                entryTitle={availableEntry?.title}
-                completedToday={completedToday}
-                onBeginToday={() =>
-                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}?source=today`)
+                completedCount={completedCount}
+                totalPublished={publishedEntries.length}
+                nextDay={nextDay}
+                nextEntryTitle={nextEntry?.title}
+                allComplete={allComplete}
+                onOpen={() =>
+                  setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`)
                 }
-                onReviewToday={() =>
-                  setLocation(`/devotional/${activeDevotional.series.id}/day/${availableDay}?source=today`)
-                }
-                onViewPreviousDays={
-                  hasPrevDevotionalDays
+                onViewPreviousEntries={
+                  hasPrevEntries
                     ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
                     : undefined
                 }
@@ -653,7 +665,7 @@ export default function Walk() {
               title={scCompanion.title}
               description="Five short weekday devotionals based on Sunday's sermon."
               metadata={`${scCompanion.numberOfDays} Days`}
-              primaryActionLabel={scCompanion.isStarted ? 'Continue' : 'Open Companion'}
+              primaryActionLabel="Continue"
               onAction={() =>
                 setLocation(
                   `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
@@ -662,7 +674,7 @@ export default function Walk() {
               secondaryAction={
                 scCompanion.isStarted && scCompanion.currentDay > 1
                   ? {
-                      label: 'View Previous Days →',
+                      label: 'View Previous Reflections →',
                       onPress: () => setLocation(`/sermon-companion/${scCompanion.id}/previous?from=walk`),
                     }
                   : undefined
