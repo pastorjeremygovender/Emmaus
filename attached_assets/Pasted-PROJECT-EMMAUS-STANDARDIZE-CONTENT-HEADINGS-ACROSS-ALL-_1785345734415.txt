@@ -1,0 +1,179 @@
+PROJECT EMMAUS — STANDARDIZE CONTENT HEADINGS ACROSS ALL CONTENT TYPES
+
+IMPORTANT
+
+This is a UI/content rendering standard.
+
+Do not modify routing.
+Do not modify progress.
+Do not modify navigation.
+Do not modify the database.
+Do not create a migration.
+
+====================================================
+CONTENT STANDARD
+====================================================
+
+Remove the label:
+
+"From the Sermon"
+
+wherever it appears above the opening greeting or introductory paragraph.
+
+This label is incorrect and unnecessary.
+
+The greeting/introduction should flow naturally into the devotional.
+
+====================================================
+APPLIES TO
+====================================================
+
+Apply this rule to:
+
+✓ Sermon Companions
+
+✓ Daily Devotionals
+
+✓ Psalms Daily Devotional
+
+✓ Future Daily Devotionals
+
+✓ Journeys
+
+✓ Bible Studies
+
+✓ Made Free
+
+✓ Any future Emmaus reading content
+
+This should become the standard content template.
+
+====================================================
+NEW CONTENT STRUCTURE
+====================================================
+
+Each reading should follow this structure:
+
+Title
+
+(optional day)
+
+Greeting / introductory paragraph
+
+Today's Reading
+
+Scripture
+
+Reflection
+
+Prayer
+
+Next Step
+
+No heading should appear between the title and the greeting unless it genuinely communicates meaningful information.
+
+====================================================
+DO NOT REMOVE
+====================================================
+
+Keep headings such as:
+
+Today's Reading
+
+Prayer
+
+Next Step
+
+Reflection
+
+Live It
+
+or any future meaningful section headings.
+
+Only remove labels that merely describe the source of the content rather than helping the reader.
+
+====================================================
+CONTENT TEMPLATE
+====================================================
+
+The greeting should begin immediately beneath the title.
+
+Example:
+
+Choose Wise Advice
+
+Good evening. It's good to have you back...
+
+NOT
+
+Choose Wise Advice
+
+From the Sermon
+
+Good evening...
+
+Likewise:
+
+Let the Word Set the Standard
+
+Hello, Super. God's Word is meeting you today...
+
+NOT
+
+Let the Word Set the Standard
+
+From the Sermon
+
+Hello, Super...
+
+====================================================
+FUTURE CONTENT
+====================================================
+
+Update the shared reading template/component so that all future content types automatically follow this standard.
+
+Do not require each content type to implement its own version.
+
+====================================================
+REGRESSION TEST
+====================================================
+
+Verify:
+
+✓ Sermon Companion
+
+✓ Psalms Daily Devotional
+
+✓ Daily Devotional
+
+✓ Journeys
+
+✓ Made Free
+
+✓ Future reading templates
+
+all display:
+
+Title
+
+↓
+
+Greeting
+
+↓
+
+Today's Reading
+
+without an unnecessary "From the Sermon" heading.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+No Emmaus reading should display the label:
+
+"From the Sermon"
+
+above the greeting unless a future feature explicitly requires it.
+
+Use one shared content rendering standard across the platform.

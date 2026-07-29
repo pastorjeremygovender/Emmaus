@@ -110,10 +110,9 @@ export function DevotionalReading({
         </h1>
       </section>
 
-      {/* ── From the Sermon ─────────────────────────────────────────────────── */}
+      {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {(greeting || previewMode) && (
         <section className="mb-10">
-          <SectionLabel>From the Sermon</SectionLabel>
           <div className="mt-3">
             {greeting ? (
               <>
