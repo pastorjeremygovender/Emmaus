@@ -514,8 +514,8 @@ export default function Walk() {
             e => e.dayNumber === availableDay && e.status === 'Published',
           );
           const completedToday  = (activeDevotional.progress.completedDays ?? []).includes(availableDay);
-          // Show "View Previous Days" once the member has unlocked more than day 1
-          const hasPrevDevotionalDays = availableDay > 1;
+          // Show "View Previous Days" once the member has completed at least one day
+          const hasPrevDevotionalDays = (activeDevotional.progress.completedDays ?? []).length > 0;
 
           return (
             <motion.section
@@ -536,7 +536,7 @@ export default function Walk() {
                 }
                 onViewPreviousDays={
                   hasPrevDevotionalDays
-                    ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous`)
+                    ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
                     : undefined
                 }
               />
@@ -585,6 +585,14 @@ export default function Walk() {
                 setLocation(
                   `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
                 )
+              }
+              secondaryAction={
+                scCompanion.isStarted && scCompanion.currentDay > 1
+                  ? {
+                      label: 'View Previous Days →',
+                      onPress: () => setLocation(`/sermon-companion/${scCompanion.id}/previous?from=walk`),
+                    }
+                  : undefined
               }
             />
           </motion.section>

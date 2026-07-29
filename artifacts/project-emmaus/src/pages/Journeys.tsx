@@ -284,7 +284,7 @@ function ProgressBar({ item }: { item: NextStepsItem }) {
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item, onAction, onPause, onDetails, isGated, onGate, enrollmentState,
+  item, onAction, onPause, onDetails, isGated, onGate, enrollmentState, onViewPreviousSteps,
 }: {
   item: NextStepsItem;
   onAction: () => void;
@@ -293,6 +293,7 @@ function DiscoveryCard({
   isGated?: boolean;
   onGate?: () => void;
   enrollmentState?: string | null;
+  onViewPreviousSteps?: () => void;
 }) {
   const dur = dayLabel(item.metadata.durationDays);
   const metaParts = [dur, item.metadata.difficulty].filter(Boolean);
@@ -321,6 +322,11 @@ function DiscoveryCard({
           : undefined
       }
       onGate={onGate}
+      secondaryAction={
+        onViewPreviousSteps
+          ? { label: 'View Previous Steps →', onPress: onViewPreviousSteps }
+          : undefined
+      }
     />
   );
 }
@@ -389,6 +395,7 @@ function DevotionalsPanel({
 
 function JourneysPanel({
   collections, standalone, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
+  getProgressDay, onViewPreviousSteps,
 }: {
   collections: JourneyCollectionGroup[];
   standalone: NextStepsItem[];
@@ -398,9 +405,17 @@ function JourneysPanel({
   isGated: (item: NextStepsItem) => boolean;
   onGate: () => void;
   getEnrollmentState: (id: string) => string | null;
+  getProgressDay: (id: string) => number;
+  onViewPreviousSteps: (id: string) => void;
 }) {
   const hasContent = collections.length > 0 || standalone.length > 0;
   if (!hasContent) return <EmptyState message="No Journeys are available yet." />;
+
+  function viewPreviousStepsFor(item: NextStepsItem) {
+    // Only show for journey-table items with /journey/ routes (not sermon-companions)
+    if (!item.route.startsWith('/journey/')) return undefined;
+    return getProgressDay(item.id) > 1 ? () => onViewPreviousSteps(item.id) : undefined;
+  }
 
   return (
     <div className="space-y-8 pt-6">
@@ -418,6 +433,7 @@ function JourneysPanel({
                 isGated={isGated(item)}
                 onGate={onGate}
                 enrollmentState={getEnrollmentState(item.id)}
+                onViewPreviousSteps={viewPreviousStepsFor(item)}
               />
             ))}
           </div>
@@ -440,6 +456,7 @@ function JourneysPanel({
                 isGated={isGated(item)}
                 onGate={onGate}
                 enrollmentState={getEnrollmentState(item.id)}
+                onViewPreviousSteps={viewPreviousStepsFor(item)}
               />
             ))}
           </div>
@@ -450,14 +467,21 @@ function JourneysPanel({
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction,
+  current, previous, onAction, onViewPreviousDays,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
+  onViewPreviousDays: (id: string) => void;
 }) {
   if (!current && previous.length === 0) {
     return <EmptyState message="No Sermon Companions are available yet." />;
+  }
+
+  function previousDaysAction(item: NextStepsItem) {
+    if (!item.route.startsWith('/sermon-companion/')) return undefined;
+    if (item.memberProgressState === 'not-started') return undefined;
+    return { label: 'View Previous Days →', onPress: () => onViewPreviousDays(item.id) };
   }
 
   return (
@@ -472,6 +496,7 @@ function SermonCompanionsPanel({
             metadata={current.metadata.durationDays ? `${current.metadata.durationDays} Days` : '5 Days'}
             primaryActionLabel={current.primaryActionLabel}
             onAction={() => onAction(current)}
+            secondaryAction={previousDaysAction(current)}
           />
         </section>
       )}
@@ -489,6 +514,7 @@ function SermonCompanionsPanel({
                 metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
                 primaryActionLabel={item.primaryActionLabel}
                 onAction={() => onAction(item)}
+                secondaryAction={previousDaysAction(item)}
               />
             ))}
           </div>
@@ -736,6 +762,8 @@ export default function Journeys() {
                 isGated={isItemGated}
                 onGate={() => setLocation('/walk')}
                 getEnrollmentState={(id) => getState(id)}
+                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous`)}
               />
             )}
 
@@ -744,6 +772,7 @@ export default function Journeys() {
                 current={data.currentSermonCompanion}
                 previous={data.previousSermonCompanions}
                 onAction={handleSermonCompanionAction}
+                onViewPreviousDays={(id) => setLocation(`/sermon-companion/${id}/previous?from=walk`)}
               />
             )}
           </>
