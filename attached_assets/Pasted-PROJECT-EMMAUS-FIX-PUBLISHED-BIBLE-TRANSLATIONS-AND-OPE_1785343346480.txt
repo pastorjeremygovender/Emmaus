@@ -1,0 +1,367 @@
+PROJECT EMMAUS — FIX PUBLISHED BIBLE TRANSLATIONS AND OPEN MY BIBLE AT TOP
+
+IMPORTANT
+
+The published application is currently working.
+
+Protect the current state before making changes.
+
+Create a checkpoint named:
+
+PRE-BIBLE-PRODUCTION-FIX-WORKING-BASELINE
+
+Do not modify:
+
+- Today’s Steps
+- Active Engagement
+- Daily Rhythm
+- Daily Devotionals
+- Journeys
+- Sermon Companions
+- Ask Emmaus
+- onboarding
+- database schema
+
+Do not generate a database migration.
+
+This task is limited to two My Bible issues:
+
+1. BSB, ASV and KJV work in Replit preview but do not display in the published app.
+2. Clicking My Bible opens the page around the centre instead of at the top.
+
+====================================================
+ISSUE 1 — TRANSLATIONS FAIL ONLY IN PRODUCTION
+====================================================
+
+CURRENT VERIFIED BEHAVIOUR
+
+REPLIT PREVIEW
+
+- BSB works
+- ASV works
+- KJV works
+
+PUBLISHED APP
+
+- BSB does not load
+- ASV does not load
+- KJV does not load
+- the app may display a message such as:
+  “Luke 1 is not available in this translation.”
+
+This is a preview-versus-production issue.
+
+Do not rebuild the Bible module.
+Do not replace the translations.
+Do not add another Bible provider.
+Do not silently substitute a different translation.
+
+Trace each translation from selection to rendered chapter.
+
+For BSB, ASV and KJV identify:
+
+1. Translation registry entry.
+2. Canonical translation code.
+3. Chapter-loading function.
+4. API endpoint or local file used.
+5. Preview response.
+6. Production response.
+7. Exact production failure point.
+
+====================================================
+CHECK LOCAL BIBLE ASSETS
+====================================================
+
+Determine whether BSB, ASV and KJV are loaded from:
+
+- JSON files
+- bundled assets
+- database records
+- server filesystem
+- an external Bible API
+
+If they use local files, verify:
+
+- the files are committed to Git;
+- they are not excluded by .gitignore;
+- production includes them in the build;
+- import paths use exact filename capitalization;
+- no Windows-only file paths are used;
+- no development-only absolute paths are used;
+- no runtime filesystem access depends on files unavailable in production;
+- all filenames and folder names match Linux case sensitivity.
+
+Pay particular attention to differences such as:
+
+- BSB.json vs bsb.json
+- KJV.json vs kjv.json
+- ASV.json vs asv.json
+- Luke.json vs luke.json
+
+Production is case-sensitive even where the local environment may appear tolerant.
+
+Use production-safe imports or asset paths.
+
+====================================================
+CHECK EXTERNAL API CONFIGURATION
+====================================================
+
+If these translations use an external Bible API, verify:
+
+- production API key exists;
+- the key is available to the correct server process;
+- the key is not expected in browser-only code;
+- the production endpoint URL is correct;
+- translation IDs are correct;
+- production requests are not blocked by CORS;
+- the deployed origin is permitted;
+- quota or provider errors are not being hidden.
+
+Do not expose API secrets in browser code or logs.
+
+====================================================
+CHECK TRANSLATION IDENTIFIERS
+====================================================
+
+Use one canonical internal code for each translation:
+
+- BSB
+- ASV
+- KJV
+
+Normalise values before lookup.
+
+Do not allow mismatches such as:
+
+- bsb vs BSB
+- asv vs ASV
+- kjv vs KJV
+
+Confirm that:
+
+- dropdown value
+- route parameter
+- API request
+- server lookup
+- cached query key
+- chapter-data key
+
+all use the same canonical translation code.
+
+====================================================
+TEST THE PRODUCTION ENDPOINTS DIRECTLY
+====================================================
+
+Call the actual deployed production chapter endpoint for a known chapter, such as:
+
+- John 1 in BSB
+- John 1 in ASV
+- John 1 in KJV
+
+Record:
+
+- endpoint URL
+- HTTP status
+- response schema
+- whether verses are returned
+- error response if not
+
+Also test one currently working translation for comparison.
+
+Do not rely only on the visible page.
+
+If the production endpoint returns the chapter correctly, inspect the frontend rendering and response parsing.
+
+If the production endpoint fails, repair the server or asset-loading path.
+
+====================================================
+CACHE CHECK
+====================================================
+
+Inspect whether the published app is using stale Bible code or cached missing responses.
+
+Check:
+
+- service worker cache
+- browser query cache
+- CDN cache
+- API cache headers
+- 304 responses
+- production bundle version
+
+Correct cache invalidation where necessary.
+
+Do not use “clear your browser cache” as the permanent solution.
+
+Test in both a normal and incognito browser after the fix.
+
+====================================================
+FAILURE HANDLING
+====================================================
+
+Do not show:
+
+“Luke 1 is not available in this translation”
+
+when the real cause is:
+
+- missing production asset
+- failed server request
+- configuration error
+- internal exception
+
+Differentiate between:
+
+1. chapter genuinely unavailable
+2. translation temporarily failed to load
+
+Use a truthful message such as:
+
+“This translation could not be loaded. Please try again.”
+
+Log the technical cause safely.
+
+Never display another translation under the selected label.
+
+====================================================
+ISSUE 2 — MY BIBLE MUST OPEN AT THE TOP
+====================================================
+
+CURRENT BEHAVIOUR
+
+When the user clicks My Bible from the bottom navigation, the page opens around the centre of the page.
+
+EXPECTED BEHAVIOUR
+
+Every normal navigation into My Bible must open at the top of the page.
+
+This includes:
+
+- clicking My Bible in bottom navigation
+- opening the Bible home/library page
+- opening a selected chapter from another screen
+- switching to a new chapter
+- switching translations where appropriate
+
+Implement route-level scroll restoration.
+
+On normal route navigation to My Bible or a new Bible chapter:
+
+- scroll the main document or actual scroll container to top
+- use immediate positioning unless smooth scrolling is already approved
+- ensure it runs after the route/content has mounted
+- do not scroll the wrong nested element
+
+Check whether the application uses:
+
+- window scrolling
+- a custom main scroll container
+- nested overflow panels
+- preserved browser scroll state
+
+Reset the correct scroll container.
+
+====================================================
+DO NOT BREAK INTENTIONAL RETURN POSITION
+====================================================
+
+If the user opens a temporary overlay or a note and then returns to the same Bible chapter, preserving their reading position may be useful.
+
+Do not indiscriminately reset scroll for every state update.
+
+Reset to top when:
+
+- entering My Bible through bottom navigation
+- opening a different book
+- opening a different chapter
+- navigating from another main section
+
+Preserve reading position where appropriate when:
+
+- closing Notes
+- closing Save/bookmark controls
+- returning from a temporary panel to the same chapter
+
+====================================================
+PRODUCTION TESTING
+====================================================
+
+Test the published app, not only preview.
+
+TRANSLATIONS
+
+1. Open My Bible.
+2. Select BSB.
+3. Open John 1.
+4. Confirm verses display.
+5. Refresh.
+6. Confirm BSB still displays.
+7. Repeat for ASV.
+8. Repeat for KJV.
+9. Confirm existing working translations still display.
+10. Confirm chapter navigation works.
+11. Confirm book navigation works.
+12. Confirm no translation displays another translation’s text.
+13. Confirm no console errors.
+14. Confirm no failed production requests.
+
+SCROLL POSITION
+
+15. Start halfway down another page.
+16. Click My Bible in bottom navigation.
+17. Confirm My Bible opens at the top.
+18. Scroll down in a chapter.
+19. Open a different chapter.
+20. Confirm the new chapter opens at the top.
+21. Switch to a different book.
+22. Confirm it opens at the top.
+23. Open and close Notes on the same chapter.
+24. Confirm the user’s reading position is not unnecessarily lost.
+25. Test on desktop and mobile.
+
+REGRESSION
+
+26. Today’s Steps still loads.
+27. Next Steps still loads.
+28. This Week’s Sermon still appears.
+29. Active Engagement still works.
+30. Bottom navigation still works.
+31. No migration was created.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+This task is complete only when:
+
+- BSB displays in the published app
+- ASV displays in the published app
+- KJV displays in the published app
+- existing translations still work
+- My Bible opens at the top from bottom navigation
+- new books and chapters open at the top
+- temporary same-chapter panels do not unnecessarily lose reading position
+- desktop and mobile production tests pass
+
+Do not declare success because the translations work only in preview.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Exact cause of the production translation failure.
+3. Whether the issue was assets, paths, identifiers, configuration, API or cache.
+4. Files changed.
+5. Production endpoint results before and after.
+6. Scroll-container or routing fix implemented.
+7. Desktop published test results.
+8. Mobile published test results.
+9. Regression test results.
+10. Confirmation that no database migration was created.
+11. Post-fix checkpoint.
+12. Exact rollback instructions.
+
+Stop after these Bible issues are fixed and verified.

@@ -1,4 +1,5 @@
 import { useLocation } from 'wouter';
+import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useBible } from '@/contexts/BibleContext';
@@ -8,6 +9,7 @@ const OT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'OT');
 const NT_BOOKS = BIBLE_BOOKS.filter(b => b.testament === 'NT');
 
 export default function BrowseBooks() {
+  useEffect(() => { window.scrollTo(0, 0); }, []);
   const [, setLocation] = useLocation();
   const { isChapterComplete } = useBible();
 

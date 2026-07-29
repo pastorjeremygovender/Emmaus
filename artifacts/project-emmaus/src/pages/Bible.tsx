@@ -4,10 +4,12 @@ import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, History, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from '@/hooks/useTranslations';
 
 export default function Bible() {
+  // Always open at the top — the user may have been scrolled down in another section
+  useEffect(() => { window.scrollTo(0, 0); }, []);
   const [, setLocation] = useLocation();
   const { lastRead, favourites, bookmarks, translationId, setTranslation } = useBible();
   const [showTranslations, setShowTranslations] = useState(false);

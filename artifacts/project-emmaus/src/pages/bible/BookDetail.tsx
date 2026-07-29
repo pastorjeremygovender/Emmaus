@@ -1,4 +1,5 @@
 import { useParams, useLocation } from 'wouter';
+import { useEffect } from 'react';
 import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getBibleBook, getBibleJourney, BIBLE_JOURNEYS } from '@/lib/bible-data';
@@ -7,6 +8,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { getChapterHeading } from '@/data/chapter-headings';
 
 export default function BookDetail() {
+  useEffect(() => { window.scrollTo(0, 0); }, []);
   const { bookId } = useParams<{ bookId: string }>();
   const [, setLocation] = useLocation();
   const { isChapterComplete, lastRead, getJourneyProgress } = useBible();

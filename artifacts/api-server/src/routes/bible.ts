@@ -1,14 +1,19 @@
 import { Router } from "express";
 import { readFileSync, existsSync, readdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { logger } from "../lib/logger";
 import { apiBibleProvider } from "../lib/api-bible-provider";
 import { type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import { getBibleData, patchBibleData, type UserBibleData } from "../bible/store.js";
 
-// process.cwd() is always artifacts/api-server/ at runtime (dev or dist)
-const DATA_DIR = join(process.cwd(), "data/bible");
+// Resolve data dir relative to the compiled bundle file, not process.cwd().
+// In production the run command is `node artifacts/api-server/dist/index.mjs`
+// executed from the workspace root, so process.cwd() ≠ artifacts/api-server/.
+// import.meta.url always points to the actual bundle file regardless of cwd.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = join(__dirname, "../data/bible");
 
 const router = Router();
 
