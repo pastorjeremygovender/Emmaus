@@ -1,0 +1,530 @@
+PROJECT EMMAUS — EMERGENCY STABILIZATION, RECOVERY AND REGRESSION LOCK
+
+STOP ALL NEW FEATURE DEVELOPMENT.
+
+Do not redesign, refactor, reorganise, modernise or add features.
+
+Several functions that were working yesterday are now broken or behaving differently. The administrator has already paid for these features to be built and fixed. Do not treat them as new feature requests and do not rebuild them from scratch.
+
+This task must diagnose and restore the application within one controlled recovery operation.
+
+Do not require separate paid prompts for each symptom found during this task.
+
+====================================================
+CURRENT KNOWN REGRESSIONS
+====================================================
+
+1. DAILY RHYTHM REVIEW
+
+The Review button appears on Today’s Steps after today’s Daily Rhythm is complete, but clicking it does nothing.
+
+It worked yesterday.
+
+Expected behaviour:
+
+- Review opens today’s completed Daily Rhythm.
+- It opens at the top.
+- It uses review/replay mode.
+- It does not advance to the next day.
+- It does not create another completion record.
+- It does not repeat first-completion actions.
+- Finishing or going back returns to Today’s Steps.
+
+2. THIS WEEK’S SERMON ON PUBLISHED APP
+
+A published Sermon Companion is marked:
+
+“Currently set as This Week’s Sermon.”
+
+It appears on Today’s Steps in the Replit preview but does not appear on Today’s Steps in the published deployment.
+
+Expected behaviour:
+
+- Preview and deployment use the correct active record.
+- The published deployment displays the same current sermon.
+- Changes made through the deployed Admin must be reflected in the deployed user app without requiring a code change.
+- Data caching must not hide newly selected or published content.
+
+3. JOURNEY EDITOR USABILITY
+
+The Journey Editor was previously working and usable.
+
+The current version has been reworked into an unusably narrow multi-column layout.
+
+The administrator cannot properly edit journey content because the actual writing area is squeezed between:
+
+- admin sidebar,
+- journey navigation,
+- step list,
+- preview/settings panels.
+
+Expected behaviour:
+
+- restore the previously usable Journey Editor where possible;
+- selecting a step clearly opens its editor;
+- the central writing area receives most of the screen;
+- Settings is closed by default and opens only when needed;
+- Preview does not permanently consume editor width;
+- the step list and sidebars are collapsible;
+- no horizontal scrolling is required for normal editing;
+- existing journeys, steps and collection assignments remain intact.
+
+4. SERMON COMPANION GENERATION BOUNDARIES
+
+The current generator is using broad sermon themes to create its own devotional material, Scriptures, references and prescriptions.
+
+This is prohibited.
+
+Expected behaviour:
+
+- use the sermon transcript as a closed source boundary;
+- only extract, organise, shorten and reinforce what was actually preached;
+- do not add outside Scriptures;
+- do not add theological claims not present in the sermon;
+- do not add illustrations, examples or applications from model knowledge;
+- every major idea must map to transcript evidence and a timestamp;
+- each companion day must include a timestamped link to the relevant sermon section;
+- remove all arbitrary prescription patterns such as:
+  - pray this three times,
+  - repeat this a certain number of times,
+  - write this on a card,
+  - put this in your phone,
+  - make a numbered list,
+  - repeat a spiritual exercise at fixed intervals.
+
+This content rule must also be enforced across all AI-generated Emmaus content, not only Sermon Companions.
+
+====================================================
+NON-NEGOTIABLE RECOVERY METHOD
+====================================================
+
+Do not begin by editing code.
+
+First investigate:
+
+- Git history;
+- Replit checkpoints;
+- current branch;
+- uncommitted changes;
+- file modification history;
+- deployment history;
+- browser console;
+- server logs;
+- failed network requests;
+- database queries;
+- preview environment variables;
+- deployment environment variables.
+
+Identify the most recent checkpoint where the following all worked together:
+
+- Daily Rhythm Review;
+- This Week’s Sermon on Today’s Steps;
+- Journey Editor;
+- Sermon Companion generator;
+- Daily Devotionals;
+- content save/publish workflows;
+- correct navigation.
+
+Before making any change, provide a short audit report containing:
+
+1. Current branch and commit.
+2. Uncommitted changes.
+3. Last known-good checkpoint.
+4. Files changed after that checkpoint.
+5. Shared files changed after that checkpoint.
+6. Exact cause of each known regression.
+7. Smallest safe restoration plan.
+
+Do not guess at the causes.
+
+Use logs, diffs, routes, API responses and repository history.
+
+====================================================
+RESTORATION PRIORITY
+====================================================
+
+Prefer restoring working code from the last known-good checkpoint.
+
+Do not replace an existing implementation with a new one merely because it is easier.
+
+If a recent change overwrote working functionality:
+
+1. Restore the affected implementation.
+2. Preserve the valid intended changes made afterward.
+3. Reapply only those intended changes carefully.
+4. Test every affected workflow.
+
+Do not revert the entire application unless a targeted restoration is impossible.
+
+Do not erase later valid content.
+
+====================================================
+STRICT SCOPE CONTROL
+====================================================
+
+Modify only files directly needed for this recovery.
+
+Do not:
+
+- change the database schema unless repository evidence proves it is necessary;
+- create duplicate routes;
+- create duplicate APIs;
+- create duplicate editors;
+- rename unrelated components;
+- reorganise directories;
+- refactor unrelated code;
+- “clean up” shared files;
+- introduce a new design system;
+- change established content structures;
+- add additional suggested features;
+- work on items from the Suggested Next Tasks panel.
+
+Disable or ignore all Suggested Next Tasks until stabilization is complete.
+
+Before modifying a shared file, state:
+
+- why it must change;
+- which features depend on it;
+- which regression tests will be run afterward.
+
+====================================================
+DATABASE AND CONTENT PROTECTION
+====================================================
+
+Never:
+
+- reset the database;
+- drop or recreate tables;
+- delete content;
+- replace records with seed data;
+- clear user progress;
+- clear completion records;
+- create duplicate journeys;
+- create duplicate collections;
+- create duplicate sermon companions;
+- silently overwrite published content.
+
+All existing:
+
+- Daily Rhythm entries;
+- Daily Devotionals;
+- journeys;
+- steps;
+- collections;
+- sermon companions;
+- publication statuses;
+- user completion records
+
+must remain intact.
+
+====================================================
+FIX 1 — DAILY RHYTHM REVIEW
+====================================================
+
+Trace the actual rendered Review button.
+
+Verify:
+
+- click handler;
+- content ID;
+- route;
+- navigation state;
+- review-mode parameter;
+- overlays and pointer events;
+- console errors;
+- completion-state branch;
+- route refresh behaviour.
+
+Restore the previously working route or handler.
+
+Review mode must be progression-safe.
+
+Test:
+
+- incomplete day opens normally;
+- completed day shows Review;
+- Review opens today’s content;
+- content starts at the top;
+- no new completion record is created;
+- no day advances;
+- tomorrow remains locked correctly;
+- Finish returns to Today’s Steps;
+- back arrow returns to Today’s Steps;
+- refresh in review mode works;
+- preview and deployment behave identically.
+
+====================================================
+FIX 2 — THIS WEEK’S SERMON DEPLOYMENT
+====================================================
+
+Compare preview and deployment.
+
+Verify:
+
+- deployment commit;
+- deployment build;
+- database connection;
+- environment variables;
+- API base URLs;
+- authentication context;
+- active-sermon query;
+- publication filters;
+- date/time filters;
+- caching headers;
+- service worker cache;
+- client query cache;
+- server query cache;
+- 304 responses;
+- stale static generation;
+- browser local storage.
+
+Run the exact Today’s Steps data request in both environments and compare the responses.
+
+Do not hard-code a sermon ID.
+
+The user-facing card must be driven by the current database selection.
+
+After repair:
+
+- selecting a sermon in Admin updates the correct database record;
+- only one sermon is current unless multiple-current behaviour is intentionally supported;
+- the published app retrieves the current sermon;
+- preview and deployment return equivalent data;
+- cache invalidation occurs after publish, unpublish or current-sermon selection;
+- the card appears without requiring a code rebuild when only content changes.
+
+====================================================
+FIX 3 — JOURNEY EDITOR RESTORATION
+====================================================
+
+Search history for the last Journey Editor the administrator was happy with.
+
+Restore that layout and behaviour wherever possible.
+
+Required final behaviour:
+
+- Journeys opens to Journey Library;
+- Collections remains a secondary subtab;
+- every journey appears in one library;
+- standalone means no collection assigned;
+- clicking Edit opens the Journey Editor;
+- Step 1 or the last edited step opens automatically;
+- selecting a step opens its content editor immediately;
+- the selected step is visually clear;
+- Add Step creates, selects and opens the new step;
+- the main editor receives most of the available width;
+- Settings is closed by default;
+- Preview is closed by default;
+- admin sidebar and step navigation are collapsible;
+- no permanent four-column writing layout;
+- no hidden edit mode;
+- no horizontal scrolling for standard fields;
+- unsaved work is not lost when switching steps;
+- refresh retains the correct journey and selected step.
+
+Do not alter Journey content fields unless required to restore the last known-good editor.
+
+Do not add reflection questions.
+
+Do not create a new Journey Editor if the previous one exists.
+
+====================================================
+FIX 4 — STRICT SERMON COMPANION GROUNDING
+====================================================
+
+Treat the sermon transcript as the complete and closed source.
+
+The generator may:
+
+- extract;
+- summarise;
+- shorten;
+- organise;
+- faithfully restate;
+- reinforce;
+- invite reflection on what was preached.
+
+The generator may not:
+
+- add a Scripture not mentioned or preached from;
+- add a theological explanation from model knowledge;
+- complete or improve the sermon;
+- add a related Bible verse;
+- introduce illustrations;
+- introduce examples;
+- introduce unsupported applications;
+- create arbitrary spiritual exercises;
+- prescribe repetition or numerical routines.
+
+Every companion day must store:
+
+- supporting transcript excerpt;
+- source start timestamp;
+- source end timestamp where available;
+- timestamped sermon URL;
+- grounding status.
+
+Each Scripture must store transcript evidence and timestamp information.
+
+If transcript evidence is insufficient:
+
+- omit the section;
+- generate fewer than five days if necessary;
+- never fill the gap using model knowledge.
+
+The administrator must be able to see the generated content beside its supporting transcript evidence.
+
+Do not silently rewrite existing published companions.
+
+Flag them for pastoral review.
+
+====================================================
+GLOBAL PRESCRIPTION FILTER
+====================================================
+
+Create a reusable content validation rule for every AI-generated Emmaus content type.
+
+Reject or flag instructions containing arbitrary formulas such as:
+
+- “three times”;
+- “seven times”;
+- “write this on a card”;
+- “put this in your phone”;
+- “repeat this every hour”;
+- “say this aloud a fixed number of times”;
+- “make a list of five”;
+- any invented numbered spiritual technique.
+
+The problem is not only the number three.
+
+The rule is:
+
+Do not invent mechanical, formulaic or arbitrary spiritual prescriptions.
+
+Allowed application must be:
+
+- grounded in the source content;
+- gentle;
+- meaningful;
+- practical;
+- non-superstitious;
+- free of invented counts and rituals.
+
+====================================================
+FULL REGRESSION TEST
+====================================================
+
+After implementing all repairs, test the running application rather than only compiling it.
+
+Test both:
+
+- Replit preview;
+- published deployment.
+
+DAILY RHYTHM
+
+- current day opens;
+- completion works;
+- Review works;
+- Previous Days works;
+- review never advances;
+- current-day gating remains correct;
+- Finish returns correctly.
+
+DAILY DEVOTIONALS
+
+- list opens;
+- current devotional opens;
+- Previous Days works;
+- save and publish work;
+- correct return navigation works;
+- no inappropriate daily limit exists.
+
+JOURNEYS
+
+- Journey Library opens;
+- existing journeys appear;
+- collection badges appear;
+- journey editor opens;
+- step editor is usable;
+- add/edit/save steps works;
+- collection assignment works;
+- create collection works;
+- preview works;
+- publish works;
+- refresh works;
+- no Journey Not Found errors.
+
+SERMON COMPANIONS
+
+- list opens;
+- existing companions appear;
+- current sermon selection works;
+- preview and deployment agree;
+- transcript processing works;
+- sermon slice is used;
+- Main Theme confirmation works;
+- generated content remains strictly grounded;
+- timestamped links work;
+- Save Draft works;
+- Publish works;
+- no HTTP 502 occurs.
+
+GENERAL
+
+- back navigation;
+- refresh routes;
+- save;
+- draft;
+- publish;
+- unpublish;
+- delete;
+- status updates;
+- current content queries;
+- no console errors;
+- no unhandled server errors;
+- no unexpected failed requests;
+- no content loss.
+
+====================================================
+DO NOT DECLARE SUCCESS EARLY
+====================================================
+
+Do not report “fixed” merely because:
+
+- code compiles;
+- TypeScript passes;
+- the button is visible;
+- one API request succeeds;
+- it works in preview only;
+- it works once;
+- an automated unit test passes.
+
+A regression is fixed only when the full user workflow succeeds in both preview and the published deployment.
+
+====================================================
+FINAL REQUIRED REPORT
+====================================================
+
+Before completion, provide one consolidated report containing:
+
+1. Pre-recovery checkpoint.
+2. Last known-good checkpoint.
+3. Root cause of each regression.
+4. Files restored.
+5. Files modified.
+6. Shared files modified and why.
+7. Valid later changes preserved.
+8. Preview test results.
+9. Published deployment test results.
+10. Database/content preservation confirmation.
+11. Current deployment commit.
+12. Stable post-recovery checkpoint.
+13. Exact rollback instructions.
+14. Any unresolved issue, clearly stated.
+
+Do not ask the administrator to discover the remaining problems manually.
+
+Do not queue more suggested work.
+
+Do not begin any new feature until the application is stable and the administrator confirms it.
