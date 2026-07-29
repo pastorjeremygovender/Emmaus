@@ -368,15 +368,32 @@ export async function patchServerSermon(
   return patch<AdminSermonRecord>(`/admin-sermons/${id}`, fields as Record<string, unknown>, auth);
 }
 
-export async function deleteServerSermon(id: string, auth: AuthHeaders): Promise<void> {
+export async function deleteServerSermon(
+  id: string,
+  auth: AuthHeaders,
+  opts?: { companionJourneyId?: string },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (opts?.companionJourneyId) body.companionJourneyId = opts.companionJourneyId;
+
   const res = await fetch(apiUrl(`/admin-sermons/${id}`), {
     method: "DELETE",
     credentials: "include",
-    headers: { "X-User-Id": auth.userId, "X-User-Role": auth.userRole },
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id": auth.userId,
+      "X-User-Role": auth.userRole,
+    },
+    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const b = await res.text();
-    throw new Error(b || `HTTP ${res.status}`);
+
+  const text = await res.text();
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(text); } catch { /* ignore */ }
+
+  if (!res.ok || parsed.success === false) {
+    const msg = (parsed.message ?? parsed.error ?? text) as string;
+    throw new Error(msg.startsWith("<") ? `HTTP ${res.status}` : msg || `HTTP ${res.status}`);
   }
 }
 

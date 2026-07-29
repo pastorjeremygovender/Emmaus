@@ -1445,14 +1445,25 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     setDeleting(true);
     setDeleteError('');
     try {
-      await deleteServerSermon(sermonId_, auth);
+      // Pass companionJourneyId so the server handles legacy companions
+      // that have no admin-sermon JSON record (slug-based journeys entries).
+      await deleteServerSermon(sermonId_, auth, {
+        companionJourneyId: form.companionJourneyId,
+      });
+      // Clear the "This Week's Sermon" assignment if it pointed here
+      if (
+        form.companionJourneyId &&
+        settings.currentWeeklySermonCompanionId === form.companionJourneyId
+      ) {
+        updateSettings({ ...settings, currentWeeklySermonCompanionId: undefined });
+      }
       removeSermon(sermonId_);
       onBack();
     } catch {
-      setDeleteError('Failed to delete. Please try again.');
+      setDeleteError("We couldn't delete this Sermon Companion. Nothing was removed. Please try again.");
       setDeleting(false);
     }
-  }, [auth, sermonId_, removeSermon, onBack]);
+  }, [auth, sermonId_, form.companionJourneyId, settings, updateSettings, removeSermon, onBack]);
 
   const handleRedetect = useCallback(async () => {
     if (!auth || !sermonId_) return;

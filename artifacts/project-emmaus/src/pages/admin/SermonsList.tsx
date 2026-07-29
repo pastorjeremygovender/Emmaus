@@ -46,7 +46,7 @@ function formatDate(raw: string): string {
 }
 
 export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
-  const { sermons, removeSermon, updateSermon } = useAdmin();
+  const { sermons, removeSermon, updateSermon, settings, updateSettings } = useAdmin();
   const { journeys } = useJourney();
   const { user } = useAuth();
 
@@ -120,13 +120,26 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     if (!deleteTarget || !auth) return;
     setDeleting(true); setDeleteError('');
     try {
-      await deleteServerSermon(deleteTarget.id, auth);
+      // Pass the companionJourneyId so the server can handle legacy companions
+      // that have no admin-sermon JSON record (slug-based journeys table entries).
+      await deleteServerSermon(
+        deleteTarget.id,
+        auth,
+        { companionJourneyId: deleteTarget.companionJourneyId },
+      );
       removeSermon(deleteTarget.id);
+      // Clear the "This Week's Sermon" setting if it pointed to the deleted companion
+      if (
+        deleteTarget.companionJourneyId &&
+        settings.currentWeeklySermonCompanionId === deleteTarget.companionJourneyId
+      ) {
+        updateSettings({ ...settings, currentWeeklySermonCompanionId: undefined });
+      }
       setDeleteTarget(null);
-      setSuccessMessage('Sermon deleted successfully.');
+      setSuccessMessage('Sermon Companion deleted successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch {
-      setDeleteError('Failed to delete. Please try again.');
+      setDeleteError('We couldn\'t delete this Sermon Companion. Nothing was removed. Please try again.');
     } finally {
       setDeleting(false);
     }

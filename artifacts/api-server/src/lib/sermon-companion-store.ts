@@ -133,6 +133,156 @@ export async function deleteCompanion(companionId: string): Promise<void> {
   await pool.query(`DELETE FROM sermon_companion WHERE id = $1`, [companionId]);
 }
 
+// ─── UUID helpers ─────────────────────────────────────────────────────────────
+
+function isUUID(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+// ─── Canonical delete service ─────────────────────────────────────────────────
+
+export type CompanionStorageType = "legacy" | "current" | "sermon-only";
+
+export interface DeleteSermonCompanionResult {
+  storageType: CompanionStorageType;
+  sermonId: string | null;
+  companionId: string | null;
+  legacyJourneyId: string | null;
+}
+
+/**
+ * Delete a sermon companion and all associated data.
+ *
+ * Handles two storage models:
+ *   - "legacy"  — companion is a Journey record (journeys table, slug ID, journeyType='companion')
+ *   - "current" — companion is a Sermon Companion record (sermon_companion table, UUID)
+ *
+ * The admin-sermon JSON record is deleted best-effort (may not exist for legacy sermons).
+ * PostgreSQL deletes are wrapped in a transaction; the JSON delete is outside it.
+ *
+ * Throws on unrecoverable DB errors so callers can roll back and surface a clean error.
+ */
+export async function deleteSermonCompanionContent({
+  sermonId,
+  companionJourneyId,
+}: {
+  sermonId: string | null;
+  companionJourneyId: string | null;
+}): Promise<DeleteSermonCompanionResult> {
+  // ── Legacy model: companion is a journey record (slug, not UUID) ─────────────
+  if (companionJourneyId && !isUUID(companionJourneyId)) {
+    logger.info(
+      { sermonId, legacyJourneyId: companionJourneyId },
+      "delete-sermon-companion: legacy path — deleting from journeys table",
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // step_reflections has no FK cascade on journey_id — must be removed first
+      await client.query(
+        "DELETE FROM step_reflections WHERE journey_id = $1",
+        [companionJourneyId],
+      );
+
+      // journeys DELETE cascades to journey_steps and user_journey_progress
+      const result = await client.query(
+        "DELETE FROM journeys WHERE id = $1 AND journey_type = 'companion' RETURNING id",
+        [companionJourneyId],
+      );
+
+      if (result.rowCount === 0) {
+        // Journey already gone — not a hard error; the companion was never there
+        // or was already cleaned up. Log a warning and commit the empty transaction.
+        logger.warn(
+          { legacyJourneyId: companionJourneyId },
+          "delete-sermon-companion: legacy journey not found (already absent) — treating as success",
+        );
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Delete admin-sermon JSON record — best-effort, may not exist for legacy sermons
+    if (sermonId) {
+      const { deleteAdminSermon } = await import("./admin-sermon-store.js");
+      await deleteAdminSermon(sermonId).catch(e =>
+        logger.warn({ err: e, sermonId }, "delete-sermon-companion: admin-sermon JSON delete skipped (not found)"),
+      );
+    }
+
+    return {
+      storageType: "legacy",
+      sermonId,
+      companionId: null,
+      legacyJourneyId: companionJourneyId,
+    };
+  }
+
+  // ── Current model: companion is in sermon_companion table (UUID) ──────────────
+  if (companionJourneyId && isUUID(companionJourneyId)) {
+    logger.info(
+      { sermonId, companionId: companionJourneyId },
+      "delete-sermon-companion: current path — deleting from sermon_companion table",
+    );
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Progress has no FK cascade — must be explicitly removed first
+      await client.query(
+        "DELETE FROM sermon_companion_progress WHERE companion_id = $1",
+        [companionJourneyId],
+      );
+      await client.query(
+        "DELETE FROM sermon_companion_entry WHERE companion_id = $1",
+        [companionJourneyId],
+      );
+      await client.query(
+        "DELETE FROM sermon_companion WHERE id = $1",
+        [companionJourneyId],
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    if (sermonId) {
+      const { deleteAdminSermon } = await import("./admin-sermon-store.js");
+      await deleteAdminSermon(sermonId);
+    }
+
+    return {
+      storageType: "current",
+      sermonId,
+      companionId: companionJourneyId,
+      legacyJourneyId: null,
+    };
+  }
+
+  // ── No companion — just delete the sermon JSON record ─────────────────────────
+  if (sermonId) {
+    const { deleteAdminSermon } = await import("./admin-sermon-store.js");
+    await deleteAdminSermon(sermonId);
+  }
+
+  return {
+    storageType: "sermon-only",
+    sermonId,
+    companionId: null,
+    legacyJourneyId: null,
+  };
+}
+
 export async function getCompanionBySermonId(sermonId: string): Promise<(Companion & { entries: CompanionEntry[] }) | null> {
   const res = await pool.query(
     `SELECT * FROM sermon_companion WHERE sermon_id = $1 ORDER BY created_at DESC LIMIT 1`,
