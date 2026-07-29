@@ -1,0 +1,244 @@
+PROJECT EMMAUS — RECOVER THE ACTUAL LAST WORKING DEPLOYMENT
+
+The previous rollback failed.
+
+It restored an older broken state rather than the last working application.
+
+Current published failures include:
+
+- obsolete onboarding flow has returned;
+- Today’s Steps cannot load;
+- Next Steps returns HTTP 500;
+- BSB reports that Luke 1 is unavailable;
+- the public application is unusable.
+
+Do not make forward code fixes from this state.
+
+Do not guess another checkpoint.
+Do not choose a rollback point based only on its name or date.
+Do not alter the database.
+Do not run migrations.
+Do not redesign anything.
+
+The immediate task is to locate and restore the exact previously working deployed build.
+
+====================================================
+1. USE DEPLOYMENT HISTORY AS THE PRIMARY SOURCE
+====================================================
+
+Inspect the Replit deployment history.
+
+List the most recent deployments with:
+
+- deployment ID;
+- deployment timestamp;
+- Git commit hash;
+- build status;
+- deployed URL or revision;
+- whether that exact revision is still available;
+- associated checkpoint if any.
+
+Identify the deployment from before today’s production failures where the public application visibly had:
+
+- no obsolete onboarding selection screen;
+- Today’s Steps loading correctly;
+- Daily Rhythm card visible;
+- Daily Devotional card visible;
+- Next Steps loading;
+- My Bible loading at least the translations that worked at that time;
+- bottom navigation working.
+
+Do not assume the latest earlier deployment is good.
+
+Verify candidate deployments directly by opening their revision URLs or restoring them temporarily in a non-destructive way.
+
+====================================================
+2. VERIFY CANDIDATES BEFORE ROLLBACK
+====================================================
+
+For each likely candidate, test:
+
+A. APP ENTRY
+
+- app opens to the approved current flow;
+- obsolete onboarding does not appear;
+- no “Welcome, Friend — what would you like to begin with?” screen;
+- no second unnecessary “Welcome — Let’s begin” screen.
+
+B. TODAY’S STEPS
+
+- page loads;
+- no “We couldn’t load this step” message;
+- Daily Rhythm appears;
+- Daily Devotional appears where expected.
+
+C. NEXT STEPS
+
+- page loads;
+- no HTTP 500;
+- tabs render;
+- existing content appears.
+
+D. MY BIBLE
+
+- a chapter loads;
+- translations that were working at that deployment still load;
+- no false “chapter unavailable” message.
+
+E. GENERAL
+
+- bottom navigation works;
+- refresh works;
+- no fatal console errors;
+- public pages do not require admin login.
+
+Select a rollback candidate only after these tests pass.
+
+====================================================
+3. REPORT THE EXACT RECOVERY TARGET
+====================================================
+
+Before changing the current deployment, report:
+
+1. Current broken deployment ID and commit.
+2. Previous failed rollback checkpoint and commit.
+3. Exact verified working deployment ID and commit.
+4. Tests passed on that working deployment.
+5. Whether its code still exists in Git history.
+6. Whether its deployment configuration can be restored exactly.
+7. Whether the production database has changed since that deployment.
+
+Do not proceed until the working revision has been verified.
+
+====================================================
+4. RESTORE THE VERIFIED WORKING REVISION
+====================================================
+
+Restore the code and deployment configuration from the verified deployment.
+
+Restore exactly:
+
+- application source;
+- lockfiles;
+- build configuration;
+- runtime configuration;
+- route configuration;
+- bundled Bible assets;
+- API handlers;
+- cache configuration;
+- deployment settings associated with that revision.
+
+Do not restore old database contents.
+
+Do not reset the database.
+
+Do not overwrite current content records unless there is proven schema incompatibility and a safe recovery plan is provided first.
+
+====================================================
+5. HANDLE DATABASE COMPATIBILITY
+====================================================
+
+Compare the verified working code’s expected schema with the current production database.
+
+If compatible:
+
+- leave the database untouched.
+
+If incompatible:
+
+- do not roll back blindly;
+- identify the exact incompatibility;
+- create a non-destructive compatibility patch;
+- preserve all current content and user records.
+
+Never drop, truncate, reseed or replace the production database.
+
+====================================================
+6. DEPLOY AND VERIFY THE ACTUAL PUBLISHED APP
+====================================================
+
+Deploy the verified working revision.
+
+Then test the public production URL in:
+
+- normal browser session;
+- private/incognito session.
+
+Confirm:
+
+1. approved entry flow appears;
+2. Today’s Steps loads;
+3. Daily Rhythm card appears;
+4. Daily Devotional appears;
+5. Next Steps loads without 500;
+6. My Bible opens a chapter;
+7. working translations load;
+8. navigation works;
+9. refresh works;
+10. no administrator session is required;
+11. no broad console or server errors occur.
+
+Do not use Replit preview as proof.
+
+====================================================
+7. FREEZE AFTER RECOVERY
+====================================================
+
+Once the verified working deployment is restored:
+
+STOP ALL DEVELOPMENT.
+
+Create a checkpoint named:
+
+VERIFIED-PRODUCTION-BASELINE-2026-07-29
+
+Record:
+
+- deployment ID;
+- commit hash;
+- database schema version;
+- required environment variables by name only;
+- build command;
+- run command;
+- verified user workflows.
+
+Disable or ignore Suggested Next Tasks.
+
+Do not fix the missing sermon, translations, Journey Editor or any other issue yet.
+
+The only goal is to restore a usable published application.
+
+====================================================
+8. IF NO WORKING DEPLOYMENT EXISTS
+====================================================
+
+If deployment history contains no revision where the required workflows pass:
+
+Do not make another broad repair.
+
+Report clearly:
+
+- which deployment comes closest;
+- which features work there;
+- which exact failures remain;
+- which code changes caused the loss of the last working state;
+- whether Replit checkpoint/deployment history is insufficient.
+
+Then stop and wait for administrator approval before further code changes.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Verified working deployment selected.
+2. Deployment ID.
+3. Commit hash.
+4. Evidence that it passed the required tests before restoration.
+5. Current production URL.
+6. Post-restoration production test results.
+7. Confirmation that the database was not reset.
+8. Confirmation that existing content was preserved.
+9. New verified-production-baseline checkpoint.
+10. Exact rollback instructions to this baseline.
