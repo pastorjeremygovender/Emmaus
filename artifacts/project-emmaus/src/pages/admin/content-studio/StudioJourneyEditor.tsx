@@ -708,7 +708,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [journeyErrorMsg, setJourneyErrorMsg] = useState('');
   const [confirmDeleteJourney, setConfirmDeleteJourney] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(false); // Closed by default — editor gets the full width
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const hasAutoSelectedStep = useRef(false);
