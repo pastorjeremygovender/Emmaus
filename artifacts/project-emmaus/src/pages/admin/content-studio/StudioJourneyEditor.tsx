@@ -27,7 +27,6 @@ import { getJourney as fetchJourneyById, deleteJourney as apiDeleteJourney } fro
 import { listCollections, createCollection } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
 import { Block, stepToBlocks, blocksToCanonical, createBlock } from '@/lib/blocks';
-import BlockCanvas from './BlockCanvas';
 import { ConfirmDialog, StatusBadge, ContentStudioToolbar } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -277,16 +276,6 @@ function StepSettings({ step, onChange }: { step: StepWithBlocks; onChange: (s: 
   return (
     <div className="p-5 space-y-6">
       <div>
-        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Step Title</label>
-        <input
-          type="text"
-          value={step.title}
-          onChange={e => onChange({ title: e.target.value })}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent bg-gray-50"
-          placeholder="Step title…"
-        />
-      </div>
-      <div>
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Reading Time</label>
         <div className="flex items-center gap-2">
           <input
@@ -487,6 +476,115 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
   );
 }
 
+// ─── Step field editor (center panel, step selected) ─────────────────────────
+
+function StepFieldEditor({
+  step,
+  titleRef,
+  onMetaChange,
+}: {
+  step: StepWithBlocks;
+  titleRef: React.RefObject<HTMLInputElement | null>;
+  onMetaChange: (changes: Partial<Step>) => void;
+}) {
+  const inputCls =
+    'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 ' +
+    'placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 ' +
+    'focus:border-teal-400 transition-colors bg-white';
+  const textareaCls = inputCls + ' resize-y leading-relaxed';
+
+  function FieldBlock({
+    label,
+    hint,
+    children,
+  }: {
+    label: string;
+    hint?: string;
+    children: React.ReactNode;
+  }) {
+    return (
+      <div className="space-y-1.5">
+        <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+          {label}
+        </label>
+        {children}
+        {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
+      <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest">
+        Step {step.day}
+      </div>
+
+      <FieldBlock label="Step Title">
+        <input
+          ref={titleRef}
+          type="text"
+          value={step.title}
+          onChange={e => onMetaChange({ title: e.target.value })}
+          placeholder="Enter step title"
+          className={inputCls}
+          autoComplete="off"
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Introduction" hint="Optional opening for this step.">
+        <textarea
+          value={step.mentorIntro ?? ''}
+          onChange={e => onMetaChange({ mentorIntro: e.target.value })}
+          rows={3}
+          placeholder="Begin this step with…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Scripture">
+        <input
+          type="text"
+          value={step.scripture ?? ''}
+          onChange={e => onMetaChange({ scripture: e.target.value })}
+          placeholder="e.g. John 3:16–17"
+          className={inputCls + ' font-mono text-[13px]'}
+          autoComplete="off"
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Content">
+        <textarea
+          value={step.devotional ?? ''}
+          onChange={e => onMetaChange({ devotional: e.target.value })}
+          rows={8}
+          placeholder="The main content for this step…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Prayer">
+        <textarea
+          value={step.prayerPrompt ?? ''}
+          onChange={e => onMetaChange({ prayerPrompt: e.target.value })}
+          rows={4}
+          placeholder="Lord,…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Next Step">
+        <textarea
+          value={step.actionStep ?? ''}
+          onChange={e => onMetaChange({ actionStep: e.target.value })}
+          rows={2}
+          placeholder="One practical response to this step…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+    </div>
+  );
+}
+
 // ─── AI Review Banner ─────────────────────────────────────────────────────────
 
 function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: () => void }) {
@@ -613,6 +711,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [rightOpen, setRightOpen] = useState(true);
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoSelectedStep = useRef(false);
 
   const autosaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const hasUnsaved = stepsWithBlocks.some(s => s.isDirty);
@@ -629,17 +728,27 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       if (existing) return existing;
       const savedBlocks = (step as Step & { blocks?: Array<Record<string, unknown>> | null }).blocks;
       let blocks: Block[];
+      let canonicalFromBlocks: Partial<Step> = {};
       if (savedBlocks && savedBlocks.length > 0) {
         // Backfill missing IDs — guards against AI-generated or legacy blocks stored without UUIDs
         blocks = (savedBlocks as unknown as Block[]).map(b =>
           b.id ? b : { ...b, id: crypto.randomUUID() }
         );
+        // Extract canonical fields from older block-format steps so the structured editor
+        // can display the content immediately without the admin having to re-enter it.
+        canonicalFromBlocks = blocksToCanonical(blocks);
       } else {
         blocks = stepToBlocks(step);
       }
-      return { ...step, blocks, isDirty: false };
+      return { ...step, ...canonicalFromBlocks, blocks, isDirty: false };
     });
     setStepsWithBlocks(initialised);
+
+    // Auto-select the first step on initial load so the editor is immediately visible.
+    if (!hasAutoSelectedStep.current && initialised.length > 0) {
+      hasAutoSelectedStep.current = true;
+      setSelectedView(initialised[0].day);
+    }
   }, [rawSteps.length]);
 
   useEffect(() => {
@@ -659,14 +768,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     if (!stepData) return;
     setSaveStatus(s => ({ ...s, [day]: 'saving' }));
     try {
-      const canonical = blocksToCanonical(stepData.blocks);
-      const blocks = stepData.blocks as unknown as Array<Record<string, unknown>>;
+      // Canonical fields are edited directly in StepFieldEditor.
+      // Regenerate blocks from canonical so the right-panel preview stays in sync.
+      const blocks = stepToBlocks(stepData) as unknown as Array<Record<string, unknown>>;
       await updateStep({
         ...stepData,
-        ...canonical,
-        devotional: canonical.devotional,
-        prayerPrompt: canonical.prayerPrompt,
-        actionStep: canonical.actionStep,
         blocks,
       } as Step & { blocks: typeof blocks });
       setStepsWithBlocks(ss => ss.map(s => s.day === day ? { ...s, isDirty: false } : s));
@@ -690,7 +796,13 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   }, [scheduleSave]);
 
   const handleStepMetaChange = useCallback((day: number, changes: Partial<Step>) => {
-    setStepsWithBlocks(ss => ss.map(s => s.day === day ? { ...s, ...changes, isDirty: true } as StepWithBlocks : s));
+    setStepsWithBlocks(ss => ss.map(s => {
+      if (s.day !== day) return s;
+      const updated = { ...s, ...changes, isDirty: true } as StepWithBlocks;
+      // Keep blocks in sync with canonical fields so the right-panel preview stays live.
+      updated.blocks = stepToBlocks(updated);
+      return updated;
+    }));
     scheduleSave(day);
   }, [scheduleSave]);
 
@@ -1012,19 +1124,10 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                 <span className="text-xs text-gray-400">{journey.durationDays} days</span>
               </div>
             ) : selectedStep ? (
-              <>
-                <span className="text-xs font-semibold text-gray-400 flex-shrink-0">
-                  Day {selectedStep.day}
-                </span>
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={selectedStep.title}
-                  onChange={e => handleStepMetaChange(selectedStep.day, { title: e.target.value })}
-                  className="flex-1 min-w-0 text-sm font-semibold text-gray-900 bg-transparent outline-none border-b border-transparent focus:border-teal-400 pb-0.5 transition-colors placeholder:text-gray-300"
-                  placeholder="Step title…"
-                />
-              </>
+              <span className="text-sm font-semibold text-gray-700 truncate">
+                Step {selectedStep.day}
+                {selectedStep.title ? ` — ${selectedStep.title}` : ''}
+              </span>
             ) : null}
           </div>
 
@@ -1073,13 +1176,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           </div>
         ) : selectedStep ? (
           <div className="flex-1 overflow-y-auto bg-white">
-            <div className="max-w-2xl mx-auto px-8 py-8">
-              <BlockCanvas
-                blocks={selectedStep.blocks}
-                onChange={blocks => handleBlocksChange(selectedStep.day, blocks)}
-                journeyContext={`${journey.title}${journey.description ? ' — ' + journey.description : ''}`}
-              />
-            </div>
+            <StepFieldEditor
+              step={selectedStep}
+              titleRef={titleInputRef}
+              onMetaChange={changes => handleStepMetaChange(selectedStep.day, changes)}
+            />
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-white">
