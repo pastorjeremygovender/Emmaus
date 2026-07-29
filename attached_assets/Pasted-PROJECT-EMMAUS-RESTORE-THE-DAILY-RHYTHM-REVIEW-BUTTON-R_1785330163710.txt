@@ -1,0 +1,224 @@
+PROJECT EMMAUS — RESTORE THE DAILY RHYTHM REVIEW BUTTON REGRESSION
+
+IMPORTANT
+
+The Daily Rhythm “Review” button was working yesterday.
+
+Today, the button appears on Today’s Steps but clicking it does nothing.
+
+This is a regression.
+
+Do not redesign the Daily Rhythm flow.
+Do not create a new review system.
+Do not change the completion or daily-gating rules.
+Restore the previously working behaviour.
+
+Before making any change:
+
+1. Create a Git commit or Replit checkpoint.
+2. Inspect Git history and Replit checkpoints.
+3. Identify the last version where the Review button worked.
+4. Compare that version with the current implementation.
+5. Preserve all Daily Rhythm content, completion records and user progress.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+When today’s Daily Rhythm is already complete, the primary button should display:
+
+Review
+
+Clicking Review must:
+
+1. Open today’s completed Daily Rhythm entry.
+2. Load the same day the user already completed.
+3. Open in review/replay mode.
+4. Start at the top of the content.
+5. Allow the user to read through the content again.
+6. Never mark another day complete.
+7. Never advance to the next day.
+8. Never change the user’s current completion state.
+9. Never create a duplicate completion record.
+10. Return to Today’s Steps when finished or when the correct back action is used.
+
+====================================================
+CURRENT FAILURE
+====================================================
+
+The Review button renders correctly but has no visible effect when clicked.
+
+Investigate:
+
+- whether the button has an onClick handler,
+- whether the handler is receiving the correct Daily Rhythm ID,
+- whether completed-state rendering uses a different button component,
+- whether the route was renamed or removed,
+- whether the review query parameter or state is missing,
+- whether navigation is being blocked by an overlay,
+- whether the button is disabled by CSS or pointer-event rules,
+- whether the route transition throws a console error,
+- whether the click sends a request that fails,
+- whether a recent shared navigation change removed the action.
+
+Do not guess.
+
+Use:
+
+- browser console,
+- network requests,
+- route logs,
+- current source,
+- Git history,
+- last known-good checkpoint.
+
+====================================================
+RESTORE THE EXISTING REVIEW ROUTE
+====================================================
+
+Search for the previously working review implementation.
+
+Possible existing patterns may include:
+
+- /daily-rhythm/:id?mode=review
+- /daily-rhythm/today?review=true
+- navigation state such as mode: "review"
+- a dedicated replay route
+- a previously existing ReviewToday handler
+
+Reuse the existing implementation.
+
+Do not create a duplicate review page if the working one already exists in history or current code.
+
+====================================================
+REVIEW MODE RULES
+====================================================
+
+Review mode must be read-only with regard to progression.
+
+It may allow the user to:
+
+- reread the Scripture,
+- reread the reflection,
+- reread the prayer,
+- revisit the next step,
+- use normal content navigation.
+
+It must not:
+
+- unlock tomorrow,
+- increment the day,
+- overwrite completion time,
+- reset the rhythm,
+- trigger confetti,
+- show a first-completion flow,
+- prompt for reminder setup again,
+- mark the content as newly completed.
+
+At the end of review mode, use a label such as:
+
+Finished
+
+or:
+
+Back to Today’s Steps
+
+Do not use Continue if it suggests advancing to another day.
+
+====================================================
+NAVIGATION
+====================================================
+
+Expected flow:
+
+Today’s Steps
+→ Review
+→ Today’s completed Daily Rhythm
+→ Finish review
+→ Today’s Steps
+
+Back arrow behaviour:
+
+- return to Today’s Steps,
+- do not send the user to another content section,
+- do not restart the app,
+- do not advance the day.
+
+====================================================
+TESTING
+====================================================
+
+Test in both:
+
+- Replit preview,
+- published deployment.
+
+Required test cases:
+
+1. User has not completed today:
+   - primary button opens today’s Daily Rhythm normally.
+
+2. User has completed today:
+   - primary button displays Review.
+   - clicking Review opens today’s entry.
+
+3. Review opens at the top.
+
+4. Review does not advance to the next day.
+
+5. Review does not create a second completion record.
+
+6. Review does not change tomorrow’s availability.
+
+7. Finishing review returns to Today’s Steps.
+
+8. Back arrow returns to Today’s Steps.
+
+9. Refreshing the review route still loads the correct day.
+
+10. No console errors.
+
+11. No failed navigation requests.
+
+12. No difference between preview and published deployment.
+
+====================================================
+REGRESSION CHECK
+====================================================
+
+After restoring Review, confirm that these still work:
+
+- first-time Daily Rhythm opening,
+- completing today’s Daily Rhythm,
+- Today’s Steps completion state,
+- View Previous Days,
+- opening a previous day,
+- returning from a previous day,
+- next-day gating,
+- current day auto-loading,
+- published deployment behaviour.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+This task is complete only when the Review button opens today’s completed Daily Rhythm correctly in both the preview and published app.
+
+Do not mark it complete because the button renders or because the code compiles.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Last known-good checkpoint found.
+3. Root cause of the regression.
+4. Files changed.
+5. Existing review logic restored.
+6. Preview test results.
+7. Published deployment test results.
+8. Confirmation that no completion data was changed.
+9. Confirmation that review does not advance the day.
+10. Post-fix checkpoint.
