@@ -296,6 +296,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
         <NewJourneyModal
           onClose={() => setShowNew(false)}
           onCreated={handleCreated}
+          defaultCollectionId={collectionId}
         />
       )}
 

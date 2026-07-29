@@ -59,7 +59,7 @@ type StudioView =
   | { id: 'journey-detail'; journeyId: string; journeyTitle?: string; collectionId?: string; collectionTitle?: string }
   | { id: 'journey-day-editor'; journeyId: string; journeyTitle?: string; day: number | null; collectionId?: string; collectionTitle?: string; fromStandalone?: boolean }
   // ── Journeys — Standalone ─────────────────────────────────────────────────
-  | { id: 'journeys-standalone'; openNew?: boolean }
+  | { id: 'journeys-standalone'; openNew?: boolean; collectionId?: string }
   | { id: 'journey-editor'; journeyId: string; collectionId?: string; fromStandalone?: boolean }
   // ── Legacy journey editors (preserve deep links) ──────────────────────────
   | { id: 'legacy-journey-editor'; journeyId?: string; freshlyGenerated?: boolean }
@@ -453,7 +453,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           <CollectionDetailView
             collectionId={view.collectionId}
             onBack={() => navigate({ id: 'journeys-collections' })}
-            onNewJourney={(collId) => navigate({ id: 'journeys-standalone', openNew: true })}
+            onNewJourney={(collId) => navigate({ id: 'journeys-standalone', openNew: true, collectionId: collId })}
             onOpenJourney={(journeyId, journeyTitle, collectionTitle) =>
               navigate({ id: 'journey-detail', journeyId, journeyTitle, collectionId: view.collectionId, collectionTitle })
             }
@@ -497,9 +497,13 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       case 'journeys-standalone':
         return (
           <StudioJourneyList
-            standaloneOnly
+            // When opened from a collection context, show that collection's
+            // journeys and pre-fill the collectionId in NewJourneyModal.
+            // Without a collectionId, default to standalone-only view.
+            collectionId={view.collectionId}
+            standaloneOnly={!view.collectionId}
             autoOpenNew={view.openNew}
-            onEdit={(id) => navigate({ id: 'journey-editor', journeyId: id, fromStandalone: true })}
+            onEdit={(id) => navigate({ id: 'journey-editor', journeyId: id, fromStandalone: !view.collectionId })}
             onLegacyEdit={(id) => navigate({ id: 'legacy-journey-editor', journeyId: id })}
           />
         );

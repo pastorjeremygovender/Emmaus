@@ -1,0 +1,199 @@
+STOP NEW FEATURE WORK.
+
+Multiple parts of Emmaus Content Studio that were working yesterday are now broken:
+
+1. The Journey Editor / collection-to-journey workflow was working yesterday.
+2. The Sermon Companion generator was working yesterday.
+3. Today the Journey area appears to end at collection metadata.
+4. Today the Sermon Companion generator returns HTTP 502.
+
+This indicates a broader regression caused by recent changes, not two unrelated missing features.
+
+Do not rebuild either feature from scratch.
+Do not continue implementing the queued Journeys prompt yet.
+Do not make additional architecture changes until the regression is identified.
+
+PRIMARY TASK
+
+Perform a regression audit of all code changes made since the last known working version.
+
+First inspect:
+
+- Git history
+- Replit checkpoints
+- file modification history
+- recent diffs
+- current server logs
+- current browser console errors
+- failed network requests
+
+Identify the last checkpoint or commit where BOTH of these worked:
+
+- Journey Editor
+- Sermon Companion generator
+
+Then compare that version with the current version.
+
+REQUIRED INVESTIGATION
+
+Determine whether recent work changed any shared files related to:
+
+- admin routing
+- Content Studio navigation
+- API route registration
+- server middleware
+- database client or schema
+- query helpers
+- authentication
+- draft/publish logic
+- shared form components
+- error handling
+- AI generation services
+- JSON parsing
+- collection and journey types
+
+Pay particular attention to any broad refactor or replacement that may have overwritten existing working code.
+
+DO NOT GUESS
+
+Before editing, report:
+
+1. The last known working commit/checkpoint.
+2. Every file changed after that point.
+3. Which changed files affect Journeys.
+4. Which changed files affect Sermon Companions.
+5. Which files or services are shared by both.
+6. The exact regression that caused each failure.
+
+RESTORATION STRATEGY
+
+Prefer the smallest safe repair.
+
+If a recent change accidentally overwrote working code:
+
+- restore the affected working implementation from the last good checkpoint,
+- then reapply only the intended new change carefully.
+
+Do not revert the entire application unless absolutely necessary.
+
+Do not remove valid content or database records.
+
+Do not reset the database.
+
+Do not seed replacement data.
+
+Do not create duplicate editors, duplicate routes or duplicate APIs.
+
+JOURNEY EDITOR RESTORATION
+
+Confirm where the previously working Journey Editor still exists in Git history.
+
+Restore the working navigation and flow exactly as it existed:
+
+Collection
+→ Journey
+→ Lessons/Steps
+
+Confirm:
+
+- collections open correctly,
+- journeys inside a collection are visible,
+- New Journey works,
+- existing journeys open,
+- lessons/steps can be added and edited,
+- standalone journeys still work,
+- refresh works on editor routes,
+- existing data remains intact.
+
+Do not design a new Journey Editor if the working one can be restored.
+
+SERMON COMPANION RESTORATION
+
+Confirm where the previously working generator exists in Git history.
+
+Restore the working generation flow, then preserve only the intended improvements:
+
+- sermon slice only,
+- detected title and speaker,
+- one-sentence Main Theme,
+- theme confirmation before Monday–Friday generation.
+
+Confirm that a theme-confirmation state returns a normal structured success response and not HTTP 502.
+
+REGRESSION TEST SUITE
+
+Before making further changes, test every major Content Studio section:
+
+DAILY RHYTHM
+- list opens
+- create opens
+- edit opens
+- save draft works
+- publish works
+- delete works
+- previous days remain available
+
+DAILY DEVOTIONALS
+- list opens
+- create opens
+- edit opens
+- save works
+- publish works
+
+JOURNEYS
+- Collections tab opens
+- Standalone tab opens
+- collection opens
+- Journey Editor opens
+- New Journey works
+- lesson/step editor opens
+- save and reopen works
+
+SERMON COMPANIONS
+- list opens
+- New Sermon Companion opens
+- valid YouTube URL processes
+- Main Theme confirmation appears
+- companion generates after confirmation
+- draft saves and opens
+
+MEDIA STUDIO
+- tabs and existing content still open
+
+Also test:
+
+- browser refresh on all admin routes,
+- back navigation,
+- no console errors,
+- no unhandled server errors,
+- no failed API calls,
+- no missing existing records.
+
+CHANGE-SCOPE RULE
+
+From this point forward, only modify files directly required for the current task.
+
+Before changing a shared file, explain why it must be changed and which existing features depend on it.
+
+After changing a shared file, regression-test every dependent feature.
+
+Do not silently rewrite or replace large components.
+
+Do not declare success because the page compiles.
+
+A feature is only restored when the complete workflow is tested in the running application.
+
+FINAL REPORT
+
+Before completion, provide:
+
+1. Root cause of the Journey Editor regression.
+2. Root cause of the Sermon Companion regression.
+3. Last known working checkpoint.
+4. Files restored.
+5. Files modified.
+6. Any intended recent changes that were safely reapplied.
+7. Results of the full Content Studio regression test.
+8. Confirmation that no content or records were lost.
+
+Do not begin queued feature work until this audit and restoration are complete.

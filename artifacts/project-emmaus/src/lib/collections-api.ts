@@ -68,7 +68,7 @@ export async function getCollection(id: string): Promise<Collection | null> {
   }
 }
 
-/** Fetch all journeys that belong to a collection. */
+/** Fetch all journeys that belong to a collection (id + title summary only). */
 export async function getCollectionJourneys(collectionId: string): Promise<{ id: string; title: string }[]> {
   try {
     const data = await apiFetch<{ journeys: { id: string; title: string }[] }>(
@@ -78,6 +78,36 @@ export async function getCollectionJourneys(collectionId: string): Promise<{ id:
   } catch {
     return [];
   }
+}
+
+/**
+ * Fetch full journey records for a collection.
+ * Returns the same shape as /api/collections/:id/journeys so all fields
+ * (collectionId, status, journeyType, etc.) are available for display.
+ */
+export async function listCollectionJourneys(collectionId: string): Promise<CollectionJourney[]> {
+  try {
+    const data = await apiFetch<{ journeys: CollectionJourney[] }>(
+      `/api/collections/${collectionId}/journeys`
+    );
+    return data.journeys ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Full journey record returned by /api/collections/:id/journeys */
+export interface CollectionJourney {
+  id: string;
+  title: string;
+  description?: string;
+  journeyType?: string;
+  status?: string;
+  durationDays?: number;
+  estimatedDuration?: string;
+  difficulty?: string;
+  tags?: string[];
+  collectionId?: string;
 }
 
 // ─── Write (admin only) ───────────────────────────────────────────────────────

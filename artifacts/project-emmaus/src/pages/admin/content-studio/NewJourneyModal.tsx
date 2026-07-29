@@ -21,6 +21,8 @@ import JourneyBuilderWizard from './JourneyBuilderWizard';
 interface Props {
   onClose: () => void;
   onCreated: (journeyId: string) => void;
+  /** Pre-selects the collection dropdown when opening from a collection context */
+  defaultCollectionId?: string;
 }
 
 type Mode = 'choice' | 'scratch' | 'builder';
@@ -36,16 +38,16 @@ const CONTENT_TYPES = [
 
 const TYPE_OPTIONS = ['core', 'companion', 'series', 'course'];
 
-export default function NewJourneyModal({ onClose, onCreated }: Props) {
+export default function NewJourneyModal({ onClose, onCreated, defaultCollectionId }: Props) {
   const { user } = useAuth();
   const { addJourney } = useJourney();
   const [mode, setMode] = useState<Mode>('choice');
   const [selectedType, setSelectedType] = useState<string>('daily-devotional');
   const [collections, setCollections] = useState<Collection[]>([]);
 
-  // Scratch form
+  // Scratch form — pre-fill collectionId when opened from a collection context
   const [scratchForm, setScratchForm] = useState({
-    title: '', description: '', journeyType: 'core', collectionId: '',
+    title: '', description: '', journeyType: 'core', collectionId: defaultCollectionId ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

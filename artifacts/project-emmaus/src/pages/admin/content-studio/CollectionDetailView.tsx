@@ -3,16 +3,17 @@
  *
  * Shows collection header (title, description, stats) and all journeys
  * belonging to that collection. Tapping a journey opens JourneyDetailView.
+ *
+ * Journeys are fetched directly from /api/collections/:id/journeys so the
+ * list is always accurate regardless of JourneyContext load timing.
  */
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  ArrowLeft, Plus, BookOpen, Pencil, Layers, Clock,
+  Plus, BookOpen, Pencil, Layers, Clock,
   Tag, Loader2, FolderOpen, CheckCircle2, FileText,
 } from 'lucide-react';
-import { getCollection } from '@/lib/collections-api';
-import type { Collection } from '@/lib/collections-api';
-import { useJourney } from '@/contexts/JourneyContext';
-import type { Journey } from '@/lib/journeys-api';
+import { getCollection, listCollectionJourneys } from '@/lib/collections-api';
+import type { Collection, CollectionJourney } from '@/lib/collections-api';
 import { StatusBadge, AdminBtn } from '../shared';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
@@ -50,15 +51,20 @@ export default function CollectionDetailView({
   onOpenJourney,
   onEditCollection,
 }: Props) {
-  const { journeys } = useJourney();
   const [collection, setCollection] = useState<Collection | null>(null);
+  const [journeys, setJourneys] = useState<CollectionJourney[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const c = await getCollection(collectionId);
+      // Fetch collection metadata and journeys in parallel for speed
+      const [c, jList] = await Promise.all([
+        getCollection(collectionId),
+        listCollectionJourneys(collectionId),
+      ]);
       setCollection(c);
+      setJourneys(jList.filter(j => j.journeyType !== 'daily-rhythm'));
     } finally {
       setLoading(false);
     }
@@ -66,22 +72,13 @@ export default function CollectionDetailView({
 
   useEffect(() => { load(); }, [load]);
 
-  // Filter journeys from context — no extra fetch needed
-  const collectionJourneys = useMemo(
-    () =>
-      (journeys as Journey[])
-        .filter(j => j.collectionId === collectionId && j.journeyType !== 'daily-rhythm')
-        .sort((a, b) => (a.title ?? '').localeCompare(b.title ?? '')),
-    [journeys, collectionId],
-  );
-
   const publishedCount = useMemo(
-    () => collectionJourneys.filter(j => j.status === 'Published').length,
-    [collectionJourneys],
+    () => journeys.filter(j => j.status === 'Published').length,
+    [journeys],
   );
   const draftCount = useMemo(
-    () => collectionJourneys.filter(j => j.status !== 'Published').length,
-    [collectionJourneys],
+    () => journeys.filter(j => j.status !== 'Published').length,
+    [journeys],
   );
 
   if (loading) {
@@ -156,7 +153,7 @@ export default function CollectionDetailView({
 
       {/* Journey list */}
       <div className="flex-1 overflow-y-auto bg-white">
-        {collectionJourneys.length === 0 ? (
+        {journeys.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
               <BookOpen size={22} className="text-gray-300" />
@@ -172,8 +169,8 @@ export default function CollectionDetailView({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-6 py-5 space-y-3">
-            {collectionJourneys.map(j => {
-              const typeCfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
+            {journeys.map(j => {
+              const typeCfg = TYPE_CONFIG[j.journeyType ?? 'core'] ?? TYPE_CONFIG.core;
               return (
                 <button
                   key={j.id}
@@ -203,7 +200,7 @@ export default function CollectionDetailView({
                       <p className="text-xs text-gray-400 mt-0.5 truncate max-w-lg">{j.description}</p>
                     )}
                     <div className="flex items-center gap-3 mt-1">
-                      {j.durationDays > 0 && (
+                      {(j.durationDays ?? 0) > 0 && (
                         <span className="text-xs text-gray-400 flex items-center gap-1">
                           <Clock size={10} /> {j.durationDays} day{j.durationDays !== 1 ? 's' : ''}
                         </span>
@@ -219,7 +216,7 @@ export default function CollectionDetailView({
                     </div>
                   </div>
 
-                  <StatusBadge status={j.status} />
+                  <StatusBadge status={j.status ?? 'Draft'} />
 
                   <span className="text-xs text-teal-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     Open →

@@ -365,7 +365,11 @@ export async function updateEntry(
   };
 
   for (const [k, col] of Object.entries(colMap)) {
-    if (k in patch) fields[col] = (patch as Record<string, unknown>)[k];
+    // Only include fields that are explicitly set (skip undefined — an
+    // undefined value means the client didn't send that field, and updating
+    // the column to NULL would violate the NOT NULL constraint on status).
+    const val = (patch as Record<string, unknown>)[k];
+    if (k in patch && val !== undefined) fields[col] = val;
   }
 
   if (!Object.keys(fields).length) return null;
