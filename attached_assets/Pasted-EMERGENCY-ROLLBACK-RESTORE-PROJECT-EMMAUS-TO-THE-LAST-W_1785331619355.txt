@@ -1,0 +1,195 @@
+EMERGENCY ROLLBACK — RESTORE PROJECT EMMAUS TO THE LAST WORKING VERSION
+
+STOP ALL CURRENT WORK IMMEDIATELY.
+
+The latest production-parity changes have caused a major regression.
+
+The published application now has these failures:
+
+- Today’s Steps: “We couldn’t load this step.”
+- Next Steps: “Failed to load Next Steps (500).”
+- Bible: BSB reports that chapters are unavailable.
+- Previously working public-app functionality is now broadly broken.
+
+Do not attempt another forward fix.
+
+Do not refactor.
+Do not edit additional application logic.
+Do not change the database.
+Do not run migrations.
+Do not delete content.
+Do not continue any suggested tasks.
+
+The immediate goal is to restore the last usable application version.
+
+====================================================
+1. IDENTIFY THE SAFE ROLLBACK POINT
+====================================================
+
+Inspect:
+
+- Git commits;
+- Replit checkpoints;
+- deployment history;
+- changes made during the most recent production-parity task.
+
+Identify the checkpoint or commit created immediately BEFORE the production-parity repair began.
+
+It may be named something similar to:
+
+pre-production-parity-repair
+
+If that exact checkpoint exists, use it.
+
+If it does not exist, identify the latest checkpoint where:
+
+- Today’s Steps loaded;
+- Daily Rhythm appeared;
+- Next Steps loaded;
+- Bible chapters displayed;
+- the public navigation worked.
+
+Before executing the rollback, report:
+
+1. Current commit.
+2. Target rollback commit/checkpoint.
+3. Files changed between them.
+4. Whether any database migration was executed.
+5. Whether any content records were changed.
+
+====================================================
+2. ROLLBACK APPLICATION CODE
+====================================================
+
+Restore the application code and deployment configuration to the selected last working checkpoint.
+
+Do not selectively improvise repairs during rollback.
+
+Restore all files changed by the failed production-parity task, including any changes to:
+
+- environment loading;
+- API routing;
+- database connection logic;
+- Next Steps queries;
+- Today’s Steps queries;
+- Bible translation loading;
+- cache configuration;
+- tenant resolution;
+- deployment configuration;
+- static asset handling.
+
+Preserve content records created through Emmaus Admin unless there is direct evidence that those records are corrupt.
+
+Do not reset or reseed the database.
+
+====================================================
+3. HANDLE DATABASE CHANGES SAFELY
+====================================================
+
+If the failed task made a database schema change:
+
+- identify it explicitly;
+- determine whether it is backward compatible;
+- reverse only the harmful migration if necessary;
+- preserve every content and user record;
+- do not drop tables;
+- do not clear data.
+
+If no migration occurred, do not touch the database.
+
+====================================================
+4. DEPLOY THE RESTORED VERSION
+====================================================
+
+After restoring the last working code:
+
+1. Build the application.
+2. Confirm there are no TypeScript or build errors.
+3. Deploy the restored commit.
+4. Record the exact deployed commit hash.
+
+Do not apply any additional fixes before verifying the rollback.
+
+====================================================
+5. VERIFY THE PUBLISHED APPLICATION
+====================================================
+
+Test the actual published deployment, not only Replit preview.
+
+Confirm:
+
+TODAY’S STEPS
+
+- page loads;
+- greeting loads;
+- Daily Rhythm card appears;
+- Daily Devotional card appears if published;
+- no “We couldn’t load this step” error;
+- no HTTP 500 request.
+
+NEXT STEPS
+
+- page loads;
+- Daily Devotionals tab loads;
+- Journeys tab loads;
+- Sermon Companions tab loads;
+- no “Failed to load Next Steps (500)” error.
+
+MY BIBLE
+
+- chapter opens;
+- at least the previously working translation displays;
+- BSB, ASV and KJV behave exactly as they did at the rollback checkpoint;
+- no chapter-unavailable error caused by the latest task.
+
+GENERAL
+
+- bottom navigation works;
+- refresh works;
+- no unhandled server errors;
+- no new console errors;
+- public pages do not require an administrator session.
+
+====================================================
+6. DO NOT CONTINUE BEYOND RESTORATION
+====================================================
+
+Once the application is restored:
+
+STOP.
+
+Do not attempt to fix:
+
+- This Week’s Sermon visibility;
+- production translation parity;
+- Journey Editor layout;
+- Daily Rhythm Review;
+- Sermon Companion generation.
+
+Those issues will be addressed only after the administrator confirms that the rollback restored the application.
+
+Do not bundle additional changes into this recovery.
+
+====================================================
+7. REQUIRED FINAL REPORT
+====================================================
+
+Provide:
+
+1. Rollback checkpoint used.
+2. Previous broken commit.
+3. Restored commit.
+4. Files reverted.
+5. Database changes found, if any.
+6. Published deployment URL.
+7. Published test results for:
+   - Today’s Steps;
+   - Next Steps;
+   - My Bible.
+8. Confirmation that no content records were deleted.
+9. Confirmation that no new feature work was performed.
+10. A new checkpoint named:
+
+stable-after-emergency-rollback
+
+Do not declare success until the published application is usable again.
