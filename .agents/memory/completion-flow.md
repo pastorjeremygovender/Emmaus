@@ -3,6 +3,18 @@ name: Completion flow standardisation
 description: How completion panels, return navigation, and sermon companion routing work across all member reading pages.
 ---
 
+## Entry-route resolver
+`src/lib/entry-route.ts` exports `resolveEntryRoute(journeys, progress)`. Rule:
+- `isCompletedToday(prog.lastCompletedAt)` → `/walk`
+- otherwise → `/daily-rhythm/day/${prog.currentDay}`
+- no journey or no progress → `/walk` / day 1
+
+`Welcome.tsx` imports and calls this instead of the old `getDailyRhythmUrl` (which just used `currentDay` and could route to an unpublished future day).
+
+`DailyRhythmDay.tsx` future-day guard: `!devMode && (isAhead || !step)` → render `<RedirectToWalk>` (replace) instead of showing `AheadOfRhythm`. The screen is now Dev Mode only.
+
+**Why the bug happened:** `completeStep` advances `currentDay` to `day + 1`. Old resolver returned `/daily-rhythm/day/${currentDay}` = future day. That day's step is not yet published → `!step = true` → "ahead of rhythm" on every same-day reopen.
+
 ## JourneyCompletionPanel
 Single reusable component at `src/components/JourneyCompletionPanel.tsx`. Props: `heading`, `subMessage?`, `returnLabel`, `onReturn`, `className?`. Styling: `bg-teal-50 border-teal-200 rounded-2xl` — match SermonCompanionReader's original inline panel.
 

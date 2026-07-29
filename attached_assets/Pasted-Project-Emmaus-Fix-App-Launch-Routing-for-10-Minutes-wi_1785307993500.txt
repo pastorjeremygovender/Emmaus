@@ -1,0 +1,465 @@
+Project Emmaus — Fix App Launch Routing for 10 Minutes with Jesus
+
+This is a critical member-flow bug.
+
+Current incorrect behaviour:
+
+Emmaus can open into a screen that says:
+
+“You’re ahead of the rhythm.
+Today’s 10 Minutes with Jesus will be ready soon.
+Check back later.”
+
+This must never happen during normal app launch.
+
+====================================================
+LOCKED DAILY ENTRY FLOW
+====================================================
+
+Emmaus must behave like this every day:
+
+FIRST OPEN OF THE DAY
+
+If today’s 10 Minutes with Jesus has not been completed:
+
+Open directly into today’s available 10 Minutes with Jesus entry.
+
+Do not open Today’s Steps first.
+
+Do not open a locked-future-day screen.
+
+Do not show “You’re ahead of the rhythm.”
+
+AFTER COMPLETING TODAY’S 10 MINUTES WITH JESUS
+
+Immediately navigate to:
+
+Today’s Steps
+
+Do not advance to tomorrow’s entry.
+
+Do not show a completion dead end.
+
+Do not require the member to press Back to Today’s Steps.
+
+EVERY SUBSEQUENT OPENING ON THE SAME DAY
+
+Open directly to:
+
+Today’s Steps
+
+Do not reopen 10 Minutes with Jesus automatically.
+
+Do not show the future-day lock screen.
+
+====================================================
+CORE RULE
+====================================================
+
+The app-entry decision must be based on:
+
+1. member local date;
+2. today’s available Daily Rhythm day;
+3. whether that exact day is completed;
+4. whether the user is in authorised Development Mode.
+
+It must not be based only on:
+
+- last viewed day;
+- highest completed day;
+- currentDay + 1;
+- last route;
+- stale local storage;
+- browser history;
+- the next chronological entry.
+
+====================================================
+TASK 1 — CREATE ONE CANONICAL APP-ENTRY RESOLVER
+====================================================
+
+Create or reuse one shared function such as:
+
+resolveEmmausEntryRoute({
+  memberId,
+  localDate,
+  developmentMode
+})
+
+It should return exactly one of:
+
+- today’s Daily Rhythm route;
+- Today’s Steps route;
+- onboarding route where genuinely required.
+
+Do not let multiple screens independently decide where the app opens.
+
+All launch paths must use this resolver:
+
+- fresh app open;
+- browser refresh;
+- sign-in redirect;
+- splash completion;
+- root route;
+- returning from an expired session;
+- installed PWA launch;
+- mobile browser launch.
+
+====================================================
+TASK 2 — CALCULATE TODAY’S AVAILABLE RHYTHM DAY
+====================================================
+
+Use the established Daily Rhythm calendar logic.
+
+Determine the member’s available day from:
+
+- Daily Rhythm start date;
+- member start date where applicable;
+- member local calendar date;
+- published entries;
+- Development Mode.
+
+Do not calculate today’s route as:
+
+lastCompletedDay + 1
+
+unless the calendar confirms that day is currently available.
+
+Do not route to a day beyond today’s available day.
+
+====================================================
+TASK 3 — COMPLETION CHECK
+====================================================
+
+Check whether the member has completed today’s exact Daily Rhythm entry.
+
+Example:
+
+todayAvailableDay = 5
+
+If Day 5 is incomplete:
+
+route to Day 5.
+
+If Day 5 is complete:
+
+route to Today’s Steps.
+
+Do not route to Day 6 merely because Day 5 is complete.
+
+Day 6 remains unavailable until the next eligible local calendar day.
+
+====================================================
+TASK 4 — AFTER COMPLETION
+====================================================
+
+When the member taps the completion action on today’s 10 Minutes with Jesus:
+
+1. save completion for today’s entry;
+2. wait for successful server confirmation;
+3. invalidate Daily Rhythm progress queries;
+4. navigate with replace semantics to Today’s Steps;
+5. prevent browser Back from returning to the just-completed active flow where possible.
+
+Use:
+
+Today’s Steps
+
+as the canonical destination.
+
+Do not navigate to:
+
+- next day;
+- Previous Days;
+- future-day lock screen;
+- Daily Rhythm series page;
+- generic completion screen.
+
+====================================================
+TASK 5 — SAME-DAY REOPENING
+====================================================
+
+After today’s entry is complete, every same-day app launch must open Today’s Steps.
+
+Verify this for:
+
+- closing and reopening the browser;
+- refreshing the root route;
+- signing out and back in;
+- reopening the installed app;
+- opening the normal Emmaus URL;
+- returning from another tab.
+
+Do not rely only on in-memory state.
+
+The completion state must come from persisted member progress.
+
+====================================================
+TASK 6 — FUTURE-DAY LOCK SCREEN
+====================================================
+
+Keep the “You’re ahead of the rhythm” screen only as a defensive route guard.
+
+It may appear only when a member explicitly or accidentally attempts to open a Daily Rhythm day later than today’s available day.
+
+Examples:
+
+- manually entering a future day URL;
+- stale browser bookmark;
+- invalid internal route;
+- Development Mode disabled after viewing future content.
+
+It must never be used as:
+
+- the root app route;
+- splash destination;
+- normal post-completion destination;
+- same-day reopen destination.
+
+====================================================
+TASK 7 — FUTURE-DAY GUARD DESTINATION
+====================================================
+
+When a normal member attempts to open a future Daily Rhythm day, prefer redirecting them to Today’s Steps instead of leaving them on the “ahead of the rhythm” screen.
+
+Recommended behaviour:
+
+Future-day route detected
+→ redirect to Today’s Steps
+→ optionally show a subtle message:
+
+“Today’s time with Jesus is complete. The next day will be ready tomorrow.”
+
+Do not create a full-screen dead end during normal use.
+
+The existing “View Previous Days” access should remain available from Today’s Steps.
+
+====================================================
+TASK 8 — SPLASH FLOW
+====================================================
+
+Preserve the locked splash experience:
+
+Emmaus
+
+Walk with Jesus
+
+After the splash, call the canonical app-entry resolver.
+
+Do not hard-code the splash to open Daily Rhythm unconditionally.
+
+Do not hard-code it to open Today’s Steps unconditionally.
+
+The resolver decides:
+
+- today incomplete → today’s 10 Minutes with Jesus;
+- today complete → Today’s Steps.
+
+====================================================
+TASK 9 — DEVELOPMENT MODE
+====================================================
+
+Development Mode may allow authorised testers to open future published days manually.
+
+However:
+
+- Development Mode must not alter production-member launch logic;
+- normal app launch should still use today’s relevant state unless the tester deliberately selected another day;
+- finishing a test day must not corrupt the real calendar schedule;
+- switching Development Mode off must return to the normal resolver.
+
+Do not let a Development Mode route persist as the default production launch route.
+
+====================================================
+TASK 10 — CLEAR STALE ROUTE STATE
+====================================================
+
+Inspect and remove any launch logic using stale values such as:
+
+- lastDailyRhythmRoute;
+- currentDay stored in localStorage;
+- lastViewedDay;
+- nextDay;
+- resumePath;
+- browser history state;
+- cached selected day.
+
+These values may support editor/testing navigation, but they must not override the canonical launch resolver.
+
+On completion, clear any stale stored route that points to a future Daily Rhythm day.
+
+====================================================
+TASK 11 — ROOT AND ALIAS ROUTES
+====================================================
+
+Inspect every member entry route, including likely routes such as:
+
+/
+ /walk
+ /app
+ /today
+ /daily-rhythm
+ authenticated redirect
+ splash callback
+
+Ensure they all resolve through the same entry logic.
+
+Do not allow one route to use the correct logic while another still opens the future-day screen.
+
+====================================================
+TASK 12 — LOADING STATE
+====================================================
+
+While the app-entry resolver is checking:
+
+- member session;
+- local date;
+- published Daily Rhythm entry;
+- today’s completion state;
+
+show a neutral Emmaus loading state or splash continuation.
+
+Do not briefly render the future-day screen and then redirect.
+
+Do not flash Today’s Steps before opening today’s reading.
+
+Wait until the route decision is known.
+
+====================================================
+TASK 13 — TIMEZONE
+====================================================
+
+Use the member’s local calendar date.
+
+For Pastor Jeremy’s current testing environment, this should respect South African local time.
+
+Do not use UTC midnight as the member’s day boundary.
+
+Test around:
+
+- 11:59 PM local time;
+- 12:00 AM local time;
+- timezone offset changes;
+- server and browser date differences.
+
+====================================================
+TASK 14 — FAILURE SAFETY
+====================================================
+
+If progress cannot be loaded:
+
+- do not guess the next day;
+- do not route to a future entry;
+- do not display raw errors.
+
+Use a safe fallback:
+
+Today’s Steps
+
+with a clean retry mechanism where necessary.
+
+Log the real error server-side.
+
+====================================================
+EXACT TEST SCENARIOS
+====================================================
+
+Use the current member and Daily Rhythm records.
+
+SCENARIO A — FIRST OPEN, DAY INCOMPLETE
+
+✓ Today’s available day is identified.
+
+✓ App opens directly to that day.
+
+✓ No future-day screen appears.
+
+✓ Today’s Steps does not appear first.
+
+SCENARIO B — COMPLETE TODAY’S READING
+
+✓ Completion saves once.
+
+✓ App navigates directly to Today’s Steps.
+
+✓ It does not open tomorrow’s day.
+
+✓ It does not show “You’re ahead of the rhythm.”
+
+✓ It does not require Back to Today’s Steps.
+
+SCENARIO C — REOPEN SAME DAY
+
+✓ Close and reopen Emmaus.
+
+✓ App opens Today’s Steps.
+
+✓ Refresh root route.
+
+✓ App opens Today’s Steps.
+
+✓ Sign out and back in.
+
+✓ App opens Today’s Steps.
+
+SCENARIO D — NEXT LOCAL DAY
+
+✓ Advance to the next local calendar date.
+
+✓ App opens the newly available 10 Minutes with Jesus day.
+
+✓ No full 24-hour waiting rule is used.
+
+SCENARIO E — FUTURE URL
+
+✓ Manually open a future Daily Rhythm URL.
+
+✓ Member is redirected safely to Today’s Steps.
+
+✓ Normal launch route remains unchanged.
+
+SCENARIO F — DEVELOPMENT MODE
+
+✓ Tester can deliberately open a future published day.
+
+✓ Normal-member launch behaviour remains correct.
+
+✓ Turning Development Mode off restores normal routing.
+
+====================================================
+IMPORTANT
+====================================================
+
+Do not redesign the “You’re ahead of the rhythm” screen as the solution.
+
+Do not change its wording and leave the launch bug intact.
+
+Do not merely redirect one visible route.
+
+Find every normal app-entry path and route all of them through one canonical resolver.
+
+The locked rule is:
+
+Before today’s 10 Minutes with Jesus is complete:
+Emmaus opens today’s reading.
+
+After it is complete:
+Emmaus opens Today’s Steps for the rest of that local day.
+
+Under no normal circumstance may Emmaus open into the future-day lock screen.
+
+====================================================
+COMPLETION REPORT
+====================================================
+
+At completion, report:
+
+1. the exact route that produced the screenshot;
+2. the root cause;
+3. the canonical app-entry resolver created or reused;
+4. every entry route updated;
+5. any stale local/session state removed;
+6. how local date is calculated;
+7. the files changed;
+8. the result of every test above;
+9. confirmation that the future-day screen is now defensive only;
+10. any final manual test still required.

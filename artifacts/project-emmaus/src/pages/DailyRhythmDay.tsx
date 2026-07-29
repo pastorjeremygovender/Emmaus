@@ -5,21 +5,24 @@
  *
  * Completion behaviour (spec §1):
  *   Tapping Continue immediately saves progress and returns the user to Today's Steps.
- *   A brief JourneyCompletionPanel is shown in-page and auto-navigates after 2 s so the
- *   member never has to tap a second time.
+ *   A brief JourneyCompletionPanel is shown in-page and auto-navigates (replace) after
+ *   2 s so the member never has to tap a second time and Back does not return to the
+ *   just-completed active flow.
  *
  * Modes:
  *   Live    — day === member's current day; shows Continue button; marks complete on tap,
- *             then auto-returns to Today's Steps via JourneyCompletionPanel.
+ *             then auto-returns (replace) to Today's Steps via JourneyCompletionPanel.
  *   Replay  — day <  member's current day; read-only; shows ReadingCompletionFooter only.
  *             Never writes progress.
  *
+ * Future-day guard (spec Task 7):
+ *   If a normal (non-dev-mode) member lands on a day that is ahead of their current
+ *   rhythm or whose step is not yet published, they are immediately redirected to
+ *   Today's Steps via replace semantics. The "You're ahead of the rhythm" screen is
+ *   preserved ONLY as a Development Mode diagnostic.
+ *
  * Previous Days remains accessible via the secondary link on the Walk card,
  * not from the bottom of this reading screen.
- *
- * Access enforcement (data-layer):
- *   day > currentDay  →  blocked; renders ahead-of-rhythm screen.
- *   step not Published →  blocked; renders ahead-of-rhythm screen (content not ready yet).
  *
  * Legacy redirect: /journey/15-minutes-with-jesus/day/:day is handled in App.tsx.
  */
@@ -38,10 +41,11 @@ import { BottomNav } from '@/components/BottomNav';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 
-// ─── Ahead-of-rhythm screen ───────────────────────────────────────────────────
-// Shared by two cases: (a) day > currentDay, (b) current day not yet published.
+// ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
+// Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
+// Normal members are silently redirected to /walk instead (see guard below).
 
-function AheadOfRhythm({
+function AheadOfRhythmDevOnly({
   hasPreviousDays,
   onBack,
   onViewPrevious,
@@ -106,10 +110,11 @@ export default function DailyRhythmDay() {
     setJustCompleted(false); // reset on day change
   }, [day]);
 
-  // Auto-return to Today's Steps 2 s after the completion panel appears (spec §1)
+  // Auto-return to Today's Steps 2 s after the completion panel appears (spec §1).
+  // Uses replace semantics so Back does not return to the just-completed reading.
   useEffect(() => {
     if (!justCompleted) return;
-    const timer = setTimeout(() => setLocation('/walk'), 2000);
+    const timer = setTimeout(() => setLocation('/walk', { replace: true }), 2000);
     return () => clearTimeout(timer);
   }, [justCompleted, setLocation]);
 
@@ -126,11 +131,12 @@ export default function DailyRhythmDay() {
     currentDay > 1 &&
     steps.some(s => s.status === 'Published' && s.day < currentDay);
 
-  // Resolve the step — blocked when ahead of the rhythm or not yet published
+  // Resolve the step
   const step = steps.find(s => s.day === day && s.status === 'Published');
   const isAhead = day > currentDay && !devMode;
 
-  if (!journey || !prog && day > 1) {
+  // ── Loading guard ─────────────────────────────────────────────────────────
+  if (!journey || (!prog && day > 1)) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading…</p>
@@ -138,19 +144,26 @@ export default function DailyRhythmDay() {
     );
   }
 
+  // ── Future-day guard (spec Task 6 + 7) ───────────────────────────────────
+  // Dev mode: show the diagnostic screen so admins can see the state.
+  // Normal members: redirect silently to Today's Steps — never dead-end here.
   if (isAhead || !step) {
-    return (
-      <AheadOfRhythm
-        hasPreviousDays={hasPreviousDays}
-        onBack={goBack}
-        onViewPrevious={goToPreviousDays}
-      />
-    );
+    if (devMode) {
+      return (
+        <AheadOfRhythmDevOnly
+          hasPreviousDays={hasPreviousDays}
+          onBack={goBack}
+          onViewPrevious={goToPreviousDays}
+        />
+      );
+    }
+    // Normal member — redirect immediately with replace so Back does not loop.
+    // Use a component-level effect to ensure this runs after render.
+    return <RedirectToWalk setLocation={setLocation} />;
   }
 
   // ── Reader ────────────────────────────────────────────────────────────────
   // Replay: day already completed in a prior session (read-only).
-  // Dev mode: future days (day > currentDay) are still readable without blocking.
   const isReplay = day < currentDay || alreadyCompleted;
 
   // Header back arrow: replay goes back to Previous Days; live goes back to Today's Steps.
@@ -159,8 +172,8 @@ export default function DailyRhythmDay() {
   const handleComplete = () => {
     completeStep(journeyId, day, '');
     setJustCompleted(true);
-    // Auto-navigation is handled by the useEffect above (2 s delay).
-    // The JourneyCompletionPanel below gives the user an immediate tap-to-return option.
+    // Auto-navigation is handled by the useEffect above (2 s replace).
+    // JourneyCompletionPanel gives an immediate tap-to-return option.
   };
 
   // ── Action button / footer ────────────────────────────────────────────────
@@ -169,13 +182,12 @@ export default function DailyRhythmDay() {
 
   if (justCompleted) {
     // Just completed this session — show standard panel; auto-returns in 2 s
-    const nextDay = day + 1;
     actionButton = (
       <JourneyCompletionPanel
         heading={`Day ${day} complete`}
-        subMessage={`Come back tomorrow for Day ${nextDay}.`}
+        subMessage={`Come back tomorrow for Day ${day + 1}.`}
         returnLabel="Back to Today's Steps"
-        onReturn={goBack}
+        onReturn={() => setLocation('/walk', { replace: true })}
       />
     );
   } else if (isReplay && alreadyCompleted) {
@@ -211,7 +223,7 @@ export default function DailyRhythmDay() {
       {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       <DevModeBanner />
 
-      {/* Sticky nav bar — back arrow only; identity shown in reading content below */}
+      {/* Sticky nav bar */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
@@ -222,7 +234,6 @@ export default function DailyRhythmDay() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex-1" />
-          {/* Balance spacer */}
           <div className="min-w-[44px]" />
         </div>
       </header>
@@ -242,6 +253,22 @@ export default function DailyRhythmDay() {
       />
 
       <BottomNav />
+    </div>
+  );
+}
+
+// ─── RedirectToWalk helper ────────────────────────────────────────────────────
+// A tiny component that fires a replace-navigation effect after mount.
+// Using a component rather than an inline useEffect lets React satisfy
+// the hooks-before-early-returns rule while still navigating immediately.
+
+function RedirectToWalk({ setLocation }: { setLocation: (to: string, opts?: { replace?: boolean }) => void }) {
+  useEffect(() => {
+    setLocation('/walk', { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+      <p className="text-muted-foreground text-sm">Loading…</p>
     </div>
   );
 }

@@ -21,23 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded } from '@/lib/onboarding';
-
-/**
- * Resolve the URL for today's Daily Rhythm day.
- * Uses the member's current progress to pick the right day; falls back to day 1
- * for new members and to /walk if the journey is not yet published.
- */
-function getDailyRhythmUrl(
-  journeys: import('@/lib/journeys-api').Journey[],
-  progress: Record<string, import('@/contexts/JourneyContext').Progress>
-): string {
-  const journey = journeys.find(
-    j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
-  );
-  if (!journey) return '/walk';
-  const currentDay = progress[journey.id]?.currentDay ?? 1;
-  return `/daily-rhythm/day/${currentDay}`;
-}
+import { resolveEntryRoute } from '@/lib/entry-route';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves faster
@@ -65,7 +49,7 @@ export default function Welcome() {
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation(getDailyRhythmUrl(journeys, progress));
+        setLocation(resolveEntryRoute(journeys, progress));
       }
     } else {
       setLocation('/auth');
@@ -95,7 +79,7 @@ export default function Welcome() {
       } else if (!isOnboarded()) {
         setLocation('/onboarding');
       } else {
-        setLocation(getDailyRhythmUrl(journeys, progress));
+        setLocation(resolveEntryRoute(journeys, progress));
       }
     } else {
       setLocation('/auth');
