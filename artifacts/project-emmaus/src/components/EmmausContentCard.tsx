@@ -42,9 +42,12 @@ export interface EmmausContentCardProps {
   description?: string;
   /** Small muted metadata — "5 Days", "Day 3", "7 Days · Beginner". */
   metadata?: string;
-  /** Primary action button label — use Emmaus language (Open / Continue / Review). */
-  primaryActionLabel: string;
-  onAction: () => void;
+  /**
+   * Primary action button label — use Emmaus language (Open / Continue / Review).
+   * Omit to suppress the button entirely (e.g. completed state with no next action).
+   */
+  primaryActionLabel?: string;
+  onAction?: () => void;
   /** Disable the primary button without removing it. */
   disabled?: boolean;
   /** Show a spinner inside the button while an async action fires. */
@@ -100,6 +103,10 @@ export function EmmausContentCard({
   // ── Spacing: Label→12px→Title→8px→Desc→12px→Meta→20px→Button ────────────────
   // Each element carries its own bottom margin so omitting an element doesn't
   // leave a gap. The last visible element before the button always uses mb-5.
+  // When there is no button, mb-5 is replaced with mb-0 — the card's own p-5
+  // padding provides the bottom breathing room.
+
+  const hasButton = !!(primaryActionLabel || gatedMessage);
 
   const titleMb = description
     ? 'mb-2'
@@ -107,15 +114,15 @@ export function EmmausContentCard({
       ? 'mb-3'
       : progressPercent != null
         ? 'mb-3'
-        : 'mb-5';
+        : hasButton ? 'mb-5' : 'mb-0';
 
   const descMb = metadata != null
     ? 'mb-3'
     : progressPercent != null
       ? 'mb-3'
-      : 'mb-5';
+      : hasButton ? 'mb-5' : 'mb-0';
 
-  const metaMb = progressPercent != null ? 'mb-3' : 'mb-5';
+  const metaMb = progressPercent != null ? 'mb-3' : hasButton ? 'mb-5' : 'mb-0';
 
   return (
     <div className={cardClass}>
@@ -149,12 +156,12 @@ export function EmmausContentCard({
         </div>
       )}
 
-      {/* ── 5. Primary button ──────────────────────────────────────────────── */}
+      {/* ── 5. Primary button (omitted when neither primaryActionLabel nor gatedMessage) */}
       {gatedMessage ? (
         <Button className={T.button} onClick={onGate}>
           {gatedMessage}
         </Button>
-      ) : (
+      ) : primaryActionLabel ? (
         <Button
           className={T.button}
           onClick={onAction}
@@ -164,7 +171,7 @@ export function EmmausContentCard({
             ? <Loader2 size={16} className="animate-spin" />
             : primaryActionLabel}
         </Button>
-      )}
+      ) : null}
 
       {/* ── Secondary text link (optional) ─────────────────────────────────── */}
       {secondaryAction && (

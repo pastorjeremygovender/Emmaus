@@ -145,6 +145,22 @@ export default function SermonCompanionReader() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Route protection — redirect cleanly when the requested day exceeds the
+  // final published day (e.g. user manually types /day/6 on a 5-day companion).
+  useEffect(() => {
+    if (!companion) return;
+    const publishedDays = companion.entries
+      .filter(e => e.status === 'Published')
+      .map(e => e.dayNumber);
+    if (publishedDays.length === 0) return;
+    const maxPublishedDay = Math.max(...publishedDays);
+    if (day > maxPublishedDay) {
+      setLocation(returnDest);
+    }
+  // returnDest is computed once from the initial query string — stable ref
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companion, day]);
+
   const handleFinish = async () => {
     if (!companionId || completing) return;
     setCompleting(true);

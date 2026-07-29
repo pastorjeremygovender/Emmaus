@@ -1,0 +1,218 @@
+PROJECT EMMAUS — FINAL-STATE BUTTON CLEANUP ON TODAY’S STEPS
+
+The published app is currently working.
+
+Create a checkpoint first:
+
+PRE-FINAL-STATE-BUTTON-CLEANUP
+
+Do not modify:
+
+- Bible translations
+- Active Engagement architecture
+- Journey logic
+- Sermon Companion generation
+- Daily Rhythm progression or gating
+- onboarding
+- Ask Emmaus
+- database schema
+
+Do not create a migration.
+
+This task is limited to two Today’s Steps card refinements.
+
+====================================================
+1. SERMON COMPANION — REMOVE CONTINUE AFTER FINAL DAY
+====================================================
+
+CURRENT PROBLEM
+
+The current Sermon Companion has 5 days.
+
+After Day 5 is complete, the Today’s Steps card still shows:
+
+Continue
+
+Clicking it attempts to open Day 6 and displays:
+
+Day 6 not available
+
+This is incorrect.
+
+EXPECTED BEHAVIOUR
+
+When the user has completed the final available day:
+
+- do not render the Continue button;
+- do not calculate or link to a nonexistent next day;
+- do not route to Day 6;
+- keep the secondary link:
+
+View Previous Reflections →
+
+The card may remain visible according to the existing This Week’s Sermon rule, but it must show a completed state without a primary action.
+
+Use the actual number of published companion days.
+
+Do not hard-code 5.
+
+Determine:
+
+finalDayNumber = highest available published day
+
+If:
+
+completedDayNumber >= finalDayNumber
+
+then:
+
+- hide the primary Continue button;
+- prevent next-day navigation;
+- keep View Previous Reflections.
+
+If an incomplete valid day exists, continue showing:
+
+Continue
+
+and open the correct next available day.
+
+Also protect the route directly:
+
+If a user manually requests a day beyond the final available day, redirect safely to:
+
+- the final available day,
+- the companion overview,
+- or Today’s Steps,
+
+rather than showing a broken “Day not available” state.
+
+====================================================
+2. DAILY RHYTHM — REMOVE REVIEW BUTTON
+====================================================
+
+CURRENT BEHAVIOUR
+
+After today’s Daily Rhythm is complete, the Today’s Steps card shows:
+
+Review
+
+and:
+
+View Previous Days →
+
+NEW APPROVED BEHAVIOUR
+
+Remove the Review button entirely from the completed Daily Rhythm card.
+
+After completion, display:
+
+- the completed/up-to-date message;
+- View Previous Days → only.
+
+Do not show:
+
+- Review
+- Review Latest Reading
+- Continue
+
+Do not remove the ability to access completed content through:
+
+View Previous Days →
+
+Do not change:
+
+- completion records;
+- one-per-day gating;
+- next-day availability;
+- current-day loading;
+- Previous Days;
+- Daily Rhythm editor;
+- first-time completion flow.
+
+====================================================
+3. CARD LAYOUT
+====================================================
+
+When the primary button is hidden:
+
+- remove the empty button space;
+- tighten the card vertically;
+- keep the secondary link clearly visible;
+- preserve the existing card style and spacing;
+- do not leave a blank container.
+
+For completed Sermon Companion:
+
+Status/content summary
+View Previous Reflections →
+
+For completed Daily Rhythm:
+
+Completion message
+View Previous Days →
+
+====================================================
+4. TESTING
+====================================================
+
+SERMON COMPANION
+
+1. User has not completed all days:
+   - Continue appears.
+   - It opens the correct next valid day.
+
+2. User completes the final available day:
+   - Continue disappears.
+   - View Previous Reflections remains.
+   - No Day 6 request is made.
+
+3. Companion with fewer or more than 5 days:
+   - final-state logic uses the actual published day count.
+
+4. Direct request beyond final day:
+   - no broken “Day not available” page appears.
+
+DAILY RHYTHM
+
+5. User has not completed today:
+   - normal opening action remains.
+
+6. User completes today:
+   - Review button is absent.
+   - View Previous Days remains.
+
+7. View Previous Days opens correctly.
+
+8. Completion state and next-day gating remain unchanged.
+
+REGRESSION
+
+9. Psalms Daily Devotional Continue remains unchanged.
+10. This Week’s Sermon card still appears.
+11. Today’s Steps loads on desktop and mobile.
+12. No HTTP errors.
+13. No migration created.
+14. No unrelated files changed.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+The task is complete only when:
+
+- a completed Sermon Companion never offers Continue to a nonexistent day;
+- View Previous Reflections remains available;
+- a completed Daily Rhythm card no longer shows Review;
+- View Previous Days remains available;
+- desktop and mobile published tests pass.
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Files changed.
+3. Final-day calculation used.
+4. Route protection added.
+5. Desktop production test results.
+6. Mobile production test results.
+7. Regression test results.
+8. Post-change checkpoint.

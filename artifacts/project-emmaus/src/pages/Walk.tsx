@@ -362,9 +362,10 @@ function FifteenMinutesCard({
       label="DAILY RHYTHM"
       title={journey.title}
       description={done ? descriptionLine : titleLine}
-      primaryActionLabel={cfg[state].label}
-      onAction={onContinue}
-      disabled={cfg[state].disabled}
+      // When done, suppress the primary button — only the secondary link remains.
+      primaryActionLabel={done ? undefined : cfg[state].label}
+      onAction={done ? undefined : onContinue}
+      disabled={done ? undefined : cfg[state].disabled}
       variant={done ? 'default' : 'featured'}
       headerTrailing={
         done
@@ -793,11 +794,19 @@ export default function Walk() {
               title={scCompanion.title}
               description="Five short weekday devotionals based on Sunday's sermon."
               metadata={`${scCompanion.numberOfDays} Days`}
-              primaryActionLabel="Continue"
-              onAction={() =>
-                setLocation(
-                  `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
-                )
+              // Hide Continue when all days are complete — currentDay advances
+              // beyond numberOfDays after the final day is marked complete.
+              primaryActionLabel={
+                scCompanion.isStarted && scCompanion.currentDay > scCompanion.numberOfDays
+                  ? undefined
+                  : "Continue"
+              }
+              onAction={
+                scCompanion.isStarted && scCompanion.currentDay > scCompanion.numberOfDays
+                  ? undefined
+                  : () => setLocation(
+                      `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
+                    )
               }
               headerTrailing={
                 scCompanion.isStarted
