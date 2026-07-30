@@ -213,36 +213,36 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: 'Journey Library' });
         break;
 
-      // Journeys — Collections (secondary organisational view)
+      // Journeys — Journey management (secondary organisational view)
       case 'journeys-collections':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
-        crumbs.push({ label: 'Collections' });
+        crumbs.push({ label: 'Journeys' });
         break;
       case 'collection-editor':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
-        crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'journeys-collections' }) });
-        crumbs.push({ label: view.collectionId ? 'Edit Collection' : 'New Collection' });
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: view.collectionId ? 'Edit Journey' : 'New Journey' });
         break;
       case 'collection-detail':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
-        crumbs.push({ label: 'Collections', onClick: () => navigate({ id: 'journeys-collections' }) });
-        crumbs.push({ label: view.collectionTitle ?? 'Collection' });
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: view.collectionTitle ?? 'Journey' });
         break;
       case 'journey-detail':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
         if (view.collectionId) {
           crumbs.push({
-            label: view.collectionTitle ?? 'Collection',
+            label: view.collectionTitle ?? 'Journey',
             onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
           });
         }
-        crumbs.push({ label: view.journeyTitle ?? 'Journey' });
+        crumbs.push({ label: view.journeyTitle ?? 'Walk' });
         break;
       case 'journey-day-editor':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
         if (view.collectionId) {
           crumbs.push({
-            label: view.collectionTitle ?? 'Collection',
+            label: view.collectionTitle ?? 'Journey',
             onClick: () => navigate({ id: 'collection-detail', collectionId: view.collectionId!, collectionTitle: view.collectionTitle }),
           });
         }
@@ -259,10 +259,10 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
         break;
 
-      // Journeys — Standalone (used for "new from collection" flow; 'Standalone' label removed from IA)
+      // Journeys — Standalone (used for "new from journey" flow; 'Standalone' label removed from IA)
       case 'journeys-standalone':
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
-        crumbs.push({ label: view.collectionId ? 'Collection' : 'Journey Library' });
+        crumbs.push({ label: view.collectionId ? 'Journey' : 'Journey Library' });
         break;
       case 'journey-editor':
         crumbs.push({
@@ -273,7 +273,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           ),
         });
         crumbs.push({
-          label: view.fromLibrary ? 'Journey Library' : (view.fromStandalone ? 'Journey Library' : 'Collections'),
+          label: view.fromLibrary ? 'Journey Library' : (view.fromStandalone ? 'Journey Library' : 'Journeys'),
           onClick: () => navigate(
             view.fromLibrary ? { id: 'journeys-library' } :
             view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }
@@ -335,7 +335,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     const sub = getJourneysSubTab(view);
     const tabs: { id: JourneysSubTab; label: string; Icon: React.ElementType }[] = [
       { id: 'library',     label: 'Journey Library', Icon: BookOpen   },
-      { id: 'collections', label: 'Collections',     Icon: FolderOpen },
+      { id: 'collections', label: 'Journeys',         Icon: FolderOpen },
     ];
     return (
       <div className="flex items-center gap-4 px-6 pt-2 pb-2 border-b border-gray-100 bg-gray-50">

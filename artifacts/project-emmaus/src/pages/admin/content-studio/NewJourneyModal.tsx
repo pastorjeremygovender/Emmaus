@@ -388,7 +388,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 {collections.length > 0 && (
                   <div>
                     <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                      Collection
+                      Journey
                     </label>
                     <select
                       value={form.collectionId}

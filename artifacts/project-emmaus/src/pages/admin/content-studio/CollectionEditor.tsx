@@ -98,7 +98,7 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
     const ok = await handleSave('Published');
     setSavingAs(null);
     if (ok) {
-      toast.success('Collection published successfully.');
+      toast.success('Journey published successfully.');
       onBack();
     } else {
       setErrorMsg('Failed to publish — please try again.');
@@ -145,7 +145,7 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
     <div className="flex flex-col h-full min-h-0">
       <ContentStudioToolbar
         onBack={onBack}
-        title={collectionId_ ? 'Edit Collection' : 'New Collection'}
+        title={collectionId_ ? 'Edit Journey' : 'New Journey'}
         subtitle={form.title || undefined}
         status={form.status}
         isSaving={savingAs === 'draft'}
@@ -160,8 +160,8 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Delete Collection?"
-          message="This collection will be permanently deleted. Journeys inside it will not be deleted."
+          title="Delete Journey?"
+          message="This Journey will be permanently deleted. Walks inside it will not be deleted."
           confirmLabel={deleting ? 'Deleting…' : 'Delete Permanently'}
           danger
           onConfirm={handleDelete}

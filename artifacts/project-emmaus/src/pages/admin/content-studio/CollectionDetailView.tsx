@@ -92,7 +92,7 @@ export default function CollectionDetailView({
   if (!collection) {
     return (
       <div className="flex flex-col items-center justify-center h-48 text-center px-6">
-        <p className="text-sm text-gray-500">Collection not found.</p>
+        <p className="text-sm text-gray-500">Journey not found.</p>
         <button onClick={onBack} className="mt-3 text-sm text-teal-600 hover:underline">← Back to Journeys</button>
       </div>
     );

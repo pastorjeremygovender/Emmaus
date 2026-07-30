@@ -364,7 +364,7 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
   }, []);
 
   const handleCreateCollection = async () => {
-    if (!newColTitle.trim()) { setCreateError('Collection name is required.'); return; }
+    if (!newColTitle.trim()) { setCreateError('Journey name is required.'); return; }
     setCreating(true); setCreateError('');
     try {
       const created = await createCollection(

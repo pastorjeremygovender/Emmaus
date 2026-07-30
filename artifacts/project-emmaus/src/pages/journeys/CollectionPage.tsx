@@ -7,7 +7,7 @@
  */
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useParams, useLocation } from 'wouter';
+import { useParams, useLocation, useSearch } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -167,6 +167,17 @@ function JourneyCard({
 export default function CollectionPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  // Resolve back destination from the ?source= param so that navigating here
+  // from the Journeys tab (?source=nextStepsJourneys) returns to /journeys?tab=journeys
+  // rather than /journeys/explore.
+  const backDestination = (() => {
+    try {
+      const source = new URLSearchParams(search).get('source');
+      if (source === 'nextStepsJourneys') return '/journeys?tab=journeys';
+    } catch { /* ignore */ }
+    return '/journeys/explore';
+  })();
   const { journeys, progress, startJourney } = useJourney();
   const { user } = useAuth();
   const { startSharedJourney } = useRooms();
@@ -250,9 +261,9 @@ export default function CollectionPage() {
         <Button
           variant="outline"
           className="rounded-xl h-10"
-          onClick={() => setLocation('/journeys/explore')}
+          onClick={() => setLocation(backDestination)}
         >
-          Back to Explore
+          Go Back
         </Button>
         <BottomNav />
       </div>
@@ -265,9 +276,9 @@ export default function CollectionPage() {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button
-            onClick={() => setLocation('/journeys/explore')}
+            onClick={() => setLocation(backDestination)}
             className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors shrink-0"
-            aria-label="Back to Explore Journeys"
+            aria-label="Back"
           >
             <ChevronLeft size={22} className="text-foreground" />
           </button>

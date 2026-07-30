@@ -3,9 +3,11 @@
  *
  * Tabs (exact order, spec-locked):
  *   1. Daily Devotionals
- *   2. Journeys   — discipleship pathways (collections); each opens to show its Walks
- *   3. Walks      — standalone walks not belonging to any Journey
+ *   2. Walks      — standalone walks; each card opens that Walk directly
+ *   3. Journeys   — discipleship pathways (collections); each card opens the Journey detail page
  *   4. Sermon Companions
+ *
+ * Hierarchy: Journey → Walk → Steps
  *
  * All grouping and eligibility is determined server-side via GET /api/next-steps.
  * This component renders only — no publication rules here.
@@ -520,34 +522,37 @@ function journeyItemCards(
   ));
 }
 
-// Journeys tab — shows discipleship pathway collections only.
-// Each collection heading groups its walks below it.
+// Journeys tab — one card per Journey (collection).
+// Selecting a card opens the Journey detail page (/journeys/collections/:id).
+// Individual Walk cards are shown there, not here.
 function JourneysPanel({
-  collections, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
-  getProgressDay, onViewPreviousSteps,
+  collections, onOpenJourney,
 }: {
   collections: JourneyCollectionGroup[];
-  onAction: (item: NextStepsItem) => void;
-  onPause: (id: string) => void;
-  onDetails: (id: string) => void;
-  isGated: (item: NextStepsItem) => boolean;
-  onGate: () => void;
-  getEnrollmentState: (id: string) => string | null;
-  getProgressDay: (id: string) => number;
-  onViewPreviousSteps: (id: string) => void;
+  onOpenJourney: (collectionId: string) => void;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
-  const cardProps = { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
+
   return (
-    <div className="space-y-8 pt-6">
-      {collections.map(col => (
-        <section key={col.id}>
-          <CollectionHeading title={col.title} description={col.description} />
-          <div className="space-y-3">
-            {journeyItemCards(col.journeys, cardProps)}
-          </div>
-        </section>
-      ))}
+    <div className="space-y-3 pt-6">
+      {collections.map(col => {
+        const walkCount = col.journeys.length;
+        const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
+        const allDone = walkCount > 0 && col.journeys.every(j => j.memberProgressState === 'completed');
+        const actionLabel = allDone ? 'Review' : hasInProgress ? 'Continue' : 'Open';
+
+        return (
+          <EmmausContentCard
+            key={col.id}
+            label="JOURNEY"
+            title={col.title}
+            description={col.description}
+            metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
+            primaryActionLabel={actionLabel}
+            onAction={() => onOpenJourney(col.id)}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -641,8 +646,8 @@ function SermonCompanionsPanel({
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'devotionals', label: 'Daily Devotionals' },
-  { id: 'journeys',    label: 'Journeys'          },
   { id: 'walks',       label: 'Walks'             },
+  { id: 'journeys',    label: 'Journeys'          },
   { id: 'sermons',     label: 'Sermon Companions' },
 ];
 
@@ -894,14 +899,7 @@ export default function Journeys() {
             {activeTab === 'journeys' && (
               <JourneysPanel
                 collections={data.journeyCollections}
-                onAction={handleJourneyAction}
-                onPause={(id) => setPauseTargetId(id)}
-                onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsJourneys`)}
-                isGated={isItemGated}
-                onGate={() => setLocation('/walk')}
-                getEnrollmentState={(id) => getState(id)}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsJourneys`)}
+                onOpenJourney={(id) => setLocation(`/journeys/collections/${id}?source=nextStepsJourneys`)}
               />
             )}
 
