@@ -281,11 +281,20 @@ The block is stripped before showing the response to the user — it is purely s
 
 /**
  * Builds the full system prompt for an LLM call, injecting dynamic context.
+ *
+ * @param contextBlock - The assembled runtime context (entry point, Bible/journey/sermon info, etc.)
+ * @param userName     - The member's preferred first name, if set. When provided, Emmaus is
+ *                       instructed to use it naturally within the conversation.
  */
-export function buildSystemPrompt(contextBlock: string): string {
+export function buildSystemPrompt(contextBlock: string, userName?: string): string {
   const si = EMMAUS_SYSTEM_INSTRUCTIONS;
-  return `${si.identity}
 
+  const nameGuidance = userName
+    ? `\nMEMBER'S NAME:\nThe member's name is ${userName}. Use it naturally and warmly within your response — not to open with it, but to weave it in where it feels genuine and personal. Do not repeat it excessively.\n`
+    : "";
+
+  return `${si.identity}
+${nameGuidance}
 ${si.pastoralStructure}
 
 ${si.toneRules}

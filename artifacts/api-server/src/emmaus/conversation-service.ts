@@ -331,7 +331,7 @@ export async function handleConversation(
       ` automatically — do NOT generate a "listen" nextStep or a sermon recommendation in metadata.`;
   }
 
-  const systemPrompt = buildSystemPrompt(contextBlock);
+  const systemPrompt = buildSystemPrompt(contextBlock, contextInput.userName?.trim() || undefined);
 
   const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
 
