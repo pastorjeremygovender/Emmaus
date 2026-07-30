@@ -412,6 +412,17 @@ export async function updateJourney(
       if (existing && !existing.publishedAt) {
         updateFields.publishedAt = now;
       }
+      // Auto-publish all Draft steps when the journey is published.
+      // Step-level Draft/Published is an admin authoring state; when a journey goes live
+      // all its steps must be live too. Without this, admins who publish the journey
+      // without individually publishing each step get a walk members can never enter.
+      await db
+        .update(journeyStepsTable)
+        .set({ status: "Published", updatedAt: now })
+        .where(and(
+          eq(journeyStepsTable.journeyId, id),
+          eq(journeyStepsTable.status, "Draft"),
+        ));
     }
   }
   if (data.coverImageUrl !== undefined)    updateFields.coverImageUrl    = data.coverImageUrl;

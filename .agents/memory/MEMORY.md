@@ -23,3 +23,4 @@
 - [Auth name persistence](auth-name-persistence.md) — user_profiles DB table (email key) is permanent source of truth; loadingProfile gates Welcome+Onboarding; signIn previously wiped name with DEMO_USER template — now preserves it.
 - [Startup migrations policy](startup-migrations-policy.md) — only schema DDL and idempotent cleanup DELETEs allowed; no INSERT/UPDATE of content rows; two overrides removed (status restore + title rename for daily-rhythm journey).
 - [Enrollment default-to-active bug class](enrollment-default-active.md) — getState() defaults to 'active' for unstarted journeys; always gate resume navigation on startedIds.has() first.
+- [Step publish gap](step-publish-gap.md) — Published journey + Draft steps = empty walk + route-guard bounce; fixed by client filter + server auto-publish on journey publish.

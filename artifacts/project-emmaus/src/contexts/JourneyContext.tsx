@@ -165,9 +165,15 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         }
         if (cancelled) return;
         // Admins and super-admins see all steps (Draft + Published).
-        // Members only receive Published steps — Draft steps must never appear to members.
+        // Members see all steps whose parent Journey is Published — step-level Draft/Published
+        // is an admin authoring state, not a member access gate. If the journey is live,
+        // all of its steps are live. Filtering by step.status alone leaves members with an
+        // empty walk whenever the admin publishes the journey but forgets to publish the steps.
         const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
-        setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
+        const publishedJourneyIds = new Set(jList.filter(j => j.status === 'Published').map(j => j.id));
+        setSteps(isAdmin ? allSteps : allSteps.filter(s =>
+          s.status === 'Published' || publishedJourneyIds.has(s.journeyId)
+        ));
 
         // Fetch progress for logged-in users
         if (user?.id) {
