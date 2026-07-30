@@ -17,6 +17,7 @@ import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import { getCollection, getCollectionJourneys } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
+import { checkJourneysHaveIntro } from '@/lib/journeys-api';
 import { ChevronLeft, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
 
@@ -187,6 +188,7 @@ export default function CollectionPage() {
   const [journeyIds, setJourneyIds]           = useState<string[]>([]);
   const [loading, setLoading]                 = useState(true);
   const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
+  const [journeysWithIntro, setJourneysWithIntro] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -197,7 +199,13 @@ export default function CollectionPage() {
     ])
       .then(([col, items]) => {
         setCollection(col);
-        setJourneyIds(items.map(i => i.id));
+        const ids = items.map(i => i.id);
+        setJourneyIds(ids);
+        // Pre-fetch which journeys have a Walk Introduction (day=0) so
+        // handleStartAlone / handleStartWithRoom can route to the right step.
+        checkJourneysHaveIntro(ids)
+          .then(introSet => setJourneysWithIntro(introSet))
+          .catch(() => { /* non-fatal: defaults to day/1 */ });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -215,12 +223,19 @@ export default function CollectionPage() {
     [publishedJourneys, journeyIds]
   );
 
+  /** Returns day/0 for walks that have a Walk Introduction, otherwise day/1. */
+  const startDayFor = useCallback(
+    (journeyId: string) => (journeysWithIntro.has(journeyId) ? 0 : 1),
+    [journeysWithIntro],
+  );
+
   const handleStart = useCallback((journeyId: string) => {
     const j = journeys.find(x => x.id === journeyId);
     if (!j) return;
     const state = getState(journeyId);
     if (state === 'active' || state === 'paused') {
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
+      // Resume at the actual next incomplete step (currentDay from progress).
+      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? startDayFor(journeyId)}`);
       return;
     }
     if ((state as string) === 'completed') {
@@ -232,25 +247,27 @@ export default function CollectionPage() {
       return;
     }
     setPendingJourneyId(journeyId);
-  }, [journeys, getState, progress, canActivateMore, startedIds, setLocation]);
+  }, [journeys, getState, progress, canActivateMore, startedIds, startDayFor, setLocation]);
 
   function handleStartAlone() {
     if (!pendingJourneyId) return;
     const id = pendingJourneyId;
+    const day = startDayFor(id);
     try { startJourney(id); } catch (err) { console.error('[Emmaus] startJourney failed:', err); }
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/1`);
+    setLocation(`/journey/${id}/day/${day}`);
   }
 
   function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
     const id = pendingJourneyId;
+    const day = startDayFor(id);
     try {
       startJourney(id);
       startSharedJourney(roomId, id, user.id);
     } catch (err) { console.error('[Emmaus] startSharedJourney failed:', err); }
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/1`);
+    setLocation(`/journey/${id}/day/${day}`);
   }
 
   const pendingJourney = journeys.find(j => j.id === pendingJourneyId) ?? null;

@@ -456,6 +456,22 @@ export async function aiBlockAction(
   return res.content;
 }
 
+// ─── Intro-step check ─────────────────────────────────────────────────────────
+
+/**
+ * Returns the subset of the supplied journey IDs that have a Walk Introduction
+ * step (day = 0). Used by CollectionPage to route not-started walks to day/0
+ * instead of always starting at day/1.
+ */
+export async function checkJourneysHaveIntro(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const params = new URLSearchParams({ ids: ids.join(',') });
+  const data = await apiFetch<{ journeyIdsWithIntro: string[] }>(
+    `/api/journeys/check-intro?${params.toString()}`
+  );
+  return new Set(data.journeyIdsWithIntro);
+}
+
 // ─── Progress endpoints ───────────────────────────────────────────────────────
 
 export async function getAllProgress(userId: string): Promise<Record<string, Progress>> {

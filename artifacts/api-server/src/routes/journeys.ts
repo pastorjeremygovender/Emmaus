@@ -82,6 +82,26 @@ router.post("/journeys/progress/import", async (req: Request, res: Response) => 
   res.json({ ok: true });
 });
 
+// ─── Intro-step check (public) ────────────────────────────────────────────────
+
+/**
+ * GET /journeys/check-intro?ids=id1,id2,id3
+ *
+ * Returns the subset of the supplied journey IDs that have a Walk Introduction
+ * step (day = 0). Used by the CollectionPage to route not-started walks to
+ * day/0 instead of hard-coding day/1.
+ */
+router.get("/journeys/check-intro", async (req: Request, res: Response) => {
+  const raw = String(req.query.ids ?? "").trim();
+  const ids = raw ? raw.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (ids.length === 0) {
+    res.json({ journeyIdsWithIntro: [] });
+    return;
+  }
+  const introSet = await store.getJourneyIdsWithIntroStep(ids);
+  res.json({ journeyIdsWithIntro: Array.from(introSet) });
+});
+
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 router.get("/journeys/search", async (req: Request, res: Response) => {
