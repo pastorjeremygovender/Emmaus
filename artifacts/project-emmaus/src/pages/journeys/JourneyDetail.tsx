@@ -274,15 +274,29 @@ export default function JourneyDetail() {
             <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
               {steps.map(s => {
                 const done = prog?.completedDays.includes(s.day);
-                return (
-                  <div key={s.day} className="flex items-start gap-3 px-4 py-3.5 bg-card">
+                const inner = (
+                  <>
                     <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done ? 'text-primary' : 'text-muted-foreground'}`}>
                       {s.day}
                     </span>
                     <span className={`text-[14px] leading-snug flex-1 ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
                       {s.title || `Step ${s.day}`}
                     </span>
-                    {done && <span className="ml-auto text-primary text-[11px] font-medium shrink-0">Review</span>}
+                    {done && <span className="ml-auto text-primary text-[11px] font-medium shrink-0">Review →</span>}
+                  </>
+                );
+                return done ? (
+                  <button
+                    key={s.day}
+                    className="w-full flex items-start gap-3 px-4 py-3.5 bg-card hover:bg-muted/40 active:bg-muted/60 transition-colors text-left"
+                    onClick={() => setLocation(`/journey/${journey.id}/day/${s.day}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`)}
+                    aria-label={`Review step ${s.day}: ${s.title || `Step ${s.day}`}`}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <div key={s.day} className="flex items-start gap-3 px-4 py-3.5 bg-card">
+                    {inner}
                   </div>
                 );
               })}
