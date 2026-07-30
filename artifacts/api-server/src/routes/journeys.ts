@@ -665,4 +665,25 @@ router.get("/journeys/:id/progress/reflections", async (req: Request, res: Respo
   res.json({ reflections: filtered });
 });
 
+// ─── One-time data repair: publish steps that belong to Published journeys ─────
+//
+// Root cause: createStep always defaulted to status="Draft" regardless of parent
+// journey status. Steps added after a journey was published stayed Draft and were
+// invisible to members. This endpoint is idempotent — safe to call multiple times.
+//
+// Scope of changes:
+//   1. Every Draft step whose parent journey is Published → status = "Published".
+//   2. Any journey named "created-in-god-s-image" (accidental placeholder with one
+//      "Untitled Step") → status = "Draft" so it no longer shadows the real walk.
+//
+// Auth: superAdmin only.
+
+router.post("/journeys/repair-step-statuses", async (req: Request, res: Response) => {
+  const callerId = requireSuperAdmin(req, res);
+  if (!callerId) return;
+
+  const report = await store.repairStepStatuses();
+  res.json({ ok: true, ...report });
+});
+
 export default router;

@@ -9,6 +9,7 @@ import { db, pool } from "@workspace/db";
 import { journeysTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
+import { repairStepStatuses } from "./journey-store.js";
 export async function runStartupMigrations(): Promise<void> {
   // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
   // Three tables for AI-generated sermon companions. sermon_id is text (not FK)
@@ -234,6 +235,32 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: seeded scaffold data removed (idempotent)");
   } catch (err) {
     logger.warn({ err }, "Startup migration: scaffold cleanup failed (non-fatal)");
+  }
+
+  // ── Repair journey step statuses (2026-07) ────────────────────────────────────
+  // Root cause: createStep always defaulted to status="Draft" regardless of
+  // parent journey status. Steps added to a Published journey after it was
+  // published stayed Draft and were invisible to members.
+  //
+  // Fix: for every Draft step whose parent journey is Published, set status to
+  // Published. Also retires the "created-in-god-s-image" placeholder journey
+  // (one Untitled Step) to Draft so it no longer shadows the real walk.
+  //
+  // Idempotent: if all steps are already Published, the UPDATE matches 0 rows.
+  // The createStep fix (status inherited from parent) means this will be a no-op
+  // on every boot after the first successful run.
+  try {
+    const report = await repairStepStatuses();
+    if (report.stepsPublished > 0 || report.placeholderJourneyRetired) {
+      logger.info(
+        { stepsPublished: report.stepsPublished, placeholderJourneyRetired: report.placeholderJourneyRetired },
+        "Startup migration: journey step statuses repaired"
+      );
+    } else {
+      logger.info("Startup migration: journey step statuses already correct (no-op)");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: journey step status repair failed (non-fatal)");
   }
 
 }

@@ -9,7 +9,7 @@
  * legacy `content` JSONB column so migrated data continues to work.
  */
 
-import { eq, and, asc, or, ilike, sql } from "drizzle-orm";
+import { eq, and, asc, or, ilike, sql, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   journeysTable,
@@ -595,11 +595,16 @@ export async function createStep(journeyId: string, data: Partial<FrontendStep> 
   const now = new Date();
   const cols = buildStepColumns(data);
 
+  // Inherit the parent journey's published state so steps added to a
+  // live journey are immediately visible without a separate publish action.
+  const parent = await getJourney(journeyId);
+  const stepStatus = parent?.status === "Published" ? "Published" : "Draft";
+
   const rows = await db.insert(journeyStepsTable).values({
     journeyId,
     day: data.day,
     title: (data.title ?? "") as string,
-    status: "Draft",
+    status: stepStatus,
     content: {},  // legacy JSONB left empty; real data is in columns
     createdAt: now,
     updatedAt: now,
@@ -657,7 +662,11 @@ export async function deleteStep(journeyId: string, day: number): Promise<boolea
 
 async function refreshJourneyDuration(journeyId: string, now: Date): Promise<void> {
   const allSteps = await listSteps(journeyId);
-  const maxDay = allSteps.reduce((m, s) => Math.max(m, s.day), 0);
+  // Only Published steps count toward the instructional lesson total.
+  // Draft placeholders (e.g. pseudo-steps added but not yet content-ready)
+  // must not inflate durationDays and break the final-step / progress logic.
+  const publishedSteps = allSteps.filter(s => s.status === "Published");
+  const maxDay = publishedSteps.reduce((m, s) => Math.max(m, s.day), 0);
   await db
     .update(journeysTable)
     .set({ durationDays: maxDay, updatedAt: now })
@@ -935,4 +944,69 @@ export async function upsertProgressFromLocal(
       updatedAt: now,
     });
   }
+}
+
+// ─── One-time data repair ──────────────────────────────────────────────────────
+
+/**
+ * Repairs step statuses that were silently created as Draft while their parent
+ * journey was already Published — a bug in the original createStep implementation.
+ *
+ * Actions (all idempotent):
+ *   1. Find every Published journey.
+ *   2. Set all Draft steps of those journeys to Published.
+ *   3. Set the "created-in-god-s-image" placeholder journey to Draft so it no
+ *      longer shadows the real walk in the same collection.
+ *
+ * Returns a report suitable for logging / API response.
+ */
+export async function repairStepStatuses(): Promise<{
+  publishedJourneyIds: string[];
+  stepsPublished: number;
+  placeholderJourneyRetired: boolean;
+}> {
+  const now = new Date();
+
+  // 1. Collect all Published journey IDs.
+  const publishedJourneys = await listPublishedJourneys();
+  const publishedIds = publishedJourneys.map(j => j.id);
+
+  let stepsPublished = 0;
+
+  if (publishedIds.length > 0) {
+    // 2. Bulk-publish every Draft step whose parent is a Published journey.
+    const result = await db
+      .update(journeyStepsTable)
+      .set({ status: "Published", updatedAt: now })
+      .where(
+        and(
+          eq(journeyStepsTable.status, "Draft"),
+          inArray(journeyStepsTable.journeyId, publishedIds),
+        ),
+      )
+      .returning({ day: journeyStepsTable.day });
+    stepsPublished = result.length;
+
+    // 3. Refresh durationDays for every affected journey so the lesson count
+    //    reflects the newly-published steps.
+    for (const id of publishedIds) {
+      await refreshJourneyDuration(id, now);
+    }
+  }
+
+  // 4. Retire the accidental "created-in-god-s-image" placeholder journey.
+  //    It has one "Untitled Step" and was shadowing "what-went-wrong" in the
+  //    Coming to Jesus collection. Setting it to Draft removes it from the
+  //    published catalogue without deleting any data.
+  const placeholder = await getJourney("created-in-god-s-image");
+  let placeholderJourneyRetired = false;
+  if (placeholder && placeholder.status === "Published") {
+    await db
+      .update(journeysTable)
+      .set({ status: "Draft", updatedAt: now })
+      .where(eq(journeysTable.id, "created-in-god-s-image"));
+    placeholderJourneyRetired = true;
+  }
+
+  return { publishedJourneyIds: publishedIds, stepsPublished, placeholderJourneyRetired };
 }

@@ -25,3 +25,4 @@
 - [Enrollment default-to-active bug class](enrollment-default-active.md) — getState() defaults to 'active' for unstarted journeys; always gate resume navigation on startedIds.has() first.
 - [Step publish gap](step-publish-gap.md) — Published journey + Draft steps = empty walk + route-guard bounce; fixed by client filter + server auto-publish on journey publish.
 - [Walk card & completion flow](walk-card-completion-flow.md) — card is one clickable button → JourneyDetail; backSource thread preserves chain; completion always "Back to Walk".
+- [Journey step status inheritance](journey-step-status.md) — createStep always inherits parent journey status; refreshJourneyDuration counts Published steps only; startup migration repairs legacy Draft-steps-on-Published-journey data idempotently.

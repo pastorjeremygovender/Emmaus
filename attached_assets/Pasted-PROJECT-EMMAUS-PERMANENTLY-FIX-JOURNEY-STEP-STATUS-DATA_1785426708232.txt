@@ -1,0 +1,558 @@
+PROJECT EMMAUS — PERMANENTLY FIX JOURNEY STEP STATUS, DATA REPAIR, PROGRESS, CONTINUE, PREVIOUS STEPS AND COMPLETION FLOW
+
+This is one complete repair task.
+
+Do not redesign the Journey interface.
+Do not create new Journey screens.
+Do not change Rooms.
+Do not change Bible.
+Do not change Daily Rhythm.
+Do not change Daily Devotionals.
+Do not change Sermon Companions.
+Do not change Today’s Steps.
+Do not change the Active Engagement architecture.
+Do not work on Suggested Next Tasks.
+
+The goal is to make the existing Journey engine work correctly with all authored steps and then verify the complete published workflow.
+
+Create a checkpoint before any change:
+
+PRE-PERMANENT-JOURNEY-DATA-REPAIR
+
+====================================================
+CONFIRMED ROOT CAUSE
+====================================================
+
+The Journey parent was Published, but steps added afterward were silently created as Draft.
+
+The public app only loads Published Journey steps.
+
+As a result:
+
+- five authored steps appeared as if only one existed;
+- Continue disappeared or resolved incorrectly;
+- View Previous Steps reported that no previous steps existed;
+- progress totals were wrong;
+- the app surfaced the wrong or incomplete Journey data.
+
+Fix both:
+
+1. Existing affected Journey data.
+2. All future step creation and import behaviour.
+
+====================================================
+1. INSPECT AND REPORT THE EXACT CURRENT DATA
+====================================================
+
+Before modifying data, inspect the production database and report:
+
+For every Journey titled or related to:
+
+- Coming to Jesus
+- What went wrong
+- Created in God’s Image
+
+show:
+
+- parent Journey ID;
+- parent title;
+- collection ID;
+- parent status;
+- parent published state;
+- every attached step ID;
+- step title;
+- sequence/order number;
+- step status;
+- created timestamp;
+- updated timestamp.
+
+Identify duplicate or incorrect Journey records, but do not delete anything automatically.
+
+For the intended live Journey, confirm exactly how many authored content steps exist.
+
+The expected content Journey currently has five substantive lessons.
+
+Do not count a completion screen such as “Journey Complete” as a normal lesson unless the current data model deliberately treats it as a completion record.
+
+====================================================
+2. REPAIR EXISTING STEP STATUSES
+====================================================
+
+Run a narrowly scoped one-time production data repair.
+
+For every step where:
+
+- the parent Journey is Published;
+- the step belongs to that Published Journey;
+- the step is currently Draft only because it inherited the wrong default status;
+
+update the step status to Published.
+
+For the Coming to Jesus / What went wrong Journey, ensure all five authored lesson records are Published and returned in the correct sequence.
+
+Do not:
+
+- change the written content;
+- rename lessons;
+- reorder valid lessons;
+- delete records;
+- reset progress;
+- reseed the database;
+- publish steps belonging to a Draft parent Journey;
+- alter unrelated content types.
+
+Before executing the repair, show:
+
+- number of affected records;
+- Journey IDs affected;
+- proposed old and new statuses.
+
+After repair, confirm the exact five published lesson titles and their sequence.
+
+====================================================
+3. PERMANENTLY FIX STEP CREATION
+====================================================
+
+Find the single canonical function used to create Journey steps, including:
+
+- manual Add Step;
+- Journey import;
+- Journey generation;
+- duplication or cloning, if supported.
+
+When creating a new step, inherit the parent Journey’s status.
+
+Required rule:
+
+If parent.status is Published:
+    new step status = Published
+
+Otherwise:
+    new step status = Draft
+
+Use the project’s actual status enum and naming convention.
+
+Conceptually:
+
+const parent = await getJourney(journeyId);
+
+const stepStatus =
+  parent?.status === "Published"
+    ? "Published"
+    : "Draft";
+
+createStep({
+  ...
+  status: stepStatus
+});
+
+Do not add a client-side visual workaround.
+
+The correct status must be stored by the server/data layer when the step is created.
+
+Do not maintain separate creation rules for manual creation and import. All paths must use the same canonical creation function or shared status resolver.
+
+====================================================
+4. FIX JOURNEY IMPORT ATOMICALLY
+====================================================
+
+When importing a multi-step Journey:
+
+- create every supplied lesson record;
+- preserve the supplied order;
+- preserve every supplied title and content section;
+- assign the correct parent Journey ID;
+- inherit the parent status consistently;
+- return the full created lesson list;
+- report partial failures;
+- do not silently succeed after creating only the first step.
+
+The import must be atomic where practical:
+
+- either all valid lessons are created;
+- or the operation fails clearly and rolls back incomplete creation.
+
+If atomic transactions are not currently available, implement explicit validation and cleanup so a failed import does not leave a misleading one-step Journey.
+
+After import, verify the number of stored steps matches the number supplied.
+
+====================================================
+5. USE ONE CANONICAL PUBLISHED-STEP QUERY
+====================================================
+
+Find every query or API used by:
+
+- Journey Continue;
+- Journey card state;
+- Journey lesson reader;
+- View Previous Steps;
+- progress calculation;
+- completion calculation;
+- Today’s Steps Journey continuation;
+- Next Steps Journey continuation.
+
+All must use one canonical ordered published-step resolver.
+
+The resolver must:
+
+- query steps for the correct Journey ID;
+- include all Published steps;
+- exclude Draft, archived and deleted steps;
+- order by the canonical sequence field;
+- return the full list;
+- never apply an accidental limit of one;
+- never substitute a similarly titled Journey;
+- never mix records from duplicate Journey IDs.
+
+Suggested result:
+
+{
+  journeyId,
+  publishedSteps,
+  totalPublishedSteps,
+  completedStepIds,
+  nextIncompleteStep,
+  isComplete
+}
+
+Do not duplicate different progress rules across screens.
+
+====================================================
+6. CONTINUE RULE
+====================================================
+
+On the Coming to Jesus Journey card in Next Steps:
+
+If no progress exists:
+- Continue opens the first published lesson.
+
+If progress exists:
+- Continue opens the first unfinished published lesson.
+
+If all five lessons are complete:
+- hide Continue;
+- retain View Previous Steps.
+
+Continue must never:
+
+- open a Draft step;
+- open a nonexistent step;
+- return to the previous page;
+- open a different Journey;
+- show “not available”;
+- route to an Untitled Step belonging to another record.
+
+Use the actual ordered published-step list.
+
+====================================================
+7. LESSON READING AND FINISH FLOW
+====================================================
+
+Keep the standardized Emmaus sequential-content flow:
+
+Journey card
+→ Continue
+→ current lesson
+→ Finished
+→ completion card
+
+At the end of a Journey lesson, use:
+
+Finished
+
+When Finished is tapped:
+
+- create or update one completion record for that lesson;
+- do not create duplicates;
+- update Active Engagement progress;
+- show the standard completion card.
+
+If another valid published lesson exists, display:
+
+Lesson complete.
+
+Continue when you’re ready.
+
+Continue to Next Lesson
+
+Back to Next Steps
+
+View Previous Steps →
+
+Continue to Next Lesson must open the next unfinished published lesson.
+
+If the completed lesson is the final published lesson, display:
+
+Journey complete.
+
+Do not show Continue to Next Lesson.
+
+Keep:
+
+Back to Next Steps
+
+View Previous Steps →
+
+====================================================
+8. VIEW PREVIOUS STEPS
+====================================================
+
+View Previous Steps must use the same correct Journey ID and canonical published-step resolver.
+
+It must show every completed published lesson for the current Journey, in sequence.
+
+For each completed lesson display:
+
+- day/step number;
+- actual lesson title;
+- Completed status;
+- Review action.
+
+Do not display “No previous steps are available yet” when completion records exist.
+
+Do not display an Untitled Step when the authored lesson has a valid title.
+
+Reviewing a completed lesson must not:
+
+- change the user’s current progress;
+- mark the lesson complete again;
+- create duplicate records;
+- move the active position backward.
+
+If no lessons have genuinely been completed, then and only then show the empty state.
+
+====================================================
+9. CORRECT JOURNEY ID RESOLUTION
+====================================================
+
+The application must use record IDs, not titles, as identity.
+
+Verify that:
+
+- Coming to Jesus card points to the intended parent Journey ID;
+- Continue loads steps from that same ID;
+- completion records store that same Journey ID and step ID;
+- View Previous Steps queries that same ID;
+- the progress resolver uses that same ID.
+
+Do not resolve Journey identity by matching titles such as:
+
+- Coming to Jesus;
+- What went wrong;
+- Created in God’s Image.
+
+If duplicate Journey records exist:
+
+- identify them in the final report;
+- determine which record is referenced by live cards and progress;
+- do not delete duplicates in this task unless deletion is absolutely required and separately approved;
+- ensure the live route consistently uses the intended canonical record.
+
+====================================================
+10. TOTALS AND PROGRESS
+====================================================
+
+All displayed totals must derive from actual published instructional lessons.
+
+If five authored lessons are Published:
+
+- total = 5;
+- progress uses completed lessons out of 5;
+- the next step is calculated within those 5.
+
+Do not report:
+
+- 6 Steps because a completion screen is being counted as a lesson;
+- 1 lesson because only one record was returned;
+- incorrect Step 4 of 5 when the completion records do not support it.
+
+If “Journey Complete” exists as a stored pseudo-step, exclude it from instructional lesson counts and Continue resolution. Handle completion as a completion state, not as an ordinary lesson.
+
+====================================================
+11. CACHE INVALIDATION
+====================================================
+
+After:
+
+- publishing a Journey;
+- adding or importing steps;
+- updating step status;
+- completing a lesson;
+
+invalidate only the relevant:
+
+- Journey detail query;
+- Journey progress query;
+- Next Steps query;
+- Today’s Steps active-engagement query;
+- Previous Steps query.
+
+The user must not need to clear browser cache or republish code merely to see corrected Journey data.
+
+====================================================
+12. NO UI REDESIGN
+====================================================
+
+Do not introduce:
+
+- new banners;
+- new hero sections;
+- new overview screens;
+- new information pills;
+- new progress dashboards;
+- extra intermediate pages;
+- different card designs.
+
+Use the current standardized Emmaus card, reader and completion components.
+
+This task is data integrity, resolver consistency and workflow correctness.
+
+====================================================
+13. AUTOMATED REGRESSION TESTS
+====================================================
+
+Add or update tests for:
+
+A. Step status inheritance
+
+- Draft parent + new step → Draft step.
+- Published parent + new step → Published step.
+
+B. Multi-step import
+
+- Import five lessons → five stored records.
+- All records preserve order.
+- Published parent → all five Published.
+- A failed import cannot silently leave one misleading step.
+
+C. Published-step resolver
+
+- Returns all Published steps.
+- Excludes Draft steps.
+- Orders correctly.
+- Does not limit to one.
+- Uses the exact Journey ID.
+
+D. Continue
+
+- No progress → Step 1.
+- Steps 1–3 complete → Step 4.
+- All five complete → no Continue.
+
+E. Previous Steps
+
+- Three completed lessons → three correct titled entries.
+- No completed lessons → correct empty state.
+- Review does not change active progress.
+
+F. Final lesson
+
+- Final lesson completion → Journey complete.
+- No invalid next lesson route.
+
+====================================================
+14. PUBLISHED END-TO-END VERIFICATION
+====================================================
+
+Verify in the actual published mobile and desktop app.
+
+Use the intended Coming to Jesus Journey.
+
+Test:
+
+1. Confirm five authored lessons exist in production.
+2. Confirm all five have Published status.
+3. Confirm the Journey card shows Continue when unfinished.
+4. Tap Continue with no progress and confirm Lesson 1 opens.
+5. Complete Lesson 1.
+6. Confirm the standard completion card appears.
+7. Tap Continue to Next Lesson.
+8. Confirm Lesson 2 opens.
+9. Complete Lessons 2 and 3.
+10. Return to Next Steps.
+11. Tap Continue.
+12. Confirm Lesson 4 opens.
+13. Open View Previous Steps.
+14. Confirm Lessons 1–3 appear with their correct titles.
+15. Review a completed lesson.
+16. Confirm active progress remains at Lesson 4.
+17. Complete Lessons 4 and 5.
+18. Confirm Journey complete appears.
+19. Return to Next Steps.
+20. Confirm Continue is absent.
+21. Confirm View Previous Steps remains.
+22. Confirm no Untitled Step appears unless that is the actual authored title.
+23. Confirm no unavailable-step message occurs.
+24. Confirm no wrong Journey opens.
+25. Confirm Today’s Steps uses the same correct progress.
+26. Confirm desktop and mobile results match.
+
+Also create one safe test Journey with five lessons through the current Admin/import workflow and verify that all five are stored and usable without any routing or UI code changes.
+
+====================================================
+15. DATABASE SAFETY
+====================================================
+
+Do not:
+
+- reset the database;
+- delete user progress;
+- delete current Journey content;
+- reseed production;
+- drop tables;
+- perform destructive migrations.
+
+If a schema change is unexpectedly required, stop and request approval before applying it.
+
+The expected repair should require:
+
+- a server/data-layer code correction;
+- a narrowly scoped existing-record status update;
+- no destructive schema migration.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+This task is complete only when:
+
+- all five authored lessons are stored and Published;
+- future steps inherit the correct parent status;
+- multi-step imports create every supplied lesson;
+- Continue opens the correct unfinished lesson;
+- Finished records completion correctly;
+- the completion card opens the next valid lesson;
+- View Previous Steps shows all completed lessons with correct titles;
+- the final lesson ends the Journey without an invalid Continue action;
+- Today’s Steps and Next Steps use the same progress;
+- published mobile and desktop tests pass;
+- no UI redesign occurred.
+
+Do not report completion because code compiles or preview works.
+
+The published end-to-end Journey workflow must pass.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Exact canonical Journey ID repaired.
+3. Existing step records before repair.
+4. Existing step records after repair.
+5. Number of records updated from Draft to Published.
+6. Root cause in the step-creation/import code.
+7. Files changed.
+8. Canonical resolver used.
+9. Duplicate Journey records found, if any.
+10. Automated test results.
+11. Published mobile test results.
+12. Published desktop test results.
+13. Confirmation that no content or progress was deleted.
+14. Confirmation that no destructive migration occurred.
+15. Post-fix checkpoint.
+16. Exact rollback instructions.
+
+Do not begin Rooms or any unrelated work until this complete Journey workflow has been verified in production.

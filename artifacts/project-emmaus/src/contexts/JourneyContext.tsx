@@ -165,15 +165,11 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         }
         if (cancelled) return;
         // Admins and super-admins see all steps (Draft + Published).
-        // Members see all steps whose parent Journey is Published — step-level Draft/Published
-        // is an admin authoring state, not a member access gate. If the journey is live,
-        // all of its steps are live. Filtering by step.status alone leaves members with an
-        // empty walk whenever the admin publishes the journey but forgets to publish the steps.
+        // Members see only Published steps. Step status is now kept in sync with the parent
+        // journey by the server (createStep inherits parent status), so this simple filter
+        // is the canonical gate — no client-side parent-status override needed.
         const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
-        const publishedJourneyIds = new Set(jList.filter(j => j.status === 'Published').map(j => j.id));
-        setSteps(isAdmin ? allSteps : allSteps.filter(s =>
-          s.status === 'Published' || publishedJourneyIds.has(s.journeyId)
-        ));
+        setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
 
         // Fetch progress for logged-in users
         if (user?.id) {
@@ -431,7 +427,6 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const refreshSteps = useCallback(async (journeyId: string) => {
     try {
       const jSteps = await api.listSteps(journeyId);
-      // Apply the same Published-only filter for members as the initial load does.
       const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
       const visible = isAdmin ? jSteps : jSteps.filter(s => s.status === 'Published');
       setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...visible]);
