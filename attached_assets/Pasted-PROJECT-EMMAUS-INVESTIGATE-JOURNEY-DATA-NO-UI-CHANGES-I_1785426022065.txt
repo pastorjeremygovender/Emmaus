@@ -1,0 +1,181 @@
+PROJECT EMMAUS — INVESTIGATE JOURNEY DATA (NO UI CHANGES)
+
+IMPORTANT
+
+This is an investigation task only.
+
+Do NOT redesign anything.
+Do NOT change navigation.
+Do NOT change buttons.
+Do NOT change layouts.
+Do NOT modify the database.
+
+Create a checkpoint first:
+
+PRE-JOURNEY-DATA-INVESTIGATION
+
+====================================================
+THE PROBLEM
+====================================================
+
+The Journey UI is behaving as if only one lesson exists.
+
+However, five lessons were authored.
+
+The admin interface does NOT allow individual lesson publishing, so this is NOT a publishing issue.
+
+I need to know where the data is being lost.
+
+====================================================
+INVESTIGATE ONLY
+====================================================
+
+For the Journey:
+
+Coming to Jesus
+
+report the following:
+
+1. JOURNEY RECORD
+
+- Journey ID
+- Collection ID
+- Status
+- Published state
+
+2. LESSON RECORDS
+
+List every lesson attached to this Journey.
+
+For each lesson report:
+
+- lesson ID
+- sequence number
+- title
+- status
+- published flag (if one exists)
+
+State clearly:
+
+How many lesson records actually exist?
+
+====================================================
+3. API
+====================================================
+
+Inspect the API used by:
+
+Continue
+
+Journey Detail
+
+Journey Progress
+
+Previous Steps
+
+For each endpoint report:
+
+- number of lessons returned
+- lesson IDs returned
+- ordering
+- filtering
+
+If only one lesson is returned:
+
+Explain exactly why.
+
+====================================================
+4. CONTINUE RESOLVER
+====================================================
+
+Inspect the logic that decides which lesson opens when the user taps Continue.
+
+Report:
+
+- which query is used
+- which lesson IDs are considered
+- why only one lesson is available
+
+====================================================
+5. PREVIOUS STEPS
+====================================================
+
+Inspect the resolver used by:
+
+View Previous Steps
+
+It currently reports:
+
+"No previous steps available"
+
+Determine whether:
+
+- completed lessons exist
+- lesson completion exists
+- resolver is reading the wrong Journey
+- resolver is filtering incorrectly
+
+====================================================
+6. VERIFY JOURNEY ID
+====================================================
+
+I have previously worked on a Journey whose first lesson was:
+
+"What went wrong"
+
+The app is now showing:
+
+"Created in God's Image"
+
+with
+
+"Untitled Step"
+
+Determine whether the application is:
+
+- reading the wrong Journey
+- reading an old Journey
+- reading a duplicate Journey
+- reading a newly created Journey
+
+Report every Journey record with the title:
+
+Coming to Jesus
+
+including IDs.
+
+====================================================
+7. ROOT CAUSE
+====================================================
+
+Do NOT guess.
+
+Identify exactly which of these is true:
+
+A. Only one lesson was ever created.
+
+B. Five lessons exist but only one is returned.
+
+C. Continue uses the wrong query.
+
+D. Previous Steps uses the wrong query.
+
+E. The app is pointing at the wrong Journey.
+
+F. Another root cause (describe it).
+
+====================================================
+IMPORTANT
+====================================================
+
+DO NOT FIX ANYTHING.
+
+DO NOT MODIFY CODE.
+
+DO NOT REDESIGN UI.
+
+DO NOT CHANGE NAVIGATION.
+
+Only investigate and produce a complete report identifying the exact root cause.
+
+Finish by recommending the smallest possible code change required to resolve the issue.
