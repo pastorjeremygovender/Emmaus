@@ -523,13 +523,14 @@ function journeyItemCards(
 }
 
 // Journeys tab — one card per Journey (collection).
-// Selecting a card navigates directly to the active/first Walk overview,
-// bypassing the intermediate collection page for single-Walk journeys.
+// Selecting Continue navigates directly to the current unfinished lesson —
+// the same pattern as Daily Devotionals. No intermediate Walk overview.
 function JourneysPanel({
-  collections, onOpenJourney,
+  collections, onOpenJourney, onViewPreviousSteps,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
+  onViewPreviousSteps?: (col: JourneyCollectionGroup) => void;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
@@ -539,7 +540,12 @@ function JourneysPanel({
         const walkCount = col.journeys.length;
         const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
         const allDone = walkCount > 0 && col.journeys.every(j => j.memberProgressState === 'completed');
-        const actionLabel = allDone ? 'Review' : hasInProgress ? 'Continue' : 'Open';
+        const hasStarted = col.journeys.some(
+          j => j.memberProgressState === 'in-progress' || j.memberProgressState === 'completed',
+        );
+        // "Continue" when in-progress, "Open" when not started.
+        // When all walks complete, hide the primary Continue action — show only View Previous Steps.
+        const actionLabel = allDone ? null : hasInProgress ? 'Continue' : 'Open';
 
         return (
           <EmmausContentCard
@@ -548,8 +554,13 @@ function JourneysPanel({
             title={col.title}
             description={col.description}
             metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
-            primaryActionLabel={actionLabel}
-            onAction={() => onOpenJourney(col)}
+            primaryActionLabel={actionLabel ?? undefined}
+            onAction={actionLabel ? () => onOpenJourney(col) : undefined}
+            secondaryAction={
+              hasStarted && onViewPreviousSteps
+                ? { label: 'View Previous Steps →', onPress: () => onViewPreviousSteps(col) }
+                : undefined
+            }
           />
         );
       })}
@@ -898,16 +909,23 @@ export default function Journeys() {
                     setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
                     return;
                   }
-                  if (col.journeys.length === 1) {
-                    setLocation(`/journeys/${col.journeys[0].id}?source=nextStepsJourneys`);
-                    return;
-                  }
                   // Multiple walks: prefer in-progress, then not-started, then first
                   const target =
                     col.journeys.find(j => j.memberProgressState === 'in-progress') ??
                     col.journeys.find(j => j.memberProgressState === 'not-started') ??
                     col.journeys[0];
-                  setLocation(`/journeys/${target.id}?source=nextStepsJourneys`);
+                  // Navigate directly to the current lesson — route is pre-computed server-side.
+                  setLocation(`${target.route}?source=nextStepsJourneys`);
+                }}
+                onViewPreviousSteps={(col) => {
+                  // Navigate to the previous-steps list for the active/first walk.
+                  const target =
+                    col.journeys.find(j => j.memberProgressState === 'in-progress') ??
+                    col.journeys.find(j => j.memberProgressState === 'completed') ??
+                    col.journeys[0];
+                  if (target) {
+                    setLocation(`/journey/${target.id}/previous?from=nextStepsJourneys`);
+                  }
                 }}
               />
             )}

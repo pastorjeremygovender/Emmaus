@@ -58,22 +58,12 @@ export default function JourneyDay() {
   const isDayCompleted = journeyProgress?.completedDays?.includes(day) ?? false;
   const isDailyRhythmReadOnly = isDailyRhythmJourney && isDayCompleted;
 
+  // All published steps for this journey — used to resolve the next lesson in the completion card.
+  const allSteps = getStepsForJourney(journeyId || '');
+
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
-
-  // backSource/backSourceId: the source context JourneyDetail held when it
-  // opened this lesson. Used to return to JourneyDetail WITH its own back
-  // context so that JourneyDetail's back arrow can continue the chain
-  // (e.g. → Coming to Jesus collection).
-  const backSource   = new URLSearchParams(window.location.search).get('backSource');
-  const backSourceId = new URLSearchParams(window.location.search).get('backSourceId');
-
-  // Walk overview URL — always return here after completion or via back arrow.
-  // Preserves JourneyDetail's own back context so the chain remains intact.
-  const journeyDetailUrl = journeyId
-    ? `/journeys/${journeyId}${backSource ? `?source=${encodeURIComponent(backSource)}${backSourceId ? `&sourceId=${encodeURIComponent(backSourceId)}` : ''}` : ''}`
-    : '/journeys?tab=journeys';
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
@@ -252,27 +242,35 @@ export default function JourneyDay() {
     );
   }
 
-  // Completion screens — both routes use EmmausCompletionCard (design locked)
+  // ── Completion card — standard Emmaus pattern (spec-locked) ──────────────────
   if (isCompleting) {
-    // Pass the full source context through to Previous Days so its back arrow
-    // preserves the complete return chain.
-    const prevDaysFrom   = source   ?? 'nextStepsJourneys';
+    const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
+
+    // "View Previous Steps →" — show when there is at least one step earlier in
+    // the sequence (i.e. this is not the very first published step).
+    const firstStepDay = allSteps[0]?.day ?? 1;
+    const hasPreviousSteps = day > firstStepDay || (isFinalStep && allSteps.length > 1);
+    const prevDaysFrom   = source ?? 'nextStepsJourneys';
     const prevDaysFromId = sourceId ?? '';
-    const prevDaysUrl = journeyId && day > 1
+    const prevDaysUrl = journeyId && hasPreviousSteps
       ? `/journey/${journeyId}/previous?from=${prevDaysFrom}${prevDaysFromId ? `&fromId=${encodeURIComponent(prevDaysFromId)}` : ''}`
       : undefined;
 
-    // Primary action is always "Back to Walk" — the Walk overview (JourneyDetail)
-    // shows updated progress, the completed step marked Done, and a Continue button
-    // pointing to the next unfinished lesson. Never offer "Continue to Next Step" here.
+    // "Continue to Next Lesson" — resolve the next published step after this one.
+    // Never rendered for the final step (isFinalStep).
+    const nextStep = !isFinalStep ? allSteps.find(s => s.day > day) : undefined;
+    const nextStepUrl = nextStep && journeyId
+      ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+      : undefined;
+
     if (isFinalStep) {
       return (
         <EmmausCompletionCard
           fullScreen
           heading="Journey complete."
-          subMessage="May the Lord continue His work in your heart today."
-          returnLabel="Back to Walk"
-          onReturn={() => setLocation(journeyDetailUrl)}
+          subMessage="May the Lord continue His work in your life."
+          returnLabel="Back to Next Steps"
+          onReturn={() => setLocation(returnPath)}
           previousDaysLabel="View Previous Steps →"
           onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
         />
@@ -282,10 +280,12 @@ export default function JourneyDay() {
     return (
       <EmmausCompletionCard
         fullScreen
-        heading={`Day ${day} complete.`}
-        subMessage="May the Lord continue His work in your heart today."
-        returnLabel="Back to Walk"
-        onReturn={() => setLocation(journeyDetailUrl)}
+        heading="Lesson complete."
+        subMessage="Continue when you're ready."
+        onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
+        continueLabel={nextStepUrl ? 'Continue to Next Lesson' : undefined}
+        returnLabel="Back to Next Steps"
+        onReturn={() => setLocation(returnPath)}
         previousDaysLabel="View Previous Steps →"
         onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
       />
@@ -297,10 +297,9 @@ export default function JourneyDay() {
       {/* Sticky header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
-          {/* Back button — navigates to the Walk overview with its back context
-              preserved (Daily Rhythm always returns to /walk). */}
+          {/* Back button — returns to the source context (Next Steps, Walk overview, etc.) */}
           <button
-            onClick={() => setLocation(isDailyRhythmJourney ? '/walk' : journeyDetailUrl)}
+            onClick={() => setLocation(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >
@@ -448,16 +447,28 @@ export default function JourneyDay() {
             </p>
           </section>
 
-          {/* Complete button */}
+          {/* Primary action — "Finished" for a fresh read; back button for replay */}
           <div className="pt-2 pb-8">
-            <Button
-              size="lg"
-              className="w-full h-14 text-[17px] rounded-2xl"
-              onClick={handleComplete}
-              data-testid="button-complete-today"
-            >
-              Complete Today
-            </Button>
+            {isDayCompleted ? (
+              /* Already completed — review mode. Prevent re-completion. */
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full h-14 text-[17px] rounded-2xl"
+                onClick={() => setLocation(resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
+              >
+                Back to Next Steps
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="w-full h-14 text-[17px] rounded-2xl"
+                onClick={handleComplete}
+                data-testid="button-complete-today"
+              >
+                Finished
+              </Button>
+            )}
           </div>
 
         </main>

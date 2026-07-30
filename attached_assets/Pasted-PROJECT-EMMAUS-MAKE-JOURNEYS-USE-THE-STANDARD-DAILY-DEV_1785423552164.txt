@@ -1,0 +1,354 @@
+PROJECT EMMAUS — MAKE JOURNEYS USE THE STANDARD DAILY DEVOTIONAL FLOW
+
+IMPORTANT
+
+Do not redesign the Journey experience.
+
+The Daily Devotional flow is already the approved Emmaus standard.
+
+Journeys must use the same user-facing interaction pattern.
+
+Create a checkpoint first:
+
+PRE-JOURNEY-STANDARD-FLOW
+
+Do not modify:
+
+- Journey authoring
+- Rooms
+- Active Engagement architecture
+- Today’s Steps
+- Daily Rhythm
+- Daily Devotionals
+- Sermon Companions
+- Bible
+- database schema
+
+Do not create a migration.
+
+====================================================
+LOCKED EMMAUS CONTENT FLOW
+====================================================
+
+All sequential Emmaus content should follow this pattern:
+
+Content card
+→ Continue
+→ Current unread item
+→ Finished
+→ Completion card
+
+Users must also be able to review previous completed items through a secondary link.
+
+Journeys must not use a separate redesigned experience.
+
+====================================================
+1. JOURNEY CARD
+====================================================
+
+On Next Steps, the Coming to Jesus Journey card should behave like the Psalms Daily Devotional card.
+
+Display:
+
+JOURNEY
+
+Coming to Jesus
+
+Description
+
+1 Walk
+
+Continue
+
+View Previous Steps →
+
+The Continue button must open the current unfinished lesson directly.
+
+Do not route first to:
+
+- a banner page;
+- a Journey information page;
+- a Walk overview;
+- a progress dashboard;
+- a lesson-list screen.
+
+The card should resolve the correct next unfinished published lesson and open it.
+
+====================================================
+2. CONTINUE LOGIC
+====================================================
+
+If the user has no Journey progress:
+
+Continue opens the first published lesson.
+
+If the user has already completed lessons:
+
+Continue opens the next unfinished published lesson.
+
+If every required lesson is complete:
+
+Do not show Continue.
+
+Keep:
+
+View Previous Steps →
+
+Do not hard-code lesson numbers or total lesson counts.
+
+Use the actual published lesson records and saved user progress.
+
+====================================================
+3. CURRENT LESSON
+====================================================
+
+The current Journey lesson should use the same reading structure and action pattern as Daily Devotionals.
+
+At the bottom of the lesson, show:
+
+Finished
+
+Do not use:
+
+- Complete Today;
+- Mark Lesson Complete;
+- Return to Journey;
+- Back to Walk.
+
+The approved primary action is:
+
+Finished
+
+====================================================
+4. COMPLETION CARD
+====================================================
+
+When the user taps Finished:
+
+Replace or extend the current lesson view with a completion card using the same pattern as Daily Devotionals.
+
+For an incomplete Journey, display:
+
+Lesson complete.
+
+Continue when you’re ready.
+
+Continue to Next Lesson
+
+Back to Next Steps
+
+View Previous Steps →
+
+The primary button must open the next valid unfinished lesson.
+
+====================================================
+5. FINAL LESSON
+====================================================
+
+When the user completes the final required lesson:
+
+Display:
+
+Journey complete.
+
+May the Lord continue His work in your life.
+
+Do not show:
+
+Continue to Next Lesson
+
+because no valid next lesson exists.
+
+Keep:
+
+Back to Next Steps
+
+View Previous Steps →
+
+The platform Continue rule still applies:
+
+Never render Continue unless a valid next item exists.
+
+====================================================
+6. VIEW PREVIOUS STEPS
+====================================================
+
+View Previous Steps → should show the completed lessons in the Journey.
+
+The user should be able to select and reread a completed lesson.
+
+Reviewing a previous lesson must not:
+
+- alter current progress;
+- mark it complete again;
+- move the user backwards;
+- create duplicate completion records.
+
+After review, return to the Journey card or Next Steps according to the existing approved return pattern.
+
+====================================================
+7. REMOVE THE REDESIGNED JOURNEY OVERVIEW FLOW
+====================================================
+
+The user-facing Journey flow should no longer require the screen containing:
+
+- large banner;
+- What went wrong hero title;
+- repeated description;
+- Coming to Jesus badge;
+- Journey Information heading;
+- duration pills;
+- progress dashboard;
+- full lesson list before continuing.
+
+Do not delete the underlying data.
+
+Do not delete Admin or authoring functionality.
+
+Simply remove this screen from the normal user continuation flow.
+
+If a lesson-list screen is still useful, use it only for:
+
+View Previous Steps →
+
+It must not sit between the Journey card and the current lesson.
+
+====================================================
+8. NAVIGATION
+====================================================
+
+Required normal flow:
+
+Next Steps
+→ Coming to Jesus card
+→ Continue
+→ current unfinished lesson
+→ Finished
+→ completion card
+→ Continue to Next Lesson
+
+Back to Next Steps returns to:
+
+Next Steps → Journeys tab
+
+View Previous Steps opens completed lessons.
+
+Do not use generic browser-history navigation where it produces inconsistent destinations.
+
+====================================================
+9. ACTIVE ENGAGEMENT
+====================================================
+
+When the user begins or continues the Journey:
+
+- create or update the existing Active Engagement record;
+- preserve current lesson progress;
+- prevent duplicate engagement records;
+- ensure the Journey appears on Today’s Steps according to the existing platform rule.
+
+Do not alter the Active Engagement schema.
+
+====================================================
+10. SHARED CONTENT STANDARD
+====================================================
+
+Reuse the existing Daily Devotional components and behaviour wherever possible, including:
+
+- primary Continue action;
+- Finished action;
+- completion card;
+- previous-entry link;
+- next-item resolver;
+- final-item handling.
+
+Do not create another Journey-only completion system.
+
+The purpose of this task is to standardize, not redesign.
+
+====================================================
+11. TESTING — PUBLISHED APP
+====================================================
+
+Test on published mobile and desktop.
+
+NEW USER
+
+1. Open Next Steps.
+2. Open Journeys.
+3. Tap Continue on Coming to Jesus.
+4. Confirm Lesson 1 opens directly.
+5. Confirm no intermediate Journey overview appears.
+
+IN-PROGRESS USER
+
+6. Complete Lessons 1–3.
+7. Return to Next Steps.
+8. Tap Continue.
+9. Confirm Lesson 4 opens directly.
+
+LESSON COMPLETION
+
+10. Tap Finished.
+11. Confirm the completion card appears.
+12. Confirm Continue to Next Lesson opens the correct next lesson.
+13. Confirm Back to Next Steps works.
+14. Confirm View Previous Steps works.
+
+FINAL LESSON
+
+15. Complete the final required lesson.
+16. Confirm Journey complete appears.
+17. Confirm Continue to Next Lesson is absent.
+18. Confirm View Previous Steps remains.
+19. Confirm no unavailable lesson is requested.
+
+REVIEW
+
+20. Open View Previous Steps.
+21. Open a completed lesson.
+22. Confirm progress does not change.
+23. Confirm no duplicate completion is created.
+
+REGRESSION
+
+24. Daily Devotional flow remains unchanged.
+25. Sermon Companion flow remains unchanged.
+26. Today’s Steps still loads.
+27. Active Engagement remains correct.
+28. No Journey Not Found error occurs.
+29. No database migration is created.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+Journeys use the same simple interaction model as Daily Devotionals:
+
+Continue
+→ Read current lesson
+→ Finished
+→ Completion card
+→ Continue to next lesson
+
+Users can review previous lessons separately.
+
+No unnecessary Journey overview or redesign sits between the Journey card and the current lesson.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Daily Devotional components reused.
+3. Journey-only overview flow removed from normal navigation.
+4. Continue resolver used.
+5. Completion-card behaviour implemented.
+6. Final-lesson behaviour confirmed.
+7. Published mobile test results.
+8. Published desktop test results.
+9. Confirmation that no database migration was created.
+10. Post-change checkpoint.
+
+Stop after this Journey flow has been standardized and verified.
