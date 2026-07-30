@@ -18,8 +18,50 @@ import { Router, type Request, type Response } from "express";
 import { setUserCookie } from "../emmaus/auth.js";
 import { getUserRole } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
+import { pool } from "@workspace/db";
 
 export const authRouter = Router();
+
+// ── User profile endpoints ────────────────────────────────────────────────────
+// These are intentionally unauthenticated (demo system) — email is the key.
+
+/** GET /api/users/profile?email=... — look up a member's saved name */
+authRouter.get("/users/profile", async (req: Request, res: Response) => {
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : null;
+  if (!email) { res.status(400).json({ error: "email query param is required" }); return; }
+  try {
+    const result = await pool.query<{ preferred_name: string }>(
+      `SELECT preferred_name FROM user_profiles WHERE email = $1`,
+      [email]
+    );
+    res.json({ preferredName: result.rows[0]?.preferred_name ?? "" });
+  } catch (err) {
+    logger.warn({ err }, "users/profile GET: db error");
+    res.json({ preferredName: "" }); // non-fatal — return empty so client falls back gracefully
+  }
+});
+
+/** POST /api/users/profile — upsert a member's saved name */
+authRouter.post("/users/profile", async (req: Request, res: Response) => {
+  const { email, preferredName } = req.body as { email?: string; preferredName?: string };
+  const emailClean = email?.trim().toLowerCase();
+  if (!emailClean) { res.status(400).json({ error: "email is required" }); return; }
+  const name = (preferredName ?? "").trim();
+  try {
+    await pool.query(
+      `INSERT INTO user_profiles (email, preferred_name)
+       VALUES ($1, $2)
+       ON CONFLICT (email) DO UPDATE SET preferred_name = EXCLUDED.preferred_name`,
+      [emailClean, name]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    logger.warn({ err }, "users/profile POST: db error");
+    res.status(500).json({ error: "Profile save failed" });
+  }
+});
+
+// ── Session endpoint ──────────────────────────────────────────────────────────
 
 authRouter.post("/auth/session", async (req: Request, res: Response) => {
   const { userId } = req.body as { userId?: string };

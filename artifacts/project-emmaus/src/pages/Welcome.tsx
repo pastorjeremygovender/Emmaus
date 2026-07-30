@@ -20,14 +20,14 @@ import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { isOnboarded } from '@/lib/onboarding';
+import { isOnboarded, markOnboarded } from '@/lib/onboarding';
 import { resolveEntryRoute } from '@/lib/entry-route';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 2000; // ms — minimum visible time even if auth resolves faster
 
 export default function Welcome() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, loadingProfile } = useAuth();
   const { journeys, progress, loading: journeyLoading, getStepsForJourney } = useJourney();
   const [, setLocation] = useLocation();
 
@@ -40,21 +40,28 @@ export default function Welcome() {
 
   // ── Fast path: splash already shown this session ──────────────────────────
   // Journey context is already loaded (same session), so we can resolve the day.
+  // We also wait for loadingProfile so that a server-restored name can prevent
+  // the onboarding name-prompt from appearing for members who already set one.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (authLoading) return;
+    if (authLoading || loadingProfile) return;
     if (user) {
       if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
-      } else if (!isOnboarded()) {
+      } else if (!isOnboarded() && !user.preferredName?.trim()) {
+        // Only show onboarding when the member genuinely has no saved name.
+        // If the server restored a name (after a localStorage clear), skip it.
         setLocation('/onboarding');
       } else {
+        // If onboarding flag was lost but name survived via server, restore flag.
+        if (!isOnboarded()) markOnboarded();
+        console.debug('[Emmaus routing] Route selected:', resolveEntryRoute(journeys, progress, getStepsForJourney));
         setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, authLoading, user, journeys, progress, getStepsForJourney]);
+  }, [alreadyShown, authLoading, loadingProfile, user, journeys, progress, getStepsForJourney]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -63,11 +70,12 @@ export default function Welcome() {
     return () => clearTimeout(id);
   }, [alreadyShown]);
 
-  // ── Navigate once splash timer, auth, AND journey data are all ready ──────
-  // Waiting for journeyLoading ensures progress is resolved before we pick the day.
+  // ── Navigate once splash timer, auth, profile, AND journey data are all ready ──
+  // loadingProfile is typically <100 ms on a good connection and runs inside the
+  // 2-second minimum splash window, so it adds no visible delay.
   useEffect(() => {
     if (alreadyShown) return;
-    if (!timerDone || authLoading || journeyLoading) return;
+    if (!timerDone || authLoading || loadingProfile || journeyLoading) return;
     if (navigatedRef.current) return;
     navigatedRef.current = true;
 
@@ -76,15 +84,19 @@ export default function Welcome() {
     if (user) {
       if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
-      } else if (!isOnboarded()) {
+      } else if (!isOnboarded() && !user.preferredName?.trim()) {
+        // Only show onboarding when the member genuinely has no saved name.
         setLocation('/onboarding');
       } else {
-        setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
+        if (!isOnboarded()) markOnboarded();
+        const dest = resolveEntryRoute(journeys, progress, getStepsForJourney);
+        console.debug('[Emmaus routing] Route selected (splash):', dest);
+        setLocation(dest);
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, timerDone, authLoading, journeyLoading, user, journeys, progress, getStepsForJourney]);
+  }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney]);
 
   // ── If already shown, render nothing while redirecting ───────────────────
   if (alreadyShown) return null;

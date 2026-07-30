@@ -16,7 +16,7 @@
  * On complete: sets emmaus_onboarded = 'true' in localStorage.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -25,13 +25,22 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { markOnboarded } from '@/lib/onboarding';
 
 export default function Onboarding() {
-  const { user, updateName } = useAuth();
+  const { user, updateName, loadingProfile } = useAuth();
   const { journeys, startJourney } = useJourney();
   const [, setLocation] = useLocation();
 
-  // Start on step 0 (name collection) only when no name has been set yet.
-  const hasName = !!(user?.preferredName?.trim());
+  // Don't assume the name is missing while the server profile is still loading —
+  // a restored name from the server would prevent the prompt from showing.
+  const hasName = !loadingProfile && !!(user?.preferredName?.trim());
   const [step, setStep] = useState<0 | 1>(hasName ? 1 : 0);
+
+  // When server profile finishes loading: if a name was restored, advance to
+  // the welcome step so the user isn't asked for their name again.
+  useEffect(() => {
+    if (!loadingProfile && user?.preferredName?.trim()) {
+      setStep(1);
+    }
+  }, [loadingProfile, user?.preferredName]);
   const [nameInput, setNameInput] = useState('');
 
   // Derive first name for display — from auth state (updated after updateName)

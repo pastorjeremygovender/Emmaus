@@ -195,6 +195,24 @@ export async function runStartupMigrations(): Promise<void> {
   }
 
 
+  // ── User profiles table (2026-07) ────────────────────────────────────────────
+  // Persistent name storage keyed by email address so a member's preferred name
+  // survives localStorage clears, sign-out/sign-in cycles, and mobile OS cache
+  // eviction. The table is intentionally minimal — only the name is stored here;
+  // all other user state remains in the demo auth layer.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        email TEXT PRIMARY KEY,
+        preferred_name TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    logger.info("Startup migration: user_profiles table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_profiles table failed (non-fatal)");
+  }
+
   // ── Remove seeded scaffold data (2026-07) ─────────────────────────────────────
   // The "New to Faith" collection and "Coming to Jesus" journey were previously
   // seeded on every boot. They have been removed from the seed block and must

@@ -3,14 +3,18 @@ import { isDemoMode } from '../lib/firebase';
 import { DEMO_USER, DEMO_ADMIN, DEMO_SUPER_ADMIN } from '../lib/demo-data';
 import { DEMO_USER_2 } from '../lib/rooms-demo-data';
 
+// ── API base URL ──────────────────────────────────────────────────────────────
+function apiBase(): string {
+  return (import.meta.env?.BASE_URL ?? '').replace(/\/$/, '');
+}
+
 // ── Session cookie bootstrap ──────────────────────────────────────────────────
 // Issues a signed server-side session cookie for the given userId so that
 // privileged API routes (admin/generator/companions) can verify identity via
 // the cookie, removing the need to trust the X-User-Id header in production.
 async function issueSessionCookie(userId: string): Promise<void> {
   try {
-    const base = (import.meta.env?.BASE_URL ?? '').replace(/\/$/, '');
-    await fetch(`${base}/api/auth/session`, {
+    await fetch(`${apiBase()}/api/auth/session`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -18,6 +22,37 @@ async function issueSessionCookie(userId: string): Promise<void> {
     });
   } catch {
     // Non-fatal in demo/dev: X-User-Id header fallback still works
+  }
+}
+
+// ── Server profile helpers ────────────────────────────────────────────────────
+// The user_profiles table stores the member's preferred name against their
+// email address. This is the permanent source of truth — it survives
+// localStorage clears, sign-out/sign-in cycles, and mobile OS cache eviction.
+
+async function fetchServerProfile(email: string): Promise<{ preferredName: string } | null> {
+  try {
+    const resp = await fetch(
+      `${apiBase()}/api/users/profile?email=${encodeURIComponent(email.toLowerCase())}`,
+      { credentials: 'include' }
+    );
+    if (!resp.ok) return null;
+    return (await resp.json()) as { preferredName: string };
+  } catch {
+    return null;
+  }
+}
+
+async function saveServerProfile(email: string, preferredName: string): Promise<void> {
+  try {
+    await fetch(`${apiBase()}/api/users/profile`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.toLowerCase(), preferredName }),
+    });
+  } catch {
+    // Non-fatal — localStorage is the fallback
   }
 }
 
@@ -35,6 +70,10 @@ export type User = {
 type AuthContextType = {
   user: User | null;
   loading: boolean;
+  /** True while the server profile (name) is being fetched on startup. Do not
+   *  show the name-collection prompt or make routing decisions that depend on
+   *  the name until this is false. */
+  loadingProfile: boolean;
   isDemoMode: boolean;
   signIn: (email: string, pass: string) => Promise<'admin' | 'user' | 'superAdmin'>;
   signUp: (email: string, pass: string, name: string) => Promise<void>;
@@ -50,30 +89,65 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    // Check local storage for demo session
+    // ── 1. Restore from localStorage (synchronous — sets loading = false) ──────
     const saved = localStorage.getItem('emmaus_demo_user');
+    let localUser: User | null = null;
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as User;
-        // Migrate legacy 'Friend' placeholder — normalise to empty string so
-        // the name-collection prompt appears on next onboarding visit.
+        // Migrate legacy 'Friend' placeholder
         if (parsed?.preferredName === 'Friend') {
           parsed.preferredName = '';
           localStorage.setItem('emmaus_demo_user', JSON.stringify(parsed));
         }
         setUser(parsed);
+        localUser = parsed;
       } catch {
         // Corrupted session — clear it so the user can sign in fresh
         localStorage.removeItem('emmaus_demo_user');
       }
     }
+
     setLoading(false);
+
+    // ── 2. Refresh from server (async — updates name if server has a better one) ──
+    // This is the permanent source of truth. It corrects the name even if:
+    //   a) sign-in previously overwrote it with the demo template (empty name)
+    //   b) localStorage was partially cleared on mobile
+    if (localUser?.email) {
+      console.debug('[Emmaus auth] Profile load start — userId:', localUser.id);
+      fetchServerProfile(localUser.email)
+        .then(profile => {
+          if (profile?.preferredName?.trim()) {
+            console.debug('[Emmaus auth] Server name found:', profile.preferredName);
+            setUser(prev => {
+              if (!prev) return prev;
+              const updated = { ...prev, preferredName: profile.preferredName };
+              localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
+              return updated;
+            });
+          } else {
+            console.debug('[Emmaus auth] No saved name on server for this email');
+          }
+        })
+        .catch(() => {
+          console.debug('[Emmaus auth] Server profile fetch failed — using local name');
+        })
+        .finally(() => {
+          console.debug('[Emmaus auth] Profile load complete');
+          setLoadingProfile(false);
+        });
+    } else {
+      // No email → no server profile to fetch
+      setLoadingProfile(false);
+    }
   }, []);
 
   const signIn = async (email: string, pass: string): Promise<'admin' | 'user' | 'superAdmin'> => {
-    // Demo only — exact match for known demo accounts
     type DemoUser = typeof DEMO_USER | typeof DEMO_ADMIN | typeof DEMO_SUPER_ADMIN | typeof DEMO_USER_2;
     let u: DemoUser = DEMO_USER;
     let role: 'admin' | 'user' | 'superAdmin' = 'user';
@@ -84,10 +158,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (email === 'friend@emmaus.church') {
       u = DEMO_USER_2;
     }
-    setUser(u as User);
-    localStorage.setItem('emmaus_demo_user', JSON.stringify(u));
-    // Establish server-side signed cookie so admin API routes work in production
-    await issueSessionCookie(u.id);
+
+    // Build the resolved user, always stamping the actual email they signed in with
+    let resolvedUser: User = { ...(u as User), email };
+
+    if (role === 'user') {
+      // ── Step A: Preserve existing name from localStorage ─────────────────────
+      // signIn was previously overwriting the whole user object with the demo
+      // template (empty name). We now check whether a prior session stored a
+      // name in localStorage and carry it forward to avoid losing it.
+      const existingSaved = localStorage.getItem('emmaus_demo_user');
+      if (existingSaved) {
+        try {
+          const existing = JSON.parse(existingSaved) as User;
+          if (existing?.preferredName?.trim()) {
+            resolvedUser = { ...resolvedUser, preferredName: existing.preferredName };
+            console.debug('[Emmaus auth] Preserved name from localStorage:', existing.preferredName);
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Issue the session cookie before fetching the server profile
+    await issueSessionCookie(resolvedUser.id);
+    console.debug('[Emmaus auth] Sign-in userId:', resolvedUser.id, 'role:', role);
+
+    if (role === 'user' && !resolvedUser.preferredName?.trim()) {
+      // ── Step B: Check server for a permanently saved name ─────────────────────
+      // If localStorage was cleared (e.g. mobile OS eviction) AND the cookie was
+      // also lost (or we got a fresh template), check whether the server has this
+      // member's name under their email address.
+      console.debug('[Emmaus auth] No name in localStorage — checking server for:', email);
+      const profile = await fetchServerProfile(email);
+      if (profile?.preferredName?.trim()) {
+        resolvedUser = { ...resolvedUser, preferredName: profile.preferredName };
+        console.debug('[Emmaus auth] Restored name from server:', profile.preferredName);
+      }
+    }
+
+    setUser(resolvedUser);
+    localStorage.setItem('emmaus_demo_user', JSON.stringify(resolvedUser));
     return role;
   };
 
@@ -96,6 +206,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(newUser));
     await issueSessionCookie(newUser.id);
+    // Save the name to the server immediately — this is what makes it
+    // recoverable after localStorage is cleared on mobile.
+    if (name.trim()) {
+      saveServerProfile(email, name.trim()); // fire-and-forget
+    }
   };
 
   const signInDemo = async (as: boolean | 'superAdmin' = false) => {
@@ -124,6 +239,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...user, preferredName: trimmed };
     setUser(updated);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
+    // Persist to server — this is what survives localStorage eviction
+    if (user.email && trimmed) {
+      console.debug('[Emmaus auth] Saving name to server:', trimmed);
+      saveServerProfile(user.email, trimmed); // fire-and-forget
+    }
   };
 
   return (
@@ -131,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         loading,
+        loadingProfile,
         isDemoMode,
         signIn,
         signUp,

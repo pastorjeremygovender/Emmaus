@@ -1,0 +1,225 @@
+The new guided Journey Editor is moving in the right direction, but there are still several architectural and functional issues that need to be completed.
+
+The goal is not to build a generic CMS.
+
+The goal is to guide authors through writing an Emmaus journey one section at a time.
+
+--------------------------------------------------
+1. START JOURNEY INTRODUCTION DOES NOT WORK
+--------------------------------------------------
+
+The green "Start Journey Introduction" button currently does nothing.
+
+Clicking it must immediately open the Journey Introduction editor.
+
+Likewise, clicking "Journey Introduction" in the left sidebar must open exactly the same editor.
+
+Do not simply highlight the menu item.
+
+Actually navigate into the editor.
+
+--------------------------------------------------
+2. JOURNEY INTRODUCTION NEEDS ITS OWN EDITOR
+--------------------------------------------------
+
+Journey Introduction is NOT Day 0.
+
+It is its own content type.
+
+The editor should display only:
+
+Journey Introduction
+
+[Large Rich Text Editor]
+
+Buttons:
+
+Save Draft
+
+Continue to Day 1
+
+No other configuration should appear while writing.
+
+--------------------------------------------------
+3. REMOVE DURATION FROM AUTHORING
+--------------------------------------------------
+
+The duration field should not appear while writing.
+
+For Emmaus Core Journeys the structure is fixed:
+
+Journey Introduction
+
+Day 1
+
+Day 2
+
+Day 3
+
+Day 4
+
+Day 5
+
+Journey Complete
+
+Therefore the duration is already known:
+
+5 Days
+
+Do not ask the author to enter it.
+
+If duration needs to change for a special journey (7, 14, 30 days etc.) it belongs inside Journey Settings or during journey creation—not while writing content.
+
+--------------------------------------------------
+4. REMOVE TYPE FROM AUTHORING
+--------------------------------------------------
+
+Journey Type (Core etc.) also belongs in Journey Settings.
+
+Do not display it while writing.
+
+Writing mode should only contain writing tools.
+
+--------------------------------------------------
+5. GUIDED AUTHORING
+--------------------------------------------------
+
+The editor should guide the author through this fixed sequence:
+
+Journey Introduction
+
+↓
+
+Day 1
+
+↓
+
+Day 2
+
+↓
+
+Day 3
+
+↓
+
+Day 4
+
+↓
+
+Day 5
+
+↓
+
+Journey Complete
+
+The author should never manually create these items.
+
+Emmaus already knows every journey follows this structure.
+
+--------------------------------------------------
+6. PROGRESS
+--------------------------------------------------
+
+The sidebar should simply show progress.
+
+Example:
+
+✓ Journey Introduction
+
+⬜ Day 1
+
+⬜ Day 2
+
+⬜ Day 3
+
+⬜ Day 4
+
+⬜ Day 5
+
+⬜ Journey Complete
+
+Only the next incomplete item should be editable.
+
+Everything else remains locked.
+
+--------------------------------------------------
+7. AFTER SAVING
+--------------------------------------------------
+
+When Journey Introduction is saved:
+
+• mark Journey Introduction complete
+
+• unlock Day 1
+
+• automatically navigate to Day 1 (or clearly present "Write Day 1")
+
+When Day 1 is saved:
+
+• mark Day 1 complete
+
+• unlock Day 2
+
+Continue until Journey Complete.
+
+--------------------------------------------------
+8. REMOVE GENERIC CMS LANGUAGE
+--------------------------------------------------
+
+Do not use:
+
+• Add Step
+
+• Untitled Step
+
+Instead use the language of the finished product:
+
+Journey Introduction
+
+Day 1
+
+Day 2
+
+Day 3
+
+Day 4
+
+Day 5
+
+Journey Complete
+
+The author should always feel like they are writing a journey, not creating arbitrary content blocks.
+
+--------------------------------------------------
+9. EXISTING JOURNEYS
+--------------------------------------------------
+
+Existing journeys must continue working.
+
+Map any current content into the new structure without data loss.
+
+--------------------------------------------------
+10. TEST
+--------------------------------------------------
+
+Create a brand-new journey called:
+
+Who Is God?
+
+Click Edit.
+
+Expected behaviour:
+
+• Journey opens in guided authoring mode.
+
+• Clicking Start Journey Introduction opens the editor immediately.
+
+• Duration and Journey Type do not appear.
+
+• Save Journey Introduction.
+
+• Day 1 unlocks automatically.
+
+• Continue through the complete workflow without ever creating "Untitled Step" or requiring the author to manually add days.
+
+The entire experience should feel like Emmaus is guiding an author through writing a discipleship journey, one section at a time, with no uncertainty about what to do next.

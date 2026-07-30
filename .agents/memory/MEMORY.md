@@ -20,4 +20,5 @@
 - [EmmausContentEditor shared layout](emmaus-content-editor.md) — shared two-panel shell for all four editors; variant prop for Journey labels; companion status tracked separately in SermonEditor.
 - [Admin Testing — Reset Progress](admin-testing-reset.md) — Admin→Testing page; three reset actions; admin-reset route; clearLocalProgressCache clears emmaus_* localStorage keys.
 - [Preferred name & greeting](preferred-name-greeting.md) — updateName in AuthContext; onboarding step 0; greeting falls back gracefully; 'friend' blocked in BLOCKED_DISPLAY_NAMES; DEMO_USER.preferredName is ''.
+- [Auth name persistence](auth-name-persistence.md) — user_profiles DB table (email key) is permanent source of truth; loadingProfile gates Welcome+Onboarding; signIn previously wiped name with DEMO_USER template — now preserves it.
 - [Startup migrations policy](startup-migrations-policy.md) — only schema DDL and idempotent cleanup DELETEs allowed; no INSERT/UPDATE of content rows; two overrides removed (status restore + title rename for daily-rhythm journey).

@@ -66,6 +66,25 @@ function getSectionLabel(day: number): string {
   return JOURNEY_SCAFFOLD.find(s => s.day === day)?.label ?? `Day ${day}`;
 }
 
+/** Returns the day number of the section that follows `currentDay`, or null if it is the last. */
+function getNextScaffoldDay(currentDay: number): number | null {
+  const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === currentDay);
+  if (idx === -1 || idx >= JOURNEY_SCAFFOLD.length - 1) return null;
+  return JOURNEY_SCAFFOLD[idx + 1].day;
+}
+
+/**
+ * A section is clickable when it already has a step written, or it is the
+ * very next section after all previous ones have been written (sequential unlock).
+ */
+function isSectionClickable(sectionDay: number, stepsWithBlocks: { day: number }[]): boolean {
+  if (stepsWithBlocks.some(s => s.day === sectionDay)) return true;
+  const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === sectionDay);
+  return JOURNEY_SCAFFOLD.slice(0, idx).every(
+    s => stepsWithBlocks.some(step => step.day === s.day)
+  );
+}
+
 // ─── Save indicator ───────────────────────────────────────────────────────────
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
@@ -140,33 +159,6 @@ function JourneyHeader({
         className="w-full mt-6 text-base text-gray-700 bg-transparent border-none outline-none resize-none placeholder:text-gray-300 leading-relaxed"
         placeholder="Describe this journey — who is it for, and what will they discover?"
       />
-
-      {/* Metadata row */}
-      <div className="flex items-center gap-6 pt-6 border-t border-gray-100 mt-8">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">Duration</label>
-          <input
-            type="number"
-            value={(form as any).durationDays ?? journey.durationDays ?? ''}
-            onChange={e => onPatch('durationDays' as keyof Journey, e.target.value)}
-            onBlur={onBlur}
-            min={1}
-            className="w-16 text-sm text-gray-700 border-b border-gray-200 focus:border-teal-400 outline-none bg-transparent text-center pb-0.5"
-          />
-          <span className="text-xs text-gray-400">days</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">Type</label>
-          <select
-            value={(form as any).journeyType ?? journey.journeyType ?? 'core'}
-            onChange={e => onPatch('journeyType' as keyof Journey, e.target.value)}
-            onBlur={onBlur}
-            className="text-sm text-gray-700 border-b border-gray-200 focus:border-teal-400 outline-none bg-transparent pb-0.5"
-          >
-            {['core', 'companion', 'series', 'course'].map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-      </div>
 
       {/* Tags */}
       {journey.tags && journey.tags.length > 0 && (
@@ -500,16 +492,24 @@ function StepFieldEditor({
   step,
   titleRef,
   onMetaChange,
+  onSaveDraft,
+  onContinue,
 }: {
   step: StepWithBlocks;
   titleRef: React.RefObject<HTMLInputElement | null>;
   onMetaChange: (changes: Partial<Step>) => void;
+  onSaveDraft: () => void;
+  /** null for the last section (Journey Complete) */
+  onContinue: (() => void) | null;
 }) {
   const inputCls =
     'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 ' +
     'placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 ' +
     'focus:border-teal-400 transition-colors bg-white';
   const textareaCls = inputCls + ' resize-y leading-relaxed';
+
+  const nextDay = getNextScaffoldDay(step.day);
+  const continueLabel = nextDay !== null ? getSectionLabel(nextDay) : null;
 
   function FieldBlock({
     label,
@@ -599,6 +599,72 @@ function StepFieldEditor({
           className={textareaCls}
         />
       </FieldBlock>
+
+      {/* ── Navigation buttons ────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+        <button
+          onClick={onSaveDraft}
+          className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all"
+        >
+          Save Draft
+        </button>
+        {onContinue && continueLabel && (
+          <button
+            onClick={onContinue}
+            className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 active:scale-[0.98] transition-all shadow-sm"
+          >
+            Continue to {continueLabel} <ChevronRight size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Journey Introduction editor ──────────────────────────────────────────────
+// Focused, distraction-free editor for the Journey Introduction section (day 0).
+// Only shows: section heading, one large content field, Save Draft, Continue to Day 1.
+
+function JourneyIntroEditor({
+  step,
+  onMetaChange,
+  onSaveDraft,
+  onContinue,
+}: {
+  step: StepWithBlocks;
+  onMetaChange: (changes: Partial<Step>) => void;
+  onSaveDraft: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="max-w-2xl mx-auto px-8 py-10">
+      <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest mb-6">
+        Journey Introduction
+      </div>
+
+      <textarea
+        value={step.devotional ?? ''}
+        onChange={e => onMetaChange({ devotional: e.target.value })}
+        rows={20}
+        autoFocus
+        placeholder="Begin the journey here. Welcome the reader, set the scene, and invite them to open their heart to what lies ahead…"
+        className="w-full border border-gray-200 rounded-xl px-5 py-4 text-base text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-colors bg-white resize-y leading-relaxed"
+      />
+
+      <div className="flex items-center gap-3 mt-6">
+        <button
+          onClick={onSaveDraft}
+          className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all"
+        >
+          Save Draft
+        </button>
+        <button
+          onClick={onContinue}
+          className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 active:scale-[0.98] transition-all shadow-sm"
+        >
+          Continue to Day 1 <ChevronRight size={14} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -692,16 +758,8 @@ function GuidedProgressPanel({
   ).length;
   const allComplete = completedCount === totalSections;
 
-  function isClickable(sectionDay: number) {
-    if (stepsWithBlocks.some(s => s.day === sectionDay)) return true;
-    const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === sectionDay);
-    return JOURNEY_SCAFFOLD.slice(0, idx).every(
-      s => stepsWithBlocks.some(step => step.day === s.day)
-    );
-  }
-
   const nextSection = JOURNEY_SCAFFOLD.find(
-    s => !stepsWithBlocks.some(step => step.day === s.day) && isClickable(s.day)
+    s => !stepsWithBlocks.some(step => step.day === s.day) && isSectionClickable(s.day, stepsWithBlocks)
   );
 
   return (
@@ -720,7 +778,7 @@ function GuidedProgressPanel({
       <div className="space-y-1.5 mb-8">
         {JOURNEY_SCAFFOLD.map(section => {
           const started = stepsWithBlocks.some(s => s.day === section.day);
-          const clickable = isClickable(section.day);
+          const clickable = isSectionClickable(section.day, stepsWithBlocks);
           return (
             <button
               key={section.day}
@@ -1030,6 +1088,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     else onBack();
   };
 
+  /** Save the current section's content then navigate into the next scaffold section. */
+  const handleSaveAndAdvance = useCallback(async (currentDay: number) => {
+    await saveStep(currentDay);
+    const nextDay = getNextScaffoldDay(currentDay);
+    if (nextDay !== null) {
+      await handleOpenSection(nextDay);
+    }
+  }, [saveStep, handleOpenSection]);
+
   // ─── Derived ──────────────────────────────────────────────────────────────
 
   const selectedStep = typeof selectedView === 'number'
@@ -1127,13 +1194,19 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                 const step = stepsWithBlocks.find(s => s.day === section.day);
                 const started = !!step;
                 const active = selectedView === section.day;
+                const clickable = isSectionClickable(section.day, stepsWithBlocks);
                 const status = step ? saveStatus[step.day] : undefined;
                 return (
                   <button
                     key={section.day}
-                    onClick={() => handleOpenSection(section.day)}
+                    onClick={() => clickable && handleOpenSection(section.day)}
+                    disabled={!clickable}
                     className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors group ${
-                      active ? 'bg-teal-50' : 'hover:bg-gray-50'
+                      active
+                        ? 'bg-teal-50'
+                        : clickable
+                        ? 'hover:bg-gray-50'
+                        : 'opacity-40 cursor-default'
                     }`}
                   >
                     {/* Completion dot */}
@@ -1179,17 +1252,21 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             <div className="flex-1 flex flex-col items-center gap-1 overflow-hidden pt-1">
               {JOURNEY_SCAFFOLD.map(section => {
                 const started = stepsWithBlocks.some(s => s.day === section.day);
+                const clickable = isSectionClickable(section.day, stepsWithBlocks);
                 return (
                   <button
                     key={section.day}
-                    onClick={() => { handleOpenSection(section.day); setLeftOpen(true); }}
+                    onClick={() => { if (clickable) { handleOpenSection(section.day); setLeftOpen(true); } }}
+                    disabled={!clickable}
                     title={section.label}
                     className={`w-7 h-7 rounded-lg text-[10px] font-bold transition-colors relative ${
                       selectedView === section.day
                         ? 'bg-teal-50 text-teal-700'
                         : started
                         ? 'text-gray-600 hover:bg-gray-100'
-                        : 'text-gray-300 hover:bg-gray-100'
+                        : clickable
+                        ? 'text-gray-400 hover:bg-gray-100'
+                        : 'text-gray-200 cursor-default'
                     }`}
                   >
                     {section.shortLabel}
@@ -1278,11 +1355,28 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           </div>
         ) : selectedStep ? (
           <div className="flex-1 overflow-y-auto bg-white">
-            <StepFieldEditor
-              step={selectedStep}
-              titleRef={titleInputRef}
-              onMetaChange={changes => handleStepMetaChange(selectedStep.day, changes)}
-            />
+            {selectedStep.day === 0 ? (
+              /* Journey Introduction — focused single-field editor */
+              <JourneyIntroEditor
+                step={selectedStep}
+                onMetaChange={changes => handleStepMetaChange(selectedStep.day, changes)}
+                onSaveDraft={() => saveStep(selectedStep.day)}
+                onContinue={() => handleSaveAndAdvance(selectedStep.day)}
+              />
+            ) : (
+              /* Days 1–5 and Journey Complete — full structured editor */
+              <StepFieldEditor
+                step={selectedStep}
+                titleRef={titleInputRef}
+                onMetaChange={changes => handleStepMetaChange(selectedStep.day, changes)}
+                onSaveDraft={() => saveStep(selectedStep.day)}
+                onContinue={
+                  getNextScaffoldDay(selectedStep.day) !== null
+                    ? () => handleSaveAndAdvance(selectedStep.day)
+                    : null
+                }
+              />
+            )}
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-white">
