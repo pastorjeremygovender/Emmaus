@@ -18,7 +18,7 @@ import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import { getCollection } from '@/lib/collections-api';
-import { ChevronLeft, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2 } from 'lucide-react';
 import { resolveReturn } from '@/lib/return-context';
 import type { Journey } from '@/contexts/JourneyContext';
 
@@ -232,10 +232,19 @@ export default function JourneyDetail() {
           const maxCompletedDay = prog ? Math.max(...prog.completedDays) : null;
           const lastStep = maxCompletedDay !== null ? steps.find(s => s.day === maxCompletedDay) : null;
           return (
-            <div className="p-4 rounded-xl bg-muted/50 border border-border">
-              <p className="text-[13px] text-muted-foreground">Journey complete · {journey.durationDays} steps finished</p>
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={17} className="text-emerald-600 shrink-0" />
+                <p className="text-[14px] font-semibold text-emerald-800">Walk Completed</p>
+              </div>
+              <p className="text-[13px] text-emerald-700">
+                {journey.durationDays} {journey.durationDays === 1 ? 'step' : 'steps'} completed
+              </p>
               {lastStep?.title && (
-                <p className="text-[12px] text-muted-foreground/70 truncate mt-1">Last: {lastStep.title}</p>
+                <div>
+                  <p className="text-[11px] text-emerald-600/70 uppercase tracking-wide font-medium">Last completed</p>
+                  <p className="text-[13px] text-emerald-800 mt-0.5 leading-snug">{lastStep.title}</p>
+                </div>
               )}
             </div>
           );
@@ -257,31 +266,35 @@ export default function JourneyDetail() {
         )}
 
         {/* ── Primary action + save ─────────────────────────────────── */}
-        <div className="space-y-2.5">
-          <Button
-            className="w-full h-12 rounded-xl font-medium"
-            style={{ fontSize: isGated && !isCompleted ? '14px' : '16px' }}
-            onClick={handlePrimaryAction}
-          >
-            {primaryLabel}
-          </Button>
-          {isGated && !isCompleted && (
-            <p className="text-[12px] text-muted-foreground text-center leading-snug">
-              Begin with today's time with Jesus. Your Journey will be ready afterwards.
-            </p>
-          )}
-          {!isStarted && (
-            <button
-              onClick={toggleSave}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[14px] text-muted-foreground hover:text-foreground border border-border hover:border-primary/30 transition-all"
-              aria-label={isSaved ? 'Remove from saved' : 'Save for later'}
+        {/* Completed walks show no Continue — the Walk is done. Members can
+            review any lesson from the list below, or open Walk Contents. */}
+        {!isCompleted && (
+          <div className="space-y-2.5">
+            <Button
+              className="w-full h-12 rounded-xl font-medium"
+              style={{ fontSize: isGated ? '14px' : '16px' }}
+              onClick={handlePrimaryAction}
             >
-              {isSaved
-                ? <><BookmarkCheck size={16} className="text-primary" /> Saved</>
-                : <><Bookmark size={16} /> Save for later</>}
-            </button>
-          )}
-        </div>
+              {primaryLabel}
+            </Button>
+            {isGated && (
+              <p className="text-[12px] text-muted-foreground text-center leading-snug">
+                Begin with today's time with Jesus. Your Journey will be ready afterwards.
+              </p>
+            )}
+            {!isStarted && (
+              <button
+                onClick={toggleSave}
+                className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[14px] text-muted-foreground hover:text-foreground border border-border hover:border-primary/30 transition-all"
+                aria-label={isSaved ? 'Remove from saved' : 'Save for later'}
+              >
+                {isSaved
+                  ? <><BookmarkCheck size={16} className="text-primary" /> Saved</>
+                  : <><Bookmark size={16} /> Save for later</>}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ── Lessons ───────────────────────────────────────────────── */}
         {steps.length > 0 && (
@@ -317,15 +330,19 @@ export default function JourneyDetail() {
                   </button>
                 );
               })}
+              {/* Walk Complete entry — appended after the lesson list once all lessons are done */}
+              {isCompleted && (
+                <button
+                  onClick={() => setLocation(`/journey/${journey.id}/complete?source=journeyDetail&sourceId=${journey.id}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left bg-card hover:bg-muted/40 active:bg-muted/60"
+                  aria-label="Review Walk Complete"
+                >
+                  <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                  <span className="text-[14px] leading-snug flex-1 text-muted-foreground">Walk Complete</span>
+                  <span className="ml-auto text-[11px] font-medium shrink-0 text-primary">Review →</span>
+                </button>
+              )}
             </div>
-            {isStarted && (
-              <button
-                onClick={() => setLocation(`/journey/${journey.id}/previous?from=journeyDetail&fromId=${journey.id}`)}
-                className="text-[13px] text-primary font-medium hover:underline"
-              >
-                View Walk Contents →
-              </button>
-            )}
           </section>
         )}
 

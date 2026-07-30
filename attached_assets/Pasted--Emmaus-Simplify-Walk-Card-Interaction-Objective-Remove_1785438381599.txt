@@ -1,0 +1,88 @@
+# Emmaus — Simplify Walk Card Interaction
+
+## Objective
+
+Remove the redundant bookmark control and Details button from Walk cards inside a Journey.
+
+The entire Walk card should be the single interaction target.
+
+Do not redesign the card.
+
+---
+
+## Current Problems
+
+On the Coming to Jesus Journey page:
+
+- The bookmark icon can be selected but cannot be deselected.
+- The bookmark function is not needed here.
+- The Details button opens the same destination as tapping the card.
+- These controls add clutter and create unnecessary confusion.
+
+---
+
+## Required Changes
+
+Remove from every Walk card:
+
+- bookmark icon
+- bookmark state
+- Details button
+
+Remove any related click handlers, saved-state logic and database writes that exist only for this bookmark control.
+
+Do not leave inactive placeholders or empty spacing where these controls were.
+
+---
+
+## Card Interaction
+
+Make the whole Walk card tappable.
+
+Tapping anywhere on the card should open the Walk Details page.
+
+This includes tapping:
+
+- the image or initials area
+- Walk title
+- description
+- duration
+- empty space inside the card
+
+Use one consistent navigation handler for the entire card.
+
+Do not place nested buttons inside the card that navigate to the same destination.
+
+---
+
+## Accessibility
+
+The card should:
+
+- have a clear focus state
+- support keyboard activation on desktop
+- respond to Enter and Space
+- use an appropriate accessible label such as:
+  “Open What Went Wrong”
+
+---
+
+## Existing Bookmark Data
+
+If bookmark records have already been created from this control:
+
+- removing the UI must not break the page
+- do not allow stale bookmark state to affect navigation
+- existing records may remain in the database unless they are safe to remove
+
+---
+
+## Acceptance Criteria
+
+- No bookmark icon appears on Walk cards.
+- No Details button appears.
+- The card has no unexplained empty footer area.
+- Tapping anywhere on the card opens the Walk.
+- Navigation works on mobile and desktop.
+- The card opens only once per tap.
+- No unrelated design changes are made.

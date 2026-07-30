@@ -276,16 +276,6 @@ export default function JourneyDay() {
 
     const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
 
-    // "View Walk Contents →" — show when there is at least one step earlier in
-    // the sequence (i.e. this is not the very first published step).
-    const firstStepDay = allSteps[0]?.day ?? 1;
-    const hasPreviousSteps = day > firstStepDay;
-    const prevDaysFrom   = source ?? 'nextStepsJourneys';
-    const prevDaysFromId = sourceId ?? '';
-    const prevDaysUrl = journeyId && hasPreviousSteps
-      ? `/journey/${journeyId}/previous?from=${prevDaysFrom}${prevDaysFromId ? `&fromId=${encodeURIComponent(prevDaysFromId)}` : ''}`
-      : undefined;
-
     // "Continue to Next Lesson" — resolve the next published step after this one.
     // (isFinalStep is handled by the useEffect above; this block is never reached for it.)
     const nextStep = allSteps.find(s => s.day > day);
@@ -302,8 +292,6 @@ export default function JourneyDay() {
         continueLabel={nextStepUrl ? 'Continue to Next Lesson' : undefined}
         returnLabel="Back to Next Steps"
         onReturn={() => setLocation(returnPath)}
-        previousDaysLabel="View Walk Contents →"
-        onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   }

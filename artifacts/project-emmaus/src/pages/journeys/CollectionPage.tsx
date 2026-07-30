@@ -14,7 +14,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useEnrollment } from '@/lib/enrollment';
 import { getCollection, getCollectionJourneys } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
-import { ChevronLeft, Bookmark, BookmarkCheck } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,69 +89,42 @@ function CollectionBanner({ collection }: { collection: Collection }) {
 // ─── Journey card ─────────────────────────────────────────────────────────────
 
 function JourneyCard({
-  journey, isSaved, enrollState,
-  onSave, onDetails,
+  journey, onOpen,
 }: {
   journey: Journey;
-  isSaved: boolean;
-  enrollState: 'none' | 'active' | 'paused' | 'completed' | 'saved';
-  onSave: () => void;
-  onDetails: () => void;
+  onOpen: () => void;
 }) {
   const dur    = durationLabel(journey);
   const rhythm = rhythmLabel(journey);
   const time   = timeLabel(journey);
 
   return (
-    <div className="bg-card rounded-2xl border border-border overflow-hidden">
-      {/* Main clickable area — opens the Walk overview (JourneyDetail).
-          No nested interactive elements; Bookmark and Details sit below. */}
-      <button
-        onClick={onDetails}
-        className="w-full text-left hover:bg-muted/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-        aria-label={`Open ${journey.title}`}
-      >
-        <div className="flex">
-          <div className="w-16 shrink-0 min-h-[88px]">
-            <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full" />
-          </div>
-          <div className="flex-1 min-w-0 px-4 py-4 space-y-1">
-            <h3 className="text-[16px] font-medium text-foreground leading-snug line-clamp-2">
-              {journey.title}
-            </h3>
-            {journey.description && (
-              <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
-                {journey.description}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
-              {dur    && <span>{dur}</span>}
-              {rhythm && <><span className="opacity-30">·</span><span>{rhythm}</span></>}
-              {time   && <><span className="opacity-30">·</span><span>{time}</span></>}
-            </div>
+    <button
+      onClick={onOpen}
+      className="w-full text-left bg-card rounded-2xl border border-border overflow-hidden hover:bg-muted/30 active:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+      aria-label={`Open ${journey.title}`}
+    >
+      <div className="flex">
+        <div className="w-16 shrink-0 min-h-[88px]">
+          <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full" />
+        </div>
+        <div className="flex-1 min-w-0 px-4 py-4 space-y-1">
+          <h3 className="text-[16px] font-medium text-foreground leading-snug line-clamp-2">
+            {journey.title}
+          </h3>
+          {journey.description && (
+            <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
+              {journey.description}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
+            {dur    && <span>{dur}</span>}
+            {rhythm && <><span className="opacity-30">·</span><span>{rhythm}</span></>}
+            {time   && <><span className="opacity-30">·</span><span>{time}</span></>}
           </div>
         </div>
-      </button>
-      {/* Secondary controls — independent of the main card tap */}
-      <div className="px-4 pb-4 pt-1 flex gap-2 justify-end">
-        <button
-          onClick={onSave}
-          className="h-10 w-10 flex items-center justify-center rounded-xl border border-border hover:border-primary/30 transition-colors text-muted-foreground hover:text-primary shrink-0"
-          aria-label={isSaved ? 'Remove from saved' : 'Save for later'}
-        >
-          {isSaved
-            ? <BookmarkCheck size={16} className="text-primary" />
-            : <Bookmark size={16} />}
-        </button>
-        <button
-          onClick={onDetails}
-          className="h-10 px-3 flex items-center justify-center rounded-xl border border-border hover:border-primary/30 transition-colors text-[13px] text-muted-foreground hover:text-foreground shrink-0"
-          aria-label={`View details for ${journey.title}`}
-        >
-          Details
-        </button>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -172,7 +145,7 @@ export default function CollectionPage() {
     return '/journeys/explore';
   })();
   const { journeys, progress } = useJourney();
-  const { getState, saveForLater } = useEnrollment();
+  const { getState } = useEnrollment();
 
   const [collection, setCollection] = useState<Collection | null>(null);
   const [journeyIds, setJourneyIds] = useState<string[]>([]);
@@ -279,19 +252,13 @@ export default function CollectionPage() {
                 No Walks in this journey yet.
               </p>
             ) : (
-              collectionJourneys.map(j => {
-                const state = getState(j.id);
-                return (
-                  <JourneyCard
-                    key={j.id}
-                    journey={j}
-                    isSaved={state === 'saved'}
-                    enrollState={state as any}
-                    onSave={() => saveForLater(j.id)}
-                    onDetails={() => setLocation(`/journeys/${j.id}?source=collectionDetail&sourceId=${id}`)}
-                  />
-                );
-              })
+              collectionJourneys.map(j => (
+                <JourneyCard
+                  key={j.id}
+                  journey={j}
+                  onOpen={() => setLocation(`/journeys/${j.id}?source=collectionDetail&sourceId=${id}`)}
+                />
+              ))
             )}
           </div>
         </>

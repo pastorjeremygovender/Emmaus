@@ -3,13 +3,11 @@
  *
  * Route: /journey/:journeyId/complete
  *
- * Reached after the member completes all numbered lessons in a Walk.
- * Renders the standard EmmausCompletionCard full-screen with "Journey complete."
- * heading and the journey's completionMessage as the sub-message.
+ * Reached after the member completes all numbered lessons in a Walk,
+ * or by tapping "Walk Complete" on the Walk overview page (JourneyDetail).
  *
  * Navigation out:
- *   "Back to Next Steps"  → /journeys?tab=journeys (Next Steps tab)
- *   "View Walk Contents →" → /journey/:id/previous
+ *   "Back to Walk" → /journeys/:journeyId (Walk overview / JourneyDetail)
  */
 
 import { useParams, useLocation } from 'wouter';
@@ -22,13 +20,6 @@ export default function WalkCompletePage() {
   const { getJourney, loading } = useJourney();
 
   const journey = getJourney(journeyId ?? '');
-
-  // "View Walk Contents →" — always points back to this walk's contents list.
-  // Pass journeyDetail as the source so Walk Contents' back arrow returns to
-  // the Walk overview (JourneyDetail).
-  const walkContentsUrl = journeyId
-    ? `/journey/${journeyId}/previous?from=journeyDetail&fromId=${encodeURIComponent(journeyId)}`
-    : undefined;
 
   if (loading) {
     return (
@@ -46,10 +37,8 @@ export default function WalkCompletePage() {
         journey?.completionMessage?.trim() ||
         'May the Lord continue His work in your life.'
       }
-      returnLabel="Back to Next Steps"
-      onReturn={() => setLocation('/journeys?tab=journeys')}
-      previousDaysLabel="View Walk Contents →"
-      onPreviousDays={walkContentsUrl ? () => setLocation(walkContentsUrl) : undefined}
+      returnLabel="Back to Walk"
+      onReturn={() => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys')}
     />
   );
 }
