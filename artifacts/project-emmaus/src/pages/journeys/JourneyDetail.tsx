@@ -287,6 +287,14 @@ export default function JourneyDetail() {
                 );
               })}
             </div>
+            {isStarted && (
+              <button
+                onClick={() => setLocation(`/journey/${journey.id}/previous?from=journeyDetail&fromId=${journey.id}`)}
+                className="text-[13px] text-primary font-medium hover:underline"
+              >
+                View Walk Contents →
+              </button>
+            )}
           </section>
         )}
 
