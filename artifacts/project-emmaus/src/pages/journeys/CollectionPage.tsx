@@ -357,7 +357,7 @@ export default function CollectionPage() {
                     enrollState={state as any}
                     onStart={() => handleStart(j.id)}
                     onSave={() => saveForLater(j.id)}
-                    onDetails={() => setLocation(`/journeys/${j.id}`)}
+                    onDetails={() => setLocation(`/journeys/${j.id}?source=collectionDetail&sourceId=${id}`)}
                   />
                 );
               })

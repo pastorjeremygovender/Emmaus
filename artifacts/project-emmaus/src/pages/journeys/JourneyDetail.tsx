@@ -162,7 +162,8 @@ export default function JourneyDetail() {
   const { startSharedJourney } = useRooms();
 
   // Read return context from URL — set by the navigation caller.
-  const source = new URLSearchParams(window.location.search).get('source');
+  const source   = new URLSearchParams(window.location.search).get('source');
+  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
 
   const [pendingStart, setPendingStart]       = useState(false);
   const [showLimitMsg, setShowLimitMsg]       = useState(false);
@@ -181,6 +182,16 @@ export default function JourneyDetail() {
   const isSaved     = enrollState === 'saved';
   const isPaused    = enrollState === 'paused' && isStarted;
   const isActive    = enrollState === 'active' && isStarted && !isCompleted;
+
+  // ── Step helpers ──────────────────────────────────────────────────────────
+  // Steps are already filtered to Published for member roles by JourneyContext.
+  // Use these instead of hardcoded day numbers so the Continue button always
+  // lands on a real published step, even when day numbering has gaps.
+  const firstStepDay = steps[0]?.day ?? 1;
+  /** Next unfinished published step day. Falls back to firstStepDay when all are done. */
+  const nextUnfinishedDay = prog
+    ? (steps.find(s => !prog.completedDays.includes(s.day))?.day ?? firstStepDay)
+    : firstStepDay;
 
   // Fetch collection name
   useEffect(() => {
@@ -247,15 +258,24 @@ export default function JourneyDetail() {
     if (!journey) return;
     // Gate check — before core is done, redirect non-exempt journeys to core
     if (isGated && !isCompleted) { openCore(); return; }
-    if (isActive) { setLocation(`/journey/${journey.id}/day/${prog!.currentDay}?source=journeyDetail&sourceId=${journey.id}`); return; }
+    // Navigate to the next unfinished published step (not prog.currentDay which may point
+    // to a deleted or Draft step and trigger the JourneyDay route-guard bounce).
+    if (isActive) {
+      setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}`);
+      return;
+    }
     if (isPaused) {
       if (canActivateMore(journeys, startedIds)) {
         resumeJourney(journey.id);
-        setLocation(`/journey/${journey.id}/day/${prog!.currentDay}?source=journeyDetail&sourceId=${journey.id}`);
+        setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}`);
       } else { setShowLimitMsg(true); }
       return;
     }
-    if (isCompleted) { setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`); return; }
+    // Completed: restart from the first published step.
+    if (isCompleted) {
+      setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
+      return;
+    }
     if (!isExemptJourney(journey) && !canActivateMore(journeys, startedIds)) {
       setShowLimitMsg(true); return;
     }
@@ -266,7 +286,10 @@ export default function JourneyDetail() {
     if (!journey) return;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id);
-    setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
+    // Use the actual first published step day, not a hardcoded 1.
+    // Prevents the JourneyDay route-guard from bouncing back when day 1 is a draft
+    // or when the journey begins at day 0 (Walk Introduction).
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);
   }
 
@@ -275,7 +298,7 @@ export default function JourneyDetail() {
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id);
     startSharedJourney(roomId, journey.id, user.id);
-    setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);
   }
 
@@ -302,9 +325,9 @@ export default function JourneyDetail() {
 
         {/* ── Back button ───────────────────────────────────────────── */}
         <button
-          onClick={() => setLocation(resolveReturn(source, null, '/journeys?tab=journeys').path)}
+          onClick={() => setLocation(resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
-          aria-label="Back to Next Steps"
+          aria-label="Back"
         >
           <ChevronLeft size={17} />
           Journeys

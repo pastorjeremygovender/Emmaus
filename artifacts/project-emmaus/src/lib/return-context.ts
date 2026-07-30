@@ -22,7 +22,8 @@
  *   nextStepsJourneys     → /journeys?tab=journeys
  *   nextStepsWalks        → /journeys?tab=walks
  *   nextStepsSermons      → /journeys?tab=sermons
- *   journeyDetail         → /journeys/:sourceId         (requires sourceId)
+ *   journeyDetail         → /journeys/:sourceId                     (requires sourceId)
+ *   collectionDetail      → /journeys/collections/:sourceId          (requires sourceId)
  *   myJourney             → /my-journey
  *   journeys (legacy)     → /journeys
  */
@@ -36,6 +37,7 @@ export type SourceKey =
   | 'nextStepsWalks'
   | 'nextStepsSermons'
   | 'journeyDetail'
+  | 'collectionDetail'
   | 'myJourney';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
@@ -84,6 +86,11 @@ export function resolveReturn(
 
   if (source === 'journeyDetail') {
     if (sourceId) return { path: `/journeys/${sourceId}`, label: 'Journey' };
+    return { path: '/journeys?tab=journeys', label: 'Next Steps' };
+  }
+
+  if (source === 'collectionDetail') {
+    if (sourceId) return { path: `/journeys/collections/${sourceId}`, label: 'Collection' };
     return { path: '/journeys?tab=journeys', label: 'Next Steps' };
   }
 
