@@ -24,3 +24,4 @@
 - [Startup migrations policy](startup-migrations-policy.md) — only schema DDL and idempotent cleanup DELETEs allowed; no INSERT/UPDATE of content rows; two overrides removed (status restore + title rename for daily-rhythm journey).
 - [Enrollment default-to-active bug class](enrollment-default-active.md) — getState() defaults to 'active' for unstarted journeys; always gate resume navigation on startedIds.has() first.
 - [Step publish gap](step-publish-gap.md) — Published journey + Draft steps = empty walk + route-guard bounce; fixed by client filter + server auto-publish on journey publish.
+- [Walk card & completion flow](walk-card-completion-flow.md) — card is one clickable button → JourneyDetail; backSource thread preserves chain; completion always "Back to Walk".

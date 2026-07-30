@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
-import { EmmausBackButton } from '@/components/EmmausBackButton';
 import { resolveReturn } from '@/lib/return-context';
-import { resolveNextStep } from '@/lib/resolve-next-entry';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
@@ -63,6 +61,19 @@ export default function JourneyDay() {
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+
+  // backSource/backSourceId: the source context JourneyDetail held when it
+  // opened this lesson. Used to return to JourneyDetail WITH its own back
+  // context so that JourneyDetail's back arrow can continue the chain
+  // (e.g. → Coming to Jesus collection).
+  const backSource   = new URLSearchParams(window.location.search).get('backSource');
+  const backSourceId = new URLSearchParams(window.location.search).get('backSourceId');
+
+  // Walk overview URL — always return here after completion or via back arrow.
+  // Preserves JourneyDetail's own back context so the chain remains intact.
+  const journeyDetailUrl = journeyId
+    ? `/journeys/${journeyId}${backSource ? `?source=${encodeURIComponent(backSource)}${backSourceId ? `&sourceId=${encodeURIComponent(backSourceId)}` : ''}` : ''}`
+    : '/journeys?tab=journeys';
 
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
@@ -243,55 +254,38 @@ export default function JourneyDay() {
 
   // Completion screens — both routes use EmmausCompletionCard (design locked)
   if (isCompleting) {
-    // Resolve the correct return destination using the source that opened this page.
-    const { path: completionReturnPath, label: completionReturnShort } =
-      resolveReturn(source, sourceId, '/journeys?tab=journeys');
-    const completionReturnLabel = `Back to ${completionReturnShort}`;
-
     // Pass the full source context through to Previous Days so its back arrow
     // preserves the complete return chain.
-    // ?fromId= carries the sourceId for 'journeyDetail' so resolveReturn can
-    // reconstruct the exact detail page URL (e.g. → /journeys/:id).
     const prevDaysFrom   = source   ?? 'nextStepsJourneys';
     const prevDaysFromId = sourceId ?? '';
     const prevDaysUrl = journeyId && day > 1
       ? `/journey/${journeyId}/previous?from=${prevDaysFrom}${prevDaysFromId ? `&fromId=${encodeURIComponent(prevDaysFromId)}` : ''}`
       : undefined;
 
+    // Primary action is always "Back to Walk" — the Walk overview (JourneyDetail)
+    // shows updated progress, the completed step marked Done, and a Continue button
+    // pointing to the next unfinished lesson. Never offer "Continue to Next Step" here.
     if (isFinalStep) {
       return (
         <EmmausCompletionCard
           fullScreen
           heading="Journey complete."
           subMessage="May the Lord continue His work in your heart today."
-          returnLabel={completionReturnLabel}
-          onReturn={() => setLocation(completionReturnPath)}
+          returnLabel="Back to Walk"
+          onReturn={() => setLocation(journeyDetailUrl)}
           previousDaysLabel="View Previous Steps →"
           onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
         />
       );
     }
 
-    // Self-paced: offer Continue to Next Step immediately when the next published
-    // step exists. Daily Rhythm never reaches here (it navigates directly to /walk).
-    // resolveNextStep enforces the platform rule: Continue only when a valid next item exists.
-    // Uses nextStep.day (not day+1) to handle any gaps in day numbering correctly.
-    const allJourneySteps = journeyId ? getStepsForJourney(journeyId) : [];
-    const nextStep = resolveNextStep(allJourneySteps, day);
-    const hasNextStep = !!nextStep;
-    const nextStepUrl = hasNextStep && journeyId && nextStep
-      ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${source}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}` : ''}`
-      : '';
-
     return (
       <EmmausCompletionCard
         fullScreen
         heading={`Day ${day} complete.`}
-        subMessage={hasNextStep ? 'Continue when you\'re ready.' : 'May the Lord continue His work in your heart today.'}
-        onContinue={hasNextStep ? () => setLocation(nextStepUrl) : undefined}
-        continueLabel={hasNextStep ? 'Continue to Next Step' : undefined}
-        returnLabel={completionReturnLabel}
-        onReturn={() => setLocation(completionReturnPath)}
+        subMessage="May the Lord continue His work in your heart today."
+        returnLabel="Back to Walk"
+        onReturn={() => setLocation(journeyDetailUrl)}
         previousDaysLabel="View Previous Steps →"
         onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
       />
@@ -303,11 +297,15 @@ export default function JourneyDay() {
       {/* Sticky header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
-          <EmmausBackButton
-            source={source}
-            sourceId={sourceId}
-            fallback="/journeys?tab=journeys"
-          />
+          {/* Back button — navigates to the Walk overview with its back context
+              preserved (Daily Rhythm always returns to /walk). */}
+          <button
+            onClick={() => setLocation(isDailyRhythmJourney ? '/walk' : journeyDetailUrl)}
+            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Back"
+          >
+            <ArrowLeft size={22} />
+          </button>
           <div className="flex-1 min-w-0 text-center px-3">
             <div className="font-medium text-sm text-foreground truncate leading-tight">
               {isDailyRhythmJourney ? '10 Minutes with Jesus' : journey.title}

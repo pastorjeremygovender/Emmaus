@@ -1,0 +1,251 @@
+PROJECT EMMAUS — SIMPLIFY WALK CARD NAVIGATION AND LESSON COMPLETION FLOW
+
+The published app is working.
+
+Create a checkpoint first:
+
+PRE-WALK-CARD-AND-COMPLETION-FLOW-FIX
+
+This task applies only to the user-facing Journey/Walk flow.
+
+Do not modify:
+
+- Journey authoring
+- Rooms
+- Today’s Steps
+- Active Engagement architecture
+- Daily Rhythm
+- Daily Devotionals
+- Sermon Companions
+- Bible
+- database schema
+
+Do not create a migration.
+
+====================================================
+1. MAKE THE WHOLE WALK CARD CLICKABLE
+====================================================
+
+On the Coming to Jesus Journey page, the Walk card currently shows:
+
+What went wrong
+Description
+5 Days · Self-paced
+Continue
+Bookmark
+Details
+
+Remove the Continue button from this card.
+
+Make the main Walk card area clickable.
+
+Clicking anywhere on the main card should open the What went wrong Walk overview page.
+
+The Walk overview is the screen that displays:
+
+- Walk title and description
+- Journey information
+- progress indicator
+- current step
+- Continue button
+- complete lesson list
+- completed lesson indicators
+
+This is the correct destination.
+
+The user should not have to choose between clicking the card and clicking Continue.
+
+====================================================
+2. PRESERVE SECONDARY CONTROLS
+====================================================
+
+Bookmark and Details may remain if they are still required.
+
+Their clicks must not trigger the main card navigation.
+
+Use event handling so:
+
+- clicking the main card opens the Walk overview;
+- clicking Bookmark only bookmarks;
+- clicking Details only opens Details.
+
+Do not place another Continue button on the outer Walk card.
+
+====================================================
+3. WALK OVERVIEW CONTINUE BUTTON
+====================================================
+
+Keep the Continue button on the What went wrong Walk overview page.
+
+That is the correct place for Continue.
+
+It should:
+
+- open the next unfinished lesson;
+- use the user’s saved progress;
+- open the first published lesson when no progress exists;
+- disappear when all required lessons are complete.
+
+Do not change the current working lesson-opening behaviour.
+
+====================================================
+4. LESSON COMPLETION CONFIRMATION
+====================================================
+
+The current lesson-completion confirmation opens as a separate full screen.
+
+The confirmation content itself is acceptable, but the navigation flow is inconsistent with other Emmaus content.
+
+After the user taps:
+
+Complete Today
+
+show the approved completion confirmation briefly within the existing lesson flow or as a lightweight completion state.
+
+Then the primary action should be:
+
+Back to Walk
+
+not:
+
+Back to Next Steps
+
+The destination must be the What went wrong Walk overview page.
+
+====================================================
+5. RETURN TO THE WALK OVERVIEW
+====================================================
+
+After completing any lesson, return the user to the What went wrong overview showing:
+
+- updated progress;
+- the completed lesson marked Done;
+- the next unfinished lesson;
+- the complete lesson list;
+- Continue pointing to the next unfinished lesson.
+
+Example:
+
+Complete Day 3
+→ confirmation
+→ Back to Walk
+→ What went wrong overview
+→ Step 4 of 5
+→ lesson list visible
+→ Continue opens Step 4
+
+Do not return directly to:
+
+- Next Steps;
+- Coming to Jesus collection page;
+- a standalone completion dead end.
+
+====================================================
+6. PREVIOUS STEPS
+====================================================
+
+The completion confirmation may retain:
+
+View Previous Steps →
+
+This should open the previous/completed lessons for the same Walk.
+
+It must not replace access to the Walk overview.
+
+====================================================
+7. BACK NAVIGATION
+====================================================
+
+Required navigation hierarchy:
+
+Next Steps
+→ Coming to Jesus
+→ What went wrong overview
+→ Lesson
+→ Completion confirmation
+→ What went wrong overview
+
+Back from a lesson:
+
+→ What went wrong overview
+
+Back from the Walk overview:
+
+→ Coming to Jesus
+
+Back from Coming to Jesus:
+
+→ Next Steps Journeys tab
+
+Do not use generic browser-history navigation where it produces inconsistent destinations.
+
+====================================================
+8. CARD ACCESSIBILITY
+====================================================
+
+Because the full Walk card becomes clickable:
+
+- use the correct button/link semantics;
+- support keyboard activation on desktop;
+- include a clear accessible label such as:
+  “Open What went wrong”;
+- preserve visible focus styling;
+- do not create nested invalid interactive HTML.
+
+Bookmark and Details must remain independently accessible.
+
+====================================================
+9. TESTING — PUBLISHED APP
+====================================================
+
+Test on published mobile and desktop.
+
+1. Open Next Steps.
+2. Open Coming to Jesus.
+3. Confirm the outer What went wrong card has no Continue button.
+4. Tap the main card.
+5. Confirm the Walk overview opens.
+6. Confirm the lesson list and progress are visible.
+7. Tap Continue on the overview.
+8. Confirm the correct unfinished lesson opens.
+9. Tap Complete Today.
+10. Confirm the completion message appears.
+11. Tap Back to Walk.
+12. Confirm the Walk overview opens.
+13. Confirm the completed lesson is marked Done.
+14. Confirm progress has updated.
+15. Confirm Continue opens the next unfinished lesson.
+16. Confirm Bookmark still works independently.
+17. Confirm Details still works independently.
+18. Confirm the back arrow follows the approved hierarchy.
+19. Confirm no Journey Not Found or unavailable-step screen appears.
+20. Confirm no migration was created.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+The outer Walk card is now one clear clickable entry point.
+
+The only Continue button is inside the Walk overview, where users can see their progress and all lessons.
+
+After completing a lesson, users return to that Walk overview so they can see what they have completed and continue naturally.
+
+====================================================
+FINAL REPORT
+====================================================
+
+Provide:
+
+1. Pre-change checkpoint.
+2. Components changed.
+3. Outer Continue button removed.
+4. Full-card click behaviour implemented.
+5. Completion return route corrected.
+6. Published mobile test results.
+7. Published desktop test results.
+8. Confirmation that no unrelated feature changed.
+9. Confirmation that no migration was created.
+10. Post-change checkpoint.
+
+Stop after this flow is complete and verified.

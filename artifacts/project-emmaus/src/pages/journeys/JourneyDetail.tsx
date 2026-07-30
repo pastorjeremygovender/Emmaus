@@ -165,6 +165,14 @@ export default function JourneyDetail() {
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
 
+  // When navigating into a lesson, pass our own back-context through so that
+  // "Back to Walk" from the completion screen (and the lesson back arrow) can
+  // return here with source params intact — allowing this page's back arrow to
+  // correctly resolve to "Coming to Jesus" (or wherever we were opened from).
+  const backContextSuffix = source
+    ? `&backSource=${encodeURIComponent(source)}&backSourceId=${encodeURIComponent(sourceId ?? '')}`
+    : '';
+
   const [pendingStart, setPendingStart]       = useState(false);
   const [showLimitMsg, setShowLimitMsg]       = useState(false);
   const [collectionName, setCollectionName]   = useState<string | null>(null);
@@ -261,19 +269,19 @@ export default function JourneyDetail() {
     // Navigate to the next unfinished published step (not prog.currentDay which may point
     // to a deleted or Draft step and trigger the JourneyDay route-guard bounce).
     if (isActive) {
-      setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}`);
+      setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
       return;
     }
     if (isPaused) {
       if (canActivateMore(journeys, startedIds)) {
         resumeJourney(journey.id);
-        setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}`);
+        setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
       } else { setShowLimitMsg(true); }
       return;
     }
     // Completed: restart from the first published step.
     if (isCompleted) {
-      setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
+      setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
       return;
     }
     if (!isExemptJourney(journey) && !canActivateMore(journeys, startedIds)) {
@@ -289,7 +297,7 @@ export default function JourneyDetail() {
     // Use the actual first published step day, not a hardcoded 1.
     // Prevents the JourneyDay route-guard from bouncing back when day 1 is a draft
     // or when the journey begins at day 0 (Walk Introduction).
-    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
 
@@ -298,7 +306,7 @@ export default function JourneyDetail() {
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id);
     startSharedJourney(roomId, journey.id, user.id);
-    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
 
