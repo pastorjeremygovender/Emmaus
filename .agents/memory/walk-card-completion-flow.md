@@ -5,6 +5,8 @@ description: CollectionPage JourneyCard is now a single clickable entry → Jour
 
 ## The rules
 
+0. **Journey card navigates directly to the Walk overview.** In the Journeys tab (`JourneysPanel` in `Journeys.tsx`), clicking a Journey collection card calls `onOpenJourney(col)` which resolves: 1 walk → navigate to that walk; multiple walks → prefer in-progress, then not-started, then first; 0 walks → fall back to `/journeys/collections/:id`. The intermediate `CollectionPage` is bypassed for single-Walk journeys.
+
 1. **Walk card has no Continue button.** The whole card body is one `<button onClick={onDetails}>` pointing to JourneyDetail. Bookmark and Details are separate buttons below the card body (never nested inside it). No nested interactive HTML.
 
 2. **CollectionPage holds no start-modal logic.** The start modal (enrollment check, room start) lives in JourneyDetail only. CollectionPage removed: `handleStart`, `handleStartAlone`, `handleStartWithRoom`, `pendingJourneyId`, `journeysWithIntro`, `JourneyStartModal`.

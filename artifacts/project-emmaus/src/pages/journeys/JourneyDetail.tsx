@@ -1,10 +1,10 @@
 /**
- * JourneyDetail — member-facing Journey detail screen.
+ * JourneyDetail — member-facing Walk overview.
  * Route: /journeys/:id
  *
  * Layout (spec order):
- *   Cover → Title → Purpose → Description → Key Scripture →
- *   Related Sermons → Journey Info → Start Journey / Save → Steps
+ *   Back → Collection name (h1) → Walk title (secondary) →
+ *   Progress → Continue → Lessons
  */
 
 import { useState, useMemo, useEffect } from 'react';
@@ -18,136 +18,9 @@ import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import { getCollection } from '@/lib/collections-api';
-import { getApiUrl } from '@/lib/api';
-import {
-  ChevronLeft, Bookmark, BookmarkCheck, Clock, Calendar,
-  Footprints, BookOpen, ExternalLink, PlayCircle, Headphones,
-} from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck } from 'lucide-react';
 import { resolveReturn } from '@/lib/return-context';
 import type { Journey } from '@/contexts/JourneyContext';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface SermonResult {
-  sermonId: string;
-  title: string;
-  speaker: string;
-  sermonDate?: string;
-  matchingReference?: string;
-  timestampedUrl: string;
-  timestampLabel: string;
-  audioUrl?: string;
-  relativeStartSeconds?: number;
-  relativeTimestampLabel?: string;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function rhythmLabel(j: Journey): string {
-  const dur = (j.estimatedDuration ?? '').toLowerCase();
-  if (dur.includes('daily') || dur.includes('per day')) return 'Daily';
-  if (dur.includes('weekly') || dur.includes('per week')) return 'Weekly';
-  if (dur.includes('guided')) return 'Guided';
-  return 'Self-paced';
-}
-
-function timeLabel(j: Journey): string | null {
-  if (!j.estimatedDuration) return null;
-  const m = j.estimatedDuration.match(/(\d+)\s*(min|minute|hour)/i);
-  if (!m) return null;
-  const n = parseInt(m[1]);
-  const unit = m[2].toLowerCase().startsWith('h') ? 'hour' : 'minute';
-  return `About ${n} ${unit}${n !== 1 ? 's' : ''} per step`;
-}
-
-/**
- * Parse a scripture reference string into { bookId, chapter } for Bible linking.
- * "John 3:16-17" → { bookId: "john", chapter: 3 }
- * "1 John 1:5"   → { bookId: "1john", chapter: 1 }
- * "Genesis 1"    → { bookId: "genesis", chapter: 1 }
- */
-function parseScriptureRef(ref: string): { bookId: string; chapter: number; display: string } | null {
-  if (!ref?.trim()) return null;
-  // Take just the first reference if multiple separated by ; or ,
-  const first = ref.split(/[;,]/)[0].trim();
-  // Match: (book name with optional leading number) (chapter) optionally :verse
-  const m = first.match(/^(.+?)\s+(\d+)(?::\d+.*)?$/);
-  if (!m) return null;
-  const bookId = m[1].toLowerCase().replace(/\s+/g, '');
-  const chapter = parseInt(m[2]);
-  if (isNaN(chapter)) return null;
-  return { bookId, chapter, display: first };
-}
-
-function formatSermonDate(d?: string): string {
-  if (!d) return '';
-  try {
-    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch { return d; }
-}
-
-// ─── Cover image ──────────────────────────────────────────────────────────────
-
-function CoverImage({ url, title }: { url?: string; title: string }) {
-  const [err, setErr] = useState(false);
-  const initials = title.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase();
-  if (!url || err) {
-    return (
-      <div className="w-full h-52 bg-primary/8 flex items-center justify-center rounded-2xl">
-        <span className="text-primary/30 text-[36px] font-medium select-none">{initials}</span>
-      </div>
-    );
-  }
-  return (
-    <img src={url} alt="" className="w-full h-52 object-cover rounded-2xl" onError={() => setErr(true)} />
-  );
-}
-
-// ─── Sermon card ──────────────────────────────────────────────────────────────
-
-function SermonCard({ sermon }: { sermon: SermonResult }) {
-  return (
-    <div className="flex items-start gap-3 p-3.5 rounded-xl border border-border bg-card">
-      <div className="w-9 h-9 rounded-full bg-primary/8 flex items-center justify-center shrink-0 mt-0.5">
-        <Headphones size={16} className="text-primary/60" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium text-foreground line-clamp-2 leading-snug">
-          {sermon.title}
-        </p>
-        <p className="text-[12px] text-muted-foreground mt-0.5">
-          {sermon.speaker}
-          {sermon.sermonDate ? ` · ${formatSermonDate(sermon.sermonDate)}` : ''}
-        </p>
-        {sermon.matchingReference && (
-          <p className="text-[11px] font-medium text-primary mt-1">{sermon.matchingReference}</p>
-        )}
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {sermon.audioUrl && (
-            <a
-              href={sermon.timestampedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[12px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full hover:bg-amber-100 transition-colors"
-            >
-              <PlayCircle size={12} />
-              {sermon.relativeTimestampLabel ? `Listen from ${sermon.relativeTimestampLabel}` : 'Listen'}
-            </a>
-          )}
-          <a
-            href={sermon.timestampedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ExternalLink size={11} />
-            {sermon.timestampLabel ? `Watch from ${sermon.timestampLabel}` : 'Watch on YouTube'}
-          </a>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -168,16 +41,14 @@ export default function JourneyDetail() {
   // When navigating into a lesson, pass our own back-context through so that
   // "Back to Walk" from the completion screen (and the lesson back arrow) can
   // return here with source params intact — allowing this page's back arrow to
-  // correctly resolve to "Coming to Jesus" (or wherever we were opened from).
+  // correctly resolve to the right parent.
   const backContextSuffix = source
     ? `&backSource=${encodeURIComponent(source)}&backSourceId=${encodeURIComponent(sourceId ?? '')}`
     : '';
 
-  const [pendingStart, setPendingStart]       = useState(false);
-  const [showLimitMsg, setShowLimitMsg]       = useState(false);
-  const [collectionName, setCollectionName]   = useState<string | null>(null);
-  const [sermons, setSermons]                 = useState<SermonResult[]>([]);
-  const [sermonsLoaded, setSermonsLoaded]     = useState(false);
+  const [pendingStart, setPendingStart]     = useState(false);
+  const [showLimitMsg, setShowLimitMsg]     = useState(false);
+  const [collectionName, setCollectionName] = useState<string | null>(null);
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journey ? progress[journey.id] : undefined;
@@ -201,7 +72,7 @@ export default function JourneyDetail() {
     ? (steps.find(s => !prog.completedDays.includes(s.day))?.day ?? firstStepDay)
     : firstStepDay;
 
-  // Fetch collection name
+  // Fetch collection name for the page heading (h1 = collection, secondary = walk title)
   useEffect(() => {
     if (!journey?.collectionId) return;
     getCollection(journey.collectionId)
@@ -209,31 +80,14 @@ export default function JourneyDetail() {
       .catch(() => {});
   }, [journey?.collectionId]);
 
-  // Fetch related sermons via preached-here when scriptureReference is set
-  useEffect(() => {
-    if (!journey?.scriptureReference) { setSermonsLoaded(true); return; }
-    const parsed = parseScriptureRef(journey.scriptureReference);
-    if (!parsed) { setSermonsLoaded(true); return; }
-    const url = getApiUrl(
-      `/api/youtube-archive/preached-here?bookId=${encodeURIComponent(parsed.bookId)}&chapter=${parsed.chapter}`
-    );
-    fetch(url)
-      .then(r => r.ok ? r.json() : { chapterSermons: [], bookSermons: [] })
-      .then((data: { chapterSermons?: SermonResult[]; bookSermons?: SermonResult[]; sermons?: SermonResult[] }) => {
-        const results = (data.chapterSermons?.length ? data.chapterSermons : data.bookSermons) ?? data.sermons ?? [];
-        setSermons(results.slice(0, 3));
-        setSermonsLoaded(true);
-      })
-      .catch(() => setSermonsLoaded(true));
-  }, [journey?.scriptureReference]);
-
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background pb-24">
         <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-6">
-          <div className="h-52 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-8 w-3/4 rounded-lg bg-muted animate-pulse" />
-          <div className="h-4 w-full rounded bg-muted animate-pulse" />
+          <div className="h-5 w-1/4 rounded bg-muted animate-pulse" />
+          <div className="h-8 w-2/3 rounded-lg bg-muted animate-pulse" />
+          <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
+          <div className="h-12 rounded-xl bg-muted animate-pulse" />
         </main>
         <BottomNav />
       </div>
@@ -294,9 +148,6 @@ export default function JourneyDetail() {
     if (!journey) return;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id);
-    // Use the actual first published step day, not a hardcoded 1.
-    // Prevents the JourneyDay route-guard from bouncing back when day 1 is a draft
-    // or when the journey begins at day 0 (Walk Introduction).
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
@@ -317,15 +168,12 @@ export default function JourneyDetail() {
   }
 
   // All self-paced journeys use "Continue" regardless of started/paused/completed state.
-  // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core'),
-  // which uses a different label to prompt the member to complete their daily reading first.
+  // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core').
   const primaryLabel =
     (isGated && !isCompleted) ? 'Complete today\'s 10 Minutes with Jesus' :
                                  'Continue';
 
-  const rhythm = rhythmLabel(journey);
-  const time   = timeLabel(journey);
-  const scriptureRef = journey.scriptureReference ? parseScriptureRef(journey.scriptureReference) : null;
+  const backDest = resolveReturn(source, sourceId, '/journeys?tab=journeys');
 
   return (
     <div className="min-h-[100dvh] bg-background pb-24">
@@ -333,113 +181,24 @@ export default function JourneyDetail() {
 
         {/* ── Back button ───────────────────────────────────────────── */}
         <button
-          onClick={() => setLocation(resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
+          onClick={() => setLocation(backDest.path)}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
           aria-label="Back"
         >
           <ChevronLeft size={17} />
-          Journeys
+          {backDest.label}
         </button>
 
-        {/* ── Cover image ───────────────────────────────────────────── */}
-        <CoverImage url={journey.coverImageUrl} title={journey.title} />
-
-        {/* ── Title ─────────────────────────────────────────────────── */}
-        <div className="space-y-1.5">
+        {/* ── Page heading: collection name as h1, walk title secondary ─ */}
+        <div className="space-y-0.5">
           <h1 className="text-[26px] font-sans font-medium tracking-tight text-foreground leading-snug">
-            {journey.title}
+            {collectionName ?? journey.title}
           </h1>
-          {/* Purpose / subtitle */}
-          {journey.subtitle && (
-            <p className="text-[14px] font-medium text-primary leading-snug">{journey.subtitle}</p>
+          {/* Walk title shown as compact secondary label when it differs from the collection name */}
+          {collectionName && collectionName !== journey.title && (
+            <p className="text-[13px] text-muted-foreground">{journey.title}</p>
           )}
         </div>
-
-        {/* ── Description ───────────────────────────────────────────── */}
-        {journey.description && (
-          <p className="text-[15px] text-muted-foreground leading-relaxed">{journey.description}</p>
-        )}
-
-        {/* ── Collection badge ──────────────────────────────────────── */}
-        {journey.collectionId && collectionName && (
-          <button
-            onClick={() => setLocation(`/journeys/collections/${journey!.collectionId}`)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-[13px] font-medium text-primary hover:bg-primary/10 transition-colors"
-            aria-label={`View ${collectionName} collection`}
-          >
-            <BookOpen size={12} />
-            {collectionName}
-          </button>
-        )}
-
-        {/* ── Key Scripture ─────────────────────────────────────────── */}
-        {scriptureRef && (
-          <section className="space-y-2.5">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Key Scripture
-            </h2>
-            <button
-              onClick={() => setLocation(`/bible/read/${scriptureRef.bookId}/${scriptureRef.chapter}`)}
-              className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all group"
-              aria-label={`Open ${scriptureRef.display} in Bible reader`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/8 flex items-center justify-center shrink-0">
-                    <BookOpen size={16} className="text-primary/70" />
-                  </div>
-                  <div>
-                    <p className="text-[15px] font-medium text-foreground">{scriptureRef.display}</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Open in Emmaus Bible</p>
-                  </div>
-                </div>
-                <ChevronLeft size={16} className="text-muted-foreground rotate-180 group-hover:text-primary transition-colors shrink-0" />
-              </div>
-            </button>
-          </section>
-        )}
-
-        {/* ── Related Sermons ───────────────────────────────────────── */}
-        {sermonsLoaded && sermons.length > 0 && (
-          <section className="space-y-2.5">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Related Sermons
-            </h2>
-            <div className="space-y-2.5">
-              {sermons.map((s, i) => <SermonCard key={s.sermonId ?? i} sermon={s} />)}
-            </div>
-          </section>
-        )}
-
-        {/* ── Journey information ───────────────────────────────────── */}
-        <section className="space-y-2.5">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Journey Information
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {journey.durationDays > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-[13px] text-muted-foreground">
-                <Calendar size={13} />
-                {journey.durationDays} {journey.durationDays === 1 ? 'Day' : 'Days'}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-[13px] text-muted-foreground">
-              <Footprints size={13} />
-              {rhythm}
-            </span>
-            {time && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-[13px] text-muted-foreground">
-                <Clock size={13} />
-                {time}
-              </span>
-            )}
-            {steps.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-[13px] text-muted-foreground">
-                {steps.length} Steps
-              </span>
-            )}
-          </div>
-        </section>
 
         {/* ── Progress (if started) ─────────────────────────────────── */}
         {isActive && prog && (
@@ -506,11 +265,11 @@ export default function JourneyDetail() {
           )}
         </div>
 
-        {/* ── Step overview ─────────────────────────────────────────── */}
+        {/* ── Lessons ───────────────────────────────────────────────── */}
         {steps.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              {steps.length} Steps
+              Lessons
             </h2>
             <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
               {steps.map(s => {

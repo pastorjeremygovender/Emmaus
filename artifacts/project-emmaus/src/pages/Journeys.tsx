@@ -523,13 +523,13 @@ function journeyItemCards(
 }
 
 // Journeys tab — one card per Journey (collection).
-// Selecting a card opens the Journey detail page (/journeys/collections/:id).
-// Individual Walk cards are shown there, not here.
+// Selecting a card navigates directly to the active/first Walk overview,
+// bypassing the intermediate collection page for single-Walk journeys.
 function JourneysPanel({
   collections, onOpenJourney,
 }: {
   collections: JourneyCollectionGroup[];
-  onOpenJourney: (collectionId: string) => void;
+  onOpenJourney: (col: JourneyCollectionGroup) => void;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
@@ -549,7 +549,7 @@ function JourneysPanel({
             description={col.description}
             metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
             primaryActionLabel={actionLabel}
-            onAction={() => onOpenJourney(col.id)}
+            onAction={() => onOpenJourney(col)}
           />
         );
       })}
@@ -892,7 +892,23 @@ export default function Journeys() {
             {activeTab === 'journeys' && (
               <JourneysPanel
                 collections={data.journeyCollections}
-                onOpenJourney={(id) => setLocation(`/journeys/collections/${id}?source=nextStepsJourneys`)}
+                onOpenJourney={(col) => {
+                  if (col.journeys.length === 0) {
+                    // No walks yet — fall back to the collection page
+                    setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
+                    return;
+                  }
+                  if (col.journeys.length === 1) {
+                    setLocation(`/journeys/${col.journeys[0].id}?source=nextStepsJourneys`);
+                    return;
+                  }
+                  // Multiple walks: prefer in-progress, then not-started, then first
+                  const target =
+                    col.journeys.find(j => j.memberProgressState === 'in-progress') ??
+                    col.journeys.find(j => j.memberProgressState === 'not-started') ??
+                    col.journeys[0];
+                  setLocation(`/journeys/${target.id}?source=nextStepsJourneys`);
+                }}
               />
             )}
 
