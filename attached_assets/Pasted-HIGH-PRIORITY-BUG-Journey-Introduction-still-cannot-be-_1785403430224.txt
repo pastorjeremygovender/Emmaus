@@ -1,0 +1,182 @@
+HIGH-PRIORITY BUG: Journey Introduction still cannot be opened or edited.
+
+Current published behaviour:
+
+- Day 1 can be selected and edited successfully.
+- Journey Introduction appears in the sidebar and progress list.
+- There is no manual checkbox, which is correct.
+- Clicking “Journey Introduction” does not open an editor.
+- Clicking the green “Write Journey Introduction” button does nothing.
+- Journey Introduction therefore cannot be written, saved or marked complete.
+
+This confirms that Journey Introduction has only been added to the UI visually. It has not been connected to the same editor lifecycle that the daily content uses.
+
+Do not redesign the screen again.
+
+Fix the underlying implementation.
+
+--------------------------------------------------
+1. CREATE A REAL JOURNEY INTRODUCTION RECORD
+--------------------------------------------------
+
+Journey Introduction must be a real persisted content section associated with the journey.
+
+It must not be:
+- a visual-only progress item
+- a disabled placeholder
+- an ordinary numbered day
+- an “Untitled Step”
+
+Use a dedicated field or content record such as:
+
+journey.introductionContent
+
+or a structured section with:
+
+type: "journey_introduction"
+
+It must be stored permanently in the production database.
+
+--------------------------------------------------
+2. CONNECT BOTH ENTRY POINTS
+--------------------------------------------------
+
+Both of these controls must open the same dedicated editor:
+
+- “Journey Introduction” in the left sidebar
+- the green “Write Journey Introduction” button
+
+They must set the editor state to Journey Introduction and display its editable form.
+
+Do not merely select or highlight the item.
+
+--------------------------------------------------
+3. DEDICATED INTRODUCTION EDITOR
+--------------------------------------------------
+
+When Journey Introduction is selected, replace the Overview panel with:
+
+Journey Introduction
+
+[Large editable rich-text field]
+
+Actions:
+
+- Save Draft
+- Save and Continue to Day 1
+
+The editor must support:
+- paragraphs
+- line breaks
+- italics
+- basic formatting
+- existing content loading when reopened
+
+Do not show:
+- Duration
+- Journey Type
+- the Overview form
+- generic day fields such as Scripture, Prayer or Today’s Step
+- Add Step
+- Untitled Step
+
+--------------------------------------------------
+4. COMPLETION MUST BE DATA-DRIVEN
+--------------------------------------------------
+
+There must not be a manual checkbox.
+
+Journey Introduction should automatically show as complete only when valid introduction content has been saved.
+
+Completion rule:
+
+trimmed introduction content is not empty
+→ mark Journey Introduction complete
+→ show the green completed indicator
+→ unlock Day 1
+
+If the saved introduction is later cleared, its completion state must update correctly.
+
+--------------------------------------------------
+5. DO NOT USE THE EXISTING DAY NUMBER LOGIC BLINDLY
+--------------------------------------------------
+
+Day 1 editing already works.
+
+Investigate how Day 1:
+- becomes selected
+- loads its editor
+- saves content
+- updates completion
+- unlocks the next item
+
+Implement an equivalent lifecycle for Journey Introduction, while keeping it separate from the numbered day array.
+
+Do not assign it day number 0 unless the existing data architecture absolutely requires that internally. It must never appear to the author or user as Day 0.
+
+--------------------------------------------------
+6. FIX THE BUTTON HANDLERS
+--------------------------------------------------
+
+Trace and fix the actual click handlers for:
+
+- Write Journey Introduction
+- sidebar Journey Introduction
+
+Check for:
+- disabled-state conditions
+- missing onClick callbacks
+- callbacks returning early
+- incorrect selectedSection values
+- type mismatches
+- rendering conditions that only recognise numbered steps
+- state resetting immediately back to Overview
+- errors in the browser console
+
+Do not silently fail.
+
+If opening or saving fails, show a visible error message.
+
+--------------------------------------------------
+7. EXISTING JOURNEYS
+--------------------------------------------------
+
+Do not delete or alter existing Day 1 content.
+
+The journey in the screenshot already has Day 1 completed while the introduction is empty.
+
+After this fix:
+- Journey Introduction must be editable.
+- Existing Day 1 content must remain intact.
+- Saving the introduction must not create a duplicate Day 1.
+- It must not create any Untitled Steps.
+- It must not reset publishing status.
+
+For existing journeys that already have daily content, allow the author to add the introduction without destroying or relocking those days.
+
+--------------------------------------------------
+8. TEST THE ACTUAL PUBLISHED FLOW
+--------------------------------------------------
+
+Test with “Who Is God?” and “What went wrong”.
+
+Required test:
+
+1. Open the Journey Editor.
+2. Click Journey Introduction in the sidebar.
+3. Confirm the dedicated editor opens.
+4. Enter introduction text.
+5. Save Draft.
+6. Leave the journey.
+7. Reopen it.
+8. Confirm the introduction text persists.
+9. Confirm Journey Introduction shows as complete.
+10. Confirm existing Day 1 content remains intact.
+11. Edit the introduction again.
+12. Confirm updates persist.
+13. Confirm the green Write Journey Introduction button opens the same editor.
+14. Confirm there are no duplicate days or Untitled Steps.
+
+Run TypeScript and build checks.
+
+Do not report this as fixed until both controls open the editor and saved introduction content survives a full page reload in the published admin.
