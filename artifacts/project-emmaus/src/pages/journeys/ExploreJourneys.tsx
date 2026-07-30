@@ -279,16 +279,18 @@ export default function ExploreJourneys() {
     saveForLater(journeyId);
   }, [saveForLater]);
 
-  function handleStartAlone() {
+  async function handleStartAlone() {
     if (!pendingJourneyId) return;
-    startJourney(pendingJourneyId);
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(pendingJourneyId);
     setLocation(`/journey/${pendingJourneyId}/day/1`);
     setPendingJourneyId(null);
   }
 
-  function handleStartWithRoom(roomId: string) {
+  async function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
-    startJourney(pendingJourneyId);
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(pendingJourneyId);
     startSharedJourney(roomId, pendingJourneyId, user.id);
     setLocation(`/journey/${pendingJourneyId}/day/1`);
     setPendingJourneyId(null);

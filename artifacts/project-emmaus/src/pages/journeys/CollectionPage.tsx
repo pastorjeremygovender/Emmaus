@@ -249,23 +249,23 @@ export default function CollectionPage() {
     setPendingJourneyId(journeyId);
   }, [journeys, getState, progress, canActivateMore, startedIds, startDayFor, setLocation]);
 
-  function handleStartAlone() {
+  async function handleStartAlone() {
     if (!pendingJourneyId) return;
     const id = pendingJourneyId;
     const day = startDayFor(id);
-    try { startJourney(id); } catch (err) { console.error('[Emmaus] startJourney failed:', err); }
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(id);
     setPendingJourneyId(null);
     setLocation(`/journey/${id}/day/${day}`);
   }
 
-  function handleStartWithRoom(roomId: string) {
+  async function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
     const id = pendingJourneyId;
     const day = startDayFor(id);
-    try {
-      startJourney(id);
-      startSharedJourney(roomId, id, user.id);
-    } catch (err) { console.error('[Emmaus] startSharedJourney failed:', err); }
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(id);
+    startSharedJourney(roomId, id, user.id);
     setPendingJourneyId(null);
     setLocation(`/journey/${id}/day/${day}`);
   }

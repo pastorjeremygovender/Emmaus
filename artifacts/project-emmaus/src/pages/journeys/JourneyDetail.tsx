@@ -262,16 +262,18 @@ export default function JourneyDetail() {
     setPendingStart(true);
   }
 
-  function handleStartAlone() {
+  async function handleStartAlone() {
     if (!journey) return;
-    startJourney(journey.id);
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(journey.id);
     setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);
   }
 
-  function handleStartWithRoom(roomId: string) {
+  async function handleStartWithRoom(roomId: string) {
     if (!journey || !user) return;
-    startJourney(journey.id);
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(journey.id);
     startSharedJourney(roomId, journey.id, user.id);
     setLocation(`/journey/${journey.id}/day/1?source=journeyDetail&sourceId=${journey.id}`);
     setPendingStart(false);

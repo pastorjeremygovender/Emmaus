@@ -10,10 +10,12 @@ interface Props {
   journeyId: string;
   journeyTitle: string;
   onClose: () => void;
-  /** Called when the user chooses "alone" — let the caller navigate */
-  onStartAlone: () => void;
-  /** Called when the user has selected a room and wants to start shared */
-  onStartWithRoom: (roomId: string) => void;
+  /** Called when the user chooses "alone" — let the caller navigate.
+   *  Return a resolved Promise for success, or reject/throw to surface an error. */
+  onStartAlone: () => Promise<void>;
+  /** Called when the user has selected a room and wants to start shared.
+   *  Return a resolved Promise for success, or reject/throw to surface an error. */
+  onStartWithRoom: (roomId: string) => Promise<void>;
 }
 
 type Step = 'choice' | 'room-select';
@@ -25,6 +27,8 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
   const [step, setStep] = useState<Step>('choice');
   const [mode, setMode] = useState<'alone' | 'together'>('alone');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // ── iOS ghost-click guard ────────────────────────────────────────────────────
   // iOS Safari fires a phantom 300ms-delayed click at the same screen coordinates
@@ -45,9 +49,18 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
 
   const myRooms: Room[] = user ? getMyRooms(user.id) : [];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (mode === 'alone') {
-      onStartAlone();
+      setStartError(null);
+      setIsStarting(true);
+      try {
+        await onStartAlone();
+      } catch (err) {
+        console.error('[Emmaus] Walk start failed:', err);
+        setStartError('Something went wrong — please try again.');
+      } finally {
+        setIsStarting(false);
+      }
       return;
     }
     // With others
@@ -64,9 +77,18 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
     }
   };
 
-  const handleStartWithRoom = () => {
+  const handleStartWithRoom = async () => {
     if (!selectedRoomId || !user) return;
-    onStartWithRoom(selectedRoomId);
+    setStartError(null);
+    setIsStarting(true);
+    try {
+      await onStartWithRoom(selectedRoomId);
+    } catch (err) {
+      console.error('[Emmaus] Walk start (with room) failed:', err);
+      setStartError('Something went wrong — please try again.');
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   return (
@@ -169,9 +191,16 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
             <Button
               className="w-full h-12 rounded-2xl text-[16px]"
               onClick={handleContinue}
+              disabled={isStarting}
             >
-              Continue
+              {isStarting ? 'Starting…' : 'Continue'}
             </Button>
+
+            {startError && (
+              <p className="text-center text-[13px] text-destructive" role="alert">
+                {startError}
+              </p>
+            )}
 
             <p className="text-center text-[13px] text-muted-foreground">
               You can always invite others later.
@@ -253,12 +282,19 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
               </div>
             )}
 
+            {startError && (
+              <p className="text-center text-[13px] text-destructive" role="alert">
+                {startError}
+              </p>
+            )}
+
             {selectedRoomId && (
               <Button
                 className="w-full h-12 rounded-2xl text-[16px]"
                 onClick={handleStartWithRoom}
+                disabled={isStarting}
               >
-                Start with this Room
+                {isStarting ? 'Starting…' : 'Start with this Room'}
               </Button>
             )}
           </div>

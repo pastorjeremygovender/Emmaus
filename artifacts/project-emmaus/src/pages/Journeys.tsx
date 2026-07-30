@@ -765,7 +765,7 @@ export default function Journeys() {
     setPendingItem(item);
   }
 
-  function handleStartAlone() {
+  async function handleStartAlone() {
     if (!pendingItem) return;
     const item = pendingItem;
     // Use the backend-computed route rather than hard-coding /day/1.
@@ -775,29 +775,22 @@ export default function Journeys() {
     const destination = item.route.includes('?')
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
-    try {
-      startJourney(item.id);
-    } catch (err) {
-      console.error('[Emmaus] startJourney failed:', err);
-      // Non-fatal — the walk page will handle missing progress gracefully.
-    }
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(item.id);
     setPendingItem(null);
     setLocation(destination);
     reload();
   }
 
-  function handleStartWithRoom(roomId: string) {
+  async function handleStartWithRoom(roomId: string) {
     if (!pendingItem || !user) return;
     const item = pendingItem;
     const destination = item.route.includes('?')
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
-    try {
-      startJourney(item.id);
-      startSharedJourney(roomId, item.id, user.id);
-    } catch (err) {
-      console.error('[Emmaus] startSharedJourney failed:', err);
-    }
+    // Throws on failure — the modal catches this and shows an inline error message.
+    await startJourney(item.id);
+    startSharedJourney(roomId, item.id, user.id);
     setPendingItem(null);
     setLocation(destination);
     reload();

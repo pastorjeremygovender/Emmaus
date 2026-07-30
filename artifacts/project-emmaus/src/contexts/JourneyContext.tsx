@@ -109,7 +109,7 @@ type JourneyContextType = {
   getStep: (journeyId: string, day: number) => Step | undefined;
   getStepsForJourney: (journeyId: string) => Step[];
   completeStep: (journeyId: string, day: number, reflectionText: string) => void;
-  startJourney: (journeyId: string) => void;
+  startJourney: (journeyId: string) => Promise<void>;
   // Admin mutations — return promises so callers can await and handle errors
   updateJourney: (journey: Journey) => Promise<Journey>;
   addJourney: (journey: Journey) => Promise<Journey>;
@@ -232,8 +232,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   // ─── User operations (fire-and-forget, optimistic) ─────────────────────────
 
   const startJourney = useCallback(
-    (journeyId: string) => {
-      if (!user?.id || progress[journeyId]) return;
+    async (journeyId: string): Promise<void> => {
+      if (!user?.id) throw new Error('Not signed in');
+      if (progress[journeyId]) return; // already started — no-op, not an error
       const optimistic: Progress = {
         journeyId,
         currentDay: 1,
@@ -242,9 +243,18 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         lastCompletedAt: null,
       };
       setProgress(p => ({ ...p, [journeyId]: optimistic }));
-      api.startJourney(journeyId, user.id)
-        .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
-        .catch(() => { /* ignore */ });
+      try {
+        const prog = await api.startJourney(journeyId, user.id);
+        setProgress(p => ({ ...p, [journeyId]: prog }));
+      } catch (err) {
+        // Roll back the optimistic update so the user can retry cleanly.
+        setProgress(p => {
+          const next = { ...p };
+          delete next[journeyId];
+          return next;
+        });
+        throw err;
+      }
     },
     [user?.id, progress]
   );
