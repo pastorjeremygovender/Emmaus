@@ -384,7 +384,8 @@ function FifteenMinutesCard({
 // SermonDevotionalCard removed — Walk.tsx now uses the shared SermonCompanionCard component.
 
 // ─── Your Journeys section ────────────────────────────────────────────────────
-// Lists journeys the member has already started.
+// Lists journeys the member has already started as full EmmausContentCards,
+// mirroring the card style used by Devotionals and Sermon Companions.
 // Returns null when there are no started journeys — no heading, no empty state.
 function YourJourneysSection({
   startedJourneys,
@@ -393,29 +394,48 @@ function YourJourneysSection({
   startedJourneys: Array<{
     journey: import('@/contexts/JourneyContext').Journey;
     prog: import('@/contexts/JourneyContext').Progress;
+    currentStep: import('@/contexts/JourneyContext').Step | null;
+    totalPublishedSteps: number;
   }>;
   onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
 }) {
   if (startedJourneys.length === 0) return null;
 
   return (
-    <section>
-      <div className="space-y-1">
-        {startedJourneys.map(({ journey, prog }) => (
-          <button
+    <section className="space-y-4">
+      {startedJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+        const completedCount = prog.completedDays.length;
+        const isCompleted =
+          totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+
+        // Mirror the description formula used by Devotionals and Next Steps so
+        // every surface always shows the same progress string for the same walk.
+        const description = isCompleted
+          ? `${totalPublishedSteps} of ${totalPublishedSteps} completed`
+          : completedCount > 0
+            ? currentStep?.title
+              ? `Day ${prog.currentDay} of ${totalPublishedSteps} · ${currentStep.title}`
+              : `Day ${prog.currentDay} of ${totalPublishedSteps}`
+            : totalPublishedSteps > 0
+              ? `Day 1 of ${totalPublishedSteps}`
+              : undefined;
+
+        return (
+          <EmmausContentCard
             key={journey.id}
-            onClick={() => onSelect(journey.id, prog)}
-            className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left"
-          >
-            <span className="text-[15px] font-medium text-foreground truncate">
-              {journey.title}
-            </span>
-            <span className="text-[13px] text-primary shrink-0 ml-3">
-              Continue →
-            </span>
-          </button>
-        ))}
-      </div>
+            label="WALK"
+            title={journey.title}
+            description={description}
+            primaryActionLabel={isCompleted ? undefined : 'Continue'}
+            onAction={isCompleted ? undefined : () => onSelect(journey.id, prog)}
+            headerTrailing={
+              isCompleted
+                ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
+                : undefined
+            }
+          />
+        );
+      })}
     </section>
   );
 }
@@ -611,7 +631,17 @@ export default function Walk() {
       ? [{ journey: devotionalJourney, prog: devotionalProg }]
       : [];
 
-  const startedJourneys = [...activeGrowthJourneys, ...devotionalEntry];
+  // Enrich each started journey with its current step title and total published
+  // step count so YourJourneysSection can render a progress-aware description.
+  const startedJourneys = [...activeGrowthJourneys, ...devotionalEntry].map(
+    ({ journey, prog }) => {
+      const steps = getStepsForJourney(journey.id).filter(
+        s => s.status === 'Published' && !s.isCompletionStep,
+      );
+      const currentStep = steps.find(s => s.day === prog.currentDay) ?? null;
+      return { journey, prog, currentStep, totalPublishedSteps: steps.length };
+    },
+  );
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 

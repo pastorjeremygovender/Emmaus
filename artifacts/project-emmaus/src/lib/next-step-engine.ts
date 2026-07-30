@@ -48,16 +48,21 @@ function pct(prog: Progress, journey: Journey): number {
   return Math.round((prog.completedDays.length / total) * 100);
 }
 
-/** Most recently continued journey: highest lastCompletedAt timestamp. */
+/**
+ * Most recently continued journey: highest lastCompletedAt timestamp.
+ * Falls back to startedAt so a newly-started walk (day 1, no completed steps,
+ * lastCompletedAt === null) still surfaces rather than being silently skipped.
+ */
 function mostRecentlyContinued(
   journeys: Journey[],
   progress: Record<string, Progress>
 ): Journey | undefined {
   return journeys
-    .filter(j => progress[j.id]?.lastCompletedAt)
+    .filter(j => progress[j.id]?.startedAt)   // has been started (startedAt always set)
     .sort((a, b) => {
-      const aDate = progress[a.id]?.lastCompletedAt ?? '';
-      const bDate = progress[b.id]?.lastCompletedAt ?? '';
+      // Prefer lastCompletedAt; fall back to startedAt for brand-new walks.
+      const aDate = progress[a.id]?.lastCompletedAt ?? progress[a.id]?.startedAt ?? '';
+      const bDate = progress[b.id]?.lastCompletedAt ?? progress[b.id]?.startedAt ?? '';
       return bDate.localeCompare(aDate);
     })[0];
 }
