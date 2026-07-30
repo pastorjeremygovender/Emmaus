@@ -129,26 +129,6 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
   'core': 'Core Discipleship',
 };
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
-
-function StepIndicator({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1.5 rounded-full transition-all ${
-            i < current ? 'bg-teal-500 w-4' :
-            i === current ? 'bg-teal-400 w-6' :
-            'bg-gray-200 w-3'
-          }`}
-        />
-      ))}
-      <span className="ml-1 text-xs text-gray-400">{current + 1} / {total}</span>
-    </div>
-  );
-}
-
 // ─── Field wrapper ────────────────────────────────────────────────────────────
 
 function WizardField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -374,67 +354,80 @@ export default function JourneyBuilderWizard({ initialContentType, initialTitle,
   const isLastScreen = screen === TOTAL_SCREENS - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col" style={{ maxHeight: '90vh' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-teal-500 flex items-center justify-center">
-              <Sparkles size={12} className="text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-900">{SCREEN_TITLES[screen]}</p>
-              <p className="text-[11px] text-gray-400">AI Journey Builder · {CONTENT_TYPE_LABELS[state.contentType] ?? state.contentType}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <StepIndicator current={screen} total={TOTAL_SCREENS} />
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[calc(100dvh-2rem)]">
+
+        {/* ── Header — always visible ──────────────────────────────────────── */}
+        <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
+          {/* Back / Cancel — fixed width so title stays centred */}
+          <button
+            onClick={screen > 0 ? back : onClose}
+            disabled={generating}
+            aria-label={screen === 0 ? 'Close' : 'Back'}
+            className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0 disabled:opacity-40"
+          >
+            <ArrowLeft size={14} />
+            {screen === 0 ? 'Cancel' : 'Back'}
+          </button>
+
+          {/* Screen title — centred */}
+          <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
+            {SCREEN_TITLES[screen]}
+          </h2>
+
+          {/* Close — fixed width, right-aligned */}
+          <div className="w-20 flex-shrink-0 flex justify-end">
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
+            >
               <X size={16} />
             </button>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* ── Step progress — thin pills ───────────────────────────────────── */}
+        <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
+          {Array.from({ length: TOTAL_SCREENS }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-[3px] rounded-full flex-1 transition-all duration-300 ${
+                i <= screen ? 'bg-teal-500' : 'bg-gray-200'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* ── Scrollable content ───────────────────────────────────────────── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5">
           {renderScreen()}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 flex-shrink-0">
-          {screen > 0 ? (
-            <button
-              onClick={back}
-              disabled={generating}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40"
-            >
-              <ArrowLeft size={14} /> Back
-            </button>
-          ) : (
-            <div />
-          )}
-
+        {/* ── Footer — always visible ──────────────────────────────────────── */}
+        <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
           {isLastScreen ? (
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-60"
+              className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
             >
               {generating ? (
-                <><Loader2 size={14} className="animate-spin" /> Generating…</>
+                <><Loader2 size={15} className="animate-spin" /><span>Generating…</span></>
               ) : (
-                <><Sparkles size={14} /> Generate Journey</>
+                <><span>Generate Journey</span><Sparkles size={15} /></>
               )}
             </button>
           ) : (
             <button
               onClick={next}
-              className="flex items-center gap-1.5 px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-xl transition-colors"
+              className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white"
             >
-              Continue <ArrowRight size={14} />
+              <span>Continue</span><ArrowRight size={15} />
             </button>
           )}
         </div>
+
       </div>
     </div>
   );
