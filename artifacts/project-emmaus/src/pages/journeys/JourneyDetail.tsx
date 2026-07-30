@@ -274,21 +274,27 @@ export default function JourneyDetail() {
             <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
               {steps.map(s => {
                 const done = prog?.completedDays.includes(s.day);
+                // Show "Up next" only when the journey is in progress (started but not fully completed)
+                const isUpNext = isStarted && !isCompleted && s.day === nextUnfinishedDay;
                 return (
                   <button
                     key={s.day}
-                    className="w-full flex items-start gap-3 px-4 py-3.5 bg-card hover:bg-muted/40 active:bg-muted/60 transition-colors text-left"
+                    className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
+                      isUpNext
+                        ? 'bg-primary/5 hover:bg-primary/10 active:bg-primary/15'
+                        : 'bg-card hover:bg-muted/40 active:bg-muted/60'
+                    }`}
                     onClick={() => setLocation(`/journey/${journey.id}/day/${s.day}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`)}
-                    aria-label={done ? `Review step ${s.day}: ${s.title || `Step ${s.day}`}` : `Go to step ${s.day}: ${s.title || `Step ${s.day}`}`}
+                    aria-label={isUpNext ? `Up next: step ${s.day}: ${s.title || `Step ${s.day}`}` : done ? `Review step ${s.day}: ${s.title || `Step ${s.day}`}` : `Go to step ${s.day}: ${s.title || `Step ${s.day}`}`}
                   >
-                    <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done ? 'text-primary' : 'text-muted-foreground'}`}>
+                    <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done || isUpNext ? 'text-primary' : 'text-muted-foreground'}`}>
                       {s.day}
                     </span>
                     <span className={`text-[14px] leading-snug flex-1 ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
                       {s.title || `Step ${s.day}`}
                     </span>
-                    <span className="ml-auto text-primary text-[11px] font-medium shrink-0">
-                      {done ? 'Review →' : '→'}
+                    <span className={`ml-auto text-[11px] font-medium shrink-0 ${isUpNext ? 'text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {isUpNext ? 'Up next →' : done ? 'Review →' : '→'}
                     </span>
                   </button>
                 );
