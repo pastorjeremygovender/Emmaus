@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import NewCollectionModal from './NewCollectionModal';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -23,13 +24,14 @@ interface Props {
   onViewJourneys: (id: string, title: string) => void;
 }
 
-export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props) {
+export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys }: Props) {
   const { user } = useAuth();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading]         = useState(true);
   const [statusTab, setStatusTab]     = useState<string>('All');
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
   const [openMenu, setOpenMenu]       = useState<string | null>(null);
+  const [showNewModal, setShowNewModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,7 +61,7 @@ export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props
         title="Journey Collections"
         description="Group related Journeys into clear pathways."
         newButton={
-          <button onClick={onNew} className={newBtnCls}>
+          <button onClick={() => setShowNewModal(true)} className={newBtnCls}>
             <Plus size={14} /> New Collection
           </button>
         }
@@ -81,7 +83,7 @@ export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props
                   Create your first collection to group related journeys.
                 </p>
                 <button
-                  onClick={onNew}
+                  onClick={() => setShowNewModal(true)}
                   className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
                 >
                   Create Collection
@@ -163,6 +165,17 @@ export default function CollectionsList({ onNew, onEdit, onViewJourneys }: Props
           danger
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {showNewModal && (
+        <NewCollectionModal
+          onClose={() => setShowNewModal(false)}
+          onCreated={(id) => {
+            setShowNewModal(false);
+            load();
+            onEdit(id);
+          }}
         />
       )}
     </>
