@@ -237,6 +237,64 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: scaffold cleanup failed (non-fatal)");
   }
 
+  // ── Walk Completion step type (2026-07) ──────────────────────────────────────
+  // Adds is_completion_step boolean column to journey_steps so that "Journey
+  // Complete" steps can be distinguished from numbered lesson steps.
+  // The column defaults to false — existing steps are unaffected.
+  // After adding the column, any existing step whose title matches common
+  // completion-step patterns is automatically marked, and durationDays for
+  // affected journeys is recomputed to exclude those steps.
+  try {
+    await pool.query(`
+      ALTER TABLE journey_steps
+        ADD COLUMN IF NOT EXISTS is_completion_step boolean NOT NULL DEFAULT false;
+    `);
+    logger.info("Startup migration: journey_steps.is_completion_step column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: is_completion_step column add failed (non-fatal)");
+  }
+
+  try {
+    // Mark steps whose title matches known completion-step patterns.
+    // This catches existing admin-authored "Journey Complete" / "Walk Complete" steps
+    // and makes them invisible to the lesson list and progress calculations.
+    await pool.query(`
+      UPDATE journey_steps
+         SET is_completion_step = true
+       WHERE is_completion_step = false
+         AND (
+           LOWER(title) LIKE '%journey complete%'
+        OR LOWER(title) LIKE '%walk complete%'
+         );
+    `);
+    logger.info("Startup migration: completion step detection applied (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: completion step detection failed (non-fatal)");
+  }
+
+  try {
+    // Recompute durationDays for every journey that has at least one completion step,
+    // now that those steps are excluded from the lesson count.
+    await pool.query(`
+      UPDATE journeys j
+         SET duration_days = (
+               SELECT COALESCE(MAX(s.day), 0)
+                 FROM journey_steps s
+                WHERE s.journey_id = j.id
+                  AND s.status = 'Published'
+                  AND s.is_completion_step = false
+             )
+       WHERE EXISTS (
+               SELECT 1 FROM journey_steps s2
+                WHERE s2.journey_id = j.id
+                  AND s2.is_completion_step = true
+             );
+    `);
+    logger.info("Startup migration: durationDays recomputed for journeys with completion steps (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: durationDays recompute failed (non-fatal)");
+  }
+
   // ── Repair journey step statuses (2026-07) ────────────────────────────────────
   // Root cause: createStep always defaulted to status="Draft" regardless of
   // parent journey status. Steps added to a Published journey after it was

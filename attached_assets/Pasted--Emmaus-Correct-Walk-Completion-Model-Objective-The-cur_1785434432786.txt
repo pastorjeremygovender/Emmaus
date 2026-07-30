@@ -1,0 +1,215 @@
+# Emmaus - Correct Walk Completion Model
+
+## Objective
+
+The current implementation still treats Walk Complete as both:
+
+- the final numbered lesson
+- and a separate completion page.
+
+This creates duplicate content and incorrect progress calculations.
+
+We need to correct the underlying model, not patch the UI.
+
+---
+
+## Current Behaviour (Incorrect)
+
+Lesson list:
+
+1
+2
+3
+4
+5
+6 Journey Complete
+
+Walk Contents:
+
+Step 1
+
+...
+
+Step 5
+
+Step 6 Journey Complete
+
+Walk Complete
+
+Progress:
+
+Step 6 of 6
+
+yet the Walk is still not complete.
+
+These are all symptoms of the same modelling issue.
+
+---
+
+## Correct Model
+
+A Walk contains three content types:
+
+1. Walk Introduction
+
+2. Numbered Steps
+
+3. Walk Complete
+
+Walk Complete is NOT a numbered step.
+
+It is its own content type.
+
+---
+
+## Lesson List
+
+Display only numbered teaching steps.
+
+Example:
+
+1 In the Beginning
+
+2 The Master Designer
+
+3 The Lord of Creation
+
+4 God Knows You
+
+5 God Wants You Know Him
+
+Do NOT display:
+
+6 Journey Complete
+
+The Continue button should automatically open Walk Complete after the final numbered lesson has been completed.
+
+---
+
+## Walk Contents
+
+Display:
+
+WELCOME
+
+Walk Introduction
+
+↓
+
+STEP 1
+
+↓
+
+STEP 2
+
+↓
+
+...
+
+↓
+
+STEP N
+
+↓
+
+WALK COMPLETE
+
+Well Done
+
+Do not generate:
+
+STEP X Journey Complete
+
+Remove it completely.
+
+---
+
+## Progress
+
+Progress should represent completion of the numbered lessons only.
+
+For this Walk:
+
+5 teaching steps
+
+Progress:
+
+Step 1 of 5
+
+...
+
+Step 5 of 5
+
+After Step 5:
+
+Continue opens Walk Complete.
+
+When Walk Complete is finished:
+
+Display:
+
+Walk Completed
+
+100%
+
+Completed
+
+Do not display:
+
+Step 6 of 6
+
+because Walk Complete is not a lesson.
+
+---
+
+## Root Cause
+
+Please inspect the progress calculation and content-generation logic.
+
+It appears the system is currently including Walk Complete in the numbered lesson collection.
+
+Instead:
+
+- numbered lessons should come only from Walk Steps
+- Walk Introduction is separate
+- Walk Complete is separate
+
+Each should have its own content type and should not be merged into the lesson array.
+
+---
+
+## Acceptance Criteria
+
+Lesson list:
+
+1–5 only
+
+Walk Contents:
+
+Welcome
+
+↓
+
+Step 1
+
+↓
+
+...
+
+↓
+
+Step 5
+
+↓
+
+Walk Complete
+
+No duplicate Journey Complete.
+
+Progress:
+
+Step 1–5 of 5
+
+Completing Walk Complete marks the Walk as fully completed.
+
+There should never be a "Step 6 Journey Complete."

@@ -53,7 +53,12 @@ export default function JourneyDetail() {
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journey ? progress[journey.id] : undefined;
   const startedIds = useMemo(() => new Set(Object.keys(progress)), [progress]);
-  const steps = journey ? getStepsForJourney(journey.id) : [];
+  // Exclude completion steps — they are their own content type (Walk Complete page),
+  // not numbered lessons. durationDays on the journey is already recomputed
+  // to exclude them, so progress and isFinalStep calculations remain consistent.
+  const steps = journey
+    ? getStepsForJourney(journey.id).filter(s => !s.isCompletionStep)
+    : [];
 
   const enrollState = journey ? getState(journey.id) : 'active';
   const isStarted   = !!prog;

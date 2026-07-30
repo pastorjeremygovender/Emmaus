@@ -87,6 +87,10 @@ export type Step = {
 
   // Block-based content (Content Studio)
   blocks?: Array<Record<string, unknown>> | null;
+
+  // Walk Completion entry — not a numbered lesson.
+  // Excluded from lesson lists, progress counts, and durationDays.
+  isCompletionStep?: boolean;
 };
 
 export type Progress = {

@@ -40,7 +40,10 @@ export default function JourneyPreviousDays() {
     .sort((a, b) => a.day - b.day);
 
   const introStep  = allSteps.find(s => s.day === 0);
-  const mainSteps  = allSteps.filter(s => s.day > 0);
+  // Exclude completion steps — they are surfaced via the Walk Complete sentinel below,
+  // not as numbered STEP entries. Without this filter the completion step would appear
+  // twice: once as "STEP N Journey Complete" and again as "WALK COMPLETE".
+  const mainSteps  = allSteps.filter(s => s.day > 0 && !s.isCompletionStep);
   const lastStep   = mainSteps[mainSteps.length - 1];
 
   // ── Build entry list ───────────────────────────────────────────────────────

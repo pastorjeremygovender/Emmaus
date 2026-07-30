@@ -119,6 +119,12 @@ export const journeyStepsTable = pgTable("journey_steps", {
   content: jsonb("content").$type<Record<string, unknown>>().default({}),
 
   status: text("status").notNull().default("draft"),
+
+  // Marks this step as the Walk Completion entry — not a numbered lesson.
+  // Completion steps are excluded from lesson lists, progress counts, and durationDays.
+  // They are displayed only via the dedicated /journey/:id/complete page.
+  isCompletionStep: boolean("is_completion_step").notNull().default(false),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

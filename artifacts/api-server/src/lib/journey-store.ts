@@ -86,6 +86,10 @@ export interface FrontendStep {
 
   // Emmaus Journey Standard — intro to the next day (stored in content.lookingAhead JSONB)
   lookingAhead?: string;
+
+  // Walk Completion entry — not a numbered lesson.
+  // Excluded from lesson lists, progress counts, and durationDays.
+  isCompletionStep?: boolean;
 }
 
 export interface FrontendJourney {
@@ -234,6 +238,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     blocks,
     closingText,
     lookingAhead,
+    isCompletionStep: row.isCompletionStep ?? false,
   };
 }
 
@@ -258,7 +263,8 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
   // Must be mapped explicitly — it is not caught by any of the field-name
   // remappings below (e.g. devotional → teachingContent). Without this line,
   // every PATCH silently drops the status field and steps stay as Draft forever.
-  if (data.status !== undefined) cols.status = data.status;
+  if (data.status !== undefined)             cols.status             = data.status;
+  if (data.isCompletionStep !== undefined)   cols.isCompletionStep   = data.isCompletionStep;
 
   if (data.title !== undefined)              cols.title              = data.title;
   if (data.mentorIntro !== undefined)        cols.mentorIntro        = data.mentorIntro;
@@ -662,11 +668,11 @@ export async function deleteStep(journeyId: string, day: number): Promise<boolea
 
 async function refreshJourneyDuration(journeyId: string, now: Date): Promise<void> {
   const allSteps = await listSteps(journeyId);
-  // Only Published steps count toward the instructional lesson total.
-  // Draft placeholders (e.g. pseudo-steps added but not yet content-ready)
-  // must not inflate durationDays and break the final-step / progress logic.
-  const publishedSteps = allSteps.filter(s => s.status === "Published");
-  const maxDay = publishedSteps.reduce((m, s) => Math.max(m, s.day), 0);
+  // Only Published, non-completion steps count toward the lesson total.
+  // Completion steps (isCompletionStep = true) are their own content type — they
+  // are never numbered lessons and must not inflate durationDays.
+  const lessonSteps = allSteps.filter(s => s.status === "Published" && !s.isCompletionStep);
+  const maxDay = lessonSteps.reduce((m, s) => Math.max(m, s.day), 0);
   await db
     .update(journeysTable)
     .set({ durationDays: maxDay, updatedAt: now })
