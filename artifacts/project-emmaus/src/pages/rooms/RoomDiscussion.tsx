@@ -79,7 +79,7 @@ export default function RoomDiscussion() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-28">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button

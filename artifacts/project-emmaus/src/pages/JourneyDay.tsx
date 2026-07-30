@@ -293,7 +293,7 @@ export default function JourneyDay() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-32">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       {/* Sticky header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">

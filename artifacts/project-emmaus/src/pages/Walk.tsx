@@ -530,7 +530,7 @@ export default function Walk() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-background pb-24">
+      <div className="min-h-[100dvh] bg-background pb-page-safe">
         <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
           <div className="space-y-1.5 pt-2">
             <div className="h-8 w-48 rounded-lg bg-muted animate-pulse" />
@@ -643,7 +643,7 @@ export default function Walk() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       {devMode && <DevModeBanner />}
       {/* Admin quick-link (shown to admins regardless of dev mode) */}

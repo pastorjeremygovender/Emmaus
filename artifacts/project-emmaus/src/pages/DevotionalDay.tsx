@@ -212,7 +212,7 @@ export default function DevotionalDay() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-[100dvh] bg-background pb-36">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       {/* Nav bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2 max-w-[640px] mx-auto">
         <button

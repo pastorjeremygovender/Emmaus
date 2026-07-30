@@ -40,7 +40,7 @@ export default function BookDetail() {
   const bookDisplayName = book.genre === 'Gospel' ? `Gospel of ${book.name}` : book.name;
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button

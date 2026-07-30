@@ -82,7 +82,7 @@ export default function JourneyDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-background pb-24">
+      <div className="min-h-[100dvh] bg-background pb-page-safe">
         <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-6">
           <div className="h-5 w-1/4 rounded bg-muted animate-pulse" />
           <div className="h-8 w-2/3 rounded-lg bg-muted animate-pulse" />
@@ -96,7 +96,7 @@ export default function JourneyDetail() {
 
   if (!journey) {
     return (
-      <div className="min-h-[100dvh] bg-background pb-24 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-background pb-page-safe flex items-center justify-center">
         <div className="text-center space-y-3 px-5">
           <p className="text-[16px] text-foreground font-medium">This Journey isn't available yet.</p>
           <Button variant="outline" onClick={() => setLocation('/journeys')}>Back to Next Steps</Button>
@@ -176,7 +176,7 @@ export default function JourneyDetail() {
   const backDest = resolveReturn(source, sourceId, '/journeys?tab=journeys');
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-6">
 
         {/* ── Back button ───────────────────────────────────────────── */}
@@ -282,7 +282,7 @@ export default function JourneyDetail() {
                     <span className={`text-[14px] leading-snug flex-1 ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
                       {s.title || `Step ${s.day}`}
                     </span>
-                    {done && <span className="ml-auto text-primary text-[11px] font-medium shrink-0">Done</span>}
+                    {done && <span className="ml-auto text-primary text-[11px] font-medium shrink-0">Review</span>}
                   </div>
                 );
               })}

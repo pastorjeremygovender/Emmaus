@@ -199,7 +199,7 @@ export default function SermonCompanionReader() {
 
   if (loadError || !companion) {
     return (
-      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6 text-center pb-24">
+      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6 text-center pb-page-safe">
         <p className="text-muted-foreground text-sm">
           This sermon companion is not available right now.
         </p>
@@ -276,7 +276,7 @@ export default function SermonCompanionReader() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-36">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       {/* Back navigation */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/40">
         <div className="max-w-[480px] mx-auto px-4 h-12 flex items-center gap-2">

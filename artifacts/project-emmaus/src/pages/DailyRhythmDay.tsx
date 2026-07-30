@@ -226,7 +226,7 @@ export default function DailyRhythmDay() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-36">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
 
       {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       <DevModeBanner />

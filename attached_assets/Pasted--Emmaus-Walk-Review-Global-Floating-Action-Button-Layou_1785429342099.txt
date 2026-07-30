@@ -1,0 +1,118 @@
+# Emmaus - Walk Review & Global Floating Action Button Layout
+
+## Objective
+
+Resolve two usability issues:
+
+1. Replace "Done" with "Review" throughout Emmaus.
+2. Establish a global layout rule so the floating Ask Emmaus button never obscures content on any screen.
+
+Do not redesign the interface.
+
+---
+
+# 1. Replace "Done" with "Review"
+
+Completed content should display:
+
+Review
+
+instead of:
+
+Done
+
+This applies to:
+
+- Walk Introduction
+- Walk Steps
+- Walk Complete
+- Daily Rhythm
+- Daily Devotionals
+- Sermon Companions
+- Any future reviewable content
+
+Selecting Review should reopen the completed content in review mode.
+
+Use this terminology consistently throughout Emmaus.
+
+---
+
+# 2. Global Floating Ask Emmaus Rule
+
+The floating Ask Emmaus button is a permanent part of Emmaus.
+
+It should remain visible throughout the application.
+
+However, it must never cover or block:
+
+- buttons
+- cards
+- text
+- navigation
+- progress indicators
+- list items
+- completion actions
+- form controls
+
+on any screen.
+
+---
+
+# Required Behaviour
+
+Create a single global layout solution rather than fixing pages individually.
+
+Every vertically scrollable page should automatically reserve sufficient bottom safe space so that all interactive content can scroll completely above the floating Ask Emmaus button.
+
+The required spacing should account for:
+
+- Ask Emmaus button height
+- bottom navigation bar
+- device safe area (including phones with gesture navigation)
+- a comfortable touch margin
+
+This should be implemented as a reusable layout component or global page wrapper used throughout Emmaus.
+
+Do not hard-code padding on individual pages.
+
+---
+
+# Acceptance Criteria
+
+The final interactive element on every screen must always be:
+
+- fully visible
+- fully readable
+- fully tappable
+
+without:
+
+- being covered by Ask Emmaus
+- dismissing Ask Emmaus
+- zooming
+- awkward scrolling
+
+Apply this globally to:
+
+- Today's Steps
+- Next Steps
+- Walks
+- Journeys
+- Walk Details
+- Walk Contents
+- Daily Devotionals
+- Daily Rhythm
+- Sermon Companions
+- My Bible
+- My Journey
+- Rooms
+- Admin preview screens
+- all future scrollable pages
+
+---
+
+# Goal
+
+Ask Emmaus should feel permanently available without ever interfering with the user experience.
+
+This should become the standard layout behaviour across the entire Emmaus application rather than being solved one screen at a time.

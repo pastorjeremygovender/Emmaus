@@ -39,6 +39,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Global page-bottom clearance ───────────────────────────────────────────
+   Every scrollable page should use pb-page-safe instead of a hard-coded pb-N.
+   Accounts for: bottom nav (h-16 = 4rem) + Ask Emmaus FAB bottom offset (5rem)
+   + FAB height (44px ≈ 2.75rem) + comfortable touch margin (1rem)
+   + device safe-area (gesture navigation bar).
+   When FloatingEmmausButton.tsx changes its bottom offset, update this too. */
+:root {
+  --page-safe-bottom: calc(5rem + 2.75rem + 1rem + env(safe-area-inset-bottom, 0px));
+}
+
+@utility pb-page-safe {
+  padding-bottom: var(--page-safe-bottom);
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));

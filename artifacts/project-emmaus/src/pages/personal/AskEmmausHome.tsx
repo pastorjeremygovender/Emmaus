@@ -110,7 +110,7 @@ export default function AskEmmausHome() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">

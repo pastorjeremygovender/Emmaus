@@ -124,7 +124,7 @@ export function PreviousDaysScreen({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
 
       {/* Sticky header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">

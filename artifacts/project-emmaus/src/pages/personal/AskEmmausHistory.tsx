@@ -66,7 +66,7 @@ export default function AskEmmausHistory() {
         </div>
       </header>
 
-      <main className="px-5 pt-6 pb-24 max-w-[560px] mx-auto space-y-8">
+      <main className="px-5 pt-6 pb-page-safe max-w-[560px] mx-auto space-y-8">
         {loading && (
           <p className="text-[15px] text-muted-foreground pt-8 text-center">Loading…</p>
         )}

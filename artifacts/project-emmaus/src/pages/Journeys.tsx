@@ -843,7 +843,7 @@ export default function Journeys() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-24">
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
