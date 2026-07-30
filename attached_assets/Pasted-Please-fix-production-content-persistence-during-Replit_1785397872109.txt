@@ -1,0 +1,66 @@
+Please fix production content persistence during Replit publishing.
+
+Current problem:
+
+When new code changes are published, some current content disappears and older deleted content reappears.
+
+I am not asking you to recover or preserve the old Sermon Companions. Those can be ignored.
+
+The required behaviour is:
+
+1. Replit publishing must deploy the latest code only.
+
+2. Publishing must not:
+- reset the database
+- restore an older database snapshot
+- rerun demo or seed data
+- recreate deleted collections or journeys
+- replace current production content with older content
+- switch the app to a different database or storage environment
+
+3. The content visible in the published admin editor immediately before deployment must remain the current content immediately after deployment.
+
+4. Use one permanent production database as the single source of truth for:
+- Collections
+- Journeys
+- Daily Rhythm
+- Daily Devotionals
+- Sermon Companions
+- all future authored content
+
+5. Ensure the development preview and the published app do not accidentally overwrite each other or connect to different content databases.
+
+6. Search for and disable any production behaviour involving:
+- seed scripts
+- demo-data initialization
+- sample-content creation
+- create-if-missing default records
+- database resets
+- startup repopulation
+- post-deployment database setup
+- hard-coded fallback content
+
+7. Demo Mode must never create, restore or alter production content.
+
+8. Preserve all current collections and journeys exactly as they exist now, especially:
+- Coming to Jesus
+- Growing in Christ
+- Living for Jesus
+- every journey currently assigned to those collections
+
+9. Deleted content must remain deleted after future deployments.
+
+10. Before making changes, create a backup or export of the current production content database.
+
+11. Test the fix as follows:
+- Create a temporary draft collection called “Deployment Persistence Test.”
+- Publish the code again.
+- Confirm the draft still exists.
+- Delete the temporary collection.
+- Publish again.
+- Confirm it does not reappear.
+- Confirm all real collections and journeys remain unchanged.
+
+12. Run the full build and TypeScript checks.
+
+Do not redesign any screens or change unrelated functionality. The goal is simply to ensure that publishing new code preserves the latest current production content exactly.

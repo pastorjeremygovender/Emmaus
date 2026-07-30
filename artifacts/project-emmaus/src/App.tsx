@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
@@ -55,6 +55,16 @@ import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
 import RoomDiscussion from '@/pages/rooms/RoomDiscussion';
 import RoomSettings from '@/pages/rooms/RoomSettings';
 
+/**
+ * Startup routing rule (locked):
+ * Every fresh page load must land on Today's Steps (/walk), never on a
+ * previously-visited tab.  The flag is false on each fresh JS execution
+ * (hard refresh, new tab, PWA reopen, browser restart) and true from the
+ * moment the Router first mounts — so within-session tab navigation is
+ * unaffected.
+ */
+let _startupChecked = false;
+
 /** Redirect /journey/15-minutes-with-jesus/day/:day → /daily-rhythm/day/:day */
 function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   const [, setLocation] = useLocation();
@@ -64,7 +74,25 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   return null;
 }
 
+// Bottom-nav tab root paths that must never be the entry point on a fresh load.
+const TAB_ROOT_PATHS = ['/bible', '/journeys', '/personal'];
+
 function Router() {
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!_startupChecked) {
+      _startupChecked = true;
+      // If the browser has loaded directly onto a tab root (e.g. the user
+      // refreshed while on My Bible), redirect through Welcome so that auth,
+      // onboarding and resolveEntryRoute() all run normally and land on /walk.
+      if (TAB_ROOT_PATHS.includes(location)) {
+        setLocation('/');
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Switch>
       <Route path="/" component={Welcome} />

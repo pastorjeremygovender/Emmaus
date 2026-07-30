@@ -1,0 +1,65 @@
+BUG: A deleted collection reappeared after publishing new code changes.
+
+What happened:
+- I previously deleted the collection called “New to Faith.”
+- The deletion appeared to work correctly.
+- I continued adding real collections and journeys in the published admin editor.
+- Replit then published/deployed the latest prompted code changes.
+- After deployment, the deleted “New to Faith” collection reappeared as a Draft.
+- My other real collections and journeys remained intact.
+
+This strongly suggests that a demo-data, seed-data, initialization, migration, or fallback process is recreating deleted default records during application startup or deployment.
+
+Please investigate and fix the root cause.
+
+Required behaviour:
+
+1. Publishing or deploying code must never recreate content that an administrator has deleted.
+
+2. Search the project for all code that creates or inserts:
+   - “New to Faith”
+   - default collections
+   - demo collections
+   - sample journeys
+   - seeded content
+   - fallback content
+   - startup initialization records
+
+3. Check:
+   - database seed scripts
+   - startup hooks
+   - migration scripts
+   - demo-mode initialization
+   - development fixtures
+   - “create if missing” logic
+   - frontend fallback arrays
+   - API initialization routes
+   - post-deploy scripts
+
+4. Remove or disable any production behaviour that automatically recreates default content merely because it is missing.
+
+5. Seed/demo content may only be created:
+   - in a fresh local development environment, or
+   - through an explicit administrator action.
+
+6. Existing production data must remain the source of truth across deployments.
+
+7. Do not reset, overwrite, merge or repopulate the production database during code deployment.
+
+8. Preserve all current real collections and journeys:
+   - Coming to Jesus
+   - Growing in Christ
+   - Living for Jesus
+   - all journeys already created inside them
+
+9. After fixing the cause, permanently delete the unwanted “New to Faith” collection and any journeys that belong only to it.
+
+10. Before deleting, verify that none of its journeys are shared with another collection.
+
+11. Run the build and confirm:
+   - the application compiles
+   - existing content remains intact
+   - deploying again does not recreate “New to Faith”
+   - administrator deletions remain permanent
+
+Do not make unrelated visual or functional changes.

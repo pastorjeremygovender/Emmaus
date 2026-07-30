@@ -1,0 +1,72 @@
+HIGH-PRIORITY BUG: The mobile app is still opening on “My Bible.”
+
+This has already been specified several times and must now be fixed at the routing level.
+
+## Locked Emmaus startup rule
+
+Every time the user opens Emmaus, the app must land on:
+
+TODAY’S STEPS
+
+It must never automatically open on:
+- My Bible
+- Next Steps
+- My Journey
+- the last-used tab
+- a previously saved route
+- a cached deep link
+- a restored browser history location
+
+## Required behaviour
+
+1. On a fresh app launch, route to Today’s Steps.
+
+2. On a browser refresh, route to Today’s Steps.
+
+3. When the mobile app or PWA is fully closed and reopened, route to Today’s Steps.
+
+4. When the user signs in, route to Today’s Steps.
+
+5. After onboarding and collecting the user’s name, route directly into the correct Today’s Steps experience, beginning with 10 Minutes with Jesus where applicable.
+
+6. Do not restore the previously selected bottom-navigation tab.
+
+7. Clear or ignore any persisted navigation state stored in:
+- localStorage
+- sessionStorage
+- cookies
+- React state persistence
+- Redux/Zustand persistence
+- service-worker cache
+- PWA navigation history
+- saved lastRoute or activeTab values
+
+8. The bottom navigation may still remember state while the app remains open in the same session, but a new launch or refresh must always reset the active tab to Today’s Steps.
+
+9. Check all route aliases and redirects so that:
+- /
+- /app
+- /home
+- /walk
+- any authenticated landing route
+
+all resolve to Today’s Steps.
+
+10. Confirm that the Today’s Steps tab is visually active after startup.
+
+11. Do not fix this only in one screen component. Implement the rule in the root application routing/startup logic so it applies consistently across desktop, mobile browser and installed PWA.
+
+## Test requirements
+
+Test all of the following:
+
+- Open the app from a completely closed mobile browser.
+- Refresh while on My Bible.
+- Close the app while on My Bible and reopen it.
+- Sign out and sign back in.
+- Open the installed PWA if available.
+- Open the published desktop app.
+
+Every test must land on Today’s Steps.
+
+Do not make unrelated design changes. This is a locked navigation rule and must be implemented consistently throughout Emmaus.

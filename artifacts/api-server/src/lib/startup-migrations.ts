@@ -7,7 +7,7 @@
 
 import { db, pool } from "@workspace/db";
 import { journeysTable } from "@workspace/db/schema";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
 export async function runStartupMigrations(): Promise<void> {
   // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
@@ -194,98 +194,28 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: daily-rhythm type failed (non-fatal)");
   }
 
-  // ── Restore Daily Rhythm to Published (2026-07) ──────────────────────────────
-  // The Daily Rhythm journey is a permanent, always-on practice.
-  // If it was accidentally set to Archived via the editor, restore it to Published
-  // so the Walk screen can always find it via listPublishedJourneys().
-  try {
-    await db
-      .update(journeysTable)
-      .set({ status: "Published" })
-      .where(
-        and(
-          eq(journeysTable.id, "15-minutes-with-jesus"),
-          eq(journeysTable.status, "Archived")
-        )
-      );
-    logger.info("Startup migration: daily-rhythm status restored to Published (idempotent)");
-  } catch (err) {
-    logger.warn({ err }, "Startup migration: daily-rhythm status restore failed (non-fatal)");
-  }
 
-  // ── Rename sprint (2026-07) ──────────────────────────────────────────────────
-  // Display title update: journey was formerly "15 Minutes with Jesus", now "10 Minutes with Jesus".
-  // The journey ID ("15-minutes-with-jesus") and all member progress are preserved.
-  // estimatedDuration updated to reflect the new invitational framing.
-  try {
-    await db
-      .update(journeysTable)
-      .set({
-        title: "10 Minutes with Jesus",
-        estimatedDuration: "10 min/day",
-      })
-      .where(
-        and(
-          eq(journeysTable.id, "15-minutes-with-jesus"),
-          ne(journeysTable.title, "10 Minutes with Jesus")
-        )
-      );
-    logger.info("Startup migration: title renamed to '10 Minutes with Jesus' (idempotent)");
-  } catch (err) {
-    logger.warn({ err }, "Startup migration: title rename failed (non-fatal)");
-  }
-
-  // ── Journey layer seed data (2026-07) ─────────────────────────────────────────
-  // Creates the "New to Faith" starter collection and its first journey
-  // "Coming to Jesus" with 7 empty days. Uses fixed UUIDs / slugs so
-  // this migration is idempotent and re-runnable.
+  // ── Remove seeded scaffold data (2026-07) ─────────────────────────────────────
+  // The "New to Faith" collection and "Coming to Jesus" journey were previously
+  // seeded on every boot. They have been removed from the seed block and must
+  // now be cleaned out of any environment where they were created. These DELETEs
+  // are idempotent: if the records are already gone, nothing happens.
   //
-  // Collection ID:  '00000000-0000-0000-0000-000000000010'
-  // Journey ID:     'coming-to-jesus'
+  // Collection ID: '00000000-0000-0000-0000-000000000010'
+  // Journey ID:    'coming-to-jesus'
   try {
     await pool.query(`
-      INSERT INTO collections
-        (id, title, description, status, display_order, tags, created_at, updated_at)
-      VALUES
-        ('00000000-0000-0000-0000-000000000010',
-         'New to Faith',
-         'An introductory pathway for people just beginning their faith journey.',
-         'Draft', 10, '[]', NOW(), NOW())
-      ON CONFLICT (id) DO NOTHING;
+      DELETE FROM journey_steps WHERE journey_id = 'coming-to-jesus';
     `);
-
     await pool.query(`
-      INSERT INTO journeys
-        (id, title, description, journey_type, status, collection_id,
-         difficulty, estimated_duration, duration_days, tags,
-         created_at, updated_at)
-      VALUES
-        ('coming-to-jesus',
-         'Coming to Jesus',
-         'A 7-day introduction to knowing Jesus — who he is, what he did, and how to follow him.',
-         'core', 'Draft', '00000000-0000-0000-0000-000000000010',
-         'Beginner', '5 min/day', 7, '["new believers","foundations"]',
-         NOW(), NOW())
-      ON CONFLICT (id) DO NOTHING;
+      DELETE FROM journeys WHERE id = 'coming-to-jesus';
     `);
-
     await pool.query(`
-      INSERT INTO journey_steps
-        (journey_id, day, title, status, created_at, updated_at)
-      VALUES
-        ('coming-to-jesus', 1, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 2, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 3, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 4, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 5, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 6, '', 'draft', NOW(), NOW()),
-        ('coming-to-jesus', 7, '', 'draft', NOW(), NOW())
-      ON CONFLICT (journey_id, day) DO NOTHING;
+      DELETE FROM collections WHERE id = '00000000-0000-0000-0000-000000000010';
     `);
-
-    logger.info("Startup migration: 'New to Faith' collection + 'Coming to Jesus' journey seeded (idempotent)");
+    logger.info("Startup migration: seeded scaffold data removed (idempotent)");
   } catch (err) {
-    logger.warn({ err }, "Startup migration: journey layer seed data failed (non-fatal)");
+    logger.warn({ err }, "Startup migration: scaffold cleanup failed (non-fatal)");
   }
 
 }
