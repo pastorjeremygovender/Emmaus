@@ -723,6 +723,130 @@ function JourneyIntroEditor({
   );
 }
 
+// ─── Journey Complete editor ──────────────────────────────────────────────────
+// Journey Complete is NOT a normal journey step. It marks the end of the whole
+// journey regardless of how many days it contains.  It has its own dedicated
+// set of fields: Title, Congratulations, Closing Prayer, Recommended Next
+// Journey (journey picker), and an optional Completion Message.
+//
+// Step fields (title, congratulations/devotional, closing prayer/prayerPrompt)
+// are saved by the existing autosave path.  Journey-level fields
+// (nextJourneyId, completionMessage) are saved explicitly via onSaveDraft.
+
+function JourneyCompleteEditor({
+  step,
+  onStepChange,
+  nextJourneyId,
+  onNextJourneyIdChange,
+  completionMessage,
+  onCompletionMessageChange,
+  allJourneys,
+  currentJourneyId,
+  onSaveDraft,
+  saveStatus,
+}: {
+  step: StepWithBlocks;
+  onStepChange: (changes: Partial<Step>) => void;
+  nextJourneyId: string;
+  onNextJourneyIdChange: (id: string) => void;
+  completionMessage: string;
+  onCompletionMessageChange: (msg: string) => void;
+  allJourneys: Journey[];
+  currentJourneyId: string;
+  onSaveDraft: () => void;
+  saveStatus: SaveStatus;
+}) {
+  const saving = saveStatus === 'saving';
+  const inputCls =
+    'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 ' +
+    'placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 ' +
+    'focus:border-teal-400 transition-colors bg-white';
+  const textareaCls = inputCls + ' resize-y leading-relaxed';
+  const selectCls = inputCls + ' cursor-pointer';
+
+  const otherJourneys = allJourneys.filter(j => j.id !== currentJourneyId && j.title);
+  const selectedJourneyTitle = otherJourneys.find(j => j.id === nextJourneyId)?.title;
+
+  return (
+    <div className="max-w-2xl mx-auto px-8 py-10 space-y-6">
+      <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest">
+        Journey Complete
+      </div>
+
+      <FieldBlock label="Title">
+        <input
+          type="text"
+          value={step.title}
+          onChange={e => onStepChange({ title: e.target.value })}
+          placeholder="Journey Complete"
+          className={inputCls}
+          autoComplete="off"
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Congratulations" hint="Celebrate what God has been teaching the reader and encourage them to keep walking with Jesus.">
+        <textarea
+          value={step.devotional ?? ''}
+          onChange={e => onStepChange({ devotional: e.target.value })}
+          rows={8}
+          autoFocus
+          placeholder="Congratulate the reader on completing this journey…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Closing Prayer" hint="Thank God for what He has done during the journey and ask Him to continue His work.">
+        <textarea
+          value={step.prayerPrompt ?? ''}
+          onChange={e => onStepChange({ prayerPrompt: e.target.value })}
+          rows={5}
+          placeholder="Lord,…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Recommended Next Journey" hint="Displayed in the app as: Continue to [Journey Name] →">
+        <select
+          value={nextJourneyId}
+          onChange={e => onNextJourneyIdChange(e.target.value)}
+          className={selectCls}
+        >
+          <option value="">— None —</option>
+          {otherJourneys.map(j => (
+            <option key={j.id} value={j.id}>{j.title}</option>
+          ))}
+        </select>
+        {selectedJourneyTitle && (
+          <p className="text-xs text-teal-700 mt-1.5 flex items-center gap-1">
+            <ChevronRight size={12} />
+            Continue to {selectedJourneyTitle}
+          </p>
+        )}
+      </FieldBlock>
+
+      <FieldBlock label="Completion Message" hint="Optional short message shown after the user completes the journey.">
+        <textarea
+          value={completionMessage}
+          onChange={e => onCompletionMessageChange(e.target.value)}
+          rows={2}
+          placeholder={`e.g. "Well done. Keep walking with Jesus."`}
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+        <button
+          onClick={onSaveDraft}
+          disabled={saving}
+          className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'error' ? 'Could not save — try again' : 'Save Draft'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── AI Review Banner ─────────────────────────────────────────────────────────
 
 function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: () => void }) {
@@ -891,7 +1015,7 @@ function GuidedProgressPanel({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor }: Props) {
-  const { getJourney, getStepsForJourney, updateJourney, updateStep, addStep, deleteStep } = useJourney();
+  const { journeys: allJourneys, getJourney, getStepsForJourney, updateJourney, updateStep, addStep, deleteStep } = useJourney();
   const { user } = useAuth();
 
   // Try to find the journey in context first (fast path).
@@ -942,10 +1066,16 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Journey Introduction state ───────────────────────────────────────────
-  // The intro is stored on the journey record (metadata.introductionContent),
-  // NOT as a step.  We keep a local copy and flush to the server on Save Draft.
   const [introContent, setIntroContent] = useState('');
   const [introSaveStatus, setIntroSaveStatus] = useState<SaveStatus>('idle');
+
+  // ─── Journey Complete state ────────────────────────────────────────────────
+  // nextJourneyId and completionMessage live on the journey record (metadata
+  // JSONB), not on the step.  Step fields (title, congratulations/devotional,
+  // closing prayer/prayerPrompt) are handled by the standard autosave path.
+  const [completeNextJourneyId, setCompleteNextJourneyId] = useState('');
+  const [completeMessage, setCompleteMessage] = useState('');
+  const [completeSaveStatus, setCompleteSaveStatus] = useState<SaveStatus>('idle');
 
   const autosaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const hasUnsaved = stepsWithBlocks.some(s => s.isDirty);
@@ -958,6 +1088,12 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   useEffect(() => {
     setIntroContent(journey?.introductionContent ?? '');
   }, [journey?.introductionContent]);
+
+  // Sync Journey Complete journey-level fields on load.
+  useEffect(() => {
+    setCompleteNextJourneyId(journey?.nextJourneyId ?? '');
+    setCompleteMessage(journey?.completionMessage ?? '');
+  }, [journey?.id]); // key on id — sync once per journey, not on every save
 
   // The intro is "complete" when the journey record already has non-empty saved content.
   const introIsComplete = Boolean(journey?.introductionContent?.trim());
@@ -1114,6 +1250,32 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     // Open Day 1 — creates the step if it doesn't exist yet.
     await handleOpenSection(1);
   }, [handleSaveIntro, handleOpenSection]);
+
+  // ─── Journey Complete save ────────────────────────────────────────────────
+  // Saves the step fields (title, congratulations/devotional, closing prayer/
+  // prayerPrompt) AND the journey-level fields (nextJourneyId, completionMessage)
+  // in a single atomic action triggered by "Save Draft" in JourneyCompleteEditor.
+  // Step fields are also kept in sync by the background autosave, but the
+  // explicit Save Draft ensures both sides flush together.
+  const handleSaveComplete = useCallback(async () => {
+    if (!journey) return;
+    setCompleteSaveStatus('saving');
+    try {
+      await Promise.all([
+        saveStep(6),
+        updateJourney({
+          ...journey,
+          nextJourneyId: completeNextJourneyId || undefined,
+          completionMessage: completeMessage || undefined,
+        } as Journey),
+      ]);
+      setCompleteSaveStatus('saved');
+      setTimeout(() => setCompleteSaveStatus('idle'), 2500);
+    } catch {
+      setCompleteSaveStatus('error');
+      setTimeout(() => setCompleteSaveStatus('idle'), 3000);
+    }
+  }, [journey, completeNextJourneyId, completeMessage, saveStep, updateJourney]);
 
   const handleSaveDraftJourney = useCallback(async () => {
     if (!journey) return;
@@ -1411,6 +1573,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             {/* Autosave status */}
             {selectedView === 'introduction' ? (
               <SaveIndicator status={introSaveStatus} />
+            ) : selectedStep?.day === 6 ? (
+              <SaveIndicator status={completeSaveStatus} />
             ) : selectedStep ? (
               <>
                 {showUnsaved && (
@@ -1469,8 +1633,24 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               saveStatus={introSaveStatus}
             />
           </div>
+        ) : selectedStep?.day === 6 ? (
+          /* Journey Complete — dedicated completion editor */
+          <div className="flex-1 overflow-y-auto bg-white">
+            <JourneyCompleteEditor
+              step={selectedStep}
+              onStepChange={changes => handleStepMetaChange(selectedStep.day, changes)}
+              nextJourneyId={completeNextJourneyId}
+              onNextJourneyIdChange={setCompleteNextJourneyId}
+              completionMessage={completeMessage}
+              onCompletionMessageChange={setCompleteMessage}
+              allJourneys={allJourneys}
+              currentJourneyId={journeyId}
+              onSaveDraft={handleSaveComplete}
+              saveStatus={completeSaveStatus}
+            />
+          </div>
         ) : selectedStep ? (
-          /* Days 1–5 and Journey Complete — full structured editor */
+          /* Days 1–5 — full structured field editor */
           <div className="flex-1 overflow-y-auto bg-white">
             <StepFieldEditor
               step={selectedStep}

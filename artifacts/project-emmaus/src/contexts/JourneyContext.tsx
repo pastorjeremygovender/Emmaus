@@ -43,6 +43,7 @@ export type Journey = {
     generatedSections: string[];
   };
   introductionContent?: string; // journey-level intro text (stored in metadata JSONB)
+  completionMessage?: string;   // short closing message after journey completion (stored in metadata JSONB)
 };
 
 export type Step = {

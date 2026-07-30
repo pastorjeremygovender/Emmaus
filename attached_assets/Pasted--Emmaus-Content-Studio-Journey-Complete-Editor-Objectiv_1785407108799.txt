@@ -1,0 +1,93 @@
+# Emmaus Content Studio - Journey Complete Editor
+
+## Objective
+
+Journey Complete is not a normal journey step.
+
+It marks the completion of an entire journey, regardless of whether that journey contains 5 days, 14 days, 30 days or any other number of steps.
+
+It should therefore have its own dedicated editor.
+
+---
+
+## Current Problem
+
+Journey Complete currently uses the same editor as a normal journey step.
+
+It includes fields such as:
+
+- Welcome
+- Scripture
+- Reflection
+- Prayer
+- Today's Step
+- Looking Ahead
+
+These fields belong to the daily content of a journey and are not appropriate for the completion page.
+
+---
+
+## Required Behaviour
+
+Create a dedicated Journey Complete editor with the following fields:
+
+### Title
+
+(Default: Journey Complete)
+
+---
+
+### Congratulations
+
+A rich text field summarising the journey, celebrating what God has been teaching the user and encouraging them to continue walking with Jesus.
+
+---
+
+### Closing Prayer
+
+A prayer thanking God for what He has done during the journey and asking Him to continue His work.
+
+---
+
+### Recommended Next Journey
+
+Journey picker.
+
+Allow the author to select the next recommended journey from the Journey Library.
+
+Display in the app as:
+
+Continue to [Journey Name] →
+
+---
+
+### Completion Message (Optional)
+
+A short closing message displayed after the user completes the journey.
+
+Example:
+
+"Well done. Keep walking with Jesus."
+
+---
+
+## Remove These Fields
+
+Journey Complete should not contain:
+
+- Scripture
+- Reflection
+- Today's Step
+- Looking Ahead
+
+These belong only to the daily journey steps.
+
+---
+
+## Design Principle
+
+Journey Introduction, Daily Steps and Journey Complete are three different content types.
+
+Each should have its own editor that matches its purpose.
+
+Journey Complete should always feel like the conclusion of one chapter and the natural beginning of the next, regardless of how many steps the journey contains.

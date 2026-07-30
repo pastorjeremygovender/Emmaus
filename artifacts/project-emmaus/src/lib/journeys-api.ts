@@ -48,6 +48,7 @@ export type Journey = {
   nextJourneyId?: string;
   requiresDailyGate?: boolean;
   introductionContent?: string;
+  completionMessage?: string;
 };
 
 export type Step = {
