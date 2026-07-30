@@ -1,9 +1,11 @@
 - [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; THEME_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase/ConfirmThemePhase.
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.
+- [Create Journey wizard](create-journey-wizard.md) — 3-step modal (method → contentType → details); JourneyBuilderWizard gains initialTitle + initialScreen props; this is the reference pattern for all creation workflows.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
 - [App entry point rule](app-entry-point.md) — resolveEntryRoute() always returns /walk (spec-locked). Previous logic routed members to their Daily Rhythm day — that was the root cause of wrong launch destination.
 - [Completion flow standardisation](completion-flow.md) — JourneyCompletionPanel shared component; source param pattern for return-destination routing; sermon companion routes from sermon_companion table not journeys table.
+- [Continue rule & route guards](continue-rule.md) — resolveNextEntry/resolveNextStep helpers in lib/resolve-next-entry.ts; guards now redirect instead of showing dead-end messages; Step uses `day` not `dayNumber`.
 - [Back navigation system](back-navigation.md) — unified return-context.ts + EmmausBackButton; SourceKey union; tab-specific nextSteps sources; ?tab= URL param on /journeys; all content pages updated.
 - [Bible module architecture](bible-module.md) — full Bible module shipped; KJV John 1–3 seed data, BibleProvider (localStorage), 5 routes, verse-tap sheets, Preached Here links to admin sermons via JOHN_SERMON_LINKS.
 - [Ask Emmaus backend](ask-emmaus-backend.md) — conversation service at POST /api/emmaus/conversation; SSE streaming; mock+OpenAI providers; safety layer; in-memory store; system-instructions.ts is the single source of truth.

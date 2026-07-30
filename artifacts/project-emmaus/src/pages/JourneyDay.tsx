@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { EmmausBackButton } from '@/components/EmmausBackButton';
-import { resolveReturn, encodeSource } from '@/lib/return-context';
+import { resolveReturn } from '@/lib/return-context';
+import { resolveNextStep } from '@/lib/resolve-next-entry';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
@@ -41,7 +42,7 @@ export default function JourneyDay() {
   const { journeyId, day: dayStr } = useParams<{ journeyId: string; day: string }>();
   const day = parseInt(dayStr || '1', 10);
   const [, setLocation] = useLocation();
-  const { getStep, completeStep, startJourney, getJourney, loading, progress } = useJourney();
+  const { getStep, getStepsForJourney, completeStep, startJourney, getJourney, loading, progress } = useJourney();
   const { user } = useAuth();
   const {
     getMyRooms,
@@ -73,6 +74,21 @@ export default function JourneyDay() {
     if (journeyId) startJourney(journeyId);
     window.scrollTo(0, 0);
   }, [journeyId]);
+
+  // Route guard — redirect non-Daily-Rhythm journeys when the requested step
+  // is unavailable (unpublished, missing, or out of range). Uses replace so Back
+  // doesn't loop the user back into the dead end.
+  // Daily Rhythm has its own "You're ahead of the rhythm" placeholder — preserved.
+  useEffect(() => {
+    if (loading) return;
+    if (!journey || isDailyRhythmJourney) return;
+    if (!step) {
+      const { path } = resolveReturn(source, sourceId, '/journeys?tab=journeys');
+      setLocation(path, { replace: true });
+    }
+    // source/sourceId are stable (from URL params read at mount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, journey, step, isDailyRhythmJourney]);
 
   if (loading) {
     return (
@@ -115,11 +131,8 @@ export default function JourneyDay() {
         </div>
       );
     }
-    return (
-      <div className="p-6 text-center mt-20 text-muted-foreground">
-        Journey step not found.
-      </div>
-    );
+    // Non-Daily-Rhythm: redirect handled by the route-guard useEffect above.
+    return null;
   }
 
   const isCompanion = journey.journeyType === 'companion';
@@ -261,10 +274,13 @@ export default function JourneyDay() {
 
     // Self-paced: offer Continue to Next Step immediately when the next published
     // step exists. Daily Rhythm never reaches here (it navigates directly to /walk).
-    const nextStep = journeyId ? getStep(journeyId, day + 1) : null;
-    const hasNextStep = !!nextStep && nextStep.status === 'Published';
-    const nextStepUrl = hasNextStep && journeyId
-      ? `/journey/${journeyId}/day/${day + 1}${source ? `?source=${source}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}` : ''}`
+    // resolveNextStep enforces the platform rule: Continue only when a valid next item exists.
+    // Uses nextStep.day (not day+1) to handle any gaps in day numbering correctly.
+    const allJourneySteps = journeyId ? getStepsForJourney(journeyId) : [];
+    const nextStep = resolveNextStep(allJourneySteps, day);
+    const hasNextStep = !!nextStep;
+    const nextStepUrl = hasNextStep && journeyId && nextStep
+      ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${source}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}` : ''}`
       : '';
 
     return (

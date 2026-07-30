@@ -20,6 +20,7 @@ import { DevotionalReading } from '@/components/DevotionalReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { resolveNextEntry } from '@/lib/resolve-next-entry';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -145,8 +146,10 @@ export default function SermonCompanionReader() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Route protection — redirect cleanly when the requested day exceeds the
-  // final published day (e.g. user manually types /day/6 on a 5-day companion).
+  // Route protection — redirect when the requested day is unavailable:
+  //   • day exceeds the final published day (e.g. /day/6 on a 5-day companion)
+  //   • entry doesn't exist in the companion's published content
+  // Uses replace so Back doesn't loop the user back into the unavailable day.
   useEffect(() => {
     if (!companion) return;
     const publishedDays = companion.entries
@@ -154,8 +157,9 @@ export default function SermonCompanionReader() {
       .map(e => e.dayNumber);
     if (publishedDays.length === 0) return;
     const maxPublishedDay = Math.max(...publishedDays);
-    if (day > maxPublishedDay) {
-      setLocation(returnDest);
+    const entry = companion.entries.find(e => e.dayNumber === day);
+    if (day > maxPublishedDay || !entry) {
+      setLocation(returnDest, { replace: true });
     }
   // returnDest is computed once from the initial query string — stable ref
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,24 +214,8 @@ export default function SermonCompanionReader() {
     );
   }
 
-  if (!entry) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6 text-center pb-24">
-        <p className="text-muted-foreground text-sm">
-          Day {day} is not available yet.
-        </p>
-        {day < companion.numberOfDays && (
-          <p className="text-xs text-muted-foreground/70">
-            Each day unlocks after you complete the previous one.
-          </p>
-        )}
-        <Button variant="outline" size="sm" onClick={() => setLocation(returnDest)}>
-          {returnLabel}
-        </Button>
-        <BottomNav />
-      </div>
-    );
-  }
+  // Unavailable day — redirect handled by the route-protection useEffect above.
+  if (!entry) return null;
 
   // ── Main reading view ──
 
@@ -240,9 +228,8 @@ export default function SermonCompanionReader() {
   let actionButton: React.ReactNode;
   if (justCompleted) {
     // Self-paced: next published entry is immediately available after completion.
-    const nextEntry = companion?.entries
-      .filter(e => e.status === 'Published' && e.dayNumber > day)
-      .sort((a, b) => a.dayNumber - b.dayNumber)[0];
+    // resolveNextEntry enforces the platform rule: Continue only when a valid next item exists.
+    const nextEntry = resolveNextEntry(companion.entries, day);
     const hasNextEntry = !!nextEntry;
     const nextUrl = hasNextEntry
       ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`

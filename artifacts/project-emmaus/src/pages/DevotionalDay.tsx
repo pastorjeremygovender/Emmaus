@@ -33,6 +33,7 @@ import {
   type DevotionalProgress,
 } from '@/lib/devotionals-api';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
+import { resolveNextEntry } from '@/lib/resolve-next-entry';
 
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
@@ -101,9 +102,21 @@ export default function DevotionalDay() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Derive entry/published list before the route-guard effect so TypeScript
+  // can see them as stable values and they aren't in the temporal dead zone.
   const entry = seriesData?.entries.find(e => e.dayNumber === day);
   const publishedEntries = seriesData?.entries.filter(e => e.status === 'Published') ?? [];
   const totalEntries = publishedEntries.length;
+
+  // Route guard — redirect instead of dead-ending when this day is unavailable.
+  // Fires after loading completes; silently replaces history so Back works cleanly.
+  useEffect(() => {
+    if (!loading && (!seriesData || !entry)) {
+      setLocation(returnPath, { replace: true });
+    }
+    // returnPath derives from the source URL param at mount — intentionally stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, seriesData, entry]);
 
   // This day has already been completed in a prior session — replay mode.
   const alreadyCompleted = progress?.completedDays?.includes(day) ?? false;
@@ -139,19 +152,11 @@ export default function DevotionalDay() {
     );
   }
 
-  // ── Not found / not available ──────────────────────────────────────────────
-  if (!seriesData || !entry) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center gap-4 px-6">
-        <p className="text-muted-foreground text-sm text-center">
-          This devotional isn't available yet.
-        </p>
-        <Button variant="outline" onClick={() => setLocation(returnPath)}>
-          {returnLabel}
-        </Button>
-      </div>
-    );
-  }
+  // ── Not found / not available — redirect handled by useEffect above ─────────
+  // The loading guard above already handles the loading state, so this is
+  // only reached when loading is false. Omit !loading so TypeScript can
+  // narrow seriesData and entry for the remainder of the component.
+  if (!seriesData || !entry) return null;
 
   // ── Action button ──────────────────────────────────────────────────────────
 
@@ -160,9 +165,8 @@ export default function DevotionalDay() {
   if (justCompleted || alreadyCompleted) {
     // Completed this session or returning to an already-completed day (replay)
     // Self-paced: next published entry is available immediately after completion.
-    const nextEntry = publishedEntries
-      .filter(e => e.dayNumber > day)
-      .sort((a, b) => a.dayNumber - b.dayNumber)[0];
+    // resolveNextEntry enforces the platform rule: Continue only when a valid next item exists.
+    const nextEntry = resolveNextEntry(seriesData.entries, day);
     const hasNextEntry = !!nextEntry;
     // Previous entries navigation — encode the back destination.
     const prevDaysFrom = source ?? 'nextStepsDevotionals';

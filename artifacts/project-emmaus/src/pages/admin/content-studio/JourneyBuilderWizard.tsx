@@ -28,6 +28,10 @@ import {
 
 interface Props {
   initialContentType: string;
+  /** Pre-fill the title field (set by NewJourneyModal when skipping screen 0) */
+  initialTitle?: string;
+  /** Start at this screen index instead of 0 (NewJourneyModal passes 1 to skip Step 1) */
+  initialScreen?: number;
   userId?: string;
   collections: Collection[];
   onClose: () => void;
@@ -161,20 +165,35 @@ function WizardField({ label, hint, children }: { label: string; hint?: string; 
 
 const TOTAL_SCREENS = 6;
 
-export default function JourneyBuilderWizard({ initialContentType, userId, collections, onClose, onCreated }: Props) {
+export default function JourneyBuilderWizard({ initialContentType, initialTitle, initialScreen, userId, collections, onClose, onCreated }: Props) {
   const storageKey = userId ? `emmaus_builder_draft_${userId}` : null;
 
-  // Load persisted draft
+  // Load persisted draft, always honouring initialContentType and initialTitle
+  // (these are set by the new 3-step wizard and take precedence over any saved draft)
   const loadDraft = (): WizardState => {
-    if (!storageKey) return { ...INITIAL_STATE, contentType: initialContentType };
+    const base: WizardState = {
+      ...INITIAL_STATE,
+      contentType: initialContentType,
+      title: initialTitle ?? '',
+    };
+    if (!storageKey) return base;
     try {
       const raw = localStorage.getItem(storageKey);
-      if (raw) return { ...INITIAL_STATE, ...JSON.parse(raw) as Partial<WizardState>, contentType: initialContentType };
+      if (raw) {
+        return {
+          ...base,
+          ...JSON.parse(raw) as Partial<WizardState>,
+          // Always override with what the caller passed — never let a stale
+          // draft overwrite the user's freshly selected type or title.
+          contentType: initialContentType,
+          title: initialTitle ?? '',
+        };
+      }
     } catch { /* ignore */ }
-    return { ...INITIAL_STATE, contentType: initialContentType };
+    return base;
   };
 
-  const [screen, setScreen] = useState(0);
+  const [screen, setScreen] = useState(initialScreen ?? 0);
   const [state, setState] = useState<WizardState>(loadDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [validatingRef, setValidatingRef] = useState(false);

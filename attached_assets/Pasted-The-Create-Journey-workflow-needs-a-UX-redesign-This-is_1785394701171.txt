@@ -1,0 +1,108 @@
+The Create Journey workflow needs a UX redesign. This is a high-priority improvement because every piece of content in Emmaus passes through this screen.
+
+## Problems
+
+- The modal is taller than the viewport on desktop.
+- Important actions are hidden below the fold.
+- Users cannot immediately see how to go back or close the workflow.
+- Too many options are presented on one screen.
+- The experience feels cluttered instead of calm and guided.
+
+## Redesign Requirements
+
+1. Redesign this as a multi-step wizard instead of one long modal.
+
+Step 1
+Choose how to create the journey.
+
+• Build with Emmaus AI
+• Start from Scratch
+
+Only these two options should be shown.
+
+------------------------------------------------
+
+Step 2
+
+Choose the content type.
+
+• Core Journey
+• Bible Study
+• Daily Devotional
+• Prayer Journey
+• Sermon Companion
+• Small Group
+
+------------------------------------------------
+
+Step 3
+
+Journey Details
+
+• Title
+• Description
+• Collection
+• Journey Type
+• Estimated Length
+
+------------------------------------------------
+
+2. Every modal must fit completely within the viewport on desktop (1366×768 minimum).
+
+The modal itself should never extend off-screen.
+
+If scrolling is required, only the content area should scroll—not the entire modal.
+
+3. Standardize every admin modal.
+
+Every modal should have:
+
+← Back
+
+Page Title
+
+✕ Close
+
+These controls must always remain visible.
+
+4. Add a sticky footer.
+
+The primary action button (Continue, Generate, Create Journey, Save, etc.) must always remain visible without requiring the user to scroll to the bottom.
+
+5. Improve typography.
+
+Increase font size.
+
+Increase contrast.
+
+Reduce grey text.
+
+Increase whitespace.
+
+Each option should feel like a modern selectable card rather than a dense list.
+
+6. Mobile-first.
+
+The same workflow must work cleanly on desktop, tablet and mobile.
+
+No clipped content.
+
+No hidden controls.
+
+No horizontal scrolling.
+
+7. Use this workflow as the standard for every future content-creation screen in Emmaus.
+
+Create Journey
+
+Create Collection
+
+Create Daily Devotional
+
+Create Bible Study
+
+Create Sermon Companion
+
+Any future creation workflows
+
+The goal is for Emmaus to feel as polished as Notion, Canva and Linear—simple, calm, obvious and requiring almost no explanation. Every screen should clearly communicate the next action without overwhelming the user.
