@@ -56,9 +56,22 @@ export default function Onboarding() {
 
   // ── Step 0 handlers ─────────────────────────────────────────────────────────
 
-  function handleNameContinue() {
+  const [nameSaving, setNameSaving] = useState(false);
+
+  async function handleNameContinue() {
     const name = nameInput.trim();
-    if (name) updateName(name);
+    if (name) {
+      // Await the server save before advancing — this ensures the profile
+      // exists on the server before the user navigates away from onboarding.
+      // If the save fails silently (network error), the localStorage copy
+      // still exists as a fallback and the user can continue normally.
+      setNameSaving(true);
+      try {
+        await updateName(name);
+      } finally {
+        setNameSaving(false);
+      }
+    }
     setStep(1);
   }
 
@@ -111,9 +124,9 @@ export default function Onboarding() {
               <Button
                 className="w-full h-12 rounded-xl text-[16px] font-medium"
                 onClick={handleNameContinue}
-                disabled={!nameInput.trim()}
+                disabled={!nameInput.trim() || nameSaving}
               >
-                Continue
+                {nameSaving ? 'Saving…' : 'Continue'}
               </Button>
               <button
                 onClick={() => setStep(1)}

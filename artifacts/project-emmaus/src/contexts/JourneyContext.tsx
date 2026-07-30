@@ -42,6 +42,7 @@ export type Journey = {
     sermonsUsed: Array<{ title: string; date: string }>;
     generatedSections: string[];
   };
+  introductionContent?: string; // journey-level intro text (stored in metadata JSONB)
 };
 
 export type Step = {

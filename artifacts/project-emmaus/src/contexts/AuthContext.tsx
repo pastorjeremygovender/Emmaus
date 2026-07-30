@@ -80,8 +80,10 @@ type AuthContextType = {
   signInDemo: (as?: boolean | 'superAdmin') => void;
   signOut: () => void;
   updateFeeling: (feeling: string) => void;
-  /** Update the signed-in user's preferred display name and persist it. */
-  updateName: (name: string) => void;
+  /** Update the signed-in user's preferred display name and persist it to localStorage
+   *  and the server. Returns a promise that resolves once the server save completes
+   *  (or fails silently) so callers can await it before navigating away. */
+  updateName: (name: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -206,10 +208,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(newUser));
     await issueSessionCookie(newUser.id);
-    // Save the name to the server immediately — this is what makes it
-    // recoverable after localStorage is cleared on mobile.
+    // Save the name to the server and AWAIT it so the profile is persisted
+    // before signUp resolves.  Auth.tsx navigates immediately after awaiting
+    // signUp, so the server record exists before the user leaves onboarding.
     if (name.trim()) {
-      saveServerProfile(email, name.trim()); // fire-and-forget
+      await saveServerProfile(email, name.trim());
     }
   };
 
@@ -233,16 +236,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
   };
 
-  const updateName = (name: string) => {
+  const updateName = async (name: string): Promise<void> => {
     if (!user) return;
     const trimmed = name.trim();
     const updated = { ...user, preferredName: trimmed };
     setUser(updated);
     localStorage.setItem('emmaus_demo_user', JSON.stringify(updated));
-    // Persist to server — this is what survives localStorage eviction
+    // Persist to server and AWAIT it — this is what survives localStorage
+    // eviction.  Previously this was fire-and-forget, which meant a network
+    // failure or immediate navigation could leave the server with no record
+    // and the name would be lost the next time localStorage was cleared.
     if (user.email && trimmed) {
       console.debug('[Emmaus auth] Saving name to server:', trimmed);
-      saveServerProfile(user.email, trimmed); // fire-and-forget
+      await saveServerProfile(user.email, trimmed);
     }
   };
 

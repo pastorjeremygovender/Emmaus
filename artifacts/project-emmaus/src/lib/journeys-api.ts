@@ -44,6 +44,10 @@ export type Journey = {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  scriptureReference?: string;
+  nextJourneyId?: string;
+  requiresDailyGate?: boolean;
+  introductionContent?: string;
 };
 
 export type Step = {

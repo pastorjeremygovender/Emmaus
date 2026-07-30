@@ -74,8 +74,23 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   return null;
 }
 
-// Bottom-nav tab root paths that must never be the entry point on a fresh load.
-const TAB_ROOT_PATHS = ['/bible', '/journeys', '/personal'];
+/**
+ * Tab section prefixes that must route through Welcome on every cold start
+ * or warm resume so that auth, profile loading, onboarding and
+ * resolveEntryRoute() can run and land on /walk.
+ *
+ * IMPORTANT: matched with startsWith so that deep paths such as
+ * /bible/read/john/3 or /journeys/explore are caught in addition to
+ * the tab roots themselves.  Previously only the three exact root strings
+ * were checked, which meant any sub-path within a tab bypassed Welcome
+ * entirely on relaunch — the root cause of "always opens on My Bible".
+ */
+const TAB_PREFIXES = ['/bible', '/journeys', '/personal'];
+
+/** Returns true when a path belongs to one of the three non-home tabs. */
+function isTabPath(path: string): boolean {
+  return TAB_PREFIXES.some(p => path === p || path.startsWith(p + '/'));
+}
 
 function Router() {
   const [location, setLocation] = useLocation();
@@ -83,10 +98,10 @@ function Router() {
   useEffect(() => {
     if (!_startupChecked) {
       _startupChecked = true;
-      // If the browser has loaded directly onto a tab root (e.g. the user
-      // refreshed while on My Bible), redirect through Welcome so that auth,
-      // onboarding and resolveEntryRoute() all run normally and land on /walk.
-      if (TAB_ROOT_PATHS.includes(location)) {
+      // If the browser has loaded directly onto any tab path (root or deep),
+      // redirect through Welcome so that auth, profile loading, onboarding
+      // and resolveEntryRoute() all run normally and land on /walk.
+      if (isTabPath(location)) {
         setLocation('/');
       }
     }
@@ -97,19 +112,17 @@ function Router() {
   // without re-executing the JS module, so _startupChecked stays true and the
   // startup redirect above never fires when the user switches back to the app.
   // This visibilitychange listener handles that case: when the document
-  // transitions from hidden → visible and the current path is a tab root,
-  // redirect to / so the normal auth + entry-route flow runs again.
+  // transitions from hidden → visible and the current path is any tab path
+  // (root or deep sub-path), redirect to / so auth + entry-route runs again.
   useEffect(() => {
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
         // Use window.location.pathname to get the current path at the moment
         // the event fires (the wouter location value is captured at render time
         // and may be stale inside a closure).
-        const currentPath = window.location.pathname.replace(
-          import.meta.env.BASE_URL.replace(/\/$/, ''),
-          ''
-        ) || '/';
-        if (TAB_ROOT_PATHS.includes(currentPath)) {
+        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+        const currentPath = window.location.pathname.replace(base, '') || '/';
+        if (isTabPath(currentPath)) {
           setLocation('/');
         }
       }

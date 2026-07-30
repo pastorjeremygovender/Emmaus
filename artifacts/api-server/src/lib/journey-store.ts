@@ -114,6 +114,7 @@ export interface FrontendJourney {
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
   requiresDailyGate?: boolean;  // default true — false bypasses the daily 15-min gate
+  introductionContent?: string; // journey-level intro text (admin-authored, stored in metadata JSONB)
   // AI Builder fields (also stored in metadata JSONB)
   aiGenerated?: boolean;
   sourcesSummary?: {
@@ -167,6 +168,7 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
     aiGenerated: meta.aiGenerated === true ? true : undefined,
     sourcesSummary: (meta.sourcesSummary as FrontendJourney["sourcesSummary"]) || undefined,
+    introductionContent: (meta.introductionContent as string) || undefined,
   };
 }
 
@@ -412,8 +414,8 @@ export async function updateJourney(
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
 
-  // scriptureReference and nextJourneyId live in the metadata JSONB column
-  if (data.scriptureReference !== undefined || data.nextJourneyId !== undefined) {
+  // scriptureReference, nextJourneyId, and introductionContent live in the metadata JSONB column
+  if (data.scriptureReference !== undefined || data.nextJourneyId !== undefined || data.introductionContent !== undefined) {
     const existing = await getJourney(id);
     const currentMeta = ((existing as any)?._rawMeta ?? {}) as Record<string, unknown>;
     // Re-fetch raw metadata from DB since FrontendJourney doesn't carry it fully
@@ -424,6 +426,7 @@ export async function updateJourney(
       ...(data.scriptureReference !== undefined ? { scriptureReference: data.scriptureReference || null } : {}),
       ...(data.nextJourneyId !== undefined ? { nextJourneyId: data.nextJourneyId || null } : {}),
       ...(data.requiresDailyGate !== undefined ? { requiresDailyGate: data.requiresDailyGate } : {}),
+      ...(data.introductionContent !== undefined ? { introductionContent: data.introductionContent } : {}),
     };
     void currentMeta; // suppress unused warning
   }
