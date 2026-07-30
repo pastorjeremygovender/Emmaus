@@ -83,6 +83,9 @@ export interface FrontendStep {
 
   // Daily Rhythm closing text (stored in content.closingText JSONB)
   closingText?: string;
+
+  // Emmaus Journey Standard — intro to the next day (stored in content.lookingAhead JSONB)
+  lookingAhead?: string;
 }
 
 export interface FrontendJourney {
@@ -200,6 +203,9 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
   // Daily Rhythm closing text
   const closingText = (legacy.closingText as string | undefined);
 
+  // Emmaus Journey Standard — looking ahead
+  const lookingAhead = (legacy.lookingAhead as string | undefined);
+
   return {
     journeyId: row.journeyId,
     day: row.day,
@@ -225,6 +231,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     order: row.day,
     blocks,
     closingText,
+    lookingAhead,
   };
 }
 
@@ -270,8 +277,9 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
   // Build only the keys that were supplied — other keys in the JSONB are overwritten,
   // but daily-rhythm steps never use blocks and block-editor steps never use closingText.
   const contentPatch: Record<string, unknown> = {};
-  if (data.blocks !== undefined)      contentPatch.blocks      = data.blocks;
-  if (data.closingText !== undefined) contentPatch.closingText = data.closingText;
+  if (data.blocks !== undefined)        contentPatch.blocks        = data.blocks;
+  if (data.closingText !== undefined)   contentPatch.closingText   = data.closingText;
+  if (data.lookingAhead !== undefined)  contentPatch.lookingAhead  = data.lookingAhead;
   if (Object.keys(contentPatch).length > 0) {
     cols.content = contentPatch;
   }

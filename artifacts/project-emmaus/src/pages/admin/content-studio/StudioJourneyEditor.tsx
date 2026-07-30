@@ -79,21 +79,39 @@ function getNextScaffoldDay(currentDay: number): number | null {
  *
  * Journey Introduction (day 0) is always clickable — it is the entry point for
  * every journey and is stored on the journey record, not as a step.
- * Day 1 is unlocked once the intro has been saved (introIsComplete), which
- * ensures authors write the introduction before the numbered days — while
- * preserving backward-compat: if Day 1 already has a step it remains clickable.
+ * Day 1 is unlocked once the intro has been saved (introIsComplete).
+ * Subsequent days are unlocked once the preceding day is COMPLETE (has content).
+ * A step that was opened but is still empty stays accessible but doesn't unlock later days.
  */
+
+/**
+ * A step is complete when it has been saved with meaningful content in at least one
+ * key authoring field.  Existence alone (the step row was created by opening the section)
+ * is NOT enough — this prevents empty sections from appearing as done.
+ */
+function isStepComplete(step: StepWithBlocks | undefined | null): boolean {
+  if (!step) return false;
+  return Boolean(
+    step.devotional?.trim()  ||   // Reflection
+    step.actionStep?.trim()  ||   // Today's Step
+    step.prayerPrompt?.trim() ||  // Prayer
+    step.mentorIntro?.trim()      // Welcome
+  );
+}
+
 function isSectionClickable(
   sectionDay: number,
-  stepsWithBlocks: { day: number }[],
+  stepsWithBlocks: StepWithBlocks[],
   introIsComplete: boolean,
 ): boolean {
   if (sectionDay === 0) return true; // Intro always accessible
+  // A section that's already been opened stays accessible regardless of content.
   if (stepsWithBlocks.some(s => s.day === sectionDay)) return true;
+  // For sequential unlock, ALL preceding sections must be COMPLETE (not just opened).
   const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === sectionDay);
   return JOURNEY_SCAFFOLD.slice(0, idx).every(s => {
     if (s.day === 0) return introIsComplete;
-    return stepsWithBlocks.some(step => step.day === s.day);
+    return isStepComplete(stepsWithBlocks.find(step => step.day === s.day));
   });
 }
 
@@ -561,7 +579,7 @@ function StepFieldEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Introduction" hint="Optional opening for this step.">
+      <FieldBlock label="Welcome" hint="Optional opening paragraph for this step.">
         <textarea
           value={step.mentorIntro ?? ''}
           onChange={e => onMetaChange({ mentorIntro: e.target.value })}
@@ -582,7 +600,7 @@ function StepFieldEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Content">
+      <FieldBlock label="Reflection">
         <textarea
           value={step.devotional ?? ''}
           onChange={e => onMetaChange({ devotional: e.target.value })}
@@ -602,12 +620,22 @@ function StepFieldEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Next Step">
+      <FieldBlock label="Today's Step">
         <textarea
           value={step.actionStep ?? ''}
           onChange={e => onMetaChange({ actionStep: e.target.value })}
           rows={2}
           placeholder="One practical response to this step…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Looking Ahead" hint="One short paragraph introducing tomorrow's journey.">
+        <textarea
+          value={step.lookingAhead ?? ''}
+          onChange={e => onMetaChange({ lookingAhead: e.target.value })}
+          rows={3}
+          placeholder="Tomorrow we'll explore…"
           className={textareaCls}
         />
       </FieldBlock>
@@ -775,12 +803,12 @@ function GuidedProgressPanel({
 }) {
   const totalSections = JOURNEY_SCAFFOLD.length;
   const completedCount = JOURNEY_SCAFFOLD.filter(s =>
-    s.day === 0 ? introIsComplete : stepsWithBlocks.some(step => step.day === s.day)
+    s.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(step => step.day === s.day))
   ).length;
   const allComplete = completedCount === totalSections;
 
   const nextSection = JOURNEY_SCAFFOLD.find(s => {
-    const complete = s.day === 0 ? introIsComplete : stepsWithBlocks.some(step => step.day === s.day);
+    const complete = s.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(step => step.day === s.day));
     return !complete && isSectionClickable(s.day, stepsWithBlocks, introIsComplete);
   });
 
@@ -799,7 +827,7 @@ function GuidedProgressPanel({
 
       <div className="space-y-1.5 mb-8">
         {JOURNEY_SCAFFOLD.map(section => {
-          const started = section.day === 0 ? introIsComplete : stepsWithBlocks.some(s => s.day === section.day);
+          const started = section.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(s => s.day === section.day));
           const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
           return (
             <button
@@ -1034,7 +1062,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       title: label,
       status: 'Draft',
       mentorIntro: '', scripture: '', devotional: '',
-      reflectionQuestion: '', prayerPrompt: '', actionStep: '',
+      reflectionQuestion: '', prayerPrompt: '', actionStep: '', lookingAhead: '',
     });
     const blocks: Block[] = [createBlock('paragraph')];
     setStepsWithBlocks(ss => [...ss, { ...newStep, blocks, isDirty: false }]);
@@ -1257,7 +1285,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
               {JOURNEY_SCAFFOLD.map(section => {
                 const step = section.day !== 0 ? stepsWithBlocks.find(s => s.day === section.day) : undefined;
-                const started = section.day === 0 ? introIsComplete : !!step;
+                const started = section.day === 0 ? introIsComplete : isStepComplete(step);
                 const active = section.day === 0 ? selectedView === 'introduction' : selectedView === section.day;
                 const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
                 const status = step ? saveStatus[step.day] : undefined;
@@ -1316,7 +1344,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             </button>
             <div className="flex-1 flex flex-col items-center gap-1 overflow-hidden pt-1">
               {JOURNEY_SCAFFOLD.map(section => {
-                const started = section.day === 0 ? introIsComplete : stepsWithBlocks.some(s => s.day === section.day);
+                const started = section.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(s => s.day === section.day));
                 const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
                 return (
                   <button

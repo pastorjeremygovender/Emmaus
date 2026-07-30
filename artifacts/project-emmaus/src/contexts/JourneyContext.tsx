@@ -59,6 +59,7 @@ export type Step = {
   prayerPrompt: string;
   actionStep: string;
   memoryVerse?: string;
+  lookingAhead?: string; // Emmaus Journey Standard — short intro for tomorrow's journey
 
   // Extended metadata
   preferredTranslation?: string;
