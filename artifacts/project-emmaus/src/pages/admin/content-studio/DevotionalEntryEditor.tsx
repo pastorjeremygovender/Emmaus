@@ -10,6 +10,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getSeriesWithEntries,
   saveEntry,
@@ -131,12 +132,12 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
     setStatus('Published');
     try {
       await doSave({ ...currentFields(), status: 'Published' });
-      setSuccessMsg('Published successfully.');
-      setTimeout(() => setSuccessMsg(''), 3000);
+      setSavingAs(null);
+      toast.success('Day published successfully.');
+      onBack();
     } catch {
       setErrorMsg('Publish failed — please try again.');
       setTimeout(() => setErrorMsg(''), 4000);
-    } finally {
       setSavingAs(null);
     }
   };

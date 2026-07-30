@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { getCollection, createCollection, updateCollection, deleteCollection } from '@/lib/collections-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
@@ -95,14 +96,14 @@ export default function CollectionEditor({ collectionId, onBack, onSaved }: Prop
     setSuccessMsg('');
     setErrorMsg('');
     const ok = await handleSave('Published');
+    setSavingAs(null);
     if (ok) {
-      setSuccessMsg('Published successfully.');
-      setTimeout(() => setSuccessMsg(''), 3000);
+      toast.success('Collection published successfully.');
+      onBack();
     } else {
       setErrorMsg('Failed to publish — please try again.');
       setTimeout(() => setErrorMsg(''), 4000);
     }
-    setSavingAs(null);
   };
 
   const handleUnpublish = async () => {

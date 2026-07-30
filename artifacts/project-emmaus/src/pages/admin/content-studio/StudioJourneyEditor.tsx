@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   ArrowLeft, Plus, Trash2, Eye, Check, Clock, AlertCircle,
   Settings, ChevronLeft, ChevronRight, PanelLeftClose,
@@ -869,16 +870,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     setJourneyErrorMsg('');
     try {
       await updateJourney({ ...journey, ...journeyForm, status: 'Published' } as Journey);
-      setJourneyForm(f => ({ ...f, status: 'Published' }));
-      setJourneySuccessMsg('Published successfully.');
-      setTimeout(() => setJourneySuccessMsg(''), 3000);
+      setJourneySaving(null);
+      toast.success('Journey published successfully.');
+      onBack();
     } catch {
       setJourneyErrorMsg('Failed to publish.');
       setTimeout(() => setJourneyErrorMsg(''), 4000);
-    } finally {
       setJourneySaving(null);
     }
-  }, [journey, journeyForm, updateJourney]);
+  }, [journey, journeyForm, updateJourney, onBack]);
 
   const handleUnpublishJourney = useCallback(async () => {
     if (!journey) return;

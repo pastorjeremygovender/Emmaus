@@ -11,6 +11,7 @@ import {
   ArrowLeft, Plus, BookHeart, ChevronRight, Loader2, Check,
   Eye, EyeOff, Pencil, Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getSeriesWithEntries,
   updateSeries,
@@ -87,9 +88,14 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
     setStatus(next);
     try {
       await updateSeries(seriesId, { status: next }, auth);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-      load();
+      if (next === 'Published') {
+        toast.success('Devotional series published successfully.');
+        onBack();
+      } else {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+        load();
+      }
     } catch {
       setSaveStatus('error');
     }

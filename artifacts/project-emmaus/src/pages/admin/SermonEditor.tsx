@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sermon } from '@/lib/admin-demo-data';
@@ -195,12 +196,12 @@ function CompanionDayEditor({
     try {
       await flushSave();
       await onCompanionPublish();
-      setSuccessMsg('Published successfully.');
-      setTimeout(() => setSuccessMsg(''), 3000);
+      setSavingAs(null);
+      toast.success('Sermon Companion published successfully.');
+      onBack();
     } catch {
       setErrorMsg('Publish failed — please try again.');
       setTimeout(() => setErrorMsg(''), 4000);
-    } finally {
       setSavingAs(null);
     }
   };
