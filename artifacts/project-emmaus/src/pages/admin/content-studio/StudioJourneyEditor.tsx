@@ -49,6 +49,23 @@ interface Props {
   onLegacyEditor: () => void;
 }
 
+// ─── Journey scaffold ─────────────────────────────────────────────────────────
+// Locked 7-section structure. Every journey follows this shape exactly.
+// Authors never create these manually — the editor guides them through each one.
+const JOURNEY_SCAFFOLD = [
+  { day: 0, label: 'Journey Introduction', shortLabel: 'I' },
+  { day: 1, label: 'Day 1',                shortLabel: '1' },
+  { day: 2, label: 'Day 2',                shortLabel: '2' },
+  { day: 3, label: 'Day 3',                shortLabel: '3' },
+  { day: 4, label: 'Day 4',                shortLabel: '4' },
+  { day: 5, label: 'Day 5',                shortLabel: '5' },
+  { day: 6, label: 'Journey Complete',     shortLabel: '✓' },
+] as const;
+
+function getSectionLabel(day: number): string {
+  return JOURNEY_SCAFFOLD.find(s => s.day === day)?.label ?? `Day ${day}`;
+}
+
 // ─── Save indicator ───────────────────────────────────────────────────────────
 
 function SaveIndicator({ status }: { status: SaveStatus }) {
@@ -517,7 +534,7 @@ function StepFieldEditor({
   return (
     <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
       <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest">
-        Step {step.day}
+        {getSectionLabel(step.day)}
       </div>
 
       <FieldBlock label="Step Title">
@@ -660,6 +677,102 @@ function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: (
   );
 }
 
+// ─── Guided progress panel (center panel, overview selected) ─────────────────
+
+function GuidedProgressPanel({
+  stepsWithBlocks,
+  onOpenSection,
+}: {
+  stepsWithBlocks: StepWithBlocks[];
+  onOpenSection: (day: number) => void;
+}) {
+  const totalSections = JOURNEY_SCAFFOLD.length;
+  const completedCount = JOURNEY_SCAFFOLD.filter(
+    s => stepsWithBlocks.some(step => step.day === s.day)
+  ).length;
+  const allComplete = completedCount === totalSections;
+
+  function isClickable(sectionDay: number) {
+    if (stepsWithBlocks.some(s => s.day === sectionDay)) return true;
+    const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === sectionDay);
+    return JOURNEY_SCAFFOLD.slice(0, idx).every(
+      s => stepsWithBlocks.some(step => step.day === s.day)
+    );
+  }
+
+  const nextSection = JOURNEY_SCAFFOLD.find(
+    s => !stepsWithBlocks.some(step => step.day === s.day) && isClickable(s.day)
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto px-8 pt-8 pb-16">
+      <div className="mb-5">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
+          Progress
+        </div>
+        <p className="text-sm text-gray-500">
+          {completedCount === 0
+            ? "This journey hasn't been written yet."
+            : `${completedCount} of ${totalSections} sections written.`}
+        </p>
+      </div>
+
+      <div className="space-y-1.5 mb-8">
+        {JOURNEY_SCAFFOLD.map(section => {
+          const started = stepsWithBlocks.some(s => s.day === section.day);
+          const clickable = isClickable(section.day);
+          return (
+            <button
+              key={section.day}
+              onClick={() => clickable && onOpenSection(section.day)}
+              disabled={!clickable}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
+                started
+                  ? 'bg-teal-50 border-teal-200 hover:bg-teal-100'
+                  : clickable
+                  ? 'bg-white border-gray-200 hover:bg-gray-50'
+                  : 'bg-gray-50/60 border-gray-100 opacity-50 cursor-default'
+              }`}
+            >
+              <span className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
+              }`}>
+                {started && <Check size={9} className="text-white" strokeWidth={3} />}
+              </span>
+              <span className={`text-sm font-medium ${
+                started ? 'text-teal-900' : clickable ? 'text-gray-700' : 'text-gray-400'
+              }`}>
+                {section.label}
+              </span>
+              {started && (
+                <span className="ml-auto text-[11px] text-teal-600 flex items-center gap-0.5">
+                  Edit <ChevronRight size={11} />
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {!allComplete && nextSection && (
+        <button
+          onClick={() => onOpenSection(nextSection.day)}
+          className="flex items-center gap-2 px-6 py-3 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 active:scale-[0.98] transition-all shadow-sm"
+        >
+          <ChevronRight size={15} />
+          {completedCount === 0 ? 'Start Journey Introduction' : `Write ${nextSection.label}`}
+        </button>
+      )}
+      {allComplete && (
+        <div className="flex items-center gap-2 text-sm text-teal-700 font-medium bg-teal-50 border border-teal-200 rounded-xl px-5 py-3">
+          <Check size={15} className="text-teal-600" />
+          All sections written — ready to publish.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor }: Props) {
@@ -712,7 +825,6 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [rightOpen, setRightOpen] = useState(false); // Closed by default — editor gets the full width
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const hasAutoSelectedStep = useRef(false);
 
   const autosaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const hasUnsaved = stepsWithBlocks.some(s => s.isDirty);
@@ -744,12 +856,6 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       return { ...step, ...canonicalFromBlocks, blocks, isDirty: false };
     });
     setStepsWithBlocks(initialised);
-
-    // Auto-select the first step on initial load so the editor is immediately visible.
-    if (!hasAutoSelectedStep.current && initialised.length > 0) {
-      hasAutoSelectedStep.current = true;
-      setSelectedView(initialised[0].day);
-    }
   }, [rawSteps.length]);
 
   useEffect(() => {
@@ -813,23 +919,28 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
   // ─── Step management ──────────────────────────────────────────────────────
 
-  const handleAddStep = async () => {
+  const handleOpenSection = useCallback(async (sectionDay: number) => {
     if (!journey) return;
-    const nextDay = rawSteps.length > 0 ? Math.max(...rawSteps.map(s => s.day)) + 1 : 1;
+    // If the step already exists just navigate to it.
+    if (stepsRef.current.some(s => s.day === sectionDay)) {
+      setSelectedView(sectionDay);
+      return;
+    }
+    // Otherwise create it using the scaffold label as the initial title.
+    const label = getSectionLabel(sectionDay);
     const newStep = await addStep({
       journeyId,
-      day: nextDay,
-      title: 'Untitled Step',
+      day: sectionDay,
+      title: label,
       status: 'Draft',
       mentorIntro: '', scripture: '', devotional: '',
       reflectionQuestion: '', prayerPrompt: '', actionStep: '',
     });
     const blocks: Block[] = [createBlock('paragraph')];
     setStepsWithBlocks(ss => [...ss, { ...newStep, blocks, isDirty: false }]);
-    setSelectedView(nextDay);
-    // Focus the title in the step header after render
+    setSelectedView(sectionDay);
     setTimeout(() => titleInputRef.current?.focus(), 100);
-  };
+  }, [journey, journeyId, addStep]);
 
   const handleDeleteStep = async (day: number) => {
     await deleteStep(journeyId, day);
@@ -1007,75 +1118,52 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
             <div className="mx-3 border-t border-gray-100" />
 
-            {/* Steps section */}
+            {/* Content section — fixed 7-section scaffold */}
             <div className="flex-shrink-0 px-2 pt-2 pb-1">
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1">Steps</div>
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1">Content</div>
             </div>
-            <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-              {stepsWithBlocks.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-xs text-gray-400 leading-relaxed px-2">
-                    This Journey is ready for its first step.
-                  </p>
-                </div>
-              ) : (
-                stepsWithBlocks.map(s => {
-                  const active = selectedView === s.day;
-                  const status = saveStatus[s.day];
-                  return (
-                    <button
-                      key={s.day}
-                      onClick={() => setSelectedView(s.day)}
-                      className={`w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left transition-colors group ${
-                        active ? 'bg-teal-50' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      {/* Day number */}
-                      <span className={`text-[11px] font-bold w-5 flex-shrink-0 tabular-nums ${
-                        active ? 'text-teal-600' : 'text-gray-400'
+            <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
+              {JOURNEY_SCAFFOLD.map(section => {
+                const step = stepsWithBlocks.find(s => s.day === section.day);
+                const started = !!step;
+                const active = selectedView === section.day;
+                const status = step ? saveStatus[step.day] : undefined;
+                return (
+                  <button
+                    key={section.day}
+                    onClick={() => handleOpenSection(section.day)}
+                    className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors group ${
+                      active ? 'bg-teal-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    {/* Completion dot */}
+                    <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
+                    }`}>
+                      {started && <Check size={8} className="text-white" strokeWidth={3} />}
+                    </span>
+                    {/* Label */}
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[13px] font-medium truncate leading-tight ${
+                        active ? 'text-teal-900' : started ? 'text-gray-700' : 'text-gray-400'
                       }`}>
-                        {s.day}
-                      </span>
-                      {/* Title */}
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-[13px] font-medium truncate leading-tight ${
-                          active ? 'text-teal-900' : 'text-gray-700'
-                        }`}>
-                          {s.title || 'Untitled Step'}
+                        {section.label}
+                      </div>
+                      {step?.estimatedReadingTime && (
+                        <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                          <Clock size={9} /> {step.estimatedReadingTime} min
                         </div>
-                        {s.estimatedReadingTime && (
-                          <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                            <Clock size={9} /> {s.estimatedReadingTime} min
-                          </div>
-                        )}
-                      </div>
-                      {/* Status indicators */}
-                      <div className="flex-shrink-0 flex items-center gap-1">
-                        {s.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
-                        {status === 'saved' && <Check size={10} className="text-emerald-500" />}
-                        {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
-                        <button
-                          onClick={e => { e.stopPropagation(); setDeleteTarget(s.day); }}
-                          className="p-0.5 opacity-0 group-hover:opacity-100 hover:text-red-400 text-gray-300 transition-all"
-                          title="Delete step"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Add Step */}
-            <div className="flex-shrink-0 px-2 pb-3 border-t border-gray-100 pt-2">
-              <button
-                onClick={handleAddStep}
-                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors font-medium"
-              >
-                <Plus size={13} /> Add Step
-              </button>
+                      )}
+                    </div>
+                    {/* Autosave indicators */}
+                    <div className="flex-shrink-0 flex items-center gap-1">
+                      {step?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
+                      {status === 'saved' && <Check size={10} className="text-emerald-500" />}
+                      {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -1089,20 +1177,28 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               <PanelLeftOpen size={14} />
             </button>
             <div className="flex-1 flex flex-col items-center gap-1 overflow-hidden pt-1">
-              {stepsWithBlocks.map(s => (
-                <button
-                  key={s.day}
-                  onClick={() => { setSelectedView(s.day); setLeftOpen(true); }}
-                  title={s.title}
-                  className={`w-7 h-7 rounded-lg text-[11px] font-bold transition-colors ${
-                    selectedView === s.day
-                      ? 'bg-teal-50 text-teal-700'
-                      : 'text-gray-400 hover:bg-gray-100'
-                  }`}
-                >
-                  {s.day}
-                </button>
-              ))}
+              {JOURNEY_SCAFFOLD.map(section => {
+                const started = stepsWithBlocks.some(s => s.day === section.day);
+                return (
+                  <button
+                    key={section.day}
+                    onClick={() => { handleOpenSection(section.day); setLeftOpen(true); }}
+                    title={section.label}
+                    className={`w-7 h-7 rounded-lg text-[10px] font-bold transition-colors relative ${
+                      selectedView === section.day
+                        ? 'bg-teal-50 text-teal-700'
+                        : started
+                        ? 'text-gray-600 hover:bg-gray-100'
+                        : 'text-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {section.shortLabel}
+                    {started && selectedView !== section.day && (
+                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-teal-400" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1125,8 +1221,9 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               </div>
             ) : selectedStep ? (
               <span className="text-sm font-semibold text-gray-700 truncate">
-                Step {selectedStep.day}
-                {selectedStep.title ? ` — ${selectedStep.title}` : ''}
+                {getSectionLabel(selectedStep.day)}
+                {selectedStep.title && selectedStep.title !== getSectionLabel(selectedStep.day)
+                  ? ` — ${selectedStep.title}` : ''}
               </span>
             ) : null}
           </div>
@@ -1173,6 +1270,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               onPatch={patchJourney}
               onBlur={handleSaveJourney}
             />
+            <div className="border-t border-gray-100" />
+            <GuidedProgressPanel
+              stepsWithBlocks={stepsWithBlocks}
+              onOpenSection={handleOpenSection}
+            />
           </div>
         ) : selectedStep ? (
           <div className="flex-1 overflow-y-auto bg-white">
@@ -1183,18 +1285,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             />
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-white">
-            <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
-              <BookOpen size={24} className="text-gray-300" />
-            </div>
-            <p className="text-sm font-medium text-gray-500">Select a step to begin writing</p>
-            <p className="text-xs text-gray-400 mt-1">Or add a step using the sidebar.</p>
-            <button
-              onClick={handleAddStep}
-              className="mt-5 px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
-            >
-              Add First Step
-            </button>
+          <div className="flex-1 flex items-center justify-center bg-white">
+            <Loader2 size={18} className="animate-spin text-gray-300" />
           </div>
         )}
       </div>
@@ -1270,8 +1362,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       {/* Dialogs */}
       {deleteTarget !== null && (
         <ConfirmDialog
-          title="Remove Step"
-          message={`Remove Day ${deleteTarget}? This cannot be undone.`}
+          title="Remove Section"
+          message={`Remove "${getSectionLabel(deleteTarget)}"? This cannot be undone.`}
           confirmLabel="Remove"
           danger
           onConfirm={() => handleDeleteStep(deleteTarget)}

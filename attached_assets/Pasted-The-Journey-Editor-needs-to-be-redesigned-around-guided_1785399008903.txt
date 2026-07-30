@@ -1,0 +1,220 @@
+The Journey Editor needs to be redesigned around guided authoring instead of generic page editing.
+
+## Problem
+
+The current workflow is confusing.
+
+Current experience:
+
+1. User clicks "Edit" on a journey.
+2. They land on an Overview page.
+3. There is no obvious place to begin writing.
+4. A small "Add Step" button appears at the bottom of the left sidebar.
+5. Clicking it creates an "Untitled Step".
+
+This creates uncertainty.
+
+The author immediately asks:
+
+- Was there already a step?
+- Did I accidentally create a second one?
+- Am I editing the first step or the second?
+- Why is the journey empty if it already contains a step?
+
+This is poor UX.
+
+The software should guide the author instead of expecting them to understand the editor.
+
+--------------------------------------------------
+
+## New Emmaus Journey Authoring Workflow
+
+Every journey has a fixed structure.
+
+This structure is locked.
+
+Journey Details
+↓
+
+Journey Introduction
+↓
+
+Day 1
+↓
+
+Day 2
+↓
+
+Day 3
+↓
+
+Day 4
+↓
+
+Day 5
+↓
+
+Journey Complete
+
+The author should never manually create these items.
+
+Emmaus already knows every journey follows this structure.
+
+--------------------------------------------------
+
+## Empty Journey Experience
+
+If a journey contains no content, clicking Edit should display:
+
+"This journey hasn't been written yet."
+
+Progress:
+
+⬜ Journey Introduction
+
+⬜ Day 1
+
+⬜ Day 2
+
+⬜ Day 3
+
+⬜ Day 4
+
+⬜ Day 5
+
+⬜ Journey Complete
+
+Primary button:
+
+🟢 Start Journey Introduction
+
+No Add Step button.
+
+--------------------------------------------------
+
+## Guided Progress
+
+After the Journey Introduction is completed:
+
+✅ Journey Introduction
+
+⬜ Day 1
+
+⬜ Day 2
+
+⬜ Day 3
+
+⬜ Day 4
+
+⬜ Day 5
+
+⬜ Journey Complete
+
+Primary button:
+
+🟢 Write Day 1
+
+After Day 1:
+
+✅ Journey Introduction
+
+✅ Day 1
+
+⬜ Day 2
+
+⬜ Day 3
+
+⬜ Day 4
+
+⬜ Day 5
+
+⬜ Journey Complete
+
+Primary button:
+
+🟢 Write Day 2
+
+Continue until:
+
+✅ Journey Complete
+
+Ready to Publish
+
+--------------------------------------------------
+
+## Remove Generic Terminology
+
+The following wording should be removed from the Journey Editor:
+
+- Add Step
+- Untitled Step
+
+Replace with language matching the finished product:
+
+Journey Introduction
+
+Day 1
+
+Day 2
+
+Day 3
+
+Day 4
+
+Day 5
+
+Journey Complete
+
+The author should always feel they are writing a journey, not creating arbitrary content blocks.
+
+--------------------------------------------------
+
+## Sidebar
+
+The sidebar should always show progress.
+
+For example:
+
+Journey
+
+✓ Overview
+
+✓ Journey Settings
+
+CONTENT
+
+⬜ Journey Introduction
+
+⬜ Day 1
+
+⬜ Day 2
+
+⬜ Day 3
+
+⬜ Day 4
+
+⬜ Day 5
+
+⬜ Journey Complete
+
+Each item becomes available only after the previous one is completed.
+
+--------------------------------------------------
+
+## Existing Journeys
+
+This change must not affect existing journey content.
+
+When opening an existing journey, Emmaus should map current content into the new structure.
+
+--------------------------------------------------
+
+## Goal
+
+The editor should feel like Emmaus is guiding an author through writing a journey one section at a time.
+
+At no point should the author wonder:
+
+"What do I do next?"
+
+The software should always make the next action obvious.
