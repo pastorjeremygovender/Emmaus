@@ -57,6 +57,101 @@ export interface SseDonePayload {
   messageId: string;
   metadata: EmmausResponseMetadata;
   promptVersion: string;
+  /** When the user asked Emmaus to use a different name, this holds the
+   *  validated new name so the client can persist it immediately. */
+  detectedNameUpdate?: string;
+}
+
+// ─── Name Update Detection ────────────────────────────────────────────────────
+
+/**
+ * Minimum and maximum character lengths for a valid preferred name segment.
+ * The name must be at least 2 characters and no more than 30, and may consist
+ * of 1–3 space-separated words (handles "call me Sarah", "call me Sarah Jane").
+ */
+const NAME_MIN = 2;
+const NAME_MAX = 30;
+
+/**
+ * Individual words that can never be part of a valid preferred name.
+ * Checked per-word after the capture group is split — prevents accepting
+ * "Sarah Please", "When You", "Jane And", or "Blessed" as name segments.
+ */
+const BLOCKED_NAME_WORDS_LOWER = new Set([
+  // Identity/role words
+  "friend", "user", "member",
+  // Pronouns
+  "me", "my", "i", "you", "he", "she", "it", "we", "they",
+  "him", "her", "us", "them",
+  // Articles and prepositions (single words like "a", "an", "the" are also
+  // caught by the per-word length minimum, but include them explicitly)
+  "a", "an", "the",
+  // Polite or sentence-final words
+  "please", "now", "back", "away", "there", "here", "up", "down",
+  "out", "in", "today", "again", "just", "still", "always", "never",
+  "maybe", "actually", "okay", "ok", "yes", "no", "sure",
+  // Connectives and clause-openers
+  "and", "but", "or", "so", "yet", "nor", "because", "since",
+  "if", "when", "where", "while", "how", "why", "what", "who",
+  // Common adjectives / emotional states that end sentences
+  "crazy", "silly", "lost", "saved", "broken", "tired", "fine",
+  "happy", "sad", "alone", "afraid", "free", "new", "wrong", "right",
+  // Spiritual or identity words not suitable as display names
+  "god", "jesus", "emmaus", "lord", "blessed", "sinner",
+]);
+
+/**
+ * Detect "call me [name]", "my name is [name]", or "I go by [name]" patterns
+ * and return a validated, title-cased name string, or null when no match is found.
+ *
+ * Safety design:
+ *  - The name segment is anchored to end-of-message or punctuation so sentence
+ *    continuations like "call me when you arrive" do not match.
+ *  - At most two words are accepted (covers "Sarah Jane" style compound names).
+ *  - Every captured word is checked against BLOCKED_NAME_WORDS_LOWER so
+ *    "call me Sarah please" (→ "Sarah Please") and similar false positives are
+ *    rejected even when they appear at the end of the message.
+ */
+export function detectNameUpdate(message: string): string | null {
+  // (?:[.,!?;]|\s*$) — name ends at punctuation or end-of-string.
+  // This ensures "call me when you arrive" does not fire because " you arrive"
+  // is neither punctuation nor end-of-string after the first word "when".
+  const nameSegment =
+    "([A-Za-z][A-Za-z'-]*(?:\\s+[A-Za-z][A-Za-z'-]*)?)\\s*(?:[.,!?;]|\\s*$)";
+
+  const patterns = [
+    new RegExp(`\\bcall\\s+me\\s+${nameSegment}`, "i"),
+    new RegExp(`\\bmy\\s+name\\s+is\\s+${nameSegment}`, "i"),
+    new RegExp(`\\bI\\s+go\\s+by\\s+${nameSegment}`, "i"),
+    new RegExp(`\\bplease\\s+call\\s+me\\s+${nameSegment}`, "i"),
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+
+    const raw = match[1].trim();
+    if (raw.length < NAME_MIN || raw.length > NAME_MAX) continue;
+
+    const words = raw.split(/\s+/);
+    const titleCasedWords = words.map(
+      (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    );
+
+    // Reject if any individual word is too short (e.g. "a" in "a sinner")
+    // or is a common English word rather than a name.
+    if (
+      titleCasedWords.some(
+        (w) => w.length < NAME_MIN || BLOCKED_NAME_WORDS_LOWER.has(w.toLowerCase())
+      )
+    ) {
+      continue;
+    }
+
+    return titleCasedWords.join(" ");
+  }
+
+  return null;
 }
 
 // ─── Route Classification ─────────────────────────────────────────────────────
@@ -188,9 +283,14 @@ export async function handleConversation(
   const store = getConversationStore();
   const provider = createLLMProvider();
 
-  // ── 1. Route classification ────────────────────────────────────────────────
+  // ── 1. Route classification + name-update detection ───────────────────────
   const route = classifyRoute(req.message);
   const settings = routeSettings(route);
+  const detectedNameUpdate = detectNameUpdate(req.message);
+
+  if (detectedNameUpdate) {
+    logger.info(`[emmaus:${reqId}] name_update detected="${detectedNameUpdate}"`);
+  }
 
   logger.info(
     `[emmaus:${reqId}] recv route=${route} maxTokens=${settings.maxTokens} msg="${req.message.slice(0, 60)}"`
@@ -331,7 +431,10 @@ export async function handleConversation(
       ` automatically — do NOT generate a "listen" nextStep or a sermon recommendation in metadata.`;
   }
 
-  const systemPrompt = buildSystemPrompt(contextBlock, contextInput.userName?.trim() || undefined);
+  // When the user just asked for a name change, use the new name in this
+  // response's prompt so Emmaus immediately addresses them correctly.
+  const effectiveUserName = detectedNameUpdate ?? (contextInput.userName?.trim() || undefined);
+  const systemPrompt = buildSystemPrompt(contextBlock, effectiveUserName, detectedNameUpdate ?? undefined);
 
   const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
 
@@ -487,6 +590,7 @@ export async function handleConversation(
     messageId: assistantMsg.id,
     metadata: finalMeta,
     promptVersion: PROMPT_VERSION,
+    ...(detectedNameUpdate ? { detectedNameUpdate } : {}),
   };
   sseWrite(res, "done", donePayload);
   res.end();

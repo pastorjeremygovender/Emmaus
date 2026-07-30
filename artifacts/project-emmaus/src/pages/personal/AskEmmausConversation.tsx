@@ -143,7 +143,7 @@ function renderProse(text: string) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AskEmmausConversation() {
-  const { user } = useAuth();
+  const { user, updateName } = useAuth();
   const params = useParams<{ id?: string }>();
   const [, setLocation] = useLocation();
 
@@ -251,6 +251,10 @@ export default function AskEmmausConversation() {
                 : m
             )
           );
+          // Persist name change when Emmaus detected a "call me [name]" request
+          if (payload.detectedNameUpdate) {
+            updateName(payload.detectedNameUpdate);
+          }
           // Crisis handoff
           if (payload.metadata.handoffType === 'crisis') {
             setIsCrisisMode(true);
@@ -300,7 +304,7 @@ export default function AskEmmausConversation() {
           userId: user.id,
           conversationId: convId,
           message: text,
-          context: { entryPoint: 'personal', conversationId: convId },
+          context: { entryPoint: 'personal', conversationId: convId, userName: user.preferredName },
           history,
           callbacks,
         });

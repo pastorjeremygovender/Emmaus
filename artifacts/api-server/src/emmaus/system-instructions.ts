@@ -286,12 +286,20 @@ The block is stripped before showing the response to the user — it is purely s
  * @param userName     - The member's preferred first name, if set. When provided, Emmaus is
  *                       instructed to use it naturally within the conversation.
  */
-export function buildSystemPrompt(contextBlock: string, userName?: string): string {
+export function buildSystemPrompt(
+  contextBlock: string,
+  userName?: string,
+  detectedNameUpdate?: string
+): string {
   const si = EMMAUS_SYSTEM_INSTRUCTIONS;
 
-  const nameGuidance = userName
+  let nameGuidance = userName
     ? `\nMEMBER'S NAME:\nThe member's name is ${userName}. Use it naturally and warmly within your response — not to open with it, but to weave it in where it feels genuine and personal. Do not repeat it excessively.\n`
     : "";
+
+  if (detectedNameUpdate) {
+    nameGuidance += `\nNAME UPDATE:\nThe member has just asked you to call them "${detectedNameUpdate}". Acknowledge this naturally and warmly — once, briefly — then continue your response using "${detectedNameUpdate}" where appropriate. Do not make it a big deal; a simple acknowledgement works (e.g. "I'll call you ${detectedNameUpdate} — ..."). Use the new name for the rest of this response.\n`;
+  }
 
   return `${si.identity}
 ${nameGuidance}

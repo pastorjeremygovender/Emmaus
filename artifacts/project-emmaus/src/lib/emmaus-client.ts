@@ -123,6 +123,9 @@ export type SseDoneEvent = {
   messageId: string;
   metadata: EmmausMetadata;
   promptVersion: string;
+  /** Present when the backend detected a "call me [name]" request in the
+   *  user's message. The client should persist this via updateName(). */
+  detectedNameUpdate?: string;
 };
 export type SseErrorEvent = { type: 'error'; message: string };
 export type SseEvent = SseTextEvent | SseDoneEvent | SseErrorEvent;
