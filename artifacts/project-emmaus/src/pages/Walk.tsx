@@ -526,6 +526,9 @@ export default function Walk() {
     title: string;
     numberOfDays: number;
     currentDay: number;
+    completedDays: number[];
+    /** Title of the entry at currentDay, if available. */
+    nextEntryTitle?: string;
     isStarted: boolean;
   } | null>(null);
 
@@ -533,13 +536,24 @@ export default function Walk() {
     if (!user?.id) return;
     fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then((data: { id: string; title: string; numberOfDays: number; progress: { currentDay: number } | null } | null) => {
+      .then((data: {
+        id: string;
+        title: string;
+        numberOfDays: number;
+        entries?: { dayNumber: number; title: string }[];
+        progress: { currentDay: number; completedDays: number[] } | null;
+      } | null) => {
         if (!data) { setScCompanion(null); return; }
+        const currentDay = data.progress?.currentDay ?? 1;
+        const completedDays = data.progress?.completedDays ?? [];
+        const nextEntryTitle = data.entries?.find(e => e.dayNumber === currentDay)?.title;
         setScCompanion({
           id: data.id,
           title: data.title,
           numberOfDays: data.numberOfDays,
-          currentDay: data.progress?.currentDay ?? 1,
+          currentDay,
+          completedDays,
+          nextEntryTitle,
           isStarted: !!data.progress,
         });
       })
@@ -840,7 +854,20 @@ export default function Walk() {
             <EmmausContentCard
               label="SERMON COMPANION"
               title={scCompanion.title}
-              description="Five short weekday devotionals based on Sunday's sermon."
+              description={(() => {
+                // Mirror the formula in buildCompanionItem (next-steps.ts) and
+                // buildDevotionalItem so Today's Steps and Next Steps always agree.
+                const completedCount = scCompanion.completedDays.length;
+                const total = scCompanion.numberOfDays;
+                const allComplete = total > 0 && completedCount >= total;
+                if (allComplete) return `${total} of ${total} completed`;
+                if (completedCount > 0) {
+                  return scCompanion.nextEntryTitle
+                    ? `Day ${scCompanion.currentDay} of ${total} · ${scCompanion.nextEntryTitle}`
+                    : `Day ${scCompanion.currentDay} of ${total}`;
+                }
+                return total > 0 ? `Day 1 of ${total}` : 'Day 1';
+              })()}
               metadata={`${scCompanion.numberOfDays} Days`}
               // Hide Continue when all days are complete — currentDay advances
               // beyond numberOfDays after the final day is marked complete.

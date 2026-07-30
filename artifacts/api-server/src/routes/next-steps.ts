@@ -249,6 +249,18 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       }),
     );
 
+    // Fetch published entries per sermon-table companion.
+    // Used by buildCompanionItem to compute a progress-aware description
+    // ("Day N of M · Entry Title") that mirrors Today's Steps exactly.
+    const companionEntriesMap = new Map<string, sermonCompanionStore.CompanionEntry[]>();
+    await Promise.all(
+      scTableCompanions.map(async c => {
+        const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
+        const published = entries.filter(e => e.status === "Published");
+        companionEntriesMap.set(c.id, published);
+      }),
+    );
+
     // ── Daily Devotionals ────────────────────────────────────────────────────
 
     const dailyDevotionals = devSeries
@@ -339,10 +351,30 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       // Strip any subtitle appended to the companion title by AI generation
       // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
       const title = c.title.includes(": ") ? c.title.split(": ")[0].trim() : c.title;
+
+      // Progress-aware description — mirrors the formula in buildDevotionalItem and
+      // Walk.tsx > DevotionalCard so Today's Steps and Next Steps always agree.
+      const publishedEntries = companionEntriesMap.get(c.id) ?? [];
+      const completedCount = prog?.completedDays.length ?? 0;
+      const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;
+      const nextEntry = publishedEntries.find(e => e.dayNumber === currentDay);
+      const nextEntryTitle = nextEntry?.title || undefined;
+
+      const description = allComplete
+        ? `${publishedEntryCount} of ${publishedEntryCount} completed`
+        : completedCount > 0
+          ? nextEntryTitle
+            ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
+            : `Day ${currentDay} of ${publishedEntryCount}`
+          : publishedEntryCount > 0
+            ? `Day 1 of ${publishedEntryCount}`
+            : "Day 1";
+
       return {
         id: c.id,
         contentType: "sermon-devotional",
         title,
+        description,
         memberProgressState: state,
         metadata: {
           durationDays: c.numberOfDays,
