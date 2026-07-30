@@ -74,23 +74,8 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   return null;
 }
 
-/**
- * Tab section prefixes that must route through Welcome on every cold start
- * or warm resume so that auth, profile loading, onboarding and
- * resolveEntryRoute() can run and land on /walk.
- *
- * IMPORTANT: matched with startsWith so that deep paths such as
- * /bible/read/john/3 or /journeys/explore are caught in addition to
- * the tab roots themselves.  Previously only the three exact root strings
- * were checked, which meant any sub-path within a tab bypassed Welcome
- * entirely on relaunch — the root cause of "always opens on My Bible".
- */
-const TAB_PREFIXES = ['/bible', '/journeys', '/personal'];
-
-/** Returns true when a path belongs to one of the three non-home tabs. */
-function isTabPath(path: string): boolean {
-  return TAB_PREFIXES.some(p => path === p || path.startsWith(p + '/'));
-}
+// isTabPath and TAB_PREFIXES live in lib/tab-paths so they can be unit-tested.
+import { isTabPath } from '@/lib/tab-paths';
 
 function Router() {
   const [location, setLocation] = useLocation();

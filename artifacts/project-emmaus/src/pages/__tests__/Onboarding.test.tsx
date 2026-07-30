@@ -117,9 +117,9 @@ describe('Onboarding — name-collection step (Step 0)', () => {
     expect(mockUpdateName).toHaveBeenCalledOnce();
     expect(mockUpdateName).toHaveBeenCalledWith('James');
 
-    // After advancing, Step 1 should be shown
+    // After advancing, Step 1 should be shown (current copy)
     expect(
-      screen.getByText(/what would you like to begin with/i),
+      screen.getByText(/let's begin by spending/i),
     ).toBeInTheDocument();
   });
 
@@ -133,9 +133,9 @@ describe('Onboarding — name-collection step (Step 0)', () => {
 
     expect(mockUpdateName).not.toHaveBeenCalled();
 
-    // Step 1 should now be visible
+    // Step 1 should now be visible (current copy)
     expect(
-      screen.getByText(/what would you like to begin with/i),
+      screen.getByText(/let's begin by spending/i),
     ).toBeInTheDocument();
   });
 });
