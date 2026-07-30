@@ -1,0 +1,197 @@
+# Emmaus - Journey Navigation Flow
+
+## Objective
+
+Fix the Journey navigation so it reflects the Emmaus hierarchy.
+
+Current hierarchy:
+
+Journey
+↓
+Walk
+↓
+Steps
+
+The current implementation skips the Walk level.
+
+---
+
+## Current Behaviour
+
+Next Steps
+
+↓
+
+Journeys
+
+↓
+
+Coming to Jesus
+
+↓
+
+Nothing happens (or navigates incorrectly).
+
+This is incorrect.
+
+---
+
+## Required Behaviour
+
+When the user taps a Journey card (for example, Coming to Jesus), open a Journey Details page.
+
+Do not start a Walk.
+
+Do not open Previous Days / Walk Contents.
+
+---
+
+## Journey Details Page
+
+Display:
+
+Journey Title
+
+Example:
+
+Coming to Jesus
+
+Journey Description
+
+Begin your walk with Jesus by discovering who He is, why He came and what it means to follow Him.
+
+---
+
+## Walks
+
+Below the description, display every Walk that belongs to this Journey.
+
+Example:
+
+WHO IS GOD?
+
+Discover who God is and why knowing Him changes everything.
+
+Continue →
+
+--------------------------------
+
+CREATED IN GOD'S IMAGE
+
+Discover your value and purpose.
+
+Continue →
+
+--------------------------------
+
+WHAT WENT WRONG?
+
+Understand how sin entered the world and why we all need a Saviour.
+
+Continue →
+
+--------------------------------
+
+JESUS SAVES
+
+Discover God's answer to our greatest need.
+
+Continue →
+
+Continue displaying every Walk assigned to that Journey.
+
+---
+
+## Selecting a Walk
+
+Only when the user taps a Walk should Emmaus open that Walk.
+
+The flow becomes:
+
+Journey
+
+↓
+
+Walk
+
+↓
+
+Walk Introduction
+
+↓
+
+Steps
+
+↓
+
+Walk Complete
+
+---
+
+## Walk Contents
+
+The existing Walk Contents screen (currently called Previous Days) belongs to an individual Walk only.
+
+It should never be opened directly from a Journey.
+
+It should only be accessible after selecting a specific Walk.
+
+---
+
+## Dynamic Behaviour
+
+Generate the Walk list from the Journey.
+
+Do not hard-code:
+
+Who Is God
+
+Created in God's Image
+
+etc.
+
+Any number of Walks should be supported.
+
+---
+
+## Design
+
+Do not redesign the interface.
+
+Reuse the existing card style.
+
+The Journey Details page should feel like a natural extension of the current design.
+
+---
+
+## Goal
+
+The navigation hierarchy must always be:
+
+Next Steps
+
+↓
+
+Journeys
+
+↓
+
+Journey
+
+↓
+
+Walk
+
+↓
+
+Walk Introduction
+
+↓
+
+Steps
+
+↓
+
+Walk Complete
+
+This architecture must support hundreds of Walks without becoming confusing.

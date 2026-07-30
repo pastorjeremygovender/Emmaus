@@ -246,7 +246,7 @@ export default function JourneyDay() {
   if (isCompleting) {
     const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
 
-    // "View Previous Steps →" — show when there is at least one step earlier in
+    // "View Walk Contents →" — show when there is at least one step earlier in
     // the sequence (i.e. this is not the very first published step).
     const firstStepDay = allSteps[0]?.day ?? 1;
     const hasPreviousSteps = day > firstStepDay || (isFinalStep && allSteps.length > 1);
@@ -271,7 +271,7 @@ export default function JourneyDay() {
           subMessage="May the Lord continue His work in your life."
           returnLabel="Back to Next Steps"
           onReturn={() => setLocation(returnPath)}
-          previousDaysLabel="View Previous Steps →"
+          previousDaysLabel="View Walk Contents →"
           onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
         />
       );
@@ -286,7 +286,7 @@ export default function JourneyDay() {
         continueLabel={nextStepUrl ? 'Continue to Next Lesson' : undefined}
         returnLabel="Back to Next Steps"
         onReturn={() => setLocation(returnPath)}
-        previousDaysLabel="View Previous Steps →"
+        previousDaysLabel="View Walk Contents →"
         onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
       />
     );

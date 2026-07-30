@@ -1,0 +1,207 @@
+# Emmaus - Walk Contents Screen
+
+## Objective
+
+The current "Previous Days" screen should become a complete overview of the entire Walk.
+
+A Walk consists of more than daily steps.
+
+It has:
+
+- Walk Introduction
+- Steps
+- Walk Complete
+
+The overview should reflect the complete experience.
+
+Do not redesign the page.
+
+Extend the existing layout.
+
+---
+
+## Rename Screen
+
+Change:
+
+Previous Days
+
+to:
+
+Walk Contents
+
+This screen should list every part of the Walk in order.
+
+---
+
+## Order
+
+Display:
+
+WELCOME
+
+↓
+
+STEP 1
+
+↓
+
+STEP 2
+
+↓
+
+STEP 3
+
+...
+
+↓
+
+STEP N
+
+↓
+
+WALK COMPLETE
+
+The number of steps must be generated dynamically.
+
+Do not assume five steps.
+
+---
+
+## Walk Introduction
+
+Display the Walk Introduction as the first item.
+
+Example:
+
+WELCOME
+
+What Went Wrong
+
+✓ Completed
+
+Review →
+
+or
+
+Continue →
+
+if not yet completed.
+
+The title should come from the Walk Introduction.
+
+---
+
+## Steps
+
+Display each completed or available step exactly as today.
+
+Example:
+
+STEP 1
+
+In the Beginning
+
+✓ Completed
+
+Review →
+
+Continue →
+
+Locked
+
+depending on the user's progress.
+
+Generate dynamically.
+
+---
+
+## Walk Complete
+
+Display the Walk Complete page as the final item.
+
+Example:
+
+WALK COMPLETE
+
+Well Done
+
+✓ Completed
+
+Review →
+
+or
+
+Continue →
+
+if available but not yet completed.
+
+---
+
+## Status
+
+Every item should display the correct state:
+
+Not Started
+
+Current
+
+Completed
+
+Locked
+
+using the same status logic already used for the daily steps.
+
+---
+
+## Navigation
+
+Selecting any completed item opens it in Review mode.
+
+Selecting the current item resumes where the user left off.
+
+Locked items remain unavailable.
+
+---
+
+## Design
+
+Do not redesign the page.
+
+Keep the existing spacing, typography and card/list layout.
+
+Simply include the missing parts of the Walk.
+
+---
+
+## Dynamic Behaviour
+
+This page must work for:
+
+- 3-step Walks
+- 5-step Walks
+- 14-step Walks
+- 30-step Walks
+- any future Walk length
+
+Never hard-code the number of steps.
+
+Always generate the contents from the Walk structure.
+
+---
+
+## Goal
+
+The Walk Contents page should present the complete story of the Walk from beginning to end:
+
+Welcome
+
+↓
+
+Steps
+
+↓
+
+Walk Complete
+
+so that users can revisit any part of the experience, not only the daily steps.

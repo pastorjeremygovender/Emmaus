@@ -39,6 +39,11 @@ export interface PreviousDayEntry {
   /** Optional sub-text, e.g. scripture reference or series name. */
   subtitle?: string;
   /**
+   * Optional override for the eyebrow label above the title.
+   * Defaults to "Day {dayNumber}". Use e.g. "WELCOME", "STEP 1", "WALK COMPLETE".
+   */
+  label?: string;
+  /**
    * 'completed' — member has completed this day; shows "Review →" action.
    * 'current'   — today's in-progress or latest available day.
    * 'locked'    — not yet available; shown but not tappable.
@@ -54,10 +59,20 @@ interface PreviousDaysScreenProps {
   loading?: boolean;
   onBack: () => void;
   onReviewDay: (dayNumber: number) => void;
+  /**
+   * Called when the user taps "Continue →" on a 'current' entry.
+   * When provided, current entries show a "Continue →" button.
+   */
+  onContinueDay?: (dayNumber: number) => void;
   /** Text next to the back arrow. Default: "Back". */
   backLabel?: string;
   /** Custom empty-state message. */
   emptyMessage?: string;
+  /**
+   * Subtitle shown in the page header, below contentTitle.
+   * Default: "Previous Days".
+   */
+  screenTitle?: string;
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -94,8 +109,10 @@ export function PreviousDaysScreen({
   loading = false,
   onBack,
   onReviewDay,
+  onContinueDay,
   backLabel = 'Back',
   emptyMessage = 'No previous days are available yet.',
+  screenTitle = 'Previous Days',
 }: PreviousDaysScreenProps) {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -123,7 +140,7 @@ export function PreviousDaysScreen({
             <div className="font-medium text-sm text-foreground leading-tight truncate">
               {contentTitle}
             </div>
-            <div className="text-[12px] text-muted-foreground">Previous Days</div>
+            <div className="text-[12px] text-muted-foreground">{screenTitle}</div>
           </div>
           {/* Spacer balances the back arrow */}
           <div className="min-w-[44px]" />
@@ -152,6 +169,8 @@ export function PreviousDaysScreen({
           <div className="divide-y divide-border/50">
             {entries.map(entry => {
               const isReviewable = entry.status === 'completed';
+              const isContinuable = entry.status === 'current' && !!onContinueDay;
+              const eyebrow = entry.label ?? `Day ${entry.dayNumber}`;
               return (
                 <div
                   key={entry.dayNumber}
@@ -161,7 +180,7 @@ export function PreviousDaysScreen({
                     {/* Left: day info */}
                     <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-0.5">
-                        Day {entry.dayNumber}
+                        {eyebrow}
                       </div>
                       <div className="text-[15px] font-medium text-foreground leading-snug truncate">
                         {entry.title}
@@ -176,7 +195,7 @@ export function PreviousDaysScreen({
                       </div>
                     </div>
 
-                    {/* Right: Review action (completed days only) */}
+                    {/* Right: action button */}
                     {isReviewable ? (
                       <button
                         onClick={() => onReviewDay(entry.dayNumber)}
@@ -186,8 +205,17 @@ export function PreviousDaysScreen({
                         Review
                         <ChevronRight size={16} />
                       </button>
+                    ) : isContinuable ? (
+                      <button
+                        onClick={() => onContinueDay!(entry.dayNumber)}
+                        className="flex items-center gap-1 text-[14px] font-medium text-primary hover:text-primary/80 transition-colors flex-shrink-0"
+                        data-testid={`continue-day-${entry.dayNumber}`}
+                      >
+                        Continue
+                        <ChevronRight size={16} />
+                      </button>
                     ) : (
-                      /* Non-reviewable days get a placeholder so the layout stays aligned */
+                      /* Locked / no-action — placeholder keeps layout aligned */
                       <div className="w-[70px]" />
                     )}
                   </div>

@@ -416,7 +416,7 @@ function DiscoveryCard({
       onGate={onGate}
       secondaryAction={
         onViewPreviousSteps
-          ? { label: 'View Previous Steps →', onPress: onViewPreviousSteps }
+          ? { label: 'View Walk Contents →', onPress: onViewPreviousSteps }
           : undefined
       }
     />
@@ -523,14 +523,13 @@ function journeyItemCards(
 }
 
 // Journeys tab — one card per Journey (collection).
-// Selecting Continue navigates directly to the current unfinished lesson —
-// the same pattern as Daily Devotionals. No intermediate Walk overview.
+// Tapping a Journey opens the Collection page (Journey Details), which lists
+// every Walk. Only tapping a Walk inside that page opens the Walk itself.
 function JourneysPanel({
-  collections, onOpenJourney, onViewPreviousSteps,
+  collections, onOpenJourney,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
-  onViewPreviousSteps?: (col: JourneyCollectionGroup) => void;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
@@ -539,13 +538,8 @@ function JourneysPanel({
       {collections.map(col => {
         const walkCount = col.journeys.length;
         const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
-        const allDone = walkCount > 0 && col.journeys.every(j => j.memberProgressState === 'completed');
-        const hasStarted = col.journeys.some(
-          j => j.memberProgressState === 'in-progress' || j.memberProgressState === 'completed',
-        );
-        // "Continue" when in-progress, "Open" when not started.
-        // When all walks complete, hide the primary Continue action — show only View Previous Steps.
-        const actionLabel = allDone ? null : hasInProgress ? 'Continue' : 'Open';
+        // "Continue" when a Walk is in-progress, "Open" otherwise (not-started or all complete).
+        const actionLabel = hasInProgress ? 'Continue' : 'Open';
 
         return (
           <EmmausContentCard
@@ -554,13 +548,8 @@ function JourneysPanel({
             title={col.title}
             description={col.description}
             metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
-            primaryActionLabel={actionLabel ?? undefined}
-            onAction={actionLabel ? () => onOpenJourney(col) : undefined}
-            secondaryAction={
-              hasStarted && onViewPreviousSteps
-                ? { label: 'View Previous Steps →', onPress: () => onViewPreviousSteps(col) }
-                : undefined
-            }
+            primaryActionLabel={actionLabel}
+            onAction={() => onOpenJourney(col)}
           />
         );
       })}
@@ -904,28 +893,9 @@ export default function Journeys() {
               <JourneysPanel
                 collections={data.journeyCollections}
                 onOpenJourney={(col) => {
-                  if (col.journeys.length === 0) {
-                    // No walks yet — fall back to the collection page
-                    setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
-                    return;
-                  }
-                  // Multiple walks: prefer in-progress, then not-started, then first
-                  const target =
-                    col.journeys.find(j => j.memberProgressState === 'in-progress') ??
-                    col.journeys.find(j => j.memberProgressState === 'not-started') ??
-                    col.journeys[0];
-                  // Navigate directly to the current lesson — route is pre-computed server-side.
-                  setLocation(`${target.route}?source=nextStepsJourneys`);
-                }}
-                onViewPreviousSteps={(col) => {
-                  // Navigate to the previous-steps list for the active/first walk.
-                  const target =
-                    col.journeys.find(j => j.memberProgressState === 'in-progress') ??
-                    col.journeys.find(j => j.memberProgressState === 'completed') ??
-                    col.journeys[0];
-                  if (target) {
-                    setLocation(`/journey/${target.id}/previous?from=nextStepsJourneys`);
-                  }
+                  // Always open the Journey Details (CollectionPage) — never skip
+                  // directly to a Walk or lesson. The member chooses their Walk there.
+                  setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
                 }}
               />
             )}
