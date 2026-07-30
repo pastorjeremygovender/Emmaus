@@ -1,0 +1,124 @@
+# Emmaus — Preserve Current Screen After Mobile Lock/Unlock
+
+## Objective
+
+Exempt mobile lock/unlock and app resume from the rule that opens Emmaus on Today’s Steps.
+
+The app should open on Today’s Steps only when the user starts a fresh session, not when they briefly lock and unlock their phone.
+
+---
+
+## Current Behaviour
+
+A user may be reading a Walk, devotional, Bible passage, Sermon Companion or another screen.
+
+When the phone is locked and then unlocked:
+
+- Emmaus resumes
+- the current screen is lost
+- the app redirects to Today’s Steps
+
+This is disruptive and incorrect.
+
+---
+
+## Required Behaviour
+
+When Emmaus moves temporarily into the background because of:
+
+- screen lock
+- phone unlock
+- switching briefly to another app
+- an incoming call
+- opening the notification shade
+- mobile browser tab losing focus
+
+the app must preserve:
+
+- the current route
+- the current screen
+- any route parameters
+- the current Walk or step
+- scroll position where practical
+- unsaved editor or response state where applicable
+
+When the user returns, Emmaus should resume exactly where they were.
+
+---
+
+## Today’s Steps Rule
+
+Today’s Steps remains the default landing screen only for a genuine fresh launch or new session.
+
+It must not run on:
+
+- visibilitychange
+- focus
+- pageshow
+- app resume
+- screen unlock
+- route rerender
+- authentication refresh
+- ordinary component remounts
+
+Do not treat every return from the background as a new app launch.
+
+---
+
+## Root-Cause Investigation
+
+Please trace where the Today’s Steps redirect is being triggered.
+
+Check for:
+
+- window focus listeners
+- document visibilitychange listeners
+- pageshow handlers
+- app lifecycle resume handlers
+- authentication state listeners
+- route guards
+- startup effects rerunning after resume
+- session state being cleared when the page is hidden
+- exact route checks
+- service-worker or PWA resume behaviour
+- React effects with unstable dependencies
+- mobile browser restoring the page and rerunning startup navigation
+
+The startup redirect should execute only once during a true fresh launch.
+
+---
+
+## Session Logic
+
+Distinguish clearly between:
+
+### Fresh Launch
+
+Emmaus was not already active and a new session begins.
+
+Result:
+
+Open Today’s Steps.
+
+### Resume
+
+Emmaus was already open and temporarily moved into the background.
+
+Result:
+
+Restore the current screen without redirecting.
+
+Use reliable session or lifecycle state rather than a time-based guess wherever possible.
+
+---
+
+## Acceptance Criteria
+
+- Locking and unlocking the phone keeps the user on the same screen.
+- Briefly switching apps keeps the user on the same screen.
+- Returning after an incoming call keeps the user on the same screen.
+- Current route parameters remain intact.
+- A genuine fresh launch still opens Today’s Steps.
+- The previous home-screen fix is not removed or weakened.
+- No unrelated navigation changes are made.
+- The fix works in both the mobile browser and installed PWA mode.

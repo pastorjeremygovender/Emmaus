@@ -57,11 +57,21 @@ import RoomSettings from '@/pages/rooms/RoomSettings';
 
 /**
  * Startup routing rule (locked):
- * Every fresh page load must land on Today's Steps (/walk), never on a
- * previously-visited tab.  The flag is false on each fresh JS execution
- * (hard refresh, new tab, PWA reopen, browser restart) and true from the
- * moment the Router first mounts — so within-session tab navigation is
- * unaffected.
+ * Every FRESH LAUNCH must land on Today's Steps (/walk).
+ * A RESUME (lock/unlock, app switch, incoming call) must NOT redirect —
+ * the user returns to exactly the screen they left.
+ *
+ * How we distinguish the two:
+ *   _startupChecked is a module-level JS variable.  It resets to false only
+ *   when the JS context is destroyed — hard refresh, new tab, PWA force-close,
+ *   browser restart.  On mobile resume (page kept in Bfcache or memory), JS is
+ *   never re-executed so _startupChecked stays true and the redirect below does
+ *   NOT fire.  This is the correct behaviour: resume ≠ fresh launch.
+ *
+ * A visibilitychange listener was previously present here to "catch" mobile
+ * resumes where _startupChecked stayed true.  It was removed because that
+ * listener fired on every lock/unlock and app switch, redirecting the user to
+ * Today's Steps from wherever they were reading.  Do not re-add it.
  */
 let _startupChecked = false;
 
@@ -90,34 +100,6 @@ function Router() {
         setLocation('/');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // On mobile, iOS/Android may keep the PWA/browser tab alive in memory
-  // without re-executing the JS module, so _startupChecked stays true and the
-  // startup redirect above never fires when the user switches back to the app.
-  // This visibilitychange listener handles that case: when the document
-  // transitions from hidden → visible and the current path is any tab path
-  // (root or deep sub-path), redirect to / so auth + entry-route runs again.
-  useEffect(() => {
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        // Use window.location.pathname to get the current path at the moment
-        // the event fires (the wouter location value is captured at render time
-        // and may be stale inside a closure).
-        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-        const currentPath = window.location.pathname.replace(base, '') || '/';
-        if (isTabPath(currentPath)) {
-          setLocation('/');
-        }
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  // setLocation is stable; no other deps needed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

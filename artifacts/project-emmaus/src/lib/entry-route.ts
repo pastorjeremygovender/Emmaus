@@ -11,9 +11,13 @@
  *   This applies after:
  *     • cold start (new session / fresh browser open)
  *     • warm start (browser session still live)
- *     • PWA re-open from home screen
- *     • backgrounding and resuming
+ *     • PWA re-open from home screen (JS context destroyed)
  *     • force-close and reopen
+ *
+ *   It does NOT apply to resume events — screen lock/unlock, brief app switch,
+ *   incoming call, notification shade, visibilitychange, pageshow, focus.
+ *   On resume the JS context is kept alive and the user returns to the exact
+ *   screen they left.  Do not redirect on resume.
  *
  *   The only exceptions are explicit deep-link navigations (push notification,
  *   shared Room invitation, shared Journey link, Bible deep link).  Those

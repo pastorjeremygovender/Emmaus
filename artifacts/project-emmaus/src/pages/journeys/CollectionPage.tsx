@@ -236,17 +236,21 @@ export default function CollectionPage() {
 
   function handleStartAlone() {
     if (!pendingJourneyId) return;
-    startJourney(pendingJourneyId);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
+    const id = pendingJourneyId;
+    try { startJourney(id); } catch (err) { console.error('[Emmaus] startJourney failed:', err); }
     setPendingJourneyId(null);
+    setLocation(`/journey/${id}/day/1`);
   }
 
   function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
-    startJourney(pendingJourneyId);
-    startSharedJourney(roomId, pendingJourneyId, user.id);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
+    const id = pendingJourneyId;
+    try {
+      startJourney(id);
+      startSharedJourney(roomId, id, user.id);
+    } catch (err) { console.error('[Emmaus] startSharedJourney failed:', err); }
     setPendingJourneyId(null);
+    setLocation(`/journey/${id}/day/1`);
   }
 
   const pendingJourney = journeys.find(j => j.id === pendingJourneyId) ?? null;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { useRooms } from '@/contexts/RoomsContext';
@@ -25,6 +25,23 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
   const [step, setStep] = useState<Step>('choice');
   const [mode, setMode] = useState<'alone' | 'together'>('alone');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+
+  // ── iOS ghost-click guard ────────────────────────────────────────────────────
+  // iOS Safari fires a phantom 300ms-delayed click at the same screen coordinates
+  // as the tap that opened this modal.  That phantom click lands on the backdrop
+  // as a *direct-target* native event (not a bubbled child event), so
+  // stopPropagation on the inner sheet cannot intercept it.  The backdrop check
+  // `e.target === e.currentTarget` evaluates true for that phantom click, causing
+  // onClose() to fire and clearing pendingItem before the user can tap Continue.
+  //
+  // Fix: suppress backdrop closes for the first 350ms after mount (just past the
+  // 300ms ghost-click window).  After that the tap-backdrop-to-close UX works
+  // normally.
+  const backdropReady = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => { backdropReady.current = true; }, 350);
+    return () => clearTimeout(t);
+  }, []);
 
   const myRooms: Room[] = user ? getMyRooms(user.id) : [];
 
@@ -54,14 +71,15 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
 
   return (
     // Backdrop — clicking the dark overlay closes the modal.
-    // The inner sheet calls stopPropagation so taps inside never bubble to this handler.
-    // Without stopPropagation, iOS Safari can report e.target as the backdrop element
-    // even when the user tapped a child button, causing onClose() to fire instead of
-    // the button's own onClick — this is the root cause of the mobile "Continue does
-    // nothing" bug.
+    // The backdropReady guard prevents iOS ghost-click phantom events (fired 300ms after
+    // the original card tap) from reaching onClose() and clearing pendingItem.
+    // stopPropagation on the inner sheet still prevents bubbled clicks from reaching here.
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (!backdropReady.current) return;
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className="w-full max-w-[480px] bg-background rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300"

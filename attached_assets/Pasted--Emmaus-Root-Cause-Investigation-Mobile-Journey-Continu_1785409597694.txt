@@ -1,0 +1,138 @@
+# Emmaus — Root Cause Investigation: Mobile Journey Continue
+
+## Objective
+
+The Continue button for Journeys in Next Steps still does not work on mobile, despite previous attempts to fix it.
+
+Do not apply another surface-level button patch.
+
+Treat this as a persistent root-cause issue, similar to the previous home-screen routing problem.
+
+First trace the full execution path, identify the exact failure, and report the diagnosis before implementing the fix.
+
+---
+
+## Working Behaviour
+
+On desktop:
+
+Next Steps
+
+→ Journeys
+
+→ Select a Journey
+
+→ Choose Alone or With Others
+
+→ Continue
+
+→ The correct Walk or Journey content opens.
+
+---
+
+## Broken Behaviour
+
+On mobile:
+
+- The user selects Alone or With Others.
+- The Continue button is visible and appears enabled.
+- Tapping Continue produces no navigation.
+- No visible error is shown.
+- The modal or page remains unchanged.
+
+---
+
+## Required Investigation
+
+Trace the complete mobile execution path from the tap through to navigation.
+
+Inspect:
+
+1. Touch event received
+2. Selected participation mode state
+3. Continue button enabled state
+4. Submit or click handler execution
+5. Any database or API save
+6. Promise resolution or rejection
+7. Modal close
+8. Route construction
+9. Navigation call
+10. Destination route rendering
+
+Add temporary diagnostic logging at every stage so the exact stopping point is visible.
+
+---
+
+## Compare Desktop and Mobile
+
+Do not assume both layouts use the same component or handler.
+
+Verify whether desktop and mobile differ in:
+
+- component tree
+- modal implementation
+- button element
+- click versus touch handlers
+- form submission
+- overlay or z-index behaviour
+- responsive conditional rendering
+- navigation logic
+- state ownership
+- route generation
+- authentication or profile state
+- Rooms or participation-mode persistence
+
+Compare the actual execution logs from desktop and mobile.
+
+---
+
+## Check for Persistent Shared Causes
+
+Specifically investigate whether this is caused by:
+
+- exact route matching instead of prefix matching
+- a stale or invalid route
+- navigation firing before required state is persisted
+- a rejected save request that is silently swallowed
+- user or profile ID not being available on mobile
+- participation mode state resetting during rerender
+- modal overlay intercepting the tap
+- nested button or form behaviour
+- duplicate handlers
+- a disabled button styled as enabled
+- mobile browser cache or stale service worker
+- responsive code rendering a different component
+- an exception occurring before navigation
+- history navigation not supported by the installed-app or mobile-browser context
+
+---
+
+## Error Handling
+
+A failed Continue action must never silently do nothing.
+
+If any save or navigation step fails:
+
+- log the full technical error
+- show a clear user-facing message
+- keep the selected option intact
+- allow the user to try again
+
+---
+
+## Required Response Before Implementation
+
+Before changing code, report:
+
+1. The exact root cause
+2. The file or component where it occurs
+3. Why desktop works
+4. Why mobile fails
+5. The proposed fix
+6. Whether the issue affects Walks, Journeys, Rooms or other navigation flows
+
+After reporting the diagnosis, implement the smallest reliable root-cause fix.
+
+Do not redesign the interface.
+
+Do not change unrelated navigation or content.
