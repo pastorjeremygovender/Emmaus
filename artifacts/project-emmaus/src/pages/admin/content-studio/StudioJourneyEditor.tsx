@@ -53,13 +53,13 @@ interface Props {
 // Locked 7-section structure. Every journey follows this shape exactly.
 // Authors never create these manually — the editor guides them through each one.
 const JOURNEY_SCAFFOLD = [
-  { day: 0, label: 'Journey Introduction', shortLabel: 'I' },
-  { day: 1, label: 'Day 1',                shortLabel: '1' },
-  { day: 2, label: 'Day 2',                shortLabel: '2' },
-  { day: 3, label: 'Day 3',                shortLabel: '3' },
-  { day: 4, label: 'Day 4',                shortLabel: '4' },
-  { day: 5, label: 'Day 5',                shortLabel: '5' },
-  { day: 6, label: 'Journey Complete',     shortLabel: '✓' },
+  { day: 0, label: 'Walk Introduction', shortLabel: 'I' },
+  { day: 1, label: 'Day 1',             shortLabel: '1' },
+  { day: 2, label: 'Day 2',             shortLabel: '2' },
+  { day: 3, label: 'Day 3',             shortLabel: '3' },
+  { day: 4, label: 'Day 4',             shortLabel: '4' },
+  { day: 5, label: 'Day 5',             shortLabel: '5' },
+  { day: 6, label: 'Walk Complete',     shortLabel: '✓' },
 ] as const;
 
 function getSectionLabel(day: number): string {
@@ -406,13 +406,13 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
       {/* Collection assignment — not shown for Daily Rhythm (it's a single track) */}
       {journey.journeyType !== 'daily-rhythm' && (
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Collection</label>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Journey</label>
           <select
             value={currentCollectionId}
             onChange={e => { onPatch('collectionId' as keyof Journey, e.target.value); onBlur(); }}
             className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
           >
-            <option value="">None (standalone)</option>
+            <option value="">None (standalone walk)</option>
             {collections.map(c => (
               <option key={c.id} value={c.id}>{c.title}</option>
             ))}
@@ -431,17 +431,17 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
               onClick={() => setShowNewCollection(true)}
               className="mt-2 text-[11px] text-teal-600 hover:text-teal-800 font-medium flex items-center gap-1 transition-colors"
             >
-              <Plus size={11} /> Create New Collection
+              <Plus size={11} /> Create New Journey
             </button>
           ) : (
             <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2.5">
-              <p className="text-xs font-semibold text-gray-700">New Collection</p>
+              <p className="text-xs font-semibold text-gray-700">New Journey</p>
               <input
                 type="text"
                 value={newColTitle}
                 onChange={e => setNewColTitle(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleCreateCollection()}
-                placeholder="Collection name *"
+                placeholder="Journey name *"
                 autoFocus
                 className="w-full px-2.5 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
               />

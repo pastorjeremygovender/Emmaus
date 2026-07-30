@@ -20,6 +20,7 @@
  *   nextSteps             → /journeys                   (legacy; devotionals default)
  *   nextStepsDevotionals  → /journeys?tab=devotionals
  *   nextStepsJourneys     → /journeys?tab=journeys
+ *   nextStepsWalks        → /journeys?tab=walks
  *   nextStepsSermons      → /journeys?tab=sermons
  *   journeyDetail         → /journeys/:sourceId         (requires sourceId)
  *   myJourney             → /my-journey
@@ -32,6 +33,7 @@ export type SourceKey =
   | 'nextSteps'
   | 'nextStepsDevotionals'
   | 'nextStepsJourneys'
+  | 'nextStepsWalks'
   | 'nextStepsSermons'
   | 'journeyDetail'
   | 'myJourney';
@@ -42,6 +44,7 @@ const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   nextSteps:            { path: '/journeys',                 label: 'Next Steps'     },  // legacy
   nextStepsDevotionals: { path: '/journeys?tab=devotionals', label: 'Next Steps'     },
   nextStepsJourneys:    { path: '/journeys?tab=journeys',    label: 'Next Steps'     },
+  nextStepsWalks:       { path: '/journeys?tab=walks',       label: 'Next Steps'     },
   nextStepsSermons:     { path: '/journeys?tab=sermons',     label: 'Next Steps'     },
   journeys:             { path: '/journeys',                 label: 'Next Steps'     },  // legacy
   myJourney:            { path: '/my-journey',               label: 'My Journey'     },

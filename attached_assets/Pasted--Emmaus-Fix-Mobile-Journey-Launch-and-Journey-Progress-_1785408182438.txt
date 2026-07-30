@@ -1,0 +1,159 @@
+# Emmaus — Fix Mobile Journey Launch and Journey Progress Indicator
+
+## Objective
+
+Fix two remaining issues in the user journey flow:
+
+1. On mobile, the Continue button after choosing how to do a Walk does nothing.
+2. The current horizontal line above the Continue button is unclear and does not accurately communicate progress.
+
+Do not redesign the existing cards, typography, spacing or overall layout.
+
+---
+
+## 1. Fix Mobile Continue Button
+
+### Current Behaviour
+
+Desktop flow works correctly:
+
+Next Steps
+
+→ Select a Walk
+
+→ Choose:
+
+- I’d like to do this alone
+- I’d like to do this with others
+
+→ Press Continue
+
+→ The Walk opens correctly.
+
+On mobile:
+
+- The user selects an option.
+- The Continue button becomes available.
+- Pressing Continue does nothing.
+- The Walk does not open.
+
+### Required Behaviour
+
+The mobile flow must behave exactly like the desktop flow.
+
+After the user chooses Alone or With Others and presses Continue:
+
+- Save the selected participation mode.
+- Close the modal.
+- Start or resume the Walk.
+- Navigate to the correct next screen.
+
+For a new Walk, open the Walk Introduction first if one exists.
+
+If the Walk Introduction has already been completed, open the next incomplete step.
+
+Do not hard-code navigation to Day 1.
+
+The logic must work for Walks of any length and must respect the actual completion state.
+
+### Investigation
+
+Please identify the root cause rather than adding a mobile-only workaround.
+
+Check for:
+
+- touch or click event differences
+- modal overlays intercepting taps
+- disabled button state not updating
+- asynchronous save failures
+- navigation firing before the save completes
+- incorrect route construction
+- event propagation issues
+- viewport-specific rendering logic
+- errors visible only on mobile
+
+Add appropriate error handling so a failed launch does not silently do nothing.
+
+---
+
+## 2. Replace the Unclear Horizontal Line
+
+### Current Behaviour
+
+A thin horizontal line appears above the Continue button on the Walk card.
+
+It looks like a progress indicator, but:
+
+- it has no label
+- its meaning is unclear
+- it does not visibly correspond with completed steps
+- it appears even when the user has not meaningfully started the Walk
+
+### Required Behaviour
+
+Remove the existing thin line and replace it with a clear progress display based on real saved completion data.
+
+For a Walk that has not started, show:
+
+Not started
+
+For a Walk in progress, show:
+
+1 of 5 steps completed
+
+or the correct number for that Walk.
+
+For a completed Walk, show:
+
+Completed
+
+A visual indicator may also be used, such as:
+
+○ ○ ○ ○ ○
+
+or
+
+● ○ ○ ○ ○
+
+but it must:
+
+- represent the actual number of completable steps
+- update only when a step is completed
+- work for Walks of different lengths
+- not count the Walk Introduction as a completed daily step unless that is an intentional system-wide rule
+- not count the Walk Complete page as a daily step
+- use stored user progress rather than a temporary UI state
+
+If a Walk contains too many steps for individual circles to remain usable, show a labelled progress bar with text such as:
+
+7 of 30 steps completed
+
+The progress display must be immediately understandable without explanation.
+
+---
+
+## 3. Terminology
+
+Use the newly agreed user-facing terminology:
+
+- Collection → Journey
+- Journey → Walk
+- Journey Introduction → Walk Introduction
+- Journey Complete → Walk Complete
+
+Internal database names may remain unchanged if changing them would risk existing data.
+
+---
+
+## Acceptance Criteria
+
+- Continue works on desktop and mobile.
+- A user never presses Continue and receives no response.
+- A new Walk opens at its Introduction when appropriate.
+- A resumed Walk opens at the next incomplete step.
+- Progress is calculated from persisted completion data.
+- The unclear horizontal line is removed.
+- Progress text is clear and accurate.
+- Walks of any length are supported.
+- No existing content, publishing status, Rooms data or user progress is lost.
+- No unrelated design changes are made.

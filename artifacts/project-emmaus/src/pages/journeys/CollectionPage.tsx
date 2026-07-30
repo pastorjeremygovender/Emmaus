@@ -305,7 +305,7 @@ export default function CollectionPage() {
               </p>
             )}
             <p className="text-[12px] text-muted-foreground">
-              {collectionJourneys.length} {collectionJourneys.length === 1 ? 'Journey' : 'Journeys'}
+              {collectionJourneys.length} {collectionJourneys.length === 1 ? 'Walk' : 'Walks'}
             </p>
           </div>
 
@@ -313,7 +313,7 @@ export default function CollectionPage() {
           <div className="px-5 space-y-3">
             {collectionJourneys.length === 0 ? (
               <p className="text-[14px] text-muted-foreground py-8 text-center">
-                No Journeys in this collection yet.
+                No Walks in this journey yet.
               </p>
             ) : (
               collectionJourneys.map(j => {

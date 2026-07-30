@@ -127,10 +127,10 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
-  const pageTitle = isLibrary ? 'Journeys' : (standaloneOnly ? 'Standalone Journeys' : 'Journeys');
+  const pageTitle = isLibrary ? 'Walk Library' : (standaloneOnly ? 'Standalone Walks' : 'Walks');
   const pageDescription = isLibrary
-    ? 'Every journey across all collections and standalone.'
-    : (standaloneOnly ? 'Journeys without a collection assignment.' : 'All journeys in this collection.');
+    ? 'Every walk across all journeys and standalone.'
+    : (standaloneOnly ? 'Walks without a journey assignment.' : 'All walks in this journey.');
 
   return (
     <>
@@ -139,7 +139,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
         description={pageDescription}
         newButton={
           <button onClick={() => setShowNew(true)} className={newBtnCls}>
-            <Plus size={14} /> New Journey
+            <Plus size={14} /> New Walk
           </button>
         }
         toolbar={
@@ -151,7 +151,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search journeys…"
+                placeholder="Search walks…"
                 className="w-full pl-9 pr-8 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
               />
               {query && (

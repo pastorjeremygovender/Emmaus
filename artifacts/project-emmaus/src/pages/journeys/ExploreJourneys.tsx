@@ -107,15 +107,15 @@ function CollectionCard({ c, onPress }: { c: CollectionSummary; onPress: () => v
               </p>
             )}
             <p className="text-[12px] text-muted-foreground mt-1">
-              {c.journeyCount} {c.journeyCount === 1 ? 'Journey' : 'Journeys'}
+              {c.journeyCount} {c.journeyCount === 1 ? 'Walk' : 'Walks'}
             </p>
           </div>
           <button
             onClick={onPress}
             className="self-start flex items-center gap-1 text-[13px] font-medium text-primary hover:underline"
-            aria-label={`View ${c.title} collection`}
+            aria-label={`View ${c.title} journey`}
           >
-            View Collection <ArrowRight size={13} />
+            View Journey <ArrowRight size={13} />
           </button>
         </div>
       </div>

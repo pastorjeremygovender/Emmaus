@@ -539,6 +539,28 @@ export async function duplicateJourney(id: string): Promise<FrontendJourney | nu
   return copy;
 }
 
+/**
+ * Returns the set of journey IDs (from the provided list) that have a step at
+ * day = 0 (the Walk Introduction). Used by the next-steps endpoint to route
+ * not-started walks to their intro rather than hard-coding day 1.
+ *
+ * Single batch query — no N+1 penalty.
+ */
+export async function getJourneyIdsWithIntroStep(journeyIds: string[]): Promise<Set<string>> {
+  if (journeyIds.length === 0) return new Set();
+  const { inArray } = await import("drizzle-orm");
+  const rows = await db
+    .selectDistinct({ journeyId: journeyStepsTable.journeyId })
+    .from(journeyStepsTable)
+    .where(
+      and(
+        eq(journeyStepsTable.day, 0),
+        inArray(journeyStepsTable.journeyId, journeyIds),
+      ),
+    );
+  return new Set(rows.map(r => r.journeyId));
+}
+
 // ─── Step CRUD ─────────────────────────────────────────────────────────────────
 
 export async function listSteps(journeyId: string): Promise<FrontendStep[]> {

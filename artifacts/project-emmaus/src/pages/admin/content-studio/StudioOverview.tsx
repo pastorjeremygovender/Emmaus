@@ -160,7 +160,7 @@ export default function StudioOverview({
           <Plus size={22} className="text-white" />
         </div>
         <div className="flex-1">
-          <div className="text-base font-semibold text-white">New Journey</div>
+          <div className="text-base font-semibold text-white">New Walk</div>
           <div className="text-sm text-teal-200 mt-0.5">Start from scratch and begin writing</div>
         </div>
         <ArrowRight size={18} className="text-white/60 group-hover:translate-x-1 transition-transform" />
@@ -172,7 +172,7 @@ export default function StudioOverview({
           { label: 'Total',       value: stats.total,     color: 'bg-gray-50 text-gray-800'       },
           { label: 'Published',   value: stats.published, color: 'bg-emerald-50 text-emerald-800' },
           { label: 'Drafts',      value: stats.drafts,    color: 'bg-amber-50 text-amber-800'     },
-          { label: 'Collections', value: collections.length, color: 'bg-purple-50 text-purple-800' },
+          { label: 'Journeys',    value: collections.length, color: 'bg-purple-50 text-purple-800' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl p-4 ${s.color}`}>
             <div className="text-2xl font-bold tabular-nums">{s.value}</div>
@@ -222,8 +222,8 @@ export default function StudioOverview({
             <BookOpen size={18} className="text-teal-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-900 text-sm">Journeys</div>
-            <div className="text-xs text-gray-500 mt-0.5">Browse and edit all journeys</div>
+            <div className="font-semibold text-gray-900 text-sm">Walks</div>
+            <div className="text-xs text-gray-500 mt-0.5">Browse and edit all walks</div>
           </div>
           <ArrowRight size={14} className="text-gray-300 group-hover:text-teal-500 transition-colors" />
         </button>
@@ -250,8 +250,8 @@ export default function StudioOverview({
             <FolderOpen size={18} className="text-purple-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-900 text-sm">Collections</div>
-            <div className="text-xs text-gray-500 mt-0.5">Group journeys into series</div>
+            <div className="font-semibold text-gray-900 text-sm">Journeys</div>
+            <div className="text-xs text-gray-500 mt-0.5">Manage Journey pathways</div>
           </div>
           <ArrowRight size={14} className="text-gray-300 group-hover:text-purple-500 transition-colors" />
         </button>
@@ -274,7 +274,7 @@ export default function StudioOverview({
                   j.journeyType === 'daily-rhythm' ? 'Daily Rhythm' :
                   j.journeyType === 'companion'    ? 'Companion' :
                   j.journeyType === 'series'       ? 'Series' :
-                  j.journeyType === 'course'       ? 'Course' : 'Journey';
+                  j.journeyType === 'course'       ? 'Course' : 'Walk';
                 return (
                   <button
                     key={`journey-${j.id}`}

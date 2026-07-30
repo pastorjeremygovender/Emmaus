@@ -114,10 +114,16 @@ function buildJourneyItem(
   j: journeyStore.FrontendJourney,
   contentType: ContentType,
   allProgress: Record<string, journeyStore.FrontendProgress>,
+  journeyIdsWithIntro: Set<string> = new Set(),
 ): NextStepsItem {
   const state = journeyProgressState(j, allProgress);
   const p = allProgress[j.id];
-  const currentDay = p?.currentDay ?? 1;
+
+  // For not-started walks: route to day/0 (Walk Introduction) when one exists,
+  // otherwise day/1. This avoids hard-coding day 1 and satisfies the spec
+  // requirement to open the Walk Introduction first when it is present.
+  const startDay = !p && journeyIdsWithIntro.has(j.id) ? 0 : 1;
+  const currentDay = p?.currentDay ?? startDay;
 
   // For sermon companions, strip any subtitle appended to the title
   // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
@@ -186,6 +192,12 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       // Sermon companions from the sermon_companion table (AI-generated pipeline)
       sermonCompanionStore.listPublishedSermonCompanions(),
     ]);
+
+    // Batch-check which published journeys have a Walk Introduction step (day=0).
+    // Used to route not-started walks to day/0 instead of hard-coding day/1.
+    const journeyIdsWithIntro = await journeyStore.getJourneyIdsWithIntroStep(
+      publishedJourneys.map(j => j.id),
+    );
 
     // Fetch user progress if available
     const [journeyProgress, devProgressMap, scProgressMap] = await Promise.all([
@@ -356,13 +368,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         title: c.title,
         description: c.description || undefined,
         journeys: (byCollection.get(c.id) ?? []).map(j =>
-          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress),
+          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
         ),
       }));
 
     // Standalone journeys (no collection, not companion/daily-rhythm)
     const standaloneJourneys = standaloneRaw.map(j =>
-      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress),
+      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
     );
 
     // ── Respond ──────────────────────────────────────────────────────────────

@@ -58,10 +58,16 @@ export interface EmmausContentCardProps {
    */
   headerTrailing?: React.ReactNode;
   /**
-   * 0-100 — renders a thin progress bar between metadata and button,
-   * useful for in-progress journeys.
+   * 0-100 — renders a thin progress bar between metadata and button.
+   * Ignored when progressNode is provided.
    */
   progressPercent?: number;
+  /**
+   * Custom progress display node rendered in place of the thin progress bar.
+   * Use for rich displays (step count text, dot indicators, etc).
+   * When provided, progressPercent is ignored.
+   */
+  progressNode?: React.ReactNode;
   /**
    * When set, replaces the primary button with this gated message button.
    * Pair with onGate to handle the tap.
@@ -91,6 +97,7 @@ export function EmmausContentCard({
   loading = false,
   headerTrailing,
   progressPercent,
+  progressNode,
   gatedMessage,
   onGate,
   secondaryAction,
@@ -108,21 +115,23 @@ export function EmmausContentCard({
 
   const hasButton = !!(primaryActionLabel || gatedMessage);
 
+  const hasProgress = progressNode != null || progressPercent != null;
+
   const titleMb = description
     ? 'mb-2'
     : metadata != null
       ? 'mb-3'
-      : progressPercent != null
+      : hasProgress
         ? 'mb-3'
         : hasButton ? 'mb-5' : 'mb-0';
 
   const descMb = metadata != null
     ? 'mb-3'
-    : progressPercent != null
+    : hasProgress
       ? 'mb-3'
       : hasButton ? 'mb-5' : 'mb-0';
 
-  const metaMb = progressPercent != null ? 'mb-3' : hasButton ? 'mb-5' : 'mb-0';
+  const metaMb = hasProgress ? 'mb-3' : hasButton ? 'mb-5' : 'mb-0';
 
   return (
     <div className={cardClass}>
@@ -146,15 +155,17 @@ export function EmmausContentCard({
         <p className={`${T.metadata} ${metaMb}`}>{metadata}</p>
       )}
 
-      {/* ── Progress bar (optional — in-progress journeys) ─────────────────── */}
-      {progressPercent != null && (
+      {/* ── Progress display (optional) ─────────────────────────────────────── */}
+      {progressNode != null ? (
+        <div className="mb-5">{progressNode}</div>
+      ) : progressPercent != null ? (
         <div className="h-0.5 rounded-full bg-primary/15 overflow-hidden mb-5">
           <div
             className="h-full rounded-full bg-primary/40 transition-all"
             style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
           />
         </div>
-      )}
+      ) : null}
 
       {/* ── 5. Primary button (omitted when neither primaryActionLabel nor gatedMessage) */}
       {gatedMessage ? (

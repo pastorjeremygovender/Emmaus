@@ -1,0 +1,199 @@
+# Emmaus Terminology Update - Journeys & Walks
+
+## Objective
+
+Simplify Emmaus terminology by replacing technical content-management language with language that naturally reflects discipleship.
+
+Collections should become Journeys.
+
+Journeys within a collection should become Walks.
+
+Standalone journeys should become Standalone Walks.
+
+This terminology should be used consistently throughout the entire application.
+
+---
+
+# New Content Hierarchy
+
+Journey
+    ↓
+Walk
+        ↓
+Steps
+
+Example:
+
+Journey
+
+Coming to Jesus
+
+Walks
+
+• Who Is God?
+• Created in God's Image
+• What Went Wrong?
+• Jesus Saves
+• Beginning Your New Life
+• Walking with God
+
+Each Walk then contains its own Journey Introduction, Steps and Journey Complete.
+
+---
+
+# Next Steps Navigation
+
+Replace the existing tabs:
+
+Daily Devotionals
+Journeys
+Sermon Companions
+
+with
+
+Daily Devotionals
+Journeys
+Walks
+Sermon Companions
+
+---
+
+# Journeys Tab
+
+The Journeys tab should display the larger discipleship pathways.
+
+Examples:
+
+Coming to Jesus
+
+Growing in Christ
+
+Living for Jesus
+
+Made Free
+
+Marriage
+
+Prayer
+
+Leadership
+
+Bible Studies
+
+etc.
+
+Selecting a Journey opens that Journey and displays all of its Walks.
+
+Example:
+
+Coming to Jesus
+
+↓
+
+Who Is God?
+
+Created in God's Image
+
+What Went Wrong?
+
+Jesus Saves
+
+etc.
+
+The existing card design should remain unchanged.
+
+Only the data being displayed changes.
+
+---
+
+# Walks Tab
+
+The Walks tab displays standalone Walks that are not assigned to any Journey.
+
+Examples:
+
+Preparing for Baptism
+
+Finding Peace in Anxiety
+
+Christmas Reflection
+
+Easter Reflection
+
+Hope After Loss
+
+How to Pray Before an Exam
+
+etc.
+
+These Walks can be started immediately without belonging to a larger Journey.
+
+---
+
+# Admin
+
+Throughout Content Studio:
+
+Collections
+
+becomes
+
+Journeys
+
+Journey Library
+
+becomes
+
+Walk Library
+
+Create Collection
+
+becomes
+
+Create Journey
+
+Create Journey
+
+becomes
+
+Create Walk
+
+Assign Collection
+
+becomes
+
+Assign Journey
+
+Standalone Journey
+
+becomes
+
+Standalone Walk
+
+Wherever appropriate, update labels, menus, breadcrumbs and page titles to use the new terminology.
+
+Internal database structures and APIs may continue using their current naming if desired. This change is primarily for the user interface and authoring experience.
+
+---
+
+# Existing Content
+
+Automatically migrate all existing Collections to Journeys.
+
+Automatically migrate all existing Journeys to Walks.
+
+Existing relationships, content, publishing status and progress must remain intact.
+
+No existing content should be lost.
+
+---
+
+# Design
+
+Do not redesign the interface.
+
+Do not change the existing card layouts, spacing or typography.
+
+This update is a terminology and navigation improvement only.
+
+The goal is to create a structure that scales naturally to hundreds of Walks while remaining intuitive for users.

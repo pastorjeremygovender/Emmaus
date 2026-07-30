@@ -347,7 +347,7 @@ export default function JourneyBuilderWizard({ initialContentType, initialTitle,
   };
 
   const SCREEN_TITLES = [
-    'Journey', 'Purpose', 'Audience',
+    'Walk', 'Purpose', 'Audience',
     'Structure', 'Scripture & Sermons', 'Style & Review',
   ];
 
@@ -415,7 +415,7 @@ export default function JourneyBuilderWizard({ initialContentType, initialTitle,
               {generating ? (
                 <><Loader2 size={15} className="animate-spin" /><span>Generating…</span></>
               ) : (
-                <><span>Generate Journey</span><Sparkles size={15} /></>
+                <><span>Generate Walk</span><Sparkles size={15} /></>
               )}
             </button>
           ) : (
@@ -469,7 +469,7 @@ function Screen1({ state, patch, errors }: {
         </div>
       </WizardField>
 
-      <WizardField label="Journey title *" hint="What will this Journey be called in the app?">
+      <WizardField label="Walk title *" hint="What will this Walk be called in the app?">
         <input
           type="text"
           value={state.title}
@@ -545,7 +545,7 @@ function Screen3({ state, patch, errors }: {
 
   return (
     <div className="space-y-5">
-      <WizardField label="Who is this Journey for? *" hint="Select all that apply.">
+      <WizardField label="Who is this Walk for? *" hint="Select all that apply.">
         <div className="flex flex-wrap gap-2 mt-1">
           {AUDIENCE_OPTIONS.map(a => (
             <button
@@ -633,13 +633,13 @@ function Screen4({ state, patch, collections }: {
       </WizardField>
 
       {collections.length > 0 && (
-        <WizardField label="Collection (optional)" hint="Assign this Journey to a series or programme.">
+        <WizardField label="Journey (optional)" hint="Assign this Walk to a Journey.">
           <select
             value={state.collectionId}
             onChange={e => patch('collectionId', e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
           >
-            <option value="">No collection</option>
+            <option value="">No journey</option>
             {collections.map(c => (
               <option key={c.id} value={c.id}>{c.title}</option>
             ))}
@@ -894,12 +894,12 @@ function Screen6({ state, patch, generating, generateError }: {
       {generating && (
         <div className="flex items-center gap-2 text-xs text-gray-500 justify-center py-2">
           <Loader2 size={14} className="animate-spin text-teal-500" />
-          <span>Building your Journey draft — this takes about 30 seconds…</span>
+          <span>Building your Walk draft — this takes about 30 seconds…</span>
         </div>
       )}
 
       <p className="text-[11px] text-gray-400 text-center">
-        The Journey will be saved as a <strong>Draft</strong>. Nothing publishes automatically. You'll be taken to the editor to review and edit.
+        The Walk will be saved as a <strong>Draft</strong>. Nothing publishes automatically. You'll be taken to the editor to review and edit.
       </p>
     </div>
   );

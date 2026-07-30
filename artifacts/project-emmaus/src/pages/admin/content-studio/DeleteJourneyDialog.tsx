@@ -8,15 +8,15 @@ interface Props {
 }
 
 const DELETED_DATA = [
-  'Journey & all metadata',
+  'Walk & all metadata',
   'All Steps',
   'All Blocks',
   'Drafts & review history',
   'Published versions',
   'Member progress & completion records',
-  'Saved & paused Journey state',
+  'Saved & paused Walk state',
   'Journal & reflection responses',
-  'Journey recommendations',
+  'Walk recommendations',
 ];
 
 export default function DeleteJourneyDialog({ journeyTitle, onConfirm, onCancel }: Props) {
@@ -40,7 +40,7 @@ export default function DeleteJourneyDialog({ journeyTitle, onConfirm, onCancel 
     try {
       await onConfirm();
     } catch (err) {
-      setError('Journey could not be deleted. Please try again.');
+      setError('Walk could not be deleted. Please try again.');
       setBusy(false);
     }
   };
@@ -65,7 +65,7 @@ export default function DeleteJourneyDialog({ journeyTitle, onConfirm, onCancel 
           </div>
           <div>
             <h2 id="delete-dialog-title" className="text-base font-semibold text-gray-900">
-              Delete Journey Permanently?
+              Delete Walk Permanently?
             </h2>
             <p className="text-sm text-gray-500 mt-0.5 leading-snug">
               <span className="font-medium text-gray-700">"{journeyTitle}"</span>

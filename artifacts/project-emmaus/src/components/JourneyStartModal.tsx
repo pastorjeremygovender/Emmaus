@@ -53,12 +53,20 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
   };
 
   return (
-    // Backdrop
+    // Backdrop — clicking the dark overlay closes the modal.
+    // The inner sheet calls stopPropagation so taps inside never bubble to this handler.
+    // Without stopPropagation, iOS Safari can report e.target as the backdrop element
+    // even when the user tapped a child button, causing onClose() to fire instead of
+    // the button's own onClick — this is the root cause of the mobile "Continue does
+    // nothing" bug.
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-[480px] bg-background rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+      <div
+        className="w-full max-w-[480px] bg-background rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-2">
@@ -82,10 +90,10 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
         </div>
 
         {step === 'choice' && (
-          <div className="px-6 pb-8 space-y-6">
+          <div className="px-6 space-y-6" style={{ paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom) + 2rem))' }}>
             <div className="space-y-1 text-center">
               <h2 className="text-[22px] font-sans font-semibold leading-snug">
-                How would you like to do this journey?
+                How would you like to do this walk?
               </h2>
             </div>
 
@@ -109,7 +117,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
                   <div>
                     <div className="font-semibold text-[16px] text-foreground">I'd like to do this alone</div>
                     <div className="text-[14px] text-muted-foreground mt-0.5 leading-relaxed">
-                      A private journey between you and Jesus.
+                      A private walk between you and Jesus.
                     </div>
                   </div>
                 </div>
@@ -157,7 +165,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
           <div className="px-6 pb-8 space-y-5">
             <div className="space-y-1">
               <h2 className="text-[20px] font-sans font-semibold">Who would you like to walk with?</h2>
-              <p className="text-[14px] text-muted-foreground">Choose a Room to walk this journey together.</p>
+              <p className="text-[14px] text-muted-foreground">Choose a Room to walk this together.</p>
             </div>
 
             {myRooms.length === 0 ? (

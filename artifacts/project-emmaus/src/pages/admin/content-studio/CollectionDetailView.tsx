@@ -93,7 +93,7 @@ export default function CollectionDetailView({
     return (
       <div className="flex flex-col items-center justify-center h-48 text-center px-6">
         <p className="text-sm text-gray-500">Collection not found.</p>
-        <button onClick={onBack} className="mt-3 text-sm text-teal-600 hover:underline">← Back to Collections</button>
+        <button onClick={onBack} className="mt-3 text-sm text-teal-600 hover:underline">← Back to Journeys</button>
       </div>
     );
   }
@@ -145,7 +145,7 @@ export default function CollectionDetailView({
               <Pencil size={13} /> Edit
             </button>
             <AdminBtn variant="primary" onClick={() => onNewJourney(collectionId)}>
-              <Plus size={14} /> New Journey
+              <Plus size={14} /> New Walk
             </AdminBtn>
           </div>
         </div>
@@ -158,13 +158,13 @@ export default function CollectionDetailView({
             <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-4">
               <BookOpen size={22} className="text-gray-300" />
             </div>
-            <p className="text-sm font-medium text-gray-600">No journeys in this collection yet.</p>
-            <p className="text-xs text-gray-400 mt-1">Add a journey to start building this pathway.</p>
+            <p className="text-sm font-medium text-gray-600">No walks in this journey yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Add a walk to start building this journey.</p>
             <button
               onClick={() => onNewJourney(collectionId)}
               className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
             >
-              + New Journey
+              + New Walk
             </button>
           </div>
         ) : (

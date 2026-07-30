@@ -58,11 +58,11 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
   return (
     <>
       <ContentStudioListPage
-        title="Journey Collections"
-        description="Group related Journeys into clear pathways."
+        title="Journeys"
+        description="Group related walks into clear discipleship pathways."
         newButton={
           <button onClick={() => setShowNewModal(true)} className={newBtnCls}>
-            <Plus size={14} /> New Collection
+            <Plus size={14} /> New Journey
           </button>
         }
         filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
@@ -75,18 +75,18 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
               <FolderOpen size={22} className="text-purple-400" />
             </div>
             <p className="text-sm font-medium text-gray-700">
-              {statusTab === 'All' ? 'No collections yet.' : `No ${statusTab} collections.`}
+              {statusTab === 'All' ? 'No journeys yet.' : `No ${statusTab} journeys.`}
             </p>
             {statusTab === 'All' && (
               <>
                 <p className="text-xs text-gray-400 mt-1">
-                  Create your first collection to group related journeys.
+                  Create your first journey to group related walks.
                 </p>
                 <button
                   onClick={() => setShowNewModal(true)}
                   className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
                 >
-                  Create Collection
+                  Create Journey
                 </button>
               </>
             )}
@@ -96,7 +96,7 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
         {filtered.map(c => {
           const isMenuOpen = openMenu === c.id;
           const metaText = [
-            `${c.journeyCount} journey${c.journeyCount !== 1 ? 's' : ''}`,
+            `${c.journeyCount} walk${c.journeyCount !== 1 ? 's' : ''}`,
             c.description,
           ].filter(Boolean).join(' · ');
 
@@ -137,7 +137,7 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
                             className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50"
                             onClick={() => { setOpenMenu(null); onViewJourneys(c.id, c.title); }}
                           >
-                            <BookOpen size={13} /> View Journeys
+                            <BookOpen size={13} /> View Walks
                           </button>
                           <hr className="my-1 border-gray-100" />
                           <button
@@ -159,8 +159,8 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Delete Collection"
-          message={`Delete "${deleteTarget.title}"? Journeys inside will become uncollected — they won't be deleted.`}
+          title="Delete Journey"
+          message={`Delete "${deleteTarget.title}"? Walks inside will become unassigned — they won't be deleted.`}
           confirmLabel="Delete"
           danger
           onConfirm={handleDelete}

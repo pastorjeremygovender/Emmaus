@@ -73,7 +73,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
 
           {/* Step title — centred */}
           <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
-            New Collection
+            New Journey
           </h2>
 
           {/* Close — fixed width, right-aligned */}
@@ -102,7 +102,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                 <FolderOpen size={17} className="text-teal-600" />
               </div>
               <p className="text-[13px] text-gray-500 leading-relaxed">
-                Group related journeys together. You can add journeys to this collection after creating it.
+                Group related walks together. You can add walks to this journey after creating it.
               </p>
             </div>
 
@@ -168,7 +168,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
           >
             {saving
               ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
-              : <span>Create Collection</span>
+              : <span>Create Journey</span>
             }
           </button>
         </div>
