@@ -47,6 +47,8 @@ export interface NextStepsItem {
     collectionId?: string;
     publishedAt?: string;
     subtitle?: string;
+    /** For daily-devotional items: the member's current day (next to complete). */
+    currentDay?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
@@ -153,21 +155,40 @@ function buildJourneyItem(
 
 function buildDevotionalItem(
   s: devStore.DevotionalSeries,
-  publishedEntryCount: number,
+  publishedEntries: devStore.DevotionalEntry[],
   devProgressMap: Map<string, devStore.DevotionalProgress>,
 ): NextStepsItem {
+  const publishedEntryCount = publishedEntries.length;
   const state = devotionalMemberState(s.id, publishedEntryCount, devProgressMap);
   const p = devProgressMap.get(s.id);
   const currentDay = p?.currentDay ?? 1;
+  const completedCount = p?.completedDays.length ?? 0;
+  const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;
+  const nextEntry = publishedEntries.find(e => e.dayNumber === currentDay);
+  const nextEntryTitle = nextEntry?.title || undefined;
+
+  // Mirror the description formula used by Walk.tsx > DevotionalCard so both
+  // screens always show exactly the same progress string.
+  const description = allComplete
+    ? `${publishedEntryCount} of ${publishedEntryCount} completed`
+    : completedCount > 0
+      ? nextEntryTitle
+        ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
+        : `Day ${currentDay} of ${publishedEntryCount}`
+      : publishedEntryCount > 0
+        ? `Day 1 of ${publishedEntryCount}`
+        : "Day 1";
+
   return {
     id: s.id,
     contentType: "daily-devotional",
     title: s.title,
-    description: s.description || undefined,
+    description,
     memberProgressState: state,
     metadata: {
       durationDays: publishedEntryCount || undefined,
       publishedAt: s.publishedAt?.toISOString?.() ?? (s.publishedAt as unknown as string) ?? undefined,
+      currentDay,
     },
     route: `/devotional/${s.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel("daily-devotional", state),
@@ -216,21 +237,23 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         : Promise.resolve({} as Record<string, sermonCompanionStore.CompanionProgress>),
     ]);
 
-    // Count published entries per devotional series
-    const entryCounts = new Map<string, number>();
+    // Fetch published entries per devotional series.
+    // Storing the full entry list (not just count) lets buildDevotionalItem
+    // look up the current entry title for a progress-aware description.
+    const seriesEntriesMap = new Map<string, devStore.DevotionalEntry[]>();
     await Promise.all(
       devSeries.map(async s => {
         const full = await devStore.getSeriesById(s.id);
-        const count = full?.entries.filter(e => e.status === "Published").length ?? 0;
-        entryCounts.set(s.id, count);
+        const published = full?.entries.filter(e => e.status === "Published") ?? [];
+        seriesEntriesMap.set(s.id, published);
       }),
     );
 
     // ── Daily Devotionals ────────────────────────────────────────────────────
 
     const dailyDevotionals = devSeries
-      .filter(s => (entryCounts.get(s.id) ?? 0) > 0)
-      .map(s => buildDevotionalItem(s, entryCounts.get(s.id) ?? 0, devProgressMap));
+      .filter(s => (seriesEntriesMap.get(s.id)?.length ?? 0) > 0)
+      .map(s => buildDevotionalItem(s, seriesEntriesMap.get(s.id) ?? [], devProgressMap));
 
     // ── Sermon Companions ──────────────────────────────────────────────────────
     // Two sources are merged into one list:

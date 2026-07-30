@@ -11,20 +11,9 @@ import { resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { BottomNav } from '@/components/BottomNav';
 
-/** Parse a scripture reference into the Bible reader path.
- *  "John 1:35-39"  →  "/bible/read/john/1"
- *  "1 John 4:7"    →  "/bible/read/1-john/4"
- */
-function parseBibleLink(ref: string): string {
-  const match = ref.trim().match(/^(\d\s+)?([A-Za-z]+)\s+(\d+)/);
-  if (!match) return '/bible/books';
-  const num  = match[1] ? match[1].trim() + '-' : '';
-  const book = (num + match[2]).toLowerCase();
-  const ch   = match[3];
-  return `/bible/read/${book}/${ch}`;
-}
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -383,13 +372,20 @@ export default function JourneyDay() {
             </section>
           ) : null}
 
-          {/* Scripture */}
-          <section className="mb-12">
-            <SectionLabel>Scripture</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.scripture}
-            </p>
-          </section>
+          {/* Scripture — uses the shared EmbeddedScripture pipeline (same as Daily Rhythm,
+              Devotionals, Sermon Companions) so the reference is parsed, the passage
+              fetched from the Bible API, and loading/error states are surfaced. */}
+          {step.scripture && (
+            <section className="mb-12">
+              <SectionLabel>Scripture</SectionLabel>
+              <div className="mt-3">
+                <EmbeddedScripture
+                  scripture={step.scripture}
+                  returnPath={`/journey/${journeyId}/day/${day}`}
+                />
+              </div>
+            </section>
+          )}
 
           {/* Devotional reflection */}
           <section className="mb-12">

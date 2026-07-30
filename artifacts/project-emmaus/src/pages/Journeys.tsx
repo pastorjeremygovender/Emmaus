@@ -434,14 +434,15 @@ function DevotionalCard({
   starting: boolean;
   onViewPreviousDays?: () => void;
 }) {
-  const dur = dayLabel(item.metadata.durationDays);
   const isPaused = item.memberProgressState === 'paused';
+  // description is already progress-aware ("Day N of M · Title", "N of N completed",
+  // "Day 1 of M") — computed server-side to match Today's Steps exactly.
+  // No separate metadata label is needed; the day count lives in description.
   return (
     <EmmausContentCard
       label="DAILY DEVOTIONAL"
       title={item.title}
       description={item.description}
-      metadata={dur || undefined}
       primaryActionLabel={item.primaryActionLabel ?? undefined}
       onAction={onAction}
       loading={starting}

@@ -30,6 +30,8 @@ export interface NextStepsItem {
     collectionId?: string;
     publishedAt?: string;
     subtitle?: string;
+    /** For daily-devotional items: the member's current day (next to complete). */
+    currentDay?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect } from 'react';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
@@ -74,6 +74,25 @@ import RoomSettings from '@/pages/rooms/RoomSettings';
  * Today's Steps from wherever they were reading.  Do not re-add it.
  */
 let _startupChecked = false;
+
+/**
+ * ScrollToTop — scrolls to (0, 0) on every pathname change.
+ *
+ * Placed inside WouterRouter so it has access to wouter context.
+ * useLayoutEffect fires synchronously before the browser paints, so the user
+ * never sees the new page rendered at the old scroll position.
+ *
+ * This covers all content navigation (devotional days, walk lessons, Bible
+ * chapters, sermon companions, etc.). It does NOT fire on query-string-only
+ * changes (?tab=, ?source=) — those don't change the pathname.
+ */
+function ScrollToTop() {
+  const [pathname] = useLocation();
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 /** Redirect /journey/15-minutes-with-jesus/day/:day → /daily-rhythm/day/:day */
 function LegacyDailyRhythmRedirect({ day }: { day: string }) {
@@ -172,6 +191,7 @@ function App() {
           <BibleProvider>
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+                <ScrollToTop />
                 <Router />
                 <FloatingEmmausButton />
               </WouterRouter>
