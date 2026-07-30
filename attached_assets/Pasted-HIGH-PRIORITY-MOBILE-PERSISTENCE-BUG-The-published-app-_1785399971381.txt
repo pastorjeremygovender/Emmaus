@@ -1,0 +1,123 @@
+HIGH-PRIORITY MOBILE PERSISTENCE BUG
+
+The published app has two related glitches:
+
+1. After signing out and signing back in, it correctly lands on Today’s Steps.
+2. On later openings, it incorrectly opens on My Bible.
+3. The app also forgets the user’s name and randomly asks for it again.
+
+These are not separate UX preferences. They indicate inconsistent persistence and startup hydration.
+
+LOCKED REQUIREMENTS
+
+A. STARTUP ROUTING
+
+Every new app opening must land on Today’s Steps.
+
+This includes:
+- fresh browser launch
+- installed PWA launch
+- app reopening after being closed
+- browser refresh
+- sign-in
+- returning after the app has been backgrounded and later reopened
+
+Do not restore:
+- last selected bottom tab
+- My Bible as the previous route
+- saved activeTab
+- saved pathname
+- browser history as the startup destination
+- stale navigation state from localStorage, sessionStorage, IndexedDB, service worker cache, Redux, Zustand, Context persistence or any equivalent store
+
+Today’s Steps must be enforced in the root startup/auth routing logic, not only inside one component.
+
+B. USER NAME PERSISTENCE
+
+The user’s name must be stored in the permanent authenticated user profile and loaded reliably on every app opening.
+
+The app must not randomly ask for the name again after it has already been saved.
+
+Verify:
+
+1. The name is saved against the authenticated user’s permanent user ID.
+
+2. The app does not rely only on:
+- localStorage
+- sessionStorage
+- temporary React state
+- device-specific cache
+- a demo profile
+- a guest profile
+
+3. On startup, the app must:
+- restore the authenticated session
+- load the permanent user profile
+- wait for profile loading to finish
+- then decide whether the name is missing
+
+4. Do not show the name prompt while profile loading is still in progress.
+
+5. Only show the name prompt when the permanent profile has loaded successfully and the name field is genuinely empty.
+
+6. Once the name is saved, update both:
+- the permanent database record
+- the current in-memory user state
+
+7. Confirm that sign-out does not delete or overwrite the saved name.
+
+8. Confirm that signing back in to the same account restores the same name.
+
+C. CHECK FOR RACE CONDITIONS
+
+Investigate whether startup logic is racing between:
+- authentication restoration
+- profile loading
+- default route selection
+- persisted navigation restoration
+- onboarding checks
+
+The likely failure is that the app briefly has no profile data, assumes the name is missing, and shows onboarding before the real profile has loaded.
+
+Introduce explicit startup states such as:
+- restoringSession
+- loadingProfile
+- ready
+
+Do not render navigation or onboarding decisions until startup is ready.
+
+D. SINGLE SOURCE OF TRUTH
+
+Use:
+- authenticated user profile in the production database as the source of truth for the name
+- root startup router as the source of truth for the opening tab
+
+Do not allow multiple competing persistence systems to control these values.
+
+E. TESTS REQUIRED
+
+Test on the published mobile app:
+
+1. Sign in and enter a name.
+2. Close the app completely.
+3. Reopen it ten times.
+4. Every opening must land on Today’s Steps.
+5. The name prompt must not reappear.
+6. Navigate to My Bible, close the app, reopen it.
+7. It must still land on Today’s Steps.
+8. Sign out and sign back in.
+9. The saved name must still be present.
+10. Refresh while on My Bible.
+11. The app must return to Today’s Steps.
+12. Test both mobile browser and installed PWA if available.
+
+Add temporary diagnostic logging for:
+- authenticated user ID
+- profile load start and finish
+- whether a saved name was found
+- route selected at startup
+- any persisted route or activeTab value being ignored
+
+Do not make unrelated design changes.
+
+This is a production persistence and startup hydration bug. Fix the underlying cause, not just the visible symptoms.
