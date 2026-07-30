@@ -201,27 +201,40 @@ export default function JourneyDetail() {
         </div>
 
         {/* ── Progress (if started) ─────────────────────────────────── */}
-        {isActive && prog && (
-          <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/15">
-            <p className="text-[13px] font-medium text-primary">Step {prog.currentDay} of {journey.durationDays}</p>
-            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${Math.round((prog.completedDays.length / (journey.durationDays || 1)) * 100)}%` }}
-              />
+        {isActive && prog && (() => {
+          const nextStep = steps.find(s => s.day === nextUnfinishedDay);
+          return (
+            <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/15">
+              <p className="text-[13px] font-medium text-primary">Step {prog.currentDay} of {journey.durationDays}</p>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.round((prog.completedDays.length / (journey.durationDays || 1)) * 100)}%` }}
+                />
+              </div>
+              {nextStep?.title && (
+                <p className="text-[12px] text-primary/70 truncate">Up next: {nextStep.title}</p>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
         {isPaused && prog && (
           <div className="p-4 rounded-xl bg-muted/50 border border-border">
             <p className="text-[13px] text-muted-foreground">Paused at Step {prog.currentDay} of {journey.durationDays}</p>
           </div>
         )}
-        {isCompleted && (
-          <div className="p-4 rounded-xl bg-muted/50 border border-border">
-            <p className="text-[13px] text-muted-foreground">Journey complete · {journey.durationDays} steps finished</p>
-          </div>
-        )}
+        {isCompleted && (() => {
+          const maxCompletedDay = prog ? Math.max(...prog.completedDays) : null;
+          const lastStep = maxCompletedDay !== null ? steps.find(s => s.day === maxCompletedDay) : null;
+          return (
+            <div className="p-4 rounded-xl bg-muted/50 border border-border">
+              <p className="text-[13px] text-muted-foreground">Journey complete · {journey.durationDays} steps finished</p>
+              {lastStep?.title && (
+                <p className="text-[12px] text-muted-foreground/70 truncate mt-1">Last: {lastStep.title}</p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Journey limit message ─────────────────────────────────── */}
         {showLimitMsg && (
