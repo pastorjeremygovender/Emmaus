@@ -1,0 +1,179 @@
+PROJECT EMMAUS — COMPLETE THE PLATFORM "CONTINUE" RULE
+
+IMPORTANT
+
+This is NOT a Daily Devotional bug.
+
+This is NOT a Sermon Companion bug.
+
+This is the unfinished implementation of the Emmaus Active Engagement architecture.
+
+Create a checkpoint:
+
+PRE-CONTINUE-RULE-COMPLETION
+
+Do not modify:
+
+- Journey content
+- Bible
+- Rooms
+- Authoring
+- Database schema
+
+Do not create a migration.
+
+====================================================
+EMMAUS PLATFORM RULE
+====================================================
+
+A user must NEVER be shown a Continue button unless a valid next item exists.
+
+This is a global Emmaus rule.
+
+It applies to every current and future content type.
+
+====================================================
+CONTENT TYPES
+====================================================
+
+Apply the rule to:
+
+✓ Daily Rhythm
+
+✓ Daily Devotionals
+
+✓ Psalms Daily Devotional
+
+✓ Sermon Companions
+
+✓ Journeys
+
+✓ Made Free
+
+✓ Bible Reading Plans
+
+✓ Every future sequential content type.
+
+====================================================
+RULE
+====================================================
+
+If:
+
+nextAvailableItem exists
+
+show:
+
+Continue
+
+Else:
+
+hide Continue.
+
+Instead show only the appropriate history link:
+
+View Previous Days
+
+View Previous Entries
+
+View Previous Reflections
+
+or equivalent.
+
+Never attempt to navigate to an unavailable day.
+
+====================================================
+IMPLEMENTATION
+====================================================
+
+Do not duplicate this logic across multiple pages.
+
+Create or reuse one shared helper such as:
+
+getPrimaryAction()
+
+or
+
+resolveNextAction()
+
+Every content card must use this shared resolver.
+
+The resolver returns:
+
+- Continue + destination
+
+OR
+
+- No Continue
+
+depending on whether another valid published item exists.
+
+====================================================
+ROUTES
+====================================================
+
+Protect every sequential route.
+
+If a request is made for an unavailable day:
+
+Do not show:
+
+"This devotional isn't available yet."
+
+Instead:
+
+redirect to:
+
+- the latest completed day,
+- the content overview,
+- or the parent page.
+
+Users should never encounter a dead-end because of a Continue button we rendered.
+
+====================================================
+TESTING
+====================================================
+
+Test every content type.
+
+Daily Devotional
+
+- incomplete → Continue works
+
+- complete → Continue absent
+
+Psalms
+
+- incomplete → Continue works
+
+- complete → Continue absent
+
+Sermon Companion
+
+- incomplete → Continue works
+
+- complete → Continue absent
+
+Journeys
+
+- incomplete → Continue works
+
+- complete → Continue absent
+
+Made Free
+
+same behaviour.
+
+Confirm:
+
+No content type attempts to open a nonexistent next day.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+Emmaus has ONE platform-wide Continue rule.
+
+Every sequential content type uses it.
+
+No future content should ever require this bug to be fixed again because the rule lives in one shared implementation.
