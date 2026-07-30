@@ -2,94 +2,42 @@
  * entry-route — canonical app-entry resolver for Project Emmaus.
  *
  * Every launch path (Welcome splash, Auth redirect, session restore, PWA open)
- * must call `resolveEntryRoute` to decide where to send the member. No screen
- * may independently hard-code a Daily Rhythm day URL.
+ * must call `resolveEntryRoute` to decide where to send an onboarded member.
+ * No screen may independently hard-code an initial destination.
  *
- * Rule (spec-locked):
- *   • Today's rhythm NOT yet complete → open today's Daily Rhythm entry.
- *   • Today's rhythm IS complete       → open Today's Steps (/walk).
- *   • No rhythm journey found          → Today's Steps (/walk).
- *   • Dev mode                         → same as above (dev mode only bypasses
- *                                        the calendar gate on the reading page
- *                                        itself; it does not alter launch logic).
+ * Rule (spec-locked — permanent):
+ *   Normal app launch → Today's Walk (/walk)
  *
- * The decision is based on:
- *   1. member local calendar date (via isCompletedToday — uses device timezone);
- *   2. today's available Daily Rhythm day (progress.currentDay);
- *   3. whether that exact day's completion timestamp falls on today's local date.
+ *   This applies after:
+ *     • cold start (new session / fresh browser open)
+ *     • warm start (browser session still live)
+ *     • PWA re-open from home screen
+ *     • backgrounding and resuming
+ *     • force-close and reopen
+ *
+ *   The only exceptions are explicit deep-link navigations (push notification,
+ *   shared Room invitation, shared Journey link, Bible deep link).  Those
+ *   navigations target a specific URL directly and never pass through this
+ *   resolver — they bypass Welcome entirely.  After the user returns to a
+ *   normal launch, this resolver sends them back to Today's Walk.
  *
  * It is deliberately NOT based on:
+ *   – the member's current Daily Rhythm day;
  *   – lastViewedDay or any stored route key;
- *   – currentDay + 1 (i.e., the next chronological entry);
  *   – browser history;
  *   – any cached selected-day value.
  */
 
-import { isCompletedToday } from './daily-lock';
-import type { Journey, Progress } from '@/contexts/JourneyContext';
-
-type JourneyLike = Pick<Journey, 'id' | 'journeyType' | 'status'>;
-
-/** Minimal step shape needed to validate day existence. */
-type StepLike = { day: number; status: string };
-
 /**
- * Returns the correct member entry route for today.
+ * Returns the correct member entry route for a normal app launch.
  *
- * @param journeys           — published journey list from JourneyContext
- * @param progress           — member progress map from JourneyContext
- * @param getStepsForJourney — optional callback to load published steps;
- *                             when provided, the resolved day is clamped to
- *                             the highest real published entry so phantom
- *                             arithmetic days (e.g. Day 8 when only 1–7 exist)
- *                             never appear in the launch URL.
- * @returns — one of: /daily-rhythm/day/:n   or   /walk
+ * Always returns `/walk` (Today's Walk) — the canonical home screen.
+ *
+ * Parameters are accepted for API compatibility (callers in Welcome.tsx
+ * already resolve journey/progress context before calling) but are not
+ * used in the routing decision.
  */
-export function resolveEntryRoute(
-  journeys: JourneyLike[],
-  progress: Record<string, Progress>,
-  getStepsForJourney?: (journeyId: string) => StepLike[],
-): string {
-  // Find the published Daily Rhythm journey (journeyType 'daily-rhythm' or legacy 'core').
-  const journey = journeys.find(
-    j =>
-      (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') &&
-      j.status === 'Published',
-  );
-
-  // No rhythm journey published yet — go to Today's Steps as a safe fallback.
-  if (!journey) return '/walk';
-
-  const prog = progress[journey.id];
-
-  // New member: no progress record. Open day 1 only if it is published.
-  if (!prog) {
-    if (getStepsForJourney) {
-      const steps = getStepsForJourney(journey.id).filter(s => s.status === 'Published');
-      return steps.some(s => s.day === 1) ? '/daily-rhythm/day/1' : '/walk';
-    }
-    return '/daily-rhythm/day/1';
-  }
-
-  // KEY CHECK: if today's rhythm is already complete (lastCompletedAt is today's
-  // local calendar date) → return to Today's Steps, never to the next day.
-  if (isCompletedToday(prog.lastCompletedAt)) return '/walk';
-
-  // Clamp the arithmetic currentDay to the highest real published entry.
-  // This prevents routing to phantom days (e.g. Day 8 when only 1–7 are published).
-  if (getStepsForJourney) {
-    const publishedSteps = getStepsForJourney(journey.id).filter(s => s.status === 'Published');
-    if (publishedSteps.length > 0) {
-      const maxPublishedDay = Math.max(...publishedSteps.map(s => s.day));
-      const effectiveDay    = Math.min(prog.currentDay, maxPublishedDay);
-      // If the entry for effectiveDay doesn't exist (content gap), return /walk.
-      if (!publishedSteps.some(s => s.day === effectiveDay)) return '/walk';
-      return `/daily-rhythm/day/${effectiveDay}`;
-    }
-    // No published entries at all — safe fallback.
-    return '/walk';
-  }
-
-  // Rhythm not yet complete today → open the current day (no step validation).
-  return `/daily-rhythm/day/${prog.currentDay}`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function resolveEntryRoute(..._args: any[]): string {
+  return '/walk';
 }

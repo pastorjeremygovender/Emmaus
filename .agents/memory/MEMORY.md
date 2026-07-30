@@ -2,6 +2,7 @@
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
+- [App entry point rule](app-entry-point.md) — resolveEntryRoute() always returns /walk (spec-locked). Previous logic routed members to their Daily Rhythm day — that was the root cause of wrong launch destination.
 - [Completion flow standardisation](completion-flow.md) — JourneyCompletionPanel shared component; source param pattern for return-destination routing; sermon companion routes from sermon_companion table not journeys table.
 - [Back navigation system](back-navigation.md) — unified return-context.ts + EmmausBackButton; SourceKey union; tab-specific nextSteps sources; ?tab= URL param on /journeys; all content pages updated.
 - [Bible module architecture](bible-module.md) — full Bible module shipped; KJV John 1–3 seed data, BibleProvider (localStorage), 5 routes, verse-tap sheets, Preached Here links to admin sermons via JOHN_SERMON_LINKS.

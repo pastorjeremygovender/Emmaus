@@ -8,7 +8,7 @@
  *   1. Splash appears immediately.
  *   2. Auth + journey state resolves behind the splash.
  *   3. After ~2 s AND both resolved → navigate:
- *        authenticated member  → today's Daily Rhythm day (resolves correct day from progress)
+ *        authenticated member  → Today's Walk (/walk) — always, on every normal launch
  *        authenticated admin   → /admin
  *        new member            → /onboarding
  *        unauthenticated       → /auth

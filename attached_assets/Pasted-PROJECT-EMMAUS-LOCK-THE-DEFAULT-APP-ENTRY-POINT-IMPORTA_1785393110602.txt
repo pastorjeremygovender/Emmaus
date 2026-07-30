@@ -1,0 +1,179 @@
+PROJECT EMMAUS — LOCK THE DEFAULT APP ENTRY POINT
+
+IMPORTANT
+
+This is the final platform fix before today's feature work.
+
+The published application is currently working.
+
+Create a checkpoint:
+
+PRE-DEFAULT-LANDING-FIX
+
+Do not modify:
+
+- Journeys
+- Rooms
+- Active Engagement
+- Bible
+- Sermon Companions
+- Daily Rhythm
+- Daily Devotionals
+- onboarding content
+- database schema
+
+Do not create a migration.
+
+====================================================
+NON-NEGOTIABLE RULE
+====================================================
+
+Whenever a signed-in user launches Emmaus normally, the application must open on:
+
+Today's Walk (Today's Steps)
+
+This is the canonical home screen.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+Normal app launch
+
+↓
+
+Today's Walk
+
+This applies after:
+
+- cold start
+- warm start
+- reopening after backgrounding
+- reopening after force close
+- published deployment
+- preview
+- Android
+- iPhone
+- desktop
+
+Do not restore the previously selected bottom-navigation tab.
+
+Do not restore stale navigation state.
+
+====================================================
+EXCEPTIONS
+====================================================
+
+The user should bypass Today's Walk ONLY when intentionally opening:
+
+- a push notification
+- a shared Journey link
+- a shared Room invitation
+- a Bible deep link
+- another explicit deep link
+
+After that interaction, normal launches must again begin on Today's Walk.
+
+====================================================
+INVESTIGATION
+====================================================
+
+Determine why the published mobile build is not opening on Today's Walk.
+
+Check:
+
+- navigation state persistence
+- bottom navigation restoration
+- local storage
+- session restoration
+- route restoration
+- default route resolver
+- mobile-only behaviour
+- published vs preview differences
+
+Do not patch symptoms.
+
+Correct the root cause.
+
+====================================================
+IMPLEMENTATION
+====================================================
+
+Create or reuse one canonical launch resolver.
+
+On successful authentication:
+
+resolveInitialRoute()
+
+must return:
+
+Today's Walk
+
+unless a valid deep-link destination exists.
+
+There should be only one source of truth.
+
+====================================================
+TESTING
+====================================================
+
+Test on the published application.
+
+Desktop:
+
+- close browser
+- reopen
+- Today's Walk opens
+
+Android:
+
+- close app
+- reopen
+- Today's Walk opens
+
+iPhone (if available):
+
+- close app
+- reopen
+- Today's Walk opens
+
+Background:
+
+- resume app
+- Today's Walk remains correct
+
+Deep links:
+
+- open Room invitation
+- opens Room
+
+Next normal launch:
+
+Today's Walk
+
+Regression:
+
+- bottom navigation still works
+- Today’s Walk loads
+- Next Steps loads
+- Bible loads
+- Journeys unaffected
+- no migrations created
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+The application always opens on Today's Walk after a normal launch for every signed-in user.
+
+This rule becomes permanent.
+
+Provide:
+
+- root cause
+- files changed
+- published mobile verification
+- published desktop verification
+- post-change checkpoint
+
+Do not begin any additional work after this task.
