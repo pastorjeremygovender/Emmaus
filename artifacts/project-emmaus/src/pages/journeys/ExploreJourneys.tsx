@@ -17,6 +17,7 @@ import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import JourneyStartModal from '@/components/JourneyStartModal';
 import { useRooms } from '@/contexts/RoomsContext';
 import { listCollections, type CollectionSummary } from '@/lib/collections-api';
+import { checkJourneysHaveIntro } from '@/lib/journeys-api';
 import { ChevronLeft, Search, X, Bookmark, BookmarkCheck, ArrowRight } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
 
@@ -210,6 +211,9 @@ export default function ExploreJourneys() {
   const [collections, setCollections]         = useState<CollectionSummary[]>([]);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [pendingJourneyId, setPendingJourneyId] = useState<string | null>(null);
+  // The day to open when starting a new walk (0 = Walk Introduction, 1 = first step).
+  // Resolved lazily when the start modal opens by checking the API for a day-0 step.
+  const [pendingStartDay, setPendingStartDay]   = useState(1);
 
   // Debounce search
   useEffect(() => {
@@ -254,26 +258,25 @@ export default function ExploreJourneys() {
   const handleStart = useCallback((journeyId: string) => {
     const j = journeys.find(x => x.id === journeyId);
     if (!j) return;
-    const state = getState(journeyId);
-    if (state === 'active') {
+    // Guard: only treat as started when a real DB progress record exists.
+    // getState() defaults to 'active' for any journey with no localStorage record —
+    // that default must never be used to infer the journey has been opened.
+    if (startedIds.has(journeyId)) {
       setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
       return;
     }
-    if (state === 'paused') {
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
-      return;
-    }
-    if ((state as string) === 'completed') {
-      setLocation(`/journey/${journeyId}/day/1`);
-      return;
-    }
+    // Not yet started — check enrollment capacity, then open the start modal.
     if (!isExemptJourney(j) && !canActivateMore(journeys, startedIds)) {
-      // Show limit hint — navigate to detail so they can manage
       setLocation(`/journeys/${journeyId}`);
       return;
     }
+    // Open start modal; resolve the correct first day (0 = Walk Intro, 1 = first step).
+    setPendingStartDay(1); // default while checking
+    checkJourneysHaveIntro([journeyId])
+      .then(set => setPendingStartDay(set.has(journeyId) ? 0 : 1))
+      .catch(() => { /* non-fatal: default to day/1 */ });
     setPendingJourneyId(journeyId);
-  }, [journeys, getState, progress, canActivateMore, startedIds, setLocation]);
+  }, [journeys, progress, canActivateMore, startedIds, setLocation]);
 
   const handleSave = useCallback((journeyId: string) => {
     saveForLater(journeyId);
@@ -281,19 +284,23 @@ export default function ExploreJourneys() {
 
   async function handleStartAlone() {
     if (!pendingJourneyId) return;
+    const id  = pendingJourneyId;
+    const day = pendingStartDay;
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(pendingJourneyId);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
+    await startJourney(id);
     setPendingJourneyId(null);
+    setLocation(`/journey/${id}/day/${day}`);
   }
 
   async function handleStartWithRoom(roomId: string) {
     if (!pendingJourneyId || !user) return;
+    const id  = pendingJourneyId;
+    const day = pendingStartDay;
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(pendingJourneyId);
-    startSharedJourney(roomId, pendingJourneyId, user.id);
-    setLocation(`/journey/${pendingJourneyId}/day/1`);
+    await startJourney(id);
+    startSharedJourney(roomId, id, user.id);
     setPendingJourneyId(null);
+    setLocation(`/journey/${id}/day/${day}`);
   }
 
   const pendingJourney = journeys.find(j => j.id === pendingJourneyId) ?? null;

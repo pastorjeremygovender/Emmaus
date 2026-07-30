@@ -232,22 +232,21 @@ export default function CollectionPage() {
   const handleStart = useCallback((journeyId: string) => {
     const j = journeys.find(x => x.id === journeyId);
     if (!j) return;
-    const state = getState(journeyId);
-    if (state === 'active' || state === 'paused') {
-      // Resume at the actual next incomplete step (currentDay from progress).
+    // Guard: only treat as started when a real DB progress record exists.
+    // getState() defaults to 'active' for any journey not in localStorage —
+    // that default must never be used to infer the journey has been opened.
+    if (startedIds.has(journeyId)) {
+      // Resume at the actual next incomplete step.
       setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? startDayFor(journeyId)}`);
       return;
     }
-    if ((state as string) === 'completed') {
-      setLocation(`/journey/${journeyId}/day/1`);
-      return;
-    }
+    // Not yet started — check enrollment capacity, then open the start modal.
     if (!isExemptJourney(j) && !canActivateMore(journeys, startedIds)) {
       setLocation(`/journeys/${journeyId}`);
       return;
     }
     setPendingJourneyId(journeyId);
-  }, [journeys, getState, progress, canActivateMore, startedIds, startDayFor, setLocation]);
+  }, [journeys, progress, canActivateMore, startedIds, startDayFor, setLocation]);
 
   async function handleStartAlone() {
     if (!pendingJourneyId) return;

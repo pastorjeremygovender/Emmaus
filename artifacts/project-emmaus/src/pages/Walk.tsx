@@ -620,8 +620,10 @@ export default function Walk() {
   }
 
   function goToJourney(journeyId: string, prog: { currentDay: number }) {
+    // progress[journeyId] is always present here — goToJourney is only called from
+    // "Your Journeys" cards which filter on progress[j.id] existence. The
+    // startJourney guard that was previously here was dead code and has been removed.
     const day = prog.currentDay ?? 1;
-    if (!progress[journeyId]) startJourney(journeyId);
     setLocation(`/journey/${journeyId}/day/${day}?source=walk`);
   }
 
