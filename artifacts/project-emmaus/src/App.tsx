@@ -93,6 +93,36 @@ function Router() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // On mobile, iOS/Android may keep the PWA/browser tab alive in memory
+  // without re-executing the JS module, so _startupChecked stays true and the
+  // startup redirect above never fires when the user switches back to the app.
+  // This visibilitychange listener handles that case: when the document
+  // transitions from hidden → visible and the current path is a tab root,
+  // redirect to / so the normal auth + entry-route flow runs again.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        // Use window.location.pathname to get the current path at the moment
+        // the event fires (the wouter location value is captured at render time
+        // and may be stale inside a closure).
+        const currentPath = window.location.pathname.replace(
+          import.meta.env.BASE_URL.replace(/\/$/, ''),
+          ''
+        ) || '/';
+        if (TAB_ROOT_PATHS.includes(currentPath)) {
+          setLocation('/');
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  // setLocation is stable; no other deps needed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Switch>
       <Route path="/" component={Welcome} />
