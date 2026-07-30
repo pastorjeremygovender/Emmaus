@@ -77,25 +77,20 @@ export default function JourneyPreviousDays() {
 
   // 3 — Walk Complete (synthetic sentinel, dayNumber = -1).
   //     Shown only when there are published steps and durationDays is known.
+  //     Accessible (Review) only once all numbered lessons are completed.
   if (durationDays > 0 && mainSteps.length > 0) {
     const allStepsComplete = completedSet.size >= durationDays;
-    const onFinalStep      = !allStepsComplete && currentDay >= durationDays;
-    const walkCompleteStatus: PreviousDayEntry['status'] =
-      allStepsComplete ? 'completed' :
-      onFinalStep      ? 'current'   :
-                         'locked';
-
     entries.push({
       dayNumber: -1,
       title:     journey?.completionMessage?.trim() || 'Well Done',
       label:     'WALK COMPLETE',
-      status:    walkCompleteStatus,
+      status:    allStepsComplete ? 'completed' : 'locked',
     });
   }
 
   // ── Shared navigation helpers ──────────────────────────────────────────────
 
-  /** Build the URL to open a step, carrying the current source context through. */
+  /** Build the URL to open a numbered step, carrying the current source context. */
   function stepUrl(day: number): string {
     const src = from ?? 'nextStepsJourneys';
     const qs  = fromId
@@ -104,23 +99,31 @@ export default function JourneyPreviousDays() {
     return `/journey/${journeyId}/day/${day}${qs}`;
   }
 
+  /** Build the URL for the dedicated Walk Complete page. */
+  function walkCompletePageUrl(): string {
+    const src = from ?? 'nextStepsJourneys';
+    const qs  = fromId
+      ? `?source=${encodeURIComponent(src)}&sourceId=${encodeURIComponent(fromId)}`
+      : `?source=${encodeURIComponent(src)}`;
+    return `/journey/${journeyId}/complete${qs}`;
+  }
+
   /**
-   * Handle "Review →" — opens the step in read-only/review mode.
-   * Walk Complete (dayNumber = -1) routes to the last published step (which
-   * renders read-only since it has already been completed).
+   * Handle "Review →" — opens the step/page in read-only/review mode.
+   * Walk Complete (dayNumber = -1) opens the dedicated Walk Complete page.
    */
   function handleReview(dayNumber: number) {
-    const target = dayNumber === -1 ? (lastStep?.day ?? 1) : dayNumber;
-    setLocation(stepUrl(target));
+    if (dayNumber === -1) { setLocation(walkCompletePageUrl()); return; }
+    setLocation(stepUrl(dayNumber));
   }
 
   /**
    * Handle "Continue →" — resumes the current in-progress step.
-   * Walk Complete (dayNumber = -1) routes to the final step to complete it.
+   * Walk Complete (dayNumber = -1) opens the dedicated Walk Complete page.
    */
   function handleContinue(dayNumber: number) {
-    const target = dayNumber === -1 ? (lastStep?.day ?? currentDay) : dayNumber;
-    setLocation(stepUrl(target));
+    if (dayNumber === -1) { setLocation(walkCompletePageUrl()); return; }
+    setLocation(stepUrl(dayNumber));
   }
 
   return (

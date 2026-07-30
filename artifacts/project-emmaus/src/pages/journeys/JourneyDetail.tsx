@@ -133,9 +133,9 @@ export default function JourneyDetail() {
       } else { setShowLimitMsg(true); }
       return;
     }
-    // Completed: restart from the first published step.
+    // Completed: open the dedicated Walk Complete page.
     if (isCompleted) {
-      setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+      setLocation(`/journey/${journey.id}/complete?source=journeyDetail&sourceId=${journey.id}`);
       return;
     }
     if (!isExemptJourney(journey) && !canActivateMore(journeys, startedIds)) {

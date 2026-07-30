@@ -65,6 +65,11 @@ export default function JourneyDay() {
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
 
+  // URL for the dedicated Walk Complete page — used when the final step is done.
+  const walkCompleteUrl = journeyId
+    ? `/journey/${journeyId}/complete?source=${encodeURIComponent(source ?? 'nextStepsJourneys')}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+    : '/journeys?tab=journeys';
+
   const [reflection, setReflection] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
   const [showSharePrompt, setShowSharePrompt] = useState(false);
@@ -75,6 +80,22 @@ export default function JourneyDay() {
     if (journeyId) startJourney(journeyId);
     window.scrollTo(0, 0);
   }, [journeyId]);
+
+  // After the final step is completed (and any sharing prompt resolved),
+  // navigate to the dedicated Walk Complete page instead of showing an inline card.
+  useEffect(() => {
+    if (
+      isCompleting &&
+      !isDailyRhythmJourney &&
+      journey?.durationDays != null &&
+      journey.durationDays > 0 &&
+      day >= journey.durationDays &&
+      (!showSharePrompt || sharingDone)
+    ) {
+      setLocation(walkCompleteUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCompleting, showSharePrompt, sharingDone]);
 
   // Route guard — redirect non-Daily-Rhythm journeys when the requested step
   // is unavailable (unpublished, missing, or out of range). Uses replace so Back
@@ -162,8 +183,13 @@ export default function JourneyDay() {
     }
     completeStep(journey.id, day, reflection);
     if (reflection.trim() && activeRoomsForJourney.length > 0) {
+      // Show reflection-sharing prompt first; the useEffect above navigates to
+      // Walk Complete (final step) or shows the lesson card (non-final) after.
       setShowSharePrompt(true);
       setIsCompleting(true);
+    } else if (isFinalStep) {
+      // Final step, no reflection to share — go straight to Walk Complete.
+      setLocation(walkCompleteUrl);
     } else {
       setIsCompleting(true);
     }
@@ -244,12 +270,16 @@ export default function JourneyDay() {
 
   // ── Completion card — standard Emmaus pattern (spec-locked) ──────────────────
   if (isCompleting) {
+    // Final step: the useEffect above is navigating to the Walk Complete page.
+    // Return null to avoid flashing the "Lesson complete" card in the meantime.
+    if (isFinalStep) return null;
+
     const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
 
     // "View Walk Contents →" — show when there is at least one step earlier in
     // the sequence (i.e. this is not the very first published step).
     const firstStepDay = allSteps[0]?.day ?? 1;
-    const hasPreviousSteps = day > firstStepDay || (isFinalStep && allSteps.length > 1);
+    const hasPreviousSteps = day > firstStepDay;
     const prevDaysFrom   = source ?? 'nextStepsJourneys';
     const prevDaysFromId = sourceId ?? '';
     const prevDaysUrl = journeyId && hasPreviousSteps
@@ -257,25 +287,11 @@ export default function JourneyDay() {
       : undefined;
 
     // "Continue to Next Lesson" — resolve the next published step after this one.
-    // Never rendered for the final step (isFinalStep).
-    const nextStep = !isFinalStep ? allSteps.find(s => s.day > day) : undefined;
+    // (isFinalStep is handled by the useEffect above; this block is never reached for it.)
+    const nextStep = allSteps.find(s => s.day > day);
     const nextStepUrl = nextStep && journeyId
       ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
       : undefined;
-
-    if (isFinalStep) {
-      return (
-        <EmmausCompletionCard
-          fullScreen
-          heading="Journey complete."
-          subMessage="May the Lord continue His work in your life."
-          returnLabel="Back to Next Steps"
-          onReturn={() => setLocation(returnPath)}
-          previousDaysLabel="View Walk Contents →"
-          onPreviousDays={prevDaysUrl ? () => setLocation(prevDaysUrl) : undefined}
-        />
-      );
-    }
 
     return (
       <EmmausCompletionCard

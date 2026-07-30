@@ -22,6 +22,7 @@ import DevotionalPreviousDays from '@/pages/DevotionalPreviousDays';
 import SermonCompanionReader from '@/pages/SermonCompanionReader';
 import SermonCompanionPreviousDays from '@/pages/SermonCompanionPreviousDays';
 import JourneyPreviousDays from '@/pages/JourneyPreviousDays';
+import WalkCompletePage from '@/pages/WalkCompletePage';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
 import JourneyDetail from '@/pages/journeys/JourneyDetail';
@@ -121,6 +122,7 @@ function Router() {
         {(params) => <LegacyDailyRhythmRedirect day={params?.day ?? '1'} />}
       </Route>
       <Route path="/journey/:journeyId/previous" component={JourneyPreviousDays} />
+      <Route path="/journey/:journeyId/complete" component={WalkCompletePage} />
       <Route path="/journey/:journeyId/day/:day" component={JourneyDay} />
       {/* Sermon companion reader — for AI-generated companions in the sermon_companion table */}
       <Route path="/sermon-companion/:id/previous" component={SermonCompanionPreviousDays} />
