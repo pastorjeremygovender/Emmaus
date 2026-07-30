@@ -13,6 +13,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
+  ArrowLeft, X,
 } from 'lucide-react';
 import { deleteServerSermon, patchServerSermon } from '@/lib/sermon-generator-api';
 import type { Sermon } from '@/lib/admin-demo-data';
@@ -45,8 +46,8 @@ function formatDate(raw: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
-  const { sermons, removeSermon, updateSermon, settings, updateSettings } = useAdmin();
+export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: Props) {
+  const { sermons, addSermon, removeSermon, updateSermon, settings, updateSettings } = useAdmin();
   const { journeys } = useJourney();
   const { user } = useAuth();
 
@@ -60,7 +61,46 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const [unpublishTarget, setUnpublishTarget] = useState<Sermon | null>(null);
   const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
 
+  // New companion creation modal state
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newTitle, setNewTitle]         = useState('');
+  const [newCreating, setNewCreating]   = useState(false);
+
   const auth = user ? { userId: user.id, userRole: user.role } : null;
+
+  const handleOpenNewModal = () => { setShowNewModal(true); setNewTitle(''); };
+
+  const handleCloseNewModal = () => { setShowNewModal(false); setNewTitle(''); };
+
+  const handleCreateCompanion = () => {
+    setNewCreating(true);
+    const id: string = `sermon-${Date.now()}`;
+    const now = new Date().toISOString();
+    const stub: Sermon = {
+      id,
+      title: newTitle.trim() || 'New Sermon Companion',
+      speaker: '',
+      sermonDate: now.split('T')[0],
+      series: '',
+      scriptureReference: '',
+      youtubeUrl: '',
+      summary: '',
+      topics: [],
+      keywords: [],
+      transcript: '',
+      transcriptStatus: 'none',
+      aiIndexStatus: 'none',
+      companionJourneyId: '',
+      mainTheme: '',
+      status: 'draft',
+      pastorEdited: false,
+      updatedAt: now,
+    };
+    addSermon(stub);
+    setNewCreating(false);
+    handleCloseNewModal();
+    onEdit(id);
+  };
 
   // ── Status filter ─────────────────────────────────────────────────────────
 
@@ -153,7 +193,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
         title="Sermon Companions"
         description="Turn Sunday's sermon into discipleship for the week."
         newButton={
-          <button onClick={onNew} className={newBtnCls}>
+          <button onClick={handleOpenNewModal} className={newBtnCls}>
             <Plus size={14} /> New Sermon Companion
           </button>
         }
@@ -364,6 +404,84 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                   : 'Delete Permanently'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Sermon Companion creation wizard — new standard ─────────────── */}
+      {showNewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[calc(100dvh-2rem)]">
+
+            {/* Header — ← Cancel | title | ✕ */}
+            <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
+              <button
+                onClick={handleCloseNewModal}
+                aria-label="Cancel"
+                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0"
+              >
+                <ArrowLeft size={14} />
+                Cancel
+              </button>
+              <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
+                New Sermon Companion
+              </h2>
+              <div className="w-20 flex-shrink-0 flex justify-end">
+                <button
+                  onClick={handleCloseNewModal}
+                  aria-label="Close"
+                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Step progress — single pill (1-step wizard) */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
+              <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
+                    Sermon Title
+                    <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !newCreating) handleCreateCompanion();
+                    }}
+                    placeholder="e.g. The God Who Sees"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                  />
+                  <p className="mt-2 text-[12px] text-gray-500 leading-relaxed">
+                    You can update the title inside the editor. Leave blank to start with a placeholder.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer — single full-width CTA */}
+            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={handleCreateCompanion}
+                disabled={newCreating}
+                className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
+              >
+                {newCreating
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
+                  : <span>Create Companion</span>
+                }
+              </button>
+            </div>
+
           </div>
         </div>
       )}

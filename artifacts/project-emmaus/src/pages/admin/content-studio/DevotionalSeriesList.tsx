@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, BookHeart, MoreHorizontal, Archive, Trash2, Loader2 } from 'lucide-react';
+import { Plus, BookHeart, MoreHorizontal, Archive, Trash2, Loader2, ArrowLeft, X } from 'lucide-react';
 import {
   listAllSeries,
   createSeries,
@@ -176,51 +176,93 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
         ))}
       </ContentStudioListPage>
 
-      {/* ── New series modal ──────────────────────────────────────────────── */}
+      {/* ── New series modal — new creation-wizard standard ──────────────── */}
       {showNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">New Devotional Series</h3>
-            <div className="space-y-3">
-              <Field label="Title *">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newTitle}
-                  onChange={e => setNewTitle(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                  placeholder="e.g. Psalms Daily Devotional"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
-                />
-              </Field>
-              <Field label="Series Type">
-                <select
-                  value={newType}
-                  onChange={e => setNewType(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
-                >
-                  {Object.entries(TYPE_LABELS).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                  ))}
-                </select>
-              </Field>
-              {formError && <p className="text-sm text-red-500">{formError}</p>}
-            </div>
-            <div className="flex gap-2 mt-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[calc(100dvh-2rem)]">
+
+            {/* Header — ← Cancel | title | ✕ */}
+            <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
               <button
                 onClick={() => { setShowNew(false); setNewTitle(''); setFormError(''); }}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                aria-label="Cancel"
+                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0"
               >
+                <ArrowLeft size={14} />
                 Cancel
               </button>
+              <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
+                New Devotional Series
+              </h2>
+              <div className="w-20 flex-shrink-0 flex justify-end">
+                <button
+                  onClick={() => { setShowNew(false); setNewTitle(''); setFormError(''); }}
+                  aria-label="Close"
+                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Step progress — single pill (1-step wizard) */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
+              <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !saving && newTitle.trim()) handleCreate();
+                    }}
+                    placeholder="e.g. Psalms Daily Devotional"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
+                    Series Type
+                  </label>
+                  <select
+                    value={newType}
+                    onChange={e => setNewType(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                  >
+                    {Object.entries(TYPE_LABELS).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+                {formError && (
+                  <p className="text-[13px] text-red-600 font-medium">{formError}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer — single full-width CTA */}
+            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleCreate}
-                disabled={saving}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50"
+                disabled={saving || !newTitle.trim()}
+                className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
               >
-                {saving ? 'Creating…' : 'Create Series'}
+                {saving
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
+                  : <span>Create Series</span>
+                }
               </button>
             </div>
+
           </div>
         </div>
       )}
