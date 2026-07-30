@@ -5,18 +5,13 @@
  * Does NOT show on subsequent logins.
  *
  * Flow:
- *   Step 0: "What would you like us to call you?" — shown only when no name is set.
- *           Input: First name
- *           [Continue] button → Step 1
+ *   Step 0: "What would you like us to call you?"
+ *           Shown only when no name is set.
+ *           [Continue] or [Skip for now] → Step 1
  *
- *   Step 1: Welcome, {firstName}. (or just "Welcome." if no name was given)
- *           What would you like to begin with?
- *           ☑ 10 Minutes with Jesus (pre-selected)
- *           [Explore Journeys] button (optional — opens /journeys/explore)
- *           [Continue] button → Step 2
- *
- *   Step 2: Welcome. Let's begin.
- *           [Begin 10 Minutes with Jesus] → /walk
+ *   Step 1: "Welcome, {firstName}."
+ *           "Let's begin by spending 10 Minutes with Jesus."
+ *           [Begin 10 Minutes with Jesus] → /daily-rhythm/day/1 (or /walk)
  *
  * On complete: sets emmaus_onboarded = 'true' in localStorage.
  */
@@ -24,7 +19,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -35,14 +29,17 @@ export default function Onboarding() {
   const { journeys, startJourney } = useJourney();
   const [, setLocation] = useLocation();
 
-  // Determine whether name is already known from auth / profile.
-  // Start on step 0 (name collection) only when no name has been set.
+  // Start on step 0 (name collection) only when no name has been set yet.
   const hasName = !!(user?.preferredName?.trim());
-  const [step, setStep] = useState<0 | 1 | 2>(hasName ? 1 : 0);
+  const [step, setStep] = useState<0 | 1>(hasName ? 1 : 0);
   const [nameInput, setNameInput] = useState('');
 
-  // Derive first name for display (safe — never falls back to 'Friend')
-  const firstName = user?.preferredName?.trim().split(' ')[0] || nameInput.trim().split(' ')[0] || undefined;
+  // Derive first name for display — from auth state (updated after updateName)
+  // or from the input field as an immediate fallback on the same render cycle.
+  const firstName =
+    user?.preferredName?.trim().split(' ')[0] ||
+    nameInput.trim().split(' ')[0] ||
+    undefined;
 
   const coreJourney = journeys.find(
     j => (j.journeyType === 'daily-rhythm' || j.journeyType === 'core') && j.status === 'Published'
@@ -52,23 +49,11 @@ export default function Onboarding() {
 
   function handleNameContinue() {
     const name = nameInput.trim();
-    if (name) {
-      updateName(name);
-    }
+    if (name) updateName(name);
     setStep(1);
   }
 
-  // ── Step 1 handlers ─────────────────────────────────────────────────────────
-
-  function handleContinue() {
-    setStep(2);
-  }
-
-  function handleExploreJourneys() {
-    setLocation('/journeys/explore');
-  }
-
-  // ── Step 2 handler ───────────────────────────────────────────────────────────
+  // ── Step 1 handler ───────────────────────────────────────────────────────────
 
   function handleBegin() {
     markOnboarded();
@@ -131,7 +116,7 @@ export default function Onboarding() {
           </motion.div>
         )}
 
-        {/* ── Step 1: Choose what to begin ─────────────────────────────────── */}
+        {/* ── Step 1: Welcome and begin ─────────────────────────────────────── */}
         {step === 1 && (
           <motion.div
             key="step1"
@@ -139,72 +124,14 @@ export default function Onboarding() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
-            className="w-full max-w-[380px] space-y-8"
-          >
-            {/* Title */}
-            <div className="space-y-2">
-              <h1 className="text-[32px] font-sans font-medium tracking-tight text-foreground leading-tight">
-                {firstName ? `Welcome, ${firstName}.` : 'Welcome.'}
-              </h1>
-              <p className="text-[17px] text-muted-foreground leading-relaxed">
-                What would you like to begin with?
-              </p>
-            </div>
-
-            {/* 10 Minutes selection — always pre-checked */}
-            <div className="rounded-2xl border border-primary/25 bg-primary/5 p-5 space-y-2.5">
-              <div className="flex items-start gap-3">
-                <CheckSquare size={20} className="text-primary shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[16px] font-medium text-foreground">
-                    10 Minutes with Jesus
-                  </p>
-                  <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
-                    A simple daily rhythm of Scripture, reflection and prayer.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Explore journeys (optional) */}
-            <div className="space-y-3">
-              <p className="text-[13px] text-muted-foreground text-center">
-                You can also explore other Journeys to walk alongside this rhythm.
-              </p>
-              <button
-                onClick={handleExploreJourneys}
-                className="w-full h-11 rounded-xl border border-border text-[14px] text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all flex items-center justify-center gap-2"
-              >
-                <Square size={15} />
-                Explore Journeys
-              </button>
-            </div>
-
-            <Button
-              className="w-full h-12 rounded-xl text-[16px] font-medium"
-              onClick={handleContinue}
-            >
-              Continue
-            </Button>
-          </motion.div>
-        )}
-
-        {/* ── Step 2: Begin ────────────────────────────────────────────────── */}
-        {step === 2 && (
-          <motion.div
-            key="step2"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
             className="w-full max-w-[380px] space-y-8 text-center"
           >
             <div className="space-y-3">
-              <h1 className="text-[36px] font-sans font-medium tracking-tight text-foreground">
-                Welcome.
+              <h1 className="text-[36px] font-sans font-medium tracking-tight text-foreground leading-tight">
+                {firstName ? `Welcome, ${firstName}.` : 'Welcome.'}
               </h1>
-              <p className="text-[20px] text-muted-foreground font-normal">
-                Let's begin.
+              <p className="text-[18px] text-muted-foreground font-normal leading-relaxed">
+                Let's begin by spending 10 Minutes with Jesus.
               </p>
             </div>
 

@@ -1,0 +1,121 @@
+PROJECT EMMAUS — REMOVE FIRST-TIME JOURNEY SELECTION
+
+IMPORTANT
+
+This is a UX correction.
+
+Create a checkpoint:
+
+PRE-FIRST-TIME-ONBOARDING-SIMPLIFICATION
+
+Do not modify:
+
+- Daily Rhythm
+- Journeys
+- Rooms
+- Active Engagement
+- Bible
+- Sermon Companion
+- database schema
+
+Do not create a migration.
+
+====================================================
+EMMAUS PRINCIPLE
+====================================================
+
+Emmaus earns trust before asking the user to make choices.
+
+A brand-new believer should never be asked which Journeys they want before they have experienced Emmaus.
+
+The first experience is always:
+
+10 Minutes with Jesus.
+
+====================================================
+REMOVE THIS SCREEN
+====================================================
+
+Remove the screen that asks:
+
+"What would you like to begin with?"
+
+Remove:
+
+- Explore Journeys checkbox
+- explanatory text about exploring journeys
+- Continue button tied to this selection
+
+A new user should not choose content at this stage.
+
+====================================================
+NEW FIRST-TIME FLOW
+====================================================
+
+After entering their name:
+
+Display:
+
+Welcome, <Name>.
+
+Let's begin by spending 10 Minutes with Jesus.
+
+Primary button:
+
+Begin 10 Minutes with Jesus
+
+Nothing else.
+
+====================================================
+AFTER FIRST COMPLETION
+====================================================
+
+After completing their first 10 Minutes with Jesus:
+
+- automatically return them to Today's Steps;
+- continue using the existing Active Engagement system;
+- allow discovery of other Journeys through Next Steps.
+
+Do not interrupt the first experience with additional choices.
+
+====================================================
+DO NOT CHANGE
+====================================================
+
+Do not change:
+
+- Next Steps
+- Journey Library
+- Journey authoring
+- Active Engagement rules
+- Today's Steps behaviour
+- Notifications
+- Bible
+
+This task is limited to removing unnecessary onboarding friction.
+
+====================================================
+TESTING
+====================================================
+
+Test in the published desktop app and published mobile app.
+
+Verify:
+
+1. New user enters their name.
+2. No Journey selection screen appears.
+3. User is taken directly into 10 Minutes with Jesus.
+4. After completion, user returns to Today's Steps.
+5. Other Journeys remain available through Next Steps.
+6. Existing users are unaffected.
+7. No database migration is created.
+
+====================================================
+DEFINITION OF DONE
+====================================================
+
+A first-time user never has to decide what to study.
+
+Emmaus introduces them to Jesus first.
+
+Only after that does it invite them to explore further.
