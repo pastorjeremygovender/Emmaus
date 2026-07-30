@@ -516,6 +516,33 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
   );
 }
 
+// ─── FieldBlock ───────────────────────────────────────────────────────────────
+// IMPORTANT: This MUST remain a module-level component, never defined inside
+// another component's render function.  Defining it inside StepFieldEditor
+// causes React to treat it as a new type on every render, unmounting and
+// remounting the DOM node — destroying cursor position, focus, and scroll state
+// after every keystroke or autosave.
+
+function FieldBlock({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
 // ─── Step field editor (center panel, step selected) ─────────────────────────
 
 function StepFieldEditor({
@@ -540,26 +567,6 @@ function StepFieldEditor({
 
   const nextDay = getNextScaffoldDay(step.day);
   const continueLabel = nextDay !== null ? getSectionLabel(nextDay) : null;
-
-  function FieldBlock({
-    label,
-    hint,
-    children,
-  }: {
-    label: string;
-    hint?: string;
-    children: React.ReactNode;
-  }) {
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-widest">
-          {label}
-        </label>
-        {children}
-        {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
