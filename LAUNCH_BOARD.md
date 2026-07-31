@@ -143,18 +143,18 @@
 
 | ID | Pillar | Issue | Files | Effort | Status |
 |----|--------|-------|-------|--------|--------|
-| P2-1 | Rooms | Chat header shows "Room Chat" not room name | `pages/rooms/RoomDetail.tsx:130–132`, `RoomChat.tsx:83–87` | 30 min | ☐ |
+| P2-1 | Rooms | Chat header shows "Room Chat" not room name | `pages/rooms/RoomDetail.tsx:130–132`, `RoomChat.tsx:83–87` | 30 min | ✅ 31 Jul |
 | P2-2 | Devotionals | `markDayComplete` race condition — read-then-write on `completedDays` JSONB | `api-server/src/lib/devotional-store.ts:268–287` | 1–2 hrs | ☐ |
 | P2-3 | Daily Rhythm | Silent completion sync failure — `completeStep` swallows API errors | `contexts/JourneyContext.tsx:303–306` | 2–4 hrs | ☐ |
-| P2-4 | Sermon Companions | Status casing mismatch — generation returns `"draft"`; DB/store use `"Draft"` | `api-server/src/routes/sermon-generator.ts:106–110` | 30 min | ☐ |
-| P2-5 | Ask Emmaus | History omits practical nextSteps — past conversations lose actionable cards | `pages/personal/AskEmmausHistory.tsx:94–105` | 1–2 hrs | ☐ |
-| P2-6 | Ask Emmaus | Pastoral handoff has no UI — server sets `handoffType: pastoral` but client renders no banner | `pages/personal/AskEmmausConversation.tsx:258–261` | 2 hrs | ☐ |
+| P2-4 | Sermon Companions | Status casing mismatch — generation returns `"draft"`; DB/store use `"Draft"` | `api-server/src/routes/sermon-generator.ts:106–110` | 30 min | ✅ 31 Jul |
+| P2-5 | Ask Emmaus | History omits practical nextSteps — past conversations lose actionable cards | `pages/personal/AskEmmausHistory.tsx:94–105` | 1–2 hrs | ✅ 31 Jul |
+| P2-6 | Ask Emmaus | Pastoral handoff has no UI — server sets `handoffType: pastoral` but client renders no banner | `pages/personal/AskEmmausConversation.tsx:258–261` | 2 hrs | ✅ 31 Jul |
 | P2-7 | Bible | Preached Here links open YouTube directly — no in-app sermon route | `data/sermon-verse-links.ts`, `components/emmaus/ResourceCard.tsx:65–70` | 4–8 hrs | ☐ |
 | P2-8 | Bible | Cloud annotation PATCH is fire-and-forget — save failures are silent | `contexts/BibleContext.tsx:162–179` | 4 hrs | ☐ |
-| P2-9 | Bible Studies | Progress Dashboard cannot bulk-publish overviews — endpoint exists, never called | `pages/admin/content-studio/BibleProgressDashboard.tsx:102–125` | 1 hr | ☐ |
-| P2-10 | Daily Rhythm | `isCompletedToday` timezone brittleness — `toLocaleDateString()` without locale | `lib/daily-lock.ts:17–25` | 1 hr | ☐ |
+| P2-9 | Bible Studies | `publishAllInReview` only updated study notes, not chapter overviews | `pages/admin/content-studio/BibleProgressDashboard.tsx:102–125` | 1 hr | ✅ 31 Jul |
+| P2-10 | Daily Rhythm | `isCompletedToday` timezone brittleness — `toLocaleDateString()` without locale | `lib/daily-lock.ts:17–25` | 1 hr | ✅ 31 Jul |
 | P2-11 | Rooms | Unauthenticated users cannot join via invite link | `pages/rooms/JoinByLink.tsx:20–36` | 1 day | ☐ |
-| P2-12 | Sermon Companions | Non-atomic publish — two independent store calls; header can publish while entry update fails | `api-server/src/routes/sermon-companions.ts:287–295` | 1–2 hrs | ☐ |
+| P2-12 | Sermon Companions | Non-atomic publish — two independent store calls; header can publish while entry update fails | `api-server/src/routes/sermon-companions.ts:287–295` | 1–2 hrs | ✅ 31 Jul |
 | P2-13 | Walks & Journeys | `backSource`/`backSourceId` written by JourneyDetail but never read — deep back-chain lost at 3+ levels | `pages/journeys/JourneyDetail.tsx:47`, `lib/return-context.ts` | 1 day | ☐ |
 
 ---
@@ -165,7 +165,7 @@
 |----------|-------|----------------|------|
 | P0 — Hard blockers | 9 items | — | 8 done, 1 deferred (SC-2) |
 | P1 — Major gaps | 8 items | — | 6 done, 2 deferred (DEV-2, RM-1) |
-| P2 — Quality issues | 13 items | 3–5 days | 0 done |
+| P2 — Quality issues | 13 items | 3–5 days | 7 done (P2-1,4,5,6,9,10,12) |
 
 ---
 
@@ -182,4 +182,4 @@
 Everything outside the eight pillars listed above is frozen for this release.
 No new features, no UI redesigns, no refactors of working code.
 
-_Last updated: 31 July 2026_
+_Last updated: 31 July 2026 — session 2_
