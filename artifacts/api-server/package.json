@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts",
+    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts",
     "test:integration": "node --test --experimental-strip-types src/routes/__tests__/audio-route.test.ts src/emmaus/__tests__/authz.test.ts src/emmaus/__tests__/streaming.test.ts",
     "test": "pnpm run test:unit && pnpm run test:integration"
   },
