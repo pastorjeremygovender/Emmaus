@@ -546,4 +546,103 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: bible_study_notes table failed (non-fatal)");
   }
 
+  // ── Bible: extend study notes with passage-level fields (2026-07) ──────────
+  // Adds JSONB columns for cross-references, themes, people, places, sources,
+  // psalm metadata. Idempotent: ADD COLUMN IF NOT EXISTS is safe to re-run.
+  try {
+    await pool.query(`
+      ALTER TABLE bible_study_notes
+        ADD COLUMN IF NOT EXISTS cross_references       jsonb NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS key_themes             jsonb NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS important_people       jsonb NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS important_places       jsonb NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS source_records         jsonb NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS psalm_metadata         jsonb NOT NULL DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS note_type              text  NOT NULL DEFAULT 'passage'
+    `);
+    logger.info("Startup migration: bible_study_notes extended columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_study_notes column extension failed (non-fatal)");
+  }
+
+  // ── Bible: study-notes unique index (2026-07) ─────────────────────────────
+  // Required for ON CONFLICT (book_id, chapter, verse_start) in the generate
+  // endpoint. Safe to re-run (CREATE UNIQUE INDEX IF NOT EXISTS).
+  try {
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uidx_bible_study_notes_book_chapter_verse
+        ON bible_study_notes (book_id, chapter, verse_start)
+    `);
+    logger.info("Startup migration: bible_study_notes unique index ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_study_notes unique index failed (non-fatal)");
+  }
+
+  // ── Bible: book introductions (2026-07) ────────────────────────────────────
+  // One row per book. Stores full book introduction content for the study panel.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bible_book_introductions (
+        id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        book_id             text NOT NULL UNIQUE,
+        book_name           text NOT NULL DEFAULT '',
+        testament           text NOT NULL DEFAULT '',
+        genre               text NOT NULL DEFAULT '',
+        author_attribution  text NOT NULL DEFAULT '',
+        date_range          text NOT NULL DEFAULT '',
+        original_audience   text NOT NULL DEFAULT '',
+        historical_setting  text NOT NULL DEFAULT '',
+        purpose             text NOT NULL DEFAULT '',
+        major_themes        jsonb NOT NULL DEFAULT '[]',
+        key_people          jsonb NOT NULL DEFAULT '[]',
+        key_places          jsonb NOT NULL DEFAULT '[]',
+        outline             jsonb NOT NULL DEFAULT '[]',
+        key_passages        jsonb NOT NULL DEFAULT '[]',
+        points_to_jesus     text NOT NULL DEFAULT '',
+        interpretation_notes text NOT NULL DEFAULT '',
+        status              text NOT NULL DEFAULT 'Draft'
+          CHECK (status IN ('Draft','In Review','Published','Archived')),
+        created_by          text NOT NULL DEFAULT '',
+        updated_by          text NOT NULL DEFAULT '',
+        created_at          timestamp NOT NULL DEFAULT now(),
+        updated_at          timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    logger.info("Startup migration: bible_book_introductions table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_book_introductions table failed (non-fatal)");
+  }
+
+  // ── Bible: chapter overviews (2026-07) ─────────────────────────────────────
+  // One row per book+chapter. Stores chapter-level summary for the study panel.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bible_chapter_overviews (
+        id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        book_id             text NOT NULL,
+        chapter             int  NOT NULL,
+        UNIQUE (book_id, chapter),
+        summary             text NOT NULL DEFAULT '',
+        main_themes         jsonb NOT NULL DEFAULT '[]',
+        important_people    jsonb NOT NULL DEFAULT '[]',
+        important_locations jsonb NOT NULL DEFAULT '[]',
+        passage_divisions   jsonb NOT NULL DEFAULT '[]',
+        key_verse           text NOT NULL DEFAULT '',
+        key_verse_start     int,
+        key_verse_end       int,
+        book_connection     text NOT NULL DEFAULT '',
+        jesus_connection    text NOT NULL DEFAULT '',
+        status              text NOT NULL DEFAULT 'Draft'
+          CHECK (status IN ('Draft','In Review','Published','Archived')),
+        created_by          text NOT NULL DEFAULT '',
+        updated_by          text NOT NULL DEFAULT '',
+        created_at          timestamp NOT NULL DEFAULT now(),
+        updated_at          timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    logger.info("Startup migration: bible_chapter_overviews table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_chapter_overviews table failed (non-fatal)");
+  }
+
 }

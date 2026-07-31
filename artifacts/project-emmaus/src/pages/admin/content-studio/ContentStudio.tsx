@@ -22,10 +22,11 @@ import React, { useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2, Film,
   FolderOpen, BookOpen, Clapperboard, ImagePlay,
-  ChevronRight,
+  ChevronRight, Scroll,
 } from 'lucide-react';
 
 import DailyRhythmStudio from './DailyRhythmStudio';
+import BibleContentStudio from './BibleContentStudio';
 import DevotionalSeriesList from './DevotionalSeriesList';
 import DevotionalSeriesEditor from './DevotionalSeriesEditor';
 import DevotionalEntryEditor from './DevotionalEntryEditor';
@@ -79,7 +80,11 @@ type StudioView =
   | { id: 'youtube-archive' }
   | { id: 'media' }
   | { id: 'kit-wizard' }
-  | { id: 'kit-editor'; kitId: string | null };
+  | { id: 'kit-editor'; kitId: string | null }
+  // ── Bible Study ───────────────────────────────────────────────────────────
+  | { id: 'bible-progress' }
+  | { id: 'bible-generator'; bookId?: string }
+  | { id: 'bible-book-intros' };
 
 // ─── Top-level navigation ─────────────────────────────────────────────────────
 
@@ -91,6 +96,7 @@ const TOP_NAV: TopTab[] = [
   { id: 'journeys',        label: 'Journeys',          Icon: Map       },
   { id: 'sermons',         label: 'Sermon Companions', Icon: Mic2      },
   { id: 'media-studio',    label: 'Media Studio',      Icon: Film      },
+  { id: 'bible-studio',    label: 'Bible Study',       Icon: Scroll    },
 ];
 
 // Map view.id → top-tab id
@@ -118,6 +124,9 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'media':                      'media-studio',
   'kit-wizard':                 'media-studio',
   'kit-editor':                 'media-studio',
+  'bible-progress':             'bible-studio',
+  'bible-generator':            'bible-studio',
+  'bible-book-intros':          'bible-studio',
 };
 
 // Default view when a top tab is clicked
@@ -128,6 +137,7 @@ const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   'journeys':      { id: 'journeys-library' },
   'sermons':       { id: 'sermons' },
   'media-studio':  { id: 'youtube-archive' },
+  'bible-studio':  { id: 'bible-progress' },
 };
 
 // ─── Subtab helpers ───────────────────────────────────────────────────────────
@@ -324,6 +334,20 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: 'Media Studio', onClick: () => navigate({ id: 'media' }) });
         crumbs.push({ label: 'Media Library', onClick: () => navigate({ id: 'media' }) });
         crumbs.push({ label: 'Media Kit' });
+        break;
+
+      // Bible Study
+      case 'bible-progress':
+        crumbs.push({ label: 'Bible Study' });
+        crumbs.push({ label: 'Progress' });
+        break;
+      case 'bible-generator':
+        crumbs.push({ label: 'Bible Study', onClick: () => navigate({ id: 'bible-progress' }) });
+        crumbs.push({ label: 'Generator' });
+        break;
+      case 'bible-book-intros':
+        crumbs.push({ label: 'Bible Study', onClick: () => navigate({ id: 'bible-progress' }) });
+        crumbs.push({ label: 'Book Introductions' });
         break;
     }
     return crumbs;
@@ -598,6 +622,27 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onOpenCompanion={(jId, fresh) =>
               navigate({ id: 'legacy-journey-editor', journeyId: jId, freshlyGenerated: fresh })
             }
+          />
+        );
+
+      // ── Bible Study ───────────────────────────────────────────────────────
+      case 'bible-progress':
+        return (
+          <BibleContentStudio
+            initialSubView="progress"
+          />
+        );
+      case 'bible-generator':
+        return (
+          <BibleContentStudio
+            initialSubView="generator"
+            initialBookId={(view as { bookId?: string }).bookId}
+          />
+        );
+      case 'bible-book-intros':
+        return (
+          <BibleContentStudio
+            initialSubView="book-intros"
           />
         );
 

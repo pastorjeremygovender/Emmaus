@@ -712,4 +712,744 @@ router.delete("/bible/study-notes/admin/:id", async (req: Request, res: Response
   }
 });
 
+// Admin: bulk-status update for multiple study notes
+router.patch("/bible/study-notes/admin/bulk/status", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { ids, status } = req.body as { ids?: string[]; status?: string };
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!Array.isArray(ids) || ids.length === 0 || !VALID.includes(status ?? '')) {
+    res.status(400).json({ error: "ids (array) and valid status required" }); return;
+  }
+  try {
+    await pool.query(
+      `UPDATE bible_study_notes SET status=$1, updated_by=$2, updated_at=now() WHERE id=ANY($3::uuid[])`,
+      [status, userId, ids]
+    );
+    res.json({ ok: true, updated: ids.length });
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/study-notes/admin/bulk/status failed");
+    res.status(500).json({ error: "Bulk status update failed" });
+  }
+});
+
+// ─── Book Introductions ────────────────────────────────────────────────────────
+//
+// GET  /api/bible/book-intro?bookId=   → member: Published intro
+// GET  /api/bible/book-intro/admin     → admin: list all (filtered by bookId)
+// POST /api/bible/book-intro/admin     → admin: create
+// PUT  /api/bible/book-intro/admin/:id → admin: update
+// PATCH /api/bible/book-intro/admin/:id/status → admin: status change
+// DELETE /api/bible/book-intro/admin/:id
+
+router.get("/bible/book-intro", async (req: Request, res: Response) => {
+  const bookId = String(req.query.bookId ?? "").trim().toLowerCase();
+  if (!bookId) { res.status(400).json({ error: "bookId required" }); return; }
+  try {
+    const r = await pool.query(
+      `SELECT * FROM bible_book_introductions WHERE book_id=$1 AND status='Published' LIMIT 1`,
+      [bookId]
+    );
+    res.json(r.rows[0] ?? null);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/book-intro failed");
+    res.json(null);
+  }
+});
+
+router.get("/bible/book-intro/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  try {
+    const bookId = String(req.query.bookId ?? "").trim().toLowerCase();
+    const params: string[] = [];
+    let q = "SELECT * FROM bible_book_introductions";
+    if (bookId) { params.push(bookId); q += ` WHERE book_id=$1`; }
+    q += " ORDER BY book_name";
+    const r = await pool.query(q, params);
+    res.json(r.rows);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/book-intro/admin failed");
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+router.post("/bible/book-intro/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { book_id, book_name, testament, genre, author_attribution, date_range,
+          original_audience, historical_setting, purpose, major_themes, key_people,
+          key_places, outline, key_passages, points_to_jesus, interpretation_notes, status } = req.body;
+  if (!book_id) { res.status(400).json({ error: "book_id required" }); return; }
+  try {
+    const r = await pool.query(
+      `INSERT INTO bible_book_introductions
+         (book_id, book_name, testament, genre, author_attribution, date_range,
+          original_audience, historical_setting, purpose, major_themes, key_people,
+          key_places, outline, key_passages, points_to_jesus, interpretation_notes,
+          status, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18)
+       ON CONFLICT (book_id) DO UPDATE SET
+         book_name=$2, testament=$3, genre=$4, author_attribution=$5, date_range=$6,
+         original_audience=$7, historical_setting=$8, purpose=$9, major_themes=$10,
+         key_people=$11, key_places=$12, outline=$13, key_passages=$14,
+         points_to_jesus=$15, interpretation_notes=$16, status=$17,
+         updated_by=$18, updated_at=now()
+       RETURNING *`,
+      [
+        book_id.toLowerCase(), book_name ?? '', testament ?? '', genre ?? '',
+        author_attribution ?? '', date_range ?? '', original_audience ?? '',
+        historical_setting ?? '', purpose ?? '',
+        JSON.stringify(major_themes ?? []), JSON.stringify(key_people ?? []),
+        JSON.stringify(key_places ?? []), JSON.stringify(outline ?? []),
+        JSON.stringify(key_passages ?? []),
+        points_to_jesus ?? '', interpretation_notes ?? '',
+        status ?? 'Draft', userId,
+      ]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "POST /bible/book-intro/admin failed");
+    res.status(500).json({ error: "Failed to save book introduction" });
+  }
+});
+
+router.put("/bible/book-intro/admin/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { id } = req.params;
+  const { book_id, book_name, testament, genre, author_attribution, date_range,
+          original_audience, historical_setting, purpose, major_themes, key_people,
+          key_places, outline, key_passages, points_to_jesus, interpretation_notes, status } = req.body;
+  try {
+    const r = await pool.query(
+      `UPDATE bible_book_introductions SET
+         book_id=$1, book_name=$2, testament=$3, genre=$4, author_attribution=$5,
+         date_range=$6, original_audience=$7, historical_setting=$8, purpose=$9,
+         major_themes=$10, key_people=$11, key_places=$12, outline=$13,
+         key_passages=$14, points_to_jesus=$15, interpretation_notes=$16,
+         status=$17, updated_by=$18, updated_at=now()
+       WHERE id=$19 RETURNING *`,
+      [
+        book_id?.toLowerCase() ?? '', book_name ?? '', testament ?? '', genre ?? '',
+        author_attribution ?? '', date_range ?? '', original_audience ?? '',
+        historical_setting ?? '', purpose ?? '',
+        JSON.stringify(major_themes ?? []), JSON.stringify(key_people ?? []),
+        JSON.stringify(key_places ?? []), JSON.stringify(outline ?? []),
+        JSON.stringify(key_passages ?? []),
+        points_to_jesus ?? '', interpretation_notes ?? '',
+        status ?? 'Draft', userId, id,
+      ]
+    );
+    if (r.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PUT /bible/book-intro/admin/:id failed");
+    res.status(500).json({ error: "Failed to update book introduction" });
+  }
+});
+
+router.patch("/bible/book-intro/admin/:id/status", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { status } = req.body;
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!VALID.includes(status)) { res.status(400).json({ error: `status must be one of ${VALID.join(', ')}` }); return; }
+  try {
+    const r = await pool.query(
+      `UPDATE bible_book_introductions SET status=$1, updated_by=$2, updated_at=now() WHERE id=$3 RETURNING *`,
+      [status, userId, req.params.id]
+    );
+    if (r.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/book-intro/admin/:id/status failed");
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.delete("/bible/book-intro/admin/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  try {
+    await pool.query("DELETE FROM bible_book_introductions WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "DELETE /bible/book-intro/admin/:id failed");
+    res.status(500).json({ error: "Failed to delete" });
+  }
+});
+
+// ─── Chapter Overviews ────────────────────────────────────────────────────────
+//
+// GET  /api/bible/chapter-overview?bookId=&chapter=   → member
+// GET  /api/bible/chapter-overview/admin?bookId=&chapter= → admin list
+// POST /api/bible/chapter-overview/admin              → create/upsert
+// PUT  /api/bible/chapter-overview/admin/:id          → update
+// PATCH /api/bible/chapter-overview/admin/:id/status  → status
+// DELETE /api/bible/chapter-overview/admin/:id
+
+router.get("/bible/chapter-overview", async (req: Request, res: Response) => {
+  const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
+  const chapter = parseInt(String(req.query.chapter ?? ""), 10);
+  if (!bookId || isNaN(chapter)) { res.status(400).json({ error: "bookId and chapter required" }); return; }
+  try {
+    const r = await pool.query(
+      `SELECT * FROM bible_chapter_overviews WHERE book_id=$1 AND chapter=$2 AND status='Published' LIMIT 1`,
+      [bookId, chapter]
+    );
+    res.json(r.rows[0] ?? null);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/chapter-overview failed");
+    res.json(null);
+  }
+});
+
+router.get("/bible/chapter-overview/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  try {
+    const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
+    const chapter = parseInt(String(req.query.chapter ?? ""), 10);
+    let q = "SELECT * FROM bible_chapter_overviews";
+    const params: (string | number)[] = [];
+    if (bookId) {
+      params.push(bookId); q += ` WHERE book_id=$${params.length}`;
+      if (!isNaN(chapter)) { params.push(chapter); q += ` AND chapter=$${params.length}`; }
+    }
+    q += " ORDER BY book_id, chapter";
+    const r = await pool.query(q, params);
+    res.json(r.rows);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/chapter-overview/admin failed");
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
+router.post("/bible/chapter-overview/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { book_id, chapter, summary, main_themes, important_people, important_locations,
+          passage_divisions, key_verse, key_verse_start, key_verse_end,
+          book_connection, jesus_connection, status } = req.body;
+  if (!book_id || !chapter) { res.status(400).json({ error: "book_id and chapter required" }); return; }
+  try {
+    const r = await pool.query(
+      `INSERT INTO bible_chapter_overviews
+         (book_id, chapter, summary, main_themes, important_people, important_locations,
+          passage_divisions, key_verse, key_verse_start, key_verse_end,
+          book_connection, jesus_connection, status, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)
+       ON CONFLICT (book_id, chapter) DO UPDATE SET
+         summary=$3, main_themes=$4, important_people=$5, important_locations=$6,
+         passage_divisions=$7, key_verse=$8, key_verse_start=$9, key_verse_end=$10,
+         book_connection=$11, jesus_connection=$12, status=$13, updated_by=$14, updated_at=now()
+       RETURNING *`,
+      [
+        book_id.toLowerCase(), Number(chapter),
+        summary ?? '', JSON.stringify(main_themes ?? []),
+        JSON.stringify(important_people ?? []), JSON.stringify(important_locations ?? []),
+        JSON.stringify(passage_divisions ?? []), key_verse ?? '',
+        key_verse_start ? Number(key_verse_start) : null,
+        key_verse_end ? Number(key_verse_end) : null,
+        book_connection ?? '', jesus_connection ?? '',
+        status ?? 'Draft', userId,
+      ]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "POST /bible/chapter-overview/admin failed");
+    res.status(500).json({ error: "Failed to save chapter overview" });
+  }
+});
+
+router.put("/bible/chapter-overview/admin/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { book_id, chapter, summary, main_themes, important_people, important_locations,
+          passage_divisions, key_verse, key_verse_start, key_verse_end,
+          book_connection, jesus_connection, status } = req.body;
+  try {
+    const r = await pool.query(
+      `UPDATE bible_chapter_overviews SET
+         book_id=$1, chapter=$2, summary=$3, main_themes=$4, important_people=$5,
+         important_locations=$6, passage_divisions=$7, key_verse=$8,
+         key_verse_start=$9, key_verse_end=$10, book_connection=$11,
+         jesus_connection=$12, status=$13, updated_by=$14, updated_at=now()
+       WHERE id=$15 RETURNING *`,
+      [
+        book_id?.toLowerCase() ?? '', Number(chapter),
+        summary ?? '', JSON.stringify(main_themes ?? []),
+        JSON.stringify(important_people ?? []), JSON.stringify(important_locations ?? []),
+        JSON.stringify(passage_divisions ?? []), key_verse ?? '',
+        key_verse_start ? Number(key_verse_start) : null,
+        key_verse_end ? Number(key_verse_end) : null,
+        book_connection ?? '', jesus_connection ?? '',
+        status ?? 'Draft', userId, req.params.id,
+      ]
+    );
+    if (r.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PUT /bible/chapter-overview/admin/:id failed");
+    res.status(500).json({ error: "Failed to update chapter overview" });
+  }
+});
+
+router.patch("/bible/chapter-overview/admin/:id/status", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { status } = req.body;
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!VALID.includes(status)) { res.status(400).json({ error: `status must be one of ${VALID.join(', ')}` }); return; }
+  try {
+    const r = await pool.query(
+      `UPDATE bible_chapter_overviews SET status=$1, updated_by=$2, updated_at=now() WHERE id=$3 RETURNING *`,
+      [status, userId, req.params.id]
+    );
+    if (r.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(r.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/chapter-overview/admin/:id/status failed");
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.delete("/bible/chapter-overview/admin/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  try {
+    await pool.query("DELETE FROM bible_chapter_overviews WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "DELETE /bible/chapter-overview/admin/:id failed");
+    res.status(500).json({ error: "Failed to delete" });
+  }
+});
+
+// ─── Bulk chapter-level operations ───────────────────────────────────────────
+
+// Publish all Draft/In Review records for a chapter (overview + passages)
+router.post("/bible/chapter-overview/admin/bulk-publish", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { bookId, chapter } = req.body as { bookId?: string; chapter?: number };
+  if (!bookId || !chapter) { res.status(400).json({ error: "bookId and chapter required" }); return; }
+  try {
+    const bId = bookId.toLowerCase();
+    const ch = Number(chapter);
+    const [ov, sn] = await Promise.all([
+      pool.query(
+        `UPDATE bible_chapter_overviews SET status='Published', updated_by=$1, updated_at=now()
+         WHERE book_id=$2 AND chapter=$3 AND status IN ('Draft','In Review') RETURNING id`,
+        [userId, bId, ch]
+      ),
+      pool.query(
+        `UPDATE bible_study_notes SET status='Published', updated_by=$1, updated_at=now()
+         WHERE book_id=$2 AND chapter=$3 AND status IN ('Draft','In Review') RETURNING id`,
+        [userId, bId, ch]
+      ),
+    ]);
+    res.json({ ok: true, overviewsPublished: ov.rowCount, passagesPublished: sn.rowCount });
+  } catch (err) {
+    logger.error({ err }, "bulk-publish failed");
+    res.status(500).json({ error: "Bulk publish failed" });
+  }
+});
+
+// ─── Study Statistics ──────────────────────────────────────────────────────────
+//
+// GET /api/bible/study-stats?bookId=   → admin: coverage stats per book (or single book)
+
+const BOOK_CHAPTER_COUNTS: Record<string, number> = {
+  genesis:49, exodus:40, leviticus:27, numbers:36, deuteronomy:34,
+  joshua:24, judges:21, ruth:4, "1samuel":31, "2samuel":24,
+  "1kings":22, "2kings":25, "1chronicles":29, "2chronicles":36,
+  ezra:10, nehemiah:13, esther:10, job:42, psalms:150, proverbs:31,
+  ecclesiastes:12, songofsolomon:8, isaiah:66, jeremiah:52,
+  lamentations:5, ezekiel:48, daniel:12, hosea:14, joel:3, amos:9,
+  obadiah:1, jonah:4, micah:7, nahum:3, habakkuk:3, zephaniah:3,
+  haggai:2, zechariah:14, malachi:4,
+  matthew:28, mark:16, luke:24, john:21, acts:28, romans:16,
+  "1corinthians":16, "2corinthians":13, galatians:6, ephesians:6,
+  philippians:4, colossians:4, "1thessalonians":5, "2thessalonians":3,
+  "1timothy":6, "2timothy":4, titus:3, philemon:1, hebrews:13,
+  james:5, "1peter":5, "2peter":3, "1john":5, "2john":1, "3john":1,
+  jude:1, revelation:22,
+};
+
+router.get("/bible/study-stats", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const filterBook = String(req.query.bookId ?? "").trim().toLowerCase() || null;
+  const targetBooks = filterBook
+    ? [filterBook]
+    : ["luke","acts","romans","1corinthians","2corinthians","psalms"]; // default to 6 target books
+
+  try {
+    const [introRes, overviewRes, noteRes] = await Promise.all([
+      pool.query(
+        `SELECT book_id, status FROM bible_book_introductions
+         WHERE book_id = ANY($1::text[])`,
+        [targetBooks]
+      ),
+      pool.query(
+        `SELECT book_id, chapter, status FROM bible_chapter_overviews
+         WHERE book_id = ANY($1::text[])`,
+        [targetBooks]
+      ),
+      pool.query(
+        `SELECT book_id, chapter, verse_start, verse_end, status
+         FROM bible_study_notes
+         WHERE book_id = ANY($1::text[])`,
+        [targetBooks]
+      ),
+    ]);
+
+    const stats = targetBooks.map(bookId => {
+      const totalChapters = BOOK_CHAPTER_COUNTS[bookId] ?? 0;
+      const intro = introRes.rows.find(r => r.book_id === bookId);
+      const overviews = overviewRes.rows.filter(r => r.book_id === bookId);
+      const notes = noteRes.rows.filter(r => r.book_id === bookId);
+
+      const statusCount = (arr: { status: string }[], status: string) =>
+        arr.filter(r => r.status === status).length;
+
+      return {
+        bookId,
+        totalChapters,
+        bookIntroStatus: intro?.status ?? null,
+        overviewsTotal: overviews.length,
+        overviewsDraft: statusCount(overviews, 'Draft'),
+        overviewsInReview: statusCount(overviews, 'In Review'),
+        overviewsPublished: statusCount(overviews, 'Published'),
+        passagesTotal: notes.length,
+        passagesDraft: statusCount(notes, 'Draft'),
+        passagesInReview: statusCount(notes, 'In Review'),
+        passagesPublished: statusCount(notes, 'Published'),
+        chaptersWithOverview: new Set(overviews.map(r => r.chapter)).size,
+        chaptersWithPassages: new Set(notes.map(r => r.chapter)).size,
+      };
+    });
+
+    res.json(stats);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/study-stats failed");
+    res.status(500).json({ error: "Failed to load stats" });
+  }
+});
+
+// ─── AI Content Generator ──────────────────────────────────────────────────────
+//
+// POST /api/bible/generate
+// Generates study content for a book-intro, chapter-overview, or full-chapter
+// (overview + passage notes) using OpenAI.  Content is saved as 'Draft'.
+//
+// Body: {
+//   type: 'book-intro' | 'chapter-overview' | 'chapter-batch'
+//   bookId: string
+//   chapter?: number  (required for chapter-* types)
+//   force?: boolean   (overwrite existing Draft records; skip if Published)
+// }
+
+import OpenAI from "openai";
+
+const openaiClient = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
+const BOOK_DISPLAY_NAMES: Record<string, string> = {
+  luke: "Luke", acts: "Acts", romans: "Romans",
+  "1corinthians": "1 Corinthians", "2corinthians": "2 Corinthians", psalms: "Psalms",
+  genesis: "Genesis", exodus: "Exodus", matthew: "Matthew", mark: "Mark",
+  john: "John", revelation: "Revelation",
+};
+
+function readChapterVerses(bookId: string, chapter: number): Array<{ verse: number; text: string }> | null {
+  try {
+    const filePath = join(DATA_DIR, "bsb", `${bookId}.json`);
+    if (!existsSync(filePath)) return null;
+    const data = JSON.parse(readFileSync(filePath, "utf8")) as {
+      chapters: Record<string, Array<{ verse: number; text: string }>>;
+    };
+    return data.chapters[String(chapter)] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+router.post("/bible/generate", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  if (!openaiClient) {
+    res.status(503).json({ error: "OpenAI is not configured. Set OPENAI_API_KEY to enable generation." });
+    return;
+  }
+
+  const { type, bookId: rawBookId, chapter: rawChapter, force = false } = req.body as {
+    type?: string;
+    bookId?: string;
+    chapter?: number;
+    force?: boolean;
+  };
+
+  const bookId = String(rawBookId ?? "").trim().toLowerCase();
+  const chapter = rawChapter ? Number(rawChapter) : null;
+
+  if (!bookId || !VALID_BOOK_IDS.has(bookId)) {
+    res.status(400).json({ error: "Valid bookId required" });
+    return;
+  }
+
+  const bookName = BOOK_DISPLAY_NAMES[bookId] ?? bookId;
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  // Reasoning models (o-series, gpt-5) reject temperature and burn completion tokens
+  // on chain-of-thought before generating output — they need much larger token budgets.
+  // gpt-5 behaves like a heavy reasoning model: it needs ~25k+ tokens to avoid producing
+  // 0-char responses (all tokens consumed by internal reasoning before any output).
+  const isReasoningModel = /^o\d/i.test(model) || /^gpt-5/i.test(model);
+  function buildCreateParams(outputTokens: number, extraMessages?: OpenAI.ChatCompletionMessageParam[]) {
+    // Reasoning models need a large total budget; standard models can stay lean.
+    const maxTokens = isReasoningModel ? Math.max(outputTokens * 6, 25000) : outputTokens;
+    const params: Parameters<typeof openaiClient!.chat.completions.create>[0] = {
+      model,
+      messages: extraMessages ?? [],
+      max_completion_tokens: maxTokens,
+      response_format: { type: "json_object" } as OpenAI.ResponseFormatJSONObject,
+    };
+    if (isReasoningModel) {
+      // reasoning_effort: "low" caps chain-of-thought to avoid excessive latency
+      // @ts-expect-error reasoning_effort is valid for reasoning models (o-series, gpt-5)
+      params.reasoning_effort = "low";
+    }
+    return params;
+  }
+
+  try {
+    // ── book-intro ────────────────────────────────────────────────────────────
+    if (type === "book-intro") {
+      // Skip if already Published (unless force)
+      const existing = await pool.query(
+        `SELECT id, status FROM bible_book_introductions WHERE book_id=$1 LIMIT 1`,
+        [bookId]
+      );
+      if (existing.rows[0]?.status === "Published" && !force) {
+        res.status(409).json({ error: "A Published intro already exists. Use force=true to regenerate." });
+        return;
+      }
+
+      const prompt = `You are a biblical scholar writing accessible study content for a Christian discipleship app called Emmaus.
+Write a complete book introduction for the book of ${bookName}.
+Return ONLY a valid JSON object with exactly these fields (no markdown, no explanation outside JSON):
+{
+  "book_name": "${bookName}",
+  "testament": "New Testament" or "Old Testament",
+  "genre": "e.g. Gospel, History, Epistle, Poetry, Prophecy",
+  "author_attribution": "traditional or debated attribution, explained honestly",
+  "date_range": "approximate date or date range",
+  "original_audience": "who the book was written for",
+  "historical_setting": "2–3 sentences on historical context",
+  "purpose": "2–3 sentences on why the book was written",
+  "major_themes": ["theme1", "theme2", "theme3"],
+  "key_people": ["person1", "person2"],
+  "key_places": ["place1", "place2"],
+  "outline": [{"section": "Part title", "chapters": "1–4", "description": "brief desc"}],
+  "key_passages": ["${bookName} 1:1", "${bookName} 3:16"],
+  "points_to_jesus": "2–3 sentences on how this book points to Jesus",
+  "interpretation_notes": "any important notes on interpretation (leave empty string if none)"
+}
+Guidelines: accessible language, not academic, honest about debates, concise.`;
+
+      const completion = await openaiClient.chat.completions.create(
+        buildCreateParams(5000, [{ role: "user", content: prompt }])
+      );
+
+      const bookIntroContent = completion.choices[0].message.content ?? "{}";
+      if (!bookIntroContent.trim().endsWith("}")) {
+        throw new Error(`Book-intro response truncated (${bookIntroContent.length} chars). Increase max_completion_tokens.`);
+      }
+      const raw = JSON.parse(bookIntroContent);
+      const r = await pool.query(
+        `INSERT INTO bible_book_introductions
+           (book_id, book_name, testament, genre, author_attribution, date_range,
+            original_audience, historical_setting, purpose, major_themes, key_people,
+            key_places, outline, key_passages, points_to_jesus, interpretation_notes,
+            status, created_by, updated_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'Draft',$17,$17)
+         ON CONFLICT (book_id) DO UPDATE SET
+           book_name=$2, testament=$3, genre=$4, author_attribution=$5, date_range=$6,
+           original_audience=$7, historical_setting=$8, purpose=$9, major_themes=$10,
+           key_people=$11, key_places=$12, outline=$13, key_passages=$14,
+           points_to_jesus=$15, interpretation_notes=$16,
+           status=CASE WHEN bible_book_introductions.status='Published' AND $18=false THEN 'Published' ELSE 'Draft' END,
+           updated_by=$17, updated_at=now()
+         RETURNING *`,
+        [
+          bookId, raw.book_name ?? bookName, raw.testament ?? '', raw.genre ?? '',
+          raw.author_attribution ?? '', raw.date_range ?? '', raw.original_audience ?? '',
+          raw.historical_setting ?? '', raw.purpose ?? '',
+          JSON.stringify(raw.major_themes ?? []), JSON.stringify(raw.key_people ?? []),
+          JSON.stringify(raw.key_places ?? []), JSON.stringify(raw.outline ?? []),
+          JSON.stringify(raw.key_passages ?? []),
+          raw.points_to_jesus ?? '', raw.interpretation_notes ?? '',
+          userId, force,
+        ]
+      );
+      res.json({ type: "book-intro", record: r.rows[0] });
+      return;
+    }
+
+    // ── chapter-overview or chapter-batch ─────────────────────────────────────
+    if (type === "chapter-overview" || type === "chapter-batch") {
+      if (!chapter || chapter < 1) {
+        res.status(400).json({ error: "chapter number required for chapter-* types" });
+        return;
+      }
+
+      const verses = readChapterVerses(bookId, chapter);
+      if (!verses || verses.length === 0) {
+        res.status(404).json({ error: `Chapter ${chapter} not found for ${bookName} (BSB required)` });
+        return;
+      }
+
+      const verseText = verses.map(v => `${v.verse} ${v.text}`).join("\n");
+      const includePasages = type === "chapter-batch";
+
+      const prompt = `You are a biblical scholar creating study content for the Emmaus Christian app.
+Generate study content for ${bookName} chapter ${chapter}.
+
+FULL CHAPTER TEXT:
+${verseText}
+
+Return ONLY a valid JSON object (no markdown):
+{
+  "overview": {
+    "summary": "2–4 sentences summarising what happens in this chapter",
+    "main_themes": ["theme1", "theme2"],
+    "important_people": ["person1"],
+    "important_locations": ["place1"],
+    "passage_divisions": [
+      {"title": "Passage Title", "verse_start": 1, "verse_end": 5},
+      {"title": "Another Passage", "verse_start": 6, "verse_end": 13}
+    ],
+    "key_verse": "verse reference e.g. ${bookName} ${chapter}:3",
+    "book_connection": "1–2 sentences on how this chapter fits the wider book",
+    "jesus_connection": "1–2 sentences on how this chapter relates to Jesus or the gospel (be honest — not every OT chapter has a direct connection; note typological/thematic if so)"
+  }${includePasages ? `,
+  "passages": [
+    {
+      "title": "Passage Title",
+      "verse_start": 1,
+      "verse_end": 5,
+      "content": "2–4 paragraphs explaining what is happening and its meaning. Clear, faithful, accessible to a new Christian.",
+      "context_note": "What comes before and after; how it fits the chapter and book",
+      "historical_note": "Relevant historical or cultural background (only if genuinely helpful — leave empty string if not needed)",
+      "original_language_note": "Key Greek or Hebrew word if genuinely significant (leave empty string if not needed)",
+      "jesus_connection": "How this passage connects to Jesus — direct, typological, or thematic. Be honest about the strength of the connection.",
+      "apply_it": "2–3 questions or invitations for reflection. Invitational, not prescriptive. No checklists or guilt.",
+      "cross_references": [
+        {"reference": "Book Chapter:Verse", "explanation": "why this is connected", "type": "Shared Theme"}
+      ]
+    }
+  ]` : ""}
+}
+Cross-reference types: Quotation, Fulfilment, Parallel Event, Shared Theme, Explanation, Contrast, Promise, Old Testament Background, Gospel Connection.
+Keep content concise and mobile-friendly. Do not use academic jargon.`;
+
+      const completion = await openaiClient.chat.completions.create(
+        buildCreateParams(includePasages ? 6000 : 3000, [{ role: "user", content: prompt }])
+      );
+
+      const chapterContent = completion.choices[0].message.content ?? "{}";
+      if (!chapterContent.trim().endsWith("}")) {
+        throw new Error(`Chapter response truncated (${chapterContent.length} chars). Increase max_completion_tokens.`);
+      }
+      const raw = JSON.parse(chapterContent);
+      const ov = raw.overview ?? {};
+
+      // Upsert chapter overview
+      const ovResult = await pool.query(
+        `INSERT INTO bible_chapter_overviews
+           (book_id, chapter, summary, main_themes, important_people, important_locations,
+            passage_divisions, key_verse, book_connection, jesus_connection, status, created_by, updated_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Draft',$11,$11)
+         ON CONFLICT (book_id, chapter) DO UPDATE SET
+           summary=$3, main_themes=$4, important_people=$5, important_locations=$6,
+           passage_divisions=$7, key_verse=$8, book_connection=$9, jesus_connection=$10,
+           status=CASE WHEN bible_chapter_overviews.status='Published' AND NOT $12 THEN 'Published' ELSE 'Draft' END,
+           updated_by=$11, updated_at=now()
+         RETURNING *`,
+        [
+          bookId, chapter,
+          ov.summary ?? '', JSON.stringify(ov.main_themes ?? []),
+          JSON.stringify(ov.important_people ?? []), JSON.stringify(ov.important_locations ?? []),
+          JSON.stringify(ov.passage_divisions ?? []), ov.key_verse ?? '',
+          ov.book_connection ?? '', ov.jesus_connection ?? '',
+          userId, force,
+        ]
+      );
+
+      const result: { overview: unknown; passages: unknown[] } = { overview: ovResult.rows[0], passages: [] };
+
+      if (includePasages && Array.isArray(raw.passages)) {
+        const passageRecords: unknown[] = [];
+        for (const p of raw.passages) {
+          const existingNote = await pool.query(
+            `SELECT id, status FROM bible_study_notes
+             WHERE book_id=$1 AND chapter=$2 AND verse_start=$3 LIMIT 1`,
+            [bookId, chapter, p.verse_start]
+          );
+          const skip = existingNote.rows[0]?.status === "Published" && !force;
+          if (skip) { passageRecords.push(existingNote.rows[0]); continue; }
+
+          const pr = await pool.query(
+            `INSERT INTO bible_study_notes
+               (book_id, chapter, verse_start, verse_end, title, content,
+                context_note, historical_note, original_language_note,
+                jesus_connection, apply_it, cross_references, status, created_by, updated_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Draft',$13,$13)
+             ON CONFLICT DO NOTHING
+             RETURNING *`,
+            [
+              bookId, chapter, p.verse_start,
+              p.verse_end ?? null,
+              p.title ?? '', p.content ?? '',
+              p.context_note ?? '', p.historical_note ?? '',
+              p.original_language_note ?? '', p.jesus_connection ?? '',
+              p.apply_it ?? '', JSON.stringify(p.cross_references ?? []),
+              userId,
+            ]
+          );
+          passageRecords.push(pr.rows[0] ?? existingNote.rows[0]);
+        }
+        result.passages = passageRecords;
+      }
+
+      res.json(result);
+      return;
+    }
+
+    res.status(400).json({ error: "type must be 'book-intro', 'chapter-overview', or 'chapter-batch'" });
+  } catch (err) {
+    logger.error({ err }, "POST /bible/generate failed");
+    res.status(500).json({ error: "Content generation failed" });
+  }
+});
+
 export default router;

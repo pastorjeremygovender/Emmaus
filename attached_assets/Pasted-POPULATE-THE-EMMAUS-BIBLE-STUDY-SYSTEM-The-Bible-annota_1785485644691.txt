@@ -1,0 +1,807 @@
+POPULATE THE EMMAUS BIBLE STUDY SYSTEM
+
+The Bible annotation architecture is already built correctly, but the study sections are currently empty.
+
+Populate the existing system with real study content for these books only:
+
+1. Luke
+2. Acts
+3. Romans
+4. 1 Corinthians
+5. 2 Corinthians
+6. Psalms
+
+Do not redesign the Bible reader.
+
+Do not create another annotation system.
+
+Use the existing Bible study architecture and populate its current fields with structured data.
+
+The objective is to make these six books fully usable inside the Emmaus Bible Study experience.
+
+--------------------------------------------------
+IMPORTANT CONTENT STRATEGY
+--------------------------------------------------
+
+Do not create an individual commentary note for every verse.
+
+Use a layered structure:
+
+BOOK
+↓
+CHAPTER
+↓
+PASSAGE
+↓
+VERSE-SPECIFIC RESOURCE WHERE NEEDED
+
+Most study material should be attached to natural passages rather than isolated verses.
+
+For example:
+
+Luke 15:1–7
+Luke 15:8–10
+Luke 15:11–32
+
+Not thirty-two unrelated verse notes.
+
+When a user selects any verse inside a passage, the Study panel should display the study resources attached to that passage.
+
+Verse-specific resources should only be created where a particular verse requires additional explanation.
+
+--------------------------------------------------
+BOOKS TO POPULATE
+--------------------------------------------------
+
+Populate:
+
+Luke — 24 chapters
+
+Acts — 28 chapters
+
+Romans — 16 chapters
+
+1 Corinthians — 16 chapters
+
+2 Corinthians — 13 chapters
+
+Psalms — 150 chapters
+
+Do not populate other books yet.
+
+Build the system so additional books can be added later using exactly the same process.
+
+--------------------------------------------------
+1. BOOK INTRODUCTIONS
+--------------------------------------------------
+
+Create a complete introduction for each of the six books.
+
+Each introduction must include:
+
+- Book name
+- Testament
+- Genre
+- Author or traditional attribution
+- Approximate date or date range
+- Original audience
+- Historical setting
+- Purpose
+- Major themes
+- Key people
+- Key places
+- Simple outline
+- Key passages
+- How the book points to Jesus
+- Important interpretation notes where appropriate
+
+Use accessible language.
+
+Do not write academically.
+
+Where authorship or dating is debated, explain that briefly and honestly rather than presenting uncertain claims as fact.
+
+--------------------------------------------------
+2. CHAPTER OVERVIEWS
+--------------------------------------------------
+
+Create an overview for every chapter.
+
+Each chapter overview must include:
+
+- Short chapter summary
+- Main themes
+- Important people
+- Important locations where applicable
+- Natural passage divisions
+- Key verse or verses
+- Connection to the wider book
+- How the chapter relates to Jesus or the gospel where biblically appropriate
+
+Keep each overview concise enough to read comfortably on mobile.
+
+Do not make chapter overviews long commentaries.
+
+--------------------------------------------------
+3. NATURAL PASSAGE DIVISIONS
+--------------------------------------------------
+
+Divide every chapter into meaningful passages.
+
+Examples:
+
+Luke 4:
+
+- Luke 4:1–13 — Jesus Is Tempted
+- Luke 4:14–30 — Jesus Rejected at Nazareth
+- Luke 4:31–37 — Jesus Drives Out an Impure Spirit
+- Luke 4:38–44 — Jesus Heals and Preaches
+
+Romans 8:
+
+- Romans 8:1–4 — No Condemnation in Christ
+- Romans 8:5–11 — Life Through the Spirit
+- Romans 8:12–17 — Children of God
+- Romans 8:18–30 — Present Suffering and Future Glory
+- Romans 8:31–39 — More Than Conquerors
+
+Psalm passage divisions should follow the structure of each psalm rather than forcing an arbitrary verse count.
+
+Store passage start verse and end verse explicitly.
+
+--------------------------------------------------
+4. PASSAGE STUDY RESOURCES
+--------------------------------------------------
+
+For every natural passage, populate these fields where relevant:
+
+- Title
+- Explanation
+- Context
+- Historical Background
+- Cross References
+- Original Language
+- How This Points to Jesus
+- Apply It
+- Key Themes
+- Important People
+- Important Places
+- Related Walks and Journeys
+- Related Sermons when verified links exist
+
+Do not display empty headings in the user interface.
+
+If a resource does not exist for a section, hide that section.
+
+--------------------------------------------------
+5. EXPLANATION
+--------------------------------------------------
+
+Write a concise explanation for each natural passage.
+
+The explanation should:
+
+- State what is happening
+- Explain the main meaning
+- Clarify difficult ideas
+- Remain faithful to the passage
+- Be understandable to a new Christian
+- Avoid unnecessary technical language
+- Avoid preaching beyond what the text supports
+- Never replace Scripture
+
+Aim for approximately two to five short paragraphs per passage.
+
+Longer material should only be used when a difficult passage genuinely requires it.
+
+--------------------------------------------------
+6. CONTEXT
+--------------------------------------------------
+
+For each passage, explain:
+
+- What happens immediately before it
+- What happens immediately after it
+- How it fits into the chapter
+- How it fits into the wider book
+- Relevant Old Testament or New Testament context
+
+The Context section must help users avoid reading verses in isolation.
+
+When a verse is selected, the system must automatically identify and display the passage containing that verse.
+
+--------------------------------------------------
+7. HISTORICAL AND CULTURAL BACKGROUND
+--------------------------------------------------
+
+Create background notes where they genuinely clarify the text.
+
+For Luke and Acts, this may include:
+
+- First-century Jewish life
+- Roman rule
+- Synagogues
+- Temple practices
+- Pharisees and Sadducees
+- Samaritans
+- Tax collectors
+- Roman citizenship
+- Travel and geography
+- Early church practices
+- Jewish and Gentile relationships
+
+For Romans and Corinthians, this may include:
+
+- The Roman church
+- Jewish and Gentile believers
+- Life in ancient Rome
+- Corinthian society
+- Patronage
+- Roman law
+- Greco-Roman worship
+- Household churches
+- Spiritual gifts
+- Public worship
+- Marriage customs
+- Food offered to idols
+- Resurrection beliefs
+
+For Psalms, this may include:
+
+- Hebrew poetry
+- Parallelism
+- Temple worship
+- Kingship
+- Lament
+- Praise
+- Wisdom psalms
+- Royal psalms
+- Messianic psalms
+- Pilgrimage songs
+- Superscriptions where relevant
+
+Do not add background merely to fill a field.
+
+--------------------------------------------------
+8. ORIGINAL-LANGUAGE ENTRIES
+--------------------------------------------------
+
+Create original-language entries only for significant Greek or Hebrew words.
+
+Do not add a word study for every word.
+
+Each entry must include:
+
+- Original word
+- Transliteration
+- Simple pronunciation guide where reliable
+- Basic meaning
+- Meaning within the selected passage
+- Important biblical usage
+- Relevant grammatical note only where it helps understanding
+- Source attribution
+
+Original-language notes must never claim that an English translation is hiding a secret meaning.
+
+Do not invent definitions, grammatical claims or etymologies.
+
+Use only legally permitted and verifiable lexical data.
+
+Where reliable source data is unavailable, leave the section absent rather than generating an unsupported explanation.
+
+--------------------------------------------------
+9. CROSS REFERENCES
+--------------------------------------------------
+
+Create curated cross-references for each passage.
+
+Each cross-reference must contain:
+
+- Related Scripture reference
+- Short explanation of the connection
+- Relationship type
+
+Relationship types may include:
+
+- Quotation
+- Fulfilment
+- Parallel Event
+- Shared Theme
+- Explanation
+- Contrast
+- Promise
+- Old Testament Background
+- Gospel Connection
+
+Cross-references must be genuinely relevant.
+
+Do not create large automated lists without explanations.
+
+--------------------------------------------------
+10. HOW THIS POINTS TO JESUS
+--------------------------------------------------
+
+Populate this field responsibly.
+
+Use direct connections when the passage:
+
+- Describes Jesus
+- Records His words or actions
+- Explains His death or resurrection
+- Teaches salvation through Him
+- Fulfils prophecy
+- Explains the gospel
+- Describes the work of His Spirit
+- Describes His Church
+- Anticipates His kingdom
+
+For Psalms, distinguish between:
+
+- Direct New Testament fulfilment
+- Messianic expectation
+- Thematic gospel connection
+- The character and work of God
+
+Do not force Jesus into passages through weak or speculative connections.
+
+Clearly identify whether a connection is direct, prophetic, typological or thematic.
+
+--------------------------------------------------
+11. APPLY IT
+--------------------------------------------------
+
+Create a short Apply It section for each passage.
+
+It should help users consider:
+
+- What this reveals about God
+- What this reveals about Jesus
+- What this reveals about people
+- What they may be invited to trust
+- How the truth may shape their life
+
+Keep it invitational.
+
+Do not use:
+
+- Fixed time requirements
+- Prescriptive counts
+- Rigid instructions
+- Guilt
+- Legalistic language
+- Checklist Christianity
+
+Do not tell users that God is personally promising a specific outcome not stated in the passage.
+
+--------------------------------------------------
+12. PSALMS-SPECIFIC HANDLING
+--------------------------------------------------
+
+Treat every psalm as its own complete literary work.
+
+Each psalm must include:
+
+- Psalm type or types
+- Short overview
+- Literary movement
+- Major theme
+- Emotional tone
+- Important imagery
+- Historical background where known
+- Key Hebrew terms where helpful
+- Related psalms
+- New Testament references where applicable
+- How the psalm points to Jesus where justified
+- Apply It
+
+Do not assume that every psalm was written by David.
+
+Respect the biblical superscription where present.
+
+When authorship or historical setting is uncertain, say so.
+
+For longer psalms, divide them into meaningful sections.
+
+For Psalm 119, use its existing Hebrew-letter structure.
+
+For Psalms of lament, do not rush past grief or imply that faithful people should not feel pain.
+
+For imprecatory psalms, explain the appeal to God's justice carefully and do not encourage personal revenge.
+
+--------------------------------------------------
+13. LUKE AND ACTS CONNECTION
+--------------------------------------------------
+
+Treat Luke and Acts as a connected two-volume work.
+
+Where relevant, link:
+
+- Themes introduced in Luke and continued in Acts
+- The work of the Holy Spirit
+- The mission of Jesus
+- The mission of the Church
+- Jerusalem
+- The inclusion of outsiders
+- Prayer
+- Witness
+- Salvation
+- The movement of the gospel toward the nations
+
+Add appropriate two-way links between related Luke and Acts passages.
+
+--------------------------------------------------
+14. ROMANS CONTENT PRIORITIES
+--------------------------------------------------
+
+Give special care to passages involving:
+
+- Sin
+- The law
+- Grace
+- Justification
+- Faith
+- Abraham
+- Union with Christ
+- Life in the Spirit
+- Israel
+- Election
+- Christian living
+- Government
+- Disputable matters
+- Unity in the church
+
+Present major theological interpretations fairly when a passage is genuinely debated.
+
+Do not hide disagreement.
+
+Do not allow the notes to become denominational arguments.
+
+Keep Scripture primary.
+
+--------------------------------------------------
+15. CORINTHIANS CONTENT PRIORITIES
+--------------------------------------------------
+
+Give special care to passages involving:
+
+- Church division
+- Leadership
+- Sexual holiness
+- Marriage and singleness
+- Lawsuits
+- Christian freedom
+- Food offered to idols
+- Worship gatherings
+- The Lord's Supper
+- Spiritual gifts
+- Love
+- Resurrection
+- Giving
+- Apostolic ministry
+- Weakness
+- Suffering
+- Reconciliation
+- False teachers
+
+Explain which instructions address specific Corinthian circumstances and which express broader Christian principles.
+
+Do not use difficult passages as weapons against users.
+
+Maintain the gentle and pastoral Emmaus Voice.
+
+--------------------------------------------------
+16. RELATED EMMAUS CONTENT
+--------------------------------------------------
+
+Where existing Emmaus content is relevant, link passages to:
+
+- Prayer
+- The Bible
+- Church
+- Baptism
+- Holy Communion
+- Faith
+- The Holy Spirit
+- Coming to Jesus
+- Growing in Christ
+- Living for Jesus
+- Made Free
+- Psalms Daily Devotional
+- Sermon Companions
+
+Only create a relationship when it is genuinely relevant.
+
+Do not automatically add unrelated Walks merely to populate the section.
+
+--------------------------------------------------
+17. RELATED SERMONS
+--------------------------------------------------
+
+Do not invent sermon links or timestamps.
+
+Only display a related sermon when:
+
+- The sermon exists in the Media Studio
+- The selected passage or subject is genuinely discussed
+- The timestamp has been verified
+
+AI may suggest possible links, but all suggestions must remain in Review status until an administrator confirms them.
+
+If there is no verified sermon, hide the Related Sermons section.
+
+--------------------------------------------------
+18. DATA GENERATION AND REVIEW
+--------------------------------------------------
+
+Build a repeatable Bible Content Generator inside Content Studio.
+
+The administrator should be able to select:
+
+- Book
+- Chapter
+- Passage
+- Resource types to generate
+
+Resource types:
+
+- Chapter Overview
+- Passage Explanation
+- Context
+- Historical Background
+- Cross References
+- Original Language
+- Jesus Connection
+- Apply It
+
+Generated content must enter:
+
+DRAFT
+
+or
+
+IN REVIEW
+
+It must never publish automatically.
+
+Admin actions:
+
+- Preview
+- Edit
+- Approve
+- Reject
+- Regenerate individual section
+- Publish passage
+- Publish chapter
+- Publish book
+- Unpublish
+- Archive
+
+Allow bulk approval only after showing the administrator which resources are being approved.
+
+--------------------------------------------------
+19. QUALITY CONTROL
+--------------------------------------------------
+
+Before a resource may be published, validate that:
+
+- The reference exists
+- The verse range is valid
+- The passage is inside the correct book and chapter
+- No Scripture quotation is incorrectly attributed
+- Original-language data has a source
+- Historical claims have a source
+- Cross-references exist
+- No invented sermon link is present
+- No empty resource is published
+- No duplicate resource already exists
+- No AI instruction text appears in user-facing content
+
+Flag uncertain material for manual review.
+
+--------------------------------------------------
+20. SOURCE RECORDS
+--------------------------------------------------
+
+Every public study resource must store:
+
+- Source type
+- Source title
+- Source author or organisation where relevant
+- Source identifier or URL where permitted
+- Date accessed or imported
+- Licence status
+- AI-generated status
+- Human-reviewed status
+- Reviewed by
+- Review date
+
+Do not display full source metadata prominently to ordinary readers, but provide a Sources option inside the study panel.
+
+Do not copy copyrighted commentary without permission.
+
+--------------------------------------------------
+21. DISPLAY LOGIC
+--------------------------------------------------
+
+When a user selects a verse:
+
+1. Identify the natural passage containing that verse.
+2. Load passage-level resources.
+3. Add any verse-specific resources.
+4. Load the chapter overview only when requested.
+5. Hide sections with no data.
+6. Preserve the user's reading position.
+
+Do not show empty cards reading:
+
+- No Explanation
+- No Context
+- No Original Language
+- No Historical Background
+
+Simply omit empty sections.
+
+The Study panel must feel complete rather than broken.
+
+--------------------------------------------------
+22. DATABASE AND IMPORT
+--------------------------------------------------
+
+Use the existing study resource tables and models.
+
+Do not build duplicate models unless the current architecture genuinely cannot support passage-level resources.
+
+If migration is required:
+
+- Preserve existing annotations
+- Map existing verse resources to the new structure
+- Back up affected records
+- Avoid destructive changes
+- Make the migration reversible where practical
+
+Create import tools capable of processing structured JSON or CSV content in batches.
+
+Every import must validate references and show an error report.
+
+--------------------------------------------------
+23. BUILD ORDER
+--------------------------------------------------
+
+Populate in this order:
+
+PHASE 1
+
+- Luke
+- Acts
+
+PHASE 2
+
+- Romans
+- 1 Corinthians
+- 2 Corinthians
+
+PHASE 3
+
+- Psalms 1–50
+
+PHASE 4
+
+- Psalms 51–100
+
+PHASE 5
+
+- Psalms 101–150
+
+This is one approved scope, not a request to stop after Phase 1.
+
+Work in phases internally for safety and review, but complete the full six-book foundation.
+
+--------------------------------------------------
+24. PROGRESS DASHBOARD
+--------------------------------------------------
+
+Inside Content Studio, add a Bible Content Progress dashboard.
+
+For each selected book display:
+
+- Chapters total
+- Chapters with overview
+- Passages identified
+- Passage explanations complete
+- Context complete
+- Cross-references complete
+- Historical notes complete
+- Original-language notes complete
+- Jesus connections complete
+- Apply It complete
+- Draft count
+- Review count
+- Published count
+- Error count
+
+Allow filtering by:
+
+- Missing content
+- Draft
+- In Review
+- Published
+- Errors
+- Book
+- Chapter
+- Resource type
+
+--------------------------------------------------
+25. DO NOT BREAK EXISTING FEATURES
+--------------------------------------------------
+
+Do not break:
+
+- Bible reading
+- Translation switching
+- Scroll position
+- Highlights
+- Personal notes
+- Bookmarks
+- Favourites
+- Prayer journal
+- Ask Emmaus
+- Today's Steps
+- Walks
+- Journeys
+- Rooms
+- Daily Rhythm
+- Daily Devotionals
+- Sermon Companions
+- Existing authentication
+- Existing private-user security rules
+
+Personal annotations and public study resources must remain separate.
+
+--------------------------------------------------
+26. TESTING
+--------------------------------------------------
+
+Test:
+
+- Selecting a verse with passage-level content
+- Selecting different verses in the same passage
+- Selecting a verse with a specific note
+- Opening each study section
+- Opening a cross-reference and returning
+- Hiding an empty section
+- Editing and publishing a resource
+- Unpublishing a resource
+- Chapter overview display
+- Book introduction display
+- Mobile bottom sheet
+- Desktop study panel
+- Preserved scroll position
+- Translation switching
+- Production build
+- User privacy
+- Performance on a slower mobile connection
+
+Test examples from all six books.
+
+--------------------------------------------------
+27. COMPLETION REPORT
+--------------------------------------------------
+
+When complete, provide:
+
+- Books populated
+- Number of chapter overviews
+- Number of natural passages
+- Number of study resources by type
+- Number of original-language entries
+- Number of cross-references
+- Number of resources awaiting review
+- Sources used
+- Database changes
+- Features tested
+- Genuine outstanding blockers
+- Content requiring licensing or further source verification
+
+Do not report the system as complete merely because the fields or generator exist.
+
+Completion means real study content has been inserted, reviewed through the proper workflow, published, and verified in the production Bible reader for Luke, Acts, Romans, 1 Corinthians, 2 Corinthians and Psalms.
