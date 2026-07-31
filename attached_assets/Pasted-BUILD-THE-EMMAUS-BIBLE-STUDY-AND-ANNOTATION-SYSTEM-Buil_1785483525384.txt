@@ -1,0 +1,865 @@
+BUILD THE EMMAUS BIBLE STUDY AND ANNOTATION SYSTEM
+
+Build the complete Bible study and annotation foundation inside Emmaus now.
+
+Do not redesign the existing Emmaus navigation, visual language or Bible reader unnecessarily.
+
+The Bible must remain clean, simple and fast by default, while giving users access to deeper study tools when they choose them.
+
+This is not a separate product. It must be integrated into the existing My Bible section and follow the existing Emmaus design system.
+
+The final result must work properly on desktop and mobile.
+
+--------------------------------------------------
+CORE PRINCIPLE
+--------------------------------------------------
+
+Scripture must always remain primary.
+
+Study notes, sermons, annotations, AI responses and other resources must support Scripture, never replace or compete with it.
+
+The default reading screen must remain uncluttered.
+
+Deeper tools should appear only when the user taps a verse or opens the Study panel.
+
+--------------------------------------------------
+1. VERSE SELECTION
+--------------------------------------------------
+
+Make every Bible verse tappable.
+
+When a user taps a verse:
+
+- Visually select the verse
+- Open a bottom sheet or side panel depending on screen size
+- Display the verse reference and full verse text
+- Preserve the user's current reading position
+- Do not navigate away from the chapter
+- Allow more than one consecutive verse to be selected where practical
+
+The verse action panel should contain:
+
+- Study
+- Highlight
+- Add Note
+- Bookmark
+- Favourite
+- Prayer
+- Share
+- Ask Emmaus
+
+Keep this panel simple and fast.
+
+--------------------------------------------------
+2. STUDY PANEL
+--------------------------------------------------
+
+When the user selects Study, display these sections:
+
+- Explanation
+- Context
+- Cross References
+- Historical Background
+- Original Language
+- How This Points to Jesus
+- Apply It
+- Related Sermons
+- Related Walks and Journeys
+
+Use expandable sections or tabs so the user is not overwhelmed.
+
+Do not display every section fully open at once.
+
+--------------------------------------------------
+3. EMMAUS STUDY NOTE
+--------------------------------------------------
+
+Each supported verse or passage may have a short Emmaus Study Note.
+
+The note should:
+
+- Explain the meaning clearly
+- Remain faithful to the passage
+- Be understandable to a new believer
+- Be conversational rather than academic
+- Point people toward Jesus where the passage reasonably allows
+- Avoid claiming certainty where Scripture is unclear
+- Avoid replacing the user's own reading of Scripture
+
+Study notes should normally be concise.
+
+Allow administrators to:
+
+- Create notes
+- Edit notes
+- Review notes
+- Publish notes
+- Unpublish notes
+- Archive notes
+
+AI-generated notes must never publish automatically.
+
+They must enter a review state first.
+
+--------------------------------------------------
+4. PASSAGE CONTEXT
+--------------------------------------------------
+
+Add a Context section that explains:
+
+- What happens immediately before this passage
+- What happens immediately after this passage
+- The main subject of the chapter
+- How the selected verse fits into the wider passage
+
+This must help prevent isolated verses from being misunderstood.
+
+Where possible, allow the user to tap:
+
+- Read Previous Context
+- Read Full Passage
+- Continue Reading
+
+These controls must scroll within the Bible reader rather than open a disconnected screen.
+
+--------------------------------------------------
+5. CROSS REFERENCES
+--------------------------------------------------
+
+Support manually curated cross references.
+
+Each cross reference should include:
+
+- Scripture reference
+- Short reason it is connected
+- Tap to open passage
+
+Opening a cross reference must:
+
+- Preserve the original reading location
+- Allow the user to return easily
+- Never lose selected notes or unsaved annotations
+
+Allow administrators to add, edit and remove cross references.
+
+Do not generate unreliable cross references automatically without review.
+
+--------------------------------------------------
+6. HISTORICAL AND CULTURAL BACKGROUND
+--------------------------------------------------
+
+Add optional historical and cultural notes for:
+
+- Books
+- Chapters
+- Passages
+- Individual verses where needed
+
+These notes may explain:
+
+- Customs
+- Political setting
+- Geography
+- Religious background
+- Social practices
+- Important people or places
+
+Keep the language accessible.
+
+Historical background must clarify Scripture, not become a lecture.
+
+--------------------------------------------------
+7. ORIGINAL LANGUAGE
+--------------------------------------------------
+
+Support Hebrew and Greek word-study entries where relevant.
+
+Each word-study entry may include:
+
+- Original word
+- Transliteration
+- Simple pronunciation guide
+- Basic meaning
+- Meaning in this passage
+- Other important uses in Scripture
+
+Do not imply that every English word has a hidden meaning.
+
+Do not allow word studies to override the clear meaning of the passage.
+
+Only show this section when relevant data exists.
+
+--------------------------------------------------
+8. HOW THIS POINTS TO JESUS
+--------------------------------------------------
+
+Add a section titled:
+
+How This Points to Jesus
+
+This section must be used responsibly.
+
+It should:
+
+- Clearly connect the passage to Jesus when the connection is biblically justified
+- Explain direct prophecies, fulfilment, gospel themes, covenant themes or the character of God
+- Avoid forcing artificial connections
+- Clearly state when a connection is thematic rather than direct
+
+--------------------------------------------------
+9. APPLY IT
+--------------------------------------------------
+
+Add a short Apply It section.
+
+This should gently help the user reflect on questions such as:
+
+- What does this reveal about God?
+- What does this reveal about Jesus?
+- What might God be inviting me to trust?
+- How could this shape the way I live?
+
+Do not use rigid instructions.
+
+Do not use prescriptive counts, fixed time requirements or checklist Christianity.
+
+Keep the tone invitational.
+
+--------------------------------------------------
+10. RELATED SERMONS
+--------------------------------------------------
+
+Connect Bible passages to sermons in the Emmaus Media Studio.
+
+Each related sermon result should display:
+
+- Sermon title
+- Speaker
+- Date
+- Short relevant excerpt or summary
+- Exact timestamp
+- Watch from Timestamp button
+
+The link must open the sermon at the correct timestamp.
+
+Only connect a sermon when the selected passage or subject is genuinely addressed.
+
+Allow administrators to:
+
+- Link sermons manually
+- Confirm AI-suggested links
+- Edit timestamps
+- Remove incorrect links
+
+AI suggestions must never publish automatically.
+
+--------------------------------------------------
+11. RELATED WALKS AND JOURNEYS
+--------------------------------------------------
+
+Allow Bible passages to link to relevant Emmaus content.
+
+Display:
+
+- Walk title
+- Journey title where applicable
+- Short description
+- Continue or Start button
+
+Examples:
+
+- A passage about prayer may link to the Prayer Walk
+- A passage about salvation may link to Coming to Jesus
+- A passage about freedom may link to Made Free
+
+Do not interrupt Bible reading with automatic popups.
+
+Show these only inside the Study panel.
+
+--------------------------------------------------
+12. PERSONAL HIGHLIGHTS
+--------------------------------------------------
+
+Allow users to highlight:
+
+- One verse
+- Several consecutive verses
+- A full selected passage
+
+Support a small set of accessible highlight colours.
+
+Highlights must:
+
+- Save automatically
+- Sync to the signed-in user
+- Appear across devices
+- Remain private
+- Be editable
+- Be removable
+
+Do not use colour alone to convey important status.
+
+--------------------------------------------------
+13. PERSONAL NOTES
+--------------------------------------------------
+
+Allow users to create a private note linked to:
+
+- A verse
+- A selected passage
+- A chapter
+- A book
+
+The note editor should support:
+
+- Plain text
+- Basic paragraph formatting
+- Autosave
+- Edit
+- Delete
+- Search
+
+Keep it simple.
+
+Do not build a full word processor.
+
+Notes are private by default.
+
+Do not add public sharing or collaborative notes at this stage.
+
+--------------------------------------------------
+14. BOOKMARKS AND FAVOURITES
+--------------------------------------------------
+
+Bookmarks and Favourites must be separate.
+
+Bookmark:
+
+- Saves a reading location for later
+
+Favourite:
+
+- Marks a verse or passage as personally meaningful
+
+Users should be able to view:
+
+- All Bookmarks
+- All Favourite Verses
+- Sort by Bible order
+- Sort by recently added
+- Search by reference or note text
+
+--------------------------------------------------
+15. PRAYER JOURNAL CONNECTION
+--------------------------------------------------
+
+Allow a selected verse to be added to the user's private prayer journal.
+
+The entry may contain:
+
+- Scripture reference
+- Scripture text
+- Personal prayer
+- Date created
+- Optional answered marker
+- Optional private note
+
+Do not make prayers visible to Rooms or other users unless a separate sharing feature is intentionally added later.
+
+Private must be the default.
+
+--------------------------------------------------
+16. ASK EMMAUS
+--------------------------------------------------
+
+Add Ask Emmaus to the verse action panel.
+
+When selected, Ask Emmaus must automatically receive:
+
+- Selected verse or passage
+- Bible translation
+- Book and chapter
+- Nearby context
+- Available Emmaus study notes
+- Relevant sermon links where available
+
+Suggested questions may include:
+
+- What does this passage mean?
+- What is happening here?
+- How does this point to Jesus?
+- How might this help me today?
+- What should I read next?
+
+Ask Emmaus responses must follow this order:
+
+1. Scripture
+2. Passage context
+3. Approved Emmaus study notes
+4. Approved sermon material
+5. Trusted supporting resources
+
+Ask Emmaus must:
+
+- Never invent historical facts
+- Never invent Greek or Hebrew meanings
+- Never invent sermon timestamps
+- Never claim that God has personally told the user something
+- Clearly acknowledge uncertainty
+- Encourage appropriate pastoral or professional support when necessary
+
+--------------------------------------------------
+17. BOOK INTRODUCTIONS
+--------------------------------------------------
+
+Add an optional introduction page for every Bible book.
+
+Each introduction may include:
+
+- Book name
+- Author or traditional attribution
+- Approximate date
+- Original audience
+- Historical setting
+- Purpose
+- Major themes
+- Key people
+- Simple outline
+- Key verses
+- How the book points to Jesus
+- Map or timeline references where available
+
+Do not block access to the Bible chapter with the introduction.
+
+Users must always be able to go straight to Scripture.
+
+--------------------------------------------------
+18. CHAPTER OVERVIEWS
+--------------------------------------------------
+
+Support optional chapter overviews.
+
+A chapter overview may include:
+
+- Short summary
+- Main themes
+- Key people
+- Key locations
+- Important connections
+- Suggested reflection
+
+The overview must be optional and collapsed by default.
+
+--------------------------------------------------
+19. MAPS AND TIMELINES
+--------------------------------------------------
+
+Create support for:
+
+- Biblical maps
+- Journey maps
+- Kingdom timelines
+- Life-of-Jesus timelines
+- Book-specific timelines
+
+Maps and timelines should open only when selected.
+
+They must not make the Bible reader slower.
+
+Store them as reusable resources that can be linked to books, chapters, passages and study notes.
+
+Do not invent geographic certainty where locations are disputed.
+
+--------------------------------------------------
+20. TRANSLATION COMPARISON
+--------------------------------------------------
+
+Allow users to compare available licensed or permitted Bible translations.
+
+Display:
+
+- Primary translation
+- One optional comparison translation
+
+Do not display too many translations at once on mobile.
+
+Preserve the selected verse and current reading position when switching translations.
+
+Only use translations that Emmaus is legally allowed to display.
+
+Do not copy or store restricted Bible text without the required licence.
+
+--------------------------------------------------
+21. AUDIO BIBLE SUPPORT
+--------------------------------------------------
+
+Build support for audio Bible playback where audio rights are available.
+
+Include:
+
+- Play
+- Pause
+- Skip forward
+- Skip backward
+- Playback speed
+- Current verse indication
+- Continue from last position
+
+Do not activate or display audio for translations without the proper rights or source.
+
+--------------------------------------------------
+22. SEARCH
+--------------------------------------------------
+
+Create one Bible search experience that can search:
+
+- Scripture text
+- References
+- Personal notes
+- Bookmarks
+- Favourites
+- Prayer journal entries
+- Emmaus study notes
+- Sermon links
+- Walk and Journey links
+
+Clearly separate results by category.
+
+Private user content must remain visible only to that user.
+
+--------------------------------------------------
+23. MY BIBLE LIBRARY
+--------------------------------------------------
+
+Inside My Bible, add a simple personal library area containing:
+
+- Highlights
+- Notes
+- Bookmarks
+- Favourites
+- Prayer Journal
+- Reading History
+
+Do not overcrowd the main Bible screen.
+
+This may be accessed through one clear Library button.
+
+--------------------------------------------------
+24. READING HISTORY
+--------------------------------------------------
+
+Track:
+
+- Last passage read
+- Recent passages
+- Last reading position
+- Reading dates
+
+Allow the user to clear reading history.
+
+Do not use reading history for public rankings, streak pressure or comparison.
+
+--------------------------------------------------
+25. ADMIN CONTENT STUDIO
+--------------------------------------------------
+
+Add a Bible Study section to Content Studio.
+
+Administrators must be able to manage:
+
+- Book introductions
+- Chapter overviews
+- Verse and passage study notes
+- Historical background
+- Original-language notes
+- Cross references
+- Jesus connections
+- Apply It notes
+- Sermon links
+- Walk and Journey links
+- Maps
+- Timelines
+
+Include statuses:
+
+- Draft
+- In Review
+- Published
+- Archived
+
+Include:
+
+- Preview
+- Save Draft
+- Publish
+- Unpublish
+- Duplicate
+- Version history where practical
+
+No AI-generated content may publish automatically.
+
+--------------------------------------------------
+26. DATA ARCHITECTURE
+--------------------------------------------------
+
+Build this as reusable structured data.
+
+Do not hard-code study notes into individual screens.
+
+Use a model that can support resources linked to:
+
+- Bible
+- Testament
+- Book
+- Chapter
+- Verse
+- Verse range
+- Topic
+- Person
+- Place
+
+Personal user data must be stored separately from public study content.
+
+Suggested entities include:
+
+BibleBook
+BibleChapter
+BibleVerse
+StudyResource
+BookIntroduction
+ChapterOverview
+CrossReference
+OriginalLanguageEntry
+HistoricalNote
+JesusConnection
+ApplicationNote
+SermonPassageLink
+ContentPassageLink
+MapResource
+TimelineResource
+UserHighlight
+UserBibleNote
+UserBookmark
+UserFavourite
+UserPrayerEntry
+UserReadingHistory
+
+Use the existing Emmaus database conventions where possible.
+
+Do not create duplicate user systems or duplicate Bible records unnecessarily.
+
+--------------------------------------------------
+27. PRIVACY AND SECURITY
+--------------------------------------------------
+
+All personal annotations must be private by default.
+
+Users must only be able to read, update or delete their own:
+
+- Notes
+- Highlights
+- Bookmarks
+- Favourites
+- Prayer entries
+- Reading history
+
+Administrators must not casually browse private annotations.
+
+Only allow access where technically necessary for support, legal compliance or user-requested recovery, and ensure this follows the platform's privacy policy.
+
+Room members must never see another member's private Bible notes automatically.
+
+--------------------------------------------------
+28. PERFORMANCE
+--------------------------------------------------
+
+The Bible must remain fast.
+
+Requirements:
+
+- Load Scripture before optional study resources
+- Lazy-load study panels
+- Lazy-load maps, timelines and sermon results
+- Cache appropriate public resources
+- Do not fetch all annotations for the whole Bible at once
+- Fetch user annotations only for the visible chapter or selected passage
+- Avoid unnecessary rerenders
+- Preserve scroll position
+- Test on slower mobile connections
+
+A study feature must not make ordinary Bible reading feel slow.
+
+--------------------------------------------------
+29. MOBILE BEHAVIOUR
+--------------------------------------------------
+
+On mobile:
+
+- Verse actions should open in a bottom sheet
+- Study sections should be collapsible
+- Buttons must not overlap Scripture
+- Ask Emmaus must not obscure navigation
+- Back must return to the exact previous reading position
+- Changing translation must not return to the top
+- Opening and closing a note must not lose scroll position
+- Screen lock and unlock must leave the user in the same passage
+
+--------------------------------------------------
+30. DESIGN
+--------------------------------------------------
+
+Use the existing Emmaus colours, typography, spacing and button styles.
+
+Do not use Times New Roman.
+
+Do not redesign the bottom navigation.
+
+Keep Scripture visually dominant.
+
+Annotations should use subtle indicators such as:
+
+- Small highlight marker
+- Note icon
+- Bookmark icon
+
+Avoid cluttering every verse with multiple visible icons.
+
+Only show detailed controls after the user selects a verse.
+
+--------------------------------------------------
+31. EMPTY STATES AND ERRORS
+--------------------------------------------------
+
+Provide clear empty states:
+
+- No notes yet
+- No bookmarks yet
+- No related sermons available
+- No study note available yet
+- No cross references available yet
+
+Do not generate fake content to fill empty sections.
+
+If data fails to load:
+
+- Keep Scripture visible
+- Show a small retry option for the affected resource
+- Do not replace the chapter with a full-screen error
+
+--------------------------------------------------
+32. LEGAL AND SOURCE INTEGRITY
+--------------------------------------------------
+
+Respect Bible translation licensing.
+
+Track the source of all:
+
+- Bible text
+- Historical notes
+- Maps
+- Timelines
+- Language data
+- Audio
+- Commentary resources
+
+Do not copy copyrighted commentary without permission.
+
+Emmaus-authored notes should be clearly identified as Emmaus Study Notes.
+
+Where a fact is uncertain or debated, say so clearly.
+
+--------------------------------------------------
+33. TESTING
+--------------------------------------------------
+
+Test the complete system before reporting it finished.
+
+Test at minimum:
+
+- Select a verse
+- Select a verse range
+- Add, edit and delete a note
+- Add and remove a highlight
+- Add and remove a bookmark
+- Add and remove a favourite
+- Create a prayer entry
+- Open Study
+- Open context
+- Open cross reference and return
+- Compare translations
+- Open related sermon at the correct timestamp
+- Open a related Walk
+- Ask Emmaus about a selected passage
+- Search personal notes
+- Restore reading position
+- Refresh the app
+- Sign out and sign in
+- Test another account for privacy isolation
+- Test desktop
+- Test mobile
+- Test published production build
+
+Verify that no user can access another user's private annotations.
+
+--------------------------------------------------
+34. DO NOT BREAK EXISTING FEATURES
+--------------------------------------------------
+
+Do not break:
+
+- Today's Steps
+- Daily Rhythm
+- Daily Devotionals
+- Walks
+- Journeys
+- Rooms
+- Sermon Companions
+- Existing Bible translations
+- Current navigation
+- User authentication
+- Name memory
+- Progress tracking
+- Active Engagement behaviour
+
+Do not change existing routes unless required.
+
+If database migration is needed:
+
+- Preserve existing data
+- Back up affected records
+- Make the migration reversible where practical
+
+--------------------------------------------------
+35. DELIVERY
+--------------------------------------------------
+
+Build this as one complete, reusable Bible study and annotation foundation.
+
+However, work in safe internal stages:
+
+1. Data model and security
+2. Verse selection and private annotations
+3. Study resource framework
+4. Book and chapter resources
+5. Sermon and Walk links
+6. Ask Emmaus integration
+7. Search and personal library
+8. Maps, timelines, comparison and audio support
+9. Performance and production testing
+
+Do not stop after creating mock screens.
+
+Connect the complete flow to real data and verify it in the published application.
+
+When finished, provide a concise report containing:
+
+- What was built
+- Database changes
+- Routes or components changed
+- Security rules added
+- Features fully working
+- Features dependent on licensing or source data
+- Tests completed
+- Any remaining genuine blockers
+
+The architecture must support the full system now while keeping the everyday Bible-reading experience clean, simple and fast.
