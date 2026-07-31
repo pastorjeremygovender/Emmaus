@@ -14,6 +14,7 @@
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
+import { resolveReturn } from '@/lib/return-context';
 
 export default function WalkCompletePage() {
   const { journeyId } = useParams<{ journeyId: string }>();
@@ -21,6 +22,16 @@ export default function WalkCompletePage() {
   const { getJourney, loading } = useJourney();
 
   const journey = getJourney(journeyId ?? '');
+
+  // WJ-1: honour the source/sourceId query params so members land back where
+  // they came from (Walk, Bible, Sermon) rather than always on the journey overview.
+  const source   = new URLSearchParams(window.location.search).get('source');
+  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+  const returnPath = resolveReturn(
+    source,
+    sourceId,
+    journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys'
+  ).path;
 
   // Resolve recommended next Walk — must be a known, published Walk
   const nextJourneyId = journey?.nextJourneyId?.trim() || undefined;
@@ -45,7 +56,7 @@ export default function WalkCompletePage() {
         'May the Lord continue His work in your life.'
       }
       returnLabel="Back to Walk"
-      onReturn={() => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys')}
+      onReturn={() => setLocation(returnPath)}
       {...(showNextWalk && nextJourney
         ? {
             continueLabel: `Start ${nextJourney.title}`,

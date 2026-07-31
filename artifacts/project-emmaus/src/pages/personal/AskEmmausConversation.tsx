@@ -482,6 +482,25 @@ export default function AskEmmausConversation() {
                     {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
                       <NextStepsCard steps={msg.metadata.nextSteps} />
                     )}
+
+                    {/* AE-2: follow-up suggestion chips — only on the last assistant message */}
+                    {msg.metadata.followUpPrompts && (msg.metadata.followUpPrompts as string[]).length > 0 &&
+                      msg.id === messages.filter(m => m.role === 'assistant').at(-1)?.id && (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-0.5">
+                          Keep exploring
+                        </p>
+                        {(msg.metadata.followUpPrompts as string[]).map((prompt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setFollowUp(prompt)}
+                            className="w-full text-left text-[14px] text-foreground bg-muted/50 hover:bg-muted/80 px-4 py-2.5 rounded-xl transition-colors"
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

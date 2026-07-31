@@ -34,6 +34,7 @@ import {
   type EmmausResponseMetadata,
   type NextStepItem,
   type EntryPoint,
+  type EmmausMemory,
 } from "./firestore-model.js";
 import {
   retrieveSermon,
@@ -305,17 +306,23 @@ export async function handleConversation(
 
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
-  // ── 3. Parallel: Bible verse search + Sermon retrieval ───────────────────
+  // ── 3. Parallel: Bible verse search + Sermon retrieval + User memories ───
   //
-  // Both run concurrently — Bible search injects relevant BSB passages into
-  // the system context; sermon retrieval finds a verified timestamped match.
+  // All three run concurrently — Bible search injects relevant BSB passages;
+  // sermon retrieval finds a verified timestamped match; memories personalise
+  // the system context with previously approved notes about the user.
   const tSearch = Date.now();
   const bibleBookId = contextInput.bibleContext?.bookId;
   const bibleChapter = contextInput.bibleContext?.chapter;
+  // AE-1: resolve userId early so we can fetch memories in this parallel step.
+  const preUserId = contextInput.userId ?? "anonymous";
 
-  const [biblePassages, sermonResult] = await Promise.all([
+  const [biblePassages, sermonResult, userMemories] = await Promise.all([
     Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
     retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
+    preUserId !== "anonymous"
+      ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
+      : Promise.resolve([] as EmmausMemory[]),
   ]);
 
   logger.info(
@@ -405,6 +412,15 @@ export async function handleConversation(
   // Inject verified sermon info into the context block so the model can
   // reference it naturally in prose — but card data comes from retrieval only.
   let contextBlock = builtCtx.systemContextBlock;
+
+  // AE-1: Inject approved user memories (fetched in parallel at step 3).
+  // Mirrors the format in context-builder.ts so the model sees a consistent block.
+  if (userMemories.length > 0) {
+    contextBlock += "\n\nApproved notes about this user (do not reference them directly — weave them in naturally):";
+    for (const m of userMemories) {
+      contextBlock += `\n  - ${m.content}`;
+    }
+  }
 
   // Inject relevant BSB passages — gives the LLM exact verse text to quote
   if (biblePassages.length > 0) {

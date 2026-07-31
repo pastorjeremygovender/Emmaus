@@ -13,7 +13,7 @@ import {
   apiCreateRoom,
   apiJoinByCode,
   apiJoinByToken,
-  apiLinkJourney,
+  apiStartShared,
   apiLeaveRoom,
   apiDeleteRoom,
   apiTransferAdmin,
@@ -241,7 +241,9 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   const getSharedReflections = useCallback(() => [] as never[], []);
   const getMySharedReflection = useCallback(() => undefined, []);
   const startSharedJourney = useCallback(async (roomId: string, journeyId: string, userId: string) => {
-    await apiLinkJourney(userId, roomId, journeyId);
+    // RM-2: use the atomic start-shared endpoint so progress is initialised
+    // server-side in a single transaction, not a bare link call that can diverge.
+    await apiStartShared(userId, { journeyId, roomId });
     // Invalidate cached detail so next load re-fetches with the linked journey
     setDetailCache(prev => {
       const next = { ...prev };
