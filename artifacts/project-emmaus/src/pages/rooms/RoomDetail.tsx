@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
-import { apiGetJourneyProgress } from '@/lib/rooms-api';
+import { apiGetJourneyProgress, apiLinkJourney } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -18,7 +18,7 @@ export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
   const { loadRoomDetail, leaveRoom, deleteRoom, removeMember } = useRooms();
-  const { getJourney } = useJourney();
+  const { getJourney, journeys, progress: myProgress } = useJourney();
   const [, setLocation] = useLocation();
 
   const [room, setRoom] = useState<RoomDetailType | null>(null);
@@ -28,6 +28,8 @@ export default function RoomDetail() {
   const [actioning, setActioning] = useState(false);
   const [progressMap, setProgressMap] = useState<Record<string, MemberJourneyProgress[]>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [showLinkWalk, setShowLinkWalk] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   // Keep a stable ref to the latest room so the interval callback can read it
   const roomRef = useRef<RoomDetailType | null>(null);
@@ -91,6 +93,15 @@ export default function RoomDetail() {
 
   const isAdmin = room.currentUserRole === 'admin';
 
+  // Walks the member has started that aren't already linked to this room —
+  // shown in the "Add a Walk" picker.
+  const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
+  const availableWalks = journeys.filter(j =>
+    j.status === 'Published' &&
+    myProgress[j.id] != null &&
+    !linkedJourneyIds.has(j.id)
+  );
+
   const handleLeave = async () => {
     setActioning(true);
     try {
@@ -124,6 +135,26 @@ export default function RoomDetail() {
       } : prev);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  };
+
+  const handleLinkWalk = async (journeyId: string) => {
+    setLinkingId(journeyId);
+    try {
+      await apiLinkJourney(user.id, String(roomId), journeyId);
+      const detail = await loadRoomDetail(String(roomId));
+      if (detail) {
+        setRoom(detail);
+        // Pre-fetch progress so the card renders immediately
+        apiGetJourneyProgress(user.id, String(roomId), journeyId)
+          .then(progress => setProgressMap(prev => ({ ...prev, [journeyId]: progress })))
+          .catch(() => {});
+      }
+      setShowLinkWalk(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to link walk');
+    } finally {
+      setLinkingId(null);
     }
   };
 
@@ -178,22 +209,85 @@ export default function RoomDetail() {
           </button>
         </section>
 
-        {/* Linked Journeys */}
-        {room.linkedJourneys.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                Journeys Walking Together
-              </h2>
+        {/* ── Journeys Walking Together ─────────────────────────────────── */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Journeys Walking Together
+            </h2>
+            <div className="flex items-center gap-3">
+              {room.linkedJourneys.length > 0 && (
+                <button
+                  onClick={() => refreshProgress(false)}
+                  disabled={refreshing}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1 disabled:opacity-40"
+                  aria-label="Refresh progress"
+                >
+                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                </button>
+              )}
+              {availableWalks.length > 0 && !showLinkWalk && (
+                <button
+                  onClick={() => setShowLinkWalk(true)}
+                  className="text-[13px] text-primary font-medium hover:underline"
+                >
+                  + Add a Walk
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Empty state */}
+          {room.linkedJourneys.length === 0 && !showLinkWalk && (
+            <div className="p-6 rounded-2xl border border-dashed border-border text-center space-y-2">
+              <BookOpen size={22} className="text-muted-foreground mx-auto opacity-40 mb-1" />
+              <p className="text-[14px] text-muted-foreground">No walks linked to this Room yet.</p>
+              {availableWalks.length > 0 ? (
+                <button
+                  onClick={() => setShowLinkWalk(true)}
+                  className="text-[14px] text-primary font-medium hover:underline"
+                >
+                  Add a Walk you're doing →
+                </button>
+              ) : (
+                <p className="text-[13px] text-muted-foreground">
+                  Start a Walk on your Today page, then link it here to track each other's progress.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Walk picker — inline list */}
+          {showLinkWalk && (
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border/60">
+                <p className="text-[13px] text-muted-foreground font-medium">Choose a Walk to add:</p>
+              </div>
+              {availableWalks.map(w => (
+                <button
+                  key={w.id}
+                  onClick={() => handleLinkWalk(w.id)}
+                  disabled={!!linkingId}
+                  className="w-full text-left px-5 py-4 border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors flex items-center justify-between"
+                >
+                  <span className="text-[15px] font-medium text-foreground">{w.title}</span>
+                  {linkingId === w.id
+                    ? <Loader2 size={16} className="animate-spin text-muted-foreground shrink-0" />
+                    : <span className="text-[13px] text-primary font-medium shrink-0">Add</span>
+                  }
+                </button>
+              ))}
               <button
-                onClick={() => refreshProgress(false)}
-                disabled={refreshing}
-                className="text-muted-foreground hover:text-foreground transition-colors p-1 -mr-1 disabled:opacity-40"
-                aria-label="Refresh progress"
+                onClick={() => setShowLinkWalk(false)}
+                className="w-full px-5 py-3 text-[13px] text-muted-foreground hover:text-foreground transition-colors text-center"
               >
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                Cancel
               </button>
             </div>
+          )}
+
+          {/* Linked journeys with per-member progress */}
+          {room.linkedJourneys.length > 0 && (
             <div className="space-y-3">
               {room.linkedJourneys.map(lj => {
                 const journey = getJourney(lj.journeyId);
@@ -251,8 +345,8 @@ export default function RoomDetail() {
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Members */}
         <section className="space-y-3">

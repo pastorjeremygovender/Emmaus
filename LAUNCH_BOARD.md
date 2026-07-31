@@ -137,6 +137,18 @@
 
 #### 6 · Rooms
 
+- [x] **RM-0 · Rooms MVP — all five core requirements** _(fixed 31 Jul 2026)_
+  Reqs 1–3 (create room, invite code, join by code) were already working end-to-end.
+  Gap: `RoomDetail.tsx` only rendered linked journeys when `linkedJourneys.length > 0` with no UI
+  to trigger the link. Fixed by replacing the conditional block with an always-visible "Journeys
+  Walking Together" section: empty state + "Add a Walk" CTA, inline walk picker (member's started
+  journeys from `JourneyContext` filtered to exclude already-linked ones), `handleLinkWalk` calling
+  `POST /api/rooms/:id/journeys` then reloading detail and pre-fetching progress, and the existing
+  per-member progress grid. `getMemberJourneyProgress` LEFT JOINs all room members against
+  `user_journey_progress` — unstarted members show `currentDay: null` ("Not started yet"). E2E
+  verified with two synthetic users through all five requirements.
+  _Files:_ `artifacts/project-emmaus/src/pages/rooms/RoomDetail.tsx`
+
 - [ ] **RM-1 · Core Room features are stubs**
   `RoomsContext.tsx:57–85, 232–260` exposes empty arrays and no-ops for notifications, journey invitations, participant tracking, shared reflections, posts, and admin archive/revoke. Any UI relying on these cannot function.
   _Files:_ `contexts/RoomsContext.tsx`, `api-server/src/routes/rooms.ts`
