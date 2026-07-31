@@ -41,6 +41,10 @@ import {
   type SermonRetrievalResult,
 } from "./sermon-retrieval.js";
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
+import { listPublishedJourneys, type FrontendJourney } from "../lib/journey-store.js";
+import { listPublishedSeries, type DevotionalSeries } from "../lib/devotional-store.js";
+import { getCurrentWeekPublicCompanion } from "../lib/sermon-companion-store.js";
+import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { logger } from "../lib/logger.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -317,12 +321,18 @@ export async function handleConversation(
   // AE-1: resolve userId early so we can fetch memories in this parallel step.
   const preUserId = contextInput.userId ?? "anonymous";
 
-  const [biblePassages, sermonResult, userMemories] = await Promise.all([
+  const [biblePassages, sermonResult, userMemories, publishedJourneys, publishedSeries, currentCompanion, userRooms] = await Promise.all([
     Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
     retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
+    listPublishedJourneys().catch((): FrontendJourney[] => []),
+    listPublishedSeries().catch((): DevotionalSeries[] => []),
+    getCurrentWeekPublicCompanion().catch(() => null),
+    preUserId !== "anonymous"
+      ? getRoomsForUser(preUserId).catch((): RoomSummary[] => [])
+      : Promise.resolve([] as RoomSummary[]),
   ]);
 
   logger.info(
@@ -427,6 +437,51 @@ export async function handleConversation(
     contextBlock += "\n\nRelevant Scripture passages (BSB translation) for this question:\n";
     for (const p of biblePassages.slice(0, 5)) {
       contextBlock += `  ${p.reference} — "${p.text}"\n`;
+    }
+  }
+
+  // Inject published Emmaus content — gives the LLM real, correct paths so it can
+  // recommend specific content rather than generic placeholders.
+  {
+    const resourceLines: string[] = [];
+
+    const contentJourneys = publishedJourneys.filter((j) => j.journeyType !== "companion");
+    if (contentJourneys.length > 0) {
+      resourceLines.push("WALKS & JOURNEYS (recommend only from this list — use the exact paths):");
+      for (const j of contentJourneys) {
+        const path =
+          j.journeyType === "daily-rhythm" ? "/walk" : `/journeys/${j.id}`;
+        const typeLabel = j.journeyType === "daily-rhythm" ? "Daily Rhythm" : "Journey";
+        resourceLines.push(`  - "${j.title}" [${typeLabel}] → ${path}`);
+      }
+    }
+
+    if (publishedSeries.length > 0) {
+      resourceLines.push("DEVOTIONAL SERIES:");
+      for (const s of publishedSeries) {
+        resourceLines.push(`  - "${s.title}" → /devotional/${s.id}/day/1`);
+      }
+    }
+
+    if (currentCompanion) {
+      resourceLines.push("CURRENT SERMON COMPANION:");
+      resourceLines.push(
+        `  - "${currentCompanion.title}" → /sermon-companion/${currentCompanion.id}/day/1`
+      );
+    }
+
+    if (userRooms.length > 0) {
+      const room = userRooms[0] as { id: string; name: string };
+      resourceLines.push("MEMBER'S ROOM:");
+      resourceLines.push(
+        `  - "${room.name}" — this member belongs to this room. Where genuinely appropriate, gently suggest sharing a prayer request here. Path: /rooms/${room.id}`
+      );
+    }
+
+    if (resourceLines.length > 0) {
+      contextBlock +=
+        "\n\nAvailable published Emmaus content for recommendations (use ONLY these — never invent a resource or path):\n" +
+        resourceLines.join("\n");
     }
   }
 

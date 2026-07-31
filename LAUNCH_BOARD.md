@@ -119,6 +119,28 @@
   `followUpPrompts` from AI response metadata now render as tappable suggestion chips after the last assistant message. Tapping populates the follow-up composer input.
   _Files:_ `pages/personal/AskEmmausConversation.tsx`
 
+- [x] **AE-3 · Ask Emmaus not referencing ICC sermons or real Emmaus content** _(fixed 31 Jul 2026 — Ticket #004)_
+  Root cause: `conversation-service.ts` never loaded published journeys, devotionals, sermon companions, or room membership — so the LLM had no knowledge of real available content. `context-builder.ts` had stale hardcoded resource hints ("Walk Through John") that don't exist in DB. System-prompt example was leaking into LLM responses.
+  
+  Fixed by:
+  - Loading published journeys, devotional series, current sermon companion, and room membership in parallel with Bible/sermon/memory fetch.
+  - Injecting a live "Available published Emmaus content" block into the context with exact titles and paths — LLM can only recommend from this list.
+  - Removing hardcoded stale resource block from `context-builder.ts`.
+  - Replacing the "Walk Through John" example in `system-instructions.ts` with a generic placeholder so it cannot bleed into recommendations.
+  - Bumping `PROMPT_VERSION` to `1.2.0`.
+  
+  Sermon retrieval was architecturally correct and drawing from the real YouTube archive — the verified ICC sermon card and "listen" next-step were already working. The gap was Emmaus content recommendations only.
+  
+  _Test results (all 4 required questions):_
+  - "I have been struggling with anger" → "FROM BAD TO WORSE" (Pastor Jeremy, 12 Apr 2026, 51:58) + The Road to Emmaus
+  - "I am afraid about the future" → "JESUS IN THE STORM" (Pastor Jeremy, 22 Mar 2026, 46:35) + The Road to Emmaus
+  - "How can I pray when I don't know what to say?" → "IT STARTS WITH ME" (Pastor Jeremy, 19 Apr 2026, 54:06) + 10 Minutes with Jesus (/walk)
+  - "Why should I forgive someone who hurt me?" → "PLANTED" (Pastor Jeremy, 1 Mar 2026, 46:26) + The Road to Emmaus
+  
+  All responses: real sermon title ✅ · real timestamp ✅ · real YouTube URL ✅ · real Emmaus content path ✅ · Scripture ✅ · no fabricated data ✅ · promptVersion 1.2.0 ✅
+  
+  _Files:_ `api-server/src/emmaus/conversation-service.ts`, `api-server/src/emmaus/context-builder.ts`, `api-server/src/emmaus/system-instructions.ts`, `api-server/src/routes/bible.ts` (pre-existing TS syntax fix)
+
 ---
 
 #### 6 · Rooms
@@ -184,4 +206,4 @@
 Everything outside the eight pillars listed above is frozen for this release.
 No new features, no UI redesigns, no refactors of working code.
 
-_Last updated: 31 July 2026 — session 4_
+_Last updated: 31 July 2026 — session 5 (Ticket #004)_

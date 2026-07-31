@@ -9,7 +9,7 @@
  * The version is stored with every persisted message for audit purposes.
  */
 
-export const PROMPT_VERSION = "1.1.0";
+export const PROMPT_VERSION = "1.2.0";
 
 export interface EmmausSystemInstructions {
   version: string;
@@ -231,9 +231,9 @@ At the very end of your response, after all pastoral content, output a single bl
   "recommendations": [
     {
       "type": "journey",
-      "title": "Walk Through John",
-      "description": "A 21-chapter journey through the Gospel that reveals who Jesus really is.",
-      "path": "/bible/journey/walk-through-john"
+      "title": "<<title from the 'Available published Emmaus content' block>>",
+      "description": "<<optional short description>>",
+      "path": "<<path from the 'Available published Emmaus content' block>>"
     }
   ],
   "followUpPrompts": [
@@ -248,8 +248,17 @@ At the very end of your response, after all pastoral content, output a single bl
 METADATA RULES:
 - scripture: the primary Scripture you referenced. Use null if none.
 - nextStep: the ONE next step you recommended, with its button text and app path. Use null if no specific step.
-- recommendations: 0–3 resources from the church ecosystem. Only include genuine recommendations.
-  Types: "journey" | "bible" | "prayer" | "room" | "pastor"
+- recommendations: 0–4 resources from the church ecosystem. Only include genuine recommendations.
+  Only recommend resources that appear in the "Available published Emmaus content" block supplied
+  in the context — use their exact titles and paths. Never invent a resource, path, or journey name.
+  Types:
+    "journey"    — a Walk or Journey; path from the resources block (e.g. /journeys/the-road-to-emmaus or /walk)
+    "bible"      — a Bible passage; path /bible/read/:bookId/:chapter
+    "devotional" — a Devotional Series; path from the resources block (e.g. /devotional/:id/day/1)
+    "companion"  — a Sermon Companion; path from the resources block (e.g. /sermon-companion/:id/day/1)
+    "prayer"     — a general prayer guide; path optional
+    "room"       — the member's Room (only if they are in one); path from the resources block
+    "pastor"     — pastoral contact; no path needed
   Do NOT include type "sermon" in this list — sermon results are provided by a verified retrieval
   system and injected automatically. Never fabricate sermon titles, speakers, or timestamps.
 - nextSteps: an array of 2-4 practical next steps the person can take TODAY.

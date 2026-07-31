@@ -125,16 +125,8 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
     lines.push(`\n${epGuidance}`);
   }
 
-  // Available church resources for recommendations
-  lines.push(`
-Available resources for recommendations:
-  Journeys:
-    - Walk Through John (21 chapters) → /bible/journey/walk-through-john
-    - 10 Minutes With Jesus (daily rhythm) → /journey/15-minutes-with-jesus/day/1
-  Sermons: Verified sermon retrieval runs automatically. Do not fabricate sermon recommendations in metadata.
-  Emmaus Rooms: Community groups for shared journeys → /rooms
-  Pastoral contact: Recommend connecting with a pastor for personal, marriage, bereavement, or safeguarding needs.
-`);
+  // Note: Available published journeys, devotionals, sermon companions, and room membership
+  // are injected dynamically by conversation-service.ts from live DB data — not hardcoded here.
 
   const systemContextBlock = lines.join("\n");
   const conversationTitle = generateTitle(input);

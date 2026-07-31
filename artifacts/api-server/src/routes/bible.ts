@@ -1494,7 +1494,7 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
   function buildCreateParams(outputTokens: number, extraMessages?: OpenAI.ChatCompletionMessageParam[]) {
     // Reasoning models need a large total budget; standard models can stay lean.
     const maxTokens = isReasoningModel ? Math.max(outputTokens * 6, 25000) : outputTokens;
-    const params: Parameters<typeof openaiClient!.chat.completions.create>[0] = {
+    const params: Parameters<typeof openaiClient.chat.completions.create>[0] = {
       model,
       messages: extraMessages ?? [],
       max_completion_tokens: maxTokens,
