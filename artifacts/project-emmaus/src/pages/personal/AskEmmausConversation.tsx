@@ -156,6 +156,8 @@ export default function AskEmmausConversation() {
   const [initialContext, setInitialContext] = useState<import('@/lib/emmaus-client').FlatContext | null>(null);
   const [followUp, setFollowUp] = useState('');
   const [isCrisisMode, setIsCrisisMode] = useState(false);
+  // P2-6: soft pastoral nudge — shown when handoffType === 'pastoral'
+  const [isPastoralMode, setIsPastoralMode] = useState(false);
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
   const [memoryDecided, setMemoryDecided] = useState(false);
 
@@ -258,6 +260,10 @@ export default function AskEmmausConversation() {
           // Crisis handoff
           if (payload.metadata.handoffType === 'crisis') {
             setIsCrisisMode(true);
+          }
+          // P2-6: Pastoral nudge — softer than crisis, shown as inline banner
+          if (payload.metadata.handoffType === 'pastoral') {
+            setIsPastoralMode(true);
           }
           // Suggest memory if there is a next step worth remembering
           if (
@@ -521,6 +527,25 @@ export default function AskEmmausConversation() {
 
         <div aria-hidden="true" className="h-1" />
       </main>
+
+      {/* P2-6: Pastoral handoff banner — soft nudge, not full-screen */}
+      {isPastoralMode && !isCrisisMode && (
+        <div className="flex-shrink-0 px-4 pt-2 max-w-[560px] mx-auto w-full">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1">
+            <p className="text-[13px] font-semibold text-amber-800">A gentle note</p>
+            <p className="text-[13px] text-amber-700 leading-relaxed">
+              This sounds like something your pastor would love to walk through with you.
+              Emmaus is here too — but a conversation with someone from church could go deeper.
+            </p>
+            <button
+              onClick={() => setIsPastoralMode(false)}
+              className="text-[12px] text-amber-600 hover:text-amber-800 underline mt-0.5"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Follow-up composer — hidden while streaming */}
       {!isStreaming && messages.length > 0 && (

@@ -13,6 +13,7 @@ import { getMessages, type StoredMessage } from '@/lib/emmaus-client';
 import { BottomNav } from '@/components/BottomNav';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
+import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
 
 function renderProse(text: string) {
@@ -102,6 +103,10 @@ export default function AskEmmausHistory() {
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
                       <ResourceCard key={i} recommendation={rec} />
                     ))}
+                    {/* P2-5: render nextSteps array (read/pray/continue/listen cards) */}
+                    {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
+                      <NextStepsCard steps={msg.metadata.nextSteps} />
+                    )}
                   </div>
                 )}
               </div>
