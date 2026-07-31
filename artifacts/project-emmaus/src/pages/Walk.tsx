@@ -546,9 +546,9 @@ export default function Walk() {
         entries: { dayNumber: number; title: string }[];
         progress: { currentDay: number; completedDays: number[]; status: string } | null;
       }>) => {
-        // Show only companions the member has started; sort current-week first.
+        // Show only companions the member has started and not paused; sort current-week first.
         const started = data
-          .filter(c => c.progress !== null)
+          .filter(c => c.progress !== null && c.progress.status !== 'paused')
           .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
         setScCompanions(started.map(c => {
           const currentDay = c.progress!.currentDay;
