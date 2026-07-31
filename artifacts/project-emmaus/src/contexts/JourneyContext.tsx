@@ -300,10 +300,10 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Sync to API
+      // Sync to API — P2-3: log failures instead of silently swallowing them
       api.completeStep(journeyId, user.id, day, reflectionText)
         .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
-        .catch(() => { /* ignore */ });
+        .catch((err) => console.error('[Emmaus] completeStep server sync failed:', err));
     },
     [user?.id]
   );

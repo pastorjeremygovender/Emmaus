@@ -6,7 +6,7 @@
  * it is loaded dynamically by the client from the member's chosen translation.
  */
 
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, sql } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
   devotionalSeriesTable,
@@ -265,26 +265,28 @@ export async function markDayComplete(
   seriesId: string,
   day: number
 ): Promise<DevotionalProgress> {
-  const existing = await getProgress(userId, seriesId);
-  const completed = existing?.completedDays ?? [];
-  // Idempotent: adding the same day twice has no effect.
-  const newCompleted = completed.includes(day) ? completed : [...completed, day];
-
-  // currentDay is intentionally NOT incremented here.
-  // The day that is available to the member is derived on the client from the
-  // member's local calendar date and startedAt — not from a stored counter.
+  // P2-2: atomic upsert — avoids the read-then-write race where two concurrent
+  // device completions of different days overwrite each other.  The SQL CASE
+  // expression appends the day only when it is not already present, keeping the
+  // operation idempotent.  currentDay is seeded at 1 and never incremented;
+  // the available day is derived client-side from startedAt.
   const [row] = await db
     .insert(devotionalProgressTable)
     .values({
       userId,
       seriesId,
-      currentDay: 1,          // seed value; never incremented on completion
-      completedDays: newCompleted,
+      currentDay: 1,
+      completedDays: [day],
     })
     .onConflictDoUpdate({
       target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
       set: {
-        completedDays: newCompleted,
+        completedDays: sql`
+          CASE WHEN NOT (${day} = ANY(${devotionalProgressTable.completedDays}))
+          THEN array_append(${devotionalProgressTable.completedDays}, ${day})
+          ELSE ${devotionalProgressTable.completedDays}
+          END
+        `,
         updatedAt: new Date(),
       },
     })
