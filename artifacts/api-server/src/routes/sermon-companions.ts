@@ -89,9 +89,11 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
       store.getAllSermonCompanionProgress(userId),
     ]);
 
-    // Only fetch entries for companions the user has started — avoids loading
-    // entry content for every companion in the catalogue.
-    const startedIds = companions.filter(c => progressMap[c.id]).map(c => c.id);
+    // Only fetch entries for companions the user has ACTIVE progress on — paused
+    // companions are excluded so they don't reappear on Today's Steps after reload.
+    const startedIds = companions
+      .filter(c => progressMap[c.id] && progressMap[c.id].status !== "paused")
+      .map(c => c.id);
     const entriesByCompanion = Object.fromEntries(
       await Promise.all(
         startedIds.map(async id => {
@@ -106,14 +108,17 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
 
     const result = companions.map(c => {
       const progress = progressMap[c.id] ?? null;
+      // Omit progress for paused companions — Walk.tsx filters on `progress !== null`
+      // so this naturally hides paused companions without client-side status checks.
+      const activeProgress = progress && progress.status !== "paused" ? progress : null;
       return {
         id: c.id,
         title: c.title,
         numberOfDays: c.publishedEntryCount,
         isCurrentWeek: (c as unknown as Record<string, unknown>).isCurrentWeek ?? false,
         entries: entriesByCompanion[c.id] ?? [],
-        progress: progress
-          ? { currentDay: progress.currentDay, completedDays: progress.completedDays, status: progress.status }
+        progress: activeProgress
+          ? { currentDay: activeProgress.currentDay, completedDays: activeProgress.completedDays, status: activeProgress.status }
           : null,
       };
     });
