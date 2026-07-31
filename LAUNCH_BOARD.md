@@ -92,6 +92,10 @@
 
 #### 3 · Walks & Journeys
 
+- [x] **WJ-0 · No published growth walk in DB** _(fixed 31 Jul 2026)_
+  The database contained only the daily-rhythm journey — no growth walks. Step 5 of the Emmaus Story ("Start and complete one Walk") failed with an empty `YourJourneysSection`. Fixed by seeding "The Road to Emmaus" (3 published days, Luke 24) via `scripts/seed-walk.mjs`. Both `standaloneJourneys` in next-steps API and the `YourJourneysSection` now surface it correctly.
+  _Files:_ `artifacts/api-server/scripts/seed-walk.mjs` (new)
+
 - [ ] **WJ-1 · Completion drops return context**
   `JourneyDay` passes `source/sourceId` into the completion URL. `WalkCompletePage.tsx:47–49` ignores them and always returns to `/journeys/:journeyId`. Members who entered from Walk, Bible, or Sermon have no correct back route after completing a step.
   _Files:_ `pages/WalkCompletePage.tsx`, `pages/JourneyDay.tsx:57–60`
