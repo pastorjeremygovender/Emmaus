@@ -2,11 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useSearch } from 'wouter';
 import { getApiUrl } from '@/lib/api';
 import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
-import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown,
-  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight,
+  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -487,7 +486,7 @@ export default function ChapterReader() {
       </header>
 
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
-      <main className="px-5 pt-8 pb-40 max-w-[600px] mx-auto">
+      <main className="px-5 pt-8 pb-28 max-w-[600px] mx-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 size={28} className="text-primary animate-spin" />
@@ -972,7 +971,6 @@ export default function ChapterReader() {
         translations={translations}
       />
 
-      <BottomNav />
     </div>
   );
 }
