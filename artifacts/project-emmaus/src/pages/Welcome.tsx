@@ -46,6 +46,13 @@ export default function Welcome() {
     if (!alreadyShown) return;
     if (authLoading || loadingProfile) return;
     if (user) {
+      // P2-11: if user tapped an invite link while unauthenticated, send them back
+      const pendingJoin = sessionStorage.getItem('pendingInviteToken');
+      if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
+        sessionStorage.removeItem('pendingInviteToken');
+        setLocation(`/join/${pendingJoin}`);
+        return;
+      }
       if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
       } else if (!isOnboarded() && !user.preferredName?.trim()) {
@@ -82,6 +89,13 @@ export default function Welcome() {
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
     if (user) {
+      // P2-11: if user tapped an invite link while unauthenticated, send them back
+      const pendingJoin = sessionStorage.getItem('pendingInviteToken');
+      if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
+        sessionStorage.removeItem('pendingInviteToken');
+        setLocation(`/join/${pendingJoin}`);
+        return;
+      }
       if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
       } else if (!isOnboarded() && !user.preferredName?.trim()) {

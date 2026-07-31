@@ -5,11 +5,11 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { Button } from '@/components/ui/button';
 import { Users, AlertCircle, Loader2 } from 'lucide-react';
 
-type Status = 'loading-auth' | 'invite' | 'joining' | 'joined' | 'already-member' | 'invalid';
+type Status = 'loading-auth' | 'unauthenticated' | 'invite' | 'joining' | 'joined' | 'already-member' | 'invalid';
 
 export default function JoinByLink() {
   const { inviteToken } = useParams<{ inviteToken: string }>();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { joinRoomByToken } = useRooms();
   const [, setLocation] = useLocation();
 
@@ -17,16 +17,24 @@ export default function JoinByLink() {
   const [error, setError] = useState('');
   const [joinedRoomId, setJoinedRoomId] = useState('');
 
-  // Once auth resolves, move to the invite confirmation screen
+  // Once auth resolves, move to the invite confirmation screen (or prompt sign-in)
   useEffect(() => {
-    if (!user) return; // Wait for auth
+    if (authLoading) return; // Still loading — keep spinner
+    if (!user) {
+      // P2-11: auth resolved with no user — save token and prompt sign-in
+      if (inviteToken) {
+        sessionStorage.setItem('pendingInviteToken', inviteToken);
+      }
+      setStatus('unauthenticated');
+      return;
+    }
     if (!inviteToken) {
       setError('No invite token found in the link.');
       setStatus('invalid');
       return;
     }
     setStatus('invite');
-  }, [user, inviteToken]);
+  }, [authLoading, user, inviteToken]);
 
   const handleJoin = async () => {
     if (!user || !inviteToken) return;
@@ -53,6 +61,32 @@ export default function JoinByLink() {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <Loader2 size={28} className="text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Unauthenticated — P2-11 ───────────────────────────────────────────────
+  // Token saved to sessionStorage; Welcome.tsx will redirect back here after sign-in.
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
+        <div className="text-center space-y-6 max-w-[340px] w-full">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+            <Users size={30} className="text-primary" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-[24px] font-sans font-semibold">You've been invited</h1>
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
+              Sign in to Emmaus to accept this Room invitation. Your invite will be waiting after you sign in.
+            </p>
+          </div>
+          <Button
+            className="w-full h-12 rounded-2xl text-[16px]"
+            onClick={() => setLocation('/')}
+          >
+            Sign in to accept
+          </Button>
+        </div>
       </div>
     );
   }
