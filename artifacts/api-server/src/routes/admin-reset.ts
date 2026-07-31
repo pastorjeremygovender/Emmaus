@@ -81,7 +81,7 @@ router.post("/admin-reset/daily-rhythm", async (req: Request, res: Response) => 
   try {
     const journeys = await journeyStore.listPublishedJourneys();
     const dailyRhythm = journeys.find(
-      j => j.journeyType === "daily-rhythm" || j.journeyType === "core"
+      j => j.journeyType === "daily-rhythm"
     );
     if (!dailyRhythm) {
       res.status(404).json({ error: "Daily Rhythm journey not found" });

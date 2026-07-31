@@ -587,9 +587,10 @@ export default function Walk() {
   // ── Content resolution ───────────────────────────────────────────────────────
 
   // 1. Daily Rhythm — 10 Minutes with Jesus
-  const coreJourney = publishedJourneys.find(
-    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
-  );
+  // Only match 'daily-rhythm': the startup migration already promoted the actual
+  // Daily Rhythm journey from 'core' → 'daily-rhythm', so any remaining 'core'
+  // journey is an admin-created growth journey and must NOT be shown here.
+  const coreJourney = publishedJourneys.find(j => j.journeyType === 'daily-rhythm');
   const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
 
   const devMode = isDevelopmentMode(user);

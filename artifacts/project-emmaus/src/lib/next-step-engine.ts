@@ -75,10 +75,10 @@ export function computeNextStep(
   const publishedJourneys = journeys.filter(j => j.status === 'Published');
 
   // ── Priority 1: Daily Rhythm (10 Minutes with Jesus) ─────────────────────
-  // Accepts both 'daily-rhythm' (new) and 'core' (legacy) for backward compat.
-  const coreJourney = publishedJourneys.find(
-    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core'
-  );
+  // Only match 'daily-rhythm': the startup migration already promoted the actual
+  // Daily Rhythm journey from 'core' → 'daily-rhythm', so 'core' journeys are
+  // now regular growth journeys and must not be treated as Daily Rhythm here.
+  const coreJourney = publishedJourneys.find(j => j.journeyType === 'daily-rhythm');
   if (coreJourney) {
     const prog = progress[coreJourney.id];
     const completedToday = isCompletedToday(prog?.lastCompletedAt);

@@ -1,0 +1,352 @@
+# Emmaus Content Engine (Permanent Architecture)
+
+We have now reached the point where Emmaus needs a permanent, repeatable content engine.
+
+Do NOT redesign the UI or change any existing user experience that is already working.
+
+Instead, refactor the backend and Content Studio so every future piece of discipleship content uses the exact same framework.
+
+The objective is that after this refactor, creating new content requires ONLY entering content—not building new screens, routing or navigation.
+
+---
+
+OBJECTIVE
+
+Build one universal content engine that powers:
+
+• Daily Rhythm
+• Daily Devotionals
+• Walks
+• Journeys (Collections)
+• Sermon Companions
+• Bible Studies
+• Made Free
+• Future Courses
+• Seasonal Studies
+• Any future discipleship content
+
+Every one of these must inherit the same architecture.
+
+Never create another separate content system.
+
+---
+
+CONTENT HIERARCHY
+
+Collection
+
+↓
+
+Walk
+
+↓
+
+Days
+
+Collections contain multiple Walks.
+
+Walks contain multiple Days.
+
+---
+
+EVERY WALK MUST INCLUDE
+
+Title
+
+Subtitle
+
+Description
+
+Category
+
+Difficulty
+
+Estimated Duration
+
+Cover Image
+
+Theme Colour
+
+Tags
+
+Welcome Screen
+
+Completion Screen
+
+Looking Ahead Message
+
+Published / Draft
+
+Author
+
+Created Date
+
+Updated Date
+
+Version
+
+Slug
+
+---
+
+EVERY DAY MUST USE THE SAME TEMPLATE
+
+Title
+
+Scripture
+
+Greeting
+
+Consider This
+
+Prayer
+
+Next Step
+
+Closing
+
+No exceptions.
+
+This is now the Emmaus Standard.
+
+---
+
+GREETING FORMAT
+
+Good morning.
+
+Welcome back.
+
+Yesterday we...
+
+Today we'll...
+
+Let's spend a few moments with Jesus.
+
+---
+
+CONSIDER THIS
+
+Written only in Emmaus Voice.
+
+Must:
+
+• point people to Jesus
+
+• be encouraging
+
+• be conversational
+
+• be Scripture-centred
+
+Never:
+
+• guilt people
+
+• lecture people
+
+• use legalistic language
+
+• become academic
+
+• include long numbered lists
+
+---
+
+PRAYER
+
+Short.
+
+Natural.
+
+Hope-filled.
+
+Christ-centred.
+
+---
+
+NEXT STEP
+
+One practical invitation.
+
+Never legalistic.
+
+Never prescriptive.
+
+Never checklist Christianity.
+
+Simply invite the user to respond to Jesus.
+
+---
+
+CLOSING
+
+Standard Emmaus closing.
+
+Examples:
+
+"Jesus walks with you today."
+
+"We'll continue walking together tomorrow."
+
+---
+
+WELCOME SCREEN
+
+Automatically generated for every Walk.
+
+Display:
+
+Title
+
+Description
+
+Estimated Duration
+
+Progress
+
+Start button
+
+On my own
+
+Create Room
+
+Use Existing Room (if applicable)
+
+---
+
+COMPLETION SCREEN
+
+Automatically generated.
+
+Include:
+
+Congratulations
+
+Journey Summary
+
+Review Walk
+
+Recommended Next Walk
+
+Return to Today's Steps
+
+---
+
+NAVIGATION
+
+Every Walk automatically includes:
+
+Progress Dots
+
+Day X of Y
+
+Previous
+
+Continue
+
+View Previous Days
+
+Finish Walk
+
+No developer should manually recreate these.
+
+---
+
+ROOMS
+
+Rooms must integrate automatically.
+
+Every Walk automatically supports:
+
+On my own
+
+Create Room
+
+Existing Room
+
+No custom coding per Walk.
+
+---
+
+CONTENT RELATIONSHIPS
+
+Allow every Walk to recommend another Walk.
+
+Example:
+
+Coming to Jesus
+
+↓
+
+Prayer
+
+↓
+
+Bible
+
+↓
+
+Church
+
+↓
+
+Baptism
+
+↓
+
+Holy Communion
+
+↓
+
+Faith
+
+↓
+
+Holy Spirit
+
+This should be configurable from Content Studio.
+
+---
+
+CONTENT STUDIO
+
+Creating a new Walk should require only:
+
+New Walk
+
+↓
+
+Enter Metadata
+
+↓
+
+Add Days
+
+↓
+
+Publish
+
+Everything else should already exist.
+
+No duplicated code.
+
+No duplicated UI.
+
+---
+
+IMPORTANT
+
+Do NOT redesign any existing Emmaus screens.
+
+Do NOT change navigation that is already working.
+
+Do NOT modify the Emmaus design language.
+
+This is an architectural refactor that creates a reusable content engine underneath the existing UI.
+
+The goal is that once complete, every future Walk, Journey, Bible Study, Devotional or Course automatically inherits the Emmaus framework.
+
+From this point forward we should only be creating content, not rebuilding infrastructure.
+
+This architecture becomes the permanent foundation of Emmaus.

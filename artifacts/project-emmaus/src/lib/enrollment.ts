@@ -26,8 +26,14 @@ export const MAX_ACTIVE_JOURNEYS = 5;
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Types that are always exempt from the active-Journey limit. */
-const EXEMPT_TYPES = new Set(['core', 'companion', 'devotional', 'daily-rhythm']);
+/** Types that are always exempt from the active-Journey limit.
+ *
+ * NOTE: 'core' is intentionally NOT in this set.  The startup migration
+ * promotes the actual 10-Minutes-with-Jesus journey from 'core' → 'daily-rhythm',
+ * so any remaining 'core' journey is an admin-created growth journey that must
+ * count toward the limit and appear on Today's Steps.
+ */
+const EXEMPT_TYPES = new Set(['companion', 'devotional', 'daily-rhythm']);
 
 export function isExemptJourney(j: Journey): boolean {
   return EXEMPT_TYPES.has(j.journeyType) || j.overloadExempt === true;
