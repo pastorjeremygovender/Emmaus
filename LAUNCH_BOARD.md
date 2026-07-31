@@ -229,4 +229,36 @@ Two regressions were reported from testing on the published app.
 
 _Files:_ `artifacts/project-emmaus/src/contexts/AuthContext.tsx`, `artifacts/project-emmaus/src/lib/journeys-api.ts`, `artifacts/api-server/src/emmaus/system-instructions.ts`
 
-_Last updated: 31 July 2026 — Correction Ticket (pilot regressions)_
+---
+
+## Ticket #004C — Fix production sermon retrieval in Ask Emmaus (31 July 2026)
+
+**Root cause:** `sermon-store.ts` used `process.cwd()` to resolve `data/sermons/` — the directory containing `videos.json` (6.6 MB, 19 sermons) and `segments.json` (7.6 MB, 2,179 indexed segments). Both files are tracked in git and exist in the deployment. But `process.cwd()` resolves differently in dev vs production:
+
+- **Dev**: `pnpm --filter @workspace/api-server run dev` — pnpm changes to the package directory first → `process.cwd()` = `.../artifacts/api-server/` → finds `data/sermons/` ✓
+- **Production**: deployment starts the server as `node artifacts/api-server/dist/index.mjs` from the workspace root → `process.cwd()` = `.../workspace/` → looks for `workspace/data/sermons/` which doesn't exist → 0 segments → sermon search always returns empty → no sermon card in Ask Emmaus
+
+**Fix applied** — one line in `sermon-store.ts`: replace `process.cwd()` with `import.meta.url`-relative resolution so the data directory path is always correct regardless of launch CWD:
+```ts
+const _storeDir = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = join(_storeDir, "..", "data", "sermons");
+// dist/index.mjs is always at .../artifacts/api-server/dist/
+// so DATA_DIR always resolves to .../artifacts/api-server/data/sermons/ ✓
+```
+
+**Dev acceptance tests — all four pass:**
+
+| Query | Sermon retrieved | Timestamp URL |
+|---|---|---|
+| "I have been struggling with anger." | FROM BAD TO WORSE — 12 Apr 2026 | `youtube.com/watch?v=rQ4pl47Iwfo&t=3118s` (51:58) |
+| "I am afraid about the future." | JESUS IN THE STORM — 22 Mar 2026 | `youtube.com/watch?v=CMrJyoNk9Pc&t=2795s` |
+| "How can I pray when I don't know what to say?" | IT STARTS WITH ME — 19 Apr 2026 | `youtube.com/watch?v=T232HmSl1z8&t=3246s` |
+| "Why should I forgive someone who hurt me?" | PLANTED — 1 Mar 2026 | `youtube.com/watch?v=njY4I4VH5E0&t=2786s` |
+
+All four: different sermons ✅ · real Pastor Jeremy titles ✅ · real timestamps ✅ · real YouTube URLs ✅ · no Psalm 42 fallback ✅
+
+_Files:_ `artifacts/api-server/src/lib/sermon-store.ts`
+
+_Next step: republish and run the same four tests against the production endpoint to satisfy the ticket's published-app requirement._
+
+_Last updated: 31 July 2026 — Ticket #004C_

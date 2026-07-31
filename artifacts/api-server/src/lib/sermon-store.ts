@@ -12,6 +12,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
 
@@ -156,7 +157,14 @@ export interface ImportJob {
 
 // ─── Storage paths ────────────────────────────────────────────────────────────
 
-const DATA_DIR = join(process.cwd(), "data", "sermons");
+// Resolve relative to this source file so the path is correct regardless of
+// which directory the Node process was launched from.
+// Dev:  pnpm runs from artifacts/api-server/ → process.cwd() = that dir ✓
+// Prod: node runs from workspace root        → process.cwd() = wrong dir ✗
+// import.meta.url always points at the compiled file inside dist/, so
+// join(__dir, "..", "data", "sermons") always resolves to the right place.
+const _storeDir = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = join(_storeDir, "..", "data", "sermons");
 const VIDEOS_FILE = join(DATA_DIR, "videos.json");
 const SEGMENTS_FILE = join(DATA_DIR, "segments.json");
 const JOBS_FILE = join(DATA_DIR, "jobs.json");
