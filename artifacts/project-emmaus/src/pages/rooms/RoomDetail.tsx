@@ -9,7 +9,8 @@ import {
   MessageSquare, Crown, Loader2, BookOpen
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
-import type { RoomDetail as RoomDetailType, RoomMember } from '@/lib/rooms-types';
+import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
+import { apiGetJourneyProgress } from '@/lib/rooms-api';
 
 export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -23,12 +24,19 @@ export default function RoomDetail() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actioning, setActioning] = useState(false);
+  const [progressMap, setProgressMap] = useState<Record<string, MemberJourneyProgress[]>>({});
 
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
-      if (!detail) setLoadError('Room not found or you are not a member.');
-      else setRoom(detail);
+      if (!detail) { setLoadError('Room not found or you are not a member.'); return; }
+      setRoom(detail);
+      // Fetch per-member progress for every linked journey
+      detail.linkedJourneys.forEach(lj => {
+        apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
+          .then(progress => setProgressMap(prev => ({ ...prev, [lj.journeyId]: progress })))
+          .catch(() => { /* silently ignore — progress section stays hidden */ });
+      });
     });
   }, [roomId, user, loadRoomDetail]);
 
@@ -146,21 +154,58 @@ export default function RoomDetail() {
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
               Journeys Walking Together
             </h2>
-            <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+            <div className="space-y-3">
               {room.linkedJourneys.map(lj => {
                 const journey = getJourney(lj.journeyId);
                 const title = journey?.title ?? lj.journeyId;
+                const memberProgress = progressMap[lj.journeyId];
                 return (
-                  <div key={lj.journeyId} className="flex items-center gap-3.5 px-5 py-4">
-                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <BookOpen size={16} className="text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-foreground truncate">{title}</div>
-                      <div className="text-[12px] text-muted-foreground">
-                        Started {new Date(lj.startedAt).toLocaleDateString()}
+                  <div key={lj.journeyId} className="rounded-2xl border border-border overflow-hidden bg-card">
+                    {/* Journey header */}
+                    <div className="flex items-center gap-3.5 px-5 py-4 border-b border-border/60">
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <BookOpen size={16} className="text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[15px] font-medium text-foreground truncate">{title}</div>
+                        <div className="text-[12px] text-muted-foreground">
+                          Started {new Date(lj.startedAt).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
+                    {/* Per-member progress */}
+                    {memberProgress && memberProgress.length > 0 && (
+                      <div className="divide-y divide-border/50">
+                        {memberProgress.map(mp => {
+                          const isMe = mp.userId === user.id;
+                          const name = isMe ? `${mp.preferredName} (you)` : mp.preferredName;
+                          let statusLabel: string;
+                          if (mp.status === 'completed') {
+                            statusLabel = 'Completed ✓';
+                          } else if (mp.currentDay != null) {
+                            statusLabel = `Day ${mp.currentDay}`;
+                          } else {
+                            statusLabel = 'Not started yet';
+                          }
+                          const isComplete = mp.status === 'completed';
+                          const notStarted = mp.currentDay == null && mp.status == null;
+                          return (
+                            <div key={mp.userId} className="flex items-center justify-between px-5 py-3 gap-3">
+                              <span className="text-[14px] text-foreground truncate">{name}</span>
+                              <span className={`text-[13px] shrink-0 ${
+                                isComplete
+                                  ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                                  : notStarted
+                                  ? 'text-muted-foreground/60'
+                                  : 'text-muted-foreground'
+                              }`}>
+                                {statusLabel}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

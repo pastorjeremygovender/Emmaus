@@ -6,7 +6,7 @@
  */
 
 import { getApiUrl } from './api';
-import type { RoomSummary, RoomDetail, RoomMessage } from './rooms-types';
+import type { RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
 
@@ -199,4 +199,16 @@ export async function apiLinkJourney(
     method: 'POST',
     body: JSON.stringify({ journeyId }),
   });
+}
+
+export async function apiGetJourneyProgress(
+  userId: string,
+  roomId: string,
+  journeyId: string
+): Promise<MemberJourneyProgress[]> {
+  const data = await roomsFetch<{ progress: MemberJourneyProgress[] }>(
+    `/api/rooms/${roomId}/journeys/${journeyId}/progress`,
+    userId
+  );
+  return data.progress;
 }

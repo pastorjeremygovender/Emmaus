@@ -33,6 +33,13 @@ export interface RoomDetail extends RoomSummary {
   currentUserRole: RoomRole;
 }
 
+export interface MemberJourneyProgress {
+  userId: string;
+  preferredName: string;
+  currentDay: number | null;
+  status: string | null; // 'active' | 'paused' | 'completed' | 'dropped' | null (not started)
+}
+
 export interface RoomMessage {
   id: string;
   roomId: string;

@@ -493,6 +493,27 @@ export async function startShared(
   }
 }
 
+/**
+ * Returns true only when the given journey is explicitly linked to the room
+ * in room_journeys.  Used by the progress endpoint to prevent callers from
+ * supplying arbitrary journeyIds and reading other members' progress.
+ */
+export async function isJourneyLinkedToRoom(
+  roomId: string,
+  journeyId: string
+): Promise<boolean> {
+  const res = await pool.query(
+    `SELECT 1 FROM room_journeys WHERE room_id = $1 AND journey_id = $2 LIMIT 1`,
+    [roomId, journeyId]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+export interface MemberJourneyProgress {
+  userId: string;
+  preferredName: string;
+  currentDay: number | null;
+  status: string | null; // 'active' | 'paused' | 'completed' | 'dropped' | null (not started)
+}
 export async function getLinkedJourneys(roomId: string): Promise<LinkedJourney[]> {
   const res = await pool.query(
     `SELECT journey_id, started_by, started_at
@@ -505,5 +526,34 @@ export async function getLinkedJourneys(roomId: string): Promise<LinkedJourney[]
     journeyId: String(r.journey_id),
     startedBy: String(r.started_by),
     startedAt: String(r.started_at),
+  }));
+}
+
+/**
+ * Returns progress rows for every member of the room on the given journey.
+ * Members who have not started the journey are included with null progress fields.
+ */
+export async function getMemberJourneyProgress(
+  roomId: string,
+  journeyId: string
+): Promise<MemberJourneyProgress[]> {
+  const res = await pool.query(
+    `SELECT rm.user_id,
+            COALESCE(up.preferred_name, split_part(rm.user_id, '@', 1)) AS preferred_name,
+            ujp.current_day,
+            ujp.status
+     FROM   room_members rm
+     LEFT JOIN user_profiles up    ON up.email = rm.user_id
+     LEFT JOIN user_journey_progress ujp
+               ON ujp.user_id = rm.user_id AND ujp.journey_id = $2
+     WHERE  rm.room_id = $1
+     ORDER  BY rm.joined_at ASC`,
+    [roomId, journeyId]
+  );
+  return res.rows.map(row => ({
+    userId: String(row.user_id),
+    preferredName: String(row.preferred_name ?? row.user_id),
+    currentDay: row.current_day != null ? Number(row.current_day) : null,
+    status: row.status ?? null,
   }));
 }

@@ -26,6 +26,8 @@ import {
   linkJourney,
   startShared,
   getAllRoomsAdmin,
+  getMemberJourneyProgress,
+  isJourneyLinkedToRoom,
 } from "../lib/room-store.js";
 import { isAdmin } from "../lib/user-role-store.js";
 
@@ -368,6 +370,36 @@ router.post("/:roomId/journeys", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to link journey." });
+  }
+});
+
+// ─── Journey progress for all room members ───────────────────────────────────
+
+router.get("/:roomId/journeys/:journeyId/progress", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { roomId, journeyId } = req.params;
+  try {
+    // Caller must be a member of this room
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+
+    // The journey must be linked to this room — prevents leaking progress for
+    // arbitrary journeys a caller supplies in the URL
+    const linked = await isJourneyLinkedToRoom(String(roomId), String(journeyId));
+    if (!linked) {
+      res.status(404).json({ error: "Journey not found in this room." });
+      return;
+    }
+
+    const progress = await getMemberJourneyProgress(String(roomId), String(journeyId));
+    res.json({ progress });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load journey progress." });
   }
 });
 
