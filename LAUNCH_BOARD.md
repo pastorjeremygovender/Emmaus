@@ -68,6 +68,10 @@
 
 #### 8 · Sermon Companions
 
+- [x] **SC-0 · Current-week companion invisible to new members** _(fixed 31 Jul 2026)_
+  Walk.tsx filtered `member/engagements` on `progress !== null`, hiding the companion for every new user. No discovery card existed. Fixed by tracking `unstartedCurrentWeekCompanion` state and rendering an `EmmausContentCard` discovery card (matching the `DevotionalDiscoveryCard` pattern) when the member has no active companion but a current-week companion is available. `handleBeginCompanion` calls `POST /api/sermon-companions/:id/progress/start` then navigates to day 1.
+  _Files:_ `artifacts/project-emmaus/src/pages/Walk.tsx`
+
 - [ ] **SC-1 · Timestamp links generated but never rendered**
   The generation pipeline stores timestamped sermon links in the DB (`sermon-generator.ts:826–861`). `SermonCompanionReader.tsx:42–53` defines `SCEntry` without a `sermonLink` field; the reader never renders them. Members cannot tap to the sermon moment they are reflecting on.
   _Files:_ `pages/SermonCompanionReader.tsx`, `api-server/src/lib/sermon-generator.ts`

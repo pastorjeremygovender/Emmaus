@@ -518,6 +518,23 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
+  const handleBeginCompanion = useCallback(async (companionId: string) => {
+    if (!user) return;
+    setStartingCompanionId(companionId);
+    try {
+      await fetch(`${BASE_URL}/api/sermon-companions/${companionId}/progress/start`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      setUnstartedCurrentWeekCompanion(null);
+      setLocation(`/sermon-companion/${companionId}/day/1?source=today`);
+    } catch {
+      // ignore — user can retry
+    } finally {
+      setStartingCompanionId(null);
+    }
+  }, [user, setLocation]);
+
   // ── Pause / Remove dialog state ──────────────────────────────────────────────
   // Tracks which card is showing the confirm-pause dialog.
   const [pauseTarget, setPauseTarget] = useState<
@@ -540,6 +557,11 @@ export default function Walk() {
     nextEntryTitle?: string;
     isCurrentWeek: boolean;
   }>>([]);
+  /** Current-week companion the member hasn't started yet — shown as a discovery card. */
+  const [unstartedCurrentWeekCompanion, setUnstartedCurrentWeekCompanion] = useState<{
+    id: string; title: string; numberOfDays: number;
+  } | null>(null);
+  const [startingCompanionId, setStartingCompanionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -570,8 +592,16 @@ export default function Walk() {
             isCurrentWeek: c.isCurrentWeek,
           };
         }));
+        // Surface the current-week companion as a discovery card for members who
+        // haven't started any companion yet (progress === null).
+        const unstartedCW = data.find(c => c.progress === null && c.isCurrentWeek);
+        setUnstartedCurrentWeekCompanion(
+          unstartedCW
+            ? { id: unstartedCW.id, title: unstartedCW.title, numberOfDays: unstartedCW.numberOfDays }
+            : null,
+        );
       })
-      .catch(() => setScCompanions([]));
+      .catch(() => { setScCompanions([]); setUnstartedCurrentWeekCompanion(null); });
   }, [user?.id]);
 
   if (!user) return null;
@@ -916,6 +946,28 @@ export default function Walk() {
             </motion.section>
           );
         })}
+
+        {/* ── Sermon Companion discovery — shown when the member hasn't started any
+            companion yet but a current-week companion is available. Mirrors the
+            DevotionalDiscoveryCard pattern so new users always see this week's
+            companion on Today's Steps without needing a separate discovery page. */}
+        {scCompanions.length === 0 && unstartedCurrentWeekCompanion && (
+          <motion.section
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+          >
+            <EmmausContentCard
+              label="SERMON COMPANION"
+              title={unstartedCurrentWeekCompanion.title}
+              description="This week's companion is available."
+              metadata={`${unstartedCurrentWeekCompanion.numberOfDays} Days`}
+              primaryActionLabel="Begin"
+              onAction={() => handleBeginCompanion(unstartedCurrentWeekCompanion.id)}
+              loading={startingCompanionId === unstartedCurrentWeekCompanion.id}
+            />
+          </motion.section>
+        )}
 
       </main>
 
