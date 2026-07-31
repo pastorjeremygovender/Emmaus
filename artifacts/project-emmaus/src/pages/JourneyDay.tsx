@@ -12,6 +12,8 @@ import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import { extractFirstSentence } from '@/lib/share';
 import { BottomNav } from '@/components/BottomNav';
 
 
@@ -325,6 +327,12 @@ export default function JourneyDay() {
           actionStep={step.actionStep}
           closingText={(step as any).closingText}
           returnPath={`/journey/${journeyId}/day/${day}`}
+          sharePayload={{
+            contentTitle: journey.title ?? '10 Minutes with Jesus',
+            dayTitle: step.title,
+            scripture: step.scripture,
+            keyThought: extractFirstSentence((step as any).closingText || step.devotional),
+          }}
           actionButton={
             isDailyRhythmReadOnly ? (
               <Button
@@ -446,6 +454,14 @@ export default function JourneyDay() {
               {step.actionStep}
             </p>
           </section>
+
+          {/* Share */}
+          <ShareButton payload={{
+            contentTitle: journey?.title ?? 'Emmaus',
+            dayTitle: step.title,
+            scripture: step.scripture,
+            keyThought: extractFirstSentence((step as any).closingText || step.devotional),
+          }} />
 
           {/* Primary action — "Finished" for a fresh read; completion card for replay */}
           <div className="pt-2 pb-8">

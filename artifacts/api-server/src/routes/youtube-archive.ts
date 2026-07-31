@@ -17,6 +17,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import { PASTOR_DISPLAY_NAME } from "../lib/pastor-name.js";
 import { randomBytes } from "node:crypto";
 import {
   getAllVideos, getVideoById, upsertVideo, updateVideo,
@@ -479,7 +480,7 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
       for (const video of toApprove) {
         await updateVideo(video.id, {
           reviewStatus: "auto-approved",
-          speaker: video.speaker || "Pastor Jeremy Govender",
+          speaker: video.speaker || PASTOR_DISPLAY_NAME,
         });
         autoApproved++;
       }

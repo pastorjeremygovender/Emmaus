@@ -12,6 +12,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import type { SharePayload } from '@/lib/share';
 import {
   SectionLabel,
   personalizeGreeting,
@@ -64,6 +66,12 @@ export interface DevotionalReadingProps {
 
   /** Primary action rendered at the bottom (Continue button etc.). */
   actionButton?: React.ReactNode;
+
+  /**
+   * Pre-built share payload. When provided (member view only), a subtle
+   * Share button is rendered above the action button. Omit for admin previews.
+   */
+  sharePayload?: SharePayload;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -82,6 +90,7 @@ export function DevotionalReading({
   returnPath,
   previewMode = false,
   actionButton,
+  sharePayload,
 }: DevotionalReadingProps) {
 
   const greetingFull = greeting
@@ -202,6 +211,11 @@ export function DevotionalReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share ───────────────────────────────────────────────────────────── */}
+      {sharePayload && !previewMode && (
+        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}

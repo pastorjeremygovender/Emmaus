@@ -21,6 +21,7 @@
 
 import { searchSermons } from "../lib/sermon-search.js";
 import { logger } from "../lib/logger.js";
+import { PASTOR_DISPLAY_NAME } from "../lib/pastor-name.js";
 
 // ─── Verified Sermon Registry (hardcoded demo fallback) ───────────────────────
 //
@@ -47,7 +48,7 @@ const VERIFIED_SERMONS: VerifiedSermon[] = [
   {
     id: "sermon-john-3",
     title: "Born Again: The Night Nicodemus Met Jesus",
-    speaker: "Pastor Jeremy Govender",
+    speaker: PASTOR_DISPLAY_NAME,
     sermonDate: "2024-09-15",
     series: "Gospel of John",
     scriptureReference: "John 3:1–21",
@@ -63,7 +64,7 @@ const VERIFIED_SERMONS: VerifiedSermon[] = [
   {
     id: "sermon-2-samuel-9",
     title: "God's Kindness Restores the Broken",
-    speaker: "Pastor Jeremy Govender",
+    speaker: PASTOR_DISPLAY_NAME,
     sermonDate: "2024-11-10",
     series: "Stories of Grace",
     scriptureReference: "2 Samuel 9",

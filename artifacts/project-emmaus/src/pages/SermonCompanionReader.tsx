@@ -17,6 +17,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, ExternalLink } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { extractFirstSentence } from '@/lib/share';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -323,6 +324,12 @@ export default function SermonCompanionReader() {
           closing={entry.closing}
           memberName={firstName}
           actionButton={actionButton}
+          sharePayload={{
+            contentTitle: companion.title,
+            dayTitle: entry.title,
+            scripture: entry.scriptureReference ?? undefined,
+            keyThought: extractFirstSentence(entry.closing || entry.reflection),
+          }}
         />
       </main>
 

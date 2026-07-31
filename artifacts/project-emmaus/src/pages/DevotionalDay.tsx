@@ -21,6 +21,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { extractFirstSentence } from '@/lib/share';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -245,6 +246,12 @@ export default function DevotionalDay() {
         memberName={resolveDisplayName(user?.preferredName)}
         returnPath={devotionalReturnPath}
         actionButton={actionButton}
+        sharePayload={{
+          contentTitle: seriesData.title,
+          dayTitle: entry.title,
+          scripture: entry.scriptureReference ?? undefined,
+          keyThought: extractFirstSentence(entry.closing || entry.considerThis),
+        }}
       />
 
       <BottomNav />

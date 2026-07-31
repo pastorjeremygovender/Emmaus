@@ -14,6 +14,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
+import { ShareButton } from '@/components/ShareButton';
+import type { SharePayload } from '@/lib/share';
 
 // ─── Greeting personalization ─────────────────────────────────────────────────
 
@@ -207,6 +209,12 @@ export interface DailyRhythmReadingProps {
    *   Preview:      a mocked non-interactive Continue affordance
    */
   actionButton?: React.ReactNode;
+
+  /**
+   * Pre-built share payload. When provided (member view only), a subtle
+   * Share button is rendered above the action button. Omit for admin previews.
+   */
+  sharePayload?: SharePayload;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -224,6 +232,7 @@ export function DailyRhythmReading({
   returnPath,
   previewMode = false,
   actionButton,
+  sharePayload,
 }: DailyRhythmReadingProps) {
 
   // ── Greeting text ───────────────────────────────────────────────────────────
@@ -364,6 +373,11 @@ export function DailyRhythmReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share ───────────────────────────────────────────────────────────── */}
+      {sharePayload && !previewMode && (
+        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ──────────────────────────────────────────────── */}
