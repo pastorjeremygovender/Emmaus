@@ -122,6 +122,7 @@ export async function createCompanion(data: {
     title: data.title,
     numberOfDays: data.numberOfDays ?? 5,
     status: 'Draft',
+    isCurrentWeek: false,
     publishedAt: null,
     createdAt: now,
     updatedAt: now,

@@ -184,8 +184,27 @@ function buildDevotionalItem(
   const publishedEntryCount = publishedEntries.length;
   const state = devotionalMemberState(s.id, publishedEntryCount, devProgressMap);
   const p = devProgressMap.get(s.id);
-  const currentDay = p?.currentDay ?? 1;
-  const completedCount = p?.completedDays.length ?? 0;
+
+  // Derive the member's next available day from completedDays — exactly the same
+  // formula used by Walk.tsx > calcAvailableDaySelfPaced (devotional-calendar.ts).
+  // markDayComplete intentionally never increments currentDay (it stays at the DB
+  // seed value of 1), so using p.currentDay here would always show "Day 1" to
+  // in-progress members and produce a different card text than Today's Steps.
+  //
+  // The cap is the HIGHEST published day number — NOT publishedEntries.length.
+  // For non-contiguous series (e.g. published days 1 and 5, count=2, maxDay=5),
+  // using the count (2) as the cap would direct the member to day 2 (unpublished)
+  // instead of staying at day 5 (published). Walk.tsx uses the same maxDay formula:
+  //   Math.max(...publishedEntries.map(e => e.dayNumber))
+  const completedDays = p?.completedDays ?? [];
+  const completedCount = completedDays.length;
+  const maxPublishedDay = publishedEntryCount > 0
+    ? Math.max(...publishedEntries.map(e => e.dayNumber))
+    : 1;
+  const currentDay = completedCount === 0
+    ? 1
+    : Math.min(Math.max(...completedDays) + 1, maxPublishedDay);
+
   const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;
   const nextEntry = publishedEntries.find(e => e.dayNumber === currentDay);
   const nextEntryTitle = nextEntry?.title || undefined;
@@ -267,7 +286,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     await Promise.all(
       devSeries.map(async s => {
         const full = await devStore.getSeriesById(s.id);
-        const published = full?.entries.filter(e => e.status === "Published") ?? [];
+          const published = steps.filter(s => s.status === "Published");
         seriesEntriesMap.set(s.id, published);
       }),
     );
@@ -285,7 +304,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     await Promise.all([
       ...scTableCompanions.map(async c => {
         const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
-        const published = entries.filter(e => e.status === "Published");
+          const published = steps.filter(s => s.status === "Published");
         companionEntriesMap.set(c.id, published);
       }),
       ...publishedJourneys
