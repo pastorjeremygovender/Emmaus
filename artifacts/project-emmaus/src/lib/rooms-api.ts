@@ -161,6 +161,33 @@ export async function apiStartShared(
   });
 }
 
+// ─── Application-admin endpoints ──────────────────────────────────────────────
+
+/**
+ * List ALL rooms — requires application admin role on the server.
+ * Never use this for member-facing views; use apiGetRooms() instead.
+ */
+export async function apiAdminGetAllRooms(userId: string): Promise<RoomSummary[]> {
+  const data = await roomsFetch<{ rooms: RoomSummary[] }>('/api/rooms/admin/all', userId);
+  return data.rooms;
+}
+
+/**
+ * Full room detail including invite credentials — requires application admin role.
+ */
+export async function apiAdminGetRoomDetail(
+  userId: string,
+  roomId: string
+): Promise<RoomDetail | null> {
+  try {
+    const data = await roomsFetch<{ room: RoomDetail }>(`/api/rooms/admin/${roomId}`, userId);
+    return data.room;
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('404')) return null;
+    throw err;
+  }
+}
+
 // ─── Linked journeys ───────────────────────────────────────────────────────
 
 export async function apiLinkJourney(

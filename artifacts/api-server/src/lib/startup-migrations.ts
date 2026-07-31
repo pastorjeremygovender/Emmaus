@@ -396,9 +396,38 @@ export async function runStartupMigrations(): Promise<void> {
     // Concurrent processes block here until the winning process releases.
     await migClient.query(`SELECT pg_advisory_lock($1)`, [ADVISORY_LOCK_KEY]);
     try {
-      // Step 1: Deduplicate existing rows so CREATE UNIQUE INDEX cannot fail
-      // due to pre-existing duplicates.  Keep the row with the highest
-      // current_day, breaking ties by latest updated_at.
+      // Step 1a: For duplicate (user_id, journey_id) pairs, merge all
+      // completed_days arrays into the keeper row (highest current_day, then
+      // latest updated_at) so that progress history is preserved before the
+      // non-keeper rows are deleted.
+      await migClient.query(`
+        UPDATE user_journey_progress AS keeper
+        SET completed_days = (
+          SELECT COALESCE(
+            jsonb_agg(DISTINCT val ORDER BY val),
+            '[]'::jsonb
+          )
+          FROM (
+            SELECT jsonb_array_elements(dup.completed_days) AS val
+            FROM user_journey_progress dup
+            WHERE dup.user_id    = keeper.user_id
+              AND dup.journey_id = keeper.journey_id
+          ) all_vals
+        )
+        WHERE keeper.id IN (
+          SELECT DISTINCT ON (user_id, journey_id) id
+          FROM user_journey_progress
+          ORDER BY user_id, journey_id, current_day DESC, updated_at DESC
+        )
+        AND (
+          SELECT count(*)
+          FROM user_journey_progress x
+          WHERE x.user_id = keeper.user_id AND x.journey_id = keeper.journey_id
+        ) > 1
+      `);
+
+      // Step 1b: Delete every non-keeper row so CREATE UNIQUE INDEX cannot fail
+      // due to pre-existing duplicates.
       await migClient.query(`
         DELETE FROM user_journey_progress
         WHERE id IN (
@@ -410,7 +439,7 @@ export async function runStartupMigrations(): Promise<void> {
               ) AS rn
             FROM user_journey_progress
           ) t WHERE rn > 1
-        );
+        )
       `);
 
       // Step 2: Create the unique index on the same connection.
@@ -418,7 +447,7 @@ export async function runStartupMigrations(): Promise<void> {
       // already committed the index.
       await migClient.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS uidx_user_journey_progress_user_journey
-          ON user_journey_progress (user_id, journey_id);
+          ON user_journey_progress (user_id, journey_id)
       `);
 
       // Step 3: Verify from the catalog before releasing the lock.  Running the
@@ -455,3 +484,4 @@ export async function runStartupMigrations(): Promise<void> {
   }
 
 }
+

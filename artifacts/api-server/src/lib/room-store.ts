@@ -153,6 +153,25 @@ export async function createRoom(
   }
 }
 
+/**
+ * Returns every room in the database — for application-admin use only.
+ * Never call this from a member-facing route; use getRoomsForUser() instead.
+ */
+export async function getAllRoomsAdmin(): Promise<RoomSummary[]> {
+  const res = await pool.query(
+    `SELECT r.*,
+            COUNT(rm.user_id)  AS member_count,
+            up.preferred_name  AS admin_preferred_name,
+            rm_admin.user_id   AS admin_user_id
+     FROM   rooms r
+     LEFT JOIN room_members rm       ON rm.room_id = r.id
+     LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+     LEFT JOIN user_profiles up      ON up.email = rm_admin.user_id
+     GROUP BY r.id, up.preferred_name, rm_admin.user_id
+     ORDER BY r.created_at DESC`
+  );
+  return res.rows.map(rowToSummary);
+}
 export async function getRoomsForUser(
   userId: string
 ): Promise<Array<RoomSummary & { currentUserRole: "admin" | "member" }>> {

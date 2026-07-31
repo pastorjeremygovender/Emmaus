@@ -1,36 +1,61 @@
-import { useState } from 'react';
-import { useRooms } from '@/contexts/RoomsContext';
-import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
+/**
+ * AdminRooms — application-admin view of all Rooms.
+ *
+ * Uses the admin-only API endpoints (/api/rooms/admin/...) which are gated
+ * server-side on the caller's application role (admin / superAdmin).
+ * Member-facing RoomsContext is intentionally NOT used here to keep the
+ * access boundaries clear.
+ */
 
-const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Member',
-  'demo-user-2': DEMO_USER_2.preferredName,
-  'demo-admin-1': 'Jeremy (Admin)',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-green-50 text-green-700 border-green-200',
-  archived: 'bg-gray-50 text-gray-600 border-gray-200',
-  deleted: 'bg-red-50 text-red-700 border-red-200',
-};
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { apiAdminGetAllRooms, apiAdminGetRoomDetail } from '@/lib/rooms-api';
+import type { RoomSummary, RoomDetail } from '@/lib/rooms-types';
 
 export default function AdminRooms() {
-  const {
-    getAllRoomsForAdmin, getRoomMembers, getJourneyInvitations,
-    adminArchiveRoom, adminRevokeInvite, adminRemovePost,
-    invites, posts,
-  } = useRooms();
+  const { user } = useAuth();
+
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<RoomDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
-  const allRooms = getAllRoomsForAdmin();
+  // ── Load all rooms on mount ───────────────────────────────────────────────
+  const loadRooms = useCallback(async () => {
+    if (!user) return;
+    setLoadingRooms(true);
+    setRoomsError(null);
+    try {
+      const data = await apiAdminGetAllRooms(user.id);
+      setRooms(data);
+    } catch (err) {
+      setRoomsError(err instanceof Error ? err.message : 'Failed to load rooms.');
+    } finally {
+      setLoadingRooms(false);
+    }
+  }, [user]);
 
-  const selectedRoom = selectedRoomId ? allRooms.find(r => r.id === selectedRoomId) : null;
-  const selectedMembers = selectedRoomId ? getRoomMembers(selectedRoomId) : [];
-  const selectedInvites: any[] = selectedRoomId ? (invites as any[]).filter(i => i.roomId === selectedRoomId) : [];
-  const selectedJourneys: any[] = selectedRoomId ? getJourneyInvitations(selectedRoomId) as any[] : [];
-  const reportedPosts: any[] = (posts as any[]).filter(p => p.status === 'active');
+  useEffect(() => { loadRooms(); }, [loadRooms]);
+
+  // ── Load room detail when selection changes ───────────────────────────────
+  useEffect(() => {
+    if (!selectedRoomId || !user) {
+      setSelectedDetail(null);
+      return;
+    }
+    setLoadingDetail(true);
+    setDetailError(null);
+    apiAdminGetRoomDetail(user.id, selectedRoomId)
+      .then(detail => setSelectedDetail(detail))
+      .catch(err => setDetailError(err instanceof Error ? err.message : 'Failed to load room detail.'))
+      .finally(() => setLoadingDetail(false));
+  }, [selectedRoomId, user]);
+
+  const selectedRoom = selectedRoomId ? rooms.find(r => r.id === selectedRoomId) : null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-8">
@@ -44,180 +69,129 @@ export default function AdminRooms() {
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">All Rooms</span>
         </div>
-        {allRooms.length === 0 ? (
+
+        {loadingRooms ? (
+          <div className="px-5 py-10 text-center text-gray-400 text-sm">Loading rooms…</div>
+        ) : roomsError ? (
+          <div className="px-5 py-10 text-center text-red-500 text-sm">{roomsError}</div>
+        ) : rooms.length === 0 ? (
           <div className="px-5 py-10 text-center text-gray-400 text-sm">No Rooms created yet.</div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {allRooms.map(room => {
-              const members = getRoomMembers(room.id);
-              const ownerName = room.adminName;
-              const activeJourneys = (getJourneyInvitations(room.id) as any[]).filter(j => j.status === 'open').length;
-              return (
-                <div
-                  key={room.id}
-                  className={`px-5 py-4 hover:bg-gray-50 cursor-pointer transition-colors ${selectedRoomId === room.id ? 'bg-teal-50' : ''}`}
-                  onClick={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-[15px] text-gray-900">{room.name}</span>
-                        <span className="px-2 py-0.5 text-[10px] font-semibold uppercase rounded border bg-green-50 text-green-700 border-green-200">
-                          active
-                        </span>
-                      </div>
-                      <div className="text-[13px] text-gray-500 mt-0.5">
-                        Admin: {room.adminName} · {room.memberCount} members · {activeJourneys} active journey{activeJourneys !== 1 ? 's' : ''}
-                      </div>
+            {rooms.map(room => (
+              <div
+                key={room.id}
+                className={`px-5 py-4 hover:bg-gray-50 cursor-pointer transition-colors ${selectedRoomId === room.id ? 'bg-teal-50' : ''}`}
+                onClick={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-[15px] text-gray-900">{room.name}</span>
+                      <span className="px-2 py-0.5 text-[10px] font-semibold uppercase rounded border bg-green-50 text-green-700 border-green-200">
+                        active
+                      </span>
                     </div>
-                    <div className="text-[12px] text-gray-400">
-                      {new Date(room.createdAt).toLocaleDateString()}
+                    <div className="text-[13px] text-gray-500 mt-0.5">
+                      Admin: {room.adminName} · {room.memberCount} member{room.memberCount !== 1 ? 's' : ''}
                     </div>
                   </div>
+                  <div className="text-[12px] text-gray-400">
+                    {new Date(room.createdAt).toLocaleDateString()}
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       {/* Room Detail Panel */}
       {selectedRoom && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden space-y-0">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <div>
               <span className="text-sm font-semibold text-gray-900">{selectedRoom.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{selectedRoom.memberCount} members</span>
+              <span className="text-xs text-gray-500 ml-2">{selectedRoom.memberCount} member{selectedRoom.memberCount !== 1 ? 's' : ''}</span>
             </div>
-            <div className="flex gap-2">
-              {(
-                confirmArchive === selectedRoom.id ? (
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => { adminArchiveRoom(selectedRoom.id); setConfirmArchive(null); }}
-                      className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg"
-                    >
-                      Confirm Archive
-                    </button>
-                    <button
-                      onClick={() => setConfirmArchive(null)}
-                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+          </div>
+
+          {loadingDetail ? (
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading room detail…</div>
+          ) : detailError ? (
+            <div className="px-5 py-8 text-center text-red-500 text-sm">{detailError}</div>
+          ) : selectedDetail ? (
+            <>
+              {/* Members */}
+              <div className="px-5 py-4 border-b border-gray-100">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
+                  Members ({selectedDetail.members.length})
+                </div>
+                {selectedDetail.members.length === 0 ? (
+                  <p className="text-sm text-gray-400">No members found.</p>
                 ) : (
-                  <button
-                    onClick={() => setConfirmArchive(selectedRoom.id)}
-                    className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200"
-                  >
-                    Archive Room
-                  </button>
-                )
+                  <div className="space-y-1.5">
+                    {selectedDetail.members.map(m => (
+                      <div key={m.userId} className="flex items-center gap-2 text-sm text-gray-700">
+                        <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {(m.preferredName || 'M')[0].toUpperCase()}
+                        </span>
+                        <span className="flex-1">{m.preferredName || <span className="text-gray-400 italic">No name set</span>}</span>
+                        <span className="text-gray-400 text-xs capitalize">{m.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Invite Credentials */}
+              <div className="px-5 py-4 border-b border-gray-100">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Invite Credentials</div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-gray-500 w-20 shrink-0">Invite code</span>
+                    <code className="text-gray-900 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-200 tracking-widest">
+                      {selectedDetail.inviteCode || <span className="text-gray-400 italic">none</span>}
+                    </code>
+                  </div>
+                  {selectedDetail.inviteToken && (
+                    <div className="flex items-start gap-3 text-sm">
+                      <span className="text-gray-500 w-20 shrink-0">Invite link</span>
+                      <code className="text-gray-600 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-200 text-xs break-all">
+                        /rooms/join/{selectedDetail.inviteToken}
+                      </code>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Linked Journeys */}
+              {selectedDetail.linkedJourneys.length > 0 && (
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Linked Journeys</div>
+                  <div className="space-y-1.5">
+                    {selectedDetail.linkedJourneys.map(lj => (
+                      <div key={lj.journeyId} className="flex items-center gap-2 text-sm text-gray-700">
+                        <span className="w-2 h-2 rounded-full bg-teal-400 shrink-0" />
+                        <span className="flex-1 font-mono text-xs text-gray-600">{lj.journeyId}</span>
+                        <span className="text-gray-400 text-xs">
+                          Started {new Date(lj.startedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-            </div>
-          </div>
 
-          {/* Members */}
-          <div className="px-5 py-4 border-b border-gray-100">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Members ({selectedMembers.length})</div>
-            {selectedMembers.length === 0 ? (
-              <p className="text-sm text-gray-400">No active members.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {selectedMembers.map(m => (
-                  <div key={m.userId} className="flex items-center gap-2 text-sm text-gray-700">
-                    <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 text-[10px] font-bold flex items-center justify-center">
-                      {(DEMO_NAMES[m.userId] || 'M')[0]}
-                    </span>
-                    <span>{DEMO_NAMES[m.userId] || m.userId}</span>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-500">{m.role}</span>
-                  </div>
-                ))}
+              {/* Post Moderation — coming soon */}
+              <div className="px-5 py-4">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Post Moderation</div>
+                <p className="text-sm text-gray-400 italic">Coming soon — post reporting and moderation tools are not yet available.</p>
               </div>
-            )}
-          </div>
-
-          {/* Invitations */}
-          <div className="px-5 py-4 border-b border-gray-100">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Invitations</div>
-            {selectedInvites.length === 0 ? (
-              <p className="text-sm text-gray-400">No invitations.</p>
-            ) : (
-              <div className="space-y-2">
-                {selectedInvites.map(inv => (
-                  <div key={inv.id} className="flex items-center gap-3 text-sm">
-                    <code className="text-gray-700 font-mono bg-gray-50 px-2 py-0.5 rounded">{inv.accessCode}</code>
-                    <span className={`text-xs ${inv.revokedAt ? 'text-red-500' : 'text-green-600'}`}>
-                      {inv.revokedAt ? 'Revoked' : inv.expiresAt ? `Expires ${new Date(inv.expiresAt).toLocaleDateString()}` : 'Active (no expiry)'}
-                    </span>
-                    <span className="text-gray-400">Used: {inv.useCount}</span>
-                    {!inv.revokedAt && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm('Revoke this invitation?')) adminRevokeInvite(inv.id);
-                        }}
-                        className="text-red-500 text-xs hover:underline ml-auto"
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Shared Journeys */}
-          {selectedJourneys.length > 0 && (
-            <div className="px-5 py-4 border-b border-gray-100">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Shared Journeys</div>
-              <div className="space-y-1.5">
-                {selectedJourneys.map(ji => (
-                  <div key={ji.id} className="flex items-center gap-2 text-sm text-gray-700">
-                    <span className={`w-2 h-2 rounded-full ${ji.status === 'open' ? 'bg-green-400' : 'bg-gray-300'}`} />
-                    <span>{ji.journeyId}</span>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-500 capitalize">{ji.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            </>
+          ) : null}
         </div>
       )}
-
-      {/* Reported Posts — demo: show all active posts */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Room Posts (moderation)</span>
-        </div>
-        {reportedPosts.length === 0 ? (
-          <div className="px-5 py-8 text-center text-gray-400 text-sm">No posts to review.</div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {reportedPosts.map(p => (
-              <div key={p.id} className="px-5 py-4 flex items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="text-[12px] text-gray-400 mb-1">
-                    {DEMO_NAMES[p.userId] || p.userId} · {p.journeyId} · Day {p.journeyStepId.replace('day-', '')}
-                  </div>
-                  <p className="text-[14px] text-gray-700 leading-relaxed">{p.body}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Remove this post?')) adminRemovePost(p.id);
-                  }}
-                  className="text-red-500 text-xs hover:underline shrink-0"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       <p className="text-[12px] text-gray-400 text-center">
         Admin view does not expose private reflections, prayers, or personal journey data.

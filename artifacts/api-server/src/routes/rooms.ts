@@ -25,9 +25,56 @@ import {
   addMessage,
   linkJourney,
   startShared,
+  getAllRoomsAdmin,
 } from "../lib/room-store.js";
+import { isAdmin } from "../lib/user-role-store.js";
 
 const router = Router();
+
+// ─── Application-admin guard ─────────────────────────────────────────────────
+
+async function guardAdmin(
+  req: Parameters<typeof requireAuth>[0],
+  res: Parameters<typeof requireAuth>[1]
+): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "Application admin access required." });
+    return null;
+  }
+  return userId;
+}
+
+// ─── Admin: list ALL rooms ────────────────────────────────────────────────────
+
+router.get("/admin/all", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const rooms = await getAllRoomsAdmin();
+    res.json({ rooms });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load rooms." });
+  }
+});
+
+// ─── Admin: full room detail (invite credentials always included) ──────────────
+
+router.get("/admin/:roomId", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  const { roomId } = req.params;
+  try {
+    const room = await getRoomById(String(roomId));
+    if (!room) {
+      res.status(404).json({ error: "Room not found." });
+      return;
+    }
+    // Full detail — invite credentials are NOT redacted for application admins
+    res.json({ room });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load room." });
+  }
+});
 
 // ─── Create room ──────────────────────────────────────────────────────────────
 
