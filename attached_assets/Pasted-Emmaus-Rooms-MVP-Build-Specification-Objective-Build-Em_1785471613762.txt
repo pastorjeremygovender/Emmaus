@@ -1,0 +1,222 @@
+Emmaus Rooms MVP — Build Specification
+
+Objective
+
+Build Emmaus Rooms as the simplest possible private discipleship groups.
+
+Rooms are not social media. They exist only to help people walk with Jesus together.
+
+The priorities are:
+
+- Simplicity
+- Speed
+- Privacy
+- Reliability
+
+Avoid feature creep.
+
+---
+
+1. Invite Only
+
+Rooms must never be publicly discoverable.
+
+Remove any ability to browse, search or randomly join Rooms.
+
+A Room can only be joined by:
+
+- Invite link
+- Invite code
+
+This keeps Rooms private for families, friends and church groups.
+
+---
+
+2. Creating a Room
+
+Whenever a user starts any Walk or Journey, display:
+
+How would you like to do this?
+
+○ On my own
+
+A private walk between you and Jesus.
+
+○ Create a Room
+
+Walk through this together with family or friends.
+
+If the user chooses On my own, begin immediately.
+
+If the user chooses Create a Room, ask only for:
+
+- Room name
+
+Then automatically:
+
+- Create the Room
+- Generate an invite code
+- Generate an invite link
+- Make the creator the Admin
+- Start the selected Walk or Journey immediately
+
+No additional setup screens.
+
+---
+
+3. Existing Rooms
+
+If the user already belongs to one or more Rooms, the prompt becomes:
+
+How would you like to do this?
+
+○ On my own
+
+○ Use an existing Room
+
+(show the user's Rooms)
+
+○ Create a new Room
+
+Choosing an existing Room immediately starts that Walk or Journey in that Room.
+
+---
+
+4. Room Roles
+
+Admin
+
+Automatically assigned to the creator.
+
+Admin can:
+
+- Invite members
+- Remove members
+- Delete the Room
+- Transfer ownership if they leave
+
+Members
+
+Can:
+
+- Participate
+- Chat
+- Complete Walks and Journeys
+- Leave the Room
+
+No other permission levels.
+
+Keep roles simple.
+
+---
+
+5. Chat
+
+Every Room has a single chat.
+
+Support:
+
+- Text
+- Emoji
+- Image attachments (optional if already supported)
+
+Do NOT build:
+
+- Threads
+- Reactions
+- Voice notes
+- GIFs
+- Polls
+- Channels
+
+This is not intended to replace WhatsApp.
+
+The chat should simply support conversation around discipleship.
+
+---
+
+6. Notifications
+
+Notifications are OPTIONAL.
+
+Default:
+
+OFF
+
+Users may enable notifications for:
+
+- New chat messages
+- New member joined
+- Walk/Journey started
+- Walk/Journey completed
+
+No notification should be enabled automatically.
+
+---
+
+7. Room Home Screen
+
+Keep it clean.
+
+Display:
+
+Room Name
+
+Members
+
+Current Walks
+
+Current Journeys
+
+Chat
+
+Settings
+
+Nothing else.
+
+---
+
+8. Navigation
+
+The Room should never interrupt the user's normal Emmaus experience.
+
+The user should always be able to:
+
+Today's Steps
+
+My Journey
+
+Next Steps
+
+My Bible
+
+exactly as before.
+
+Rooms simply provide a shared context for participating together.
+
+---
+
+9. Performance
+
+Optimise for speed.
+
+Room creation should take only a few seconds.
+
+Joining from an invite should require the fewest taps possible.
+
+Avoid unnecessary loading screens.
+
+---
+
+10. Design Principles
+
+Every design decision should satisfy these questions:
+
+- Is it simple?
+- Is it fast?
+- Is it private?
+- Does it help people walk with Jesus together?
+
+If a feature does not clearly improve discipleship, do not add it.
+
+Build this as the permanent foundation for Emmaus Rooms. Future features should extend this foundation without changing its simplicity.
