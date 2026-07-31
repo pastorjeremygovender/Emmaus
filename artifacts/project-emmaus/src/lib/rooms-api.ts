@@ -141,8 +141,23 @@ export async function apiSendMessage(
   return data.message;
 }
 
-// ─── Atomic shared-start ──────────────────────────────────────────────────
-
+/**
+ * Exchange authenticated credentials for a short-lived one-time SSE stream
+ * token.  The token is valid for 30 s and must be passed to the EventSource
+ * URL — EventSource cannot send custom headers, so identity is established
+ * here (via the normal auth flow) and carried by the token.
+ */
+export async function apiGetStreamToken(
+  userId: string,
+  roomId: string
+): Promise<string> {
+  const data = await roomsFetch<{ token: string }>(
+    `/api/rooms/${roomId}/messages/stream/token`,
+    userId,
+    { method: 'POST' }
+  );
+  return data.token;
+}
 export interface StartSharedParams {
   journeyId: string;
   /** Use an existing room */

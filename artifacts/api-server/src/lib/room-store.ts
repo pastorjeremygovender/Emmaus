@@ -298,9 +298,14 @@ export async function leaveRoom(roomId: string, userId: string): Promise<void> {
     `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, userId]
   );
+  // Close any open SSE stream for the departed member immediately
+  terminateUserFromRoom(roomId, userId);
 }
 
 export async function deleteRoom(roomId: string): Promise<void> {
+  // Close all open SSE streams before deleting so no subscriber receives
+  // post-deletion events.
+  terminateAllFromRoom(roomId);
   // FK CASCADE handles room_members, room_messages, room_journeys
   await pool.query(`DELETE FROM rooms WHERE id = $1`, [roomId]);
 }
@@ -338,10 +343,16 @@ export async function removeMember(
     `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, targetUserId]
   );
+  // Close any open SSE stream for the removed member immediately
+  terminateUserFromRoom(roomId, targetUserId);
 }
 
-// ─── Chat ─────────────────────────────────────────────────────────────────────
-
+interface Subscriber {
+  userId: string;
+  onMessage: (msg: RoomMessage) => void;
+  /** Close the underlying SSE response immediately. */
+  terminate: () => void;
+}
 export async function getMessages(
   roomId: string,
   limit = 50,
@@ -385,7 +396,12 @@ export async function addMessage(
     [userId]
   );
   const preferred_name = nameRes.rows[0]?.preferred_name ?? null;
-  return rowToMessage({ ...row, preferred_name });
+  const msg = rowToMessage({ ...row, preferred_name });
+
+  // Notify all SSE subscribers for this room
+  notifySubscribers(roomId, msg);
+
+  return msg;
 }
 
 // ─── Linked journeys ──────────────────────────────────────────────────────────
@@ -529,6 +545,12 @@ export async function getLinkedJourneys(roomId: string): Promise<LinkedJourney[]
   }));
 }
 
+function notifySubscribers(roomId: string, msg: RoomMessage): void {
+  roomSubscribers.get(roomId)?.forEach(sub => {
+    try { sub.onMessage(msg); } catch { /* ignore closed connections */ }
+  });
+}
+
 /**
  * Returns progress rows for every member of the room on the given journey.
  * Members who have not started the journey are included with null progress fields.
@@ -556,4 +578,64 @@ export async function getMemberJourneyProgress(
     currentDay: row.current_day != null ? Number(row.current_day) : null,
     status: row.status ?? null,
   }));
+}
+
+/**
+ * Register an SSE subscriber for a room.
+ *
+ * @param roomId    Room the subscriber is watching.
+ * @param userId    Identity of the connected member (used for revocation).
+ * @param onMessage Called whenever a new message is persisted to the room.
+ * @param terminate Called to forcibly close the SSE response (e.g. on leave/removal).
+ * @returns Unsubscribe function — call it when the connection closes normally.
+ */
+export function subscribeToRoom(
+  roomId: string,
+  userId: string,
+  onMessage: (msg: RoomMessage) => void,
+  terminate: () => void
+): () => void {
+  const sub: Subscriber = { userId, onMessage, terminate };
+  if (!roomSubscribers.has(roomId)) {
+    roomSubscribers.set(roomId, new Set());
+  }
+  roomSubscribers.get(roomId)!.add(sub);
+  return () => {
+    const set = roomSubscribers.get(roomId);
+    if (set) {
+      set.delete(sub);
+      if (set.size === 0) roomSubscribers.delete(roomId);
+    }
+  };
+}
+
+/**
+ * Immediately terminate all open SSE streams for a specific user in a room.
+ * Call after leaveRoom() or removeMember() so the evicted member stops
+ * receiving new messages without waiting for the next heartbeat.
+ */
+export function terminateUserFromRoom(roomId: string, userId: string): void {
+  const set = roomSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of [...set]) {
+    if (sub.userId === userId) {
+      try { sub.terminate(); } catch { /* ignore */ }
+      set.delete(sub);
+    }
+  }
+  if (set.size === 0) roomSubscribers.delete(roomId);
+}
+const roomSubscribers = new Map<string, Set<Subscriber>>();
+
+/**
+ * Immediately terminate all open SSE streams for a room.
+ * Call after deleteRoom() so no subscriber receives stale post-deletion events.
+ */
+export function terminateAllFromRoom(roomId: string): void {
+  const set = roomSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of set) {
+    try { sub.terminate(); } catch { /* ignore */ }
+  }
+  roomSubscribers.delete(roomId);
 }

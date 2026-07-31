@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGetMessages, apiSendMessage } from '@/lib/rooms-api';
-import { Button } from '@/components/ui/button';
+import { apiGetMessages, apiGetStreamToken, apiSendMessage } from '@/lib/rooms-api';
+import { getApiUrl } from '@/lib/api';
 import { ArrowLeft, Send } from 'lucide-react';
 import type { RoomMessage } from '@/lib/rooms-types';
 
-const POLL_INTERVAL_MS = 10_000;
+const MAX_RECONNECT_ATTEMPTS = 6;
+const BASE_BACKOFF_MS = 1_000;
 
 function formatTime(iso: string): string {
   try {
@@ -35,7 +36,7 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
   const groups: { date: string; items: RoomMessage[] }[] = [];
   let current: { date: string; items: RoomMessage[] } | null = null;
 
-  // Messages come newest-first from the API; reverse for display
+  // Messages come newest-first from state; reverse for display (oldest → newest)
   const sorted = [...messages].reverse();
 
   for (const msg of sorted) {
@@ -47,6 +48,23 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
     current.items.push(msg);
   }
   return groups;
+}
+
+/**
+ * Merge two newest-first message lists, deduplicating by id.
+ * Real server messages take priority over optimistic placeholders.
+ */
+function mergeMessages(a: RoomMessage[], b: RoomMessage[]): RoomMessage[] {
+  const seen = new Map<string, RoomMessage>();
+  for (const msg of [...a, ...b]) {
+    const existing = seen.get(msg.id);
+    if (!existing || existing.id.startsWith('opt-')) {
+      seen.set(msg.id, msg);
+    }
+  }
+  return Array.from(seen.values()).sort(
+    (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
+  );
 }
 
 export default function RoomChat() {
@@ -61,41 +79,184 @@ export default function RoomChat() {
   const [roomName, setRoomName] = useState('');
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isFirstLoad = useRef(true);
 
-  const fetchMessages = useCallback(async (scrollToBottom = false) => {
-    if (!user || !roomId) return;
-    try {
-      const msgs = await apiGetMessages(user.id, String(roomId));
-      setMessages(msgs);
-      setLoadError('');
-      if (scrollToBottom) {
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
-      }
-    } catch (err) {
-      if (isFirstLoad.current) {
-        setLoadError(err instanceof Error ? err.message : 'Failed to load messages');
-      }
-    } finally {
-      isFirstLoad.current = false;
-    }
-  }, [user, roomId]);
-
-  // Load room name from history state or referrer title
+  // Load room name from history state
   useEffect(() => {
     const state = history.state as { roomName?: string } | null;
     if (state?.roomName) setRoomName(state.roomName);
   }, []);
 
-  // Initial load + polling
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  }, []);
+
+  // SSE connection with manual reconnect
+  //
+  // Authentication: EventSource cannot send custom request headers (e.g. X-User-Id),
+  // so we use a two-step handshake:
+  //   1. POST .../stream/token  — authenticated via requireAuth (cookie or header);
+  //      returns a 30 s one-time UUID.
+  //   2. GET  .../stream?token=<uuid>  — server re-validates membership after consuming
+  //      the token, then opens the SSE stream.
+  //
+  // Race-free load sequence (per connection):
+  //   Each connect() call owns its own `connectionHistoryLoaded` flag and
+  //   `connectionBuffer` array so reconnections never share stale state.
+  //   A. Open EventSource.  Buffer any SSE events (connectionBuffer).
+  //   B. On onopen, fetch history — stream is already open, so no gap exists.
+  //   C. Merge history + connectionBuffer, deduplicate by id.  Set loaded = true.
+  //   D. Subsequent SSE events for this connection flow directly into state and
+  //      are merged with current state (never replace it wholesale).
+  //
+  // Reconnect (onerror or history-fetch failure):
+  //   Close the stale EventSource (prevents its built-in retry using the
+  //   consumed token), schedule a new connect() with capped exponential backoff.
+  //   History is re-fetched on every reconnect to fill any gap.
+  //   Token-fetch failures use the same backoff path.
   useEffect(() => {
-    fetchMessages(true);
-    intervalRef.current = setInterval(() => fetchMessages(false), POLL_INTERVAL_MS);
+    if (!user || !roomId) return;
+
+    let cancelled = false;
+    let currentEs: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    function scheduleReconnect() {
+      if (cancelled || attempt >= MAX_RECONNECT_ATTEMPTS) return;
+      const backoffMs = BASE_BACKOFF_MS * Math.pow(2, attempt);
+      attempt++;
+      reconnectTimer = setTimeout(() => { if (!cancelled) connect(); }, backoffMs);
+    }
+
+    function closeCurrentEs() {
+      currentEs?.close();
+      currentEs = null;
+    }
+
+    async function connect() {
+      if (cancelled) return;
+
+      // ── Step 1: get a fresh one-time stream token ──────────────────────
+      // Failure uses the same capped backoff so transient errors self-heal.
+      let token: string;
+      try {
+        token = await apiGetStreamToken(user!.id, String(roomId));
+      } catch (err) {
+        if (!cancelled) {
+          if (attempt === 1) {
+            // First attempt failed — show an error to the user
+            setLoadError(err instanceof Error ? err.message : 'Failed to connect to chat.');
+          }
+          scheduleReconnect();
+        }
+        return;
+      }
+      if (cancelled) return;
+
+      // ── Step 2: open EventSource — do NOT rely on its built-in retry ──
+      // Per-connection state: each connect() call has its own buffer and
+      // loaded flag so reconnections start completely clean.
+      let connectionHistoryLoaded = false;
+      const connectionBuffer: RoomMessage[] = [];
+
+      const url = getApiUrl(
+        `/api/rooms/${String(roomId)}/messages/stream?token=${encodeURIComponent(token)}`
+      );
+      const es = new EventSource(url);
+      currentEs = es;
+
+      es.onmessage = (event: MessageEvent) => {
+        if (cancelled || es !== currentEs) return;
+        try {
+          const msg = JSON.parse(event.data as string) as RoomMessage;
+
+          if (!connectionHistoryLoaded) {
+            // ── Phase A: buffer until this connection's history is merged ──
+            if (!connectionBuffer.some(m => m.id === msg.id)) {
+              connectionBuffer.unshift(msg);
+            }
+            return;
+          }
+
+          // ── Phase D: history loaded — merge directly into current state ──
+          setMessages(prev => {
+            // Replace a matching optimistic placeholder (same userId + body)
+            const optIdx = prev.findIndex(
+              m => m.id.startsWith('opt-') && m.userId === msg.userId && m.body === msg.body
+            );
+            if (optIdx !== -1) {
+              const next = [...prev];
+              next[optIdx] = msg;
+              return next;
+            }
+            if (prev.some(m => m.id === msg.id)) return prev;
+            return [msg, ...prev];
+          });
+          scrollToBottom();
+        } catch {
+          // Malformed SSE event — ignore
+        }
+      };
+
+      // ── Step 3: fetch history now that the stream is open (Phase B) ───
+      es.onopen = async () => {
+        if (cancelled || es !== currentEs) return;
+        attempt = 0; // successful connection — reset backoff counter
+
+        try {
+          const msgs = await apiGetMessages(user!.id, String(roomId));
+          if (cancelled || es !== currentEs) return;
+
+          // ── Phase C: merge history + buffer, deduplicate ──────────────
+          // Use mergeMessages against current state too so pre-existing
+          // optimistic messages are preserved rather than wiped.
+          setMessages(prev => mergeMessages(mergeMessages(msgs, connectionBuffer), prev));
+          connectionBuffer.length = 0;
+          connectionHistoryLoaded = true;
+          setLoadError('');
+          scrollToBottom();
+        } catch (err) {
+          if (cancelled || es !== currentEs) return;
+          // History fetch failed — close this connection and retry.
+          // The buffer is local to this connection so a new connect()
+          // starts with a fresh empty buffer and loaded = false.
+          closeCurrentEs();
+          if (attempt === 0) {
+            setLoadError(err instanceof Error ? err.message : 'Failed to load messages.');
+          }
+          scheduleReconnect();
+        }
+      };
+
+      // Manual reconnect on error — close stale ES immediately so EventSource
+      // cannot fire its own retry (which would reuse the consumed token).
+      es.onerror = () => {
+        if (cancelled || es !== currentEs) return;
+        closeCurrentEs();
+
+        // Re-fetch history to fill any gap that occurred while disconnected.
+        // Merge with current state so live messages sent during the gap are
+        // not lost if they already arrived in state via a previous SSE event.
+        if (connectionHistoryLoaded) {
+          apiGetMessages(user!.id, String(roomId))
+            .then(msgs => {
+              if (!cancelled) setMessages(prev => mergeMessages(msgs, prev));
+            })
+            .catch(() => { /* best-effort gap fill */ });
+        }
+
+        scheduleReconnect();
+      };
+    }
+
+    connect();
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      cancelled = true;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      closeCurrentEs();
     };
-  }, [fetchMessages]);
+  }, [user, roomId, scrollToBottom]);
 
   const handleSend = async () => {
     if (!body.trim() || !user || !roomId || sending) return;
@@ -103,7 +264,7 @@ export default function RoomChat() {
     setBody('');
     setSending(true);
 
-    // Optimistic message
+    // Optimistic message — SSE will replace it with the canonical version
     const optimistic: RoomMessage = {
       id: `opt-${Date.now()}`,
       roomId: String(roomId),
@@ -113,16 +274,15 @@ export default function RoomChat() {
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [optimistic, ...prev]);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    scrollToBottom();
 
     try {
       await apiSendMessage(user.id, String(roomId), text);
-      // Refresh to get server-canonical message
-      await fetchMessages(false);
+      // SSE delivers the canonical message and replaces the optimistic entry
     } catch {
-      // Remove optimistic message on failure
+      // Remove optimistic message on failure and restore the draft
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
-      setBody(text); // restore
+      setBody(text);
     } finally {
       setSending(false);
     }

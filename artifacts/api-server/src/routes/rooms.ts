@@ -8,6 +8,7 @@
  */
 
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { requireAuth } from "../emmaus/auth.js";
 import { isStartSharedReady } from "../lib/feature-flags.js";
 import {
@@ -28,6 +29,7 @@ import {
   getAllRoomsAdmin,
   getMemberJourneyProgress,
   isJourneyLinkedToRoom,
+  subscribeToRoom,
 } from "../lib/room-store.js";
 import { isAdmin } from "../lib/user-role-store.js";
 
@@ -402,6 +404,144 @@ router.get("/:roomId/journeys/:journeyId/progress", async (req, res) => {
     res.status(500).json({ error: "Failed to load journey progress." });
   }
 });
+
+// ─── Chat — SSE stream (new messages pushed in real-time) ────────────────────
+//
+// EventSource cannot send custom request headers (e.g. X-User-Id), so we use
+// a two-step handshake:
+//
+//   1. POST /:roomId/messages/stream/token  — authenticated via requireAuth
+//      (session cookie or X-User-Id header); verifies membership; returns a
+//      one-time, short-lived UUID token.
+//
+//   2. GET  /:roomId/messages/stream?token=<uuid>  — consumes the token (one
+//      use only); identity comes from the token store, never from the URL.
+//
+// This keeps the SSE URL shareable (no persistent secret in it) while still
+// preventing unauthenticated or spoofed subscriptions.
+
+interface StreamToken {
+  userId: string;
+  roomId: string;
+  expiresAt: number; // Date.now() + TTL
+}
+
+// In-memory token store — tokens are consumed on first use and expire after
+// 30 s even if unused.  No persistence needed: tokens are only valid for the
+// initial handshake and are immediately replaced by the open TCP connection.
+const streamTokens = new Map<string, StreamToken>();
+
+/** Purge expired tokens (called lazily on each issuance). */
+function pruneExpiredTokens(): void {
+  const now = Date.now();
+  for (const [key, value] of streamTokens) {
+    if (value.expiresAt < now) streamTokens.delete(key);
+  }
+}
+
+router.post("/:roomId/messages/stream/token", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { roomId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+
+  pruneExpiredTokens();
+  const token = randomUUID();
+  streamTokens.set(token, {
+    userId,
+    roomId: String(roomId),
+    expiresAt: Date.now() + 30_000, // valid for 30 s
+  });
+
+  res.json({ token });
+});
+
+router.get("/:roomId/messages/stream", async (req, res) => {
+  const tokenStr = req.query.token as string | undefined;
+  if (!tokenStr) {
+    res.status(401).json({ error: "A stream token is required." });
+    return;
+  }
+
+  const tokenData = streamTokens.get(tokenStr);
+  // Consume immediately — one-time use regardless of outcome so it cannot be replayed
+  streamTokens.delete(tokenStr);
+
+  if (
+    !tokenData ||
+    tokenData.expiresAt < Date.now() ||
+    tokenData.roomId !== String(req.params.roomId)
+  ) {
+    res.status(401).json({ error: "Invalid or expired stream token." });
+    return;
+  }
+
+  const { userId, roomId } = tokenData;
+
+  // Revalidate membership here — the token may have been issued before the
+  // member left or was removed.  The token is already consumed so it cannot
+  // be replayed even if we reject here.
+  try {
+    const role = await getMemberRole(roomId, userId);
+    if (!role) {
+      res.status(403).json({ error: "You are no longer a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+
+  // ── Open the SSE stream ──────────────────────────────────────────────────
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  let unsubscribe: (() => void) | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Close the stream and clean up all resources. */
+  function terminate() {
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    try { res.end(); } catch { /* ignore */ }
+  }
+
+  unsubscribe = subscribeToRoom(
+    roomId,
+    userId,
+    (msg) => {
+      try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch { /* ignore */ }
+    },
+    terminate
+  );
+
+  // Heartbeat every 25 s keeps the connection alive through proxies / load
+  // balancers that close idle TCP connections.  We also revalidate membership
+  // here as a safety net for cases (e.g. room deletion) where terminateXxx
+  // may not have been called.
+  heartbeatTimer = setInterval(async () => {
+    try { res.write(": heartbeat\n\n"); } catch { /* ignore */ }
+    try {
+      const role = await getMemberRole(roomId, userId);
+      if (!role) terminate(); // membership was revoked
+    } catch { /* ignore — best-effort safety check */ }
+  }, 25_000);
+
+  req.on("close", terminate);
+});
+
 
 // ─── Chat — get messages ──────────────────────────────────────────────────────
 
