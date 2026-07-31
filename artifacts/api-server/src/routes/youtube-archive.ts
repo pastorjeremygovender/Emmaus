@@ -32,6 +32,7 @@ import {
 import {
   storeRefreshToken, hasOAuthCredentials, getValidAccessToken,
   clearOAuthCredentials, getOAuthStatus,
+  addPendingState, verifyAndConsumePendingState,
 } from "../lib/oauth-store.js";
 import { classifyVideo, shouldAutoApprove } from "../lib/sermon-classifier.js";
 import { processCaption } from "../lib/transcript-segmenter.js";
@@ -48,16 +49,8 @@ import { join } from "node:path";
 
 const router = Router();
 
-// ─── OAuth state store (in-memory, short-lived) ───────────────────────────────
-
-const pendingOAuthStates = new Map<string, number>(); // state → expires
-
-function cleanOAuthStates() {
-  const now = Date.now();
-  for (const [k, exp] of pendingOAuthStates) {
-    if (exp < now) pendingOAuthStates.delete(k);
-  }
-}
+// OAuth state is now persisted to disk via oauth-store so it survives
+// hot-reloads and process restarts (see addPendingState / verifyAndConsumePendingState).
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -1112,7 +1105,7 @@ router.get("/youtube-archive/oauth/status", async (_req: Request, res: Response)
   res.json(status);
 });
 
-router.get("/youtube-archive/oauth/start", (req: Request, res: Response) => {
+router.get("/youtube-archive/oauth/start", async (req: Request, res: Response) => {
   const config = getOAuthConfig();
   if (!config) {
     res.status(400).json({
@@ -1121,53 +1114,116 @@ router.get("/youtube-archive/oauth/start", (req: Request, res: Response) => {
     return;
   }
 
-  cleanOAuthStates();
+  // State is persisted to disk so it survives hot-reloads and restarts that
+  // would wipe an in-memory Map (the root cause of "Invalid or expired OAuth state").
   const state = randomBytes(16).toString("hex");
-  pendingOAuthStates.set(state, Date.now() + 10 * 60 * 1000); // 10 min TTL
+  await addPendingState(state);
 
   const url = buildOAuthUrl(config, state);
   res.redirect(url);
 });
 
+/** Render a popup-friendly HTML page that closes itself on success or shows a retry button on error. */
+function oauthPopupPage(opts: {
+  success: boolean;
+  title: string;
+  body: string;
+  retryUrl?: string;
+}): string {
+  const { success, title, body, retryUrl } = opts;
+  const icon = success ? "✅" : "❌";
+  const autoClose = success
+    ? `<p style="color:#666;font-size:14px">This window will close automatically…</p>
+       <script>
+         if (window.opener) { try { window.opener.postMessage('oauth-success','*'); } catch(_){} }
+         setTimeout(function(){ window.close(); }, 2500);
+       </script>`
+    : "";
+  const retryBtn = retryUrl
+    ? `<a href="${retryUrl}" style="display:inline-block;margin-top:1rem;padding:0.5rem 1.25rem;background:#1d4ed8;color:#fff;border-radius:6px;text-decoration:none;font-size:14px">Try again</a>
+       <button onclick="window.close()" style="margin-left:0.75rem;padding:0.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;font-size:14px;cursor:pointer">Close</button>`
+    : `<button onclick="window.close()" style="margin-top:1rem;padding:0.5rem 1rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;font-size:14px;cursor:pointer">Close</button>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>YouTube OAuth</title></head>
+<body style="font-family:system-ui,sans-serif;padding:2rem;max-width:420px;margin:auto">
+  <h2 style="margin-top:0">${icon} ${title}</h2>
+  <p style="color:#374151">${body}</p>
+  ${success ? autoClose : retryBtn}
+</body></html>`;
+}
+
 router.get("/youtube-archive/oauth/callback", async (req: Request, res: Response) => {
   const { code, state, error } = req.query as Record<string, string>;
+  const retryUrl = "/api/youtube-archive/oauth/start";
 
   if (error) {
-    res.status(400).send(`OAuth error: ${error}`);
+    res.status(400).send(oauthPopupPage({
+      success: false,
+      title: "Google denied access",
+      body: `Google returned an error: <code>${error}</code>. Make sure you approve all requested permissions.`,
+      retryUrl,
+    }));
     return;
   }
 
-  cleanOAuthStates();
-  const stateEntry = pendingOAuthStates.get(state);
-  if (!stateEntry || stateEntry < Date.now()) {
-    res.status(400).send("Invalid or expired OAuth state");
+  if (!state || !code) {
+    res.status(400).send(oauthPopupPage({
+      success: false,
+      title: "Invalid callback",
+      body: "The OAuth callback was missing required parameters. Please try connecting again.",
+      retryUrl,
+    }));
     return;
   }
-  pendingOAuthStates.delete(state);
+
+  // Verify state from the persistent file store (survives hot-reloads).
+  const stateValid = await verifyAndConsumePendingState(state);
+  if (!stateValid) {
+    res.status(400).send(oauthPopupPage({
+      success: false,
+      title: "Session expired — please try again",
+      body: "The OAuth session could not be verified (it may have expired or the server restarted). This is safe — please click 'Try again' to start a new connection.",
+      retryUrl,
+    }));
+    return;
+  }
 
   const config = getOAuthConfig();
   if (!config) {
-    res.status(400).send("OAuth not configured");
+    res.status(400).send(oauthPopupPage({
+      success: false,
+      title: "OAuth not configured",
+      body: "YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REDIRECT_URI must all be set as environment secrets.",
+    }));
     return;
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code, config);
     if (!tokens.refresh_token) {
-      res.status(400).send("No refresh token received — ensure offline access was requested");
+      res.status(400).send(oauthPopupPage({
+        success: false,
+        title: "No refresh token",
+        body: "Google did not return a refresh token. This usually means the account was already connected. Try disconnecting first, then reconnect to force a new token.",
+        retryUrl: `${retryUrl}?prompt=consent`,
+      }));
       return;
     }
     await storeRefreshToken(tokens.refresh_token);
-    res.send(`
-      <html><body style="font-family:sans-serif;padding:2rem">
-        <h2>✅ YouTube account connected</h2>
-        <p>You can now import captions from this channel.</p>
-        <p>Return to the Admin Portal to continue.</p>
-        <script>setTimeout(()=>window.close(),3000)</script>
-      </body></html>
-    `);
+    res.send(oauthPopupPage({
+      success: true,
+      title: "YouTube connected",
+      body: "Your YouTube account is now connected. You can close this window and return to Media Studio.",
+    }));
   } catch (err) {
-    res.status(500).send(`Token exchange failed: ${String(err)}`);
+    res.status(500).send(oauthPopupPage({
+      success: false,
+      title: "Connection failed",
+      body: `Token exchange failed: ${String(err).slice(0, 200)}`,
+      retryUrl,
+    }));
   }
 });
 

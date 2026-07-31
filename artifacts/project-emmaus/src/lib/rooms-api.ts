@@ -141,6 +141,26 @@ export async function apiSendMessage(
   return data.message;
 }
 
+// ─── Atomic shared-start ──────────────────────────────────────────────────
+
+export interface StartSharedParams {
+  journeyId: string;
+  /** Use an existing room */
+  roomId?: string;
+  /** Create a new room with this name */
+  roomName?: string;
+}
+
+export async function apiStartShared(
+  userId: string,
+  params: StartSharedParams
+): Promise<{ roomId: string }> {
+  return roomsFetch('/api/rooms/start-shared', userId, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
 // ─── Linked journeys ───────────────────────────────────────────────────────
 
 export async function apiLinkJourney(

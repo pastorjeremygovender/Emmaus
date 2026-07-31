@@ -384,6 +384,96 @@ export async function linkJourney(
   );
 }
 
+// ─── Atomic shared-start ─────────────────────────────────────────────────────
+
+export interface StartSharedParams {
+  userId: string;
+  journeyId: string;
+  /** Provide roomId to use an existing room, or roomName to create a new one. */
+  roomId?: string;
+  roomName?: string;
+}
+
+/**
+ * startShared — creates (or reuses) a Room, links the journey, and starts
+ * journey progress for the caller in a single DB transaction.  All-or-nothing:
+ * if any step fails the whole operation rolls back.
+ */
+export async function startShared(
+  params: StartSharedParams
+): Promise<{ roomId: string }> {
+  const { userId, journeyId } = params;
+
+  // Generate invite credentials before the transaction so we don't hold a
+  // connection open during the extra SELECT.  The code is random (26^7 ≈ 8B
+  // combinations) so a wasted code on rollback is negligible.
+  let inviteCode: string | undefined;
+  let inviteToken: string | undefined;
+  if (!params.roomId) {
+    inviteCode = await generateInviteCode();
+    inviteToken = randomUUID();
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    let roomId: string;
+
+    if (params.roomId) {
+      // Lock the membership row for the duration of the transaction so a
+      // concurrent leave or admin-removal cannot commit between this check and
+      // the room_journeys INSERT.  FOR UPDATE blocks any DELETE/UPDATE on the
+      // same row until our transaction commits or rolls back.
+      const memberRes = await client.query(
+        `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.roomId, userId]
+      );
+      if (!memberRes.rows[0]) throw new Error("NOT_A_MEMBER");
+      roomId = params.roomId;
+    } else {
+      // Create the room and make the caller its admin
+      const roomRes = await client.query(
+        `INSERT INTO rooms (name, invite_code, invite_token, created_by)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [params.roomName!.trim(), inviteCode, inviteToken, userId]
+      );
+      roomId = String(roomRes.rows[0].id);
+      await client.query(
+        `INSERT INTO room_members (room_id, user_id, role) VALUES ($1, $2, 'admin')`,
+        [roomId, userId]
+      );
+    }
+
+    // Link the journey to the room (unique constraint on room_id + journey_id)
+    await client.query(
+      `INSERT INTO room_journeys (room_id, journey_id, started_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (room_id, journey_id) DO NOTHING`,
+      [roomId, journeyId, userId]
+    );
+
+    // Start journey progress for the caller — idempotent via the unique index
+    // on (user_id, journey_id) added by startup migration.
+    const now = new Date();
+    await client.query(
+      `INSERT INTO user_journey_progress
+         (user_id, journey_id, current_day, completed_days, started_at, status, created_at, updated_at)
+       VALUES ($1, $2, 1, '[]'::jsonb, $3, 'active', $3, $3)
+       ON CONFLICT (user_id, journey_id) DO NOTHING`,
+      [userId, journeyId, now]
+    );
+
+    await client.query("COMMIT");
+    return { roomId };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getLinkedJourneys(roomId: string): Promise<LinkedJourney[]> {
   const res = await pool.query(
     `SELECT journey_id, started_by, started_at

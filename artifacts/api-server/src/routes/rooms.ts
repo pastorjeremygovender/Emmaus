@@ -9,6 +9,7 @@
 
 import { Router } from "express";
 import { requireAuth } from "../emmaus/auth.js";
+import { isStartSharedReady } from "../lib/feature-flags.js";
 import {
   createRoom,
   getRoomsForUser,
@@ -23,6 +24,7 @@ import {
   getMessages,
   addMessage,
   linkJourney,
+  startShared,
 } from "../lib/room-store.js";
 
 const router = Router();
@@ -65,6 +67,53 @@ router.get("/", async (req, res) => {
     res.json({ rooms: sanitised });
   } catch (err) {
     res.status(500).json({ error: "Failed to load rooms." });
+  }
+});
+
+// ─── Atomic shared-start — create/reuse room + link journey + start progress ─
+
+router.post("/start-shared", async (req, res) => {
+  if (!isStartSharedReady()) {
+    res.status(503).json({ error: "Shared-start is temporarily unavailable. Please try again shortly." });
+    return;
+  }
+
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { journeyId, roomId, roomName } = req.body as {
+    journeyId?: string;
+    roomId?: string;
+    roomName?: string;
+  };
+
+  if (!journeyId) {
+    res.status(400).json({ error: "journeyId is required." });
+    return;
+  }
+  if (!roomId && !roomName?.trim()) {
+    res.status(400).json({ error: "Either roomId or roomName is required." });
+    return;
+  }
+  if (roomId && roomName?.trim()) {
+    res.status(400).json({ error: "Provide roomId or roomName, not both." });
+    return;
+  }
+
+  try {
+    const result = await startShared({
+      userId,
+      journeyId,
+      roomId,
+      roomName: roomName?.trim(),
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof Error && err.message === "NOT_A_MEMBER") {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to start shared journey." });
   }
 });
 

@@ -1,9 +1,11 @@
 /**
  * OAuth Token Store — file-based, server-side only
  *
- * Stores YouTube OAuth refresh tokens and cached access tokens.
+ * Stores YouTube OAuth refresh tokens, cached access tokens, and
+ * pending CSRF state values.  File-based so state survives hot-reloads
+ * and process restarts that would wipe an in-memory Map.
  * Never exposed to the browser.
- * Location: data/sermons/oauth.json
+ * Location: data/sermons/oauth.json, data/sermons/oauth-states.json
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -13,6 +15,7 @@ import { refreshAccessToken, getOAuthConfig } from "./youtube-client.js";
 
 const DATA_DIR = join(process.cwd(), "data", "sermons");
 const OAUTH_FILE = join(DATA_DIR, "oauth.json");
+const STATES_FILE = join(DATA_DIR, "oauth-states.json");
 
 interface OAuthData {
   refreshToken: string;
@@ -43,6 +46,64 @@ async function writeOAuthData(data: OAuthData): Promise<void> {
   const { rename } = await import("node:fs/promises");
   await rename(tmp, OAUTH_FILE);
 }
+
+// ─── Pending CSRF state persistence ──────────────────────────────────────────
+// State values are written to a file so they survive hot-reloads and process
+// restarts.  An in-memory Map is cleared on every reload, which is the root
+// cause of "Invalid or expired OAuth state" errors in development.
+
+interface PendingStates {
+  [state: string]: number; // state → expiresAt (ms epoch)
+}
+
+async function readStates(): Promise<PendingStates> {
+  try {
+    const raw = await readFile(STATES_FILE, "utf-8");
+    return JSON.parse(raw) as PendingStates;
+  } catch {
+    return {};
+  }
+}
+
+async function writeStates(states: PendingStates): Promise<void> {
+  await ensureDir();
+  const tmp = `${STATES_FILE}.tmp.${Date.now()}`;
+  await writeFile(tmp, JSON.stringify(states), "utf-8");
+  const { rename } = await import("node:fs/promises");
+  await rename(tmp, STATES_FILE);
+}
+
+/** Add a new CSRF state with a 10-minute TTL. */
+export async function addPendingState(state: string): Promise<void> {
+  const states = await readStates();
+  // Prune expired entries while we have the file open.
+  const now = Date.now();
+  for (const [k, exp] of Object.entries(states)) {
+    if (exp < now) delete states[k];
+  }
+  states[state] = now + 10 * 60 * 1000;
+  await writeStates(states);
+}
+
+/**
+ * Verify that `state` is present and unexpired, then delete it so it
+ * cannot be replayed.  Returns true if valid, false otherwise.
+ */
+export async function verifyAndConsumePendingState(state: string): Promise<boolean> {
+  const states = await readStates();
+  const exp = states[state];
+  // Always clean up expired entries.
+  const now = Date.now();
+  for (const [k, e] of Object.entries(states)) {
+    if (e < now) delete states[k];
+  }
+  const valid = typeof exp === "number" && exp >= now;
+  if (valid) delete states[state];
+  await writeStates(states);
+  return valid;
+}
+
+// ─── Token storage ────────────────────────────────────────────────────────────
 
 export async function storeRefreshToken(refreshToken: string): Promise<void> {
   await writeOAuthData({

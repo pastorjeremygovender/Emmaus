@@ -14,8 +14,9 @@ import { Button } from '@/components/ui/button';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-import JourneyStartModal from '@/components/JourneyStartModal';
+import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
+import { apiStartShared } from '@/lib/rooms-api';
 import { listCollections, type CollectionSummary } from '@/lib/collections-api';
 import { checkJourneysHaveIntro } from '@/lib/journeys-api';
 import { ChevronLeft, Search, X, Bookmark, BookmarkCheck, ArrowRight } from 'lucide-react';
@@ -202,7 +203,7 @@ function JourneyCard({
 export default function ExploreJourneys() {
   const { journeys, progress, startJourney } = useJourney();
   const { user } = useAuth();
-  const { startSharedJourney } = useRooms();
+  const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
   const { getState, saveForLater, canActivateMore } = useEnrollment();
 
@@ -296,9 +297,19 @@ export default function ExploreJourneys() {
     if (!pendingJourneyId || !user) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
-    // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(id);
-    await startSharedJourney(roomId, id, user.id);
+    // Single atomic call — throws on failure; the sheet surfaces the error inline.
+    await apiStartShared(user.id, { journeyId: id, roomId });
+    await startJourney(id); // sync local progress cache (no-op at DB)
+    setPendingJourneyId(null);
+    setLocation(`/journey/${id}/day/${day}`);
+  }
+
+  async function handleCreateAndStart(roomName: string) {
+    if (!pendingJourneyId || !user) return;
+    const id  = pendingJourneyId;
+    const day = pendingStartDay;
+    const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName });
+    await Promise.all([startJourney(id), loadRooms()]);
     setPendingJourneyId(null);
     setLocation(`/journey/${id}/day/${day}`);
   }
@@ -456,13 +467,14 @@ export default function ExploreJourneys() {
 
       <BottomNav />
 
-      {/* Journey start modal */}
+      {/* Journey start sheet */}
       {pendingJourney && (
-        <JourneyStartModal
-          journeyId={pendingJourney.id}
+        <JourneyStartSheet
           journeyTitle={pendingJourney.title}
+          userRooms={user ? getMyRooms(user.id) : []}
           onStartAlone={handleStartAlone}
-          onStartWithRoom={handleStartWithRoom}
+          onStartInRoom={handleStartWithRoom}
+          onCreateAndStart={handleCreateAndStart}
           onClose={() => setPendingJourneyId(null)}
         />
       )}

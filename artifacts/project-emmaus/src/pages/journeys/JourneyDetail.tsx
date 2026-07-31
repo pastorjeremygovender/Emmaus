@@ -15,8 +15,9 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
-import JourneyStartModal from '@/components/JourneyStartModal';
+import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
+import { apiStartShared } from '@/lib/rooms-api';
 import { getCollection } from '@/lib/collections-api';
 import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2 } from 'lucide-react';
 import { resolveReturn } from '@/lib/return-context';
@@ -32,7 +33,7 @@ export default function JourneyDetail() {
   const { user } = useAuth();
   const { getState, saveForLater, resumeJourney, canActivateMore } = useEnrollment();
   const { gateClear, coreJourney: coreJ } = useDailyGate();
-  const { startSharedJourney } = useRooms();
+  const { getMyRooms, loadRooms } = useRooms();
 
   // Read return context from URL — set by the navigation caller.
   const source   = new URLSearchParams(window.location.search).get('source');
@@ -159,9 +160,21 @@ export default function JourneyDetail() {
 
   async function handleStartWithRoom(roomId: string) {
     if (!journey || !user) return;
-    // Throws on failure — the modal catches this and shows an inline error message.
+    // Single atomic call: link journey + start progress in one DB transaction.
+    // Throws on failure — the sheet catches this and shows an inline error.
+    await apiStartShared(user.id, { journeyId: journey.id, roomId });
+    // Sync the local progress cache (DB already has the record; this is a no-op at the DB level).
     await startJourney(journey.id);
-    await startSharedJourney(roomId, journey.id, user.id);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+    setPendingStart(false);
+  }
+
+  async function handleCreateAndStart(roomName: string) {
+    if (!journey || !user) return;
+    // Single atomic call: create room + link journey + start progress in one DB transaction.
+    const { roomId } = await apiStartShared(user.id, { journeyId: journey.id, roomName });
+    // Sync frontend caches: progress (no-op at DB) + rooms list (shows the new room).
+    await Promise.all([startJourney(journey.id), loadRooms()]);
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
@@ -351,12 +364,13 @@ export default function JourneyDetail() {
       <BottomNav />
 
       {pendingStart && (
-        <JourneyStartModal
-          journeyId={journey.id}
+        <JourneyStartSheet
           journeyTitle={journey.title}
-          onClose={() => setPendingStart(false)}
+          userRooms={user ? getMyRooms(user.id) : []}
           onStartAlone={handleStartAlone}
-          onStartWithRoom={handleStartWithRoom}
+          onStartInRoom={handleStartWithRoom}
+          onCreateAndStart={handleCreateAndStart}
+          onClose={() => setPendingStart(false)}
         />
       )}
     </div>

@@ -54,6 +54,23 @@ function ConnectionPanel({
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
 
+  // Listen for the popup's postMessage so we refresh immediately when OAuth succeeds
+  // rather than using an unreliable setTimeout.
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data === 'oauth-success') onRefresh();
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onRefresh]);
+
+  const handleConnect = () => {
+    startOAuthFlow();
+    // Fallback poll in case the popup is blocked or postMessage is swallowed.
+    const t = setTimeout(onRefresh, 6000);
+    return () => clearTimeout(t);
+  };
+
   const handleDisconnect = async () => {
     if (!confirm('Disconnect YouTube OAuth? Caption imports will stop working.')) return;
     setDisconnecting(true);
@@ -75,9 +92,7 @@ function ConnectionPanel({
           <WifiOff size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
         )}
         <div>
-          <div className="text-[13px] font-medium text-gray-800">
-            YouTube Data API
-          </div>
+          <div className="text-[13px] font-medium text-gray-800">YouTube Data API</div>
           {status.youtube.configured ? (
             <div className="text-[12px] text-gray-500 mt-0.5">
               {status.youtube.channelInfo
@@ -94,31 +109,25 @@ function ConnectionPanel({
 
       {/* OAuth connection */}
       <div className="flex items-start gap-3">
-        {status.oauth.connected ? (
-          <Shield size={16} className="text-green-500 mt-0.5 flex-shrink-0" />
-        ) : (
-          <Shield size={16} className="text-gray-300 mt-0.5 flex-shrink-0" />
-        )}
-        <div className="flex-1">
-          <div className="text-[13px] font-medium text-gray-800">
-            Owner OAuth (caption access)
-          </div>
+        <Shield size={16} className={`mt-0.5 flex-shrink-0 ${status.oauth.connected ? 'text-green-500' : 'text-gray-300'}`} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-gray-800">Owner OAuth (caption access)</div>
           {status.oauth.connected ? (
             <div className="text-[12px] text-gray-500 mt-0.5">
               Connected{status.oauth.authorizedAt ? ` — authorized ${new Date(status.oauth.authorizedAt).toLocaleDateString()}` : ''}
             </div>
           ) : status.oauth.oauthConfigured ? (
             <div className="text-[12px] text-amber-600 mt-0.5">
-              OAuth configured but not yet authorized. Click Connect to authorize.
+              Not yet authorized — click <strong>Connect</strong> to open the Google sign-in popup.
             </div>
           ) : (
             <div className="text-[12px] text-gray-400 mt-0.5">
-              Set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI to enable caption import
+              Set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REDIRECT_URI to enable caption import.
             </div>
           )}
         </div>
         {status.oauth.oauthConfigured && (
-          <div>
+          <div className="flex-shrink-0">
             {status.oauth.connected ? (
               <button
                 onClick={handleDisconnect}
@@ -129,8 +138,8 @@ function ConnectionPanel({
               </button>
             ) : (
               <button
-                onClick={() => { startOAuthFlow(); setTimeout(onRefresh, 5000); }}
-                className="text-[12px] text-teal-600 hover:text-teal-800 font-medium transition-colors"
+                onClick={handleConnect}
+                className="text-[12px] font-medium text-teal-600 hover:text-teal-800 transition-colors"
               >
                 Connect
               </button>
@@ -138,6 +147,16 @@ function ConnectionPanel({
           </div>
         )}
       </div>
+
+      {/* Redirect URI hint — helps admins configure Google Cloud Console correctly */}
+      {status.oauth.oauthConfigured && !status.oauth.connected && (
+        <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
+          <p className="text-[11px] font-medium text-gray-500 mb-1">Authorized redirect URI (must match Google Cloud Console exactly)</p>
+          <code className="text-[11px] text-gray-700 break-all select-all">
+            {window.location.origin.replace(/:\d+$/, '')}/api/youtube-archive/oauth/callback
+          </code>
+        </div>
+      )}
     </div>
   );
 }

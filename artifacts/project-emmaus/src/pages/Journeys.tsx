@@ -24,8 +24,9 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 // daily-gate import removed — all non-Daily-Rhythm content is now self-paced.
-import JourneyStartModal from '@/components/JourneyStartModal';
+import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
+import { apiStartShared } from '@/lib/rooms-api';
 import {
   X, Pause, MoreHorizontal, Loader2,
   BookHeart, Mic2, Map,
@@ -682,7 +683,7 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => 
 export default function Journeys() {
   const { journeys, progress, startJourney } = useJourney();
   const { user } = useAuth();
-  const { startSharedJourney } = useRooms();
+  const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
 
@@ -789,9 +790,22 @@ export default function Journeys() {
     const destination = item.route.includes('?')
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
-    // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(item.id);
-    await startSharedJourney(roomId, item.id, user.id);
+    // Single atomic call — throws on failure; the sheet surfaces the error inline.
+    await apiStartShared(user.id, { journeyId: item.id, roomId });
+    await startJourney(item.id); // sync local progress cache (no-op at DB)
+    setPendingItem(null);
+    setLocation(destination);
+    reload();
+  }
+
+  async function handleCreateAndStart(roomName: string) {
+    if (!pendingItem || !user) return;
+    const item = pendingItem;
+    const destination = item.route.includes('?')
+      ? `${item.route}&source=nextStepsJourneys`
+      : `${item.route}?source=nextStepsJourneys`;
+    const { roomId } = await apiStartShared(user.id, { journeyId: item.id, roomName });
+    await Promise.all([startJourney(item.id), loadRooms()]);
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -930,14 +944,15 @@ export default function Journeys() {
 
       <BottomNav />
 
-      {/* Journey start modal */}
+      {/* Journey start sheet */}
       {pendingItem && (
-        <JourneyStartModal
-          journeyId={pendingItem.id}
+        <JourneyStartSheet
           journeyTitle={pendingItem.title}
-          onClose={() => setPendingItem(null)}
+          userRooms={user ? getMyRooms(user.id) : []}
           onStartAlone={handleStartAlone}
-          onStartWithRoom={handleStartWithRoom}
+          onStartInRoom={handleStartWithRoom}
+          onCreateAndStart={handleCreateAndStart}
+          onClose={() => setPendingItem(null)}
         />
       )}
 

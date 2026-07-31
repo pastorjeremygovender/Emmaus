@@ -11,6 +11,7 @@
 
 import { eq, and, asc, or, ilike, sql, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
+import { isStartSharedReady } from "./feature-flags.js";
 import {
   journeysTable,
   journeyStepsTable,
@@ -794,10 +795,37 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
 }
 
 export async function startJourney(userId: string, journeyId: string): Promise<FrontendProgress> {
+  const now = new Date();
+
+  if (isStartSharedReady()) {
+    // The unique index on (user_id, journey_id) is confirmed present — use
+    // ON CONFLICT so concurrent calls (e.g. start-shared racing this endpoint)
+    // are safe.  If the INSERT is a no-op RETURNING is empty; fall through to
+    // a SELECT to return the existing row.
+    const rows = await db.insert(userJourneyProgressTable).values({
+      userId,
+      journeyId,
+      currentDay: 1,
+      completedDays: [],
+      startedAt: now,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+    if (rows.length > 0) return toFrontendProgress(rows[0]);
+
+    const existing = await getProgress(userId, journeyId);
+    return existing!;
+  }
+
+  // Index not yet confirmed (migration still running or failed) — fall back to
+  // the original read-then-insert so existing journey starts are not broken.
   const existing = await getProgress(userId, journeyId);
   if (existing) return existing;
 
-  const now = new Date();
   const rows = await db.insert(userJourneyProgressTable).values({
     userId,
     journeyId,

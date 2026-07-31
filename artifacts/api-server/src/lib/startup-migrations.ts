@@ -10,6 +10,7 @@ import { journeysTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { repairStepStatuses } from "./journey-store.js";
+import { setStartSharedReady } from "./feature-flags.js";
 export async function runStartupMigrations(): Promise<void> {
   // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
   // Three tables for AI-generated sermon companions. sermon_id is text (not FK)
@@ -369,6 +370,88 @@ export async function runStartupMigrations(): Promise<void> {
     }
   } catch (err) {
     logger.warn({ err }, "Startup migration: journey step status repair failed (non-fatal)");
+  }
+
+  // ── user_journey_progress unique constraint (2026-07) ─────────────────────
+  // Required for the atomic shared-start endpoint (POST /rooms/start-shared).
+  //
+  // Multi-instance safety: a pg_advisory_lock serializes the deduplicate +
+  // index-create steps across all API processes booting simultaneously.
+  // Whichever process wins the lock runs the DDL; the others wait, then proceed
+  // through CREATE UNIQUE INDEX IF NOT EXISTS (a no-op) and — critically —
+  // verify the catalog independently.  Every process that sees indisunique=true
+  // AND indisvalid=true sets its own in-memory flag, so no process is left
+  // permanently serving 503 because another process did the real work.
+  //
+  // The lock is held only for the mutation phase (deduplicate + CREATE INDEX);
+  // the catalog verify runs outside the lock so it reflects the committed state.
+  const ADVISORY_LOCK_KEY = 7_391_852; // arbitrary fixed integer; unique to this migration
+  // All advisory-lock work MUST use a single checked-out PoolClient so that
+  // pg_advisory_lock, the DDL, and pg_advisory_unlock are guaranteed to run
+  // on the same physical connection.  pool.query() does not guarantee connection
+  // affinity across calls and must not be used here.
+  const migClient = await pool.connect();
+  try {
+    // Acquire the session-scoped advisory lock on this connection.
+    // Concurrent processes block here until the winning process releases.
+    await migClient.query(`SELECT pg_advisory_lock($1)`, [ADVISORY_LOCK_KEY]);
+    try {
+      // Step 1: Deduplicate existing rows so CREATE UNIQUE INDEX cannot fail
+      // due to pre-existing duplicates.  Keep the row with the highest
+      // current_day, breaking ties by latest updated_at.
+      await migClient.query(`
+        DELETE FROM user_journey_progress
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (
+                PARTITION BY user_id, journey_id
+                ORDER BY current_day DESC, updated_at DESC
+              ) AS rn
+            FROM user_journey_progress
+          ) t WHERE rn > 1
+        );
+      `);
+
+      // Step 2: Create the unique index on the same connection.
+      // IF NOT EXISTS is a no-op for processes that waited while the winner
+      // already committed the index.
+      await migClient.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uidx_user_journey_progress_user_journey
+          ON user_journey_progress (user_id, journey_id);
+      `);
+
+      // Step 3: Verify from the catalog before releasing the lock.  Running the
+      // verify on the same connection while the lock is held gives this process
+      // a consistent view.  indisvalid guards against an index left in an
+      // invalid state by a previous failed concurrent build.
+      const verifyRes = await migClient.query(`
+        SELECT 1
+          FROM pg_index i
+          JOIN pg_class c ON c.oid = i.indexrelid
+         WHERE c.relname = 'uidx_user_journey_progress_user_journey'
+           AND i.indisunique = true
+           AND i.indisvalid  = true
+      `);
+
+      // Set the flag before releasing the lock so the endpoint becomes active
+      // only after the constraint is confirmed on this connection.
+      if (verifyRes.rows.length > 0) {
+        setStartSharedReady();
+        logger.info("Startup migration: user_journey_progress unique index verified and active — start-shared endpoint active");
+      } else {
+        logger.error("Startup migration: unique index exists but catalog reports it as invalid or non-unique — start-shared endpoint will return 503");
+      }
+    } finally {
+      // Always release the advisory lock on the same connection so other
+      // booting processes can proceed rather than blocking indefinitely.
+      await migClient.query(`SELECT pg_advisory_unlock($1)`, [ADVISORY_LOCK_KEY]).catch(() => {});
+    }
+  } catch (err) {
+    logger.error({ err }, "Startup migration: user_journey_progress unique index FAILED — start-shared endpoint will return 503 until resolved");
+  } finally {
+    // Return the connection to the pool regardless of outcome.
+    migClient.release();
   }
 
 }
