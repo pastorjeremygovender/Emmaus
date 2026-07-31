@@ -512,6 +512,43 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
           }`} />
         </button>
       </div>
+
+      {/* Theme Colour */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Theme Colour</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={(form as any).themeColor ?? (journey as any).themeColor ?? '#14B8A6'}
+            onChange={e => onPatch('themeColor' as keyof Journey, e.target.value)}
+            onBlur={onBlur}
+            className="h-9 w-14 rounded-lg border border-gray-200 cursor-pointer bg-gray-50 p-0.5"
+            title="Pick a brand colour for this Walk"
+          />
+          <input
+            type="text"
+            value={(form as any).themeColor ?? (journey as any).themeColor ?? ''}
+            onChange={e => {
+              const v = e.target.value;
+              if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) onPatch('themeColor' as keyof Journey, v);
+            }}
+            onBlur={onBlur}
+            placeholder="#14B8A6"
+            maxLength={7}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
+          />
+        </div>
+        <p className="text-[11px] text-gray-400 mt-1.5">Hex colour used for future branded Walk experiences.</p>
+      </div>
+
+      {/* Version (read-only) */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Version</label>
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+          <span className="text-sm text-gray-700 font-medium">v{(journey as any).version ?? 1}</span>
+          <span className="text-[11px] text-gray-400">— increments automatically on each publish</span>
+        </div>
+      </div>
     </div>
   );
 }

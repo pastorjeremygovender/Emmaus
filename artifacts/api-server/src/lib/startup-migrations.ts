@@ -346,6 +346,21 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms tables failed (non-fatal)");
   }
 
+  // ── Walk theme_color and version columns (2026-07) ───────────────────────────
+  // theme_color — nullable VARCHAR(7) for hex brand colours on a Walk.
+  // version     — integer, defaults to 1; incremented by the API on each publish.
+  // Both are completely additive — existing rows are unaffected.
+  try {
+    await pool.query(`
+      ALTER TABLE journeys
+        ADD COLUMN IF NOT EXISTS theme_color VARCHAR(7),
+        ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+    `);
+    logger.info("Startup migration: journeys.theme_color + version columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: journeys.theme_color / version columns failed (non-fatal)");
+  }
+
   // ── Repair journey step statuses (2026-07) ────────────────────────────────────
   // Root cause: createStep always defaulted to status="Draft" regardless of
   // parent journey status. Steps added to a Published journey after it was

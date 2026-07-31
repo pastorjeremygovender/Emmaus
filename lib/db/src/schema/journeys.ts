@@ -47,6 +47,10 @@ export const journeysTable = pgTable("journeys", {
   publishedAt: timestamp("published_at"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
 
+  // Branding & versioning
+  themeColor: text("theme_color"),   // hex colour, e.g. '#3B82F6' — nullable
+  version: integer("version").notNull().default(1),  // incremented on each publish
+
   // Content Studio grouping (nullable — uncollected journeys still work)
   collectionId: text("collection_id"),
 

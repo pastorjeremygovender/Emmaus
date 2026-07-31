@@ -44,6 +44,8 @@ export type Journey = {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  themeColor?: string;   // hex colour, e.g. '#3B82F6'
+  version?: number;      // incremented on each publish; 1-based
   scriptureReference?: string;
   nextJourneyId?: string;
   requiresDailyGate?: boolean;

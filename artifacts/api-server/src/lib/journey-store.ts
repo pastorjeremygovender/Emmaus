@@ -118,6 +118,9 @@ export interface FrontendJourney {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  // Branding & versioning
+  themeColor?: string;   // hex colour, e.g. '#3B82F6' — nullable
+  version?: number;      // incremented on each publish; defaults to 1
   // Stored in metadata JSONB — no DB migration required
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
@@ -172,6 +175,8 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     collectionId: row.collectionId ?? undefined,
+    themeColor: row.themeColor ?? undefined,
+    version: row.version ?? 1,
     scriptureReference: (meta.scriptureReference as string) || undefined,
     nextJourneyId: (meta.nextJourneyId as string) || undefined,
     requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
@@ -441,6 +446,14 @@ export async function updateJourney(
   if (data.overloadExempt !== undefined)   updateFields.overloadExempt   = data.overloadExempt;
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
+  if (data.themeColor !== undefined)       updateFields.themeColor       = data.themeColor || null;
+
+  // Auto-increment version on each publish
+  if (data.status === "Published") {
+    const existingForVersion = await db.select({ version: journeysTable.version }).from(journeysTable).where(eq(journeysTable.id, id));
+    const currentVersion = existingForVersion[0]?.version ?? 1;
+    updateFields.version = currentVersion + 1;
+  }
 
   // scriptureReference, nextJourneyId, and introductionContent live in the metadata JSONB column
   if (data.scriptureReference !== undefined || data.nextJourneyId !== undefined || data.introductionContent !== undefined || data.completionMessage !== undefined) {
