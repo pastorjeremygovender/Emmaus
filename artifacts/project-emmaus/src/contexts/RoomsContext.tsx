@@ -46,7 +46,7 @@ interface RoomsContextType {
   getMyMembership: (roomId: string, userId: string) => { role: RoomRole } | undefined;
 
   // Mutations
-  createRoom: (userId: string, name: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
+  createRoom: (userId: string, name: string, description?: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
   joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
   joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
   leaveRoom: (roomId: string, userId: string) => Promise<void>;
@@ -168,8 +168,8 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Mutations ────────────────────────────────────────────────────────────
-  const createRoom = useCallback(async (userId: string, name: string) => {
-    const result = await apiCreateRoom(userId, name);
+  const createRoom = useCallback(async (userId: string, name: string, description = "") => {
+    const result = await apiCreateRoom(userId, name, description);
     await loadRooms();
     return result;
   }, [loadRooms]);

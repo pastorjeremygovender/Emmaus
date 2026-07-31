@@ -6,6 +6,7 @@ export type RoomRole = 'admin' | 'member';
 export interface RoomSummary {
   id: string;
   name: string;
+  description: string;
   inviteCode: string;
   inviteToken: string;
   createdBy: string;

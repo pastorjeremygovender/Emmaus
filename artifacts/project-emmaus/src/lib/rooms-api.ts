@@ -41,11 +41,12 @@ async function roomsFetch<T>(
 
 export async function apiCreateRoom(
   userId: string,
-  name: string
+  name: string,
+  description = ""
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   return roomsFetch('/api/rooms', userId, {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, description }),
   });
 }
 

@@ -86,14 +86,14 @@ router.post("/", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { name } = req.body as { name?: string };
+  const { name, description } = req.body as { name?: string; description?: string };
   if (!name || !name.trim()) {
     res.status(400).json({ error: "Room name is required." });
     return;
   }
 
   try {
-    const result = await createRoom(name.trim(), userId);
+    const result = await createRoom(name.trim(), userId, description ?? "");
     res.status(201).json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to create room." });

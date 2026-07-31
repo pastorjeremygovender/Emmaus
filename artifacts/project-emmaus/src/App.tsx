@@ -49,7 +49,7 @@ import ReadingHistory from '@/pages/bible/ReadingHistory';
 import Rooms from '@/pages/rooms/Rooms';
 import RoomDetail from '@/pages/rooms/RoomDetail';
 import CreateRoom from '@/pages/rooms/CreateRoom';
-import JoinByCode from '@/pages/rooms/JoinByCode';
+import JoinRoom from '@/pages/rooms/JoinRoom';
 import JoinByLink from '@/pages/rooms/JoinByLink';
 import InviteMembers from '@/pages/rooms/InviteMembers';
 import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
@@ -171,7 +171,7 @@ function Router() {
       {/* Rooms */}
       <Route path="/rooms" component={Rooms} />
       <Route path="/rooms/create" component={CreateRoom} />
-      <Route path="/rooms/join" component={JoinByCode} />
+      <Route path="/rooms/join" component={JoinRoom} />
       <Route path="/rooms/:roomId/chat" component={RoomChat} />
       <Route path="/rooms/:roomId/invite" component={InviteMembers} />
       <Route path="/rooms/:roomId/settings" component={RoomSettings} />

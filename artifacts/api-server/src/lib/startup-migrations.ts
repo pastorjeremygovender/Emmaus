@@ -351,6 +351,19 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms tables failed (non-fatal)");
   }
 
+  // ── Rooms description column (2026-07) ───────────────────────────────────────
+  // Added after initial launch so Room creators can provide a brief description.
+  // ALTER TABLE … ADD COLUMN IF NOT EXISTS is idempotent.
+  try {
+    await pool.query(`
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''
+    `);
+    logger.info("Startup migration: rooms.description column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms.description column failed (non-fatal)");
+  }
+
   // ── Walk theme_color and version columns (2026-07) ───────────────────────────
   // theme_color — nullable VARCHAR(7) for hex brand colours on a Walk.
   // version     — integer, defaults to 1; incremented by the API on each publish.

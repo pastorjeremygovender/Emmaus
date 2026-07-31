@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { LogOut, Users, ChevronRight, Pencil, Check, X } from 'lucide-react';
+import { LogOut, Users, ChevronRight, Pencil, Check, X, Plus, LogIn } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -202,13 +202,26 @@ export default function Personal() {
             )}
           </div>
           {myRooms.length === 0 ? (
-            <button
-              onClick={() => setLocation('/rooms')}
-              className="w-full text-left p-4 rounded-xl border border-dashed border-border bg-background hover:border-primary/30 transition-all flex items-center gap-3"
-            >
-              <Users size={17} className="text-muted-foreground shrink-0" />
-              <span className="text-[15px] text-muted-foreground">Walk journeys with family or friends</span>
-            </button>
+            <div className="space-y-3">
+              <p className="text-[14px] text-muted-foreground">
+                You're not part of any Rooms yet.
+              </p>
+              <Button
+                className="w-full h-11 rounded-xl text-[15px]"
+                onClick={() => setLocation('/rooms/create')}
+              >
+                <Plus size={16} className="mr-2" />
+                Create Room
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl text-[15px]"
+                onClick={() => setLocation('/rooms/join')}
+              >
+                <LogIn size={16} className="mr-2" />
+                Join Room
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {myRooms.slice(0, 3).map(room => (

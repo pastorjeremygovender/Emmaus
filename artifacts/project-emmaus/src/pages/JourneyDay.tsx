@@ -257,28 +257,28 @@ export default function JourneyDay() {
     );
   }
 
+  // ── Shared completion-path variables ─────────────────────────────────────────
+  // Hoisted above isCompleting so the same values are used in both the
+  // just-completed full-screen card and the isDayCompleted replay footer.
+  const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
+  const nextStep = allSteps.find(s => s.day > day);
+  const nextStepUrl = !isFinalStep && nextStep && journeyId
+    ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+    : undefined;
+
   // ── Completion card — standard Emmaus pattern (spec-locked) ──────────────────
   if (isCompleting) {
     // Final step: the useEffect above is navigating to the Walk Complete page.
-    // Return null to avoid flashing the "Lesson complete" card in the meantime.
+    // Return null to avoid flashing the completion card in the meantime.
     if (isFinalStep) return null;
-
-    const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
-
-    // "Continue to Next Lesson" — resolve the next published step after this one.
-    // (isFinalStep is handled by the useEffect above; this block is never reached for it.)
-    const nextStep = allSteps.find(s => s.day > day);
-    const nextStepUrl = nextStep && journeyId
-      ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
-      : undefined;
 
     return (
       <EmmausCompletionCard
         fullScreen
-        heading="Lesson complete."
+        heading="Day complete."
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
-        continueLabel={nextStepUrl ? 'Continue to Next Lesson' : undefined}
+        continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
         returnLabel="Back to Next Steps"
         onReturn={() => setLocation(returnPath)}
       />
@@ -447,18 +447,32 @@ export default function JourneyDay() {
             </p>
           </section>
 
-          {/* Primary action — "Finished" for a fresh read; back button for replay */}
+          {/* Primary action — "Finished" for a fresh read; completion card for replay */}
           <div className="pt-2 pb-8">
             {isDayCompleted ? (
-              /* Already completed — review mode. Prevent re-completion. */
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full h-14 text-[17px] rounded-2xl"
-                onClick={() => setLocation(resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
-              >
-                Back to Next Steps
-              </Button>
+              /* Already completed — review mode. Show the standard completion card
+                 with Continue to Next Day (if a next published step exists) or
+                 View Walk Summary (if this was the final step). */
+              <EmmausCompletionCard
+                heading="Day complete."
+                subMessage="Continue when you're ready."
+                onContinue={
+                  nextStepUrl
+                    ? () => setLocation(nextStepUrl)
+                    : isFinalStep
+                    ? () => setLocation(walkCompleteUrl)
+                    : undefined
+                }
+                continueLabel={
+                  nextStepUrl
+                    ? 'Continue to Next Day'
+                    : isFinalStep
+                    ? 'View Walk Summary'
+                    : undefined
+                }
+                returnLabel="Back to Next Steps"
+                onReturn={() => setLocation(returnPath)}
+              />
             ) : (
               <Button
                 size="lg"

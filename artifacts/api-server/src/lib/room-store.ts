@@ -21,6 +21,7 @@ export interface RoomMember {
 export interface RoomSummary {
   id: string;
   name: string;
+  description: string;
   inviteCode: string;
   inviteToken: string;
   createdBy: string;
@@ -101,6 +102,7 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
   return {
     id: String(row.id),
     name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
     inviteCode: String(row.invite_code ?? ""),
     inviteToken: String(row.invite_token ?? ""),
     createdBy: String(row.created_by ?? ""),
@@ -134,7 +136,8 @@ function rowToMessage(row: Record<string, unknown>): RoomMessage {
 
 export async function createRoom(
   name: string,
-  createdBy: string
+  createdBy: string,
+  description = ""
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   const inviteCode = await generateInviteCode();
   const inviteToken = randomUUID();
@@ -144,10 +147,10 @@ export async function createRoom(
     await client.query("BEGIN");
 
     const res = await client.query(
-      `INSERT INTO rooms (name, invite_code, invite_token, created_by)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO rooms (name, description, invite_code, invite_token, created_by)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, invite_code, invite_token`,
-      [name, inviteCode, inviteToken, createdBy]
+      [name, description.trim(), inviteCode, inviteToken, createdBy]
     );
     const { id: roomId } = res.rows[0];
 

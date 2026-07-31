@@ -50,19 +50,22 @@ export default function WalkCompletePage() {
   return (
     <EmmausCompletionCard
       fullScreen
-      heading="Journey complete."
+      heading="Walk complete."
       subMessage={
         journey?.completionMessage?.trim() ||
-        'May the Lord continue His work in your life.'
+        "You've completed this Walk."
       }
-      returnLabel="Back to Walk"
+      returnLabel="Back to Next Steps"
       onReturn={() => setLocation(returnPath)}
       {...(showNextWalk && nextJourney
         ? {
             continueLabel: `Start ${nextJourney.title}`,
             onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
           }
-        : {})}
+        : {
+            continueLabel: 'View Walk Summary',
+            onContinue: () => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys'),
+          })}
     />
   );
 }
