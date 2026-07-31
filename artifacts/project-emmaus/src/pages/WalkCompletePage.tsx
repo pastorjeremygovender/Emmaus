@@ -7,7 +7,8 @@
  * or by tapping "Walk Complete" on the Walk overview page (JourneyDetail).
  *
  * Navigation out:
- *   "Back to Walk" → /journeys/:journeyId (Walk overview / JourneyDetail)
+ *   "Start [Next Walk]" → /journeys/:nextJourneyId  (when nextJourneyId is set)
+ *   "Back to Walk"      → /journeys/:journeyId       (always available as secondary)
  */
 
 import { useParams, useLocation } from 'wouter';
@@ -20,6 +21,12 @@ export default function WalkCompletePage() {
   const { getJourney, loading } = useJourney();
 
   const journey = getJourney(journeyId ?? '');
+
+  // Resolve recommended next Walk — must be a known, published Walk
+  const nextJourneyId = journey?.nextJourneyId?.trim() || undefined;
+  const nextJourney = nextJourneyId ? getJourney(nextJourneyId) : undefined;
+  // Only surface the CTA when the next journey exists and is published
+  const showNextWalk = !!nextJourney && nextJourney.status === 'Published';
 
   if (loading) {
     return (
@@ -39,6 +46,12 @@ export default function WalkCompletePage() {
       }
       returnLabel="Back to Walk"
       onReturn={() => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys')}
+      {...(showNextWalk && nextJourney
+        ? {
+            continueLabel: `Start ${nextJourney.title}`,
+            onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
+          }
+        : {})}
     />
   );
 }
