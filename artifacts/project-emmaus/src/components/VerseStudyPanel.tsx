@@ -335,7 +335,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       `/api/bible/cross-references?bookId=${verse.bookId}&chapter=${verse.chapter}&verse=${verse.verse}`
     );
     const overviewUrl = getApiUrl(
-      `/api/bible/chapter-overview/${verse.bookId}/${verse.chapter}`
+      `/api/bible/chapter-overview?bookId=${encodeURIComponent(verse.bookId)}&chapter=${verse.chapter}`
     );
 
     Promise.all([

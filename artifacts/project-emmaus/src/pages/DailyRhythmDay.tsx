@@ -90,7 +90,9 @@ export default function DailyRhythmDay() {
   const { user } = useAuth();
   const { journeys, progress, getStepsForJourney, completeStep } = useJourney();
 
-  const journeyId = '15-minutes-with-jesus';
+  // Resolve the daily-rhythm journey dynamically so any slug works in production.
+  // Falls back to the known seed ID so existing deep-links don't break.
+  const journeyId = journeys.find(j => j.journeyType === 'daily-rhythm')?.id ?? '15-minutes-with-jesus';
   const day = parseInt(dayNumber ?? '1', 10);
   const devMode = isDevelopmentMode(user);
 

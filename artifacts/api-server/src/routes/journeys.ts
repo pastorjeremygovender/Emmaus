@@ -21,17 +21,13 @@ const router = Router();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Resolve userId for progress routes:
- * 1. Signed session cookie / X-User-Id header (trusted, server-derived)
- * 2. Body / query param (fallback for user-facing app before full auth is added)
+ * Resolve userId for progress routes from trusted server-side identity only.
+ * The signed session cookie and X-User-Id header (dev/non-production) are the
+ * only accepted sources — body and query params are NOT trusted to prevent a
+ * caller from reading or writing another user's progress.
  */
 function resolveUserId(req: Request): string | null {
-  return (
-    extractUserId(req) ||
-    (req.query.userId as string) ||
-    (req.body?.userId as string) ||
-    null
-  );
+  return extractUserId(req);
 }
 
 function slugify(str: string): string {

@@ -185,12 +185,29 @@ export default function ChapterReader() {
     setChapterOverview(null);
     setIntroExpanded(false);
 
-    fetch(getApiUrl(`/api/bible/book-intro/${encodeURIComponent(resolvedBookId)}`))
+    // BS-1: use query-param routes that read from the DB (Published rows),
+    // not the legacy path-param routes that returned static hardcoded data.
+    // BS-2: map DB snake_case column names to the shape this component expects.
+    fetch(getApiUrl(`/api/bible/book-intro?bookId=${encodeURIComponent(resolvedBookId)}`))
       .then(r => r.ok ? r.json() : null)
-      .then(data => setBookIntro(data))
+      .then(data => {
+        if (!data) { setBookIntro(null); return; }
+        setBookIntro({
+          author: data.author_attribution ?? data.author ?? '',
+          dateWritten: data.date_range ?? data.dateWritten ?? '',
+          theme: Array.isArray(data.major_themes)
+            ? data.major_themes.join(', ')
+            : (data.theme ?? ''),
+          keyVerse: Array.isArray(data.key_passages) && data.key_passages[0]
+            ? data.key_passages[0]
+            : (data.keyVerse ?? ''),
+          keyVerseRef: data.keyVerseRef ?? '',
+          overview: data.purpose ?? data.historical_setting ?? data.overview ?? '',
+        });
+      })
       .catch(() => {/* non-critical */});
 
-    fetch(getApiUrl(`/api/bible/chapter-overview/${encodeURIComponent(resolvedBookId)}/${chapterNum}`))
+    fetch(getApiUrl(`/api/bible/chapter-overview?bookId=${encodeURIComponent(resolvedBookId)}&chapter=${chapterNum}`))
       .then(r => r.ok ? r.json() : null)
       .then(data => setChapterOverview(data?.summary ?? null))
       .catch(() => {/* non-critical */});

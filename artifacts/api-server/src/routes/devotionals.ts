@@ -16,6 +16,9 @@ export const devotionalsRouter = Router();
 // Role is passed via X-User-Role header (same approach as requireSuperAdmin in auth.ts).
 
 function isAdminRole(req: Request): boolean {
+  // In production, client-supplied role headers cannot be trusted — mirrors the
+  // NODE_ENV gate in auth.ts extractUserId() for X-User-Id.
+  if (process.env.NODE_ENV === "production") return false;
   const role = req.headers["x-user-role"];
   return role === "admin" || role === "superAdmin";
 }
