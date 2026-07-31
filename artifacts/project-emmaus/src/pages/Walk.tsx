@@ -453,12 +453,12 @@ export default function Walk() {
     [journeys]
   );
 
-  // Daily Devotionals — active (started) series and discovery (unstarted) series
-  const [activeDevotional, setActiveDevotional] = useState<{
+  // Daily Devotionals — ALL active (started) series and discovery (unstarted) series
+  const [activeDevotionals, setActiveDevotionals] = useState<Array<{
     series: DevotionalSeries;
     progress: DevotionalProgress;
     entries: DevotionalEntry[];
-  } | null>(null);
+  }>>([]);
   const [unstartedSeries, setUnstartedSeries] = useState<DevotionalSeries[]>([]);
   const [startingId, setStartingId] = useState<string | null>(null);
 
@@ -474,19 +474,20 @@ export default function Walk() {
       progress: progressList.find(p => p.seriesId === s.id) ?? null,
     }));
 
-    const started = withProg.find(x => x.progress !== null);
-    if (started && started.progress) {
-      // Fetch entries so we can compute available day and show the entry title
-      const withEntries = await getSeriesWithEntries(started.series.id, auth)
-        .catch(() => null);
-      setActiveDevotional({
-        series: started.series,
-        progress: started.progress,
-        entries: withEntries?.entries ?? [],
-      });
+    // Show ALL started series on Today's Steps, not just the first one.
+    const allStarted = withProg.filter(x => x.progress !== null);
+    if (allStarted.length > 0) {
+      // Load entries in parallel so every card can show its entry title.
+      const withEntries = await Promise.all(
+        allStarted.map(async ({ series, progress }) => {
+          const data = await getSeriesWithEntries(series.id, auth).catch(() => null);
+          return { series, progress: progress!, entries: data?.entries ?? [] };
+        }),
+      );
+      setActiveDevotionals(withEntries);
       setUnstartedSeries([]);
     } else {
-      setActiveDevotional(null);
+      setActiveDevotionals([]);
       setUnstartedSeries(seriesList);
     }
   }, []);
@@ -521,7 +522,8 @@ export default function Walk() {
   // ── Sermon Companion (from sermon_companion table via API) ───────────────────
   // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
   // in localStorage. Loading it here (before early returns) satisfies Rules of Hooks.
-  const [scCompanion, setScCompanion] = useState<{
+  // All in-progress sermon companions — not just the current-week one.
+  const [scCompanions, setScCompanions] = useState<Array<{
     id: string;
     title: string;
     numberOfDays: number;
@@ -529,35 +531,40 @@ export default function Walk() {
     completedDays: number[];
     /** Title of the entry at currentDay, if available. */
     nextEntryTitle?: string;
-    isStarted: boolean;
-  } | null>(null);
+    isCurrentWeek: boolean;
+  }>>([]);
 
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: {
+    fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Array<{
         id: string;
         title: string;
         numberOfDays: number;
-        entries?: { dayNumber: number; title: string }[];
-        progress: { currentDay: number; completedDays: number[] } | null;
-      } | null) => {
-        if (!data) { setScCompanion(null); return; }
-        const currentDay = data.progress?.currentDay ?? 1;
-        const completedDays = data.progress?.completedDays ?? [];
-        const nextEntryTitle = data.entries?.find(e => e.dayNumber === currentDay)?.title;
-        setScCompanion({
-          id: data.id,
-          title: data.title,
-          numberOfDays: data.numberOfDays,
-          currentDay,
-          completedDays,
-          nextEntryTitle,
-          isStarted: !!data.progress,
-        });
+        isCurrentWeek: boolean;
+        entries: { dayNumber: number; title: string }[];
+        progress: { currentDay: number; completedDays: number[]; status: string } | null;
+      }>) => {
+        // Show only companions the member has started; sort current-week first.
+        const started = data
+          .filter(c => c.progress !== null)
+          .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
+        setScCompanions(started.map(c => {
+          const currentDay = c.progress!.currentDay;
+          const nextEntryTitle = c.entries.find(e => e.dayNumber === currentDay)?.title;
+          return {
+            id: c.id,
+            title: c.title,
+            numberOfDays: c.numberOfDays,
+            currentDay,
+            completedDays: c.progress!.completedDays,
+            nextEntryTitle,
+            isCurrentWeek: c.isCurrentWeek,
+          };
+        }));
       })
-      .catch(() => setScCompanion(null));
+      .catch(() => setScCompanions([]));
   }, [user?.id]);
 
   if (!user) return null;
@@ -762,75 +769,74 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. Daily Devotional — self-paced ──────────────────────────────── */}
-        {activeDevotional ? (() => {
-          const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
-          const maxPublishedDay  = publishedEntries.length > 0
-            ? Math.max(...publishedEntries.map(e => e.dayNumber))
-            : 1;
-          const completedDays   = activeDevotional.progress.completedDays ?? [];
-          // Self-paced: next available day is derived from completions, not calendar.
-          const nextDay         = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
-          const nextEntry       = activeDevotional.entries.find(
-            e => e.dayNumber === nextDay && e.status === 'Published',
-          );
-          const completedCount  = completedDays.length;
-          const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
-          // For review when all complete, navigate to the highest completed day.
-          const openDay         = allComplete
-            ? Math.max(...completedDays)
-            : nextDay;
-          // Show "View Previous Entries" once the member has completed at least one.
-          const hasPrevEntries  = completedCount > 0;
+        {/* ── 2. Daily Devotionals — self-paced (all active series) ─────────── */}
+        {activeDevotionals.length > 0
+          ? activeDevotionals.map(activeDevotional => {
+              const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
+              const maxPublishedDay  = publishedEntries.length > 0
+                ? Math.max(...publishedEntries.map(e => e.dayNumber))
+                : 1;
+              const completedDays   = activeDevotional.progress.completedDays ?? [];
+              const nextDay         = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
+              const nextEntry       = activeDevotional.entries.find(
+                e => e.dayNumber === nextDay && e.status === 'Published',
+              );
+              const completedCount  = completedDays.length;
+              const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
+              const openDay         = allComplete ? Math.max(...completedDays) : nextDay;
+              const hasPrevEntries  = completedCount > 0;
 
-          return (
-            <motion.section
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.09 }}
-            >
-              <DevotionalCard
-                series={activeDevotional.series}
-                completedCount={completedCount}
-                totalPublished={publishedEntries.length}
-                nextDay={nextDay}
-                nextEntryTitle={nextEntry?.title}
-                allComplete={allComplete}
-                onOpen={() =>
-                  setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`)
-                }
-                onViewPreviousEntries={
-                  hasPrevEntries
-                    ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
-                    : undefined
-                }
-                onPause={() => setPauseTarget({
-                  type: 'devotional',
-                  id: activeDevotional.series.id,
-                  title: activeDevotional.series.title,
-                })}
-                onRemove={() => {
-                  // Optimistic: hide the card immediately
-                  setActiveDevotional(null);
-                  // Fire-and-forget
-                  void callEngagementAction('devotional', activeDevotional.series.id, 'remove');
-                }}
-              />
-            </motion.section>
-          );
-        })() : unstartedSeries.length > 0 ? (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.09 }}
-          >
-            <DevotionalDiscoveryCard
-              series={unstartedSeries[0]}
-              onBegin={() => handleBeginDevotional(unstartedSeries[0].id)}
-              starting={startingId === unstartedSeries[0].id}
-            />
-          </motion.section>
-        ) : null}
+              return (
+                <motion.section
+                  key={activeDevotional.series.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.09 }}
+                >
+                  <DevotionalCard
+                    series={activeDevotional.series}
+                    completedCount={completedCount}
+                    totalPublished={publishedEntries.length}
+                    nextDay={nextDay}
+                    nextEntryTitle={nextEntry?.title}
+                    allComplete={allComplete}
+                    onOpen={() =>
+                      setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`)
+                    }
+                    onViewPreviousEntries={
+                      hasPrevEntries
+                        ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
+                        : undefined
+                    }
+                    onPause={() => setPauseTarget({
+                      type: 'devotional',
+                      id: activeDevotional.series.id,
+                      title: activeDevotional.series.title,
+                    })}
+                    onRemove={() => {
+                      setActiveDevotionals(prev => prev.filter(d => d.series.id !== activeDevotional.series.id));
+                      void callEngagementAction('devotional', activeDevotional.series.id, 'remove');
+                    }}
+                  />
+                </motion.section>
+              );
+            })
+          : unstartedSeries.length > 0
+            ? (
+              <motion.section
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.09 }}
+              >
+                <DevotionalDiscoveryCard
+                  series={unstartedSeries[0]}
+                  onBegin={() => handleBeginDevotional(unstartedSeries[0].id)}
+                  starting={startingId === unstartedSeries[0].id}
+                />
+              </motion.section>
+            )
+            : null
+        }
 
         {/* ── 3. Your Journeys ───────────────────────────────────────────────── */}
         <motion.div
@@ -844,75 +850,63 @@ export default function Walk() {
           />
         </motion.div>
 
-        {/* ── 3. This Week's Sermon Companion ────────────────────────────────── */}
-        {scCompanion && (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-          >
-            <EmmausContentCard
-              label="SERMON COMPANION"
-              title={scCompanion.title}
-              description={(() => {
-                // Mirror the formula in buildCompanionItem (next-steps.ts) and
-                // buildDevotionalItem so Today's Steps and Next Steps always agree.
-                const completedCount = scCompanion.completedDays.length;
-                const total = scCompanion.numberOfDays;
-                const allComplete = total > 0 && completedCount >= total;
-                if (allComplete) return `${total} of ${total} completed`;
-                if (completedCount > 0) {
-                  return scCompanion.nextEntryTitle
-                    ? `Day ${scCompanion.currentDay} of ${total} · ${scCompanion.nextEntryTitle}`
-                    : `Day ${scCompanion.currentDay} of ${total}`;
+        {/* ── 4. Sermon Companions — all in-progress ─────────────────────────── */}
+        {scCompanions.map(sc => {
+          const completedCount = sc.completedDays.length;
+          const total = sc.numberOfDays;
+          const allComplete = total > 0 && completedCount >= total;
+          const description = allComplete
+            ? `${total} of ${total} completed`
+            : completedCount > 0
+              ? sc.nextEntryTitle
+                ? `Day ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
+                : `Day ${sc.currentDay} of ${total}`
+              : total > 0 ? `Day 1 of ${total}` : 'Day 1';
+
+          return (
+            <motion.section
+              key={sc.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15 }}
+            >
+              <EmmausContentCard
+                label="SERMON COMPANION"
+                title={sc.title}
+                description={description}
+                metadata={`${sc.numberOfDays} Days`}
+                // Hide Continue when all days are complete.
+                primaryActionLabel={sc.currentDay > sc.numberOfDays ? undefined : 'Continue'}
+                onAction={
+                  sc.currentDay > sc.numberOfDays
+                    ? undefined
+                    : () => setLocation(`/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`)
                 }
-                return total > 0 ? `Day 1 of ${total}` : 'Day 1';
-              })()}
-              metadata={`${scCompanion.numberOfDays} Days`}
-              // Hide Continue when all days are complete — currentDay advances
-              // beyond numberOfDays after the final day is marked complete.
-              primaryActionLabel={
-                scCompanion.isStarted && scCompanion.currentDay > scCompanion.numberOfDays
-                  ? undefined
-                  : "Continue"
-              }
-              onAction={
-                scCompanion.isStarted && scCompanion.currentDay > scCompanion.numberOfDays
-                  ? undefined
-                  : () => setLocation(
-                      `/sermon-companion/${scCompanion.id}/day/${scCompanion.currentDay}?source=today`
-                    )
-              }
-              headerTrailing={
-                scCompanion.isStarted
-                  ? (
-                    <WalkMoreMenu
-                      onPause={() => setPauseTarget({
-                        type: 'sermon-companion',
-                        id: scCompanion.id,
-                        title: scCompanion.title,
-                      })}
-                      onRemove={() => {
-                        // Optimistic: hide the card immediately
-                        setScCompanion(null);
-                        // Fire-and-forget
-                        void callEngagementAction('sermon-companion', scCompanion.id, 'remove');
-                      }}
-                    />
-                  )
-                  : undefined
-              }
-              secondaryAction={
-                scCompanion.isStarted && scCompanion.currentDay > 1
-                  ? {
-                      label: 'View Previous Reflections →',
-                      onPress: () => setLocation(`/sermon-companion/${scCompanion.id}/previous?from=walk`),
-                    }
-                  : undefined
-              }
-            />
-          </motion.section>
-        )}
+                headerTrailing={
+                  <WalkMoreMenu
+                    onPause={() => setPauseTarget({
+                      type: 'sermon-companion',
+                      id: sc.id,
+                      title: sc.title,
+                    })}
+                    onRemove={() => {
+                      setScCompanions(prev => prev.filter(c => c.id !== sc.id));
+                      void callEngagementAction('sermon-companion', sc.id, 'remove');
+                    }}
+                  />
+                }
+                secondaryAction={
+                  sc.currentDay > 1
+                    ? {
+                        label: 'View Previous Reflections →',
+                        onPress: () => setLocation(`/sermon-companion/${sc.id}/previous?from=walk`),
+                      }
+                    : undefined
+                }
+              />
+            </motion.section>
+          );
+        })}
 
       </main>
 
@@ -927,12 +921,10 @@ export default function Walk() {
             const target = pauseTarget;
             setPauseTarget(null);
             if (target.type === 'devotional') {
-              // Optimistic: hide card
-              setActiveDevotional(null);
+              setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
               void callEngagementAction('devotional', target.id, 'pause');
             } else {
-              // Optimistic: hide card
-              setScCompanion(null);
+              setScCompanions(prev => prev.filter(c => c.id !== target.id));
               void callEngagementAction('sermon-companion', target.id, 'pause');
             }
           }}

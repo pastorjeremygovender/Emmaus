@@ -286,7 +286,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     await Promise.all(
       devSeries.map(async s => {
         const full = await devStore.getSeriesById(s.id);
-          const published = steps.filter(s => s.status === "Published");
+        const published = (full?.entries ?? []).filter((e: devStore.DevotionalEntry) => e.status === "Published");
         seriesEntriesMap.set(s.id, published);
       }),
     );
@@ -304,7 +304,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     await Promise.all([
       ...scTableCompanions.map(async c => {
         const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
-          const published = steps.filter(s => s.status === "Published");
+        const published = entries.filter(e => e.status === "Published");
         companionEntriesMap.set(c.id, published);
       }),
       ...publishedJourneys

@@ -73,6 +73,58 @@ sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Reques
   }
 });
 
+// ─── GET /member/engagements ──────────────────────────────────────────────────
+// Must be registered before GET /:companionId to prevent path-param capture.
+// Any authenticated member. Returns ALL Published companions with the caller's
+// progress attached. Walk.tsx uses this to surface every in-progress companion
+// on Today's Steps, not just the current-week one.
+
+sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const [companions, progressMap] = await Promise.all([
+      store.listPublishedSermonCompanions(),
+      store.getAllSermonCompanionProgress(userId),
+    ]);
+
+    // Only fetch entries for companions the user has started — avoids loading
+    // entry content for every companion in the catalogue.
+    const startedIds = companions.filter(c => progressMap[c.id]).map(c => c.id);
+    const entriesByCompanion = Object.fromEntries(
+      await Promise.all(
+        startedIds.map(async id => {
+          const entries = await store.getEntriesForCompanion(id);
+          return [id, entries.filter(e => e.status === "Published").map(e => ({
+            dayNumber: e.dayNumber,
+            title: e.title,
+          }))];
+        }),
+      ),
+    );
+
+    const result = companions.map(c => {
+      const progress = progressMap[c.id] ?? null;
+      return {
+        id: c.id,
+        title: c.title,
+        numberOfDays: c.publishedEntryCount,
+        isCurrentWeek: (c as unknown as Record<string, unknown>).isCurrentWeek ?? false,
+        entries: entriesByCompanion[c.id] ?? [],
+        progress: progress
+          ? { currentDay: progress.currentDay, completedDays: progress.completedDays, status: progress.status }
+          : null,
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: member/engagements failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── GET /by-sermon/:sermonId ─────────────────────────────────────────────────
 
 sermonCompanionsRouter.get("/by-sermon/:sermonId", async (req: Request, res: Response) => {
