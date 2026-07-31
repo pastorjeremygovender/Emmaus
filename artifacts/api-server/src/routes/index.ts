@@ -15,6 +15,7 @@ import { adminSermonsRouter } from "./admin-sermons";
 import nextStepsRouter from "./next-steps";
 import { engagementsRouter } from "./engagements";
 import adminResetRouter from "./admin-reset";
+import roomsRouter from "./rooms";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/admin-sermons", adminSermonsRouter);
 router.use(nextStepsRouter);
 router.use("/engagements", engagementsRouter);
 router.use(adminResetRouter);
+router.use("/rooms", roomsRouter);
 
 export default router;

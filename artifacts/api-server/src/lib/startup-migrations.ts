@@ -295,6 +295,56 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: durationDays recompute failed (non-fatal)");
   }
 
+  // ── Rooms tables (2026-07) ───────────────────────────────────────────────────
+  // Four tables for the invite-only Rooms feature. Invite codes are 7 random
+  // uppercase letters; invite tokens are UUIDs (for one-click join links).
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rooms (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name         TEXT NOT NULL,
+        invite_code  CHAR(7) NOT NULL UNIQUE,
+        invite_token UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+        created_by   TEXT NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS room_members (
+        room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id    TEXT NOT NULL,
+        role       TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+        joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS room_members_room_id_idx ON room_members(room_id);
+      CREATE INDEX IF NOT EXISTS room_members_user_id_idx ON room_members(user_id);
+
+      CREATE TABLE IF NOT EXISTS room_messages (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id    TEXT NOT NULL,
+        body       TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS room_messages_room_id_idx ON room_messages(room_id);
+
+      CREATE TABLE IF NOT EXISTS room_journeys (
+        room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        journey_id TEXT NOT NULL,
+        started_by TEXT NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, journey_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS room_journeys_room_id_idx ON room_journeys(room_id);
+    `);
+    logger.info("Startup migration: rooms tables created (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms tables failed (non-fatal)");
+  }
+
   // ── Repair journey step statuses (2026-07) ────────────────────────────────────
   // Root cause: createStep always defaulted to status="Draft" regardless of
   // parent journey status. Steps added to a Published journey after it was
