@@ -195,6 +195,7 @@ async function apiFetch<T>(
   }
   const res = await fetch(getApiUrl(path), {
     ...fetchOptions,
+    credentials: 'include',   // always send the signed emmaus_uid session cookie; cannot be overridden
     headers,
   });
   if (!res.ok) {

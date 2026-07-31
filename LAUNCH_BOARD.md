@@ -206,4 +206,27 @@
 Everything outside the eight pillars listed above is frozen for this release.
 No new features, no UI redesigns, no refactors of working code.
 
-_Last updated: 31 July 2026 — session 5 (Ticket #004)_
+---
+
+## Correction Ticket — Pilot Regressions (31 July 2026)
+
+Two regressions were reported from testing on the published app.
+
+### Part A — Active Walk/Journey no longer appears on Today's Steps
+
+**Root cause:** When the app restores a user from `localStorage` on startup (refresh, app restart, revisit), `issueSessionCookie` was not called. The `emmaus_uid` session cookie was only issued during explicit `signIn`/`signUp`/`signInDemo` calls. Without a cookie, any server route relying on `resolveUserId` (including `POST /api/journeys/:id/progress/start`) returned 400 in production where the `X-User-Id` header fallback is disabled (by DR-2). The `startJourney` call would fail, the optimistic update would be rolled back, and the card would disappear.
+
+**Fixes applied:**
+1. **`AuthContext.tsx`** — added `issueSessionCookie(parsed.id)` in the localStorage-restore branch of the startup `useEffect`. Cookie is now re-issued on every app startup, not just on explicit sign-in flows.
+2. **`journeys-api.ts`** — added `credentials: 'include'` to `apiFetch` (after `...fetchOptions` so it can never be overridden). Belt-and-suspenders: ensures cookies are sent even in any future cross-origin or hybrid dev configurations.
+
+### Part B — Ask Emmaus defaults to Psalm 42 regardless of question
+
+**Root cause:** `system-instructions.ts` had `"Psalm 42:1"` and `"Open Psalm 42"` hardcoded in two places — the prose `nextStep` example (line 108–109) and the `<EMMAUS_META>` JSON example (lines 221–229). The LLM copied these verbatim when it had no better context (production sermon archive was empty at the time of the test, so no sermon card reduced the available context). Additionally, the Psalm 42 example was so specific that the model latched onto it even when it shouldn't have.
+
+**Fixes applied:**
+- **`system-instructions.ts`** — replaced all Psalm 42 references with truly generic `<<placeholder>>` strings in both the prose example and the structured JSON example. The model is now instructed to use a passage it actually referenced, not copy an example.
+
+_Files:_ `artifacts/project-emmaus/src/contexts/AuthContext.tsx`, `artifacts/project-emmaus/src/lib/journeys-api.ts`, `artifacts/api-server/src/emmaus/system-instructions.ts`
+
+_Last updated: 31 July 2026 — Correction Ticket (pilot regressions)_

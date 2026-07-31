@@ -108,6 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setUser(parsed);
         localUser = parsed;
+        // Re-issue the session cookie so the signed emmaus_uid is fresh for this
+        // session. Without this, a page refresh or app restart would rely on a
+        // potentially-expired or browser-cleared cookie, breaking progress routes
+        // in production where X-User-Id is not accepted.
+        issueSessionCookie(parsed.id).catch(() => { /* non-fatal */ });
       } catch {
         // Corrupted session — clear it so the user can sign in fresh
         localStorage.removeItem('emmaus_demo_user');
