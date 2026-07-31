@@ -644,12 +644,12 @@ function StepFieldEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Reflection">
+      <FieldBlock label="Consider This">
         <textarea
           value={step.devotional ?? ''}
           onChange={e => onMetaChange({ devotional: e.target.value })}
           rows={8}
-          placeholder="The main content for this step…"
+          placeholder="The main devotional reflection for this day…"
           className={textareaCls}
         />
       </FieldBlock>
@@ -664,12 +664,22 @@ function StepFieldEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Today's Step">
+      <FieldBlock label="Your Next Step">
         <textarea
           value={step.actionStep ?? ''}
           onChange={e => onMetaChange({ actionStep: e.target.value })}
           rows={2}
           placeholder="One practical response to this step…"
+          className={textareaCls}
+        />
+      </FieldBlock>
+
+      <FieldBlock label="Closing" hint="Optional send-off at the bottom of the reading.">
+        <textarea
+          value={step.closingText ?? ''}
+          onChange={e => onMetaChange({ closingText: e.target.value })}
+          rows={2}
+          placeholder="Walk with grace today."
           className={textareaCls}
         />
       </FieldBlock>
@@ -1243,6 +1253,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       status: 'Draft',
       mentorIntro: '', scripture: '', devotional: '',
       reflectionQuestion: '', prayerPrompt: '', actionStep: '', lookingAhead: '',
+      closingText: '',
     });
     const blocks: Block[] = [createBlock('paragraph')];
     setStepsWithBlocks(ss => [...ss, { ...newStep, blocks, isDirty: false }]);

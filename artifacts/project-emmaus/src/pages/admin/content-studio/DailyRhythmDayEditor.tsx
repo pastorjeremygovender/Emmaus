@@ -48,9 +48,9 @@ const VARIANT_LABELS: Record<EditorVariant, VariantLabels> = {
     actionStepHint: 'One concrete action for today.',
   },
   'journey': {
-    reflection:     "Today's Journey",
-    reflectionHint: "Help members reflect on today's scripture — 2–4 paragraphs. Prompt them to think about what it means and how God might be speaking today.",
-    actionStep:     "Today's Step",
+    reflection:     'Consider This',
+    reflectionHint: 'The main devotional reflection for this day — 2–4 paragraphs. Help members see what the scripture means for their life today.',
+    actionStep:     'Your Next Step',
     actionStepHint: 'One concrete action the member can take today.',
   },
 };

@@ -64,6 +64,9 @@ export type Step = {
   memoryVerse?: string;
   lookingAhead?: string; // Emmaus Journey Standard — short intro for tomorrow's journey
 
+  // Emmaus Standard closing text (stored in content.closingText JSONB)
+  closingText?: string;
+
   // Extended metadata
   preferredTranslation?: string;
   estimatedReadingTime?: number;
