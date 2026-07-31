@@ -122,6 +122,16 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
           body: JSON.stringify({ ids: inReviewIds, status: 'Published' }),
         });
       }
+      // P2-9: also publish all In Review overviews for this book (previously missing)
+      await fetch(getApiUrl('/api/bible/chapter-overviews/admin/book-status'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user?.id ?? '',
+          'x-user-role': (user as { role?: string })?.role ?? '',
+        },
+        body: JSON.stringify({ bookId, status: 'Published' }),
+      });
       await load();
     } finally {
       setPublishing(null);

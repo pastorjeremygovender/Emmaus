@@ -466,6 +466,38 @@ export async function publishAllEntries(companionId: string): Promise<void> {
   );
 }
 
+/**
+ * P2-12: Atomically publish the companion header AND all its entries in a single
+ * transaction. Prevents the non-atomic two-call race where the header publishes
+ * but the entry UPDATE fails, leaving members with a broken reading experience.
+ */
+export async function publishCompanionAtomic(id: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE sermon_companion
+       SET status = 'Published',
+           published_at = COALESCE(published_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id],
+    );
+    await client.query(
+      `UPDATE sermon_companion_entry
+       SET status = 'Published', updated_at = NOW()
+       WHERE companion_id = $1`,
+      [id],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Member discovery ──────────────────────────────────────────────────────────
 
 /**

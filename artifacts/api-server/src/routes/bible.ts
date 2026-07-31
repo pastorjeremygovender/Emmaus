@@ -955,6 +955,30 @@ router.delete("/bible/study-notes/admin/:id", async (req: Request, res: Response
   }
 });
 
+// Admin: bulk-status update for all overviews in a book (P2-9)
+router.patch("/bible/chapter-overviews/admin/book-status", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const { bookId, status } = req.body as { bookId?: string; status?: string };
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!bookId || !VALID.includes(status ?? '')) {
+    res.status(400).json({ error: "bookId and valid status required" }); return;
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE bible_chapter_overviews
+       SET status=$1, updated_by=$2, updated_at=now()
+       WHERE book_id=$3 AND status IN ('Draft','In Review') RETURNING id`,
+      [status, userId, bookId.toLowerCase()]
+    );
+    res.json({ ok: true, updated: r.rowCount });
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/chapter-overviews/admin/book-status failed");
+    res.status(500).json({ error: "Bulk overview status update failed" });
+  }
+});
+
 // Admin: bulk-status update for multiple study notes
 router.patch("/bible/study-notes/admin/bulk/status", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);

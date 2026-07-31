@@ -159,6 +159,8 @@ export default function RoomDetail() {
   };
 
   const openChat = () => {
+    // P2-1: pass room name in history state so RoomChat can display it in the header
+    history.replaceState({ ...history.state, roomName: room?.name ?? '' }, '');
     setLocation(`/rooms/${roomId}/chat`);
   };
 

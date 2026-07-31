@@ -106,7 +106,8 @@ router.post("/sermon-generator/generate", async (req: Request, res: Response) =>
     res.json({
       success: true,
       sermon: result.sermon,
-      companion: { ...result.companion, status: "draft", entryCount: result.companion.entries?.length ?? 0 },
+      // P2-4: companion.status must be "Draft" (capital D) to match DB/store casing
+      companion: { ...result.companion, status: "Draft", entryCount: result.companion.entries?.length ?? 0 },
       source: { videoId: result.sermon.youtubeUrl, transcriptStatus: result.sermon.transcriptStatus },
       _full: result,
     });

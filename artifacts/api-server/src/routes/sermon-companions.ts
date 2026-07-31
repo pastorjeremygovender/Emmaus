@@ -290,8 +290,8 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
 
   try {
     const id = String(req.params.companionId);
-    await store.updateCompanion(id, { status: "Published" });
-    await store.publishAllEntries(id);
+    // P2-12: use atomic helper so companion header + entries publish in a single transaction
+    await store.publishCompanionAtomic(id);
     res.json({ ok: true, status: "Published" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: publish failed");
