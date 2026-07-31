@@ -83,6 +83,14 @@ export default function ChapterReader() {
     audioUrl?: string; relativeStartSeconds?: number; relativeTimestampLabel?: string;
     youtubeUrl?: string;
   }>>([]);
+  // Book intro + chapter overview
+  const [bookIntro, setBookIntro] = useState<{
+    author: string; dateWritten: string; theme: string;
+    keyVerse: string; keyVerseRef: string; overview: string;
+  } | null>(null);
+  const [chapterOverview, setChapterOverview] = useState<string | null>(null);
+  const [introExpanded, setIntroExpanded] = useState(false);
+
   const [preachedHereOpen, setPreachedHereOpen] = useState(false);
   const [preachedHerePlayer, setPreachedHerePlayer] = useState<{
     audioUrl: string; startSeconds: number; title: string; speaker?: string; watchUrl?: string;
@@ -170,6 +178,23 @@ export default function ChapterReader() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
+
+  // Fetch book intro + chapter overview when book/chapter changes (non-critical)
+  useEffect(() => {
+    setBookIntro(null);
+    setChapterOverview(null);
+    setIntroExpanded(false);
+
+    fetch(getApiUrl(`/api/bible/book-intro/${encodeURIComponent(resolvedBookId)}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setBookIntro(data))
+      .catch(() => {/* non-critical */});
+
+    fetch(getApiUrl(`/api/bible/chapter-overview/${encodeURIComponent(resolvedBookId)}/${chapterNum}`))
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setChapterOverview(data?.summary ?? null))
+      .catch(() => {/* non-critical */});
+  }, [resolvedBookId, chapterNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch Preached Here sermons when book/chapter changes (non-critical)
   useEffect(() => {
@@ -413,6 +438,16 @@ export default function ChapterReader() {
           </div>
         )}
 
+        {/* Chapter overview banner — one-sentence "chapter at a glance" */}
+        {chapterOverview && (
+          <div className="px-4 pb-2">
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-primary/5 border border-primary/15">
+              <BookOpen size={13} className="text-primary/70 mt-0.5 shrink-0" />
+              <p className="text-[12px] text-muted-foreground leading-[1.5] italic">{chapterOverview}</p>
+            </div>
+          </div>
+        )}
+
         {/* Preached Here badge — appears when ICC sermons reference this chapter */}
         {preachedHereSermons.length > 0 && (
           <div className="flex justify-center pb-2 px-4">
@@ -457,6 +492,52 @@ export default function ChapterReader() {
           </div>
         ) : (
           <div className="space-y-0">
+
+            {/* Book intro card — shown on chapter 1 only */}
+            {chapterNum === 1 && bookIntro && (
+              <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
+                <button
+                  onClick={() => setIntroExpanded(v => !v)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                >
+                  <div className="w-8 h-8 bg-primary/15 rounded-xl flex items-center justify-center shrink-0">
+                    <Info size={15} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-foreground">About {book.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{bookIntro.theme}</p>
+                  </div>
+                  <ChevronDown
+                    size={15}
+                    className={['text-muted-foreground transition-transform shrink-0', introExpanded ? 'rotate-180' : ''].join(' ')}
+                  />
+                </button>
+
+                {introExpanded && (
+                  <div className="px-4 pb-4 space-y-3 border-t border-primary/10">
+                    <p className="text-[14px] text-foreground leading-[1.7] pt-3">{bookIntro.overview}</p>
+
+                    <div className="rounded-xl bg-background/60 border border-primary/10 p-3.5 space-y-1">
+                      <p className="text-[12px] font-semibold text-primary/80 uppercase tracking-widest">Key Verse</p>
+                      <p className="text-[14px] text-foreground italic leading-[1.6]">"{bookIntro.keyVerse}"</p>
+                      <p className="text-[12px] text-muted-foreground font-medium">— {bookIntro.keyVerseRef}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Author</p>
+                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.author}</p>
+                      </div>
+                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Written</p>
+                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.dateWritten}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {chapterData.verses.map(v => {
               const hl = getHighlight(book.id, chapterNum, v.verse);
               const fav = isFavourite(book.id, chapterNum, v.verse);

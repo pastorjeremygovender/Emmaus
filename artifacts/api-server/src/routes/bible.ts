@@ -185,6 +185,39 @@ function isValidTranslation(id: string): boolean {
   return LOCAL_TRANSLATION_IDS.has(id) || LICENSED_TRANSLATION_IDS.has(id);
 }
 
+// ─── Book Intros & Chapter Overviews (must be before the wildcard route) ──────
+//
+// GET /api/bible/book-intro/:bookId
+// GET /api/bible/chapter-overview/:bookId/:chapter
+
+import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
+
+router.get("/bible/book-intro/:bookId", (req, res) => {
+  const bookId = String(req.params.bookId).toLowerCase().trim();
+  const intro = BOOK_INTROS[bookId];
+  if (!intro) {
+    res.status(404).json({ error: "No intro available for this book" });
+    return;
+  }
+  res.json(intro);
+});
+
+router.get("/bible/chapter-overview/:bookId/:chapter", (req, res) => {
+  const bookId = String(req.params.bookId).toLowerCase().trim();
+  const chapter = parseInt(String(req.params.chapter), 10);
+  if (isNaN(chapter) || chapter < 1) {
+    res.status(400).json({ error: "Invalid chapter number" });
+    return;
+  }
+  const key = `${bookId}:${chapter}`;
+  const summary = CHAPTER_OVERVIEWS[key];
+  if (!summary) {
+    res.status(404).json({ error: "No overview available for this chapter" });
+    return;
+  }
+  res.json({ bookId, chapter, summary });
+});
+
 // ─── GET /api/bible/:translation/:bookId/:chapter ─────────────────────────────
 
 router.get("/bible/:translation/:bookId/:chapter", async (req, res) => {
@@ -516,6 +549,205 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, "PATCH /bible/data failed");
     res.status(500).json({ error: "Failed to save Bible data" });
+  }
+});
+
+// ─── Cross References ──────────────────────────────────────────────────────────
+//
+// GET  /api/bible/cross-references?bookId=john&chapter=3&verse=16
+//   → Returns all cross reference pairs that include this verse (in either direction),
+//     with inline verse text fetched from the pre-loaded BSB search index.
+//
+// Admin CRUD:
+//   GET    /api/bible/cross-references/admin
+//   POST   /api/bible/cross-references/admin
+//   DELETE /api/bible/cross-references/admin/:id
+
+// Helper: look up a verse text from the already-loaded in-memory BSB search index.
+// Falls back to a one-time synchronous file load (cached) if the index isn't warm yet.
+// Never reads a file on a hot request path.
+const bsbVerseCache = new Map<string, string>(); // key: "bookId:chapter:verse"
+function getLocalVerseText(bookId: string, chapter: number, verse: number): string | null {
+  const cacheKey = `${bookId}:${chapter}:${verse}`;
+  if (bsbVerseCache.has(cacheKey)) return bsbVerseCache.get(cacheKey)!;
+
+  // Try the pre-built BSB search index first (avoids any I/O if already warmed)
+  const index = searchIndices.get("bsb");
+  if (index && index.length > 0) {
+    const record = index.find(r => r.bookId === bookId && r.chapter === chapter && r.verse === verse);
+    const text = record?.text ?? null;
+    if (text) bsbVerseCache.set(cacheKey, text);
+    return text;
+  }
+
+  // Fallback: one-time synchronous load (only before index is warm, typically never on hot path)
+  try {
+    const filePath = join(DATA_DIR, "bsb", `${bookId}.json`);
+    if (!existsSync(filePath)) return null;
+    const raw = readFileSync(filePath, "utf8");
+    const data = JSON.parse(raw) as {
+      chapters: Record<string, Array<{ verse: number; text: string }>>;
+    };
+    const verses = data.chapters[String(chapter)] ?? [];
+    const text = verses.find(v => v.verse === verse)?.text ?? null;
+    if (text) bsbVerseCache.set(cacheKey, text);
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+// Validation helper for cross-reference verse coordinates
+function validateVerseCoords(
+  bookId: unknown, chapter: unknown, verse: unknown
+): { bookId: string; chapter: number; verse: number } | null {
+  const bid = String(bookId ?? "").trim().toLowerCase();
+  const ch  = Number(chapter);
+  const v   = Number(verse);
+  if (!VALID_BOOK_IDS.has(bid))          return null;
+  if (!Number.isFinite(ch) || ch < 1 || ch > 150) return null;
+  if (!Number.isFinite(v)  || v < 1  || v > 200)  return null;
+  return { bookId: bid, chapter: ch, verse: v };
+}
+
+// Member: fetch cross references for a verse (both directions)
+router.get("/bible/cross-references", async (req: Request, res: Response) => {
+  const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
+  const chapter = parseInt(String(req.query.chapter ?? ""), 10);
+  const verse   = parseInt(String(req.query.verse ?? ""), 10);
+
+  if (!bookId || isNaN(chapter) || isNaN(verse)) {
+    res.status(400).json({ error: "bookId, chapter, and verse are required" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM bible_cross_references
+       WHERE (from_book_id = $1 AND from_chapter = $2 AND from_verse = $3)
+          OR (to_book_id   = $1 AND to_chapter   = $2 AND to_verse   = $3)
+       ORDER BY created_at ASC`,
+      [bookId, chapter, verse]
+    );
+
+    // Enrich each row with inline verse text for the "other" side of the link
+    const enriched = result.rows.map((row: {
+      id: string;
+      from_book_id: string; from_chapter: number; from_verse: number;
+      to_book_id: string;   to_chapter: number;   to_verse: number;
+      relationship_note: string;
+    }) => {
+      const isFrom = row.from_book_id === bookId && row.from_chapter === chapter && row.from_verse === verse;
+      const targetBook    = isFrom ? row.to_book_id    : row.from_book_id;
+      const targetChapter = isFrom ? row.to_chapter    : row.from_chapter;
+      const targetVerse   = isFrom ? row.to_verse      : row.from_verse;
+      const verseText     = getLocalVerseText(targetBook, targetChapter, targetVerse);
+      const bookName      = BOOK_NAMES[targetBook] ?? targetBook;
+      return {
+        id: row.id,
+        from_book_id: row.from_book_id, from_chapter: row.from_chapter, from_verse: row.from_verse,
+        to_book_id:   row.to_book_id,   to_chapter:   row.to_chapter,   to_verse:   row.to_verse,
+        relationship_note: row.relationship_note,
+        // Resolved target for display
+        targetBookId:   targetBook,
+        targetBookName: bookName,
+        targetChapter,
+        targetVerse,
+        targetVerseText: verseText,
+        targetRef: `${bookName} ${targetChapter}:${targetVerse}`,
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/cross-references failed");
+    res.json([]); // non-critical
+  }
+});
+
+// Admin: list all cross references
+router.get("/bible/cross-references/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const bookId = String(req.query.bookId ?? "").trim().toLowerCase();
+  try {
+    let query = "SELECT * FROM bible_cross_references";
+    const params: string[] = [];
+    if (bookId) {
+      params.push(bookId);
+      query += ` WHERE from_book_id = $1 OR to_book_id = $1`;
+    }
+    query += " ORDER BY from_book_id, from_chapter, from_verse";
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/cross-references/admin failed");
+    res.status(500).json({ error: "Failed to list cross references" });
+  }
+});
+
+// Admin: create a cross reference
+router.post("/bible/cross-references/admin", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  const { from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse, relationship_note } = req.body;
+
+  const fromCoords = validateVerseCoords(from_book_id, from_chapter, from_verse);
+  const toCoords   = validateVerseCoords(to_book_id,   to_chapter,   to_verse);
+
+  if (!fromCoords) {
+    res.status(400).json({ error: `Invalid 'from' verse: book must be a canonical Bible book ID, chapter 1–150, verse 1–200` });
+    return;
+  }
+  if (!toCoords) {
+    res.status(400).json({ error: `Invalid 'to' verse: book must be a canonical Bible book ID, chapter 1–150, verse 1–200` });
+    return;
+  }
+  // Reject self-links
+  if (
+    fromCoords.bookId === toCoords.bookId &&
+    fromCoords.chapter === toCoords.chapter &&
+    fromCoords.verse === toCoords.verse
+  ) {
+    res.status(400).json({ error: "A verse cannot reference itself" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO bible_cross_references
+         (from_book_id, from_chapter, from_verse, to_book_id, to_chapter, to_verse, relationship_note, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [
+        fromCoords.bookId, fromCoords.chapter, fromCoords.verse,
+        toCoords.bookId,   toCoords.chapter,   toCoords.verse,
+        String(relationship_note ?? '').trim(), userId,
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "POST /bible/cross-references/admin failed");
+    res.status(500).json({ error: "Failed to create cross reference" });
+  }
+});
+
+// Admin: delete a cross reference
+router.delete("/bible/cross-references/admin/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+
+  try {
+    await pool.query("DELETE FROM bible_cross_references WHERE id = $1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "DELETE /bible/cross-references/admin/:id failed");
+    res.status(500).json({ error: "Failed to delete cross reference" });
   }
 });
 

@@ -515,6 +515,33 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: user_bible_data table failed (non-fatal)");
   }
 
+  // ── Bible: cross references (2026-07) ─────────────────────────────────────
+  // Stores cross-reference pairs between Bible verses, editable by admins.
+  // Each row links a "from" verse to a "to" verse with an optional note.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bible_cross_references (
+        id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        from_book_id      text NOT NULL,
+        from_chapter      int  NOT NULL,
+        from_verse        int  NOT NULL,
+        to_book_id        text NOT NULL,
+        to_chapter        int  NOT NULL,
+        to_verse          int  NOT NULL,
+        relationship_note text NOT NULL DEFAULT '',
+        created_by        text NOT NULL DEFAULT '',
+        created_at        timestamp NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS bible_cross_refs_from_idx
+        ON bible_cross_references(from_book_id, from_chapter, from_verse);
+      CREATE INDEX IF NOT EXISTS bible_cross_refs_to_idx
+        ON bible_cross_references(to_book_id, to_chapter, to_verse);
+    `);
+    logger.info("Startup migration: bible_cross_references table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_cross_references table failed (non-fatal)");
+  }
+
   // ── Bible: admin study notes (2026-07) ─────────────────────────────────────
   // Stores curator-authored study content per verse/passage. All fields are
   // optional text so the admin can fill in sections incrementally.

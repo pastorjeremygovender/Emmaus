@@ -2,7 +2,7 @@
  * VerseStudyPanel
  *
  * Full-height bottom sheet opened when a user taps "Study" on a verse.
- * Loads passage-level study notes, cross-references, and chapter overview.
+ * Loads passage-level study notes, DB-backed cross-references, and chapter overview.
  *
  * Per spec:
  * - Find the passage containing the selected verse (verse_start ≤ v ≤ verse_end)
@@ -16,7 +16,7 @@ import { getApiUrl } from '@/lib/api';
 import {
   X, ChevronDown, ChevronUp, BookOpen, Globe, GitBranch,
   Clock, LetterText, Flame, Lightbulb, Mic2, Footprints,
-  Loader2, BookMarked, ArrowRight,
+  Loader2, BookMarked, ArrowRight, Link2,
 } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 
@@ -31,9 +31,14 @@ export type StudyVerse = {
 };
 
 type CrossReference = {
-  reference: string;
-  explanation: string;
-  type: string;
+  id: string;
+  targetBookId: string;
+  targetBookName: string;
+  targetChapter: number;
+  targetVerse: number;
+  targetRef: string;
+  targetVerseText: string | null;
+  relationship_note: string;
 };
 
 type StudyNote = {
@@ -49,7 +54,7 @@ type StudyNote = {
   original_language_note: string;
   jesus_connection: string;
   apply_it: string;
-  cross_references: CrossReference[];
+  cross_references: unknown[];
   key_themes: string[];
   important_people: string[];
   important_places: string[];
@@ -87,7 +92,7 @@ function StudySection({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  if (!content?.trim()) return null; // spec: hide empty sections
+  if (!content) return null;
 
   return (
     <div className="border-b border-border/50 last:border-0">
@@ -113,7 +118,13 @@ function StudySection({
 
 // ─── Cross references section ─────────────────────────────────────────────────
 
-function CrossReferencesSection({ refs }: { refs: CrossReference[] }) {
+function CrossReferencesSection({
+  refs,
+  onNavigate,
+}: {
+  refs: CrossReference[];
+  onNavigate: (bookId: string, chapter: number, verse: number) => void;
+}) {
   const [open, setOpen] = useState(false);
   if (!refs || refs.length === 0) return null;
 
@@ -123,7 +134,7 @@ function CrossReferencesSection({ refs }: { refs: CrossReference[] }) {
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-3 py-4 text-left"
       >
-        <span className="text-primary/70 shrink-0"><GitBranch size={17} /></span>
+        <span className="text-primary/70 shrink-0"><Link2 size={17} /></span>
         <span className="flex-1 text-[15px] font-semibold text-foreground">Cross References</span>
         <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full mr-1">
           {refs.length}
@@ -135,20 +146,27 @@ function CrossReferencesSection({ refs }: { refs: CrossReference[] }) {
 
       {open && (
         <div className="pb-4 space-y-2.5">
-          {refs.map((ref, i) => (
-            <div key={i} className="p-3.5 rounded-xl border border-border bg-card">
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <span className="text-[13px] font-semibold text-foreground">{ref.reference}</span>
-                {ref.type && (
-                  <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">
-                    {ref.type}
-                  </span>
-                )}
+          {refs.map(ref => (
+            <button
+              key={ref.id}
+              onClick={() => onNavigate(ref.targetBookId, ref.targetChapter, ref.targetVerse)}
+              className="w-full flex items-start gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
+            >
+              <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+                <Link2 size={14} className="text-primary" />
               </div>
-              {ref.explanation && (
-                <p className="text-[13px] text-muted-foreground leading-[1.5]">{ref.explanation}</p>
-              )}
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-primary">{ref.targetRef}</p>
+                {ref.targetVerseText ? (
+                  <p className="text-[13px] text-foreground leading-[1.6] mt-0.5 line-clamp-3">
+                    "{ref.targetVerseText}"
+                  </p>
+                ) : null}
+                {ref.relationship_note ? (
+                  <p className="text-[11px] text-muted-foreground mt-1 italic">{ref.relationship_note}</p>
+                ) : null}
+              </div>
+            </button>
           ))}
         </div>
       )}
@@ -294,14 +312,16 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
   const [, setLocation] = useLocation();
   const [studyNote, setStudyNote] = useState<StudyNote | null>(null);
   const [sermons, setSermons] = useState<PreachedHereSermon[]>([]);
+  const [crossRefs, setCrossRefs] = useState<CrossReference[]>([]);
   const [chapterOverview, setChapterOverview] = useState<ChapterOverview | null | 'loading'>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch study note + sermons when panel opens
+  // Fetch study note, sermons, DB cross references, and chapter overview when panel opens
   useEffect(() => {
     if (!open || !verse) return;
     setStudyNote(null);
     setSermons([]);
+    setCrossRefs([]);
     setChapterOverview(null);
     setLoading(true);
 
@@ -311,18 +331,23 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
     const sermonUrl = getApiUrl(
       `/api/youtube-archive/preached-here?bookId=${encodeURIComponent(verse.bookId)}&chapter=${verse.chapter}`
     );
+    const crossRefUrl = getApiUrl(
+      `/api/bible/cross-references?bookId=${verse.bookId}&chapter=${verse.chapter}&verse=${verse.verse}`
+    );
     const overviewUrl = getApiUrl(
-      `/api/bible/chapter-overview?bookId=${verse.bookId}&chapter=${verse.chapter}`
+      `/api/bible/chapter-overview/${verse.bookId}/${verse.chapter}`
     );
 
     Promise.all([
       fetch(noteUrl).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch(sermonUrl).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch(crossRefUrl).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch(overviewUrl).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([note, rawSermons, overview]) => {
+    ]).then(([note, rawSermons, refs, overview]) => {
       setStudyNote(note as StudyNote | null);
       const sd = rawSermons as { chapterSermons?: PreachedHereSermon[]; sermons?: PreachedHereSermon[] };
       setSermons(sd.chapterSermons ?? sd.sermons ?? []);
+      setCrossRefs(Array.isArray(refs) ? refs : []);
       setChapterOverview((overview as ChapterOverview | null) ?? null);
     }).finally(() => setLoading(false));
   }, [open, verse?.bookId, verse?.chapter, verse?.verse]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -330,19 +355,9 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
   const ref = verse ? `${verse.bookName} ${verse.chapter}:${verse.verse}` : '';
   const chapterRef = verse ? `${verse.bookName} ${verse.chapter}` : '';
 
-  // Parse cross_references — may come back as string or array
-  const crossRefs: CrossReference[] = (() => {
-    if (!studyNote) return [];
-    const raw = studyNote.cross_references;
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return []; } }
-    return [];
-  })();
-
   const hasAnyContent = studyNote && (
     studyNote.content || studyNote.context_note || studyNote.historical_note ||
-    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it ||
-    crossRefs.length > 0
+    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it
   );
 
   return (
@@ -396,7 +411,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                 {/* Chapter Overview — available on demand */}
                 <ChapterOverviewSection overview={chapterOverview} chapterRef={chapterRef} />
 
-                {/* Explanation */}
+                {/* 1. Explanation */}
                 <StudySection
                   icon={<BookOpen size={17} />}
                   title="Explanation"
@@ -404,51 +419,55 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                   defaultOpen
                 />
 
-                {/* Passage Context */}
+                {/* 2. Passage Context */}
                 <StudySection
                   icon={<Globe size={17} />}
                   title="Passage Context"
                   content={studyNote?.context_note}
                 />
 
-                {/* Historical Background */}
+                {/* 3. Historical Background */}
                 <StudySection
                   icon={<Clock size={17} />}
                   title="Historical Background"
                   content={studyNote?.historical_note}
                 />
 
-                {/* Original Language */}
+                {/* 4. Original Language */}
                 <StudySection
                   icon={<LetterText size={17} />}
                   title="Original Language"
                   content={studyNote?.original_language_note}
                 />
 
-                {/* How This Points to Jesus */}
+                {/* 5. How This Points to Jesus */}
                 <StudySection
                   icon={<Flame size={17} />}
                   title="How This Points to Jesus"
                   content={studyNote?.jesus_connection}
                 />
 
-                {/* Cross References */}
-                <CrossReferencesSection refs={crossRefs} />
-
-                {/* Apply It */}
+                {/* 6. Apply It */}
                 <StudySection
                   icon={<Lightbulb size={17} />}
                   title="Apply It"
                   content={studyNote?.apply_it}
                 />
 
-                {/* Preached Here */}
-                {sermons.length > 0 && (
-                  <PreachedHereSection sermons={sermons} />
-                )}
+                {/* 7. Cross References — DB-backed, tap to navigate */}
+                <CrossReferencesSection
+                  refs={crossRefs}
+                  onNavigate={(bookId, chapter, verseNum) => {
+                    onClose();
+                    setLocation(`/bible/read/${bookId}/${chapter}?startVerse=${verseNum}`);
+                  }}
+                />
+
+                {/* 8. Preached Here */}
+                <PreachedHereSection sermons={sermons} />
 
                 {/* No content state */}
-                {!hasAnyContent && !chapterOverview && sermons.length === 0 && (
+                {!hasAnyContent && !chapterOverview && sermons.length === 0 && crossRefs.length === 0 && (
                   <div className="py-8 text-center">
                     <p className="text-[15px] font-semibold text-foreground mb-2">
                       No study notes yet for this passage
