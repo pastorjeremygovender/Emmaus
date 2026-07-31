@@ -117,6 +117,7 @@ function buildJourneyItem(
   contentType: ContentType,
   allProgress: Record<string, journeyStore.FrontendProgress>,
   journeyIdsWithIntro: Set<string> = new Set(),
+  publishedSteps?: journeyStore.FrontendStep[],
 ): NextStepsItem {
   const state = journeyProgressState(j, allProgress);
   const p = allProgress[j.id];
@@ -133,11 +134,33 @@ function buildJourneyItem(
     ? j.title.split(": ")[0].trim()
     : j.title;
 
+  // For sermon-devotional journey companions compute a progress-aware description
+  // ("Day N of M · Title") that mirrors the formula used for sermon-table companions
+  // and buildDevotionalItem. Falls back to j.description when steps are not available.
+  let description: string | undefined = j.description || undefined;
+  if (contentType === "sermon-devotional" && publishedSteps !== undefined) {
+    const totalDays = publishedSteps.length;
+    const completedCount = p?.completedDays.length ?? 0;
+    const allComplete = totalDays > 0 && completedCount >= totalDays;
+    const nextStep = publishedSteps.find(s => s.day === currentDay);
+    const nextStepTitle = nextStep?.title || undefined;
+
+    description = allComplete
+      ? `${totalDays} of ${totalDays} completed`
+      : completedCount > 0
+        ? nextStepTitle
+          ? `Day ${currentDay} of ${totalDays} · ${nextStepTitle}`
+          : `Day ${currentDay} of ${totalDays}`
+        : totalDays > 0
+          ? `Day 1 of ${totalDays}`
+          : "Day 1";
+  }
+
   return {
     id: j.id,
     contentType,
     title,
-    description: j.description || undefined,
+    description,
     memberProgressState: state,
     metadata: {
       durationDays: j.durationDays || undefined,
@@ -253,13 +276,26 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // Used by buildCompanionItem to compute a progress-aware description
     // ("Day N of M · Entry Title") that mirrors Today's Steps exactly.
     const companionEntriesMap = new Map<string, sermonCompanionStore.CompanionEntry[]>();
-    await Promise.all(
-      scTableCompanions.map(async c => {
+
+    // Fetch published steps per journey-source companion.
+    // Used by buildJourneyItem to compute the same progress-aware description
+    // for companions stored in the journeys table (legacy/manual companions).
+    const journeyCompanionStepsMap = new Map<string, journeyStore.FrontendStep[]>();
+
+    await Promise.all([
+      ...scTableCompanions.map(async c => {
         const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
         const published = entries.filter(e => e.status === "Published");
         companionEntriesMap.set(c.id, published);
       }),
-    );
+      ...publishedJourneys
+        .filter(j => j.journeyType === "companion")
+        .map(async j => {
+          const steps = await journeyStore.listSteps(j.id);
+          const published = steps.filter(s => s.status === "Published");
+          journeyCompanionStepsMap.set(j.id, published);
+        }),
+    ]);
 
     // ── Daily Devotionals ────────────────────────────────────────────────────
 
@@ -319,7 +355,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // Build NextStepsItem from either source type.
     function buildCompanionItem(u: UnifiedCompanion): NextStepsItem {
       if (u.source === "journey") {
-        return buildJourneyItem(u.data, "sermon-devotional", journeyProgress);
+        return buildJourneyItem(
+          u.data,
+          "sermon-devotional",
+          journeyProgress,
+          new Set(), // no intro-step routing needed for companions
+          journeyCompanionStepsMap.get(u.data.id),
+        );
       }
       // sermon-table companion
       const c = u.data;
