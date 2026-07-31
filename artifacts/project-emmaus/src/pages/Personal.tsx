@@ -222,7 +222,7 @@ export default function Personal() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-medium text-foreground truncate">{room.name}</div>
-                    <div className="text-[12px] text-muted-foreground">{room.type}</div>
+                    <div className="text-[12px] text-muted-foreground">{room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}</div>
                   </div>
                   <ChevronRight size={15} className="text-muted-foreground shrink-0" />
                 </button>

@@ -3,69 +3,105 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { Button } from '@/components/ui/button';
-import { Users, Crown, AlertCircle } from 'lucide-react';
-import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
-import type { Room, RoomInvite } from '@/lib/rooms-types';
+import { Users, AlertCircle, Loader2 } from 'lucide-react';
 
-const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Member',
-  'demo-user-2': DEMO_USER_2.preferredName,
-  'demo-admin-1': 'Jeremy',
-};
-
-type Status = 'loading' | 'valid' | 'invalid' | 'already-member' | 'joined';
+type Status = 'loading-auth' | 'invite' | 'joining' | 'joined' | 'already-member' | 'invalid';
 
 export default function JoinByLink() {
   const { inviteToken } = useParams<{ inviteToken: string }>();
   const { user } = useAuth();
-  const { findInviteByToken, getRoom, getRoomMembers, joinRoomByToken } = useRooms();
+  const { joinRoomByToken } = useRooms();
   const [, setLocation] = useLocation();
 
-  const [status, setStatus] = useState<Status>('loading');
+  const [status, setStatus] = useState<Status>('loading-auth');
   const [error, setError] = useState('');
-  const [preview, setPreview] = useState<{ room: Room; invite: RoomInvite } | null>(null);
-  const [joining, setJoining] = useState(false);
+  const [joinedRoomId, setJoinedRoomId] = useState('');
 
+  // Once auth resolves, move to the invite confirmation screen
   useEffect(() => {
-    if (!inviteToken) { setStatus('invalid'); setError('No invite token provided.'); return; }
-    const invite = findInviteByToken(inviteToken);
-    if (!invite) { setStatus('invalid'); setError('This invitation is not valid.'); return; }
-    if (invite.revokedAt) { setStatus('invalid'); setError('This invitation has been revoked.'); return; }
-    if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-      setStatus('invalid'); setError('This invitation has expired.'); return;
+    if (!user) return; // Wait for auth
+    if (!inviteToken) {
+      setError('No invite token found in the link.');
+      setStatus('invalid');
+      return;
     }
-    const room = getRoom(invite.roomId);
-    if (!room || room.status !== 'active') { setStatus('invalid'); setError('This Room no longer exists.'); return; }
-    if (user) {
-      const alreadyMember = getRoomMembers(room.id).find(m => m.userId === user.id);
-      if (alreadyMember) { setStatus('already-member'); setPreview({ room, invite }); return; }
-    }
-    setPreview({ room, invite });
-    setStatus('valid');
-  }, [inviteToken, user]);
+    setStatus('invite');
+  }, [user, inviteToken]);
 
-  const handleJoin = () => {
-    if (!user) { setLocation('/auth'); return; }
-    if (!inviteToken) return;
-    setJoining(true);
-    const result = joinRoomByToken(user.id, inviteToken);
-    if (result.success) {
+  const handleJoin = async () => {
+    if (!user || !inviteToken) return;
+    setStatus('joining');
+    const result = await joinRoomByToken(user.id, String(inviteToken));
+    if (result.success && result.roomId) {
+      setJoinedRoomId(result.roomId);
       setStatus('joined');
     } else {
-      setError(result.error ?? 'Something went wrong. Please try again.');
-      setStatus('invalid');
+      const msg = result.error ?? 'This invitation is not valid or has expired.';
+      // Handle "already a member" gracefully
+      if (msg.toLowerCase().includes('already') && result.roomId) {
+        setJoinedRoomId(result.roomId);
+        setStatus('already-member');
+      } else {
+        setError(msg);
+        setStatus('invalid');
+      }
     }
-    setJoining(false);
   };
 
-  if (status === 'loading') {
+  // ── Loading auth ──────────────────────────────────────────────────────────
+  if (status === 'loading-auth') {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
-        <div className="text-muted-foreground text-[15px]">Checking invitation…</div>
+        <Loader2 size={28} className="text-muted-foreground animate-spin" />
       </div>
     );
   }
 
+  // ── Invite confirmation ───────────────────────────────────────────────────
+  if (status === 'invite') {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
+        <div className="text-center space-y-6 max-w-[340px] w-full">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+            <Users size={30} className="text-primary" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-[24px] font-sans font-semibold">You've been invited</h1>
+            <p className="text-[15px] text-muted-foreground leading-relaxed">
+              Someone has invited you to join a Room on Emmaus. Rooms let you walk journeys
+              together with family or friends.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <Button className="w-full h-12 rounded-2xl text-[16px]" onClick={handleJoin}>
+              Join Room
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-11 rounded-2xl"
+              onClick={() => setLocation('/rooms')}
+            >
+              Not now
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Joining ───────────────────────────────────────────────────────────────
+  if (status === 'joining') {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 size={32} className="text-muted-foreground animate-spin mx-auto" />
+          <p className="text-[15px] text-muted-foreground">Joining Room…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Invalid ───────────────────────────────────────────────────────────────
   if (status === 'invalid') {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
@@ -83,7 +119,8 @@ export default function JoinByLink() {
     );
   }
 
-  if (status === 'already-member' && preview) {
+  // ── Already a member ──────────────────────────────────────────────────────
+  if (status === 'already-member') {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
         <div className="text-center space-y-4 max-w-[320px]">
@@ -91,8 +128,10 @@ export default function JoinByLink() {
             <Users size={26} className="text-primary" />
           </div>
           <h1 className="text-[22px] font-sans font-semibold">You're already in this Room</h1>
-          <p className="text-[16px] font-medium text-foreground">{preview.room.name}</p>
-          <Button className="w-full rounded-2xl" onClick={() => setLocation(`/rooms/${preview.room.id}`)}>
+          <Button
+            className="w-full rounded-2xl"
+            onClick={() => setLocation(joinedRoomId ? `/rooms/${joinedRoomId}` : '/rooms')}
+          >
             Open Room
           </Button>
         </div>
@@ -100,82 +139,30 @@ export default function JoinByLink() {
     );
   }
 
-  if (status === 'joined' && preview) {
-    return (
-      <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
-        <div className="text-center space-y-5 max-w-[320px]">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-            <Users size={30} className="text-primary" />
-          </div>
-          <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
-          <p className="text-[16px] font-medium text-foreground">{preview.room.name}</p>
-          <p className="text-[14px] text-muted-foreground">
-            Your personal journey progress and private content remain yours alone.
-          </p>
-          <Button className="w-full rounded-2xl h-12" onClick={() => setLocation(`/rooms/${preview.room.id}`)}>
-            Open Room
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Valid — show confirmation
-  if (!preview) return null;
-  const ownerName = DEMO_NAMES[preview.room.ownerId] || 'Room Owner';
-  const members = getRoomMembers(preview.room.id);
-
+  // ── Joined ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-[400px] space-y-7">
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-            <Users size={26} className="text-primary" />
-          </div>
-          <p className="text-[14px] text-muted-foreground">You've been invited to join</p>
-          <h1 className="text-[28px] font-sans font-bold text-foreground">{preview.room.name}</h1>
+      <div className="text-center space-y-5 max-w-[340px]">
+        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+          <Users size={30} className="text-primary" />
         </div>
-
-        <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4">
-            <span className="text-[14px] text-muted-foreground">Invited by</span>
-            <div className="flex items-center gap-1.5">
-              <Crown size={13} className="text-amber-500" />
-              <span className="text-[14px] font-medium text-foreground">{ownerName}</span>
-            </div>
-          </div>
-          <div className="flex items-center justify-between px-5 py-4">
-            <span className="text-[14px] text-muted-foreground">Room type</span>
-            <span className="text-[14px] font-medium text-foreground">{preview.room.type}</span>
-          </div>
-          <div className="flex items-center justify-between px-5 py-4">
-            <span className="text-[14px] text-muted-foreground">Members</span>
-            <span className="text-[14px] font-medium text-foreground">{members.length}</span>
-          </div>
-        </div>
-
-        <div className="p-4 bg-muted/40 rounded-xl">
-          <p className="text-[13px] text-muted-foreground leading-relaxed">
-            Joining this Room will never expose your private reflections, prayer requests, or personal content to other members.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <Button
-            className="w-full h-12 rounded-2xl text-[16px]"
-            onClick={handleJoin}
-            disabled={joining}
-          >
-            {joining ? 'Joining…' : 'Join Room'}
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full h-11 rounded-2xl"
-            onClick={() => setLocation('/rooms')}
-          >
-            Cancel
-          </Button>
-        </div>
+        <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
+        <p className="text-[14px] text-muted-foreground leading-relaxed">
+          Welcome to the Room. Your personal journey progress and private content remain yours alone.
+        </p>
+        <Button
+          className="w-full rounded-2xl h-12"
+          onClick={() => setLocation(`/rooms/${joinedRoomId}`)}
+        >
+          Open Room
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full rounded-2xl h-11"
+          onClick={() => setLocation('/rooms')}
+        >
+          Back to Rooms
+        </Button>
       </div>
     </div>
   );

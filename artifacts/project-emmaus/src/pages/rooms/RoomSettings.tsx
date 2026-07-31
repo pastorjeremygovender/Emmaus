@@ -1,61 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Crown, Shield, User as UserIcon } from 'lucide-react';
-import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
-import type { RoomRole } from '@/lib/rooms-types';
-
-const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Member',
-  'demo-user-2': DEMO_USER_2.preferredName,
-  'demo-admin-1': 'Jeremy',
-};
+import { ArrowLeft, Crown, Loader2 } from 'lucide-react';
+import type { RoomDetail, RoomMember } from '@/lib/rooms-types';
 
 export default function RoomSettings() {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
-  const { getRoom, canManage, renameRoom, assignRole, removeMember, archiveRoom, getRoomMembers } = useRooms();
+  const { loadRoomDetail, removeMember, transferAdmin } = useRooms();
   const [, setLocation] = useLocation();
-  const [name, setName] = useState('');
-  const [saved, setSaved] = useState(false);
-  const [confirmArchive, setConfirmArchive] = useState(false);
+
+  const [room, setRoom] = useState<RoomDetail | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [confirmTransfer, setConfirmTransfer] = useState<RoomMember | null>(null);
+
+  useEffect(() => {
+    if (!roomId || !user) return;
+    loadRoomDetail(String(roomId)).then(detail => {
+      if (!detail) { setLoadError('Room not found.'); return; }
+      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Room admin can access Settings.'); return; }
+      setRoom(detail);
+    });
+  }, [roomId, user, loadRoomDetail]);
 
   if (!user || !roomId) return null;
-  const room = getRoom(roomId);
-  if (!room || !canManage(roomId, user.id)) {
+
+  if (loadError) {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
-        <p className="text-muted-foreground">You don't have permission to manage this Room.</p>
+        <p className="text-muted-foreground">{loadError}</p>
         <Button onClick={() => setLocation(`/rooms/${roomId}`)}>Back</Button>
       </div>
     );
   }
 
-  const members = getRoomMembers(roomId).filter(m => m.userId !== user.id);
+  if (!room) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <Loader2 size={24} className="text-muted-foreground animate-spin" />
+      </div>
+    );
+  }
 
-  const handleRename = () => {
-    if (!name.trim()) return;
-    renameRoom(roomId, name.trim(), user.id);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    setName('');
+  const otherMembers = room.members.filter(m => m.userId !== user.id);
+
+  const handleRemove = async (member: RoomMember) => {
+    if (!window.confirm(`Remove ${member.preferredName} from this Room?`)) return;
+    setActioning(member.userId);
+    try {
+      await removeMember(String(roomId), member.userId, user.id);
+      setRoom(prev => prev ? {
+        ...prev,
+        members: prev.members.filter(m => m.userId !== member.userId),
+        memberCount: prev.memberCount - 1,
+      } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove member');
+    } finally {
+      setActioning(null);
+    }
   };
 
-  const handleArchive = () => {
-    archiveRoom(roomId, user.id);
-    setLocation('/rooms');
-  };
-
-  const handleAssignRole = (targetUserId: string, role: RoomRole) => {
-    assignRole(roomId, targetUserId, role, user.id);
-  };
-
-  const handleRemove = (targetUserId: string, targetName: string) => {
-    if (window.confirm(`Remove ${targetName} from this Room?`)) {
-      removeMember(roomId, targetUserId, user.id);
+  const handleTransfer = async (toMember: RoomMember) => {
+    setActioning(toMember.userId);
+    try {
+      await transferAdmin(String(roomId), toMember.userId, user.id);
+      setLocation(`/rooms/${roomId}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to transfer admin');
+      setActioning(null);
+      setConfirmTransfer(null);
     }
   };
 
@@ -76,59 +94,46 @@ export default function RoomSettings() {
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-9 pb-8">
 
-        {/* Rename */}
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Room Name</h2>
-          <p className="text-[14px] text-muted-foreground">Current: <span className="font-medium text-foreground">{room.name}</span></p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="New Room name"
-              className="flex-1 h-11 px-4 rounded-xl border border-border bg-card text-[15px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              maxLength={60}
-            />
-            <Button size="sm" className="rounded-xl px-5" onClick={handleRename} disabled={!name.trim()}>
-              {saved ? 'Saved!' : 'Save'}
-            </Button>
-          </div>
-        </section>
-
-        {/* Member roles */}
-        {members.length > 0 && (
+        {/* Members */}
+        {otherMembers.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Member Roles</h2>
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Members
+            </h2>
             <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
-              {members.map(m => {
-                const mName = DEMO_NAMES[m.userId] || 'Member';
+              {otherMembers.map(m => {
+                const isActioning = actioning === m.userId;
                 return (
-                  <div key={m.id} className="flex items-center gap-3 px-5 py-4">
+                  <div key={m.userId} className="flex items-center gap-3 px-5 py-4">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-medium text-foreground">{mName}</div>
-                      <div className="text-[12px] text-muted-foreground">{m.role}</div>
+                      <div className="text-[15px] font-medium text-foreground truncate">
+                        {m.preferredName || 'Member'}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {m.role === 'admin' && <Crown size={11} className="text-amber-500" />}
+                        <span className="text-[12px] text-muted-foreground capitalize">{m.role}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
+                      {/* Transfer admin */}
+                      {m.role !== 'admin' && (
+                        <button
+                          onClick={() => setConfirmTransfer(m)}
+                          disabled={isActioning}
+                          className="text-[12px] text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg"
+                          title="Make admin"
+                        >
+                          <Crown size={14} />
+                        </button>
+                      )}
+                      {/* Remove */}
                       <button
-                        onClick={() => handleAssignRole(m.userId, 'Leader')}
-                        className={`p-2 rounded-lg transition-colors ${m.role === 'Leader' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-                        title="Make Leader"
-                      >
-                        <Shield size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleAssignRole(m.userId, 'Member')}
-                        className={`p-2 rounded-lg transition-colors ${m.role === 'Member' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-                        title="Set as Member"
-                      >
-                        <UserIcon size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleRemove(m.userId, mName)}
-                        className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-1"
+                        onClick={() => handleRemove(m)}
+                        disabled={isActioning}
+                        className="text-[12px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg ml-1 disabled:opacity-40"
                         title="Remove member"
                       >
-                        ×
+                        {isActioning ? <Loader2 size={13} className="animate-spin" /> : '×'}
                       </button>
                     </div>
                   </div>
@@ -138,23 +143,44 @@ export default function RoomSettings() {
           </section>
         )}
 
-        {/* Archive */}
-        <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Archive Room</h2>
-          {!confirmArchive ? (
-            <Button variant="outline" className="w-full rounded-xl" onClick={() => setConfirmArchive(true)}>
-              Archive Room
-            </Button>
-          ) : (
-            <div className="p-4 bg-muted/40 rounded-xl space-y-3">
-              <p className="text-[13px] text-muted-foreground">Archive this Room? Members won't be able to start new journeys, but personal data is preserved.</p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleArchive}>Archive</Button>
-                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmArchive(false)}>Cancel</Button>
-              </div>
+        {otherMembers.length === 0 && (
+          <div className="p-8 border border-dashed border-border rounded-2xl text-center">
+            <p className="text-[15px] text-muted-foreground">You're the only member.</p>
+          </div>
+        )}
+
+        {/* Transfer admin confirmation */}
+        {confirmTransfer && (
+          <div className="p-5 rounded-2xl border border-primary/30 bg-primary/5 space-y-4">
+            <div>
+              <p className="text-[15px] font-semibold text-foreground">
+                Transfer admin to {confirmTransfer.preferredName}?
+              </p>
+              <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+                They will become the Room admin. You will become a regular member.
+              </p>
             </div>
-          )}
-        </section>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 rounded-xl"
+                onClick={() => handleTransfer(confirmTransfer)}
+                disabled={!!actioning}
+              >
+                {actioning ? <><Loader2 size={13} className="mr-1.5 animate-spin" />Transferring…</> : 'Confirm Transfer'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 rounded-xl"
+                onClick={() => setConfirmTransfer(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
       </main>
       <BottomNav />
     </div>

@@ -791,7 +791,7 @@ export default function Journeys() {
       : `${item.route}?source=nextStepsJourneys`;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(item.id);
-    startSharedJourney(roomId, item.id, user.id);
+    await startSharedJourney(roomId, item.id, user.id);
     setPendingItem(null);
     setLocation(destination);
     reload();

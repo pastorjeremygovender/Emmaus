@@ -153,7 +153,7 @@ export default function JourneyDay() {
   const myRooms = user ? getMyRooms(user.id) : [];
   const activeRoomsForJourney = journeyId
     ? myRooms.filter(room => {
-        const invitations = getJourneyInvitations(room.id);
+        const invitations = getJourneyInvitations(room.id) as any[];
         return invitations.some(ji => ji.journeyId === journeyId && ji.status === 'open');
       })
     : [];

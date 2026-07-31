@@ -55,7 +55,14 @@ router.get("/", async (req, res) => {
 
   try {
     const rooms = await getRoomsForUser(userId);
-    res.json({ rooms });
+    // Redact invitation credentials for rooms where the caller is not admin
+    const sanitised = rooms.map(({ currentUserRole, ...room }) => {
+      if (currentUserRole !== "admin") {
+        return { ...room, inviteCode: "", inviteToken: "" };
+      }
+      return room;
+    });
+    res.json({ rooms: sanitised });
   } catch (err) {
     res.status(500).json({ error: "Failed to load rooms." });
   }
@@ -126,7 +133,11 @@ router.get("/:roomId", async (req, res) => {
       return;
     }
 
-    res.json({ room, currentUserRole: role });
+    // Redact invitation credentials for non-admin members
+    const sanitisedRoom = role === "admin"
+      ? room
+      : { ...room, inviteCode: "", inviteToken: "" };
+    res.json({ room: sanitisedRoom, currentUserRole: role });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
   }

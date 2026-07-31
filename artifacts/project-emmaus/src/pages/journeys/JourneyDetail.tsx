@@ -161,7 +161,7 @@ export default function JourneyDetail() {
     if (!journey || !user) return;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id);
-    startSharedJourney(roomId, journey.id, user.id);
+    await startSharedJourney(roomId, journey.id, user.id);
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }

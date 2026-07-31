@@ -298,7 +298,7 @@ export default function ExploreJourneys() {
     const day = pendingStartDay;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(id);
-    startSharedJourney(roomId, id, user.id);
+    await startSharedJourney(roomId, id, user.id);
     setPendingJourneyId(null);
     setLocation(`/journey/${id}/day/${day}`);
   }

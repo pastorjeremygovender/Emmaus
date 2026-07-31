@@ -54,6 +54,7 @@ import InviteMembers from '@/pages/rooms/InviteMembers';
 import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
 import RoomDiscussion from '@/pages/rooms/RoomDiscussion';
 import RoomSettings from '@/pages/rooms/RoomSettings';
+import RoomChat from '@/pages/rooms/RoomChat';
 
 /**
  * Startup routing rule (locked):
@@ -169,6 +170,7 @@ function Router() {
       <Route path="/rooms" component={Rooms} />
       <Route path="/rooms/create" component={CreateRoom} />
       <Route path="/rooms/join" component={JoinByCode} />
+      <Route path="/rooms/:roomId/chat" component={RoomChat} />
       <Route path="/rooms/:roomId/invite" component={InviteMembers} />
       <Route path="/rooms/:roomId/settings" component={RoomSettings} />
       <Route path="/rooms/:roomId/journey/:journeyId/view" component={SharedJourneyView} />

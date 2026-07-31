@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useRooms } from '@/contexts/RoomsContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Users, User, ChevronRight, X } from 'lucide-react';
-import type { Room } from '@/lib/rooms-types';
+import type { RoomSummary } from '@/lib/rooms-types';
 
 interface Props {
   journeyId: string;
@@ -47,7 +47,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
     return () => clearTimeout(t);
   }, []);
 
-  const myRooms: Room[] = user ? getMyRooms(user.id) : [];
+  const myRooms: RoomSummary[] = user ? getMyRooms(user.id) : [];
 
   const handleContinue = async () => {
     if (mode === 'alone') {
@@ -253,7 +253,7 @@ export default function JourneyStartModal({ journeyId, journeyTitle, onClose, on
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-[15px] truncate">{room.name}</div>
-                        <div className="text-[12px] text-muted-foreground">{room.type}</div>
+                        <div className="text-[12px] text-muted-foreground">{room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}</div>
                       </div>
                       <ChevronRight size={16} className="text-muted-foreground shrink-0" />
                     </div>

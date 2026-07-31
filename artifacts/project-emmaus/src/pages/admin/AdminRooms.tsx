@@ -28,9 +28,9 @@ export default function AdminRooms() {
 
   const selectedRoom = selectedRoomId ? allRooms.find(r => r.id === selectedRoomId) : null;
   const selectedMembers = selectedRoomId ? getRoomMembers(selectedRoomId) : [];
-  const selectedInvites = selectedRoomId ? invites.filter(i => i.roomId === selectedRoomId) : [];
-  const selectedJourneys = selectedRoomId ? getJourneyInvitations(selectedRoomId) : [];
-  const reportedPosts = posts.filter(p => p.status === 'active'); // Demo: show all active posts
+  const selectedInvites: any[] = selectedRoomId ? (invites as any[]).filter(i => i.roomId === selectedRoomId) : [];
+  const selectedJourneys: any[] = selectedRoomId ? getJourneyInvitations(selectedRoomId) as any[] : [];
+  const reportedPosts: any[] = (posts as any[]).filter(p => p.status === 'active');
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-8">
@@ -50,8 +50,8 @@ export default function AdminRooms() {
           <div className="divide-y divide-gray-100">
             {allRooms.map(room => {
               const members = getRoomMembers(room.id);
-              const ownerName = DEMO_NAMES[room.ownerId] || 'Unknown';
-              const activeJourneys = getJourneyInvitations(room.id).filter(j => j.status === 'open').length;
+              const ownerName = room.adminName;
+              const activeJourneys = (getJourneyInvitations(room.id) as any[]).filter(j => j.status === 'open').length;
               return (
                 <div
                   key={room.id}
@@ -62,12 +62,12 @@ export default function AdminRooms() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-[15px] text-gray-900">{room.name}</span>
-                        <span className={`px-2 py-0.5 text-[10px] font-semibold uppercase rounded border ${STATUS_COLORS[room.status]}`}>
-                          {room.status}
+                        <span className="px-2 py-0.5 text-[10px] font-semibold uppercase rounded border bg-green-50 text-green-700 border-green-200">
+                          active
                         </span>
                       </div>
                       <div className="text-[13px] text-gray-500 mt-0.5">
-                        {room.type} · Owner: {ownerName} · {members.length} members · {activeJourneys} active journey{activeJourneys !== 1 ? 's' : ''}
+                        Admin: {room.adminName} · {room.memberCount} members · {activeJourneys} active journey{activeJourneys !== 1 ? 's' : ''}
                       </div>
                     </div>
                     <div className="text-[12px] text-gray-400">
@@ -87,10 +87,10 @@ export default function AdminRooms() {
           <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <div>
               <span className="text-sm font-semibold text-gray-900">{selectedRoom.name}</span>
-              <span className="text-xs text-gray-500 ml-2">{selectedRoom.type}</span>
+              <span className="text-xs text-gray-500 ml-2">{selectedRoom.memberCount} members</span>
             </div>
             <div className="flex gap-2">
-              {selectedRoom.status === 'active' && (
+              {(
                 confirmArchive === selectedRoom.id ? (
                   <div className="flex gap-1.5">
                     <button
@@ -126,7 +126,7 @@ export default function AdminRooms() {
             ) : (
               <div className="space-y-1.5">
                 {selectedMembers.map(m => (
-                  <div key={m.id} className="flex items-center gap-2 text-sm text-gray-700">
+                  <div key={m.userId} className="flex items-center gap-2 text-sm text-gray-700">
                     <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 text-[10px] font-bold flex items-center justify-center">
                       {(DEMO_NAMES[m.userId] || 'M')[0]}
                     </span>

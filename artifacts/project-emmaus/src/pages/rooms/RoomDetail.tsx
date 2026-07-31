@@ -1,87 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
-import { useJourney } from '@/contexts/JourneyContext';
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import {
-  ArrowLeft, Users, Share2, Settings, LogOut, Trash2,
-  ChevronRight, CheckCircle2, Clock, Minus, Crown, Shield
+  ArrowLeft, Share2, Settings, LogOut, Trash2,
+  MessageSquare, Crown, Loader2, BookOpen
 } from 'lucide-react';
-import { DEMO_USER_2 } from '@/lib/rooms-demo-data';
-import type { RoomJourneyInvitation } from '@/lib/rooms-types';
-
-// Map known user IDs to display names for demo mode
-const DEMO_NAMES: Record<string, string> = {
-  'demo-user-1': 'Member',
-  'demo-user-2': DEMO_USER_2.preferredName,
-  'demo-admin-1': 'Jeremy',
-};
-
-function displayName(userId: string, currentUser: { id: string; preferredName: string } | null) {
-  if (currentUser && userId === currentUser.id) {
-    const name = currentUser.preferredName?.trim();
-    return name ? `${name} (you)` : 'You';
-  }
-  return DEMO_NAMES[userId] || 'Member';
-}
+import { useJourney } from '@/contexts/JourneyContext';
+import type { RoomDetail as RoomDetailType, RoomMember } from '@/lib/rooms-types';
 
 export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
-  const {
-    getRoom, getRoomMembers, getJourneyInvitations, getParticipants, getMyParticipation,
-    canInvite, canManage, getMyMembership,
-    joinJourneyInvitation, declineJourneyInvitation,
-    leaveRoom, deleteRoom, archiveRoom,
-    getPendingJourneyInvitations,
-  } = useRooms();
-  const { getJourney, progress } = useJourney();
+  const { loadRoomDetail, leaveRoom, deleteRoom, removeMember } = useRooms();
+  const { getJourney } = useJourney();
   const [, setLocation] = useLocation();
+
+  const [room, setRoom] = useState<RoomDetailType | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [actioning, setActioning] = useState(false);
+
+  useEffect(() => {
+    if (!roomId || !user) return;
+    loadRoomDetail(String(roomId)).then(detail => {
+      if (!detail) setLoadError('Room not found or you are not a member.');
+      else setRoom(detail);
+    });
+  }, [roomId, user, loadRoomDetail]);
 
   if (!user || !roomId) return null;
 
-  const room = getRoom(roomId);
-  if (!room || room.status === 'deleted') {
+  if (loadError) {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
-        <p className="text-muted-foreground">Room not found.</p>
+        <p className="text-muted-foreground">{loadError}</p>
         <Button onClick={() => setLocation('/rooms')}>Back to Rooms</Button>
       </div>
     );
   }
 
-  const members = getRoomMembers(roomId);
-  const myMembership = getMyMembership(roomId, user.id);
-  if (!myMembership) {
+  if (!room) {
     return (
-      <div className="p-6 text-center mt-20 space-y-4">
-        <p className="text-muted-foreground">You are not a member of this Room.</p>
-        <Button onClick={() => setLocation('/rooms')}>Back to Rooms</Button>
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <Loader2 size={24} className="text-muted-foreground animate-spin" />
       </div>
     );
   }
 
-  const isOwner = myMembership.role === 'Owner';
-  const isLeaderOrOwner = canInvite(roomId, user.id);
+  const isAdmin = room.currentUserRole === 'admin';
 
-  const journeyInvites = getJourneyInvitations(roomId);
-  const openInvites = journeyInvites.filter(ji => ji.status === 'open');
-  const closedInvites = journeyInvites.filter(ji => ji.status !== 'open');
-  const myPendingInvites = getPendingJourneyInvitations(roomId, user.id);
-
-  const handleLeave = () => {
-    if (isOwner) return; // Cannot leave as owner
-    leaveRoom(roomId, user.id);
-    setLocation('/rooms');
+  const handleLeave = async () => {
+    setActioning(true);
+    try {
+      await leaveRoom(String(roomId), user.id);
+      setLocation('/rooms');
+    } catch (err) {
+      setActioning(false);
+      alert(err instanceof Error ? err.message : 'Failed to leave room');
+    }
   };
 
-  const handleDelete = () => {
-    deleteRoom(roomId, user.id);
-    setLocation('/rooms');
+  const handleDelete = async () => {
+    setActioning(true);
+    try {
+      await deleteRoom(String(roomId), user.id);
+      setLocation('/rooms');
+    } catch (err) {
+      setActioning(false);
+      alert(err instanceof Error ? err.message : 'Failed to delete room');
+    }
+  };
+
+  const handleRemoveMember = async (member: RoomMember) => {
+    if (!window.confirm(`Remove ${member.preferredName} from this Room?`)) return;
+    try {
+      await removeMember(String(roomId), member.userId, user.id);
+      setRoom(prev => prev ? {
+        ...prev,
+        members: prev.members.filter(m => m.userId !== member.userId),
+        memberCount: prev.memberCount - 1,
+      } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  };
+
+  const openChat = () => {
+    setLocation(`/rooms/${roomId}/chat`);
   };
 
   return (
@@ -98,9 +107,9 @@ export default function RoomDetail() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="font-sans font-semibold text-[17px] truncate">{room.name}</div>
-            <div className="text-[12px] text-muted-foreground">{room.type} · {myMembership.role}</div>
+            <div className="text-[12px] text-muted-foreground capitalize">{room.currentUserRole}</div>
           </div>
-          {isLeaderOrOwner && (
+          {isAdmin && (
             <button
               onClick={() => setLocation(`/rooms/${roomId}/invite`)}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -114,63 +123,48 @@ export default function RoomDetail() {
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-10">
 
-        {/* Pending Journey Invitations — needs my response */}
-        {myPendingInvites.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Journey Invitations
-            </h2>
-            {myPendingInvites.map(ji => {
-              const journey = getJourney(ji.journeyId);
-              const inviterName = displayName(ji.createdBy, user);
-              return (
-                <div key={ji.id} className="p-5 rounded-2xl border border-primary/20 bg-primary/5 space-y-4">
-                  <div>
-                    <p className="text-[13px] text-muted-foreground">
-                      {inviterName} has invited {room.name} to begin:
-                    </p>
-                    <h3 className="text-[18px] font-sans font-semibold text-foreground mt-1">
-                      {journey?.title ?? ji.journeyId}
-                    </h3>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1 rounded-xl"
-                      onClick={() => { joinJourneyInvitation(ji.id, user.id); }}
-                    >
-                      Join Journey
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 rounded-xl"
-                      onClick={() => { declineJourneyInvitation(ji.id, user.id); }}
-                    >
-                      Maybe Later
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        )}
+        {/* Chat */}
+        <section>
+          <button
+            onClick={openChat}
+            className="w-full text-left p-5 rounded-2xl border border-primary/25 bg-primary/5 hover:border-primary/40 transition-all flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <MessageSquare size={20} className="text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[16px] font-semibold text-foreground">Room Chat</div>
+              <div className="text-[13px] text-muted-foreground">Talk with your Room members</div>
+            </div>
+            <ArrowLeft size={16} className="text-muted-foreground rotate-180 shrink-0" />
+          </button>
+        </section>
 
-        {/* Active Shared Journeys */}
-        {openInvites.length > 0 && (
+        {/* Linked Journeys */}
+        {room.linkedJourneys.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Active Shared Journeys
+              Journeys Walking Together
             </h2>
-            {openInvites.map(ji => (
-              <SharedJourneyCard
-                key={ji.id}
-                ji={ji}
-                roomId={roomId}
-                userId={user.id}
-                onClick={() => setLocation(`/rooms/${roomId}/journey/${ji.journeyId}/view`)}
-              />
-            ))}
+            <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+              {room.linkedJourneys.map(lj => {
+                const journey = getJourney(lj.journeyId);
+                const title = journey?.title ?? lj.journeyId;
+                return (
+                  <div key={lj.journeyId} className="flex items-center gap-3.5 px-5 py-4">
+                    <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <BookOpen size={16} className="text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[15px] font-medium text-foreground truncate">{title}</div>
+                      <div className="text-[12px] text-muted-foreground">
+                        Started {new Date(lj.startedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -178,9 +172,9 @@ export default function RoomDetail() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Members ({members.length})
+              Members ({room.members.length})
             </h2>
-            {isLeaderOrOwner && (
+            {isAdmin && (
               <button
                 onClick={() => setLocation(`/rooms/${roomId}/invite`)}
                 className="text-[13px] text-primary font-medium hover:underline"
@@ -190,29 +184,32 @@ export default function RoomDetail() {
             )}
           </div>
           <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
-            {members.map(m => {
-              const name = displayName(m.userId, user);
-              const initials = name.replace(' (you)', '').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+            {room.members.map(m => {
+              const isMe = m.userId === user.id;
+              const displayName = isMe
+                ? `${m.preferredName || 'You'} (you)`
+                : m.preferredName || 'Member';
+              const initials = (m.preferredName || 'M')
+                .split(' ')
+                .map(w => w[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase();
               return (
-                <div key={m.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                <div key={m.userId} className="flex items-center gap-3.5 px-5 py-3.5">
                   <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[13px] font-semibold flex items-center justify-center shrink-0">
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-foreground truncate">{name}</div>
+                    <div className="text-[15px] font-medium text-foreground truncate">{displayName}</div>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      {m.role === 'Owner' && <Crown size={11} className="text-amber-500" />}
-                      {m.role === 'Leader' && <Shield size={11} className="text-primary" />}
-                      <span className="text-[12px] text-muted-foreground">{m.role}</span>
+                      {m.role === 'admin' && <Crown size={11} className="text-amber-500" />}
+                      <span className="text-[12px] text-muted-foreground capitalize">{m.role}</span>
                     </div>
                   </div>
-                  {isOwner && m.userId !== user.id && (
+                  {isAdmin && !isMe && (
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Remove ${name} from this Room?`)) {
-                          // removeMember handled in future full impl
-                        }
-                      }}
+                      onClick={() => handleRemoveMember(m)}
                       className="text-[12px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1"
                     >
                       Remove
@@ -224,49 +221,31 @@ export default function RoomDetail() {
           </div>
         </section>
 
-        {/* Completed Journeys */}
-        {closedInvites.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Completed Journeys
-            </h2>
-            {closedInvites.map(ji => {
-              const journey = getJourney(ji.journeyId);
-              return (
-                <div key={ji.id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card opacity-70">
-                  <CheckCircle2 size={18} className="text-primary shrink-0" />
-                  <span className="text-[15px] text-foreground">{journey?.title ?? ji.journeyId}</span>
-                </div>
-              );
-            })}
-          </section>
-        )}
-
         {/* Room actions */}
         <section className="space-y-3 pt-2 pb-4">
-          {isLeaderOrOwner && (
-            <Button
-              variant="outline"
-              className="w-full h-11 rounded-xl"
-              onClick={() => setLocation(`/rooms/${roomId}/invite`)}
-            >
-              <Share2 size={16} className="mr-2" />
-              Invite Members
-            </Button>
-          )}
-          {isOwner && (
-            <Button
-              variant="outline"
-              className="w-full h-11 rounded-xl"
-              onClick={() => setLocation(`/rooms/${roomId}/settings`)}
-            >
-              <Settings size={16} className="mr-2" />
-              Room Settings
-            </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl"
+                onClick={() => setLocation(`/rooms/${roomId}/invite`)}
+              >
+                <Share2 size={16} className="mr-2" />
+                Invite Members
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full h-11 rounded-xl"
+                onClick={() => setLocation(`/rooms/${roomId}/settings`)}
+              >
+                <Settings size={16} className="mr-2" />
+                Room Settings
+              </Button>
+            </>
           )}
 
-          {/* Leave Room */}
-          {!isOwner && !confirmLeave && (
+          {/* Leave Room (non-admin only) */}
+          {!isAdmin && !confirmLeave && (
             <Button
               variant="ghost"
               className="w-full h-11 rounded-xl text-muted-foreground hover:text-destructive"
@@ -276,25 +255,36 @@ export default function RoomDetail() {
               Leave Room
             </Button>
           )}
-          {!isOwner && confirmLeave && (
+          {!isAdmin && confirmLeave && (
             <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
               <p className="text-[15px] font-medium text-foreground">Leave this Room?</p>
               <p className="text-[13px] text-muted-foreground leading-relaxed">
-                You'll lose access to Room discussion. Your personal journey progress will be preserved.
+                You'll lose access to Room chat. Your personal journey progress is preserved.
               </p>
               <div className="flex gap-2">
-                <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleLeave}>
-                  Leave Room
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1 rounded-xl"
+                  onClick={handleLeave}
+                  disabled={actioning}
+                >
+                  {actioning ? 'Leaving…' : 'Leave Room'}
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmLeave(false)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 rounded-xl"
+                  onClick={() => setConfirmLeave(false)}
+                >
                   Cancel
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Owner: delete */}
-          {isOwner && !confirmDelete && (
+          {/* Admin: delete */}
+          {isAdmin && !confirmDelete && (
             <Button
               variant="ghost"
               className="w-full h-11 rounded-xl text-muted-foreground hover:text-destructive"
@@ -304,25 +294,36 @@ export default function RoomDetail() {
               Delete Room
             </Button>
           )}
-          {isOwner && confirmDelete && (
+          {isAdmin && confirmDelete && (
             <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
               <p className="text-[15px] font-medium text-foreground">Delete this Room permanently?</p>
               <p className="text-[13px] text-muted-foreground leading-relaxed">
-                This will archive membership and revoke all invitations. Personal journey progress and private content for all members will be preserved.
+                This removes the Room and all its chat messages. Member journey progress is preserved.
               </p>
               <div className="flex gap-2">
-                <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleDelete}>
-                  Delete Room
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1 rounded-xl"
+                  onClick={handleDelete}
+                  disabled={actioning}
+                >
+                  {actioning ? 'Deleting…' : 'Delete Room'}
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmDelete(false)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 rounded-xl"
+                  onClick={() => setConfirmDelete(false)}
+                >
                   Cancel
                 </Button>
               </div>
             </div>
           )}
-          {isOwner && (
+          {isAdmin && !confirmDelete && (
             <p className="text-center text-[12px] text-muted-foreground">
-              As Owner, you must transfer ownership or delete the Room before leaving.
+              As admin, transfer admin to another member before leaving.
             </p>
           )}
         </section>
@@ -330,33 +331,5 @@ export default function RoomDetail() {
       </main>
       <BottomNav />
     </div>
-  );
-}
-
-function SharedJourneyCard({ ji, roomId, userId, onClick }: { ji: RoomJourneyInvitation; roomId: string; userId: string; onClick: () => void }) {
-  const { getJourney } = useJourney();
-  const { getParticipants, getMyParticipation } = useRooms();
-  const journey = getJourney(ji.journeyId);
-  const participants = getParticipants(ji.id);
-  const myParticipation = getMyParticipation(ji.id, userId);
-  const joinedCount = participants.filter(p => p.participationStatus === 'joined').length;
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all space-y-3"
-    >
-      <div>
-        <h3 className="text-[17px] font-sans font-semibold text-foreground">{journey?.title ?? ji.journeyId}</h3>
-        <p className="text-[13px] text-muted-foreground mt-1">
-          {joinedCount} {joinedCount === 1 ? 'person' : 'people'} walking this journey
-          {myParticipation?.participationStatus === 'joined' ? " · You're in" : ''}
-        </p>
-      </div>
-      <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-        <span>View progress & discussion</span>
-        <ChevronRight size={16} />
-      </div>
-    </button>
   );
 }

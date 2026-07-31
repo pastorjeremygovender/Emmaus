@@ -153,9 +153,12 @@ export async function createRoom(
   }
 }
 
-export async function getRoomsForUser(userId: string): Promise<RoomSummary[]> {
+export async function getRoomsForUser(
+  userId: string
+): Promise<Array<RoomSummary & { currentUserRole: "admin" | "member" }>> {
   const res = await pool.query(
     `SELECT r.*,
+            rm.role            AS current_user_role,
             COUNT(rm2.user_id) AS member_count,
             up.preferred_name  AS admin_preferred_name,
             rm_admin.user_id   AS admin_user_id
@@ -164,11 +167,14 @@ export async function getRoomsForUser(userId: string): Promise<RoomSummary[]> {
      JOIN   room_members rm2 ON rm2.room_id = r.id
      LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
      LEFT JOIN user_profiles up ON up.email = rm_admin.user_id
-     GROUP  BY r.id, up.preferred_name, rm_admin.user_id
+     GROUP  BY r.id, up.preferred_name, rm_admin.user_id, rm.role
      ORDER  BY r.created_at DESC`,
     [userId]
   );
-  return res.rows.map(rowToSummary);
+  return res.rows.map(row => ({
+    ...rowToSummary(row),
+    currentUserRole: (row.current_user_role as "admin" | "member") ?? "member",
+  }));
 }
 
 export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
