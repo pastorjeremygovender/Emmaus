@@ -51,6 +51,10 @@ export const journeysTable = pgTable("journeys", {
   themeColor: text("theme_color"),   // hex colour, e.g. '#3B82F6' — nullable
   version: integer("version").notNull().default(1),  // incremented on each publish
 
+  // Smart content indicators — set when admin opts-in to notifying members on publish.
+  // null = never opted in; a timestamp value = "notify as of this date" (7-day NEW window).
+  notifyPublishedAt: timestamp("notify_published_at"),
+
   // Content Studio grouping (nullable — uncollected journeys still work)
   collectionId: text("collection_id"),
 
@@ -157,6 +161,8 @@ export const userJourneyProgressTable = pgTable("user_journey_progress", {
   startedAt: timestamp("started_at").defaultNow().notNull(),
   lastCompletedAt: timestamp("last_completed_at"),
   status: text("status").notNull().default("active"),  // active|completed|paused|dropped
+  // Set to NOW() when the member opens/views the content — used by badge computation.
+  lastOpenedAt: timestamp("last_opened_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -21,6 +21,8 @@ import * as devStore from "../lib/devotional-store.js";
 import * as collectionsStore from "../lib/collections-store.js";
 import * as sermonCompanionStore from "../lib/sermon-companion-store.js";
 import { logger } from "../lib/logger.js";
+import { computeBadge, type Badge } from "../lib/badge.js";
+import { extractUserId } from "../emmaus/auth.js";
 
 const router = Router();
 
@@ -57,6 +59,8 @@ export interface NextStepsItem {
    * null means the content is fully complete — no primary action should be shown.
    */
   primaryActionLabel: string | null;
+  /** Smart Content Indicator badge — 'NEW' | 'UPDATED' | null */
+  badge?: Badge;
 }
 
 export interface JourneyCollectionGroup {
@@ -173,6 +177,7 @@ function buildJourneyItem(
     },
     route: `/journey/${j.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel(contentType, state),
+    badge: computeBadge(j.notifyPublishedAt, p?.lastOpenedAt, !!p),
   };
 }
 
@@ -234,6 +239,7 @@ function buildDevotionalItem(
     },
     route: `/devotional/${s.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel("daily-devotional", state),
+    badge: computeBadge(s.notifyPublishedAt ?? null, p?.lastOpenedAt ?? null, devProgressMap.has(s.id)),
   };
 }
 
@@ -241,10 +247,9 @@ function buildDevotionalItem(
 
 router.get("/next-steps", async (req: Request, res: Response) => {
   try {
-    const userId =
-      (req.headers["x-user-id"] as string | undefined) ||
-      (req.query.userId as string | undefined) ||
-      null;
+    // Resolve user identity via the trusted auth helper — falls back to null
+    // when the request is unauthenticated (public catalog mode).
+    const userId = extractUserId(req);
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
@@ -449,6 +454,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
           : `/sermon-companion/${c.id}/day/${currentDay}`,
         // null → EmmausContentCard renders no primary button (no "Continue").
         primaryActionLabel: isAllComplete ? null : primaryActionLabel("sermon-devotional", state),
+        badge: computeBadge(c.notifyPublishedAt ?? null, prog?.lastOpenedAt ?? null, !!prog),
       };
     }
 

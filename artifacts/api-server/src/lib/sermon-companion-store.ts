@@ -38,6 +38,8 @@ export interface Companion {
   status: string;
   isCurrentWeek: boolean;
   publishedAt: string | null;
+  /** Set when admin opts-in to notifying members on publish (Smart Content Indicators). */
+  notifyPublishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   entries?: CompanionEntry[];
@@ -53,6 +55,8 @@ export interface CompanionProgress {
   updatedAt: string;
   /** Engagement lifecycle status — active | paused */
   status: string;
+  /** Set when the member opens the content — used for UPDATED badge computation. */
+  lastOpenedAt?: string | null;
 }
 
 // ─── Companion CRUD ───────────────────────────────────────────────────────────
@@ -408,9 +412,16 @@ export async function getProgressForUser(userId: string, companionId: string): P
 
 export async function startCompanion(userId: string, companionId: string): Promise<CompanionProgress> {
   const res = await pool.query(
-    `INSERT INTO sermon_companion_progress (id, user_id, companion_id, current_day, completed_days, started_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, 1, '[]', NOW(), NOW())
-     ON CONFLICT (user_id, companion_id) DO UPDATE SET updated_at = NOW()
+    // Include last_opened_at on creation so the badge is immediately cleared —
+    // a member who begins a companion should not see UPDATED on reload.
+    // On first visit: INSERT with last_opened_at = NOW() so no UPDATED badge fires.
+    // On conflict (returning member): also update last_opened_at so the UPDATED badge
+    // clears atomically when the reader loads, without relying on the fire-and-forget
+    // dismissBadge call winning the race against /member/engagements.
+    `INSERT INTO sermon_companion_progress
+       (id, user_id, companion_id, current_day, completed_days, last_opened_at, started_at, updated_at)
+     VALUES (gen_random_uuid(), $1, $2, 1, '[]', NOW(), NOW(), NOW())
+     ON CONFLICT (user_id, companion_id) DO UPDATE SET last_opened_at = NOW(), updated_at = NOW()
      RETURNING *`,
     [userId, companionId]
   );
@@ -445,6 +456,7 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     status: String(row.status ?? 'Draft'),
     isCurrentWeek: row.is_current_week === true || row.is_current_week === 'true',
     publishedAt: row.published_at ? String(row.published_at) : null,
+    notifyPublishedAt: row.notify_published_at ? String(row.notify_published_at) : null,
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
@@ -471,7 +483,7 @@ export async function publishAllEntries(companionId: string): Promise<void> {
  * transaction. Prevents the non-atomic two-call race where the header publishes
  * but the entry UPDATE fails, leaving members with a broken reading experience.
  */
-export async function publishCompanionAtomic(id: string): Promise<void> {
+export async function publishCompanionAtomic(id: string, notifyMembers = false): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -479,9 +491,10 @@ export async function publishCompanionAtomic(id: string): Promise<void> {
       `UPDATE sermon_companion
        SET status = 'Published',
            published_at = COALESCE(published_at, NOW()),
+           notify_published_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
            updated_at = NOW()
        WHERE id = $1`,
-      [id],
+      [id, notifyMembers],
     );
     await client.query(
       `UPDATE sermon_companion_entry
@@ -678,6 +691,7 @@ function rowToProgress(row: Record<string, unknown>): CompanionProgress {
     startedAt: String(row.started_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
     status: String(row.status ?? 'active'),
+    lastOpenedAt: row.last_opened_at ? String(row.last_opened_at) : null,
   };
 }
 

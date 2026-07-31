@@ -121,6 +121,8 @@ export interface FrontendJourney {
   // Branding & versioning
   themeColor?: string;   // hex colour, e.g. '#3B82F6' — nullable
   version?: number;      // incremented on each publish; defaults to 1
+  // Smart content indicators — ISO string; null/undefined = no notification set
+  notifyPublishedAt?: string;
   // Stored in metadata JSONB — no DB migration required
   scriptureReference?: string;  // e.g. "John 3:16-17"
   nextJourneyId?: string;       // slug of recommended next journey after completion
@@ -144,6 +146,8 @@ export interface FrontendProgress {
   lastCompletedAt: string | null;
   /** Engagement lifecycle status — active | paused | completed | dropped */
   status: string;
+  /** Set when the member opens the content — used for UPDATED badge computation. */
+  lastOpenedAt?: string | null;
 }
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -177,6 +181,7 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     collectionId: row.collectionId ?? undefined,
     themeColor: row.themeColor ?? undefined,
     version: row.version ?? 1,
+    notifyPublishedAt: row.notifyPublishedAt?.toISOString(),
     scriptureReference: (meta.scriptureReference as string) || undefined,
     nextJourneyId: (meta.nextJourneyId as string) || undefined,
     requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
@@ -256,6 +261,7 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
     startedAt: row.startedAt.toISOString(),
     lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
     status: row.status ?? "active",
+    lastOpenedAt: row.lastOpenedAt?.toISOString() ?? null,
   };
 }
 
@@ -447,6 +453,16 @@ export async function updateJourney(
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
   if (data.themeColor !== undefined)       updateFields.themeColor       = data.themeColor || null;
+
+  // notifyMembers is a write-only publish flag:
+  //   true  → set notify_published_at = now() (opt-in, members see NEW/UPDATED)
+  //   false → clear notify_published_at = null (opt-out, no badge)
+  //   absent / undefined → leave unchanged
+  if ((data as Record<string, unknown>).notifyMembers === true) {
+    updateFields.notifyPublishedAt = now;
+  } else if ((data as Record<string, unknown>).notifyMembers === false && data.status === "Published") {
+    updateFields.notifyPublishedAt = null;
+  }
 
   // Auto-increment version on each publish
   if (data.status === "Published") {
@@ -820,18 +836,23 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
     completedDays: [],
     startedAt: now,
     status: "active",
+    // Set lastOpenedAt on creation so the badge is immediately cleared —
+    // a member who starts a NEW journey should not see UPDATED on reload.
+    lastOpenedAt: now,
     createdAt: now,
     updatedAt: now,
   })
-  .onConflictDoNothing()
+  // On conflict: update lastOpenedAt atomically so any UPDATED badge clears
+  // when the reader opens, even for returning members. updatedAt is also
+  // refreshed; no other progress fields are changed so concurrent start calls
+  // remain safe (they don't overwrite currentDay or completedDays).
+  .onConflictDoUpdate({
+    target: [userJourneyProgressTable.userId, userJourneyProgressTable.journeyId],
+    set: { lastOpenedAt: now, updatedAt: now },
+  })
   .returning();
 
-  if (rows.length > 0) return toFrontendProgress(rows[0]);
-
-  // Row already existed (inserted by a concurrent request or the atomic
-  // shared-start endpoint) — fetch and return it.
-  const existing = await getProgress(userId, journeyId);
-  return existing!;
+  return toFrontendProgress(rows[0]);
 }
 
 export async function completeStep(

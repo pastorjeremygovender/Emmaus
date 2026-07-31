@@ -15,6 +15,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
+import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, MoreHorizontal, Pause, Trash2, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
@@ -166,6 +167,7 @@ function DevotionalCard({
   nextDay,
   nextEntryTitle,
   allComplete,
+  badge,
   onOpen,
   onViewPreviousEntries,
   onPause,
@@ -182,6 +184,8 @@ function DevotionalCard({
   nextEntryTitle?: string;
   /** True when all published entries have been completed. */
   allComplete: boolean;
+  /** Smart Content Indicator — UPDATED only on Today's Steps */
+  badge?: 'UPDATED' | null;
   /** Navigate to the next available entry. */
   onOpen: () => void;
   onViewPreviousEntries?: () => void;
@@ -204,6 +208,7 @@ function DevotionalCard({
       title={series.title}
       description={description}
       primaryActionLabel="Continue"
+      badge={badge ?? null}
       onAction={onOpen}
       headerTrailing={
         allComplete
@@ -422,14 +427,26 @@ function YourJourneysSection({
               ? `Day 1 of ${totalPublishedSteps}`
               : undefined;
 
+        // Today's Steps shows UPDATED only — never NEW.
+        // Any journey in startedJourneys has a progress record (hasProgress = true).
+        const badge = computeUpdatedBadge(
+          journey.notifyPublishedAt ?? null,
+          prog.lastOpenedAt ?? null,
+          true,
+        );
+
         return (
           <EmmausContentCard
             key={journey.id}
             label="WALK"
             title={journey.title}
             description={description}
+            badge={badge}
             primaryActionLabel={isCompleted ? undefined : 'Continue'}
-            onAction={isCompleted ? undefined : () => onSelect(journey.id, prog)}
+            onAction={isCompleted ? undefined : () => {
+              void dismissBadge('journey', journey.id);
+              onSelect(journey.id, prog);
+            }}
             headerTrailing={
               isCompleted
                 ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
@@ -526,6 +543,8 @@ export default function Walk() {
         method: 'POST',
         credentials: 'include',
       });
+      // Dismiss any NEW badge — progress now exists; opening it clears the indicator.
+      void dismissBadge('companion', companionId);
       setUnstartedCurrentWeekCompanion(null);
       setLocation(`/sermon-companion/${companionId}/day/1?source=today`);
     } catch {
@@ -556,6 +575,8 @@ export default function Walk() {
     /** Title of the entry at currentDay, if available. */
     nextEntryTitle?: string;
     isCurrentWeek: boolean;
+    /** Smart Content Indicator — UPDATED only on Today's Steps */
+    badge?: 'UPDATED' | null;
   }>>([]);
   /** Current-week companion the member hasn't started yet — shown as a discovery card. */
   const [unstartedCurrentWeekCompanion, setUnstartedCurrentWeekCompanion] = useState<{
@@ -574,6 +595,7 @@ export default function Walk() {
         isCurrentWeek: boolean;
         entries: { dayNumber: number; title: string }[];
         progress: { currentDay: number; completedDays: number[]; status: string } | null;
+        badge?: 'NEW' | 'UPDATED' | null;
       }>) => {
         // Show only companions the member has started and not paused; sort current-week first.
         const started = data
@@ -590,6 +612,8 @@ export default function Walk() {
             completedDays: c.progress!.completedDays,
             nextEntryTitle,
             isCurrentWeek: c.isCurrentWeek,
+            // Today's Steps only shows UPDATED — never NEW
+            badge: c.badge === 'UPDATED' ? 'UPDATED' : null,
           };
         }));
         // Surface the current-week companion as a discovery card for members who
@@ -838,9 +862,17 @@ export default function Walk() {
                     nextDay={nextDay}
                     nextEntryTitle={nextEntry?.title}
                     allComplete={allComplete}
-                    onOpen={() =>
-                      setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`)
-                    }
+                    badge={computeUpdatedBadge(
+                      activeDevotional.series.notifyPublishedAt ?? null,
+                      activeDevotional.progress.lastOpenedAt ?? null,
+                      // hasProgress: any devotional in activeDevotionals has a progress
+                      // record (started), so this is always true here.
+                      true,
+                    )}
+                    onOpen={() => {
+                      void dismissBadge('devotional', activeDevotional.series.id);
+                      setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`);
+                    }}
                     onViewPreviousEntries={
                       hasPrevEntries
                         ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
@@ -916,10 +948,14 @@ export default function Walk() {
                 metadata={`${sc.numberOfDays} Days`}
                 // Hide Continue when all days are complete.
                 primaryActionLabel={sc.currentDay > sc.numberOfDays ? undefined : 'Continue'}
+                badge={sc.badge ?? null}
                 onAction={
                   sc.currentDay > sc.numberOfDays
                     ? undefined
-                    : () => setLocation(`/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`)
+                    : () => {
+                        void dismissBadge('companion', sc.id);
+                        setLocation(`/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`);
+                      }
                 }
                 headerTrailing={
                   <WalkMoreMenu

@@ -35,6 +35,7 @@ import {
 } from '@/lib/devotionals-api';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
+import { dismissBadge } from '@/lib/badge-api';
 
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
@@ -90,6 +91,8 @@ export default function DevotionalDay() {
       } else {
         setProgress(p);
       }
+      // Clear UPDATED badge — member has opened the content (fire-and-forget).
+      void dismissBadge('devotional', seriesId);
     } catch {
       // ignore — loading errors shown via empty state below
     } finally {

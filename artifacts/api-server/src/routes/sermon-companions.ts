@@ -106,11 +106,17 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
       ),
     );
 
+    const { computeBadge } = await import("../lib/badge.js");
     const result = companions.map(c => {
       const progress = progressMap[c.id] ?? null;
       // Omit progress for paused companions — Walk.tsx filters on `progress !== null`
       // so this naturally hides paused companions without client-side status checks.
       const activeProgress = progress && progress.status !== "paused" ? progress : null;
+      const badge = computeBadge(
+        c.notifyPublishedAt ?? null,
+        progress?.lastOpenedAt ?? null,
+        progress !== null,
+      );
       return {
         id: c.id,
         title: c.title,
@@ -120,6 +126,7 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
         progress: activeProgress
           ? { currentDay: activeProgress.currentDay, completedDays: activeProgress.completedDays, status: activeProgress.status }
           : null,
+        badge,
       };
     });
 
@@ -290,8 +297,9 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
 
   try {
     const id = String(req.params.companionId);
+    const notifyMembers = req.body?.notifyMembers === true;
     // P2-12: use atomic helper so companion header + entries publish in a single transaction
-    await store.publishCompanionAtomic(id);
+    await store.publishCompanionAtomic(id, notifyMembers);
     res.json({ ok: true, status: "Published" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: publish failed");

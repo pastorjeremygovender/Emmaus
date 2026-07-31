@@ -1494,7 +1494,7 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
   function buildCreateParams(outputTokens: number, extraMessages?: OpenAI.ChatCompletionMessageParam[]) {
     // Reasoning models need a large total budget; standard models can stay lean.
     const maxTokens = isReasoningModel ? Math.max(outputTokens * 6, 25000) : outputTokens;
-    const params: Parameters<typeof openaiClient.chat.completions.create>[0] = {
+    const params: OpenAI.ChatCompletionCreateParamsNonStreaming = {
       model,
       messages: extraMessages ?? [],
       max_completion_tokens: maxTokens,
@@ -1502,8 +1502,7 @@ router.post("/bible/generate", async (req: Request, res: Response) => {
     };
     if (isReasoningModel) {
       // reasoning_effort: "low" caps chain-of-thought to avoid excessive latency
-      // @ts-expect-error reasoning_effort is valid for reasoning models (o-series, gpt-5)
-      params.reasoning_effort = "low";
+      (params as unknown as Record<string, unknown>).reasoning_effort = "low";
     }
     return params;
   }

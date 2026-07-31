@@ -21,6 +21,8 @@ export const devotionalSeriesTable = pgTable("devotional_series", {
   status: text("status").notNull().default("Draft"),
   // status: Draft | Published | Archived
   publishedAt: timestamp("published_at"),
+  // Smart content indicators — set when admin opts-in to notifying members on publish.
+  notifyPublishedAt: timestamp("notify_published_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdBy: text("created_by"),
@@ -73,6 +75,8 @@ export const devotionalProgressTable = pgTable("devotional_progress", {
   status: text("status").notNull().default("active"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Set to NOW() when the member opens/views the content — used by badge computation.
+  lastOpenedAt: timestamp("last_opened_at"),
 }, (table) => [
   unique("devotional_progress_user_series_unique").on(table.userId, table.seriesId),
 ]);

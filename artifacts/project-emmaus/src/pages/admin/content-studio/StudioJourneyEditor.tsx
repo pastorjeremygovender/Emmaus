@@ -1106,6 +1106,9 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [journeySaving, setJourneySaving] = useState<'saving' | 'publishing' | 'unpublishing' | 'deleting' | null>(null);
   const [journeySuccessMsg, setJourneySuccessMsg] = useState('');
   const [journeyErrorMsg, setJourneyErrorMsg] = useState('');
+  // Smart Content Indicators: notify members of new/updated content on publish.
+  // Defaults ON for first publish; admin can uncheck for silent updates.
+  const [notifyMembers, setNotifyMembers] = useState(true);
   const [confirmDeleteJourney, setConfirmDeleteJourney] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false); // Closed by default — editor gets the full width
@@ -1348,7 +1351,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     setJourneySuccessMsg('');
     setJourneyErrorMsg('');
     try {
-      await updateJourney({ ...journey, ...journeyForm, status: 'Published' } as Journey);
+      await updateJourney({ ...journey, ...journeyForm, status: 'Published', notifyMembers } as unknown as Journey);
       setJourneySaving(null);
       toast.success('Journey published successfully.');
       onBack();
@@ -1357,7 +1360,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       setTimeout(() => setJourneyErrorMsg(''), 4000);
       setJourneySaving(null);
     }
-  }, [journey, journeyForm, updateJourney, onBack]);
+  }, [journey, journeyForm, updateJourney, onBack, notifyMembers]);
 
   const handleUnpublishJourney = useCallback(async () => {
     if (!journey) return;
@@ -1451,6 +1454,19 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
         onPublish={handlePublishJourney}
         onUnpublish={handleUnpublishJourney}
         onDelete={() => setConfirmDeleteJourney(true)}
+        extraActions={
+          (journeyForm.status ?? journey?.status) !== 'Published' ? (
+            <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={notifyMembers}
+                onChange={e => setNotifyMembers(e.target.checked)}
+                className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              Notify members
+            </label>
+          ) : undefined
+        }
       />
 
       <div className="flex flex-1 min-h-0 overflow-hidden bg-gray-50">

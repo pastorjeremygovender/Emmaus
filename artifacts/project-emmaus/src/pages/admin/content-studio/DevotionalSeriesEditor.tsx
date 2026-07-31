@@ -45,6 +45,8 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  // Smart Content Indicators: notify members on publish. Defaults ON; admin can uncheck.
+  const [notifyMembers, setNotifyMembers] = useState(true);
 
   // Editable fields
   const [title, setTitle] = useState('');
@@ -87,7 +89,11 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
     const next = status === 'Published' ? 'Draft' : 'Published';
     setStatus(next);
     try {
-      await updateSeries(seriesId, { status: next }, auth);
+      await updateSeries(
+        seriesId,
+        { status: next, ...(next === 'Published' ? { notifyMembers } : {}) },
+        auth,
+      );
       if (next === 'Published') {
         toast.success('Devotional series published successfully.');
         onBack();
@@ -224,6 +230,17 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
                 {status === 'Published' ? <><EyeOff size={12} /> Unpublish</> : <><Eye size={12} /> Publish</>}
               </button>
             </div>
+            {status !== 'Published' && (
+              <label className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={notifyMembers}
+                  onChange={e => setNotifyMembers(e.target.checked)}
+                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+                Notify members of new content
+              </label>
+            )}
           </div>
         </div>
       </div>

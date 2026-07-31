@@ -84,7 +84,7 @@ export async function createSeries(
 
 export async function updateSeries(
   id: string,
-  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">>,
+  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">> & { notifyMembers?: boolean },
   updatedBy?: string
 ): Promise<DevotionalSeries | null> {
   const now = new Date();
@@ -95,11 +95,22 @@ export async function updateSeries(
         ? null
         : undefined;
 
+  // notifyMembers=true  → set notify_published_at = now() (opt-in)
+  // notifyMembers=false → clear notify_published_at = null (explicit opt-out)
+  // notifyMembers absent → leave unchanged (undefined = no change in .set())
+  const notifyPublishedAt =
+    data.notifyMembers === true && data.status === "Published" ? now
+    : data.notifyMembers === false && data.status === "Published" ? null
+    : undefined;
+
+  const { notifyMembers: _omit, ...rest } = data;
+
   const [row] = await db
     .update(devotionalSeriesTable)
     .set({
-      ...data,
+      ...rest,
       ...(publishedAt !== undefined ? { publishedAt } : {}),
+      ...(notifyPublishedAt !== undefined ? { notifyPublishedAt } : {}),
       updatedAt: now,
     })
     .where(eq(devotionalSeriesTable.id, id))
@@ -214,6 +225,7 @@ export async function startSeries(
   userId: string,
   seriesId: string
 ): Promise<DevotionalProgress> {
+  const now = new Date();
   const [row] = await db
     .insert(devotionalProgressTable)
     .values({
@@ -221,15 +233,19 @@ export async function startSeries(
       seriesId,
       currentDay: 1,
       completedDays: [],
+      // Set lastOpenedAt on creation so the badge is immediately cleared —
+      // a member who begins a devotional should not see UPDATED on reload.
+      lastOpenedAt: now,
     })
-    .onConflictDoNothing()
+    // On conflict: update lastOpenedAt atomically so any UPDATED badge clears
+    // when the reader opens, even for returning members.
+    .onConflictDoUpdate({
+      target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
+      set: { lastOpenedAt: now, updatedAt: now },
+    })
     .returning();
 
-  if (row) return row;
-
-  // Already started — return existing progress
-  const existing = await getProgress(userId, seriesId);
-  return existing!;
+  return row;
 }
 
 // ─── Engagement lifecycle ─────────────────────────────────────────────────────
@@ -281,9 +297,11 @@ export async function markDayComplete(
     .onConflictDoUpdate({
       target: [devotionalProgressTable.userId, devotionalProgressTable.seriesId],
       set: {
+        // completed_days is JSONB — use @> (contains) and || (concat) instead of
+        // ANY/array_append which only work on native PostgreSQL array types.
         completedDays: sql`
-          CASE WHEN NOT (${day} = ANY(${devotionalProgressTable.completedDays}))
-          THEN array_append(${devotionalProgressTable.completedDays}, ${day})
+          CASE WHEN NOT (${devotionalProgressTable.completedDays} @> to_jsonb(${day}::int))
+          THEN ${devotionalProgressTable.completedDays} || to_jsonb(${day}::int)
           ELSE ${devotionalProgressTable.completedDays}
           END
         `,

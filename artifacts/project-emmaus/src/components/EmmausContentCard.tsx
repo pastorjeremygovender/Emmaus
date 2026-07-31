@@ -20,6 +20,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { ContentBadge } from './ContentBadge';
+import type { Badge } from '@/lib/badge-api';
 
 // ─── Design tokens (change here to propagate everywhere) ──────────────────────
 
@@ -82,6 +84,11 @@ export interface EmmausContentCardProps {
    * Default: plain bg-card border-border.
    */
   variant?: 'default' | 'featured';
+  /**
+   * Smart Content Indicator badge — 'NEW' | 'UPDATED' | null.
+   * Rendered as a small absolute-positioned chip at top-right of the card.
+   */
+  badge?: Badge;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -102,10 +109,11 @@ export function EmmausContentCard({
   onGate,
   secondaryAction,
   variant = 'default',
+  badge,
 }: EmmausContentCardProps) {
   const cardClass = variant === 'featured'
-    ? 'rounded-2xl border p-5 bg-primary/5 border-primary/20'
-    : 'rounded-2xl border p-5 bg-card border-border';
+    ? 'relative rounded-2xl border p-5 bg-primary/5 border-primary/20'
+    : 'relative rounded-2xl border p-5 bg-card border-border';
 
   // ── Spacing: Label→12px→Title→8px→Desc→12px→Meta→20px→Button ────────────────
   // Each element carries its own bottom margin so omitting an element doesn't
@@ -135,6 +143,9 @@ export function EmmausContentCard({
 
   return (
     <div className={cardClass}>
+
+      {/* ── Smart Content Indicator badge ──────────────────────────────────── */}
+      <ContentBadge badge={badge ?? null} />
 
       {/* ── 1. Label row ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-2 mb-3">

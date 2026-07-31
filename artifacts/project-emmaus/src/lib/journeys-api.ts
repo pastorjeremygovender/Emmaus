@@ -51,6 +51,8 @@ export type Journey = {
   requiresDailyGate?: boolean;
   introductionContent?: string;
   completionMessage?: string;
+  /** Set when admin publishes with "Notify members" ON — drives NEW/UPDATED badges */
+  notifyPublishedAt?: string;
 };
 
 export type Step = {
@@ -97,6 +99,8 @@ export type Progress = {
   completedDays: number[];
   startedAt: string;
   lastCompletedAt: string | null;
+  /** Set when member opens the content — clears UPDATED badge */
+  lastOpenedAt?: string | null;
 };
 
 export type SearchResult = {

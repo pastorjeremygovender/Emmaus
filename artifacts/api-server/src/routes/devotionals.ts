@@ -136,11 +136,20 @@ devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
 
 devotionalsRouter.patch("/:id", async (req: Request, res: Response) => {
   if (!guardAdmin(req, res)) return;
-  const { title, description, seriesType, status } = req.body;
+  const { title, description, seriesType, status, notifyMembers } = req.body;
   try {
+    // Build update payload with only the fields the caller explicitly sent —
+    // omit undefined values so a publish-only PATCH ({ status, notifyMembers })
+    // never writes NULL into required fields like title.
+    const updateData: Parameters<typeof store.updateSeries>[1] = {};
+    if (title !== undefined)         updateData.title = title;
+    if (description !== undefined)   updateData.description = description;
+    if (seriesType !== undefined)     updateData.seriesType = seriesType;
+    if (status !== undefined)        updateData.status = status;
+    if (notifyMembers !== undefined)  updateData.notifyMembers = notifyMembers;
     const updated = await store.updateSeries(
       String(req.params.id),
-      { title, description, seriesType, status }
+      updateData
     );
     if (!updated) { res.status(404).json({ error: "Series not found" }); return; }
     res.json(updated);

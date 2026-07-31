@@ -22,6 +22,7 @@ import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
+import { dismissBadge } from '@/lib/badge-api';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -135,6 +136,8 @@ export default function SermonCompanionReader() {
       } else {
         setProgress(data.progress);
       }
+      // Clear UPDATED badge — member has opened the content (fire-and-forget).
+      void dismissBadge('companion', companionId);
     } catch {
       setLoadError(true);
     } finally {

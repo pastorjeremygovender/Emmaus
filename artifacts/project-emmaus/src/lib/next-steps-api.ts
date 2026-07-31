@@ -16,6 +16,8 @@ export type ContentType =
   | 'sermon-devotional'
   | 'daily-devotional';
 
+export type Badge = 'NEW' | 'UPDATED' | null;
+
 export interface NextStepsItem {
   id: string;
   contentType: ContentType;
@@ -40,6 +42,8 @@ export interface NextStepsItem {
    * null means the content is fully complete — no primary action should be shown.
    */
   primaryActionLabel: string | null;
+  /** Smart Content Indicator badge — 'NEW' | 'UPDATED' | null */
+  badge?: Badge;
 }
 
 export interface JourneyCollectionGroup {
@@ -66,15 +70,15 @@ export async function resumeEngagement(
 }
 
 export async function fetchNextSteps(params?: {
-  userId?: string;
   currentCompanionId?: string;
 }): Promise<NextStepsData> {
   const qs = new URLSearchParams();
-  if (params?.userId) qs.set('userId', params.userId);
   if (params?.currentCompanionId) qs.set('currentCompanionId', params.currentCompanionId);
 
   const url = `/api/next-steps${qs.toString() ? `?${qs}` : ''}`;
-  const res = await fetch(url);
+  // credentials:'include' sends the session cookie so the server can resolve
+  // user identity via extractUserId() and return personalised progress + badges.
+  const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) throw new Error(`Failed to load Next Steps (${res.status})`);
   return res.json() as Promise<NextStepsData>;
 }

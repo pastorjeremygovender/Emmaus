@@ -93,6 +93,8 @@ function CompanionDayEditor({
   entries,
   auth,
   companionStatus,
+  notifyMembers,
+  onNotifyMembersChange,
   onCompanionPublish,
   onCompanionUnpublish,
   onBack,
@@ -102,6 +104,9 @@ function CompanionDayEditor({
   entries: CompanionEntry[];
   auth: { userId: string; userRole: string };
   companionStatus: string;
+  /** Smart Content Indicator — show to members as new/updated when published */
+  notifyMembers: boolean;
+  onNotifyMembersChange: (v: boolean) => void;
   onCompanionPublish: () => Promise<void>;
   onCompanionUnpublish: () => Promise<void>;
   onBack: () => void;
@@ -264,6 +269,19 @@ function CompanionDayEditor({
           onSaveDraft={handleSaveDraft}
           onPublish={handlePublish}
           onUnpublish={handleUnpublish}
+          extraActions={
+            companionStatus !== 'Published' ? (
+              <label className="flex items-center gap-1.5 text-[12px] text-gray-500 cursor-pointer select-none whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={notifyMembers}
+                  onChange={e => onNotifyMembersChange(e.target.checked)}
+                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+                Notify members
+              </label>
+            ) : undefined
+          }
         />
       }
       aboveSplit={daySelector}
@@ -1130,6 +1148,8 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   // shows the correct Published/Draft state and Publish/Unpublish buttons.
   const [companionStatusLocal, setCompanionStatusLocal] = useState<string>('Draft');
   const [companionPublishing, setCompanionPublishing] = useState(false);
+  // Smart Content Indicators: notify members on companion publish. Defaults ON.
+  const [companionNotifyMembers, setCompanionNotifyMembers] = useState(true);
 
   // Sermon form state
   const [form, setForm] = useState<Omit<Sermon, 'id'>>(() =>
@@ -1194,12 +1214,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     try {
       // publishSermonCompanion calls POST /api/sermon-companions/:id/publish which
       // atomically sets the companion status to Published AND publishes all entries.
-      await publishSermonCompanion(companionData.id, auth);
+      await publishSermonCompanion(companionData.id, auth, companionNotifyMembers);
       setCompanionStatusLocal('Published');
     } finally {
       setCompanionPublishing(false);
     }
-  }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companionData?.id, auth, companionNotifyMembers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCompanionUnpublish = useCallback(async () => {
     if (!companionData?.id || !auth) return;
@@ -1908,6 +1928,8 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               entries={companionData.entries}
               auth={auth!}
               companionStatus={companionStatusLocal}
+              notifyMembers={companionNotifyMembers}
+              onNotifyMembersChange={setCompanionNotifyMembers}
               onCompanionPublish={handleCompanionPublish}
               onCompanionUnpublish={handleCompanionUnpublish}
               onBack={() => setActiveTab('sermon')}

@@ -16,6 +16,7 @@ import nextStepsRouter from "./next-steps";
 import { engagementsRouter } from "./engagements";
 import adminResetRouter from "./admin-reset";
 import roomsRouter from "./rooms";
+import { badgesRouter } from "./badges";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(nextStepsRouter);
 router.use("/engagements", engagementsRouter);
 router.use(adminResetRouter);
 router.use("/rooms", roomsRouter);
+router.use(badgesRouter);
 
 export default router;

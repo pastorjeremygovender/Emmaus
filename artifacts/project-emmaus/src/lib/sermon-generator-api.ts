@@ -425,12 +425,14 @@ export async function saveCompanionEntry(
  * Publish a sermon companion and ALL its entries atomically.
  * The companion moves from Draft → Published and all 5 days become visible
  * to members in a single request.
+ * @param notifyMembers When true, sets notify_published_at so members see a badge.
  */
 export async function publishSermonCompanion(
   companionId: string,
   auth: AuthHeaders,
+  notifyMembers = false,
 ): Promise<void> {
-  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/publish`, {}, auth);
+  await post<{ ok: boolean }>(`/sermon-companions/${companionId}/publish`, { notifyMembers }, auth);
 }
 
 /**

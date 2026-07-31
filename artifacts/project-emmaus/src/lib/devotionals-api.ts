@@ -48,6 +48,8 @@ export interface DevotionalSeries {
   seriesType: string;
   status: string;
   publishedAt: string | null;
+  /** Set when admin opts-in to notifying members on publish (Smart Content Indicators). */
+  notifyPublishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
@@ -78,6 +80,8 @@ export interface DevotionalProgress {
   completedDays: number[];
   startedAt: string;
   updatedAt: string;
+  /** Set when the member opens the content — used for UPDATED badge computation. */
+  lastOpenedAt?: string | null;
 }
 
 export interface SeriesWithEntries extends DevotionalSeries {
@@ -121,7 +125,7 @@ export function createSeries(
 
 export function updateSeries(
   id: string,
-  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">>,
+  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">> & { notifyMembers?: boolean },
   auth?: AdminAuth
 ): Promise<DevotionalSeries> {
   return request<DevotionalSeries>(apiUrl(`/${id}`), {

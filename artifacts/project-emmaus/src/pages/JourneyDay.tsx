@@ -15,6 +15,7 @@ import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
 import { extractFirstSentence } from '@/lib/share';
 import { BottomNav } from '@/components/BottomNav';
+import { dismissBadge } from '@/lib/badge-api';
 
 
 function formatTimestamp(seconds: number): string {
@@ -68,7 +69,11 @@ export default function JourneyDay() {
   const [sharingDone, setSharingDone] = useState(false);
 
   useEffect(() => {
-    if (journeyId) startJourney(journeyId);
+    if (journeyId) {
+      startJourney(journeyId);
+      // Clear UPDATED badge — member has opened the content (fire-and-forget).
+      void dismissBadge('journey', journeyId);
+    }
     window.scrollTo(0, 0);
   }, [journeyId]);
 

@@ -42,6 +42,7 @@ import {
   type ContentType,
   type JourneyCollectionGroup,
 } from '@/lib/next-steps-api';
+import { dismissBadge } from '@/lib/badge-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -399,6 +400,7 @@ function DiscoveryCard({
       metadata={metaParts.join(' · ') || undefined}
       primaryActionLabel={actionLabel}
       onAction={onAction}
+      badge={item.badge ?? null}
       headerTrailing={
         item.memberProgressState === 'in-progress' && onPause && onDetails
           ? <MoreMenu onPause={onPause} onDetails={onDetails} />
@@ -447,6 +449,7 @@ function DevotionalCard({
       primaryActionLabel={item.primaryActionLabel ?? undefined}
       onAction={onAction}
       loading={starting}
+      badge={item.badge ?? null}
       headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
       secondaryAction={
         onViewPreviousDays
@@ -706,7 +709,7 @@ export default function Journeys() {
     setApiLoading(true);
     setApiError(null);
     try {
-      const result = await fetchNextSteps({ userId: user?.id });
+      const result = await fetchNextSteps();
       setData(result);
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Failed to load');
@@ -736,6 +739,7 @@ export default function Journeys() {
   // through to handleJourneyAction which uses the standard journey flow.
 
   async function handleSermonCompanionAction(item: NextStepsItem) {
+    void dismissBadge('companion', item.id);
     if (item.route.startsWith('/sermon-companion/')) {
       if (item.memberProgressState === 'paused') {
         try { await resumeEngagement('sermon-companion', item.id); } catch { /* non-fatal */ }
@@ -752,6 +756,7 @@ export default function Journeys() {
   // ── Journey action handler ────────────────────────────────────────────────
 
   function handleJourneyAction(item: NextStepsItem) {
+    void dismissBadge('journey', item.id);
     if (item.memberProgressState !== 'not-started') {
       setLocation(item.route + '?source=nextStepsJourneys');
       return;
@@ -814,6 +819,7 @@ export default function Journeys() {
   // ── Devotional action handler ─────────────────────────────────────────────
 
   async function handleDevotionalAction(item: NextStepsItem) {
+    void dismissBadge('devotional', item.id);
     if (item.memberProgressState === 'paused') {
       try { await resumeEngagement('devotional', item.id); } catch { /* non-fatal */ }
       await reload();

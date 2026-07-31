@@ -379,6 +379,32 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: journeys.theme_color / version columns failed (non-fatal)");
   }
 
+  // ── Smart Content Indicators — notify_published_at + last_opened_at (2026-07) ──
+  // IMPORTANT: must run before repairStepStatuses which queries the journeys table
+  // via Drizzle (which now includes notify_published_at in the SELECT). If the column
+  // doesn't exist when that query runs, it will fail with "column does not exist".
+  // notify_published_at: set on content tables when admin opts-in to notifying members.
+  // last_opened_at: set on progress tables when a member opens/views the content.
+  // Both are nullable; null = feature not yet activated for that row.
+  {
+    const badgeAlters = [
+      `ALTER TABLE journeys                  ADD COLUMN IF NOT EXISTS notify_published_at timestamptz`,
+      `ALTER TABLE devotional_series         ADD COLUMN IF NOT EXISTS notify_published_at timestamptz`,
+      `ALTER TABLE sermon_companion          ADD COLUMN IF NOT EXISTS notify_published_at timestamptz`,
+      `ALTER TABLE user_journey_progress     ADD COLUMN IF NOT EXISTS last_opened_at timestamptz`,
+      `ALTER TABLE devotional_progress       ADD COLUMN IF NOT EXISTS last_opened_at timestamptz`,
+      `ALTER TABLE sermon_companion_progress ADD COLUMN IF NOT EXISTS last_opened_at timestamptz`,
+    ];
+    for (const sql of badgeAlters) {
+      try {
+        await pool.query(sql);
+      } catch (err) {
+        logger.warn({ err, sql }, "Startup migration: badge column alter failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: Smart Content Indicator columns ensured (idempotent)");
+  }
+
   // ── Repair journey step statuses (2026-07) ────────────────────────────────────
   // Root cause: createStep always defaulted to status="Draft" regardless of
   // parent journey status. Steps added to a Published journey after it was

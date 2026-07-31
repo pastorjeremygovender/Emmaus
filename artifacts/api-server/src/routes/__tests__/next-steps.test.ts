@@ -284,6 +284,7 @@ type NextStepsItem = {
   };
   route: string;
   primaryActionLabel: string | null;
+  badge?: 'NEW' | 'UPDATED' | null;
 };
 
 type NextStepsResponse = {
@@ -295,7 +296,9 @@ type NextStepsResponse = {
 };
 
 async function fetchNextSteps(userId: string): Promise<NextStepsResponse> {
-  const res = await request({ path: `/api/next-steps?userId=${encodeURIComponent(userId)}` });
+  // Identity is resolved from X-User-Id header (accepted in dev/demo mode).
+  // The legacy ?userId query param is no longer trusted by the server.
+  const res = await request({ path: `/api/next-steps`, userId });
   assert.equal(res.status, 200, `GET /next-steps failed (${res.status}): ${res.body}`);
   return JSON.parse(res.body) as NextStepsResponse;
 }
@@ -628,5 +631,147 @@ describe("E — GET /next-steps response shape", () => {
     assert.equal(res.status, 200, `anonymous request failed: ${res.body}`);
     const data = JSON.parse(res.body) as NextStepsResponse;
     assert.ok(Array.isArray(data.dailyDevotionals));
+  });
+});
+
+// ─── H — Badge lifecycle (NEW / UPDATED / dismiss) ────────────────────────────
+// Verifies the Smart Content Indicators feature end-to-end:
+//   1. Admin publishes with notifyMembers=true → non-started member sees NEW
+//   2. Started member (progress exists) sees UPDATED
+//   3. POST /badges/dismiss clears the badge (lastOpenedAt → now)
+//   4. Admin publishes with notifyMembers=false → no badge for either member
+
+describe("H — Badge lifecycle: NEW, UPDATED, dismiss, and opt-out", () => {
+  let badgeSeriesId = "";
+  const BADGE_NEW_USER = `test-badge-new-${RUN_TAG}`;
+  const BADGE_UPDATED_USER = `test-badge-updated-${RUN_TAG}`;
+  const BADGE_NO_USER = `test-badge-no-${RUN_TAG}`;
+
+  before(async () => {
+    // 1. Create a devotional series for badge testing.
+    const createRes = await request({
+      method: "POST",
+      path: "/api/devotionals",
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: {
+        title: `__TEST__ Badge Lifecycle [${RUN_TAG}]`,
+        description: "Badge test series",
+        seriesType: "general",
+      },
+    });
+    assert.equal(createRes.status, 201, `Create badge series failed: ${createRes.body}`);
+    const created = JSON.parse(createRes.body) as { id: string };
+    badgeSeriesId = created.id;
+
+    // 2. Add one published entry (PUT upsert matches the existing test pattern).
+    const entryRes = await request({
+      method: "PUT",
+      path: `/api/devotionals/${badgeSeriesId}/entries/1`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { title: "Badge Day 1", scriptureReference: "John 1:1", status: "Published" },
+    });
+    assert.equal(entryRes.status, 200, `Create badge entry failed: ${entryRes.body}`);
+
+    // 3. BADGE_UPDATED_USER starts the series BEFORE the notify-publish.
+    const startRes = await request({
+      method: "POST",
+      path: `/api/devotionals/${badgeSeriesId}/start`,
+      userId: BADGE_UPDATED_USER,
+    });
+    assert.equal(startRes.status, 200, `Start for UPDATED user failed: ${startRes.body}`);
+
+    // 4. Publish with notifyMembers=true.
+    const publishRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Published", notifyMembers: true },
+    });
+    assert.equal(publishRes.status, 200, `Publish with notify failed: ${publishRes.body}`);
+  });
+
+  it("non-started member sees NEW badge", async () => {
+    const data = await fetchNextSteps(BADGE_NEW_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear in dailyDevotionals");
+    assert.equal(item!.badge, "NEW", `Expected NEW badge, got ${String(item!.badge)}`);
+  });
+
+  it("started member who enrolled before publish sees UPDATED badge", async () => {
+    const data = await fetchNextSteps(BADGE_UPDATED_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear in dailyDevotionals");
+    assert.equal(item!.badge, "UPDATED", `Expected UPDATED badge, got ${String(item!.badge)}`);
+  });
+
+  it("POST /badges/dismiss clears the UPDATED badge for the started member", async () => {
+    // Dismiss the badge.
+    const dismissRes = await request({
+      method: "POST",
+      path: "/api/badges/dismiss",
+      userId: BADGE_UPDATED_USER,
+      body: { contentType: "devotional", contentId: badgeSeriesId },
+    });
+    assert.equal(dismissRes.status, 200, `Dismiss failed: ${dismissRes.body}`);
+
+    // Refetch and confirm the badge is gone.
+    const data = await fetchNextSteps(BADGE_UPDATED_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should still appear");
+    assert.equal(
+      item!.badge ?? null,
+      null,
+      `Badge should be null after dismiss, got ${String(item!.badge)}`
+    );
+  });
+
+  it("POST /badges/dismiss is a no-op for a member with no progress (NEW badge persists)", async () => {
+    const dismissRes = await request({
+      method: "POST",
+      path: "/api/badges/dismiss",
+      userId: BADGE_NO_USER,
+      body: { contentType: "devotional", contentId: badgeSeriesId },
+    });
+    // Server returns 200 even for no-op (no progress row to update).
+    assert.equal(dismissRes.status, 200, `Dismiss no-op failed: ${dismissRes.body}`);
+
+    // The NEW badge is still present because no progress row exists.
+    const data = await fetchNextSteps(BADGE_NO_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear");
+    assert.equal(item!.badge, "NEW", `NEW badge should persist after no-op dismiss, got ${String(item!.badge)}`);
+  });
+
+  it("publish with notifyMembers=false produces no badge for a new member", async () => {
+    // Re-publish with notify=false to reset notify_published_at.
+    const unpubRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Draft" },
+    });
+    assert.equal(unpubRes.status, 200, `Unpublish failed: ${unpubRes.body}`);
+
+    const repubRes = await request({
+      method: "PATCH",
+      path: `/api/devotionals/${badgeSeriesId}`,
+      userId: ADMIN_USER_ID,
+      role: "superAdmin",
+      body: { status: "Published", notifyMembers: false },
+    });
+    assert.equal(repubRes.status, 200, `Re-publish without notify failed: ${repubRes.body}`);
+
+    const data = await fetchNextSteps(BADGE_NO_USER);
+    const item = data.dailyDevotionals.find(d => d.id === badgeSeriesId);
+    assert.ok(item, "badge series should appear");
+    assert.equal(
+      item!.badge ?? null,
+      null,
+      `No badge expected when notifyMembers=false, got ${String(item!.badge)}`
+    );
   });
 });
