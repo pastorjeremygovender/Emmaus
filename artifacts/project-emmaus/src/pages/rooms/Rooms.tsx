@@ -105,7 +105,7 @@ function RoomCard({ room, onClick }: { room: RoomSummary; onClick: () => void })
           <div className="flex items-center gap-2 mt-1.5 text-[13px] text-muted-foreground">
             <span>{room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}</span>
             <span>·</span>
-            <span>Admin: {room.adminName}</span>
+            <span>Admin: {room.adminName || 'Room Admin'}</span>
           </div>
         </div>
         <ChevronRight size={18} className="text-muted-foreground mt-1 shrink-0" />

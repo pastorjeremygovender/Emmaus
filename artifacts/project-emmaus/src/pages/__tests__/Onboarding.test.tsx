@@ -21,7 +21,7 @@ vi.mock('framer-motion', async () => {
     // Render children immediately without animation wrappers
     motion: new Proxy(actual.motion, {
       get(_target, prop: string) {
-        const Tag = prop as keyof JSX.IntrinsicElements;
+        const Tag = prop as keyof React.JSX.IntrinsicElements;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const Comp = ({ children, ...rest }: any) => {
           // Strip framer-only props so React doesn't warn

@@ -114,7 +114,7 @@ export default function RoomDetail() {
   };
 
   const handleRemoveMember = async (member: RoomMember) => {
-    if (!window.confirm(`Remove ${member.preferredName} from this Room?`)) return;
+    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Room?`)) return;
     try {
       await removeMember(String(roomId), member.userId, user.id);
       setRoom(prev => prev ? {
@@ -218,7 +218,8 @@ export default function RoomDetail() {
                       <div className="divide-y divide-border/50">
                         {memberProgress.map(mp => {
                           const isMe = mp.userId === user.id;
-                          const name = isMe ? `${mp.preferredName} (you)` : mp.preferredName;
+                          const memberLabel = mp.preferredName || (isMe ? 'You' : 'Member');
+                          const name = isMe ? `${memberLabel} (you)` : memberLabel;
                           let statusLabel: string;
                           if (mp.status === 'completed') {
                             statusLabel = 'Completed ✓';

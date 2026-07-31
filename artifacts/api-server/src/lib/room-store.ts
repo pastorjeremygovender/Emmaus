@@ -85,7 +85,13 @@ function resolveDisplayName(row: Record<string, unknown>, userIdField: string, n
 function rowToMember(row: Record<string, unknown>): RoomMember {
   return {
     userId: String(row.user_id),
-    preferredName: resolveDisplayName(row, "user_id", "preferred_name"),
+    // Return the raw preferred_name (trimmed) or empty string — never a raw
+    // userId fragment.  Callers (admin and member UIs) apply their own label
+    // ("No name set", "Member", etc.) when this is empty.
+    preferredName:
+      row.preferred_name && String(row.preferred_name).trim()
+        ? String(row.preferred_name).trim()
+        : "",
     role: (row.role as "admin" | "member") ?? "member",
     joinedAt: String(row.joined_at ?? ""),
   };
@@ -100,16 +106,25 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
     createdBy: String(row.created_by ?? ""),
     createdAt: String(row.created_at ?? ""),
     memberCount: Number(row.member_count ?? 0),
-    adminName: resolveDisplayName(row, "created_by", "admin_preferred_name"),
+    // Return empty string when admin has no profile — UI applies its own label.
+    adminName:
+      row.admin_preferred_name && String(row.admin_preferred_name).trim()
+        ? String(row.admin_preferred_name).trim()
+        : "",
   };
 }
 
 function rowToMessage(row: Record<string, unknown>): RoomMessage {
+  const rawName =
+    row.preferred_name && String(row.preferred_name).trim()
+      ? String(row.preferred_name).trim()
+      : "";
   return {
     id: String(row.id),
     roomId: String(row.room_id),
     userId: String(row.user_id),
-    senderName: resolveDisplayName(row, "user_id", "preferred_name"),
+    // Fall back to "Member" so chat never displays a raw userId.
+    senderName: rawName || "Member",
     body: String(row.body ?? ""),
     createdAt: String(row.created_at ?? ""),
   };
@@ -561,7 +576,7 @@ export async function getMemberJourneyProgress(
 ): Promise<MemberJourneyProgress[]> {
   const res = await pool.query(
     `SELECT rm.user_id,
-            COALESCE(up.preferred_name, split_part(rm.user_id, '@', 1)) AS preferred_name,
+            up.preferred_name,
             ujp.current_day,
             ujp.status
      FROM   room_members rm
@@ -574,7 +589,11 @@ export async function getMemberJourneyProgress(
   );
   return res.rows.map(row => ({
     userId: String(row.user_id),
-    preferredName: String(row.preferred_name ?? row.user_id),
+    // Empty string when no profile name — never expose a raw userId fragment.
+    preferredName:
+      row.preferred_name && String(row.preferred_name).trim()
+        ? String(row.preferred_name).trim()
+        : "",
     currentDay: row.current_day != null ? Number(row.current_day) : null,
     status: row.status ?? null,
   }));

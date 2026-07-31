@@ -49,7 +49,7 @@ export default function RoomSettings() {
   const otherMembers = room.members.filter(m => m.userId !== user.id);
 
   const handleRemove = async (member: RoomMember) => {
-    if (!window.confirm(`Remove ${member.preferredName} from this Room?`)) return;
+    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Room?`)) return;
     setActioning(member.userId);
     try {
       await removeMember(String(roomId), member.userId, user.id);
@@ -154,7 +154,7 @@ export default function RoomSettings() {
           <div className="p-5 rounded-2xl border border-primary/30 bg-primary/5 space-y-4">
             <div>
               <p className="text-[15px] font-semibold text-foreground">
-                Transfer admin to {confirmTransfer.preferredName}?
+                Transfer admin to {confirmTransfer.preferredName || 'this member'}?
               </p>
               <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
                 They will become the Room admin. You will become a regular member.

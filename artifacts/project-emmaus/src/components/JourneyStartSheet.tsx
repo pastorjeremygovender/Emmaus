@@ -357,8 +357,8 @@ export default function JourneyStartSheet({
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
 interface OptionCardProps {
   icon: React.ReactNode;
   title: string;
