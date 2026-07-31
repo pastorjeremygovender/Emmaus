@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Share2, Settings, LogOut, Trash2,
-  MessageSquare, Crown, Loader2, BookOpen
+  MessageSquare, Crown, Loader2, BookOpen, RefreshCw
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
 import { apiGetJourneyProgress } from '@/lib/rooms-api';
+
+const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
 export default function RoomDetail() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -25,13 +27,34 @@ export default function RoomDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [actioning, setActioning] = useState(false);
   const [progressMap, setProgressMap] = useState<Record<string, MemberJourneyProgress[]>>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Keep a stable ref to the latest room so the interval callback can read it
+  const roomRef = useRef<RoomDetailType | null>(null);
+  useEffect(() => { roomRef.current = room; }, [room]);
+
+  const refreshProgress = useCallback(async (silent = true) => {
+    if (!roomRef.current || !user || !roomId) return;
+    if (!silent) setRefreshing(true);
+    try {
+      await Promise.all(
+        roomRef.current.linkedJourneys.map(lj =>
+          apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
+            .then(progress => setProgressMap(prev => ({ ...prev, [lj.journeyId]: progress })))
+            .catch(() => { /* silently ignore */ })
+        )
+      );
+    } finally {
+      if (!silent) setRefreshing(false);
+    }
+  }, [user, roomId]);
 
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
       if (!detail) { setLoadError('Room not found or you are not a member.'); return; }
       setRoom(detail);
-      // Fetch per-member progress for every linked journey
+      // Initial fetch
       detail.linkedJourneys.forEach(lj => {
         apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
           .then(progress => setProgressMap(prev => ({ ...prev, [lj.journeyId]: progress })))
@@ -39,6 +62,13 @@ export default function RoomDetail() {
       });
     });
   }, [roomId, user, loadRoomDetail]);
+
+  // Periodic refresh every 60 seconds
+  useEffect(() => {
+    if (!room) return;
+    const timer = setInterval(() => { refreshProgress(true); }, PROGRESS_REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [room, refreshProgress]);
 
   if (!user || !roomId) return null;
 
@@ -151,9 +181,19 @@ export default function RoomDetail() {
         {/* Linked Journeys */}
         {room.linkedJourneys.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Journeys Walking Together
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                Journeys Walking Together
+              </h2>
+              <button
+                onClick={() => refreshProgress(false)}
+                disabled={refreshing}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 -mr-1 disabled:opacity-40"
+                aria-label="Refresh progress"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+            </div>
             <div className="space-y-3">
               {room.linkedJourneys.map(lj => {
                 const journey = getJourney(lj.journeyId);
