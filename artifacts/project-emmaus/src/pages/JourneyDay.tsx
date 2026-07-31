@@ -13,7 +13,6 @@ import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
-import { extractFirstSentence } from '@/lib/share';
 import { BottomNav } from '@/components/BottomNav';
 import { dismissBadge } from '@/lib/badge-api';
 
@@ -333,10 +332,14 @@ export default function JourneyDay() {
           closingText={(step as any).closingText}
           returnPath={`/journey/${journeyId}/day/${day}`}
           sharePayload={{
-            contentTitle: journey.title ?? '10 Minutes with Jesus',
+            title: journey.title ?? '10 Minutes with Jesus',
             dayTitle: step.title,
-            scripture: step.scripture,
-            keyThought: extractFirstSentence((step as any).closingText || step.devotional),
+            scripture: step.scripture ?? undefined,
+            greeting: step.mentorIntro ?? undefined,
+            reflection: step.devotional ?? undefined,
+            prayer: step.prayerPrompt ?? undefined,
+            nextStep: step.actionStep ?? undefined,
+            closing: (step as any).closingText ?? undefined,
           }}
           actionButton={
             isDailyRhythmReadOnly ? (
@@ -462,10 +465,14 @@ export default function JourneyDay() {
 
           {/* Share */}
           <ShareButton payload={{
-            contentTitle: journey?.title ?? 'Emmaus',
+            title: journey?.title ?? 'Emmaus',
             dayTitle: step.title,
-            scripture: step.scripture,
-            keyThought: extractFirstSentence((step as any).closingText || step.devotional),
+            scripture: step.scripture ?? undefined,
+            greeting: step.mentorIntro ?? undefined,
+            reflection: step.devotional ?? undefined,
+            prayer: step.prayerPrompt ?? undefined,
+            nextStep: step.actionStep ?? undefined,
+            closing: (step as any).closingText ?? undefined,
           }} />
 
           {/* Primary action — "Finished" for a fresh read; completion card for replay */}

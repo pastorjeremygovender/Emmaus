@@ -319,17 +319,19 @@ export default function ChapterReader() {
     setLocation(`/bible/read/${newBookId}/${newChapter}${qs}`);
   }
 
-  // Share verse via Web Share API (with clipboard fallback)
+  // Share verse via Web Share API (with clipboard fallback).
+  // deepLink: null suppresses the "Continue your journey" block — verse shares
+  // stand alone and don't need a deep link to a specific verse.
   async function handleShare(verseNum: number, text: string) {
     const ref = `${book!.name} ${chapterNum}:${verseNum}`;
-    const shareData = { title: ref, text: `"${text}" — ${ref}` };
+    const { shareContent } = await import('@/lib/share');
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        await navigator.clipboard.writeText(`"${text}" — ${ref}`);
-      }
-    } catch { /* cancelled */ }
+      await shareContent({
+        title: ref,
+        reflection: `"${text}"`,
+        deepLink: null,
+      });
+    } catch { /* cancelled or clipboard unavailable */ }
   }
 
   // Save verse prayer — prepends the verse reference to the prayer text

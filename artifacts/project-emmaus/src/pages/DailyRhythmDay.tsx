@@ -34,7 +34,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
-import { extractFirstSentence } from '@/lib/share';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { BottomNav } from '@/components/BottomNav';
@@ -262,10 +261,14 @@ export default function DailyRhythmDay() {
         returnPath={`/daily-rhythm/day/${day}`}
         actionButton={actionButton}
         sharePayload={{
-          contentTitle: '10 Minutes with Jesus',
+          title: '10 Minutes with Jesus',
           dayTitle: step.title,
-          scripture: step.scripture,
-          keyThought: extractFirstSentence((step as any).closingText || step.devotional),
+          scripture: step.scripture ?? undefined,
+          greeting: step.mentorIntro ?? undefined,
+          reflection: step.devotional ?? undefined,
+          prayer: step.prayerPrompt ?? undefined,
+          nextStep: step.actionStep ?? undefined,
+          closing: (step as any).closingText ?? undefined,
         }}
       />
 

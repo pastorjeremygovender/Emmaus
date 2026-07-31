@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useCallback, memo, type RefObject } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
+import { ShareButton } from '@/components/ShareButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { BottomNav } from '@/components/BottomNav';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
@@ -518,6 +519,18 @@ export default function AskEmmausConversation() {
                       memoryContent={memoryPrompt}
                       onAccept={handleMemoryAccept}
                       onDecline={handleMemoryDecline}
+                    />
+                  )}
+
+                {/* Share — only on the last completed assistant message */}
+                {!msg.isStreaming &&
+                  msg.content &&
+                  msg.id === messages.filter((m) => m.role === 'assistant').at(-1)?.id && (
+                    <ShareButton
+                      payload={{
+                        title: 'Ask Emmaus',
+                        reflection: msg.content,
+                      }}
                     />
                   )}
               </div>
