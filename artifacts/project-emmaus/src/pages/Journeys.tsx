@@ -29,7 +29,7 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
   X, Pause, MoreHorizontal, Loader2,
-  BookHeart, Mic2, Map,
+  BookHeart, Mic2, Map, Users, ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
@@ -870,6 +870,23 @@ export default function Journeys() {
             Choose something that will help you take your next step with Jesus.
           </p>
         </header>
+
+        {/* My Rooms shortcut — always visible so members can find Rooms from Next Steps */}
+        <div className="mt-5">
+          <button
+            onClick={() => setLocation('/rooms')}
+            className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Users size={13} />
+            <span>My Rooms</span>
+            {user && getMyRooms(user.id).length > 0 && (
+              <span className="text-[11px] font-semibold text-primary bg-primary/10 rounded-full px-1.5 py-0.5 leading-none">
+                {getMyRooms(user.id).length}
+              </span>
+            )}
+            <ChevronRight size={13} className="ml-auto" />
+          </button>
+        </div>
 
         {/* Tab bar */}
         <TabBar active={activeTab} onChange={handleTabChange} />

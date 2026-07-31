@@ -19,8 +19,10 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import { getCollection } from '@/lib/collections-api';
-import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2, Users } from 'lucide-react';
 import { resolveReturn } from '@/lib/return-context';
+import { apiLinkJourney } from '@/lib/rooms-api';
+import { RoomPickerSheet } from '@/components/RoomPickerSheet';
 import type { Journey } from '@/contexts/JourneyContext';
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -50,6 +52,7 @@ export default function JourneyDetail() {
   const [pendingStart, setPendingStart]     = useState(false);
   const [showLimitMsg, setShowLimitMsg]     = useState(false);
   const [collectionName, setCollectionName] = useState<string | null>(null);
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journey ? progress[journey.id] : undefined;
@@ -206,6 +209,14 @@ export default function JourneyDetail() {
     else saveForLater(journey.id);
   }
 
+  async function handleLinkToRoom(roomId: string) {
+    if (!journey || !user) throw new Error('Not available');
+    // Throws on failure — RoomPickerSheet catches this and shows inline error.
+    await apiLinkJourney(user.id, roomId, journey.id);
+    // Invalidate the cached room detail so the room page reflects the new link.
+    await loadRoomDetail(roomId);
+  }
+
   // All self-paced journeys use "Continue" regardless of started/paused/completed state.
   // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core').
   const primaryLabel =
@@ -330,6 +341,31 @@ export default function JourneyDetail() {
           </div>
         )}
 
+        {/* ── Add to Room — retroactive linking ────────────────────── */}
+        {(isStarted || isCompleted) && !matchingRoomId && userRooms.length > 0 && (
+          <div className="flex items-center justify-between py-1">
+            <span className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+              <Users size={13} />
+              Walking this with others?
+            </span>
+            <button
+              onClick={() => setShowRoomPicker(true)}
+              className="text-[13px] font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Add to a Room →
+            </button>
+          </div>
+        )}
+        {matchingRoomId && (
+          <button
+            onClick={() => setLocation(`/rooms/${matchingRoomId}`)}
+            className="flex items-center gap-2 text-[13px] text-primary font-medium hover:text-primary/80 transition-colors"
+          >
+            <Users size={13} />
+            Open Room →
+          </button>
+        )}
+
         {/* ── Lessons ───────────────────────────────────────────────── */}
         {steps.length > 0 && (
           <section className="space-y-3">
@@ -395,6 +431,15 @@ export default function JourneyDetail() {
           initialStep={matchingRoomId ? 'room-list' : 'main'}
           preSelectedRoomId={matchingRoomId ?? undefined}
           showRoomNudge={!!matchingRoomId}
+        />
+      )}
+
+      {showRoomPicker && (
+        <RoomPickerSheet
+          rooms={userRooms}
+          onSelect={handleLinkToRoom}
+          onClose={() => setShowRoomPicker(false)}
+          title="Add Walk to a Room"
         />
       )}
     </div>
