@@ -196,6 +196,46 @@ async function readJsonFile<T>(filePath: string, defaultValue: T): Promise<T> {
   }
 }
 
+// ─── Startup diagnostic ────────────────────────────────────────────────────────
+
+/**
+ * Log resolved paths and record counts so deployment logs can confirm whether
+ * sermon data is visible to the running server.  Called once from startup-migrations.
+ */
+export async function verifySermonStore(): Promise<void> {
+  const videosExist = existsSync(VIDEOS_FILE);
+  const segmentsExist = existsSync(SEGMENTS_FILE);
+  let videoCount = 0;
+  let segmentCount = 0;
+  let approvedCount = 0;
+
+  if (videosExist) {
+    const videos = await readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
+    videoCount = videos.length;
+    approvedCount = videos.filter(
+      (v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved"
+    ).length;
+  }
+  if (segmentsExist) {
+    const segs = await readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
+    segmentCount = segs.length;
+  }
+
+  logger.info(
+    {
+      dataDir: DATA_DIR,
+      videosFile: VIDEOS_FILE,
+      segmentsFile: SEGMENTS_FILE,
+      videosExist,
+      segmentsExist,
+      totalVideos: videoCount,
+      approvedVideos: approvedCount,
+      totalSegments: segmentCount,
+    },
+    "Sermon store diagnostic"
+  );
+}
+
 // ─── Video Records ────────────────────────────────────────────────────────────
 
 export async function getAllVideos(): Promise<YoutubeVideoRecord[]> {

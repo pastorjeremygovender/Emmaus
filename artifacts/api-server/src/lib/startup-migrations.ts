@@ -11,7 +11,12 @@ import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { repairStepStatuses } from "./journey-store.js";
 import { setStartSharedReady } from "./feature-flags.js";
+import { verifySermonStore } from "./sermon-store.js";
 export async function runStartupMigrations(): Promise<void> {
+  // ── Sermon store diagnostic (runs every boot — confirms data is reachable) ──
+  await verifySermonStore().catch((err) =>
+    logger.warn({ err }, "Sermon store diagnostic failed (non-fatal)")
+  );
   // ── Sermon Companion tables (2026-07) ─────────────────────────────────────────
   // Three tables for AI-generated sermon companions. sermon_id is text (not FK)
   // because sermons are stored in a JSON file, not a DB table.
