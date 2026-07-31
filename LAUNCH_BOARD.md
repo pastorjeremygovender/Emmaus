@@ -174,6 +174,8 @@
 - **SC-2** — Admin companion management UI (Content Studio doesn't surface companions)
 - **DEV-2** — Admin devotionals authoring UI
 - **RM-1** — Core Room feature stubs (notifications, shared reflections, participant tracking)
+- **P2-7** — Preached Here links open YouTube in a new browser tab instead of an in-app member sermon view. Requires building a new member sermon viewer route. UX degradation, not a blocker (YouTube opens and user can return via browser back).
+- **P2-13** — `backSource`/`backSourceId` URL params are written by JourneyDetail but never consumed by JourneyDay — deep back-chains (3+ levels) don't fully unwind. The main `source`/`sourceId` chain (used by WalkCompletePage and other content pages) is intact. Estimated 1 day to wire up correctly.
 
 ---
 
