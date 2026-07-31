@@ -6,17 +6,17 @@ import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown,
-  BookOpen, Share2, Highlighter, MessageSquare, Sparkles,
+  BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { getBibleBook, getPrevBook, getNextBook } from '@/lib/bible-data';
 import { useBible, HighlightColor } from '@/contexts/BibleContext';
 import { useChapter } from '@/hooks/useChapter';
-import { useTranslations } from '@/hooks/useTranslations';
 import { getVerseSermonLinks } from '@/data/sermon-verse-links';
 import { BibleReferencePicker } from '@/components/BibleReferencePicker';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
+import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -65,6 +65,7 @@ export default function ChapterReader() {
   const [showPrayerInput, setShowPrayerInput] = useState(false);
   const [prayerText, setPrayerText] = useState('');
   const [studyPanelVerse, setStudyPanelVerse] = useState<StudyVerse | null>(null);
+  const [compareSheet, setCompareSheet] = useState<{ verse: number; text: string } | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [translationDropdownOpen, setTranslationDropdownOpen] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
@@ -657,6 +658,18 @@ export default function ChapterReader() {
                     <Sparkles size={20} className="text-muted-foreground" />
                     <span className="text-[11px] font-medium text-foreground">Ask AI</span>
                   </button>
+
+                  {/* Compare translations */}
+                  <button
+                    onClick={() => {
+                      setCompareSheet({ verse: verseSheet.verse, text: verseSheet.text });
+                      setVerseSheet(null);
+                    }}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
+                  >
+                    <ArrowLeftRight size={20} className="text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-foreground">Compare</span>
+                  </button>
                 </div>
 
                 {/* Highlight colour picker (shown when Highlight is toggled) */}
@@ -848,13 +861,35 @@ export default function ChapterReader() {
         onClose={() => setStudyPanelVerse(null)}
       />
 
+      {/* ── Compare Translations Sheet ───────────────────────────────────────── */}
+      <CompareVerseSheet
+        open={!!compareSheet}
+        onClose={() => setCompareSheet(null)}
+        bookId={resolvedBookId}
+        bookName={book.name}
+        chapterNum={chapterNum}
+        verse={compareSheet?.verse ?? 1}
+        currentText={compareSheet?.text ?? ''}
+        currentTranslationId={translationId}
+        translations={translations}
+      />
+
       <BottomNav />
     </div>
   );
 }
 
-// ─── Preached Here card ───────────────────────────────────────────────────────
-
+interface CompareVerseSheetProps {
+  open: boolean;
+  onClose: () => void;
+  bookId: string;
+  bookName: string;
+  chapterNum: number;
+  verse: number;
+  currentText: string;
+  currentTranslationId: string;
+  translations: TranslationMeta[];
+}
 interface PHSSermon {
   sermonId: string; title: string; speaker: string; sermonDate?: string;
   timestampedUrl: string; timestampLabel: string; matchingReference?: string;
@@ -906,4 +941,117 @@ function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch { return dateStr; }
+}
+
+function CompareVerseSheet({
+  open, onClose, bookId, bookName, chapterNum, verse,
+  currentText, currentTranslationId, translations,
+}: CompareVerseSheetProps) {
+  // Default the compare translation to the first translation that isn't current
+  const defaultCompare = translations.find(t => t.id !== currentTranslationId)?.id ?? '';
+  const [compareId, setCompareId] = useState(defaultCompare);
+
+  // When the sheet opens, reset to a sensible default if the current value is the same as
+  // the primary translation (can happen when the primary changes while the sheet is open)
+  useEffect(() => {
+    if (open) {
+      if (!compareId || compareId === currentTranslationId) {
+        const other = translations.find(t => t.id !== currentTranslationId);
+        if (other) setCompareId(other.id);
+      }
+    }
+  }, [open, currentTranslationId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { chapter: compareChapter, loading: compareLoading } = useChapter(
+    bookId, chapterNum, compareId,
+  );
+  const compareVerseText = compareChapter?.verses.find(v => v.verse === verse)?.text ?? null;
+
+  const currentMeta = translations.find(t => t.id === currentTranslationId);
+  const compareMeta = translations.find(t => t.id === compareId);
+
+  const ref = `${bookName} ${chapterNum}:${verse}`;
+
+  return (
+    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] overflow-y-auto">
+        <div className="space-y-4 pb-4">
+          <SheetHeader>
+            <SheetTitle className="text-left text-[12px] font-semibold text-primary uppercase tracking-widest">
+              {ref} — Compare
+            </SheetTitle>
+          </SheetHeader>
+
+          {/* Translation pair selector */}
+          <div className="flex items-center gap-2">
+            {/* Primary (read-only, current translation) */}
+            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-muted/40">
+              <span className="w-9 h-6 rounded text-[10px] font-bold flex items-center justify-center bg-primary text-primary-foreground shrink-0">
+                {currentMeta?.abbreviation ?? currentTranslationId.toUpperCase()}
+              </span>
+              <span className="text-[13px] font-medium text-foreground truncate">
+                {currentMeta?.name ?? currentTranslationId}
+              </span>
+            </div>
+
+            <ArrowLeftRight size={16} className="text-muted-foreground shrink-0" />
+
+            {/* Compare — user picks */}
+            <div className="flex-1 relative">
+              <select
+                value={compareId}
+                onChange={e => setCompareId(e.target.value)}
+                className="w-full appearance-none px-3 py-2 rounded-xl border border-border bg-card text-[13px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                aria-label="Select comparison translation"
+              >
+                {translations
+                  .filter(t => t.id !== currentTranslationId)
+                  .map(t => (
+                    <option key={t.id} value={t.id}>{t.abbreviation} — {t.name}</option>
+                  ))}
+              </select>
+              <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Side-by-side verse panels */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Current translation */}
+            <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary text-primary-foreground">
+                {currentMeta?.abbreviation ?? currentTranslationId.toUpperCase()}
+              </span>
+              <p className="text-[14px] leading-[1.7] text-foreground">{currentText}</p>
+            </div>
+
+            {/* Compare translation */}
+            <div className="p-3.5 rounded-xl border border-border bg-card space-y-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground">
+                {compareMeta?.abbreviation ?? compareId.toUpperCase()}
+              </span>
+              {compareLoading ? (
+                <div className="flex items-center gap-2 py-2">
+                  <Loader2 size={14} className="text-primary animate-spin shrink-0" />
+                  <span className="text-[13px] text-muted-foreground">Loading…</span>
+                </div>
+              ) : compareVerseText ? (
+                <p className="text-[14px] leading-[1.7] text-foreground">{compareVerseText}</p>
+              ) : (
+                <p className="text-[13px] text-muted-foreground italic">
+                  This verse is not available in the selected translation.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Attribution for licensed translations */}
+          {compareMeta?.attributionUrl && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              {compareMeta.name} text provided via API.Bible
+            </p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 }

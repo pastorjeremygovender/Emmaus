@@ -7,6 +7,7 @@ import { apiBibleProvider } from "../lib/api-bible-provider";
 import { type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import { getBibleData, patchBibleData, type UserBibleData } from "../bible/store.js";
+import { isAdmin } from "../lib/user-role-store.js";
 
 // Resolve data dir relative to the compiled bundle file, not process.cwd().
 // In production the run command is `node artifacts/api-server/dist/index.mjs`
@@ -510,8 +511,8 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
   }
 
   try {
-    await patchBibleData(userId, sanitized);
-    res.json({ ok: true });
+    const updated = await patchBibleData(userId, sanitized);
+    res.json(updated);
   } catch (err) {
     logger.error({ err }, "PATCH /bible/data failed");
     res.status(500).json({ error: "Failed to save Bible data" });
@@ -531,7 +532,23 @@ router.patch("/bible/data", async (req: Request, res: Response) => {
 //   DELETE /api/bible/study-notes/admin/:id
 
 import { pool } from "@workspace/db";
-import { isAdmin } from "../lib/user-role-store.js";
+
+/**
+ * Verifies the caller is an authenticated admin or superAdmin using the
+ * server-side role store — never trusts the client-controlled x-user-role header.
+ * Returns the authenticated userId on success, or null after sending 401/403.
+ */
+async function requireAdminRole(req: Request, res: Response): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null; // 401 already sent by requireAuth
+
+  const adminAccess = await isAdmin(userId);
+  if (!adminAccess) {
+    res.status(403).json({ error: "Admin access required" });
+    return null;
+  }
+  return userId;
+}
 
 // Member: fetch Published study note for a specific verse
 router.get("/bible/study-notes", async (req: Request, res: Response) => {
@@ -565,9 +582,7 @@ router.get("/bible/study-notes", async (req: Request, res: Response) => {
 
 // Admin: list all study notes (all statuses)
 router.get("/bible/study-notes/admin", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
-  if (!userId) return;
-  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  if (!await requireAdminRole(req, res)) return;
   try {
     const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
     const chapter = parseInt(String(req.query.chapter ?? ""), 10);
@@ -592,9 +607,8 @@ router.get("/bible/study-notes/admin", async (req: Request, res: Response) => {
 
 // Admin: create a study note
 router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAdminRole(req, res);
   if (!userId) return;
-  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const {
     book_id, chapter, verse_start, verse_end, title, content,
@@ -633,9 +647,8 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
 
 // Admin: update a study note
 router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAdminRole(req, res);
   if (!userId) return;
-  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { id } = req.params;
   const {
@@ -671,9 +684,8 @@ router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) =
 
 // Admin: change status only
 router.patch("/bible/study-notes/admin/:id/status", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAdminRole(req, res);
   if (!userId) return;
-  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { id } = req.params;
   const { status } = req.body;
@@ -699,9 +711,8 @@ router.patch("/bible/study-notes/admin/:id/status", async (req: Request, res: Re
 
 // Admin: delete a study note
 router.delete("/bible/study-notes/admin/:id", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireAdminRole(req, res);
   if (!userId) return;
-  if (!(await isAdmin(userId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   try {
     await pool.query("DELETE FROM bible_study_notes WHERE id = $1", [req.params.id]);
