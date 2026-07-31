@@ -214,7 +214,7 @@ function DevotionalCard({
       }
       secondaryAction={
         onViewPreviousEntries
-          ? { label: 'View Previous Entries →', onPress: onViewPreviousEntries }
+          ? { label: 'View Previous →', onPress: onViewPreviousEntries }
           : undefined
       }
     />
@@ -374,7 +374,7 @@ function FifteenMinutesCard({
       }
       secondaryAction={
         onViewPreviousDays
-          ? { label: 'View Previous Days →', onPress: onViewPreviousDays }
+          ? { label: 'View Previous →', onPress: onViewPreviousDays }
           : undefined
       }
     />
@@ -431,6 +431,11 @@ function YourJourneysSection({
             headerTrailing={
               isCompleted
                 ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
+                : undefined
+            }
+            secondaryAction={
+              completedCount > 0
+                ? { label: 'View Previous →', onPress: () => onSelect(journey.id, prog) }
                 : undefined
             }
           />
@@ -899,7 +904,7 @@ export default function Walk() {
                 secondaryAction={
                   sc.currentDay > 1
                     ? {
-                        label: 'View Previous Reflections →',
+                        label: 'View Previous →',
                         onPress: () => setLocation(`/sermon-companion/${sc.id}/previous?from=walk`),
                       }
                     : undefined
