@@ -115,6 +115,13 @@ devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
       return;
     }
 
+    // Defence-in-depth: strip Draft (and Archived) entries from member responses
+    // so unpublished content is never transmitted to the browser.
+    // Admins receive the full entry list for authoring purposes.
+    if (!adminAccess) {
+      series.entries = series.entries.filter(e => e.status === "Published");
+    }
+
     res.json(series);
   } catch (err) {
     logger.error({ err }, "getSeriesById failed");
