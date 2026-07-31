@@ -15,6 +15,7 @@ import Auth from '@/pages/Auth';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
 import JourneyDay from '@/pages/JourneyDay';
+import JourneyPreviousDays from '@/pages/JourneyPreviousDays';
 import DailyRhythmDay from '@/pages/DailyRhythmDay';
 import PreviousDays from '@/pages/PreviousDays';
 import DevotionalDay from '@/pages/DevotionalDay';
@@ -140,6 +141,7 @@ function Router() {
       <Route path="/journey/15-minutes-with-jesus/day/:day">
         {(params) => <LegacyDailyRhythmRedirect day={params?.day ?? '1'} />}
       </Route>
+      <Route path="/journey/:journeyId/previous" component={JourneyPreviousDays} />
       <Route path="/journey/:journeyId/complete" component={WalkCompletePage} />
       <Route path="/journey/:journeyId/day/:day" component={JourneyDay} />
       {/* Sermon companion reader — for AI-generated companions in the sermon_companion table */}

@@ -390,6 +390,7 @@ function FifteenMinutesCard({
 function YourJourneysSection({
   startedJourneys,
   onSelect,
+  onViewPrevious,
 }: {
   startedJourneys: Array<{
     journey: import('@/contexts/JourneyContext').Journey;
@@ -398,6 +399,7 @@ function YourJourneysSection({
     totalPublishedSteps: number;
   }>;
   onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
+  onViewPrevious: (journeyId: string) => void;
 }) {
   if (startedJourneys.length === 0) return null;
 
@@ -435,7 +437,7 @@ function YourJourneysSection({
             }
             secondaryAction={
               completedCount > 0
-                ? { label: 'View Previous →', onPress: () => onSelect(journey.id, prog) }
+                ? { label: 'View Previous →', onPress: () => onViewPrevious(journey.id) }
                 : undefined
             }
           />
@@ -853,6 +855,7 @@ export default function Walk() {
           <YourJourneysSection
             startedJourneys={startedJourneys}
             onSelect={goToJourney}
+            onViewPrevious={(id) => setLocation(`/journey/${id}/previous?from=walk`)}
           />
         </motion.div>
 
