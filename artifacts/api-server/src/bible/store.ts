@@ -113,33 +113,34 @@ const EMPTY_DATA: UserBibleData = {
 
 // ─── DB-backed store ───────────────────────────────────────────────────────────
 
-export async function getBibleData(userId: string): Promise<UserBibleData> {
-  try {
-    const res = await pool.query(
-      'SELECT data FROM user_bible_data WHERE user_id = $1',
-      [userId]
-    );
-    if (res.rows.length === 0) return { ...EMPTY_DATA };
-    return { ...EMPTY_DATA, ...(res.rows[0].data as Partial<UserBibleData>) };
-  } catch {
-    // DB unavailable — return empty rather than crashing the reader
-    return { ...EMPTY_DATA };
-  }
+/**
+ * Returns the user's stored Bible data, or null when no cloud record exists yet.
+ * Returning null (vs. an empty object) lets the route return 404 and the client
+ * fall back to — and then migrate — its localStorage data on first authenticated load.
+ * DB errors propagate so the route can return 500.
+ */
+export async function getBibleData(userId: string): Promise<UserBibleData | null> {
+  const res = await pool.query(
+    'SELECT data FROM user_bible_data WHERE user_id = $1',
+    [userId]
+  );
+  if (res.rows.length === 0) return null;  // no cloud record yet
+  return { ...EMPTY_DATA, ...(res.rows[0].data as Partial<UserBibleData>) };
 }
 
-export async function patchBibleData(userId: string, patch: Partial<UserBibleData>): Promise<UserBibleData> {
-  try {
-    const current = await getBibleData(userId);
-    const next = { ...current, ...patch };
-    await pool.query(
-      `INSERT INTO user_bible_data (user_id, data, updated_at)
-       VALUES ($1, $2::jsonb, now())
-       ON CONFLICT (user_id)
-       DO UPDATE SET data = $2::jsonb, updated_at = now()`,
-      [userId, JSON.stringify(next)]
-    );
-    return next;
-  } catch {
-    return { ...EMPTY_DATA, ...patch };
-  }
+/**
+ * Atomically merges the provided fields into the user's stored data using
+ * PostgreSQL's jsonb || operator, avoiding the read-then-upsert race condition.
+ * Each key in `patch` overwrites only that key; untouched keys are preserved.
+ * DB errors propagate so the route can return 500 (the client already holds
+ * the update in localStorage, so no data is lost on a failed cloud write).
+ */
+export async function patchBibleData(userId: string, patch: Partial<UserBibleData>): Promise<void> {
+  await pool.query(
+    `INSERT INTO user_bible_data (user_id, data, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (user_id)
+     DO UPDATE SET data = user_bible_data.data || $2::jsonb, updated_at = now()`,
+    [userId, JSON.stringify(patch)]
+  );
 }

@@ -120,7 +120,12 @@ type BibleContextType = {
   // Personal prayers
   prayers: PersonalPrayer[];
   savePrayer: (bookId: string, chapter: number, text: string) => void;
+  updatePrayer: (id: string, text: string) => void;
   getPrayer: (bookId: string, chapter: number) => PersonalPrayer | undefined;
+  deletePrayer: (prayerId: string) => void;
+
+  // Chapter reflections (delete)
+  deleteReflection: (reflectionId: string) => void;
 };
 
 const BibleContext = createContext<BibleContextType | null>(null);
@@ -196,6 +201,7 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
         // Try cloud first
         const cloud = await loadBibleData(user.id);
         if (cloud) {
+          // Cloud record exists — use it as the authoritative source
           history    = cloud.history ?? [];
           completed  = cloud.completed;
           journeyProg = cloud.journeyProgress;
@@ -206,7 +212,11 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
           refls      = cloud.reflections;
           prays      = cloud.prayers;
         } else {
-          // Cloud unavailable — fall back to localStorage
+          // No cloud record yet (404) or cloud unavailable (5xx / network error).
+          // Fall back to localStorage in both cases — if the user has local data,
+          // fire-and-forget a migration PATCH to seed the cloud row so future
+          // loads use the cloud record. This is safe: if the DB is genuinely down
+          // the PATCH also fails silently and localStorage remains the source of truth.
           history    = loadFromLocalStorage();
           completed  = load(LS.completed, []);
           journeyProg = load(LS.journeyProgress, {});
@@ -216,6 +226,20 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
           nts        = load(LS.notes, []);
           refls      = load(LS.reflections, []);
           prays      = load(LS.prayers, []);
+
+          // Migrate any existing local data to cloud (fire-and-forget)
+          const hasLocalData =
+            history.length > 0 || completed.length > 0 ||
+            hlights.length > 0 || favs.length > 0 || bkms.length > 0 ||
+            nts.length > 0 || refls.length > 0 || prays.length > 0 ||
+            Object.keys(journeyProg).length > 0;
+          if (hasLocalData) {
+            patchBibleData(user.id, {
+              history, completed, journeyProgress: journeyProg,
+              highlights: hlights, favourites: favs, bookmarks: bkms,
+              notes: nts, reflections: refls, prayers: prays,
+            });
+          }
         }
       } else {
         // Unauthenticated — localStorage only
@@ -401,6 +425,24 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
 
   const getPrayer = useCallback((bookId: string, chapter: number) => prayers.find(p => p.bookId === bookId && p.chapter === chapter), [prayers]);
 
+  const updatePrayer = useCallback((id: string, text: string) => {
+    setPrayers(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, text, savedAt: new Date().toISOString() } : p);
+      persist({ prayers: next });
+      return next;
+    });
+  }, [persist]);
+
+  const deletePrayer = useCallback((prayerId: string) => {
+    setPrayers(prev => { const next = prev.filter(p => p.id !== prayerId); persist({ prayers: next }); return next; });
+  }, [persist]);
+
+  // ─── Reflections (delete) ────────────────────────────────────────────────────
+
+  const deleteReflection = useCallback((reflectionId: string) => {
+    setReflections(prev => { const next = prev.filter(r => r.id !== reflectionId); persist({ reflections: next }); return next; });
+  }, [persist]);
+
   const lastRead = readingHistory.length > 0 ? readingHistory[0] : null;
 
   return (
@@ -414,7 +456,8 @@ export function BibleProvider({ children }: { children: React.ReactNode }) {
       bookmarks, addBookmark, removeBookmark, isBookmarked,
       notes, saveNote, deleteNote, getNote, getChapterNotes,
       reflections, saveReflection, getReflection,
-      prayers, savePrayer, getPrayer,
+      prayers, savePrayer, updatePrayer, getPrayer, deletePrayer,
+      deleteReflection,
     }}>
       {children}
     </BibleContext.Provider>
