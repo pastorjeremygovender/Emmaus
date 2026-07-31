@@ -871,22 +871,29 @@ export default function Journeys() {
           </p>
         </header>
 
-        {/* My Rooms shortcut — always visible so members can find Rooms from Next Steps */}
-        <div className="mt-5">
-          <button
-            onClick={() => setLocation('/rooms')}
-            className="flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users size={13} />
-            <span>My Rooms</span>
-            {user && getMyRooms(user.id).length > 0 && (
-              <span className="text-[11px] font-semibold text-primary bg-primary/10 rounded-full px-1.5 py-0.5 leading-none">
-                {getMyRooms(user.id).length}
-              </span>
-            )}
-            <ChevronRight size={13} className="ml-auto" />
-          </button>
-        </div>
+        {/* My Rooms — prominent entry point */}
+        {(() => {
+          const myRooms = user ? getMyRooms(user.id) : [];
+          return (
+            <button
+              onClick={() => setLocation('/rooms')}
+              className="mt-5 w-full flex items-center gap-3 p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-left"
+            >
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Users size={17} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-foreground">My Rooms</p>
+                <p className="text-[12px] text-muted-foreground">
+                  {myRooms.length > 0
+                    ? `${myRooms.length} ${myRooms.length === 1 ? 'Room' : 'Rooms'}`
+                    : 'Walk journeys together with others'}
+                </p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+            </button>
+          );
+        })()}
 
         {/* Tab bar */}
         <TabBar active={activeTab} onChange={handleTabChange} />

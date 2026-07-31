@@ -12,12 +12,11 @@
 import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, MoreHorizontal, Pause, Trash2, X, Users } from 'lucide-react';
+import { CheckCircle2, MoreHorizontal, Pause, Trash2, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
@@ -453,7 +452,6 @@ export default function Walk() {
   const { user } = useAuth();
   const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
   const { getState } = useEnrollment();
-  const { getMyRooms } = useRooms();
   const [, setLocation] = useLocation();
 
   // Hooks must all be called before early returns.
@@ -971,58 +969,6 @@ export default function Walk() {
           </motion.section>
         )}
 
-        {/* ── 5. Rooms ────────────────────────────────────────────────────────── */}
-        {(() => {
-          const myRooms = getMyRooms();
-          return myRooms.length > 0 ? (
-            <motion.section
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.18 }}
-              className="space-y-3"
-            >
-              <SectionLabel>My Rooms</SectionLabel>
-              {myRooms.map(room => (
-                <div
-                  key={room.id}
-                  className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3"
-                >
-                  <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Users size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-medium text-foreground truncate">{room.name}</p>
-                    <p className="text-[12px] text-muted-foreground">
-                      {room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 rounded-lg text-[13px] shrink-0"
-                    onClick={() => setLocation(`/rooms/${room.id}`)}
-                  >
-                    Open
-                  </Button>
-                </div>
-              ))}
-            </motion.section>
-          ) : (
-            <motion.section
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.18 }}
-            >
-              <EmmausContentCard
-                label="ROOMS"
-                title="Continue with others"
-                description="Create or join a Room to do Walks and Bible Studies together with family or friends."
-                primaryActionLabel="Create or Join Room"
-                onAction={() => setLocation('/rooms')}
-              />
-            </motion.section>
-          );
-        })()}
 
       </main>
 

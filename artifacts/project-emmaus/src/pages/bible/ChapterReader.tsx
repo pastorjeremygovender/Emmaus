@@ -443,8 +443,28 @@ export default function ChapterReader() {
             </div>
           </div>
 
-          {/* Spacer — balances the back button */}
-          <div className="w-11 shrink-0" />
+          {/* Notes + Save — moved here from bottom toolbar to avoid FAB overlap */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setNotesOpen(true)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Chapter notes"
+            >
+              <FileText size={20} />
+              {chapterNotes.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-primary text-[7px] text-primary-foreground rounded-full flex items-center justify-center font-bold leading-none">
+                  {chapterNotes.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleToggleBookmark}
+              className={['p-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center', bookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground'].join(' ')}
+              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this chapter'}
+            >
+              <Bookmark size={20} className={bookmarked ? 'fill-primary' : ''} />
+            </button>
+          </div>
         </div>
 
         {/* Chapter heading (sub-line) */}
@@ -587,32 +607,6 @@ export default function ChapterReader() {
       {/* ── Fixed Bottom Toolbar ─────────────────────────────────────────────── */}
       <div className="fixed bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border/50 safe-area-bottom">
         <div className="max-w-[600px] mx-auto">
-
-          {/* Tool row — Notes and Save/Bookmark only */}
-          <div className="flex items-center justify-around h-12 px-6 border-b border-border/30">
-            <button
-              onClick={() => setNotesOpen(true)}
-              className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors p-2 relative"
-              aria-label="Chapter notes"
-            >
-              <FileText size={18} />
-              <span className="text-[9px]">Notes</span>
-              {chapterNotes.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-primary text-[8px] text-primary-foreground rounded-full flex items-center justify-center font-bold">
-                  {chapterNotes.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={handleToggleBookmark}
-              className={['flex flex-col items-center gap-0.5 transition-colors p-2', bookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground'].join(' ')}
-              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this chapter'}
-            >
-              <Bookmark size={18} className={bookmarked ? 'fill-primary' : ''} />
-              <span className="text-[9px]">{bookmarked ? 'Saved' : 'Save'}</span>
-            </button>
-          </div>
 
           {/* Chapter navigation row */}
           <div className="flex items-center h-14 px-2">
