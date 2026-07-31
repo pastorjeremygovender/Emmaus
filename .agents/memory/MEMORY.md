@@ -28,3 +28,4 @@
 - [Step publish gap](step-publish-gap.md) — Published journey + Draft steps = empty walk + route-guard bounce; fixed by client filter + server auto-publish on journey publish.
 - [Walk card & completion flow](walk-card-completion-flow.md) — card is one clickable button → JourneyDetail; backSource thread preserves chain; completion always "Back to Walk".
 - [Journey step status inheritance](journey-step-status.md) — createStep always inherits parent journey status; refreshJourneyDuration counts Published steps only; startup migration repairs legacy Draft-steps-on-Published-journey data idempotently.
+- [Launch Board P2 fixes](launch-board-p2-fixes.md) — atomic devotional progress, invite token sessionStorage bridge, companion atomic publish, P2-7/SC-2/DEV-2/RM-1 deferred post-launch.
