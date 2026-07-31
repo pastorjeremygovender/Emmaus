@@ -153,7 +153,7 @@
 | P2-8 | Bible | Cloud annotation PATCH is fire-and-forget — save failures are silent | `contexts/BibleContext.tsx:162–179` | 4 hrs | ✅ By design — localStorage is authoritative; cloud PATCH is an optional sync and the code explicitly documents the silent-fail fallback. No change needed. |
 | P2-9 | Bible Studies | `publishAllInReview` only updated study notes, not chapter overviews | `pages/admin/content-studio/BibleProgressDashboard.tsx:102–125` | 1 hr | ✅ 31 Jul |
 | P2-10 | Daily Rhythm | `isCompletedToday` timezone brittleness — `toLocaleDateString()` without locale | `lib/daily-lock.ts:17–25` | 1 hr | ✅ 31 Jul |
-| P2-11 | Rooms | Unauthenticated users cannot join via invite link | `pages/rooms/JoinByLink.tsx:20–36` | 1 day | ☐ |
+| P2-11 | Rooms | Unauthenticated users cannot join via invite link | `pages/rooms/JoinByLink.tsx:20–36` | 1 day | ✅ 31 Jul |
 | P2-12 | Sermon Companions | Non-atomic publish — two independent store calls; header can publish while entry update fails | `api-server/src/routes/sermon-companions.ts:287–295` | 1–2 hrs | ✅ 31 Jul |
 | P2-13 | Walks & Journeys | `backSource`/`backSourceId` written by JourneyDetail but never read — deep back-chain lost at 3+ levels | `pages/journeys/JourneyDetail.tsx:47`, `lib/return-context.ts` | 1 day | ☐ |
 
@@ -165,7 +165,7 @@
 |----------|-------|----------------|------|
 | P0 — Hard blockers | 9 items | — | 8 done, 1 deferred (SC-2) |
 | P1 — Major gaps | 8 items | — | 6 done, 2 deferred (DEV-2, RM-1) |
-| P2 — Quality issues | 13 items | 3–5 days | 10 done (P2-1,2,3,4,5,6,8,9,10,12) |
+| P2 — Quality issues | 13 items | 3–5 days | 11 done (P2-1,2,3,4,5,6,8,9,10,11,12) |
 
 ---
 
@@ -182,4 +182,4 @@
 Everything outside the eight pillars listed above is frozen for this release.
 No new features, no UI redesigns, no refactors of working code.
 
-_Last updated: 31 July 2026 — session 3_
+_Last updated: 31 July 2026 — session 4_
