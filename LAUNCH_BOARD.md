@@ -9,14 +9,14 @@
 
 | # | Pillar | Completion | Status |
 |---|--------|-----------|--------|
-| 1 | Daily Rhythm | 70% | 🔴 Blockers |
-| 2 | Daily Devotionals | 65% | 🔴 Blockers |
-| 3 | Walks & Journeys | 75% | 🟠 Blockers |
-| 4 | Bible Studies | 40% | 🔴 Blockers |
+| 1 | Daily Rhythm | 95% | 🟡 Issues |
+| 2 | Daily Devotionals | 75% | 🟠 P1 gap (no admin UI) |
+| 3 | Walks & Journeys | 90% | 🟡 Issues |
+| 4 | Bible Studies | 80% | 🟡 Issues |
 | 5 | Bible | 80% | 🟡 Issues |
-| 6 | Rooms | 60% | 🟠 Blockers |
-| 7 | Ask Emmaus | 75% | 🟠 Blockers |
-| 8 | Sermon Companions | 55% | 🔴 Blockers |
+| 6 | Rooms | 70% | 🟠 P1 gap (stubs) |
+| 7 | Ask Emmaus | 90% | 🟡 Issues |
+| 8 | Sermon Companions | 70% | 🔴 P0 gap (no admin UI) |
 
 **Status key:** 🔴 Has P0 blocker · 🟠 Has P1 blocker · 🟡 P2 issues only · ✅ Clear
 
@@ -31,61 +31,53 @@
 
 #### 1 · Daily Rhythm
 
-- [ ] **DR-1 · Hard-coded journey ID**
-  Reader (`DailyRhythmDay.tsx:93–105`) hardcodes `15-minutes-with-jesus`. Walk and next-step engine resolve by `journeyType === 'daily-rhythm'`. If the live DB journey slug ever differs, the reader stalls forever at Loading with no error shown to the user.
-  _Files:_ `pages/DailyRhythmDay.tsx`, `pages/Walk.tsx:600`, `lib/next-step-engine.ts:81`
-  _Effort:_ 1–2 hrs
+- [x] **DR-1 · Hard-coded journey ID** _(fixed 31 Jul 2026)_
+  `DailyRhythmDay.tsx` hardcoded `15-minutes-with-jesus`. Fixed to dynamically look up `journeyType === 'daily-rhythm'`.
+  _Files:_ `pages/DailyRhythmDay.tsx`
 
-- [ ] **DR-2 · Progress API accepts caller-supplied userId** _(shared with Walks)_
-  `routes/journeys.ts:7–9, 24–35` falls back to `userId` in query/body. Any authenticated caller knowing a user ID can read, write, or complete another user's Daily Rhythm progress.
+- [x] **DR-2 · Progress API accepts caller-supplied userId** _(fixed 31 Jul 2026)_
+  `routes/journeys.ts` fell back to `userId` in query/body. Fixed: body/query fallbacks removed; only signed cookie or X-User-Id header (dev gate) accepted.
   _Files:_ `api-server/src/routes/journeys.ts`
-  _Effort:_ 2–4 hrs
 
 ---
 
 #### 2 · Daily Devotionals
 
-- [ ] **DEV-1 · Header-based admin auth (security)**
-  `routes/devotionals.ts:15–29` trusts the `X-User-Role` header supplied by the client. Any authenticated user can claim `admin`, read all Draft series, and mutate any content.
+- [x] **DEV-1 · Header-based admin auth (security)** _(fixed 31 Jul 2026)_
+  `routes/devotionals.ts` trusted X-User-Role with no NODE_ENV gate. Fixed by adding `if (process.env.NODE_ENV === "production") return false;` to `isAdminRole()`, mirroring `auth.ts`.
   _Files:_ `api-server/src/routes/devotionals.ts`
-  _Effort:_ 2–4 hrs
 
 ---
 
 #### 4 · Bible Studies
 
-- [ ] **BS-1 · Generated content invisible to members**
-  `VerseStudyPanel.tsx:337–351` and `ChapterReader.tsx:188, 193` call static path-style routes (`/api/bible/chapter-overview/:book/:chapter`, `/api/bible/book-intro/:bookId`) that return hardcoded data from `book-intros.ts`. The DB member routes (`/api/bible/chapter-overview?bookId=&chapter=`, `/api/bible/book-intro?bookId=`) have no frontend caller. All 1,035 generated study notes, 247 chapter overviews, and 6 book intros are invisible to members.
-  _Files:_ `components/VerseStudyPanel.tsx`, `pages/bible/ChapterReader.tsx`, `api-server/src/routes/bible.ts:188–219`
-  _Effort:_ 1 day
+- [x] **BS-1 · Generated content invisible to members** _(fixed 31 Jul 2026)_
+  `VerseStudyPanel.tsx` and `ChapterReader.tsx` called static path-style routes. Fixed to call query-param DB routes (`?bookId=&chapter=`).
+  _Files:_ `components/VerseStudyPanel.tsx`, `pages/bible/ChapterReader.tsx`
 
-- [ ] **BS-2 · ChapterOverview type mismatch**
-  `VerseStudyPanel`'s `ChapterOverview` type and renderer expect `{ summary }` (static shape). The DB row contains `main_themes`, `key_people`, `key_locations`, `passage_divisions`, `key_verse`, `jesus_connection`, `book_connection`. Routing fix (BS-1) alone is not enough; the renderer must be updated to match the DB shape.
-  _Files:_ `components/VerseStudyPanel.tsx:411–490`
-  _Effort:_ 2–4 hrs
+- [x] **BS-2 · ChapterOverview type mismatch** _(fixed 31 Jul 2026)_
+  DB snake_case columns mapped to camelCase shape in ChapterReader fetch chain.
+  _Files:_ `pages/bible/ChapterReader.tsx`
 
 ---
 
 #### 8 · Sermon Companions
 
 - [x] **SC-0 · Current-week companion invisible to new members** _(fixed 31 Jul 2026)_
-  Walk.tsx filtered `member/engagements` on `progress !== null`, hiding the companion for every new user. No discovery card existed. Fixed by tracking `unstartedCurrentWeekCompanion` state and rendering an `EmmausContentCard` discovery card (matching the `DevotionalDiscoveryCard` pattern) when the member has no active companion but a current-week companion is available. `handleBeginCompanion` calls `POST /api/sermon-companions/:id/progress/start` then navigates to day 1.
-  _Files:_ `artifacts/project-emmaus/src/pages/Walk.tsx`
+  Walk.tsx filtered out companions with no progress. Fixed with `unstartedCurrentWeekCompanion` state + discovery card + `handleBeginCompanion`.
+  _Files:_ `pages/Walk.tsx`
 
-- [ ] **SC-1 · Timestamp links generated but never rendered**
-  The generation pipeline stores timestamped sermon links in the DB (`sermon-generator.ts:826–861`). `SermonCompanionReader.tsx:42–53` defines `SCEntry` without a `sermonLink` field; the reader never renders them. Members cannot tap to the sermon moment they are reflecting on.
-  _Files:_ `pages/SermonCompanionReader.tsx`, `api-server/src/lib/sermon-generator.ts`
-  _Effort:_ 1–2 hrs
+- [x] **SC-1 · Timestamp links generated but never rendered** _(fixed 31 Jul 2026)_
+  Added `sermonLink?: string | null` to `SCEntry` interface. Added `ExternalLink` import. Renders "Listen to this sermon moment" link above `DevotionalReading` when `entry.sermonLink` is non-empty.
+  _Files:_ `pages/SermonCompanionReader.tsx`
 
-- [ ] **SC-2 · Admin has no companion management UI**
-  `Admin.tsx:28–54` exposes Dashboard, Content Studio, Bible Study, People, Settings, Testing. No Sermon or Companion section exists. Full CRUD/publish routes are present on the server but unreachable through the admin shell.
-  _Files:_ `pages/Admin.tsx`, `api-server/src/routes/sermon-companions.ts`
+- [x] **SC-3 · Generation confirmation flow has no UI** _(verified: already implemented)_
+  `SermonEditor.tsx` already handles `SERMON_CONFIRMATION_REQUIRED` → `setPhase('confirm-sermon')`. `ConfirmSermonPhase` component exists at line 590. Not a blocker.
+
+- [ ] **SC-2 · Admin has no companion management UI** _(deferred — 1–2 days)_
+  Content Studio filters out `journeyType === 'companion'` at `StudioJourneyList.tsx:74`. Full CRUD/publish routes exist server-side but are unreachable from the admin shell.
+  _Files:_ `pages/admin/content-studio/StudioJourneyList.tsx`, `api-server/src/routes/sermon-companions.ts`
   _Effort:_ 1–2 days
-
-- [ ] **SC-3 · Generation confirmation flow has no UI**
-  `routes/sermon-generator.ts:38–50` returns a structured `{ success: false, code: 'SERMON_CONFIRMATION_REQUIRED' }` HTTP 200 when boundary detection is low-confidence. No admin UI handles this response; complex sermons appear to silently fail generation.
-  _Files:_ `pages/admin/` (absent handler), `lib/sermon-generator-api.ts:130–233`
-  _Effort:_ 4–8 hrs
 
 ---
 
@@ -97,25 +89,21 @@
 #### 3 · Walks & Journeys
 
 - [x] **WJ-0 · No published growth walk in DB** _(fixed 31 Jul 2026)_
-  The database contained only the daily-rhythm journey — no growth walks. Step 5 of the Emmaus Story ("Start and complete one Walk") failed with an empty `YourJourneysSection`. Fixed by seeding "The Road to Emmaus" (3 published days, Luke 24) via `scripts/seed-walk.mjs`. Both `standaloneJourneys` in next-steps API and the `YourJourneysSection` now surface it correctly.
-  _Files:_ `artifacts/api-server/scripts/seed-walk.mjs` (new)
+  Seeded "The Road to Emmaus" (3 published days, Luke 24) via `scripts/seed-walk.mjs`.
 
-- [ ] **WJ-1 · Completion drops return context**
-  `JourneyDay` passes `source/sourceId` into the completion URL. `WalkCompletePage.tsx:47–49` ignores them and always returns to `/journeys/:journeyId`. Members who entered from Walk, Bible, or Sermon have no correct back route after completing a step.
-  _Files:_ `pages/WalkCompletePage.tsx`, `pages/JourneyDay.tsx:57–60`
-  _Effort:_ 2–4 hrs
+- [x] **WJ-1 · Completion drops return context** _(fixed 31 Jul 2026)_
+  `WalkCompletePage` now reads `source`/`sourceId` from URL and calls `resolveReturn()` so the back button honours the member's actual entry point (Walk, Bible, Journey Detail, etc.).
+  _Files:_ `pages/WalkCompletePage.tsx`
 
-- [ ] **WJ-2 · Back-navigation naming collision**
-  Three incompatible param names in active use: `source`, `from`, `backSource`. `JourneyDetail` emits `backSource`; `JourneyDay`/`WalkCompletePage` read only `source/sourceId`. `JourneyPreviousDays` understands only `from`. The return-context chain breaks at multiple boundaries.
-  _Files:_ `pages/JourneyDetail.tsx:42–48`, `pages/JourneyPreviousDays.tsx:26–52`, `lib/return-context.ts`
-  _Effort:_ 1 day
+- [ ] **WJ-2 · Back-navigation naming collision** _(downgraded to P2 — not an active collision)_
+  Investigation found: `backSource`/`backSourceId` are written by JourneyDetail but never read by JourneyDay — dead params, not an active collision. `from` is isolated to PreviousDays pages (coherent subsystem). Main `source`/`sourceId` chain is consistent throughout the tree. Reclassified as P2.
 
 ---
 
 #### 2 · Daily Devotionals _(continued)_
 
-- [ ] **DEV-2 · No admin authoring UI**
-  Full CRUD API exists (`routes/devotionals.ts`, `devotional-store.ts`) but no page exists under `src/pages/admin` to create or edit series. Admins must use raw API calls.
+- [ ] **DEV-2 · No admin authoring UI** _(deferred — 1–2 days)_
+  Full CRUD API exists but no admin page to create/edit series. Admins must use raw API calls.
   _Files:_ `src/pages/admin/` (absent), `lib/devotionals-api.ts`
   _Effort:_ 1–2 days
 
@@ -123,72 +111,69 @@
 
 #### 7 · Ask Emmaus
 
-- [ ] **AE-1 · Memory saved but never loaded**
-  Users consent and save memory (`AskEmmausConversation.tsx:381–391`). `handleConversation` never fetches user memories or passes them to `buildContext` (`conversation-service.ts:299–304`). Memory has zero effect on any answer.
-  _Files:_ `api-server/src/emmaus/conversation-service.ts`, `pages/personal/AskEmmausConversation.tsx`
-  _Effort:_ 2–4 hrs
+- [x] **AE-1 · Memory saved but never loaded** _(fixed 31 Jul 2026)_
+  `getMemories(userId)` now fetched in parallel with Bible/sermon search in `conversation-service.ts`. Approved memories injected into `contextBlock` in the same format as `context-builder.ts` lines 114–119.
+  _Files:_ `api-server/src/emmaus/conversation-service.ts`
 
-- [ ] **AE-2 · Follow-up prompts never shown**
-  System prompt specifies `followUpPrompts` (`system-instructions.ts:239–243`), metadata type carries them (`emmaus-client.ts:84–92`), but the conversation UI renders nothing for them (`AskEmmausConversation.tsx:470–485`). Users see no suggested follow-on questions.
-  _Files:_ `pages/personal/AskEmmausConversation.tsx`, `api-server/src/emmaus/system-instructions.ts`
-  _Effort:_ 2–4 hrs
+- [x] **AE-2 · Follow-up prompts never shown** _(fixed 31 Jul 2026)_
+  `followUpPrompts` from AI response metadata now render as tappable suggestion chips after the last assistant message. Tapping populates the follow-up composer input.
+  _Files:_ `pages/personal/AskEmmausConversation.tsx`
 
 ---
 
 #### 6 · Rooms
 
 - [x] **RM-0 · Rooms MVP — all five core requirements** _(fixed 31 Jul 2026)_
-  Reqs 1–3 (create room, invite code, join by code) were already working end-to-end.
-  Gap: `RoomDetail.tsx` only rendered linked journeys when `linkedJourneys.length > 0` with no UI
-  to trigger the link. Fixed by replacing the conditional block with an always-visible "Journeys
-  Walking Together" section: empty state + "Add a Walk" CTA, inline walk picker (member's started
-  journeys from `JourneyContext` filtered to exclude already-linked ones), `handleLinkWalk` calling
-  `POST /api/rooms/:id/journeys` then reloading detail and pre-fetching progress, and the existing
-  per-member progress grid. `getMemberJourneyProgress` LEFT JOINs all room members against
-  `user_journey_progress` — unstarted members show `currentDay: null` ("Not started yet"). E2E
-  verified with two synthetic users through all five requirements.
-  _Files:_ `artifacts/project-emmaus/src/pages/rooms/RoomDetail.tsx`
+  Create room, invite code, join by code, link walk, per-member progress grid — all working. E2E verified with two synthetic users.
+  _Files:_ `pages/rooms/RoomDetail.tsx`
 
-- [ ] **RM-1 · Core Room features are stubs**
-  `RoomsContext.tsx:57–85, 232–260` exposes empty arrays and no-ops for notifications, journey invitations, participant tracking, shared reflections, posts, and admin archive/revoke. Any UI relying on these cannot function.
+- [x] **RM-2 · `startSharedJourney` uses non-atomic endpoint** _(fixed 31 Jul 2026)_
+  `RoomsContext.startSharedJourney` now calls `apiStartShared()` (atomic `/api/rooms/start-shared`) instead of `apiLinkJourney()`.
+  _Files:_ `contexts/RoomsContext.tsx`
+
+- [ ] **RM-1 · Core Room features are stubs** _(deferred — 3–5 days)_
+  Notifications, journey invitations, participant tracking, shared reflections, posts, admin archive/revoke are all no-ops. Too large for launch window; recommend post-launch.
   _Files:_ `contexts/RoomsContext.tsx`, `api-server/src/routes/rooms.ts`
   _Effort:_ 3–5 days
-
-- [ ] **RM-2 · `startSharedJourney` uses non-atomic endpoint**
-  `RoomsContext.startSharedJourney` calls the ordinary link endpoint, not the atomic `/start-shared` (`RoomsContext.tsx:243–251`). Progress initialisation can diverge from the server's atomic flow. The atomic client wrapper exists but is unused (`rooms-api.ts:169–177`).
-  _Files:_ `contexts/RoomsContext.tsx`, `lib/rooms-api.ts`
-  _Effort:_ 1–2 hrs
 
 ---
 
 ### 🟡 P2 — Quality Issues
 > Degrade experience. Fix before broad rollout.
 
-| ID | Pillar | Issue | Files | Effort |
-|----|--------|-------|-------|--------|
-| P2-1 | Rooms | Chat header shows "Room Chat" not room name — `RoomDetail` navigates without setting `history.state.roomName` | `pages/rooms/RoomDetail.tsx:130–132`, `RoomChat.tsx:83–87` | 30 min |
-| P2-2 | Devotionals | `markDayComplete` race condition — read-then-write on `completedDays` JSONB; concurrent devices overwrite each other | `api-server/src/lib/devotional-store.ts:268–287` | 1–2 hrs |
-| P2-3 | Daily Rhythm | Silent completion sync failure — `completeStep` swallows API errors; progress vanishes on reload with no retry | `contexts/JourneyContext.tsx:303–306` | 2–4 hrs |
-| P2-4 | Sermon Companions | Status casing mismatch — generation returns `"draft"` (lowercase); DB/store use `"Draft"`; strict comparisons fail | `api-server/src/routes/sermon-generator.ts:106–110` | 30 min |
-| P2-5 | Ask Emmaus | History omits practical nextSteps — past conversations lose actionable read/pray/continue/listen cards | `pages/personal/AskEmmausHistory.tsx:94–105` | 1–2 hrs |
-| P2-6 | Ask Emmaus | Pastoral handoff has no UI — server sets `handoffType: pastoral` but client renders no banner or contact action | `pages/personal/AskEmmausConversation.tsx:258–261` | 2 hrs |
-| P2-7 | Bible | Preached Here links open YouTube directly — no in-app sermon route used across Bible, Ask Emmaus, VerseStudyPanel | `data/sermon-verse-links.ts`, `components/emmaus/ResourceCard.tsx:65–70` | 4–8 hrs |
-| P2-8 | Bible | Cloud annotation PATCH is fire-and-forget — save failures are silent; concurrent devices overwrite each other's full arrays | `contexts/BibleContext.tsx:162–179` | 4 hrs |
-| P2-9 | Bible Studies | Progress Dashboard cannot bulk-publish overviews — server endpoint exists but dashboard never calls it | `pages/admin/content-studio/BibleProgressDashboard.tsx:102–125` | 1 hr |
-| P2-10 | Daily Rhythm | `isCompletedToday` timezone brittleness — `toLocaleDateString()` without explicit locale produces brittle date strings | `lib/daily-lock.ts:17–25` | 1 hr |
-| P2-11 | Rooms | Unauthenticated users cannot join via invite link — must already be signed in before confirmation | `pages/rooms/JoinByLink.tsx:20–36` | 1 day |
-| P2-12 | Sermon Companions | Non-atomic publish — two independent store calls; header can publish while entry update fails | `api-server/src/routes/sermon-companions.ts:287–295` | 1–2 hrs |
+| ID | Pillar | Issue | Files | Effort | Status |
+|----|--------|-------|-------|--------|--------|
+| P2-1 | Rooms | Chat header shows "Room Chat" not room name | `pages/rooms/RoomDetail.tsx:130–132`, `RoomChat.tsx:83–87` | 30 min | ☐ |
+| P2-2 | Devotionals | `markDayComplete` race condition — read-then-write on `completedDays` JSONB | `api-server/src/lib/devotional-store.ts:268–287` | 1–2 hrs | ☐ |
+| P2-3 | Daily Rhythm | Silent completion sync failure — `completeStep` swallows API errors | `contexts/JourneyContext.tsx:303–306` | 2–4 hrs | ☐ |
+| P2-4 | Sermon Companions | Status casing mismatch — generation returns `"draft"`; DB/store use `"Draft"` | `api-server/src/routes/sermon-generator.ts:106–110` | 30 min | ☐ |
+| P2-5 | Ask Emmaus | History omits practical nextSteps — past conversations lose actionable cards | `pages/personal/AskEmmausHistory.tsx:94–105` | 1–2 hrs | ☐ |
+| P2-6 | Ask Emmaus | Pastoral handoff has no UI — server sets `handoffType: pastoral` but client renders no banner | `pages/personal/AskEmmausConversation.tsx:258–261` | 2 hrs | ☐ |
+| P2-7 | Bible | Preached Here links open YouTube directly — no in-app sermon route | `data/sermon-verse-links.ts`, `components/emmaus/ResourceCard.tsx:65–70` | 4–8 hrs | ☐ |
+| P2-8 | Bible | Cloud annotation PATCH is fire-and-forget — save failures are silent | `contexts/BibleContext.tsx:162–179` | 4 hrs | ☐ |
+| P2-9 | Bible Studies | Progress Dashboard cannot bulk-publish overviews — endpoint exists, never called | `pages/admin/content-studio/BibleProgressDashboard.tsx:102–125` | 1 hr | ☐ |
+| P2-10 | Daily Rhythm | `isCompletedToday` timezone brittleness — `toLocaleDateString()` without locale | `lib/daily-lock.ts:17–25` | 1 hr | ☐ |
+| P2-11 | Rooms | Unauthenticated users cannot join via invite link | `pages/rooms/JoinByLink.tsx:20–36` | 1 day | ☐ |
+| P2-12 | Sermon Companions | Non-atomic publish — two independent store calls; header can publish while entry update fails | `api-server/src/routes/sermon-companions.ts:287–295` | 1–2 hrs | ☐ |
+| P2-13 | Walks & Journeys | `backSource`/`backSourceId` written by JourneyDetail but never read — deep back-chain lost at 3+ levels | `pages/journeys/JourneyDetail.tsx:47`, `lib/return-context.ts` | 1 day | ☐ |
 
 ---
 
 ## Effort Summary
 
-| Priority | Count | Estimated Total |
-|----------|-------|----------------|
-| P0 — Hard blockers | 7 items | 3–5 days |
-| P1 — Major gaps | 8 items | 5–8 days |
-| P2 — Quality issues | 12 items | 3–4 days |
-| **Total** | **27 items** | **11–17 days** |
+| Priority | Count | Estimated Total | Done |
+|----------|-------|----------------|------|
+| P0 — Hard blockers | 9 items | — | 8 done, 1 deferred (SC-2) |
+| P1 — Major gaps | 8 items | — | 6 done, 2 deferred (DEV-2, RM-1) |
+| P2 — Quality issues | 13 items | 3–5 days | 0 done |
+
+---
+
+## Deferred Items (post-launch)
+
+- **SC-2** — Admin companion management UI (Content Studio doesn't surface companions)
+- **DEV-2** — Admin devotionals authoring UI
+- **RM-1** — Core Room feature stubs (notifications, shared reflections, participant tracking)
 
 ---
 
