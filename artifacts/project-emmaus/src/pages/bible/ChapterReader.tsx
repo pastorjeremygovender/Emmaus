@@ -5,7 +5,8 @@ import { SermonAudioPlayer } from '@/components/SermonAudioPlayer';
 import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Heart, FileText, Bookmark, X, Check,
-  ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown
+  ChevronLeft, ChevronRight, Loader2, ExternalLink, RefreshCw, ChevronDown,
+  BookOpen, Share2, Highlighter, MessageSquare, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -15,6 +16,7 @@ import { useChapter } from '@/hooks/useChapter';
 import { useTranslations } from '@/hooks/useTranslations';
 import { getVerseSermonLinks } from '@/data/sermon-verse-links';
 import { BibleReferencePicker } from '@/components/BibleReferencePicker';
+import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -46,6 +48,7 @@ export default function ChapterReader() {
     isFavourite, addFavourite, removeFavourite,
     getNote, saveNote, getChapterNotes,
     isBookmarked, addBookmark, removeBookmark,
+    savePrayer,
   } = useBible();
 
   const { translations } = useTranslations();
@@ -58,6 +61,10 @@ export default function ChapterReader() {
   const [verseSheet, setVerseSheet] = useState<{ verse: number; text: string } | null>(null);
   const [noteText, setNoteText] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showPrayerInput, setShowPrayerInput] = useState(false);
+  const [prayerText, setPrayerText] = useState('');
+  const [studyPanelVerse, setStudyPanelVerse] = useState<StudyVerse | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [translationDropdownOpen, setTranslationDropdownOpen] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
@@ -268,6 +275,39 @@ export default function ChapterReader() {
   // BibleReferencePicker navigate callback
   function handlePickerNavigate(newBookId: string, newChapter: number) {
     setLocation(`/bible/read/${newBookId}/${newChapter}${qs}`);
+  }
+
+  // Share verse via Web Share API (with clipboard fallback)
+  async function handleShare(verseNum: number, text: string) {
+    const ref = `${book!.name} ${chapterNum}:${verseNum}`;
+    const shareData = { title: ref, text: `"${text}" — ${ref}` };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(`"${text}" — ${ref}`);
+      }
+    } catch { /* cancelled */ }
+  }
+
+  // Save verse prayer — prepends the verse reference to the prayer text
+  function handleSavePrayer(verseNum: number) {
+    if (!prayerText.trim()) return;
+    savePrayer(book!.id, chapterNum, `${book!.name} ${chapterNum}:${verseNum} — ${prayerText.trim()}`);
+    setPrayerText('');
+    setShowPrayerInput(false);
+  }
+
+  // Open study panel for a verse
+  function openStudyPanel(verseNum: number, text: string) {
+    setVerseSheet(null);
+    setStudyPanelVerse({
+      bookId: resolvedBookId,
+      bookName: book!.name,
+      chapter: chapterNum,
+      verse: verseNum,
+      text,
+    });
   }
 
   return (
@@ -515,91 +555,143 @@ export default function ChapterReader() {
       </div>
 
       {/* ── Verse Action Sheet ───────────────────────────────────────────────── */}
-      <Sheet open={!!verseSheet} onOpenChange={open => !open && setVerseSheet(null)}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] overflow-y-auto">
+      <Sheet open={!!verseSheet} onOpenChange={open => {
+        if (!open) {
+          setVerseSheet(null);
+          setShowNoteInput(false);
+          setShowHighlightPicker(false);
+          setShowPrayerInput(false);
+        }
+      }}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] overflow-y-auto">
           {verseSheet && (() => {
-            const sermonLinks = getVerseSermonLinks(resolvedBookId, chapterNum, verseSheet.verse);
+            const fav = isFavourite(book.id, chapterNum, verseSheet.verse);
+            const bkm = isBookmarked(book.id, chapterNum);
+            const hl  = getHighlight(book.id, chapterNum, verseSheet.verse);
+            const ref = `${book.name} ${chapterNum}:${verseSheet.verse}`;
             return (
-              <div className="space-y-5 pb-4">
+              <div className="space-y-4 pb-4">
+                {/* Reference + text */}
                 <SheetHeader>
-                  <SheetTitle className="text-left text-[13px] font-semibold text-primary uppercase tracking-widest">
-                    {book.name} {chapterNum}:{verseSheet.verse}
+                  <SheetTitle className="text-left text-[12px] font-semibold text-primary uppercase tracking-widest">
+                    {ref}
                   </SheetTitle>
                 </SheetHeader>
                 <p className="font-sans text-[17px] leading-[1.65] text-foreground italic">"{verseSheet.text}"</p>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                {/* 8-action grid */}
+                <div className="grid grid-cols-4 gap-2">
+                  {/* Study */}
+                  <button
+                    onClick={() => openStudyPanel(verseSheet.verse, verseSheet.text)}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
+                  >
+                    <BookOpen size={20} className="text-primary" />
+                    <span className="text-[11px] font-medium text-foreground">Study</span>
+                  </button>
+
+                  {/* Highlight */}
+                  <button
+                    onClick={() => { setShowHighlightPicker(v => !v); setShowNoteInput(false); setShowPrayerInput(false); }}
+                    className={['flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors', showHighlightPicker || hl ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-card border-border hover:bg-muted/50'].join(' ')}
+                  >
+                    <Highlighter size={20} className={hl ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'} />
+                    <span className="text-[11px] font-medium text-foreground">Highlight</span>
+                  </button>
+
+                  {/* Note */}
+                  <button
+                    onClick={() => { setShowNoteInput(v => !v); setShowHighlightPicker(false); setShowPrayerInput(false); }}
+                    className={['flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors', showNoteInput ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-card border-border hover:bg-muted/50'].join(' ')}
+                  >
+                    <FileText size={20} className={showNoteInput ? 'text-primary' : getNote(book.id, chapterNum, verseSheet.verse) ? 'text-primary' : 'text-muted-foreground'} />
+                    <span className="text-[11px] font-medium text-foreground">Note</span>
+                  </button>
+
+                  {/* Bookmark (chapter) */}
+                  <button
+                    onClick={handleToggleBookmark}
+                    className={['flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors', bkm ? 'bg-primary/10 border-primary/30' : 'bg-card border-border hover:bg-muted/50'].join(' ')}
+                  >
+                    <Bookmark size={20} className={bkm ? 'fill-primary text-primary' : 'text-muted-foreground'} />
+                    <span className="text-[11px] font-medium text-foreground">{bkm ? 'Saved' : 'Bookmark'}</span>
+                  </button>
+
+                  {/* Favourite */}
                   <button
                     onClick={() => toggleFavourite(verseSheet.verse, verseSheet.text)}
-                    className={['flex items-center gap-2.5 p-3.5 rounded-xl border transition-colors', isFavourite(book.id, chapterNum, verseSheet.verse) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-card border-border text-foreground'].join(' ')}
+                    className={['flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors', fav ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800' : 'bg-card border-border hover:bg-muted/50'].join(' ')}
                   >
-                    <Heart size={18} className={isFavourite(book.id, chapterNum, verseSheet.verse) ? 'fill-primary' : ''} />
-                    <span className="text-[14px] font-medium">{isFavourite(book.id, chapterNum, verseSheet.verse) ? 'Saved' : 'Save verse'}</span>
+                    <Heart size={20} className={fav ? 'fill-rose-500 text-rose-500' : 'text-muted-foreground'} />
+                    <span className="text-[11px] font-medium text-foreground">{fav ? 'Saved' : 'Favourite'}</span>
                   </button>
+
+                  {/* Prayer */}
                   <button
-                    onClick={() => setShowNoteInput(v => !v)}
-                    className={['flex items-center gap-2.5 p-3.5 rounded-xl border transition-colors', showNoteInput ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-card border-border text-foreground'].join(' ')}
+                    onClick={() => { setShowPrayerInput(v => !v); setShowNoteInput(false); setShowHighlightPicker(false); }}
+                    className={['flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-colors', showPrayerInput ? 'bg-primary/10 border-primary/30' : 'bg-card border-border hover:bg-muted/50'].join(' ')}
                   >
-                    <FileText size={18} />
-                    <span className="text-[14px] font-medium">Note</span>
+                    <MessageSquare size={20} className={showPrayerInput ? 'text-primary' : 'text-muted-foreground'} />
+                    <span className="text-[11px] font-medium text-foreground">Prayer</span>
+                  </button>
+
+                  {/* Share */}
+                  <button
+                    onClick={() => handleShare(verseSheet.verse, verseSheet.text)}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-muted/50 transition-colors"
+                  >
+                    <Share2 size={20} className="text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-foreground">Share</span>
+                  </button>
+
+                  {/* Ask Emmaus */}
+                  <button
+                    onClick={() => {
+                      setVerseSheet(null);
+                      setLocation(
+                        `/personal/ask-emmaus/conversation?verse=${encodeURIComponent(ref)}&q=${encodeURIComponent(`Help me understand ${ref}: "${verseSheet.text}"`)}`
+                      );
+                    }}
+                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
+                  >
+                    <Sparkles size={20} className="text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-foreground">Ask AI</span>
                   </button>
                 </div>
 
-                {sermonLinks.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest">Preached Here</p>
-                    <div className="space-y-2">
-                      {sermonLinks.map(link => (
+                {/* Highlight colour picker (shown when Highlight is toggled) */}
+                {showHighlightPicker && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Choose colour</p>
+                    <div className="flex gap-3 items-center">
+                      {HIGHLIGHT_COLORS.map(({ color, swatch }) => {
+                        const active = hl?.color === color;
+                        return (
+                          <button
+                            key={color}
+                            onClick={() => setHighlightColor(verseSheet.verse, color)}
+                            className={['w-10 h-10 rounded-full border-2 transition-all', swatch, active ? 'border-foreground scale-110' : 'border-transparent'].join(' ')}
+                            aria-label={`Highlight ${color}`}
+                          />
+                        );
+                      })}
+                      {hl && (
                         <button
-                          key={link.sermonId}
-                          onClick={() => setLocation('/admin')}
-                          className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/30 hover:bg-primary/5 transition-colors text-left"
+                          onClick={() => removeHighlight(book!.id, chapterNum, verseSheet.verse)}
+                          className="w-10 h-10 rounded-full border-2 border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground"
+                          aria-label="Remove highlight"
                         >
-                          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
-                            <span className="text-[16px]">🎙️</span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-semibold text-foreground line-clamp-1">{link.title}</p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {link.speaker}{link.sermonDate && ` · ${formatDate(link.sermonDate)}`}
-                            </p>
-                          </div>
-                          <ExternalLink size={14} className="text-muted-foreground shrink-0" />
+                          <X size={15} />
                         </button>
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <p className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest">Highlight</p>
-                  <div className="flex gap-3">
-                    {HIGHLIGHT_COLORS.map(({ color, swatch }) => {
-                      const hl = getHighlight(book.id, chapterNum, verseSheet.verse);
-                      const active = hl?.color === color;
-                      return (
-                        <button
-                          key={color}
-                          onClick={() => setHighlightColor(verseSheet.verse, color)}
-                          className={['w-9 h-9 rounded-full border-2 transition-all', swatch, active ? 'border-foreground scale-110' : 'border-transparent'].join(' ')}
-                          aria-label={`Highlight ${color}`}
-                        />
-                      );
-                    })}
-                    {getHighlight(book.id, chapterNum, verseSheet.verse) && (
-                      <button
-                        onClick={() => removeHighlight(book!.id, chapterNum, verseSheet.verse)}
-                        className="w-9 h-9 rounded-full border-2 border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground"
-                        aria-label="Remove highlight"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
+                {/* Note input (shown when Note is toggled) */}
                 {showNoteInput && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Note</p>
                     <textarea
                       value={noteText}
                       onChange={e => setNoteText(e.target.value)}
@@ -612,6 +704,27 @@ export default function ChapterReader() {
                         <Check size={15} className="mr-1.5" /> Save note
                       </Button>
                       <Button variant="ghost" onClick={() => setShowNoteInput(false)} className="rounded-xl">Cancel</Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Prayer input (shown when Prayer is toggled) */}
+                {showPrayerInput && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Prayer journal</p>
+                    <p className="text-[12px] text-muted-foreground italic">"{verseSheet.text}"</p>
+                    <textarea
+                      value={prayerText}
+                      onChange={e => setPrayerText(e.target.value)}
+                      placeholder="Write a prayer inspired by this verse…"
+                      className="w-full min-h-[100px] resize-none text-[15px] rounded-xl border border-border bg-background px-4 py-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleSavePrayer(verseSheet.verse)} disabled={!prayerText.trim()} className="flex-1 rounded-xl">
+                        <Check size={15} className="mr-1.5" /> Save prayer
+                      </Button>
+                      <Button variant="ghost" onClick={() => setShowPrayerInput(false)} className="rounded-xl">Cancel</Button>
                     </div>
                   </div>
                 )}
@@ -727,6 +840,13 @@ export default function ChapterReader() {
           watchUrl={preachedHerePlayer.watchUrl}
         />
       )}
+
+      {/* ── Verse Study Panel ────────────────────────────────────────────────── */}
+      <VerseStudyPanel
+        verse={studyPanelVerse}
+        open={!!studyPanelVerse}
+        onClose={() => setStudyPanelVerse(null)}
+      />
 
       <BottomNav />
     </div>

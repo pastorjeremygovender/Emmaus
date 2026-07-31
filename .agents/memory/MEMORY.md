@@ -1,3 +1,4 @@
+- [Bible Study Foundation](bible-study-foundation.md) — Stages 1–3: user_bible_data + bible_study_notes DB tables; 8-action verse sheet; VerseStudyPanel; admin Bible Study section.
 - [Sermon generation pipeline](sermon-generation-pipeline.md) — sermon-aware detection added; SERMON_CONFIRMATION_REQUIRED flow; THEME_CONFIRMATION_REQUIRED flow; parseVttTimed; detectSermonSection; redetectSermon; ConfirmSermonPhase/AdjustSermonPhase/ConfirmThemePhase.
 - [Media Studio module](media-studio.md) — new major admin module at /admin → Media Studio; all content stays Draft, never auto-publishes.
 - [Content Studio writing experience](content-studio-writing-experience.md) — collapsible panels, overview/step selectedView, autoOpenNew prop, autosave ref pattern must not change.

@@ -1,12 +1,14 @@
 /**
- * Bible Data Store
+ * Bible Data Store — PostgreSQL-backed
  *
- * In-memory store keyed by userId. Holds all Bible reading data:
- * reading history (array, last 20), completed chapters, journey progress,
- * highlights, favourites, bookmarks, notes, reflections, and prayers.
+ * Each authenticated user's annotations are stored as a JSONB blob in
+ * `user_bible_data`. The shape is identical to BibleContext's UserBibleData
+ * so the existing PATCH /api/bible/data payload works without client changes.
  *
- * Production upgrade path: swap the Map for Firestore/Postgres reads/writes.
+ * Falls back to EMPTY_DATA on DB error so the reader never hard-crashes.
  */
+
+import { pool } from "@workspace/db";
 
 // ─── Shared Types (mirrors BibleContext types) ────────────────────────────────
 
@@ -77,6 +79,8 @@ export type PersonalPrayer = {
   id: string;
   bookId: string;
   chapter: number;
+  verse?: number;
+  verseText?: string;
   text: string;
   savedAt: string;
 };
@@ -93,7 +97,7 @@ export type UserBibleData = {
   prayers: PersonalPrayer[];
 };
 
-// ─── Store ────────────────────────────────────────────────────────────────────
+// ─── Empty defaults ────────────────────────────────────────────────────────────
 
 const EMPTY_DATA: UserBibleData = {
   history: [],
@@ -107,15 +111,35 @@ const EMPTY_DATA: UserBibleData = {
   prayers: [],
 };
 
-const store = new Map<string, UserBibleData>();
+// ─── DB-backed store ───────────────────────────────────────────────────────────
 
-export function getBibleData(userId: string): UserBibleData {
-  return store.get(userId) ?? { ...EMPTY_DATA };
+export async function getBibleData(userId: string): Promise<UserBibleData> {
+  try {
+    const res = await pool.query(
+      'SELECT data FROM user_bible_data WHERE user_id = $1',
+      [userId]
+    );
+    if (res.rows.length === 0) return { ...EMPTY_DATA };
+    return { ...EMPTY_DATA, ...(res.rows[0].data as Partial<UserBibleData>) };
+  } catch {
+    // DB unavailable — return empty rather than crashing the reader
+    return { ...EMPTY_DATA };
+  }
 }
 
-export function patchBibleData(userId: string, patch: Partial<UserBibleData>): UserBibleData {
-  const current = store.get(userId) ?? { ...EMPTY_DATA };
-  const next = { ...current, ...patch };
-  store.set(userId, next);
-  return next;
+export async function patchBibleData(userId: string, patch: Partial<UserBibleData>): Promise<UserBibleData> {
+  try {
+    const current = await getBibleData(userId);
+    const next = { ...current, ...patch };
+    await pool.query(
+      `INSERT INTO user_bible_data (user_id, data, updated_at)
+       VALUES ($1, $2::jsonb, now())
+       ON CONFLICT (user_id)
+       DO UPDATE SET data = $2::jsonb, updated_at = now()`,
+      [userId, JSON.stringify(next)]
+    );
+    return next;
+  } catch {
+    return { ...EMPTY_DATA, ...patch };
+  }
 }

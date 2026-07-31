@@ -462,16 +462,21 @@ router.get("/bible/validate-ref", (req, res) => {
 // Identity: X-User-Id header (demo mode) or signed session cookie.
 
 // GET /api/bible/data — returns full Bible data for the caller
-router.get("/bible/data", (req: Request, res: Response) => {
+router.get("/bible/data", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const data = getBibleData(userId);
-  res.json(data);
+  try {
+    const data = await getBibleData(userId);
+    res.json(data);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/data failed");
+    res.status(500).json({ error: "Failed to load Bible data" });
+  }
 });
 
 // PATCH /api/bible/data — merges provided fields into the caller's stored data
-router.patch("/bible/data", (req: Request, res: Response) => {
+router.patch("/bible/data", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
@@ -498,8 +503,213 @@ router.patch("/bible/data", (req: Request, res: Response) => {
     }
   }
 
-  const updated = patchBibleData(userId, sanitized);
-  res.json(updated);
+  try {
+    const updated = await patchBibleData(userId, sanitized);
+    res.json(updated);
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/data failed");
+    res.status(500).json({ error: "Failed to save Bible data" });
+  }
+});
+
+// ─── Study Notes ───────────────────────────────────────────────────────────────
+//
+// GET  /api/bible/study-notes?bookId=john&chapter=1&verse=1
+//   → Returns the first Published study note that covers the requested verse.
+//
+// Admin CRUD (requires x-user-role: admin|superAdmin):
+//   GET    /api/bible/study-notes/admin
+//   POST   /api/bible/study-notes/admin
+//   PUT    /api/bible/study-notes/admin/:id
+//   PATCH  /api/bible/study-notes/admin/:id/status
+//   DELETE /api/bible/study-notes/admin/:id
+
+import { pool } from "@workspace/db";
+
+function requireAdminRole(req: Request, res: Response): boolean {
+  const role = String(req.headers["x-user-role"] ?? "");
+  if (role !== "admin" && role !== "superAdmin") {
+    res.status(403).json({ error: "Admin access required" });
+    return false;
+  }
+  return true;
+}
+
+// Member: fetch Published study note for a specific verse
+router.get("/bible/study-notes", async (req: Request, res: Response) => {
+  const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
+  const chapter = parseInt(String(req.query.chapter ?? ""), 10);
+  const verse   = parseInt(String(req.query.verse ?? ""), 10);
+
+  if (!bookId || isNaN(chapter) || isNaN(verse)) {
+    res.status(400).json({ error: "bookId, chapter, and verse are required" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM bible_study_notes
+       WHERE book_id = $1
+         AND chapter = $2
+         AND verse_start <= $3
+         AND (verse_end IS NULL OR verse_end >= $3)
+         AND status = 'Published'
+       ORDER BY verse_start ASC
+       LIMIT 1`,
+      [bookId, chapter, verse]
+    );
+    res.json(result.rows[0] ?? null);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/study-notes failed");
+    res.json(null); // non-critical — reader still works without study notes
+  }
+});
+
+// Admin: list all study notes (all statuses)
+router.get("/bible/study-notes/admin", async (req: Request, res: Response) => {
+  if (!requireAdminRole(req, res)) return;
+  try {
+    const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
+    const chapter = parseInt(String(req.query.chapter ?? ""), 10);
+    let query = "SELECT * FROM bible_study_notes";
+    const params: (string | number)[] = [];
+    if (bookId) {
+      params.push(bookId);
+      query += ` WHERE book_id = $${params.length}`;
+      if (!isNaN(chapter)) {
+        params.push(chapter);
+        query += ` AND chapter = $${params.length}`;
+      }
+    }
+    query += " ORDER BY book_id, chapter, verse_start";
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    logger.error({ err }, "GET /bible/study-notes/admin failed");
+    res.status(500).json({ error: "Failed to list study notes" });
+  }
+});
+
+// Admin: create a study note
+router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
+  if (!requireAdminRole(req, res)) return;
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const {
+    book_id, chapter, verse_start, verse_end, title, content,
+    context_note, historical_note, original_language_note,
+    jesus_connection, apply_it, status,
+  } = req.body;
+
+  if (!book_id || !chapter || !verse_start) {
+    res.status(400).json({ error: "book_id, chapter, verse_start are required" });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO bible_study_notes
+         (book_id, chapter, verse_start, verse_end, title, content,
+          context_note, historical_note, original_language_note,
+          jesus_connection, apply_it, status, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
+       RETURNING *`,
+      [
+        book_id, Number(chapter), Number(verse_start),
+        verse_end ? Number(verse_end) : null,
+        title ?? '', content ?? '', context_note ?? '',
+        historical_note ?? '', original_language_note ?? '',
+        jesus_connection ?? '', apply_it ?? '',
+        status ?? 'Draft', userId,
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "POST /bible/study-notes/admin failed");
+    res.status(500).json({ error: "Failed to create study note" });
+  }
+});
+
+// Admin: update a study note
+router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) => {
+  if (!requireAdminRole(req, res)) return;
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { id } = req.params;
+  const {
+    book_id, chapter, verse_start, verse_end, title, content,
+    context_note, historical_note, original_language_note,
+    jesus_connection, apply_it, status,
+  } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE bible_study_notes SET
+         book_id = $1, chapter = $2, verse_start = $3, verse_end = $4,
+         title = $5, content = $6, context_note = $7, historical_note = $8,
+         original_language_note = $9, jesus_connection = $10, apply_it = $11,
+         status = $12, updated_by = $13, updated_at = now()
+       WHERE id = $14 RETURNING *`,
+      [
+        book_id, Number(chapter), Number(verse_start),
+        verse_end ? Number(verse_end) : null,
+        title ?? '', content ?? '', context_note ?? '',
+        historical_note ?? '', original_language_note ?? '',
+        jesus_connection ?? '', apply_it ?? '',
+        status ?? 'Draft', userId, id,
+      ]
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PUT /bible/study-notes/admin/:id failed");
+    res.status(500).json({ error: "Failed to update study note" });
+  }
+});
+
+// Admin: change status only
+router.patch("/bible/study-notes/admin/:id/status", async (req: Request, res: Response) => {
+  if (!requireAdminRole(req, res)) return;
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { id } = req.params;
+  const { status } = req.body;
+  const VALID = ['Draft', 'In Review', 'Published', 'Archived'];
+  if (!VALID.includes(status)) {
+    res.status(400).json({ error: `status must be one of ${VALID.join(', ')}` });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE bible_study_notes SET status = $1, updated_by = $2, updated_at = now()
+       WHERE id = $3 RETURNING *`,
+      [status, userId, id]
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(result.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "PATCH /bible/study-notes/admin/:id/status failed");
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+// Admin: delete a study note
+router.delete("/bible/study-notes/admin/:id", async (req: Request, res: Response) => {
+  if (!requireAdminRole(req, res)) return;
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    await pool.query("DELETE FROM bible_study_notes WHERE id = $1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "DELETE /bible/study-notes/admin/:id failed");
+    res.status(500).json({ error: "Failed to delete study note" });
+  }
 });
 
 export default router;

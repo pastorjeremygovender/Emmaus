@@ -12,6 +12,7 @@ import {
   Menu,
   PenSquare,
   FlaskConical,
+  BookOpen,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -20,12 +21,14 @@ import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
 import type { PeopleTab } from './admin/People';
 import Testing from './admin/Testing';
+import BibleStudyAdmin from './admin/BibleStudyAdmin';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AdminSection =
   | 'dashboard'
   | 'content-studio'
+  | 'bible-study'
   | 'people'
   | 'settings'
   | 'testing';
@@ -44,6 +47,7 @@ export type AdminNav = {
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
   { id: 'dashboard',      label: 'Dashboard',       Icon: LayoutDashboard },
   { id: 'content-studio', label: 'Content Studio',  Icon: PenSquare },
+  { id: 'bible-study',    label: 'Bible Study',     Icon: BookOpen },
   { id: 'people',         label: 'People',          Icon: Users },
   { id: 'settings',       label: 'Settings',        Icon: Settings2 },
   { id: 'testing',        label: 'Testing',         Icon: FlaskConical },
@@ -76,11 +80,12 @@ export default function Admin() {
   // ─── Section label for mobile header ──────────────────────────────────────
 
   const sectionLabel: Record<AdminSection, string> = {
-    dashboard:      'Dashboard',
+    dashboard:        'Dashboard',
     'content-studio': 'Content Studio',
-    people:         'People',
-    settings:       'Settings',
-    testing:        'Testing',
+    'bible-study':    'Bible Study',
+    people:           'People',
+    settings:         'Settings',
+    testing:          'Testing',
   };
 
   // ─── Content renderer ─────────────────────────────────────────────────────
@@ -106,6 +111,12 @@ export default function Admin() {
         );
       case 'settings':
         return <AdminSettings />;
+      case 'bible-study':
+        return (
+          <div className="p-6 lg:p-8 max-w-4xl">
+            <BibleStudyAdmin />
+          </div>
+        );
       case 'testing':
         return <Testing />;
       default:

@@ -498,4 +498,52 @@ export async function runStartupMigrations(): Promise<void> {
     migClient.release();
   }
 
+  // ── Bible: persistent user annotation storage (2026-07) ────────────────────
+  // Replaces the ephemeral in-memory Map in bible/store.ts. One JSONB row per
+  // user; blob is identical to the shape used by BibleContext so the existing
+  // PATCH /api/bible/data payload works without any client changes.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_bible_data (
+        user_id   text PRIMARY KEY,
+        data      jsonb NOT NULL DEFAULT '{}',
+        updated_at timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    logger.info("Startup migration: user_bible_data table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_bible_data table failed (non-fatal)");
+  }
+
+  // ── Bible: admin study notes (2026-07) ─────────────────────────────────────
+  // Stores curator-authored study content per verse/passage. All fields are
+  // optional text so the admin can fill in sections incrementally.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bible_study_notes (
+        id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        book_id               text NOT NULL,
+        chapter               int  NOT NULL,
+        verse_start           int  NOT NULL,
+        verse_end             int,
+        title                 text NOT NULL DEFAULT '',
+        content               text NOT NULL DEFAULT '',
+        context_note          text NOT NULL DEFAULT '',
+        historical_note       text NOT NULL DEFAULT '',
+        original_language_note text NOT NULL DEFAULT '',
+        jesus_connection      text NOT NULL DEFAULT '',
+        apply_it              text NOT NULL DEFAULT '',
+        status                text NOT NULL DEFAULT 'Draft'
+          CHECK (status IN ('Draft','In Review','Published','Archived')),
+        created_by            text NOT NULL DEFAULT '',
+        updated_by            text NOT NULL DEFAULT '',
+        created_at            timestamp NOT NULL DEFAULT now(),
+        updated_at            timestamp NOT NULL DEFAULT now()
+      )
+    `);
+    logger.info("Startup migration: bible_study_notes table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_study_notes table failed (non-fatal)");
+  }
+
 }
