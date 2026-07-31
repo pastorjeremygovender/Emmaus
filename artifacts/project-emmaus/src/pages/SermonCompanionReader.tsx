@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft } from 'lucide-react';
+import { Loader2, ChevronLeft, ExternalLink } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
@@ -50,6 +50,8 @@ interface SCEntry {
   nextStep: string;
   closing: string;
   status: string;
+  /** Timestamped YouTube URL linking to the sermon moment this entry reflects on. */
+  sermonLink?: string | null;
 }
 
 interface SCProgress {
@@ -291,6 +293,21 @@ export default function SermonCompanionReader() {
           <span className="text-sm text-muted-foreground truncate">{companion.title}</span>
         </div>
       </header>
+
+      {/* Sermon timestamp link — opens the exact sermon moment this entry reflects on */}
+      {entry.sermonLink && (
+        <div className="max-w-[480px] mx-auto px-5 pt-4 pb-1">
+          <a
+            href={entry.sermonLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[14px] text-primary font-medium hover:underline"
+          >
+            <ExternalLink size={14} className="shrink-0" />
+            Listen to this sermon moment
+          </a>
+        </div>
+      )}
 
       {/* Reading content */}
       <main className="max-w-[480px] mx-auto">
