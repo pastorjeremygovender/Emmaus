@@ -11,10 +11,15 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { logger } from "./logger.js";
 
-const ROLES_FILE = join(process.cwd(), "data", "user-roles.json");
+// Use import.meta.url so the path resolves correctly in both dev (where pnpm
+// sets CWD to artifacts/api-server/) and production (where node runs from the
+// workspace root, making process.cwd() point to /home/runner/workspace/ instead
+// of the artifact directory).
+const ROLES_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "user-roles.json");
 
 type UserRole = "user" | "admin" | "superAdmin";
 
