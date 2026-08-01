@@ -138,6 +138,10 @@ added.
 
 ## 6. What to do if the integrity test fails
 
+> **This test now runs automatically before every deployment** via the
+> **"data-safety: content integrity"** validation step. If the validation panel
+> reports a failure, do not deploy until the steps below are resolved.
+
 A failure means `runStartupMigrations()` mutated authored content. **Do not
 proceed with deployment.**
 
