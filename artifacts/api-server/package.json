@@ -8,6 +8,10 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "seed:content": "node --experimental-strip-types src/scripts/seed-content.ts",
+    "seed:demo": "node --experimental-strip-types src/scripts/seed-demo.ts",
+    "repair:step-statuses": "node --experimental-strip-types src/scripts/repair-step-statuses.ts",
+    "repair:progress-duplicates": "node --experimental-strip-types src/scripts/repair-progress-duplicates.ts",
     "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts",
     "test:integration": "node --test --experimental-strip-types src/routes/__tests__/audio-route.test.ts src/routes/__tests__/next-steps.test.ts src/routes/__tests__/devotional-multi-series.test.ts src/routes/__tests__/hide-progress-regression.test.ts src/emmaus/__tests__/authz.test.ts src/emmaus/__tests__/streaming.test.ts",
     "test": "pnpm run test:unit && pnpm run test:integration"
