@@ -141,9 +141,18 @@ export function useSpeechRecognition({
     rec.start();
   }, []);
 
-  // Clean up on unmount
+  // Clean up on unmount and when the app is backgrounded
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        recognitionRef.current?.abort();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       recognitionRef.current?.abort();
     };
   }, []);
