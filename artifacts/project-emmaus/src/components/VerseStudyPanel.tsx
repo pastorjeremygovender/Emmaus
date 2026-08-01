@@ -365,6 +365,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       <SheetContent
         side="bottom"
         className="rounded-t-2xl h-[92dvh] flex flex-col p-0 overflow-hidden"
+        hideDefaultClose
       >
         {/* Header */}
         <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-border/50 shrink-0">

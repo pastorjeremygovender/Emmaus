@@ -4,7 +4,7 @@
  *
  * Layout (spec order):
  *   Back → Collection name (h1) → Walk title (secondary) →
- *   Progress → Continue → Lessons
+ *   Progress → Continue → Steps
  */
 
 import { useState, useMemo, useEffect } from 'react';
@@ -312,7 +312,7 @@ export default function JourneyDetail() {
 
         {/* ── Primary action + save ─────────────────────────────────── */}
         {/* Completed walks show no Continue — the Walk is done. Members can
-            review any lesson from the list below, or open Walk Contents. */}
+            review any step from the list below, or open Walk Contents. */}
         {!isCompleted && (
           <div className="space-y-2.5">
             <Button
@@ -366,11 +366,11 @@ export default function JourneyDetail() {
           </button>
         )}
 
-        {/* ── Lessons ───────────────────────────────────────────────── */}
+        {/* ── Steps ────────────────────────────────────────────────── */}
         {steps.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Lessons
+              Steps
             </h2>
             <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
               {steps.map(s => {
@@ -400,18 +400,6 @@ export default function JourneyDetail() {
                   </button>
                 );
               })}
-              {/* Walk Complete entry — appended after the lesson list once all lessons are done */}
-              {isCompleted && (
-                <button
-                  onClick={() => setLocation(`/journey/${journey.id}/complete?source=journeyDetail&sourceId=${journey.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 transition-colors text-left bg-card hover:bg-muted/40 active:bg-muted/60"
-                  aria-label="Review Walk Complete"
-                >
-                  <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                  <span className="text-[14px] leading-snug flex-1 text-muted-foreground">Walk Complete</span>
-                  <span className="ml-auto text-[11px] font-medium shrink-0 text-primary">Review →</span>
-                </button>
-              )}
             </div>
           </section>
         )}
