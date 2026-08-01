@@ -52,6 +52,9 @@ type StudyNote = {
   original_language_note: string;
   jesus_connection: string;
   apply_it: string;
+  key_truth: string;
+  reflection_question: string;
+  related_scriptures: string;
   status: 'Draft' | 'In Review' | 'Published' | 'Archived';
   created_by: string;
   updated_by: string;
@@ -78,6 +81,9 @@ const EMPTY_FORM: Omit<StudyNote, 'id' | 'created_by' | 'updated_by' | 'created_
   original_language_note: '',
   jesus_connection: '',
   apply_it: '',
+  key_truth: '',
+  reflection_question: '',
+  related_scriptures: '',
   status: 'Draft',
 };
 
@@ -227,14 +233,17 @@ function StudyNoteForm({
         </select>
       </div>
 
-      {/* Content sections */}
+      {/* Content sections — ordered to match spec */}
       <div className="space-y-3">
-        {field('content', 'Explanation', 'What does this verse/passage mean? Write a clear explanation...', 'content')}
-        {field('context_note', 'Passage Context', 'What comes before and after? How does this fit the narrative?', 'context_note')}
-        {field('historical_note', 'Historical Background', 'What cultural or historical details help us understand this?', 'historical_note')}
-        {field('original_language_note', 'Original Language', 'Significant Hebrew/Greek word insights or nuances...', 'original_language_note')}
-        {field('jesus_connection', 'How This Points to Jesus', 'How does this verse or passage point toward Christ?', 'jesus_connection')}
-        {field('apply_it', 'Apply It', 'What practical application can a reader take from this today?', 'apply_it')}
+        {field('content',              'Explanation',        'What does this verse/passage mean? Write a clear explanation…',             'content')}
+        {field('context_note',         'Passage Context',    'What comes before and after? How does this fit the narrative?',             'context_note')}
+        {field('key_truth',            'Key Truth',          'What is the central truth or principle of this passage?',                   'key_truth')}
+        {field('reflection_question',  'Reflection',         'A question that invites the reader to personally reflect…',                 'reflection_question')}
+        {field('apply_it',             'Practical Application', 'What practical step can a reader take from this today?',                'apply_it')}
+        {field('related_scriptures',   'Related Scriptures', 'e.g. John 3:16, Romans 5:8 — comma-separated references',                 'related_scriptures')}
+        {field('historical_note',      'Historical Background', 'What cultural or historical details help us understand this?',          'historical_note')}
+        {field('original_language_note', 'Original Language', 'Significant Hebrew/Greek word insights or nuances…',                     'original_language_note')}
+        {field('jesus_connection',     'How This Points to Jesus', 'How does this verse or passage point toward Christ?',                'jesus_connection')}
       </div>
 
       {/* Actions */}

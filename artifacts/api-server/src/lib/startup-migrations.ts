@@ -636,6 +636,60 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: bible_study_notes column extension failed (non-fatal)");
   }
 
+  // ── Bible: study-notes authoring fields (key_truth, reflection_question, related_scriptures) ──
+  try {
+    await pool.query(`
+      ALTER TABLE bible_study_notes
+        ADD COLUMN IF NOT EXISTS key_truth            text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS reflection_question  text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS related_scriptures   text NOT NULL DEFAULT ''
+    `);
+    logger.info("Startup migration: bible_study_notes authoring columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_study_notes authoring columns failed (non-fatal)");
+  }
+
+  // ── Bible: seed study notes if table is empty (2026-08) ──────────────────
+  // Seeds 1,014 pre-authored notes from the bundled JSON when the DB has none.
+  // Idempotent: only runs if COUNT(*) = 0. Safe to deploy multiple times.
+  try {
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS n FROM bible_study_notes`);
+    if (Number(countRows[0].n) === 0) {
+      const { readFileSync } = await import('node:fs');
+      const { fileURLToPath } = await import('node:url');
+      const { dirname, resolve } = await import('node:path');
+      const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), '../data/bible-study-notes-seed.json');
+      type SeedNote = {
+        book_id: string; chapter: number; verse_start: number; verse_end: number | null;
+        title: string; content: string; context_note: string; historical_note: string;
+        original_language_note: string; jesus_connection: string; apply_it: string; status: string;
+      };
+      const notes: SeedNote[] = JSON.parse(readFileSync(seedPath, 'utf-8')) as SeedNote[];
+      for (const n of notes) {
+        await pool.query(
+          `INSERT INTO bible_study_notes
+             (book_id, chapter, verse_start, verse_end, title, content, context_note,
+              historical_note, original_language_note, jesus_connection, apply_it, status,
+              created_by, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'seed','seed')
+           ON CONFLICT DO NOTHING`,
+          [
+            n.book_id, n.chapter, n.verse_start,
+            n.verse_end ?? null,
+            n.title, n.content, n.context_note,
+            n.historical_note, n.original_language_note,
+            n.jesus_connection, n.apply_it, n.status,
+          ]
+        );
+      }
+      logger.info({ count: notes.length }, "Startup migration: bible_study_notes seeded from bundled JSON");
+    } else {
+      logger.info({ existing: countRows[0].n }, "Startup migration: bible_study_notes already populated, skipping seed");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: bible_study_notes seed failed (non-fatal)");
+  }
+
   // ── Bible: study-notes unique index (2026-07) ─────────────────────────────
   // Required for ON CONFLICT (book_id, chapter, verse_start) in the generate
   // endpoint. Safe to re-run (CREATE UNIQUE INDEX IF NOT EXISTS).

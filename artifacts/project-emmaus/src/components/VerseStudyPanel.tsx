@@ -54,6 +54,9 @@ type StudyNote = {
   original_language_note: string;
   jesus_connection: string;
   apply_it: string;
+  key_truth: string;
+  reflection_question: string;
+  related_scriptures: string;
   cross_references: unknown[];
   key_themes: string[];
   important_people: string[];
@@ -357,7 +360,8 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
 
   const hasAnyContent = studyNote && (
     studyNote.content || studyNote.context_note || studyNote.historical_note ||
-    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it
+    studyNote.original_language_note || studyNote.jesus_connection || studyNote.apply_it ||
+    studyNote.key_truth || studyNote.reflection_question || studyNote.related_scriptures
   );
 
   return (
@@ -427,32 +431,53 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                   content={studyNote?.context_note}
                 />
 
-                {/* 3. Historical Background */}
+                {/* 3. Key Truth */}
+                <StudySection
+                  icon={<Flame size={17} />}
+                  title="Key Truth"
+                  content={studyNote?.key_truth}
+                />
+
+                {/* 4. Reflection */}
+                <StudySection
+                  icon={<Lightbulb size={17} />}
+                  title="Reflection"
+                  content={studyNote?.reflection_question}
+                />
+
+                {/* 5. Practical Application */}
+                <StudySection
+                  icon={<Footprints size={17} />}
+                  title="Practical Application"
+                  content={studyNote?.apply_it}
+                />
+
+                {/* 6. Related Scriptures */}
+                <StudySection
+                  icon={<Link2 size={17} />}
+                  title="Related Scriptures"
+                  content={studyNote?.related_scriptures}
+                />
+
+                {/* 7. Historical Background */}
                 <StudySection
                   icon={<Clock size={17} />}
                   title="Historical Background"
                   content={studyNote?.historical_note}
                 />
 
-                {/* 4. Original Language */}
+                {/* 8. Original Language */}
                 <StudySection
                   icon={<LetterText size={17} />}
                   title="Original Language"
                   content={studyNote?.original_language_note}
                 />
 
-                {/* 5. How This Points to Jesus */}
+                {/* 9. How This Points to Jesus */}
                 <StudySection
-                  icon={<Flame size={17} />}
+                  icon={<BookMarked size={17} />}
                   title="How This Points to Jesus"
                   content={studyNote?.jesus_connection}
-                />
-
-                {/* 6. Apply It */}
-                <StudySection
-                  icon={<Lightbulb size={17} />}
-                  title="Apply It"
-                  content={studyNote?.apply_it}
                 />
 
                 {/* 7. Cross References — DB-backed, tap to navigate */}

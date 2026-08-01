@@ -845,7 +845,7 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
   const {
     book_id, chapter, verse_start, verse_end, title, content,
     context_note, historical_note, original_language_note,
-    jesus_connection, apply_it, status,
+    jesus_connection, apply_it, key_truth, reflection_question, related_scriptures, status,
   } = req.body;
 
   if (!book_id || !chapter || !verse_start) {
@@ -858,8 +858,9 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
       `INSERT INTO bible_study_notes
          (book_id, chapter, verse_start, verse_end, title, content,
           context_note, historical_note, original_language_note,
-          jesus_connection, apply_it, status, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
+          jesus_connection, apply_it, key_truth, reflection_question, related_scriptures,
+          status, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)
        RETURNING *`,
       [
         book_id, Number(chapter), Number(verse_start),
@@ -867,6 +868,7 @@ router.post("/bible/study-notes/admin", async (req: Request, res: Response) => {
         title ?? '', content ?? '', context_note ?? '',
         historical_note ?? '', original_language_note ?? '',
         jesus_connection ?? '', apply_it ?? '',
+        key_truth ?? '', reflection_question ?? '', related_scriptures ?? '',
         status ?? 'Draft', userId,
       ]
     );
@@ -886,7 +888,7 @@ router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) =
   const {
     book_id, chapter, verse_start, verse_end, title, content,
     context_note, historical_note, original_language_note,
-    jesus_connection, apply_it, status,
+    jesus_connection, apply_it, key_truth, reflection_question, related_scriptures, status,
   } = req.body;
 
   try {
@@ -895,14 +897,16 @@ router.put("/bible/study-notes/admin/:id", async (req: Request, res: Response) =
          book_id = $1, chapter = $2, verse_start = $3, verse_end = $4,
          title = $5, content = $6, context_note = $7, historical_note = $8,
          original_language_note = $9, jesus_connection = $10, apply_it = $11,
-         status = $12, updated_by = $13, updated_at = now()
-       WHERE id = $14 RETURNING *`,
+         key_truth = $12, reflection_question = $13, related_scriptures = $14,
+         status = $15, updated_by = $16, updated_at = now()
+       WHERE id = $17 RETURNING *`,
       [
         book_id, Number(chapter), Number(verse_start),
         verse_end ? Number(verse_end) : null,
         title ?? '', content ?? '', context_note ?? '',
         historical_note ?? '', original_language_note ?? '',
         jesus_connection ?? '', apply_it ?? '',
+        key_truth ?? '', reflection_question ?? '', related_scriptures ?? '',
         status ?? 'Draft', userId, id,
       ]
     );
