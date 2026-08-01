@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { runStartupMigrations } from "./lib/startup-migrations.js";
+import { runProdDataSync } from "./lib/prod-data-sync.js";
 
 const app: Express = express();
 
@@ -35,8 +36,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Run startup migrations on boot (non-blocking — never prevents startup)
-runStartupMigrations().catch(err =>
-  logger.warn({ err }, "Startup migrations encountered a non-fatal error")
-);
+runStartupMigrations()
+  .then(() => runProdDataSync())
+  .catch(err =>
+    logger.warn({ err }, "Startup migrations / prod-data-sync encountered a non-fatal error")
+  );
 
 export default app;

@@ -18,6 +18,7 @@ import adminResetRouter from "./admin-reset";
 import roomsRouter from "./rooms";
 import { badgesRouter } from "./badges";
 import { auditLogRouter } from "./audit-log";
+import prodMigrationRouter from "./prod-migration";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(adminResetRouter);
 router.use("/rooms", roomsRouter);
 router.use(badgesRouter);
 router.use(auditLogRouter);
+router.use(prodMigrationRouter);
 
 export default router;

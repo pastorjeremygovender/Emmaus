@@ -21,6 +21,14 @@ async function buildAll() {
     path.resolve(artifactDir, "src/data/bible-study-notes-seed.json"),
     path.resolve(dataDistDir, "bible-study-notes-seed.json")
   );
+  await cp(
+    path.resolve(artifactDir, "src/data/prod-sync-overviews.json"),
+    path.resolve(dataDistDir, "prod-sync-overviews.json")
+  );
+  await cp(
+    path.resolve(artifactDir, "src/data/prod-sync-journeys.json"),
+    path.resolve(dataDistDir, "prod-sync-journeys.json")
+  );
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
