@@ -653,35 +653,40 @@ export async function runStartupMigrations(): Promise<void> {
   // Seeds 1,014 pre-authored notes from the bundled JSON when the DB has none.
   // Idempotent: only runs if COUNT(*) = 0. Safe to deploy multiple times.
   try {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    // import.meta.url resolves to the esbuild bundle (dist/index.mjs).
+    // The seed JSON is copied to dist/data/ by build.mjs, so the path is
+    // sibling 'data/' from the bundle's own directory — NOT '../data/'.
+    const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), 'data/bible-study-notes-seed.json');
+    type SeedNote = {
+      book_id: string; chapter: number; verse_start: number; verse_end: number | null;
+      title: string; content: string; context_note: string; historical_note: string;
+      original_language_note: string; jesus_connection: string; apply_it: string; status: string;
+      key_truth: string; reflection_question: string; related_scriptures: string;
+    };
+    const notes: SeedNote[] = JSON.parse(readFileSync(seedPath, 'utf-8')) as SeedNote[];
+
     const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS n FROM bible_study_notes`);
     if (Number(countRows[0].n) === 0) {
-      const { readFileSync } = await import('node:fs');
-      const { fileURLToPath } = await import('node:url');
-      const { dirname, resolve } = await import('node:path');
-      // import.meta.url resolves to the esbuild bundle (dist/index.mjs).
-      // The seed JSON is copied to dist/data/ by build.mjs, so the path is
-      // sibling 'data/' from the bundle's own directory — NOT '../data/'.
-      const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), 'data/bible-study-notes-seed.json');
-      type SeedNote = {
-        book_id: string; chapter: number; verse_start: number; verse_end: number | null;
-        title: string; content: string; context_note: string; historical_note: string;
-        original_language_note: string; jesus_connection: string; apply_it: string; status: string;
-      };
-      const notes: SeedNote[] = JSON.parse(readFileSync(seedPath, 'utf-8')) as SeedNote[];
       for (const n of notes) {
         await pool.query(
           `INSERT INTO bible_study_notes
              (book_id, chapter, verse_start, verse_end, title, content, context_note,
-              historical_note, original_language_note, jesus_connection, apply_it, status,
-              created_by, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'seed','seed')
+              historical_note, original_language_note, jesus_connection, apply_it,
+              key_truth, reflection_question, related_scriptures,
+              status, created_by, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'seed','seed')
            ON CONFLICT DO NOTHING`,
           [
             n.book_id, n.chapter, n.verse_start,
             n.verse_end ?? null,
             n.title, n.content, n.context_note,
             n.historical_note, n.original_language_note,
-            n.jesus_connection, n.apply_it, n.status,
+            n.jesus_connection, n.apply_it,
+            n.key_truth ?? '', n.reflection_question ?? '', n.related_scriptures ?? '',
+            n.status,
           ]
         );
       }
@@ -689,8 +694,35 @@ export async function runStartupMigrations(): Promise<void> {
     } else {
       logger.info({ existing: countRows[0].n }, "Startup migration: bible_study_notes already populated, skipping seed");
     }
+
+    // ── Backfill key_truth / reflection_question / related_scriptures on existing rows ──
+    // Runs on every boot but is a no-op when all rows are already populated.
+    // Matches by (book_id, chapter, verse_start) — the natural composite key used in seeding.
+    let backfilled = 0;
+    for (const n of notes) {
+      if (!n.key_truth && !n.reflection_question && !n.related_scriptures) continue;
+      const result = await pool.query(
+        `UPDATE bible_study_notes
+         SET key_truth         = $1,
+             reflection_question = $2,
+             related_scriptures  = $3,
+             updated_at          = now()
+         WHERE book_id = $4 AND chapter = $5 AND verse_start = $6
+           AND (key_truth = '' OR key_truth IS NULL)`,
+        [
+          n.key_truth ?? '', n.reflection_question ?? '', n.related_scriptures ?? '',
+          n.book_id, n.chapter, n.verse_start,
+        ]
+      );
+      backfilled += result.rowCount ?? 0;
+    }
+    if (backfilled > 0) {
+      logger.info({ backfilled }, "Startup migration: bible_study_notes key_truth/reflection/related_scriptures backfilled");
+    } else {
+      logger.info("Startup migration: bible_study_notes new authoring fields already populated, no backfill needed");
+    }
   } catch (err) {
-    logger.warn({ err }, "Startup migration: bible_study_notes seed failed (non-fatal)");
+    logger.warn({ err }, "Startup migration: bible_study_notes seed/backfill failed (non-fatal)");
   }
 
   // ── Bible: study-notes unique index (2026-07) ─────────────────────────────
