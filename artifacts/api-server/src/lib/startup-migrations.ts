@@ -220,27 +220,53 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: user_profiles table failed (non-fatal)");
   }
 
-  // ── Remove seeded scaffold data (2026-07) ─────────────────────────────────────
-  // The "New to Faith" collection and "Coming to Jesus" journey were previously
-  // seeded on every boot. They have been removed from the seed block and must
-  // now be cleaned out of any environment where they were created. These DELETEs
-  // are idempotent: if the records are already gone, nothing happens.
-  //
-  // Collection ID: '00000000-0000-0000-0000-000000000010'
-  // Journey ID:    'coming-to-jesus'
+  // ── Restore "Coming to Jesus" journey (2026-08 recovery) ─────────────────────
+  // A previous migration block DELETEd this journey on every boot, treating it as
+  // scaffold data. It was real published content and was wiped. This block restores
+  // the collection, journey, and 7 placeholder steps using ON CONFLICT DO NOTHING
+  // so it runs safely on every boot — if the records exist (admin rebuilt them) the
+  // INSERT is a no-op; if they were wiped it puts them back.
   try {
     await pool.query(`
-      DELETE FROM journey_steps WHERE journey_id = 'coming-to-jesus';
+      INSERT INTO collections
+        (id, title, description, status, display_order, tags, created_at, updated_at)
+      VALUES
+        ('00000000-0000-0000-0000-000000000010',
+         'Coming to Jesus',
+         'An introductory pathway for people just beginning their faith journey.',
+         'Published', 10, '[]', NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING;
     `);
     await pool.query(`
-      DELETE FROM journeys WHERE id = 'coming-to-jesus';
+      INSERT INTO journeys
+        (id, title, description, journey_type, status, collection_id,
+         difficulty, estimated_duration, duration_days, tags, published_at,
+         created_at, updated_at)
+      VALUES
+        ('coming-to-jesus',
+         'Coming to Jesus',
+         'A 7-day introduction to knowing Jesus — who he is, what he did, and how to follow him.',
+         'growth', 'Published', '00000000-0000-0000-0000-000000000010',
+         'Beginner', '5 min/day', 7, '["new believers","foundations"]',
+         NOW(), NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING;
     `);
     await pool.query(`
-      DELETE FROM collections WHERE id = '00000000-0000-0000-0000-000000000010';
+      INSERT INTO journey_steps
+        (journey_id, day, title, status, is_completion_step, created_at, updated_at)
+      VALUES
+        ('coming-to-jesus', 1, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 2, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 3, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 4, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 5, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 6, '', 'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 7, '', 'Published', false, NOW(), NOW())
+      ON CONFLICT (journey_id, day) DO NOTHING;
     `);
-    logger.info("Startup migration: seeded scaffold data removed (idempotent)");
+    logger.info("Startup migration: 'Coming to Jesus' journey recovery ensured (idempotent)");
   } catch (err) {
-    logger.warn({ err }, "Startup migration: scaffold cleanup failed (non-fatal)");
+    logger.warn({ err }, "Startup migration: 'Coming to Jesus' journey recovery failed (non-fatal)");
   }
 
   // ── Walk Completion step type (2026-07) ──────────────────────────────────────

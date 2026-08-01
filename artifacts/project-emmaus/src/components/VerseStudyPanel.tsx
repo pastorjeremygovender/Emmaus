@@ -345,7 +345,7 @@ function PreachedHereSection({ sermons }: { sermons: PreachedHereSermon[] }) {
         <div className="pb-4">
           {sermons.length === 0 ? (
             <p className="text-[14px] text-muted-foreground italic">
-              No sermons linked to this chapter yet.
+              No sermons found for this passage yet.
             </p>
           ) : (
             <div className="space-y-2.5">
@@ -426,8 +426,10 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
       fetch(overviewUrl).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([note, rawSermons, refs, overview]) => {
       setStudyNote(note as StudyNote | null);
-      const sd = rawSermons as { chapterSermons?: PreachedHereSermon[]; sermons?: PreachedHereSermon[] };
-      setSermons(sd.chapterSermons ?? sd.sermons ?? []);
+      const sd = rawSermons as { chapterSermons?: PreachedHereSermon[]; bookSermons?: PreachedHereSermon[]; sermons?: PreachedHereSermon[] };
+      // Prefer chapter-specific results; fall back to book-level when none found
+      const chapterHits = sd.chapterSermons ?? [];
+      setSermons(chapterHits.length > 0 ? chapterHits : (sd.bookSermons ?? sd.sermons ?? []));
       setCrossRefs(Array.isArray(refs) ? refs : []);
       setChapterOverview((overview as ChapterOverview | null) ?? null);
     }).finally(() => setLoading(false));
