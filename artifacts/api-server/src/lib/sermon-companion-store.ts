@@ -692,7 +692,10 @@ function rowToProgress(row: Record<string, unknown>): CompanionProgress {
     updatedAt: String(row.updated_at ?? ''),
     status: String(row.status ?? 'active'),
     lastOpenedAt: row.last_opened_at ? String(row.last_opened_at) : null,
-  };
+    // hidden_from_today is added via startup migration and must be mapped here
+    // so the member/engagements route can correctly return hiddenFromToday.
+    hidden_from_today: row.hidden_from_today === true || row.hidden_from_today === 'true',
+  } as CompanionProgress & { hidden_from_today: boolean };
 }
 
 // ─── Engagement lifecycle ─────────────────────────────────────────────────────

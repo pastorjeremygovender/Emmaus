@@ -220,13 +220,31 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: user_profiles table failed (non-fatal)");
   }
 
-  // ── Restore "Coming to Jesus" journey (2026-08 recovery) ─────────────────────
-  // A previous migration block DELETEd this journey on every boot, treating it as
-  // scaffold data. It was real published content and was wiped. This block restores
-  // the collection, journey, and 7 placeholder steps using ON CONFLICT DO NOTHING
-  // so it runs safely on every boot — if the records exist (admin rebuilt them) the
-  // INSERT is a no-op; if they were wiped it puts them back.
+  // ── Restore "Who Is God?" walk inside "Coming to Jesus" journey (2026-08) ─────
+  //
+  // LOCKED STRUCTURE — do not change:
+  //   Collection  : 00000000-0000-0000-0000-000000000010  "Coming to Jesus"
+  //   Journey/Walk: coming-to-jesus                       "Who Is God?"
+  //   Steps (5)   : In the Beginning · The Master Designer · The Lord of Creation
+  //                 God Knows You · God Wants You to Know Him
+  //   + day-6 Journey Complete step (Draft, is_completion_step = true)
+  //
+  // History: A previous migration block ran DELETE FROM journeys WHERE id =
+  // 'coming-to-jesus' on every boot, wiping authored content.  A later recovery
+  // mistakenly reseeded the wrong title ("Coming to Jesus") and 7 empty steps.
+  // This block corrects both errors idempotently:
+  //   1. Ensures the collection exists.
+  //   2. Ensures the journey row exists with the correct title and duration;
+  //      if it already has the correct title the UPDATE is a safe no-op.
+  //   3. Removes any empty-titled steps (the wrong scaffold).
+  //   4. Inserts the 5 correct steps + Journey Complete (ON CONFLICT DO NOTHING
+  //      so steps that have been authored through the admin UI are untouched).
+  //
+  // Step body content (scripture, devotional, reflection, prayer, action step)
+  // was authored via the admin UI and cannot be recovered from git history.
+  // Authors must re-enter that content through the Content Studio.
   try {
+    // 1. Ensure collection
     await pool.query(`
       INSERT INTO collections
         (id, title, description, status, display_order, tags, created_at, updated_at)
@@ -237,6 +255,11 @@ export async function runStartupMigrations(): Promise<void> {
          'Published', 10, '[]', NOW(), NOW())
       ON CONFLICT (id) DO NOTHING;
     `);
+
+    // 2. Ensure journey with correct title, duration, and type.
+    //    INSERT: creates the row if absent.
+    //    DO UPDATE: repairs the wrong title/duration that the previous recovery left.
+    //    Tags and description are preserved once authored (not overwritten here).
     await pool.query(`
       INSERT INTO journeys
         (id, title, description, journey_type, status, collection_id,
@@ -244,29 +267,43 @@ export async function runStartupMigrations(): Promise<void> {
          created_at, updated_at)
       VALUES
         ('coming-to-jesus',
-         'Coming to Jesus',
-         'A 7-day introduction to knowing Jesus — who he is, what he did, and how to follow him.',
+         'Who Is God?',
+         '',
          'growth', 'Published', '00000000-0000-0000-0000-000000000010',
-         'Beginner', '5 min/day', 7, '["new believers","foundations"]',
+         'Beginner', '5 min/day', 5, '["new believers","foundations"]',
          NOW(), NOW(), NOW())
-      ON CONFLICT (id) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE
+        SET title          = CASE WHEN journeys.title IN ('Coming to Jesus', '')
+                                  THEN 'Who Is God?' ELSE journeys.title END,
+            duration_days  = CASE WHEN journeys.duration_days = 7
+                                  THEN 5 ELSE journeys.duration_days END,
+            updated_at     = NOW();
     `);
+
+    // 3. Remove any empty-titled placeholder steps left by the wrong scaffold.
+    await pool.query(`
+      DELETE FROM journey_steps
+      WHERE journey_id = 'coming-to-jesus' AND title = '';
+    `);
+
+    // 4. Insert the 5 titled lesson steps + Journey Complete.
+    //    ON CONFLICT DO NOTHING: authored content is never overwritten.
     await pool.query(`
       INSERT INTO journey_steps
         (journey_id, day, title, status, is_completion_step, created_at, updated_at)
       VALUES
-        ('coming-to-jesus', 1, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 2, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 3, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 4, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 5, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 6, '', 'Published', false, NOW(), NOW()),
-        ('coming-to-jesus', 7, '', 'Published', false, NOW(), NOW())
+        ('coming-to-jesus', 1, 'In the Beginning',           'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 2, 'The Master Designer',        'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 3, 'The Lord of Creation',       'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 4, 'God Knows You',              'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 5, 'God Wants You to Know Him',  'Published', false, NOW(), NOW()),
+        ('coming-to-jesus', 6, 'Journey Complete',           'Draft',     true,  NOW(), NOW())
       ON CONFLICT (journey_id, day) DO NOTHING;
     `);
-    logger.info("Startup migration: 'Coming to Jesus' journey recovery ensured (idempotent)");
+
+    logger.info("Startup migration: 'Coming to Jesus' → 'Who Is God?' walk restored (idempotent)");
   } catch (err) {
-    logger.warn({ err }, "Startup migration: 'Coming to Jesus' journey recovery failed (non-fatal)");
+    logger.warn({ err }, "Startup migration: 'Who Is God?' walk restore failed (non-fatal)");
   }
 
   // ── Walk Completion step type (2026-07) ──────────────────────────────────────

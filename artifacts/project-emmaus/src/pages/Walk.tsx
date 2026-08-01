@@ -36,16 +36,21 @@ import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Fire-and-forget engagement action (pause / hide / unhide / remove). */
+/** Fire-and-forget engagement action (pause / hide / unhide / remove).
+ *  userId must be supplied so the X-User-Id header is always sent — the signed
+ *  session cookie alone is not reliable in all deployment environments. */
 async function callEngagementAction(
   type: 'journey' | 'devotional' | 'sermon-companion',
   id: string,
   action: 'pause' | 'remove' | 'hide' | 'unhide',
+  userId?: string,
 ): Promise<void> {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-Id'] = userId;
     await fetch(
       `${BASE_URL}/api/engagements/${type}/${encodeURIComponent(id)}/${action}`,
-      { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+      { method: 'POST', credentials: 'include', headers },
     );
   } catch { /* network errors are non-fatal */ }
 }
@@ -907,7 +912,7 @@ export default function Walk() {
                     })}
                     onHide={() => {
                       setActiveDevotionals(prev => prev.filter(d => d.series.id !== activeDevotional.series.id));
-                      void callEngagementAction('devotional', activeDevotional.series.id, 'hide');
+                      void callEngagementAction('devotional', activeDevotional.series.id, 'hide', user?.id);
                     }}
                   />
                 </motion.section>
@@ -928,7 +933,7 @@ export default function Walk() {
             onViewPrevious={(id) => setLocation(`/journey/${id}/previous?from=walk`)}
             onHide={(journeyId) => {
               setHiddenJourneyIds(prev => new Set([...prev, journeyId]));
-              void callEngagementAction('journey', journeyId, 'hide');
+              void callEngagementAction('journey', journeyId, 'hide', user?.id);
             }}
             onPause={(journeyId, title) => setPauseTarget({ type: 'journey', id: journeyId, title })}
           />
@@ -979,7 +984,7 @@ export default function Walk() {
                     })}
                     onHide={() => {
                       setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                      void callEngagementAction('sermon-companion', sc.id, 'hide');
+                      void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
                     }}
                   />
                 }
@@ -1015,13 +1020,13 @@ export default function Walk() {
             setPauseTarget(null);
             if (target.type === 'journey') {
               setHiddenJourneyIds(prev => new Set([...prev, target.id]));
-              void callEngagementAction('journey', target.id, 'pause');
+              void callEngagementAction('journey', target.id, 'pause', user?.id);
             } else if (target.type === 'devotional') {
               setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
-              void callEngagementAction('devotional', target.id, 'pause');
+              void callEngagementAction('devotional', target.id, 'pause', user?.id);
             } else {
               setScCompanions(prev => prev.filter(c => c.id !== target.id));
-              void callEngagementAction('sermon-companion', target.id, 'pause');
+              void callEngagementAction('sermon-companion', target.id, 'pause', user?.id);
             }
           }}
         />
