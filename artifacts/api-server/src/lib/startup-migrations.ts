@@ -805,4 +805,29 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: bible_chapter_overviews table failed (non-fatal)");
   }
 
+  // ── Today's Steps: hide-from-today flag on devotional progress (2026-08) ──────
+  // Replaces destructive "Remove" with a non-destructive hide. Progress, completed
+  // days, and position are all preserved. The column defaults FALSE so existing
+  // rows are unaffected.
+  try {
+    await pool.query(`
+      ALTER TABLE devotional_progress
+        ADD COLUMN IF NOT EXISTS hidden_from_today BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    logger.info("Startup migration: devotional_progress.hidden_from_today column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: devotional_progress.hidden_from_today failed (non-fatal)");
+  }
+
+  // ── Today's Steps: hide-from-today flag on sermon companion progress (2026-08) ─
+  try {
+    await pool.query(`
+      ALTER TABLE sermon_companion_progress
+        ADD COLUMN IF NOT EXISTS hidden_from_today BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    logger.info("Startup migration: sermon_companion_progress.hidden_from_today column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: sermon_companion_progress.hidden_from_today failed (non-fatal)");
+  }
+
 }

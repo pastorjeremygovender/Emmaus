@@ -873,7 +873,10 @@ export default function Journeys() {
             Next Steps
           </h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Choose something that will help you take your next step with Jesus.
+            Choose something to continue walking with Jesus.
+          </p>
+          <p className="text-[13px] text-muted-foreground/80 leading-relaxed mt-0.5">
+            Anything you start will appear on Today's Steps until you finish, pause or hide it.
           </p>
         </header>
 

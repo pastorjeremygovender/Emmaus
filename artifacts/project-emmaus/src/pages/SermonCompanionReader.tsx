@@ -151,6 +151,15 @@ export default function SermonCompanionReader() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Restore to Today's Steps — clears hidden_from_today when the member opens
+  // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
+  useEffect(() => {
+    if (!companionId || !user?.id) return;
+    fetch(`${BASE}/api/engagements/sermon-companion/${encodeURIComponent(companionId)}/unhide`, {
+      method: 'POST', credentials: 'include',
+    }).catch(() => {});
+  }, [companionId, user?.id]);
+
   // Route protection — redirect when the requested day is unavailable:
   //   • day exceeds the final published day (e.g. /day/6 on a 5-day companion)
   //   • entry doesn't exist in the companion's published content

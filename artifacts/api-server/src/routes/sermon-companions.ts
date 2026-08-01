@@ -109,22 +109,30 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
     const { computeBadge } = await import("../lib/badge.js");
     const result = companions.map(c => {
       const progress = progressMap[c.id] ?? null;
-      // Omit progress for paused companions — Walk.tsx filters on `progress !== null`
+      // Null out progress for paused companions — Walk.tsx filters on `progress !== null`
       // so this naturally hides paused companions without client-side status checks.
+      // Hidden companions keep their progress so Next Steps can still surface them as
+      // "in progress"; Walk.tsx filters them separately via hiddenFromToday.
       const activeProgress = progress && progress.status !== "paused" ? progress : null;
       const badge = computeBadge(
         c.notifyPublishedAt ?? null,
         progress?.lastOpenedAt ?? null,
         progress !== null,
       );
+      const progressRow = activeProgress as (typeof activeProgress & { hidden_from_today?: boolean }) | null;
       return {
         id: c.id,
         title: c.title,
         numberOfDays: c.publishedEntryCount,
         isCurrentWeek: (c as unknown as Record<string, unknown>).isCurrentWeek ?? false,
         entries: entriesByCompanion[c.id] ?? [],
-        progress: activeProgress
-          ? { currentDay: activeProgress.currentDay, completedDays: activeProgress.completedDays, status: activeProgress.status }
+        progress: progressRow
+          ? {
+              currentDay: progressRow.currentDay,
+              completedDays: progressRow.completedDays,
+              status: progressRow.status,
+              hiddenFromToday: progressRow.hidden_from_today ?? false,
+            }
           : null,
         badge,
       };

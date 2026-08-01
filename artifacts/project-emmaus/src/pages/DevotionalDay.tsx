@@ -105,6 +105,16 @@ export default function DevotionalDay() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Restore to Today's Steps — clears hidden_from_today when the member opens
+  // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
+  useEffect(() => {
+    if (!seriesId || !user?.id) return;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    fetch(`${base}/api/engagements/devotional/${encodeURIComponent(seriesId)}/unhide`, {
+      method: 'POST', credentials: 'include',
+    }).catch(() => {});
+  }, [seriesId, user?.id]);
+
   // Derive entry/published list before the route-guard effect so TypeScript
   // can see them as stable values and they aren't in the temporal dead zone.
   const entry = seriesData?.entries.find(e => e.dayNumber === day);

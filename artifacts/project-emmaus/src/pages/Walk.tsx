@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, MoreHorizontal, Pause, Trash2, X } from 'lucide-react';
+import { CheckCircle2, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
@@ -36,11 +36,11 @@ import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Fire-and-forget engagement action (pause / remove). */
+/** Fire-and-forget engagement action (pause / hide / unhide / remove). */
 async function callEngagementAction(
   type: 'devotional' | 'sermon-companion',
   id: string,
-  action: 'pause' | 'remove',
+  action: 'pause' | 'remove' | 'hide' | 'unhide',
 ): Promise<void> {
   try {
     await fetch(
@@ -52,7 +52,7 @@ async function callEngagementAction(
 
 // ─── Walk-specific MoreMenu ────────────────────────────────────────────────────
 
-function WalkMoreMenu({ onPause, onRemove }: { onPause: () => void; onRemove: () => void }) {
+function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -90,10 +90,10 @@ function WalkMoreMenu({ onPause, onRemove }: { onPause: () => void; onRemove: ()
               <Pause size={13} className="text-muted-foreground" /> Pause
             </button>
             <button
-              onClick={() => { setOpen(false); onRemove(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2"
+              onClick={() => { setOpen(false); onHide(); }}
+              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
             >
-              <Trash2 size={13} className="text-destructive/70" /> Remove
+              <EyeOff size={13} className="text-muted-foreground" /> Hide from Today's Steps
             </button>
           </motion.div>
         )}
@@ -171,7 +171,7 @@ function DevotionalCard({
   onOpen,
   onViewPreviousEntries,
   onPause,
-  onRemove,
+  onHide,
 }: {
   series: DevotionalSeries;
   /** Number of entries the member has completed. */
@@ -190,7 +190,8 @@ function DevotionalCard({
   onOpen: () => void;
   onViewPreviousEntries?: () => void;
   onPause?: () => void;
-  onRemove?: () => void;
+  /** Non-destructive hide: removes from Today's Steps, preserves all progress. */
+  onHide?: () => void;
 }) {
   const description = allComplete
     ? `${totalPublished} of ${totalPublished} completed`
@@ -213,8 +214,8 @@ function DevotionalCard({
       headerTrailing={
         allComplete
           ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-          : (onPause && onRemove)
-            ? <WalkMoreMenu onPause={onPause} onRemove={onRemove} />
+          : (onPause && onHide)
+            ? <WalkMoreMenu onPause={onPause} onHide={onHide} />
             : undefined
       }
       secondaryAction={
@@ -498,8 +499,8 @@ export default function Walk() {
       progress: progressList.find(p => p.seriesId === s.id) ?? null,
     }));
 
-    // Show ALL started series on Today's Steps, not just the first one.
-    const allStarted = withProg.filter(x => x.progress !== null);
+    // Show ALL started, non-hidden series on Today's Steps.
+    const allStarted = withProg.filter(x => x.progress !== null && !x.progress.hidden_from_today);
     if (allStarted.length > 0) {
       // Load entries in parallel so every card can show its entry title.
       const withEntries = await Promise.all(
@@ -597,9 +598,9 @@ export default function Walk() {
         progress: { currentDay: number; completedDays: number[]; status: string } | null;
         badge?: 'NEW' | 'UPDATED' | null;
       }>) => {
-        // Show only companions the member has started and not paused; sort current-week first.
+        // Show only companions the member has started, not paused, and not hidden.
         const started = data
-          .filter(c => c.progress !== null && c.progress.status !== 'paused')
+          .filter(c => c.progress !== null && c.progress.status !== 'paused' && !(c.progress as { hiddenFromToday?: boolean }).hiddenFromToday)
           .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
         setScCompanions(started.map(c => {
           const currentDay = c.progress!.currentDay;
@@ -883,29 +884,15 @@ export default function Walk() {
                       id: activeDevotional.series.id,
                       title: activeDevotional.series.title,
                     })}
-                    onRemove={() => {
+                    onHide={() => {
                       setActiveDevotionals(prev => prev.filter(d => d.series.id !== activeDevotional.series.id));
-                      void callEngagementAction('devotional', activeDevotional.series.id, 'remove');
+                      void callEngagementAction('devotional', activeDevotional.series.id, 'hide');
                     }}
                   />
                 </motion.section>
               );
             })
-          : unstartedSeries.length > 0
-            ? (
-              <motion.section
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.09 }}
-              >
-                <DevotionalDiscoveryCard
-                  series={unstartedSeries[0]}
-                  onBegin={() => handleBeginDevotional(unstartedSeries[0].id)}
-                  starting={startingId === unstartedSeries[0].id}
-                />
-              </motion.section>
-            )
-            : null
+          : null
         }
 
         {/* ── 3. Your Journeys ───────────────────────────────────────────────── */}
@@ -964,9 +951,9 @@ export default function Walk() {
                       id: sc.id,
                       title: sc.title,
                     })}
-                    onRemove={() => {
+                    onHide={() => {
                       setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                      void callEngagementAction('sermon-companion', sc.id, 'remove');
+                      void callEngagementAction('sermon-companion', sc.id, 'hide');
                     }}
                   />
                 }
@@ -983,27 +970,9 @@ export default function Walk() {
           );
         })}
 
-        {/* ── Sermon Companion discovery — shown when the member hasn't started any
-            companion yet but a current-week companion is available. Mirrors the
-            DevotionalDiscoveryCard pattern so new users always see this week's
-            companion on Today's Steps without needing a separate discovery page. */}
-        {scCompanions.length === 0 && unstartedCurrentWeekCompanion && (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-          >
-            <EmmausContentCard
-              label="SERMON COMPANION"
-              title={unstartedCurrentWeekCompanion.title}
-              description="This week's companion is available."
-              metadata={`${unstartedCurrentWeekCompanion.numberOfDays} Days`}
-              primaryActionLabel="Begin"
-              onAction={() => handleBeginCompanion(unstartedCurrentWeekCompanion.id)}
-              loading={startingCompanionId === unstartedCurrentWeekCompanion.id}
-            />
-          </motion.section>
-        )}
+        {/* Discovery cards for optional content have been removed from Today's Steps.
+            Optional content (Devotionals, Companions, Walks) begins life in Next Steps
+            and only appears here after the member intentionally starts it. */}
 
 
       </main>
