@@ -119,6 +119,78 @@ export function StudySection({
   );
 }
 
+// ─── Key Truth section — bold takeaway callout ────────────────────────────────
+
+function KeyTruthSection({ content }: { content: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  if (!content) return null;
+
+  return (
+    <div className="border-b border-border/50 last:border-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 py-4 text-left"
+      >
+        <span className="text-orange-500 shrink-0"><Flame size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold text-foreground">Key Truth</span>
+        {open
+          ? <ChevronUp size={16} className="text-muted-foreground shrink-0" />
+          : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="pb-4">
+          <div className="rounded-xl bg-orange-500/8 border border-orange-500/20 px-4 py-3.5">
+            <p className="text-[15px] font-semibold text-foreground leading-[1.65] whitespace-pre-wrap">
+              {content}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Reflection section — interactive question callout ────────────────────────
+
+function ReflectionSection({ content }: { content: string | undefined }) {
+  const [open, setOpen] = useState(false);
+  if (!content) return null;
+
+  return (
+    <div className="border-b border-border/50 last:border-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 py-4 text-left"
+      >
+        <span className="text-amber-500 shrink-0"><Lightbulb size={17} /></span>
+        <span className="flex-1 text-[15px] font-semibold text-foreground">Reflection</span>
+        {open
+          ? <ChevronUp size={16} className="text-muted-foreground shrink-0" />
+          : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="pb-4">
+          <div className="rounded-xl bg-amber-500/8 border border-amber-500/25 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-[13px] font-bold text-amber-600 leading-none">?</span>
+              </div>
+              <p className="text-[15px] text-foreground leading-[1.7] whitespace-pre-wrap italic">
+                {content}
+              </p>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2 px-1">
+            Take a moment to sit with this question.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Cross references section ─────────────────────────────────────────────────
 
 function CrossReferencesSection({
@@ -438,18 +510,10 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                 />
 
                 {/* 3. Key Truth */}
-                <StudySection
-                  icon={<Flame size={17} />}
-                  title="Key Truth"
-                  content={studyNote?.key_truth}
-                />
+                <KeyTruthSection content={studyNote?.key_truth} />
 
                 {/* 4. Reflection */}
-                <StudySection
-                  icon={<Lightbulb size={17} />}
-                  title="Reflection"
-                  content={studyNote?.reflection_question}
-                />
+                <ReflectionSection content={studyNote?.reflection_question} />
 
                 {/* 5. Practical Application */}
                 <StudySection
