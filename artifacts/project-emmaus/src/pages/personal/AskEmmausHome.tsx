@@ -192,7 +192,7 @@ export default function AskEmmausHome() {
 
         {/* Disclaimer */}
         <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
-          Emmaus offers pastoral reflection, not professional advice.{' '}
+          Emmaus offers pastoral reflection, not counseling or professional advice.{' '}
           If you are in crisis, please contact{' '}
           <a href="tel:116123" className="underline underline-offset-2 hover:text-foreground">
             Samaritans on 116 123
