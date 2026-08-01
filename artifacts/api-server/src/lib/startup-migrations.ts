@@ -405,6 +405,21 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: journeys.theme_color / version columns failed (non-fatal)");
   }
 
+  // ── Walk hide-from-today (2026-08) ───────────────────────────────────────────
+  // Non-destructive hide for Walk/Journey cards on Today's Steps. Setting this
+  // flag removes the card from the walk without deleting any progress or completed
+  // history. It is automatically cleared when the member opens the Walk from Next
+  // Steps (JourneyDetail calls POST /api/engagements/journey/:id/unhide on mount).
+  try {
+    await pool.query(`
+      ALTER TABLE user_journey_progress
+        ADD COLUMN IF NOT EXISTS hidden_from_today boolean NOT NULL DEFAULT false;
+    `);
+    logger.info("Startup migration: user_journey_progress.hidden_from_today column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_journey_progress.hidden_from_today column failed (non-fatal)");
+  }
+
   // ── Smart Content Indicators — notify_published_at + last_opened_at (2026-07) ──
   // IMPORTANT: must run before repairStepStatuses which queries the journeys table
   // via Drizzle (which now includes notify_published_at in the SELECT). If the column

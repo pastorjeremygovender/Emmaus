@@ -148,6 +148,8 @@ export interface FrontendProgress {
   status: string;
   /** Set when the member opens the content — used for UPDATED badge computation. */
   lastOpenedAt?: string | null;
+  /** Non-destructive hide: card removed from Today's Steps, progress preserved. */
+  hiddenFromToday?: boolean;
 }
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -262,6 +264,7 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
     lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
     status: row.status ?? "active",
     lastOpenedAt: row.lastOpenedAt?.toISOString() ?? null,
+    hiddenFromToday: (row as { hiddenFromToday?: boolean }).hiddenFromToday ?? false,
   };
 }
 

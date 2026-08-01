@@ -7,7 +7,7 @@
  *   Progress → Continue → Steps
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
@@ -88,6 +88,17 @@ export default function JourneyDetail() {
       .then(col => setCollectionName(col?.title ?? null))
       .catch(() => {});
   }, [journey?.collectionId]);
+
+  // Auto-unhide — opening a Walk from Next Steps (or anywhere) restores it to
+  // Today's Steps. This is fire-and-forget; the member doesn't need to wait for it.
+  useEffect(() => {
+    if (!journey || !prog || !user) return;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    fetch(
+      `${base}/api/engagements/journey/${encodeURIComponent(journey.id)}/unhide`,
+      { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+    ).catch(() => { /* non-fatal */ });
+  }, [journey?.id, !!prog, !!user]);
 
   // Pre-fetch room details so we can detect if this journey is already linked to a room.
   // Runs whenever the user's room list changes (e.g. after sign-in or room join).

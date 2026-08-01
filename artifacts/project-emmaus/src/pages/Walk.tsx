@@ -38,7 +38,7 @@ const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 /** Fire-and-forget engagement action (pause / hide / unhide / remove). */
 async function callEngagementAction(
-  type: 'devotional' | 'sermon-companion',
+  type: 'journey' | 'devotional' | 'sermon-companion',
   id: string,
   action: 'pause' | 'remove' | 'hide' | 'unhide',
 ): Promise<void> {
@@ -400,6 +400,8 @@ function YourJourneysSection({
   startedJourneys,
   onSelect,
   onViewPrevious,
+  onHide,
+  onPause,
 }: {
   startedJourneys: Array<{
     journey: import('@/contexts/JourneyContext').Journey;
@@ -409,6 +411,8 @@ function YourJourneysSection({
   }>;
   onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
   onViewPrevious: (journeyId: string) => void;
+  onHide: (journeyId: string) => void;
+  onPause: (journeyId: string, title: string) => void;
 }) {
   if (startedJourneys.length === 0) return null;
 
@@ -454,7 +458,10 @@ function YourJourneysSection({
             headerTrailing={
               isCompleted
                 ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-                : undefined
+                : <WalkMoreMenu
+                    onPause={() => onPause(journey.id, journey.title)}
+                    onHide={() => onHide(journey.id)}
+                  />
             }
             secondaryAction={
               completedCount > 0
@@ -561,10 +568,17 @@ export default function Walk() {
   // ── Pause / Remove dialog state ──────────────────────────────────────────────
   // Tracks which card is showing the confirm-pause dialog.
   const [pauseTarget, setPauseTarget] = useState<
-    { type: 'devotional'; id: string; title: string }
+    { type: 'journey'; id: string; title: string }
+    | { type: 'devotional'; id: string; title: string }
     | { type: 'sermon-companion'; id: string; title: string }
     | null
   >(null);
+
+  // ── Journey hide state — optimistic local removal ────────────────────────────
+  // Journey progress is loaded from JourneyContext (not a local fetch like
+  // devotionals), so we track hidden IDs in a local Set for instant UI updates
+  // rather than mutating the shared context.
+  const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
 
   // ── Sermon Companion (from sermon_companion table via API) ───────────────────
   // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
@@ -698,12 +712,16 @@ export default function Walk() {
   // 3. Your Journeys — journeys the member has already started.
   //    Includes: active growth journeys + started daily devotional.
   //    Excludes: Daily Rhythm (shown above), Companion (shown below).
+  //    Excludes: hidden journeys (optimistic local set OR server flag).
   //    Status check: prefer server-backed progress[j.id]?.status; fall back to
   //    localStorage (enrollment.ts optimistic cache) for instant UI updates.
   const activeGrowthJourneys = publishedJourneys
     .filter(j => {
       if (!progress[j.id]) return false;
       if (isExemptJourney(j)) return false;
+      // Hide: optimistic local set (instant) OR server flag (after page reload).
+      if (hiddenJourneyIds.has(j.id)) return false;
+      if (progress[j.id]?.hiddenFromToday) return false;
       // Server status wins when present; optimistic localStorage cache as fallback.
       const serverStatus = progress[j.id]?.status;
       if (serverStatus) return serverStatus === 'active';
@@ -908,6 +926,11 @@ export default function Walk() {
             startedJourneys={startedJourneys}
             onSelect={goToJourney}
             onViewPrevious={(id) => setLocation(`/journey/${id}/previous?from=walk`)}
+            onHide={(journeyId) => {
+              setHiddenJourneyIds(prev => new Set([...prev, journeyId]));
+              void callEngagementAction('journey', journeyId, 'hide');
+            }}
+            onPause={(journeyId, title) => setPauseTarget({ type: 'journey', id: journeyId, title })}
           />
         </motion.div>
 
@@ -990,7 +1013,10 @@ export default function Walk() {
           onPause={() => {
             const target = pauseTarget;
             setPauseTarget(null);
-            if (target.type === 'devotional') {
+            if (target.type === 'journey') {
+              setHiddenJourneyIds(prev => new Set([...prev, target.id]));
+              void callEngagementAction('journey', target.id, 'pause');
+            } else if (target.type === 'devotional') {
               setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
               void callEngagementAction('devotional', target.id, 'pause');
             } else {

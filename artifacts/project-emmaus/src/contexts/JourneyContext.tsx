@@ -110,6 +110,8 @@ export type Progress = {
   status?: string;
   /** Set when member opens the content — clears UPDATED badge */
   lastOpenedAt?: string | null;
+  /** Non-destructive hide: card removed from Today's Steps, all progress preserved. */
+  hiddenFromToday?: boolean;
 };
 
 type JourneyContextType = {

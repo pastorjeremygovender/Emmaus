@@ -72,6 +72,14 @@ export default function JourneyDay() {
       startJourney(journeyId);
       // Clear UPDATED badge — member has opened the content (fire-and-forget).
       void dismissBadge('journey', journeyId);
+      // Restore a hidden Walk to Today's Steps — idempotent if not hidden.
+      // Covers the primary Next Steps → Continue path (direct to /journey/:id/day/:n)
+      // which bypasses JourneyDetail. Both routes now issue the unhide on open.
+      const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+      fetch(
+        `${base}/api/engagements/journey/${encodeURIComponent(journeyId)}/unhide`,
+        { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+      ).catch(() => { /* non-fatal */ });
     }
     window.scrollTo(0, 0);
   }, [journeyId]);

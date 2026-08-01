@@ -272,7 +272,12 @@ engagementsRouter.post("/:contentType/:contentId/hide", async (req: Request, res
   const contentId   = String(req.params.contentId);
 
   try {
-    if (contentType === "devotional") {
+    if (contentType === "journey") {
+      await pool.query(
+        `UPDATE user_journey_progress SET hidden_from_today = TRUE WHERE user_id = $1 AND journey_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "devotional") {
       await pool.query(
         `UPDATE devotional_progress SET hidden_from_today = TRUE WHERE user_id = $1 AND series_id = $2`,
         [userId, contentId],
@@ -306,7 +311,12 @@ engagementsRouter.post("/:contentType/:contentId/unhide", async (req: Request, r
   const contentId   = String(req.params.contentId);
 
   try {
-    if (contentType === "devotional") {
+    if (contentType === "journey") {
+      await pool.query(
+        `UPDATE user_journey_progress SET hidden_from_today = FALSE WHERE user_id = $1 AND journey_id = $2`,
+        [userId, contentId],
+      );
+    } else if (contentType === "devotional") {
       await pool.query(
         `UPDATE devotional_progress SET hidden_from_today = FALSE WHERE user_id = $1 AND series_id = $2`,
         [userId, contentId],

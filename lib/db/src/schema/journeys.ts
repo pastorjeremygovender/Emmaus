@@ -163,6 +163,9 @@ export const userJourneyProgressTable = pgTable("user_journey_progress", {
   status: text("status").notNull().default("active"),  // active|completed|paused|dropped
   // Set to NOW() when the member opens/views the content — used by badge computation.
   lastOpenedAt: timestamp("last_opened_at"),
+  // Non-destructive hide: card removed from Today's Steps without losing any progress.
+  // Automatically cleared (set to false) when the member opens the Walk from Next Steps.
+  hiddenFromToday: boolean("hidden_from_today").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
