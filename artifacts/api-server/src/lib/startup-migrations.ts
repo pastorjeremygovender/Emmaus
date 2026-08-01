@@ -658,7 +658,10 @@ export async function runStartupMigrations(): Promise<void> {
       const { readFileSync } = await import('node:fs');
       const { fileURLToPath } = await import('node:url');
       const { dirname, resolve } = await import('node:path');
-      const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), '../data/bible-study-notes-seed.json');
+      // import.meta.url resolves to the esbuild bundle (dist/index.mjs).
+      // The seed JSON is copied to dist/data/ by build.mjs, so the path is
+      // sibling 'data/' from the bundle's own directory — NOT '../data/'.
+      const seedPath = resolve(dirname(fileURLToPath(import.meta.url)), 'data/bible-study-notes-seed.json');
       type SeedNote = {
         book_id: string; chapter: number; verse_start: number; verse_end: number | null;
         title: string; content: string; context_note: string; historical_note: string;
