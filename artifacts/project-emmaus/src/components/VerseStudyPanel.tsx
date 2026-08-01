@@ -86,7 +86,7 @@ type PreachedHereSermon = {
 
 // ─── Section accordion — only renders if content is non-empty ─────────────────
 
-function StudySection({
+export function StudySection({
   icon, title, content, defaultOpen = false,
 }: {
   icon: React.ReactNode;

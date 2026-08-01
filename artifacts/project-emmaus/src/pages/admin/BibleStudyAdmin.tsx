@@ -11,9 +11,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   BookOpen, Plus, Edit2, Trash2, Eye, EyeOff, ChevronDown, ChevronUp,
   Loader2, Check, X, AlertCircle, Link2,
+  Globe, Clock, LetterText, Flame, Lightbulb, Footprints, BookMarked, ScanEye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getBibleBook, BIBLE_BOOKS } from '@/lib/bible-data';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { StudySection } from '@/components/VerseStudyPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +118,7 @@ function StudyNoteForm({
 }) {
   const [form, setForm] = useState({ ...EMPTY_FORM, ...initial });
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['content']));
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   function toggle(key: string) {
     setExpandedSections(prev => {
@@ -247,7 +253,7 @@ function StudyNoteForm({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 pt-2">
+      <div className="flex gap-2 pt-2 flex-wrap">
         <Button
           onClick={() => onSave(form)}
           disabled={saving}
@@ -256,10 +262,73 @@ function StudyNoteForm({
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
           {saving ? 'Saving…' : 'Save note'}
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setPreviewOpen(true)}
+          className="rounded-xl gap-2"
+        >
+          <ScanEye size={15} />
+          Preview
+        </Button>
         <Button variant="ghost" onClick={onCancel} className="rounded-xl">
           Cancel
         </Button>
       </div>
+
+      {/* Preview dialog — renders the note exactly as members see it */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg w-full max-h-[85dvh] flex flex-col p-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/50 shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
+                  Preview — {(() => {
+                    const book = getBibleBook(form.book_id);
+                    const name = book?.name ?? form.book_id;
+                    const verseRange = form.verse_end && form.verse_end !== form.verse_start
+                      ? `${form.verse_start}–${form.verse_end}`
+                      : String(form.verse_start);
+                    return `${name} ${form.chapter}:${verseRange}`;
+                  })()}
+                </p>
+                <DialogTitle className="text-[15px] font-bold text-foreground leading-snug">
+                  {form.title || <span className="text-muted-foreground italic font-normal">No title</span>}
+                </DialogTitle>
+              </div>
+            </div>
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1.5">
+              <ScanEye size={11} />
+              This is how the note will appear to members
+            </p>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-8">
+            {/* Check if any content exists */}
+            {!(form.content || form.context_note || form.key_truth || form.reflection_question ||
+               form.apply_it || form.related_scriptures || form.historical_note ||
+               form.original_language_note || form.jesus_connection) ? (
+              <div className="py-10 text-center">
+                <BookOpen size={28} className="text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-[14px] text-muted-foreground">No content to preview yet.</p>
+                <p className="text-[13px] text-muted-foreground mt-1">Fill in at least one section to see a preview.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/50 pt-2">
+                <StudySection icon={<BookOpen size={17} />}      title="Explanation"              content={form.content}                defaultOpen />
+                <StudySection icon={<Globe size={17} />}         title="Passage Context"          content={form.context_note} />
+                <StudySection icon={<Flame size={17} />}         title="Key Truth"                content={form.key_truth} />
+                <StudySection icon={<Lightbulb size={17} />}     title="Reflection"               content={form.reflection_question} />
+                <StudySection icon={<Footprints size={17} />}    title="Practical Application"    content={form.apply_it} />
+                <StudySection icon={<Link2 size={17} />}         title="Related Scriptures"       content={form.related_scriptures} />
+                <StudySection icon={<Clock size={17} />}         title="Historical Background"    content={form.historical_note} />
+                <StudySection icon={<LetterText size={17} />}    title="Original Language"        content={form.original_language_note} />
+                <StudySection icon={<BookMarked size={17} />}    title="How This Points to Jesus" content={form.jesus_connection} />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
