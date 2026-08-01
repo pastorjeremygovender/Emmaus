@@ -568,6 +568,41 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: sermon_companion_progress.hidden_from_today failed (non-fatal)");
   }
 
+  // ── Content audit log table + deleted_at soft-delete columns (2026-08) ─────────
+  // content_audit_log records every admin mutation. deleted_at columns allow
+  // soft deletes for journeys and steps so content can be recovered if needed.
+  {
+    const auditDDL = [
+      `CREATE TABLE IF NOT EXISTS content_audit_log (
+        id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        content_type   TEXT NOT NULL,
+        content_id     TEXT NOT NULL,
+        action         TEXT NOT NULL,
+        performed_by   TEXT NOT NULL,
+        performed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        previous_state JSONB,
+        new_state      JSONB
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_content_audit_log_content
+         ON content_audit_log (content_type, content_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_content_audit_log_performed_at
+         ON content_audit_log (performed_at DESC)`,
+      `ALTER TABLE journeys               ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      `ALTER TABLE journey_steps          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+      // Devotional and sermon companion soft-delete columns are intentionally
+      // deferred until filtering is also implemented in their store modules.
+      // (see tasks #283, #285 for the follow-up work)
+    ];
+    for (const ddl of auditDDL) {
+      try {
+        await pool.query(ddl);
+      } catch (err) {
+        logger.warn({ err }, "Startup migration: audit DDL step failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: content_audit_log + deleted_at columns ensured (idempotent)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate

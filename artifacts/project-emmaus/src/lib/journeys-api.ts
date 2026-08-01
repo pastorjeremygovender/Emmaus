@@ -268,8 +268,8 @@ export async function permanentDeleteJourney(
   return apiFetch(`/api/journeys/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     userId,
+    body: JSON.stringify({ confirm: 'PERMANENTLY_DELETE' }),
     headers: {
-      'X-User-Role': 'superAdmin',
       ...(userEmail ? { 'X-User-Email': userEmail } : {}),
     },
   });

@@ -62,6 +62,8 @@ export const journeysTable = pgTable("journeys", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
+  // Soft-delete: set by DELETE /journeys/:id, invisible to all queries when not null.
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const insertJourneySchema = createInsertSchema(journeysTable).omit({
@@ -135,6 +137,8 @@ export const journeyStepsTable = pgTable("journey_steps", {
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Soft-delete: set by DELETE /journeys/:id/steps/:day, invisible to all queries when not null.
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   // Enforce step uniqueness within a journey so (journeyId, day) is a reliable key
   unique("journey_steps_journey_id_day_unique").on(table.journeyId, table.day),

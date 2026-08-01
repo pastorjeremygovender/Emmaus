@@ -15,6 +15,8 @@ import * as store from "../lib/journey-store.js";
 import type { FrontendStep } from "../lib/journey-store.js";
 import { parseImportCsv, exportJourneysToCsv } from "../lib/journey-csv.js";
 import { generateJourney, generateStructuredJourney, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
+import { logAuditEvent } from "../lib/audit-log.js";
+import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 
 const router = Router();
 
@@ -113,6 +115,7 @@ router.get("/journeys/search", async (req: Request, res: Response) => {
 router.get("/journeys/export", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const rawIds = String(req.query.ids ?? "").trim();
   const ids = rawIds ? rawIds.split(",").map(s => s.trim()).filter(Boolean) : [];
@@ -142,6 +145,7 @@ router.get("/journeys/export", async (req: Request, res: Response) => {
 router.post("/journeys/import", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { csv, batchId } = req.body as { csv: string; batchId?: string };
   if (!csv || typeof csv !== "string") {
@@ -205,6 +209,14 @@ router.post("/journeys/import", async (req: Request, res: Response) => {
       }
     }
 
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journeyId,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journeyId, title: importJourney.title, status: "Draft", source: "csv-import", batchId: importBatchId, stepCount: importJourney.steps.length },
+    });
     createdJourneyIds.push(journeyId);
   }
 
@@ -221,6 +233,7 @@ router.post("/journeys/import", async (req: Request, res: Response) => {
 router.post("/journeys/generate", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { prompt } = req.body as { prompt: string };
   if (!prompt?.trim()) {
@@ -257,6 +270,14 @@ router.post("/journeys/generate", async (req: Request, res: Response) => {
     });
   }
 
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: journeyId,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { id: journeyId, title: generated.title, status: "Draft", source: "ai-generate", stepCount: generated.steps.length },
+  });
   res.status(201).json({ journeyId, title: generated.title, stepCount: generated.steps.length });
 });
 
@@ -271,6 +292,7 @@ const BUILD_DEDUP_MS = 90_000;
 router.post("/journeys/ai-build", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const payload = req.body as BuilderPayload;
 
@@ -359,6 +381,14 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
       });
     }
 
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journeyId,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journeyId, title: generated.title, status: "Draft", source: "ai-build", stepCount: generated.steps.length },
+    });
     buildInProgress.delete(dedupKey);
     res.status(201).json({
       journeyId,
@@ -378,6 +408,7 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
 router.post("/journeys/ai-block-action", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { action, blockType, currentContent, journeyContext } = req.body as {
     action: string;
@@ -424,6 +455,7 @@ router.get("/journeys", async (_req: Request, res: Response) => {
 router.post("/journeys", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const { title, description = "", journeyType = "core", status = "Draft", ...rest } = req.body as Record<string, unknown>;
   if (!title || typeof title !== "string") {
@@ -461,6 +493,14 @@ router.post("/journeys", async (req: Request, res: Response) => {
       pastorEdited: rest.pastorEdited as boolean | undefined,
       collectionId: rest.collectionId as string | undefined,
     });
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: journey.id,
+      action: "create",
+      performedBy: callerId,
+      previousState: null,
+      newState: { id: journey.id, title: journey.title, status: journey.status },
+    });
     res.status(201).json(journey);
   } catch (err: unknown) {
     const status = (err as { status?: number }).status;
@@ -481,71 +521,166 @@ router.get("/journeys/:id", async (req: Request, res: Response) => {
 router.patch("/journeys/:id", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, req.body as Record<string, unknown>);
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+
+  const reqStatus = (req.body as Record<string, unknown>).status as string | undefined;
+  let auditAction: "edit" | "publish" | "unpublish" | "archive" = "edit";
+  if (reqStatus) {
+    if (reqStatus === "Published" && before?.status !== "Published") auditAction = "publish";
+    else if (reqStatus === "Draft" && before?.status === "Published") auditAction = "unpublish";
+    else if (reqStatus === "Archived") auditAction = "archive";
+  }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: auditAction,
+    performedBy: callerId,
+    previousState: before ? { id: before.id, title: before.title, status: before.status } : null,
+    newState: { id: updated.id, title: updated.title, status: updated.status },
+  });
+
   res.json(updated);
 });
 
 router.delete("/journeys/:id", async (req: Request, res: Response) => {
-  // Permanent deletion is restricted to Super Administrators only
-  const callerId = requireSuperAdmin(req, res);
-  if (!callerId) return;
-
   const id = String(req.params["id"]);
+  const isPermanent = (req.body as Record<string, unknown>)?.confirm === "PERMANENTLY_DELETE";
 
-  // In-memory dedup guard — prevent double-delete if button is clicked twice
-  const dedupeKey = `delete:${id}`;
-  if (deleteInProgress.has(dedupeKey)) {
-    res.status(409).json({ error: "A deletion is already in progress for this journey." });
-    return;
-  }
-  deleteInProgress.set(dedupeKey, Date.now());
-
-  try {
-    const adminEmail = req.headers["x-user-email"] as string ?? "";
-    const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
-    res.json({ ok: true, ...counts });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Deletion failed";
-    if (message === "Journey not found") {
-      res.status(404).json({ error: message });
-    } else {
-      console.error("[delete journey]", err);
-      res.status(500).json({ error: "Journey could not be deleted." });
+  if (isPermanent) {
+    // Permanent hard delete — Super Administrators only.
+    // Role is resolved server-side from user-role-store, never from headers.
+    const callerId = requireAuth(req, res);
+    if (!callerId) return;
+    if ((await getUserRole(callerId)) !== "superAdmin") {
+      res.status(403).json({ error: "Super admin access required for permanent deletion" });
+      return;
     }
-  } finally {
-    deleteInProgress.delete(dedupeKey);
+
+    const dedupeKey = `delete:${id}`;
+    if (deleteInProgress.has(dedupeKey)) {
+      res.status(409).json({ error: "A deletion is already in progress for this journey." });
+      return;
+    }
+    deleteInProgress.set(dedupeKey, Date.now());
+
+    try {
+      const adminEmail = req.headers["x-user-email"] as string ?? "";
+      // Use getJourneyIncludingDeleted so this works after a prior soft-delete.
+      const journeySnapshot = await store.getJourneyIncludingDeleted(id);
+      const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
+      await logAuditEvent({
+        contentType: "journey",
+        contentId: id,
+        action: "permanent_delete",
+        performedBy: callerId,
+        previousState: journeySnapshot
+          ? { id: journeySnapshot.id, title: journeySnapshot.title, status: journeySnapshot.status }
+          : null,
+        newState: null,
+      });
+      res.json({ ok: true, ...counts });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Deletion failed";
+      if (message === "Journey not found") {
+        res.status(404).json({ error: message });
+      } else {
+        res.status(500).json({ error: "Journey could not be deleted." });
+      }
+    } finally {
+      deleteInProgress.delete(dedupeKey);
+    }
+  } else {
+    // Soft delete — requires admin or superAdmin (server-side verified).
+    const callerId = requireAuth(req, res);
+    if (!callerId) return;
+    if (!(await isAdmin(callerId))) {
+      res.status(403).json({ error: "Admin access required" });
+      return;
+    }
+
+    const journey = await store.getJourney(id);
+    if (!journey) { res.status(404).json({ error: "Journey not found" }); return; }
+
+    if (journey.status === "Published") {
+      res.status(400).json({
+        error: "Published journeys must be archived before deleting. Use POST /journeys/:id/archive first.",
+      });
+      return;
+    }
+
+    await store.softDeleteJourney(id);
+    await logAuditEvent({
+      contentType: "journey",
+      contentId: id,
+      action: "delete",
+      performedBy: callerId,
+      previousState: { id: journey.id, title: journey.title, status: journey.status },
+      newState: { deletedAt: new Date().toISOString() },
+    });
+    res.json({ ok: true });
   }
 });
 
 router.post("/journeys/:id/publish", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, { status: "Published" });
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: "publish",
+    performedBy: callerId,
+    previousState: before ? { status: before.status } : null,
+    newState: { status: "Published" },
+  });
   res.json(updated);
 });
 
 router.post("/journeys/:id/archive", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const id = String(req.params["id"]);
+  const before = await store.getJourney(id);
   const updated = await store.updateJourney(id, { status: "Archived" });
   if (!updated) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: id,
+    action: "archive",
+    performedBy: callerId,
+    previousState: before ? { status: before.status } : null,
+    newState: { status: "Archived" },
+  });
   res.json(updated);
 });
 
 router.post("/journeys/:id/duplicate", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const copy = await store.duplicateJourney(String(req.params["id"]));
   if (!copy) { res.status(404).json({ error: "Journey not found" }); return; }
+  await logAuditEvent({
+    contentType: "journey",
+    contentId: copy.id,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { id: copy.id, title: copy.title, status: copy.status, source: "duplicate", sourceJourneyId: String(req.params["id"]) },
+  });
   res.status(201).json(copy);
 });
 
@@ -559,6 +694,7 @@ router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
 router.post("/journeys/:id/steps", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const { day, title = "", ...rest } = req.body as Record<string, unknown>;
@@ -567,19 +703,37 @@ router.post("/journeys/:id/steps", async (req: Request, res: Response) => {
     return;
   }
   const step = await store.createStep(journeyId, { day: day as number, title: title as string, ...rest } as Parameters<typeof store.createStep>[1]);
+  await logAuditEvent({
+    contentType: "journey_step",
+    contentId: `${journeyId}:day:${step.day}`,
+    action: "create",
+    performedBy: callerId,
+    previousState: null,
+    newState: { journeyId: step.journeyId, day: step.day, title: step.title, status: step.status },
+  });
   res.status(201).json(step);
 });
 
 router.patch("/journeys/:id/steps/:day", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const day = parseInt(String(req.params["day"]), 10);
   if (isNaN(day)) { res.status(400).json({ error: "day must be a number" }); return; }
+  const stepBefore = await store.getStep(journeyId, day);
   try {
     const updated = await store.updateStep(journeyId, day, req.body as Parameters<typeof store.updateStep>[2]);
     if (!updated) { res.status(404).json({ error: "Step not found" }); return; }
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${day}`,
+      action: "edit",
+      performedBy: callerId,
+      previousState: stepBefore ? { day: stepBefore.day, title: stepBefore.title, status: stepBefore.status } : null,
+      newState: { day: updated.day, title: updated.title, status: updated.status },
+    });
     res.json(updated);
   } catch (err: unknown) {
     // Unique constraint violation (postgres code 23505) — day already exists in this journey
@@ -596,11 +750,24 @@ router.patch("/journeys/:id/steps/:day", async (req: Request, res: Response) => 
 router.delete("/journeys/:id/steps/:day", async (req: Request, res: Response) => {
   const callerId = requireAuth(req, res);
   if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
 
   const journeyId = String(req.params["id"]);
   const day = parseInt(String(req.params["day"]), 10);
   if (isNaN(day)) { res.status(400).json({ error: "day must be a number" }); return; }
-  await store.deleteStep(journeyId, day);
+
+  const stepBefore = await store.getStep(journeyId, day);
+  await store.softDeleteStep(journeyId, day);
+  if (stepBefore) {
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${day}`,
+      action: "delete",
+      performedBy: callerId,
+      previousState: { day: stepBefore.day, title: stepBefore.title, status: stepBefore.status },
+      newState: { deletedAt: new Date().toISOString() },
+    });
+  }
   res.json({ ok: true });
 });
 

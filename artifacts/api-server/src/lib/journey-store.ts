@@ -9,8 +9,8 @@
  * legacy `content` JSONB column so migrated data continues to work.
  */
 
-import { eq, and, asc, or, ilike, sql, inArray } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { eq, and, asc, or, ilike, sql, inArray, isNull } from "drizzle-orm";
+import { db, pool } from "@workspace/db";
 import { isStartSharedReady } from "./feature-flags.js";
 import {
   journeysTable,
@@ -340,7 +340,9 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
 // ─── Journey CRUD ─────────────────────────────────────────────────────────────
 
 export async function listJourneys(): Promise<FrontendJourney[]> {
-  const rows = await db.select().from(journeysTable).orderBy(asc(journeysTable.createdAt));
+  const rows = await db.select().from(journeysTable)
+    .where(isNull(journeysTable.deletedAt))
+    .orderBy(asc(journeysTable.createdAt));
   return rows.map(toFrontendJourney);
 }
 
@@ -348,12 +350,23 @@ export async function listPublishedJourneys(): Promise<FrontendJourney[]> {
   const rows = await db
     .select()
     .from(journeysTable)
-    .where(eq(journeysTable.status, "Published"))
+    .where(and(eq(journeysTable.status, "Published"), isNull(journeysTable.deletedAt)))
     .orderBy(asc(journeysTable.createdAt));
   return rows.map(toFrontendJourney);
 }
 
 export async function getJourney(id: string): Promise<FrontendJourney | null> {
+  const rows = await db.select().from(journeysTable)
+    .where(and(eq(journeysTable.id, id), isNull(journeysTable.deletedAt)));
+  return rows[0] ? toFrontendJourney(rows[0]) : null;
+}
+
+/**
+ * Admin-only bypass: returns a journey even if it has been soft-deleted.
+ * Use this in routes that need to read a journey before permanently deleting it,
+ * where the journey may already have been soft-deleted via an earlier DELETE call.
+ */
+export async function getJourneyIncludingDeleted(id: string): Promise<FrontendJourney | null> {
   const rows = await db.select().from(journeysTable).where(eq(journeysTable.id, id));
   return rows[0] ? toFrontendJourney(rows[0]) : null;
 }
@@ -522,8 +535,10 @@ export async function permanentDeleteJourney(
   adminId: string,
   adminEmail: string
 ): Promise<{ stepCount: number; blockCount: number; progressCount: number; reflectionCount: number }> {
-  // 1. Fetch the journey so we have the title for the audit record
-  const journey = await getJourney(id);
+  // 1. Fetch the journey so we have the title for the audit record.
+  // Use getJourneyIncludingDeleted because a superAdmin may call permanentDelete
+  // after a prior soft-delete (where getJourney returns null).
+  const journey = await getJourneyIncludingDeleted(id);
   if (!journey) throw new Error("Journey not found");
 
   // 2. Count associated records before any deletion
@@ -606,6 +621,7 @@ export async function getJourneyIdsWithIntroStep(journeyIds: string[]): Promise<
       and(
         eq(journeyStepsTable.day, 0),
         inArray(journeyStepsTable.journeyId, journeyIds),
+        isNull(journeyStepsTable.deletedAt),
       ),
     );
   return new Set(rows.map(r => r.journeyId));
@@ -617,7 +633,7 @@ export async function listSteps(journeyId: string): Promise<FrontendStep[]> {
   const rows = await db
     .select()
     .from(journeyStepsTable)
-    .where(eq(journeyStepsTable.journeyId, journeyId))
+    .where(and(eq(journeyStepsTable.journeyId, journeyId), isNull(journeyStepsTable.deletedAt)))
     .orderBy(asc(journeyStepsTable.day));
   return rows.map(toFrontendStep);
 }
@@ -626,7 +642,7 @@ export async function getStep(journeyId: string, day: number): Promise<FrontendS
   const rows = await db
     .select()
     .from(journeyStepsTable)
-    .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day)));
+    .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day), isNull(journeyStepsTable.deletedAt)));
   return rows[0] ? toFrontendStep(rows[0]) : null;
 }
 
@@ -660,7 +676,7 @@ export async function updateStep(journeyId: string, day: number, data: Partial<F
   const existing = await db
     .select()
     .from(journeyStepsTable)
-    .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day)));
+    .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day), isNull(journeyStepsTable.deletedAt)));
   if (!existing[0]) return null;
 
   const now = new Date();
@@ -697,6 +713,33 @@ export async function deleteStep(journeyId: string, day: number): Promise<boolea
 
   await refreshJourneyDuration(journeyId, new Date());
   return true;
+}
+
+/**
+ * Soft-delete a journey by setting deleted_at. The journey remains in the DB
+ * for recovery but is invisible to all list/member/admin queries.
+ * Use this in preference to permanentDeleteJourney unless the admin explicitly
+ * confirms permanent deletion via `{ "confirm": "PERMANENTLY_DELETE" }`.
+ */
+export async function softDeleteJourney(id: string): Promise<void> {
+  await pool.query(
+    `UPDATE journeys SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    [id],
+  );
+}
+
+/**
+ * Soft-delete a journey step by setting deleted_at. Soft-deleted steps are
+ * invisible to members and admin UI; refreshJourneyDuration is called to ensure
+ * durationDays counts only non-deleted Published steps.
+ */
+export async function softDeleteStep(journeyId: string, day: number): Promise<void> {
+  await pool.query(
+    `UPDATE journey_steps SET deleted_at = NOW(), updated_at = NOW()
+     WHERE journey_id = $1 AND day = $2`,
+    [journeyId, day],
+  );
+  await refreshJourneyDuration(journeyId, new Date());
 }
 
 async function refreshJourneyDuration(journeyId: string, now: Date): Promise<void> {
@@ -935,12 +978,15 @@ export async function searchJourneys(q: string, tags: string[]): Promise<SearchR
   // Journey-level search: title + description
   const journeyRows = q
     ? await db.select().from(journeysTable).where(
-        or(
-          ilike(journeysTable.title, term),
-          ilike(journeysTable.description, term),
+        and(
+          or(
+            ilike(journeysTable.title, term),
+            ilike(journeysTable.description, term),
+          ),
+          isNull(journeysTable.deletedAt),
         )
       )
-    : await db.select().from(journeysTable);
+    : await db.select().from(journeysTable).where(isNull(journeysTable.deletedAt));
 
   // Tag filter: keep journeys whose tags array contains any of the requested tags
   let journeyResults = journeyRows.map(toFrontendJourney);
@@ -953,13 +999,24 @@ export async function searchJourneys(q: string, tags: string[]): Promise<SearchR
   // Step-level search (only when a text query is present)
   let stepMatches: SearchResult["stepMatches"] = [];
   if (q) {
-    const stepRows = await db.select().from(journeyStepsTable).where(
-      or(
-        ilike(journeyStepsTable.title, term),
-        ilike(journeyStepsTable.scripture, term),
-        ilike(journeyStepsTable.teachingContent, term),
-        ilike(journeyStepsTable.prayer, term),
-        ilike(journeyStepsTable.reflectionQuestion, term),
+    // Exclude steps from soft-deleted parent journeys by scoping to live journey IDs.
+    const liveJourneyIds = (await db
+      .select({ id: journeysTable.id })
+      .from(journeysTable)
+      .where(isNull(journeysTable.deletedAt)))
+      .map(r => r.id);
+
+    const stepRows = liveJourneyIds.length === 0 ? [] : await db.select().from(journeyStepsTable).where(
+      and(
+        or(
+          ilike(journeyStepsTable.title, term),
+          ilike(journeyStepsTable.scripture, term),
+          ilike(journeyStepsTable.teachingContent, term),
+          ilike(journeyStepsTable.prayer, term),
+          ilike(journeyStepsTable.reflectionQuestion, term),
+        ),
+        isNull(journeyStepsTable.deletedAt),
+        inArray(journeyStepsTable.journeyId, liveJourneyIds),
       )
     );
     stepMatches = stepRows.map(r => {

@@ -17,6 +17,7 @@ import * as store from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
+import { logAuditEvent } from "../lib/audit-log.js";
 
 export const sermonCompanionsRouter = Router();
 
@@ -199,8 +200,17 @@ sermonCompanionsRouter.patch("/:companionId", async (req: Request, res: Response
     return;
   }
 
+  const companionId = String(req.params.companionId);
   try {
-    await store.updateCompanion(String(req.params.companionId), { title, status: status as CompanionStatus | undefined });
+    await store.updateCompanion(companionId, { title, status: status as CompanionStatus | undefined });
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: companionId,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { title, status },
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "sermon-companions: updateCompanion failed");
@@ -232,6 +242,14 @@ sermonCompanionsRouter.patch("/:companionId/entries/:day", async (req: Request, 
       res.status(404).json({ error: "Entry not found" });
       return;
     }
+    await logAuditEvent({
+      contentType: "sermon_companion_entry",
+      contentId: `${companionId}:day:${day}`,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { companionId, day, title, status },
+    });
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "sermon-companions: updateEntry failed");
@@ -308,6 +326,14 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
     const notifyMembers = req.body?.notifyMembers === true;
     // P2-12: use atomic helper so companion header + entries publish in a single transaction
     await store.publishCompanionAtomic(id, notifyMembers);
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: id,
+      action: "publish",
+      performedBy: adminId,
+      previousState: null,
+      newState: { status: "Published" },
+    });
     res.json({ ok: true, status: "Published" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: publish failed");
@@ -322,7 +348,16 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
   if (!adminId) return;
 
   try {
-    await store.updateCompanion(String(req.params.companionId), { status: "Draft" });
+    const id = String(req.params.companionId);
+    await store.updateCompanion(id, { status: "Draft" });
+    await logAuditEvent({
+      contentType: "sermon_companion",
+      contentId: id,
+      action: "unpublish",
+      performedBy: adminId,
+      previousState: null,
+      newState: { status: "Draft" },
+    });
     res.json({ ok: true, status: "Draft" });
   } catch (err) {
     logger.error({ err }, "sermon-companions: unpublish failed");

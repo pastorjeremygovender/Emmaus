@@ -13,6 +13,7 @@ import {
   PenSquare,
   FlaskConical,
   BookOpen,
+  ClipboardList,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
@@ -22,6 +23,7 @@ import People from './admin/People';
 import type { PeopleTab } from './admin/People';
 import Testing from './admin/Testing';
 import BibleStudyAdmin from './admin/BibleStudyAdmin';
+import AuditLog from './admin/AuditLog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +33,8 @@ export type AdminSection =
   | 'bible-study'
   | 'people'
   | 'settings'
-  | 'testing';
+  | 'testing'
+  | 'audit-log';
 
 export type AdminNav = {
   section: AdminSection;
@@ -50,6 +53,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
   { id: 'bible-study',    label: 'Bible Study',     Icon: BookOpen },
   { id: 'people',         label: 'People',          Icon: Users },
   { id: 'settings',       label: 'Settings',        Icon: Settings2 },
+  { id: 'audit-log',      label: 'Audit Log',       Icon: ClipboardList },
   { id: 'testing',        label: 'Testing',         Icon: FlaskConical },
 ];
 
@@ -85,6 +89,7 @@ export default function Admin() {
     'bible-study':    'Bible Study',
     people:           'People',
     settings:         'Settings',
+    'audit-log':      'Audit Log',
     testing:          'Testing',
   };
 
@@ -115,6 +120,12 @@ export default function Admin() {
         return (
           <div className="p-6 lg:p-8 max-w-4xl">
             <BibleStudyAdmin />
+          </div>
+        );
+      case 'audit-log':
+        return (
+          <div className="p-0">
+            <AuditLog />
           </div>
         );
       case 'testing':

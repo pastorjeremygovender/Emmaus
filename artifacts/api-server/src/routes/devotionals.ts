@@ -9,24 +9,18 @@ import { Router, type Request, type Response } from "express";
 import * as store from "../lib/devotional-store.js";
 import { logger } from "../lib/logger.js";
 import { requireAuth } from "../emmaus/auth.js";
+import { logAuditEvent } from "../lib/audit-log.js";
+import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 
 export const devotionalsRouter = Router();
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
-// Role is passed via X-User-Role header (same approach as requireSuperAdmin in auth.ts).
+// Role is resolved server-side from user-role-store, never from client headers.
 
-function isAdminRole(req: Request): boolean {
-  // In production, client-supplied role headers cannot be trusted — mirrors the
-  // NODE_ENV gate in auth.ts extractUserId() for X-User-Id.
-  if (process.env.NODE_ENV === "production") return false;
-  const role = req.headers["x-user-role"];
-  return role === "admin" || role === "superAdmin";
-}
-
-function guardAdmin(req: Request, res: Response): string | null {
+async function guardAdmin(req: Request, res: Response): Promise<string | null> {
   const userId = requireAuth(req, res);
   if (!userId) return null;
-  if (!isAdminRole(req)) {
+  if (!(await isAdmin(userId))) {
     res.status(403).json({ error: "Admin access required" });
     return null;
   }
@@ -51,7 +45,7 @@ devotionalsRouter.get("/", async (req: Request, res: Response) => {
 // ─── Admin: list all series ────────────────────────────────────────────────
 
 devotionalsRouter.get("/admin", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  if (!(await guardAdmin(req, res))) return;
   try {
     const series = await store.listSeries();
     res.json(series);
@@ -79,7 +73,7 @@ devotionalsRouter.get("/progress/all", async (req: Request, res: Response) => {
 // ─── Admin: create series ──────────────────────────────────────────────────
 
 devotionalsRouter.post("/", async (req: Request, res: Response) => {
-  const adminId = guardAdmin(req, res);
+  const adminId = await guardAdmin(req, res);
   if (!adminId) return;
   const { title, description, seriesType } = req.body;
   if (!title?.trim()) {
@@ -91,6 +85,14 @@ devotionalsRouter.post("/", async (req: Request, res: Response) => {
       { title: title.trim(), description, seriesType },
       adminId
     );
+    await logAuditEvent({
+      contentType: "devotional_series",
+      contentId: String(series.id),
+      action: "create",
+      performedBy: adminId,
+      previousState: null,
+      newState: { id: series.id, title: series.title, status: series.status },
+    });
     res.status(201).json(series);
   } catch (err) {
     logger.error({ err }, "createSeries failed");
@@ -135,7 +137,8 @@ devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
 // ─── Admin: update series ──────────────────────────────────────────────────
 
 devotionalsRouter.patch("/:id", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
   const { title, description, seriesType, status, notifyMembers } = req.body;
   try {
     // Build update payload with only the fields the caller explicitly sent —
@@ -147,11 +150,26 @@ devotionalsRouter.patch("/:id", async (req: Request, res: Response) => {
     if (seriesType !== undefined)     updateData.seriesType = seriesType;
     if (status !== undefined)        updateData.status = status;
     if (notifyMembers !== undefined)  updateData.notifyMembers = notifyMembers;
-    const updated = await store.updateSeries(
-      String(req.params.id),
-      updateData
-    );
+    const seriesId = String(req.params.id);
+    const seriesBefore = await store.getSeriesById(seriesId);
+    const updated = await store.updateSeries(seriesId, updateData);
     if (!updated) { res.status(404).json({ error: "Series not found" }); return; }
+
+    let auditAction: "edit" | "publish" | "unpublish" | "archive" = "edit";
+    if (status) {
+      if (status === "Published" && seriesBefore?.status !== "Published") auditAction = "publish";
+      else if (status === "Draft" && seriesBefore?.status === "Published") auditAction = "unpublish";
+      else if (status === "Archived") auditAction = "archive";
+    }
+    await logAuditEvent({
+      contentType: "devotional_series",
+      contentId: seriesId,
+      action: auditAction,
+      performedBy: adminId,
+      previousState: seriesBefore ? { id: seriesBefore.id, title: seriesBefore.title, status: seriesBefore.status } : null,
+      newState: { id: updated.id, title: updated.title, status: updated.status },
+    });
+
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "updateSeries failed");
@@ -162,9 +180,20 @@ devotionalsRouter.patch("/:id", async (req: Request, res: Response) => {
 // ─── Admin: archive series ────────────────────────────────────────────────
 
 devotionalsRouter.delete("/:id", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const seriesId = String(req.params.id);
   try {
-    await store.deleteSeries(String(req.params.id));
+    const seriesBefore = await store.getSeriesById(seriesId);
+    await store.deleteSeries(seriesId);
+    await logAuditEvent({
+      contentType: "devotional_series",
+      contentId: seriesId,
+      action: "archive",
+      performedBy: adminId,
+      previousState: seriesBefore ? { id: seriesBefore.id, title: seriesBefore.title, status: seriesBefore.status } : null,
+      newState: { status: "Archived" },
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "deleteSeries failed");
@@ -175,9 +204,35 @@ devotionalsRouter.delete("/:id", async (req: Request, res: Response) => {
 // ─── Admin: permanent delete ────────────────────────────────────────────────
 
 devotionalsRouter.delete("/:id/permanent", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+
+  // Permanent hard delete — Super Administrators only.
+  if ((await getUserRole(adminId)) !== "superAdmin") {
+    res.status(403).json({ error: "Super admin access required for permanent deletion" });
+    return;
+  }
+
+  // Require explicit confirmation before permanently destroying authored content.
+  if ((req.body as Record<string, unknown>)?.confirm !== "PERMANENTLY_DELETE") {
+    res.status(400).json({
+      error: "Permanent deletion requires { \"confirm\": \"PERMANENTLY_DELETE\" } in the request body.",
+    });
+    return;
+  }
+
+  const seriesId = String(req.params.id);
   try {
-    await store.permanentDeleteSeries(String(req.params.id));
+    const seriesBefore = await store.getSeriesById(seriesId);
+    await store.permanentDeleteSeries(seriesId);
+    await logAuditEvent({
+      contentType: "devotional_series",
+      contentId: seriesId,
+      action: "permanent_delete",
+      performedBy: adminId,
+      previousState: seriesBefore ? { id: seriesBefore.id, title: seriesBefore.title, status: seriesBefore.status } : null,
+      newState: null,
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "permanentDeleteSeries failed");
@@ -188,7 +243,8 @@ devotionalsRouter.delete("/:id/permanent", async (req: Request, res: Response) =
 // ─── Admin: upsert entry ────────────────────────────────────────────────────
 
 devotionalsRouter.put("/:id/entries/:day", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
   const seriesId = String(req.params.id);
   const day = parseInt(String(req.params.day), 10);
   if (isNaN(day) || day < 1) {
@@ -197,6 +253,14 @@ devotionalsRouter.put("/:id/entries/:day", async (req: Request, res: Response) =
   }
   try {
     const entry = await store.upsertEntry(seriesId, day, req.body);
+    await logAuditEvent({
+      contentType: "devotional_entry",
+      contentId: `${seriesId}:day:${day}`,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { seriesId, day },
+    });
     res.json(entry);
   } catch (err) {
     logger.error({ err }, "upsertEntry failed");
@@ -207,11 +271,20 @@ devotionalsRouter.put("/:id/entries/:day", async (req: Request, res: Response) =
 // ─── Admin: delete entry ────────────────────────────────────────────────────
 
 devotionalsRouter.delete("/:id/entries/:day", async (req: Request, res: Response) => {
-  if (!guardAdmin(req, res)) return;
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
   const seriesId = String(req.params.id);
   const day = parseInt(String(req.params.day), 10);
   try {
     await store.deleteEntry(seriesId, day);
+    await logAuditEvent({
+      contentType: "devotional_entry",
+      contentId: `${seriesId}:day:${day}`,
+      action: "delete",
+      performedBy: adminId,
+      previousState: { seriesId, day },
+      newState: null,
+    });
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "deleteEntry failed");

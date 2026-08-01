@@ -147,7 +147,12 @@ export function archiveSeries(id: string, auth?: AdminAuth): Promise<void> {
 }
 
 export function permanentDeleteSeries(id: string, auth?: AdminAuth): Promise<void> {
-  return request<void>(apiUrl(`/${id}/permanent`), { method: "DELETE", userId: auth?.userId, userRole: auth?.userRole });
+  return request<void>(apiUrl(`/${id}/permanent`), {
+    method: "DELETE",
+    body: JSON.stringify({ confirm: "PERMANENTLY_DELETE" }),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
 }
 
 // ─── Admin: Entries ───────────────────────────────────────────────────────────
