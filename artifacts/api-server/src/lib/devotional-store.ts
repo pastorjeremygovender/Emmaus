@@ -215,10 +215,30 @@ export async function getProgress(
 }
 
 export async function getAllProgressForUser(userId: string): Promise<DevotionalProgress[]> {
-  return db
-    .select()
-    .from(devotionalProgressTable)
-    .where(eq(devotionalProgressTable.userId, userId));
+  // Use raw SQL so hidden_from_today (added via startup migration) is included
+  // in the result. Drizzle select() only returns schema-defined columns, and
+  // hidden_from_today is not in the Drizzle schema yet to avoid a camelCase
+  // vs snake_case naming conflict with the existing API contract.
+  const res = await pool.query(
+    `SELECT * FROM devotional_progress WHERE user_id = $1`,
+    [userId],
+  );
+  // Map DB snake_case columns to the DevotionalProgress shape.
+  // hidden_from_today passes through as-is (snake_case) because the client
+  // and Walk.tsx both access it as progress.hidden_from_today.
+  return res.rows.map((row) => ({
+    id: String(row.id),
+    userId: String(row.user_id),
+    seriesId: String(row.series_id),
+    currentDay: Number(row.current_day ?? 1),
+    completedDays: Array.isArray(row.completed_days) ? row.completed_days : [],
+    status: String(row.status ?? "active"),
+    startedAt: row.started_at ? new Date(row.started_at) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(),
+    lastOpenedAt: row.last_opened_at ? new Date(row.last_opened_at) : null,
+    // Include the startup-migration column so Walk.tsx can filter hidden cards.
+    hidden_from_today: row.hidden_from_today ?? false,
+  })) as unknown as DevotionalProgress[];
 }
 
 export async function startSeries(
