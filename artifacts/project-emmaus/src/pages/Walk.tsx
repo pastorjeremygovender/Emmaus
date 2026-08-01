@@ -119,7 +119,10 @@ function WalkPauseDialog({
           </button>
         </div>
         <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress will be kept exactly as it is. You can resume from the Next Steps tab whenever you're ready.
+          Your progress will be kept exactly as it is. Pausing stops your daily rhythm until you choose to resume from the Next Steps tab.
+        </p>
+        <p className="text-[13px] text-muted-foreground/70 leading-relaxed -mt-2">
+          To simply remove this card from Today's Steps without pausing, use <span className="font-medium text-muted-foreground">Hide from Today's Steps</span> instead.
         </p>
         <div className="flex gap-3">
           <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause</Button>
