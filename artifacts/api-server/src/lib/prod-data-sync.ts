@@ -42,19 +42,11 @@ const OLD_JOURNEY_IDS = [
 
 export async function runProdDataSync(): Promise<void> {
   try {
-    // ── Guard: only proceed when chapter overviews are missing ───────────
+    // ── Quick check: how many overviews do we have? ───────────────────────
     const { rows: [{ cnt }] } = await pool.query<{ cnt: string }>(
       "SELECT COUNT(*) AS cnt FROM bible_chapter_overviews",
     );
     const overviewCount = parseInt(cnt, 10);
-
-    if (overviewCount > 0) {
-      logger.info(
-        { overviewCount },
-        "prod-data-sync: chapter overviews already present — skipping full sync",
-      );
-      // Still run the journey reconciliation in case that part was missed.
-    }
 
     // ── Load seed data ────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,43 +67,65 @@ export async function runProdDataSync(): Promise<void> {
     }
 
     // ── 1. Chapter overviews ─────────────────────────────────────────────
-    if (overviewCount === 0) {
-      let inserted = 0;
-      for (const ov of overviews) {
-        try {
-          const r = await pool.query(
-            `INSERT INTO bible_chapter_overviews
-               (id, book_id, chapter, summary,
-                main_themes, important_people, important_locations, passage_divisions,
-                key_verse, key_verse_start, key_verse_end,
-                book_connection, jesus_connection,
-                status, created_by, updated_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-             ON CONFLICT (book_id, chapter) DO NOTHING`,
-            [
-              ov.id, ov.book_id, ov.chapter, ov.summary,
-              JSON.stringify(ov.main_themes ?? []),
-              JSON.stringify(ov.important_people ?? []),
-              JSON.stringify(ov.important_locations ?? []),
-              JSON.stringify(ov.passage_divisions ?? []),
-              ov.key_verse ?? "", ov.key_verse_start ?? null, ov.key_verse_end ?? null,
-              ov.book_connection ?? "", ov.jesus_connection ?? "",
-              ov.status ?? "Published", ov.created_by ?? "migration", ov.updated_by ?? "migration",
-            ],
-          );
-          inserted += r.rowCount ?? 0;
-        } catch (err) {
-          logger.warn(
-            { err, book_id: ov.book_id, chapter: ov.chapter },
-            "prod-data-sync: chapter overview insert failed",
-          );
+    // Always upsert — ensures any newly authored overview reaches production
+    // on the next deploy, not just when the table is empty.
+    let overviewsInserted = 0;
+    let overviewsUpdated = 0;
+    for (const ov of overviews) {
+      try {
+        const jsonbStr = (v: unknown) =>
+          v != null ? (typeof v === "string" ? v : JSON.stringify(v)) : "[]";
+        const r = await pool.query(
+          `INSERT INTO bible_chapter_overviews
+             (id, book_id, chapter, summary,
+              main_themes, important_people, important_locations, passage_divisions,
+              key_verse, key_verse_start, key_verse_end,
+              book_connection, jesus_connection,
+              status, created_by, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           ON CONFLICT (book_id, chapter) DO UPDATE SET
+             summary            = EXCLUDED.summary,
+             main_themes        = EXCLUDED.main_themes,
+             important_people   = EXCLUDED.important_people,
+             important_locations = EXCLUDED.important_locations,
+             passage_divisions  = EXCLUDED.passage_divisions,
+             key_verse          = EXCLUDED.key_verse,
+             key_verse_start    = EXCLUDED.key_verse_start,
+             key_verse_end      = EXCLUDED.key_verse_end,
+             book_connection    = EXCLUDED.book_connection,
+             jesus_connection   = EXCLUDED.jesus_connection,
+             status             = EXCLUDED.status,
+             updated_by         = EXCLUDED.updated_by`,
+          [
+            ov.id, ov.book_id, ov.chapter, ov.summary ?? "",
+            jsonbStr(ov.main_themes),
+            jsonbStr(ov.important_people),
+            jsonbStr(ov.important_locations),
+            jsonbStr(ov.passage_divisions),
+            ov.key_verse ?? "", ov.key_verse_start ?? null, ov.key_verse_end ?? null,
+            ov.book_connection ?? "", ov.jesus_connection ?? "",
+            ov.status ?? "Published",
+            ov.created_by ?? "seed", ov.updated_by ?? "seed",
+          ],
+        );
+        if ((r.rowCount ?? 0) > 0) {
+          // rowCount=1 on both INSERT and UPDATE for ON CONFLICT DO UPDATE.
+          // Track by comparing against the pre-existing count.
+          overviewsInserted++;
         }
+      } catch (err) {
+        logger.warn(
+          { err, book_id: ov.book_id, chapter: ov.chapter },
+          "prod-data-sync: chapter overview upsert failed",
+        );
       }
-      logger.info(
-        { total: overviews.length, inserted },
-        "prod-data-sync: chapter overviews synced",
-      );
     }
+    // Rows updated = upserts that touched existing rows.
+    overviewsUpdated = overviewsInserted - Math.max(0, overviews.length - overviewCount);
+    logger.info(
+      { seed: overviews.length, dbBefore: overviewCount, upserted: overviewsInserted },
+      "prod-data-sync: chapter overviews synced",
+    );
 
     // ── 2. Remove old journey IDs not present in dev ──────────────────────
     for (const jid of OLD_JOURNEY_IDS) {

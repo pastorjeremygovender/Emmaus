@@ -24,12 +24,12 @@ args = "data-safety: content integrity"
 name = "data-safety: content integrity"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run checksum:content > /tmp/pre-deploy-checksum.json && pnpm --filter @workspace/api-server run test:integrity"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run export:seed && pnpm --filter @workspace/api-server run checksum:content > /tmp/pre-deploy-checksum.json && pnpm --filter @workspace/api-server run test:integrity"
 
 [agent]
 stack = "PNPM_WORKSPACE"
