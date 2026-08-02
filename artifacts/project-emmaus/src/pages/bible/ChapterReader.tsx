@@ -16,6 +16,7 @@ import { getVerseSermonLinks } from '@/data/sermon-verse-links';
 import { BibleReferencePicker } from '@/components/BibleReferencePicker';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
+import { BottomNav } from '@/components/BottomNav';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -476,15 +477,12 @@ export default function ChapterReader() {
           </div>
         )}
 
-        {/* Chapter overview banner — one-sentence "chapter at a glance" */}
-        {chapterOverview && (
-          <div className="px-4 pb-2">
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-primary/5 border border-primary/15">
-              <BookOpen size={13} className="text-primary/70 mt-0.5 shrink-0" />
-              <p className="text-[12px] text-muted-foreground leading-[1.5] italic">{chapterOverview}</p>
-            </div>
-          </div>
-        )}
+        {/* Verse-tap hint — one compact line, no card */}
+        <div className="px-5 pb-2">
+          <p className="text-[11px] text-muted-foreground/60 text-center">
+            Tap any verse to open Bible Study options.
+          </p>
+        </div>
 
         {/* Preached Here badge — appears when ICC sermons reference this chapter */}
         {preachedHereSermons.length > 0 && (
@@ -508,7 +506,11 @@ export default function ChapterReader() {
       </header>
 
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
-      <main className="px-5 pt-8 pb-28 max-w-[600px] mx-auto">
+      {/* pb accounts for: chapter nav (h-14=3.5rem) + BottomNav (h-16=4rem) + safe-area + breathing room */}
+      <main
+        className="px-5 pt-8 max-w-[600px] mx-auto"
+        style={{ paddingBottom: 'calc(9rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 size={28} className="text-primary animate-spin" />
@@ -606,8 +608,15 @@ export default function ChapterReader() {
         )}
       </main>
 
-      {/* ── Fixed Bottom Toolbar ─────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 bg-background/95 backdrop-blur-sm border-t border-border/50 safe-area-bottom">
+      {/* ── Standard App Navigation ─────────────────────────────────────────── */}
+      <BottomNav />
+
+      {/* ── Chapter Navigation — sits directly above the app nav ─────────────── */}
+      {/* bottom = BottomNav height (h-16=4rem) + device safe-area inset */}
+      <div
+        className="fixed left-0 right-0 z-20 bg-background/95 backdrop-blur-sm border-t border-border/50"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <div className="max-w-[600px] mx-auto">
 
           {/* Chapter navigation row */}

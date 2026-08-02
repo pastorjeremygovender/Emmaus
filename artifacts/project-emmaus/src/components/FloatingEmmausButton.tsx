@@ -240,7 +240,12 @@ export function FloatingEmmausButton() {
     <div
       className="fixed z-40"
       style={{
-        bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))',
+        // On the Bible chapter reader both a chapter nav (h-14=3.5rem) and the
+        // standard BottomNav (h-16=4rem) are stacked at the bottom.
+        // Raise the FAB above both bars on that route; use the standard offset elsewhere.
+        bottom: location.startsWith('/bible/read/')
+          ? 'calc(8.5rem + env(safe-area-inset-bottom, 0px))'
+          : 'calc(5rem + env(safe-area-inset-bottom, 0px))',
         right: '16px',
       }}
     >

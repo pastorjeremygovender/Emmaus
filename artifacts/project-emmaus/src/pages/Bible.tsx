@@ -16,6 +16,7 @@ export default function Bible() {
   const { lastRead, favourites, bookmarks, notes, prayers, highlights, translationId, setTranslation } = useBible();
   const [showTranslations, setShowTranslations] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [copyrightExpanded, setCopyrightExpanded] = useState(false);
   const { translations } = useTranslations();
 
   const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
@@ -29,10 +30,32 @@ export default function Bible() {
         {/* Header */}
         <header className="space-y-1">
           <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
-          {activeTab === 'home' && (
-            <p className="text-[13px] text-muted-foreground">
-              {currentTranslation?.name} · {currentTranslation?.copyright}
-            </p>
+          {activeTab === 'home' && currentTranslation && (
+            <div className="space-y-0.5">
+              {/* Line 1: translation name + abbreviation */}
+              <p className="text-[13px] text-muted-foreground">
+                {currentTranslation.name} ({currentTranslation.abbreviation})
+              </p>
+              {/* Line 2: collapsed short attribution; tap to reveal full legal text */}
+              {currentTranslation.copyright.length > 60 ? (
+                <button
+                  onClick={() => setCopyrightExpanded(v => !v)}
+                  className="flex items-start gap-1 text-left w-full group"
+                  aria-expanded={copyrightExpanded}
+                  aria-label={copyrightExpanded ? 'Collapse copyright notice' : 'Show full copyright notice'}
+                >
+                  <p className="text-[11px] text-muted-foreground/70 flex-1 leading-relaxed">
+                    {copyrightExpanded ? currentTranslation.copyright : shortCopyright(currentTranslation.copyright)}
+                  </p>
+                  <ChevronDown
+                    size={12}
+                    className={['text-muted-foreground/50 mt-0.5 shrink-0 transition-transform duration-150', copyrightExpanded ? 'rotate-180' : ''].join(' ')}
+                  />
+                </button>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/70">{currentTranslation.copyright}</p>
+              )}
+            </div>
           )}
         </header>
 
@@ -274,7 +297,8 @@ export default function Bible() {
                           <div className={['text-[14px] font-medium', t.id === translationId ? 'text-primary' : 'text-foreground'].join(' ')}>
                             {t.name}
                           </div>
-                          <div className="text-[11px] text-muted-foreground">{t.copyright}</div>
+                          {/* Show short-form attribution in the list; full text via the header disclosure */}
+                          <div className="text-[11px] text-muted-foreground">{shortCopyright(t.copyright)}</div>
                         </div>
                         {t.id === translationId && (
                           <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">Active</span>
@@ -306,4 +330,26 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       {children}
     </h2>
   );
+}
+
+/**
+ * Extract a compact attribution from a full copyright string.
+ *
+ * Strategy:
+ *  1. Look for a "© year …" clause — return the text up to and including the
+ *     first sentence that contains it.
+ *  2. Fallback: return the first sentence (up to the first ". ").
+ *  3. If there is no sentence break, return the full string unchanged (it is
+ *     already short enough).
+ *
+ * The full legal text is never removed — it stays in the copyright prop and
+ * is displayed when the user taps "expand" in the header disclosure.
+ */
+function shortCopyright(copyright: string): string {
+  // Try to extract the "© …" sentence
+  const cMatch = copyright.match(/©[^.]*\./);
+  if (cMatch) return cMatch[0].trim();
+  // Fallback: first sentence
+  const dotIdx = copyright.indexOf('. ');
+  return dotIdx > -1 ? copyright.slice(0, dotIdx + 1) : copyright;
 }
