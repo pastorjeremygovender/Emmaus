@@ -960,7 +960,7 @@ export default function Walk() {
               transition={{ duration: 0.5, delay: 0.15 }}
             >
               <EmmausContentCard
-                label="SERMON COMPANION"
+                label={sc.isCurrentWeek ? "THIS WEEK'S SERMON" : "SERMON COMPANION"}
                 title={sc.title}
                 description={description}
                 metadata={`${sc.numberOfDays} Days`}
@@ -987,14 +987,6 @@ export default function Walk() {
                       void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
                     }}
                   />
-                }
-                secondaryAction={
-                  sc.currentDay > 1
-                    ? {
-                        label: 'View Previous →',
-                        onPress: () => setLocation(`/sermon-companion/${sc.id}/previous?from=walk`),
-                      }
-                    : undefined
                 }
               />
             </motion.section>

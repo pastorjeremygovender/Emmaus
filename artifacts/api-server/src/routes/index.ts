@@ -19,10 +19,13 @@ import roomsRouter from "./rooms";
 import { badgesRouter } from "./badges";
 import { auditLogRouter } from "./audit-log";
 import prodMigrationRouter from "./prod-migration";
+import storageRouter from "./storage";
+import { sermonsRouter } from "./sermons";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(storageRouter);
 router.use(authRouter);
 router.use(emmausRouter);
 router.use(bibleRouter);
@@ -42,5 +45,6 @@ router.use("/rooms", roomsRouter);
 router.use(badgesRouter);
 router.use(auditLogRouter);
 router.use(prodMigrationRouter);
+router.use("/sermons", sermonsRouter);
 
 export default router;

@@ -12,6 +12,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "./logger.js";
+import { upsertByLegacyId } from "./canonical-sermon-store.js";
 
 const DATA_DIR = join(process.cwd(), "data", "sermons");
 const DRAFTS_FILE = join(DATA_DIR, "admin-drafts.json");
@@ -103,6 +104,10 @@ export async function upsertAdminSermon(
     };
     records[idx] = merged;
     await atomicWrite(records);
+    // Dual-write: keep canonical DB in sync
+    syncToCanonical(merged).catch(err =>
+      logger.warn({ err, id: merged.id }, "admin-sermon-store: canonical sync failed (non-fatal)")
+    );
     return merged;
   }
 
@@ -113,6 +118,10 @@ export async function upsertAdminSermon(
   };
   records.push(record);
   await atomicWrite(records);
+  // Dual-write: keep canonical DB in sync
+  syncToCanonical(record).catch(err =>
+    logger.warn({ err, id: record.id }, "admin-sermon-store: canonical sync failed (non-fatal)")
+  );
   return record;
 }
 
@@ -145,5 +154,62 @@ export async function updateAdminSermon(
   };
   records[idx] = updated;
   await atomicWrite(records);
+  // Dual-write: keep canonical DB in sync
+  syncToCanonical(updated).catch(err =>
+    logger.warn({ err, id }, "admin-sermon-store: canonical sync failed (non-fatal)")
+  );
   return updated;
+}
+
+// ─── Canonical DB sync helper ─────────────────────────────────────────────────
+
+/** Idempotently mirror an AdminSermonRecord into the canonical sermons DB table. */
+async function syncToCanonical(record: AdminSermonRecord): Promise<void> {
+  // Lazy parse — avoids pulling this in on every import
+  const { upsertByLegacyId: upsert } = await import("./canonical-sermon-store.js");
+
+  // Map status: "draft"/"review"/"published" → "Draft"/"Review"/"Published"
+  function mapStatus(s: string): "Draft" | "Review" | "Published" {
+    if (s === "published") return "Published";
+    if (s === "review") return "Review";
+    return "Draft";
+  }
+
+  // Simple scripture book ID extraction
+  function parseBookIds(ref: string): string[] {
+    if (!ref) return [];
+    const lower = ref.toLowerCase();
+    const bookMap: Array<[RegExp, string]> = [
+      [/\bjohn\b/, "john"], [/\bluke\b/, "luke"], [/\bmark\b/, "mark"],
+      [/\bmatthew\b/, "matthew"], [/\bacts\b/, "acts"], [/\bromans\b/, "romans"],
+      [/\bgenesis\b/, "genesis"], [/\bpsalm/, "psalms"], [/\bproverbs\b/, "proverbs"],
+      [/\bisaiah\b/, "isaiah"], [/\bephesians\b/, "ephesians"],
+      [/\bphilippians\b/, "philippians"], [/\bhebrews\b/, "hebrews"],
+      [/\bcolossians\b/, "colossians"], [/\bgalatians\b/, "galatians"],
+    ];
+    return bookMap.filter(([re]) => re.test(lower)).map(([, id]) => id);
+  }
+
+  await upsert({
+    legacyJsonId:       record.id,
+    title:              record.title ?? "",
+    speaker:            record.speaker ?? "",
+    sermonDate:         record.sermonDate ?? "",
+    series:             record.series ?? "",
+    scriptureReference: record.scriptureReference ?? "",
+    scriptureBookIds:   parseBookIds(record.scriptureReference ?? ""),
+    scriptureChapters:  [],
+    youtubeUrl:         record.youtubeUrl ?? "",
+    youtubeVideoId:     "",
+    audioPath:          "",
+    notes:              "",
+    transcript:         record.sermonTranscript ?? record.transcript ?? "",
+    transcriptStatus:   record.transcriptStatus ?? "none",
+    summary:            record.summary ?? "",
+    themes:             record.topics ?? [],
+    sections:           [],
+    keywords:           record.keywords ?? [],
+    mainTheme:          record.mainTheme ?? "",
+    status:             mapStatus(record.status ?? "draft"),
+  });
 }

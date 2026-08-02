@@ -6,6 +6,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { runStartupMigrations } from "./lib/startup-migrations.js";
 import { runProdDataSync } from "./lib/prod-data-sync.js";
+import { runSermonDataMigration } from "./lib/sermon-data-migration.js";
 
 const app: Express = express();
 
@@ -38,6 +39,7 @@ app.use("/api", router);
 // Run startup migrations on boot (non-blocking — never prevents startup)
 runStartupMigrations()
   .then(() => runProdDataSync())
+  .then(() => runSermonDataMigration())
   .catch(err =>
     logger.warn({ err }, "Startup migrations / prod-data-sync encountered a non-fatal error")
   );

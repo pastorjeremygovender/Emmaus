@@ -1,0 +1,304 @@
+/**
+ * sermons.ts — Canonical Sermon API routes.
+ *
+ * Member endpoints (require auth only):
+ *   GET  /api/sermons                   — list published sermons
+ *   GET  /api/sermons/:id               — get one published sermon
+ *
+ * Admin endpoints (require admin or superAdmin role):
+ *   GET    /api/sermons/admin             — list all sermons (any status)
+ *   GET    /api/sermons/admin/:id         — get one sermon by UUID
+ *   POST   /api/sermons/admin             — create new canonical sermon
+ *   PATCH  /api/sermons/admin/:id         — update sermon fields
+ *   DELETE /api/sermons/admin/:id         — delete sermon (+ companion FK cascade)
+ *   POST   /api/sermons/admin/:id/publish   — publish sermon
+ *   POST   /api/sermons/admin/:id/unpublish — return sermon to Draft
+ *   POST   /api/sermons/admin/:id/audio-upload-url — presigned GCS upload URL for audio
+ *
+ * Design intent:
+ * - This is the SINGLE SOURCE OF TRUTH for all sermon content.
+ * - `/api/admin-sermons` (file-backed JSON) is kept for backward-compat during
+ *   the transition period, but all new creation/editing goes through this router.
+ * - Published canonical sermons suppresses matching YouTube archive results in
+ *   Ask Emmaus and Preached Here (suppression happens in retrieval layers).
+ */
+
+import { Router, type Request, type Response } from "express";
+import * as store from "../lib/canonical-sermon-store.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
+import { deleteSermonCompanionContent } from "../lib/sermon-companion-store.js";
+import { requireAuth } from "../emmaus/auth.js";
+import { isAdmin } from "../lib/user-role-store.js";
+import { logger } from "../lib/logger.js";
+
+export const sermonsRouter = Router();
+const objectStorage = new ObjectStorageService();
+
+// ─── Auth helpers ──────────────────────────────────────────────────────────────
+
+async function guardAdmin(req: Request, res: Response): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "Admin access required" });
+    return null;
+  }
+  return userId;
+}
+
+// ─── Member: list published sermons ──────────────────────────────────────────
+
+sermonsRouter.get("/", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const sermons = await store.listPublishedSermons();
+    res.set("Cache-Control", "no-store");
+    res.json(sermons);
+  } catch (err) {
+    logger.error({ err }, "sermons: listPublished failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Member: get one published sermon ────────────────────────────────────────
+
+sermonsRouter.get("/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  // Catch the "admin" literal so it doesn't get matched here
+  if (req.params.id === "admin") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  try {
+    const sermon = await store.getSermonById(String(req.params.id));
+    if (!sermon || sermon.status !== "Published") {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: getMember failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: list all sermons ──────────────────────────────────────────────────
+
+sermonsRouter.get("/admin", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const sermons = await store.getAllSermons();
+    res.set("Cache-Control", "no-store");
+    res.json(sermons);
+  } catch (err) {
+    logger.error({ err }, "sermons: listAll failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: get one sermon ────────────────────────────────────────────────────
+
+sermonsRouter.get("/admin/:id", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const sermon = await store.getSermonById(String(req.params.id));
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: getAdmin failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: create new canonical sermon ──────────────────────────────────────
+
+sermonsRouter.post("/admin", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const body = req.body as Record<string, unknown>;
+
+  if (!body?.title || typeof body.title !== "string" || !body.title.trim()) {
+    res.status(400).json({ error: "title is required" });
+    return;
+  }
+
+  try {
+    const sermon = await store.createSermon({
+      legacyJsonId:       null,
+      title:              String(body.title ?? ""),
+      speaker:            String(body.speaker ?? ""),
+      sermonDate:         String(body.sermonDate ?? ""),
+      series:             String(body.series ?? ""),
+      scriptureReference: String(body.scriptureReference ?? ""),
+      scriptureBookIds:   Array.isArray(body.scriptureBookIds) ? body.scriptureBookIds as string[] : [],
+      scriptureChapters:  Array.isArray(body.scriptureChapters) ? body.scriptureChapters as number[] : [],
+      youtubeUrl:         String(body.youtubeUrl ?? ""),
+      youtubeVideoId:     String(body.youtubeVideoId ?? ""),
+      audioPath:          String(body.audioPath ?? ""),
+      notes:              String(body.notes ?? ""),
+      transcript:         String(body.transcript ?? ""),
+      transcriptStatus:   (body.transcriptStatus as store.CanonicalSermon["transcriptStatus"]) ?? "none",
+      summary:            String(body.summary ?? ""),
+      themes:             Array.isArray(body.themes) ? body.themes as string[] : [],
+      sections:           Array.isArray(body.sections) ? body.sections as store.SermonSection[] : [],
+      keywords:           Array.isArray(body.keywords) ? body.keywords as string[] : [],
+      mainTheme:          String(body.mainTheme ?? ""),
+      status:             (body.status as store.CanonicalSermon["status"]) ?? "Draft",
+    });
+    res.status(201).json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: create failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: update sermon fields ──────────────────────────────────────────────
+
+sermonsRouter.patch("/admin/:id", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+  const body = req.body as store.UpdateSermonData;
+
+  // Guard: status must be a valid value if provided
+  if (body.status !== undefined && !["Draft", "Review", "Published"].includes(body.status)) {
+    res.status(400).json({ error: "status must be Draft, Review, or Published" });
+    return;
+  }
+
+  try {
+    const updated = await store.updateSermon(id, body);
+    if (!updated) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.json(updated);
+  } catch (err) {
+    logger.error({ err }, "sermons: update failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: publish sermon ────────────────────────────────────────────────────
+
+sermonsRouter.post("/admin/:id/publish", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+  try {
+    const sermon = await store.publishSermon(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: publish failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: unpublish sermon ──────────────────────────────────────────────────
+
+sermonsRouter.post("/admin/:id/unpublish", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+  try {
+    const sermon = await store.unpublishSermon(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: unpublish failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: delete sermon (cascade companion) ─────────────────────────────────
+//
+// Deletes the canonical sermon record. If there is a linked sermon companion
+// (sermon_companion.sermon_uuid = this id), it is also deleted via the companion
+// store cascade. The legacy sermon_id text column is used as a fallback.
+
+sermonsRouter.delete("/admin/:id", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+
+  try {
+    const sermon = await store.getSermonById(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+
+    // Delete companion content if linked (uses legacyJsonId as the sermon_id key)
+    if (sermon.legacyJsonId) {
+      await deleteSermonCompanionContent({
+        sermonId: sermon.legacyJsonId,
+        companionJourneyId: null,
+      }).catch(err =>
+        logger.warn({ err, sermonId: id }, "sermons: companion delete failed (continuing)")
+      );
+    }
+
+    const deleted = await store.deleteSermon(id);
+    if (!deleted) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+
+    logger.info({ sermonId: id, title: sermon.title }, "sermons: deleted");
+    res.json({ success: true, deleted: { id, title: sermon.title } });
+  } catch (err) {
+    logger.error({ err }, "sermons: delete failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: request presigned audio upload URL ────────────────────────────────
+//
+// Returns a GCS presigned PUT URL so the client can upload audio directly.
+// The objectPath returned here should be stored in sermon.audioPath after upload.
+// Body: { name: string, size: number, contentType: string }
+
+sermonsRouter.post("/admin/:id/audio-upload-url", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+  const { name, size, contentType } = req.body as {
+    name?: string;
+    size?: number;
+    contentType?: string;
+  };
+
+  if (!name || !size || !contentType) {
+    res.status(400).json({ error: "name, size, and contentType are required" });
+    return;
+  }
+
+  try {
+    // Verify sermon exists
+    const sermon = await store.getSermonById(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+
+    const uploadURL = await objectStorage.getObjectEntityUploadURL();
+    const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
+
+    // Auto-update the sermon's audioPath so it's stored immediately
+    await store.updateSermon(id, { audioPath: objectPath });
+
+    res.json({ uploadURL, objectPath });
+  } catch (err) {
+    logger.error({ err, sermonId: id }, "sermons: audio-upload-url failed");
+    res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});

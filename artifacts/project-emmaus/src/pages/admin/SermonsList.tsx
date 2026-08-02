@@ -1,22 +1,25 @@
 /**
- * SermonsList — Sermon Companions list screen.
+ * SermonsList — Canonical Sermons list screen.
  *
- * Replaces the previous horizontal-scrolling AdminTable with the shared
- * ContentStudioListItem row design. Each row shows:
- *   icon · title · speaker + date + scripture + transcript + companion · status · actions
+ * Data source: canonical PostgreSQL sermons table via /api/sermons/admin.
+ * Status values: "Draft" | "Review" | "Published" (title-case).
  *
  * Actions: Edit | Quick Publish/Unpublish | Delete
  */
-import React, { useState, useMemo } from 'react';
-import { useAdmin } from '@/contexts/AdminContext';
-import { useJourney } from '@/contexts/JourneyContext';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
-  ArrowLeft, X,
+  ArrowLeft, X, RefreshCw,
 } from 'lucide-react';
-import { deleteServerSermon, patchServerSermon } from '@/lib/sermon-generator-api';
-import type { Sermon } from '@/lib/admin-demo-data';
+import {
+  type CanonicalSermon,
+  listAdminSermons,
+  publishAdminSermon,
+  unpublishAdminSermon,
+  deleteAdminSermon,
+  createAdminSermon,
+} from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './content-studio/ContentStudioListPage';
@@ -28,17 +31,13 @@ type Props = {
   onOpenCompanion: (sermonId: string, companionId: string) => void;
 };
 
-const STATUS_TABS = ['All', 'Draft', 'Published'] as const;
+const STATUS_TABS = ['All', 'Draft', 'Review', 'Published'] as const;
 
 const TRANSCRIPT_LABELS: Record<string, string> = {
   none: 'No transcript',
   pending: 'Transcript pending',
   complete: 'Transcript complete',
 };
-
-function isUUID(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-}
 
 function formatDate(raw: string): string {
   if (!raw) return '';
@@ -47,80 +46,90 @@ function formatDate(raw: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: Props) {
-  const { sermons, addSermon, removeSermon, updateSermon, settings, updateSettings } = useAdmin();
-  const { journeys } = useJourney();
+/** Map a canonical sermon's edit ID: prefer legacyJsonId so SermonEditor still works */
+function editId(s: CanonicalSermon): string {
+  return s.legacyJsonId ?? s.id;
+}
+
+export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const { user } = useAuth();
 
-  const [statusTab, setStatusTab]       = useState<string>('All');
-  const [deleteTarget, setDeleteTarget] = useState<Sermon | null>(null);
-  const [deleting, setDeleting]         = useState(false);
-  const [deleteError, setDeleteError]   = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage]     = useState('');
-  const [publishing, setPublishing]     = useState<Record<string, boolean>>({});
-  const [unpublishTarget, setUnpublishTarget] = useState<Sermon | null>(null);
-  const [openMenuId, setOpenMenuId]     = useState<string | null>(null);
+  const [sermons, setSermons]                 = useState<CanonicalSermon[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [loadError, setLoadError]             = useState('');
+  const [statusTab, setStatusTab]             = useState<string>('All');
+  const [deleteTarget, setDeleteTarget]       = useState<CanonicalSermon | null>(null);
+  const [deleting, setDeleting]               = useState(false);
+  const [deleteError, setDeleteError]         = useState('');
+  const [successMessage, setSuccessMessage]   = useState('');
+  const [errorMessage, setErrorMessage]       = useState('');
+  const [publishing, setPublishing]           = useState<Record<string, boolean>>({});
+  const [unpublishTarget, setUnpublishTarget] = useState<CanonicalSermon | null>(null);
+  const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
 
-  // New companion creation modal state
+  // New sermon creation modal
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTitle, setNewTitle]         = useState('');
   const [newCreating, setNewCreating]   = useState(false);
+  const [newError, setNewError]         = useState('');
 
-  const auth = user ? { userId: user.id, userRole: user.role } : null;
+  // ── Load sermons ────────────────────────────────────────────────────────────
 
-  const handleOpenNewModal = () => { setShowNewModal(true); setNewTitle(''); };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await listAdminSermons();
+      setSermons(data);
+    } catch {
+      setLoadError('Failed to load sermons. Please refresh.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleCloseNewModal = () => { setShowNewModal(false); setNewTitle(''); };
+  useEffect(() => { load(); }, [load]);
 
-  const handleCreateCompanion = () => {
-    setNewCreating(true);
-    const id: string = `sermon-${Date.now()}`;
-    const now = new Date().toISOString();
-    const stub: Sermon = {
-      id,
-      title: newTitle.trim() || 'New Sermon Companion',
-      speaker: '',
-      sermonDate: now.split('T')[0],
-      series: '',
-      scriptureReference: '',
-      youtubeUrl: '',
-      summary: '',
-      topics: [],
-      keywords: [],
-      transcript: '',
-      transcriptStatus: 'none',
-      aiIndexStatus: 'none',
-      companionJourneyId: '',
-      mainTheme: '',
-      status: 'draft',
-      pastorEdited: false,
-      updatedAt: now,
-    };
-    addSermon(stub);
-    setNewCreating(false);
-    handleCloseNewModal();
-    onEdit(id);
-  };
-
-  // ── Status filter ─────────────────────────────────────────────────────────
+  // ── Status filter ────────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     if (statusTab === 'All') return sermons;
-    return sermons.filter(s => s.status === statusTab.toLowerCase());
+    return sermons.filter(s => s.status === statusTab);
   }, [sermons, statusTab]);
 
-  // ── Publish / Unpublish ───────────────────────────────────────────────────
+  // ── New canonical sermon ──────────────────────────────────────────────────────
 
-  const handlePublish = async (sermon: Sermon, e: React.MouseEvent) => {
+  const handleOpenNewModal = () => { setShowNewModal(true); setNewTitle(''); setNewError(''); };
+  const handleCloseNewModal = () => { setShowNewModal(false); setNewTitle(''); setNewError(''); };
+
+  const handleCreateSermon = async () => {
+    setNewCreating(true);
+    setNewError('');
+    try {
+      const created = await createAdminSermon({
+        title: newTitle.trim() || 'New Sermon',
+        status: 'Draft',
+        sermonDate: new Date().toISOString().split('T')[0],
+      });
+      setSermons(prev => [created, ...prev]);
+      handleCloseNewModal();
+      onEdit(editId(created));
+    } catch (err) {
+      setNewError(err instanceof Error ? err.message : 'Failed to create sermon');
+    } finally {
+      setNewCreating(false);
+    }
+  };
+
+  // ── Publish / Unpublish ──────────────────────────────────────────────────────
+
+  const handlePublish = async (sermon: CanonicalSermon, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!auth) return;
     setPublishing(prev => ({ ...prev, [sermon.id]: true }));
     setErrorMessage(''); setSuccessMessage('');
     try {
-      const now = new Date().toISOString();
-      await patchServerSermon(sermon.id, { status: 'published', updatedAt: now }, auth);
-      updateSermon({ ...sermon, status: 'published', updatedAt: now });
+      const updated = await publishAdminSermon(sermon.id);
+      setSermons(prev => prev.map(s => s.id === sermon.id ? { ...s, ...updated } : s));
       setSuccessMessage('Published successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch {
@@ -132,13 +141,12 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
   };
 
   const handleConfirmUnpublish = async () => {
-    if (!unpublishTarget || !auth) return;
+    if (!unpublishTarget) return;
     setPublishing(prev => ({ ...prev, [unpublishTarget.id]: true }));
     setErrorMessage(''); setSuccessMessage('');
     try {
-      const now = new Date().toISOString();
-      await patchServerSermon(unpublishTarget.id, { status: 'draft', updatedAt: now }, auth);
-      updateSermon({ ...unpublishTarget, status: 'draft', updatedAt: now });
+      const updated = await unpublishAdminSermon(unpublishTarget.id);
+      setSermons(prev => prev.map(s => s.id === unpublishTarget.id ? { ...s, ...updated } : s));
       setUnpublishTarget(null);
       setSuccessMessage('Unpublished successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -155,47 +163,54 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
     }
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────────
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget || !auth) return;
+    if (!deleteTarget) return;
     setDeleting(true); setDeleteError('');
     try {
-      // Pass the companionJourneyId so the server can handle legacy companions
-      // that have no admin-sermon JSON record (slug-based journeys table entries).
-      await deleteServerSermon(
-        deleteTarget.id,
-        auth,
-        { companionJourneyId: deleteTarget.companionJourneyId },
-      );
-      removeSermon(deleteTarget.id);
-      // Clear the "This Week's Sermon" setting if it pointed to the deleted companion
-      if (
-        deleteTarget.companionJourneyId &&
-        settings.currentWeeklySermonCompanionId === deleteTarget.companionJourneyId
-      ) {
-        updateSettings({ ...settings, currentWeeklySermonCompanionId: undefined });
-      }
+      await deleteAdminSermon(deleteTarget.id);
+      setSermons(prev => prev.filter(s => s.id !== deleteTarget.id));
       setDeleteTarget(null);
-      setSuccessMessage('Sermon Companion deleted successfully.');
+      setSuccessMessage('Sermon deleted successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch {
-      setDeleteError('We couldn\'t delete this Sermon Companion. Nothing was removed. Please try again.');
+      setDeleteError("We couldn't delete this sermon. Nothing was removed. Please try again.");
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 text-gray-400">
+        <Loader2 size={18} className="animate-spin mr-2" />
+        Loading sermons…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3 text-gray-500">
+        <p className="text-sm">{loadError}</p>
+        <button onClick={load} className="flex items-center gap-1.5 text-sm text-teal-600 hover:underline">
+          <RefreshCw size={13} /> Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
       <ContentStudioListPage
-        title="Sermon Companions"
-        description="Turn Sunday's sermon into discipleship for the week."
+        title="Sermons"
+        description="Manage sermons and their companion discipleship content."
         newButton={
           <button onClick={handleOpenNewModal} className={newBtnCls}>
-            <Plus size={14} /> New Sermon Companion
+            <Plus size={14} /> New Sermon
           </button>
         }
         filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
@@ -205,7 +220,7 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
             <Mic2 size={28} className="text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500">
               {statusTab === 'All'
-                ? 'No Sermon Companions yet. Click "New Sermon Companion" to generate your first draft.'
+                ? 'No sermons yet. Click "New Sermon" to add your first one, or use the URL-based generator.'
                 : `No ${statusTab} sermons.`}
             </p>
           </div>
@@ -224,14 +239,10 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         )}
 
         {filtered.map(s => {
-          const hasCompanion     = !!s.companionJourneyId;
-          const companionIsNew   = hasCompanion && isUUID(s.companionJourneyId!);
-          const legacyCompanion  = !companionIsNew && s.companionJourneyId
-            ? journeys.find(j => j.id === s.companionJourneyId)
-            : null;
-          const isPublished      = s.status === 'published';
+          const isPublished      = s.status === 'Published';
           const isPublishingThis = !!publishing[s.id];
           const isMenuOpen       = openMenuId === s.id;
+          const companionId      = (s as CanonicalSermon & { companionId?: string | null }).companionId;
 
           return (
             <ContentStudioListItem
@@ -256,26 +267,26 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     {s.scriptureReference && <span>{s.scriptureReference}</span>}
                     <span className="text-gray-300">·</span>
                     <span>{TRANSCRIPT_LABELS[s.transcriptStatus] ?? s.transcriptStatus}</span>
-                    {(companionIsNew || legacyCompanion) && (
+                    {companionId && (
                       <>
                         <span className="text-gray-300">·</span>
                         <button
-                          onClick={() => onOpenCompanion(s.id, s.companionJourneyId!)}
+                          onClick={() => onOpenCompanion(editId(s), companionId)}
                           className="text-teal-600 hover:text-teal-800 hover:underline flex items-center gap-0.5"
                         >
                           <BookOpen size={10} />
-                          {legacyCompanion ? legacyCompanion.title : 'View Companion'}
+                          View Companion
                         </button>
                       </>
                     )}
                   </div>
                 </div>
               }
-              status={<StatusBadge status={s.status} />}
+              status={<StatusBadge status={isPublished ? 'published' : s.status.toLowerCase()} />}
               actions={
                 <>
                   {/* Edit */}
-                  <button onClick={() => onEdit(s.id)} className={actionBtnCls}>
+                  <button onClick={() => onEdit(editId(s))} className={actionBtnCls}>
                     Edit
                   </button>
 
@@ -342,11 +353,11 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         })}
       </ContentStudioListPage>
 
-      {/* ── Unpublish confirmation ──────────────────────────────────────────── */}
+      {/* ── Unpublish confirmation ────────────────────────────────────────────── */}
       {unpublishTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this content?</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Unpublish this sermon?</h3>
             <p className="text-sm text-gray-500 mb-4">Members will no longer see it.</p>
             <div className="flex gap-2">
               <button
@@ -369,19 +380,19 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         </div>
       )}
 
-      {/* ── Delete confirmation ────────────────────────────────────────────── */}
+      {/* ── Delete confirmation ──────────────────────────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Sermon?</h3>
             <p className="text-sm text-gray-500 mb-3">
               You are about to permanently delete this sermon.
-              {deleteTarget.companionJourneyId && (
-                <> The linked sermon companion draft will also be deleted.</>
+              {(deleteTarget as CanonicalSermon & { companionId?: string | null }).companionId && (
+                <> The linked sermon companion will also be deleted.</>
               )}
               {' '}This action cannot be undone.
             </p>
-            {deleteTarget.status === 'published' && (
+            {deleteTarget.status === 'Published' && (
               <div className="mb-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
                 This sermon is currently visible to members. Deleting it will immediately remove it from Emmaus.
               </div>
@@ -409,12 +420,12 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
         </div>
       )}
 
-      {/* ── New Sermon Companion creation wizard — new standard ─────────────── */}
+      {/* ── New Sermon modal ──────────────────────────────────────────────────── */}
       {showNewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[calc(100dvh-2rem)]">
 
-            {/* Header — ← Cancel | title | ✕ */}
+            {/* Header */}
             <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
               <button
                 onClick={handleCloseNewModal}
@@ -425,7 +436,7 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                 Cancel
               </button>
               <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center">
-                New Sermon Companion
+                New Sermon
               </h2>
               <div className="w-20 flex-shrink-0 flex justify-end">
                 <button
@@ -438,12 +449,12 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
               </div>
             </div>
 
-            {/* Step progress — single pill (1-step wizard) */}
+            {/* Step progress */}
             <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
               <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
             </div>
 
-            {/* Scrollable content */}
+            {/* Content */}
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               <div className="space-y-4">
                 <div>
@@ -457,7 +468,7 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === 'Enter' && !newCreating) handleCreateCompanion();
+                      if (e.key === 'Enter' && !newCreating) handleCreateSermon();
                     }}
                     placeholder="e.g. The God Who Sees"
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
@@ -466,20 +477,30 @@ export default function SermonsList({ onEdit, onNew: _onNew, onOpenCompanion }: 
                     You can update the title inside the editor. Leave blank to start with a placeholder.
                   </p>
                 </div>
+                {newError && (
+                  <p className="text-sm text-red-600">{newError}</p>
+                )}
               </div>
             </div>
 
-            {/* Footer — single full-width CTA */}
-            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
+            {/* Footer */}
+            <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
               <button
-                onClick={handleCreateCompanion}
+                onClick={handleCreateSermon}
                 disabled={newCreating}
                 className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
               >
                 {newCreating
                   ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
-                  : <span>Create Companion</span>
+                  : <span>Create Sermon</span>
                 }
+              </button>
+              <button
+                onClick={() => { handleCloseNewModal(); onNew(); }}
+                disabled={newCreating}
+                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
+              >
+                Or generate from a YouTube URL →
               </button>
             </div>
 

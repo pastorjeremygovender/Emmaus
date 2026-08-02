@@ -603,6 +603,60 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: content_audit_log + deleted_at columns ensured (idempotent)");
   }
 
+  // ── Canonical Sermons table (2026-08) ────────────────────────────────────────
+  // Replaces the file-backed admin-drafts.json with a proper DB table.
+  // sermon_companion.sermon_uuid FK added here to link companion → canonical sermon.
+  // NOTE: sermon_id (text) on sermon_companion is kept for legacy compatibility.
+  {
+    const sermonsDDL = [
+      `CREATE TABLE IF NOT EXISTS sermons (
+         id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+         legacy_json_id      TEXT,
+         title               TEXT NOT NULL DEFAULT '',
+         speaker             TEXT NOT NULL DEFAULT '',
+         sermon_date         TEXT NOT NULL DEFAULT '',
+         series              TEXT NOT NULL DEFAULT '',
+         scripture_reference TEXT NOT NULL DEFAULT '',
+         scripture_book_ids  JSONB NOT NULL DEFAULT '[]',
+         scripture_chapters  JSONB NOT NULL DEFAULT '[]',
+         youtube_url         TEXT NOT NULL DEFAULT '',
+         youtube_video_id    TEXT NOT NULL DEFAULT '',
+         audio_path          TEXT NOT NULL DEFAULT '',
+         notes               TEXT NOT NULL DEFAULT '',
+         transcript          TEXT NOT NULL DEFAULT '',
+         transcript_status   TEXT NOT NULL DEFAULT 'none',
+         summary             TEXT NOT NULL DEFAULT '',
+         themes              JSONB NOT NULL DEFAULT '[]',
+         sections            JSONB NOT NULL DEFAULT '[]',
+         keywords            JSONB NOT NULL DEFAULT '[]',
+         main_theme          TEXT NOT NULL DEFAULT '',
+         status              TEXT NOT NULL DEFAULT 'Draft',
+         published_at        TIMESTAMPTZ,
+         created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+         updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+       )`,
+      // Drop any previously-created partial index and replace with a full unique
+      // index so ON CONFLICT (legacy_json_id) works without a WHERE clause.
+      // PostgreSQL allows multiple NULLs in a non-partial unique index (safe).
+      `DROP INDEX IF EXISTS sermons_legacy_json_id_idx`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS sermons_legacy_json_id_idx
+         ON sermons (legacy_json_id)`,
+      `CREATE INDEX IF NOT EXISTS sermons_status_idx ON sermons (status)`,
+      `CREATE INDEX IF NOT EXISTS sermons_published_at_idx ON sermons (published_at DESC)`,
+      // FK from sermon_companion to the new canonical table (nullable during migration)
+      `ALTER TABLE sermon_companion
+         ADD COLUMN IF NOT EXISTS sermon_uuid UUID REFERENCES sermons(id)`,
+    ];
+    for (const ddl of sermonsDDL) {
+      try {
+        await pool.query(ddl);
+      } catch (err) {
+        logger.warn({ err }, "Startup migration: sermons DDL step failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: sermons table + sermon_companion.sermon_uuid ensured (idempotent)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate

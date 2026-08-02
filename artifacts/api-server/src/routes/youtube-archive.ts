@@ -39,6 +39,7 @@ import { classifyVideo, shouldAutoApprove } from "../lib/sermon-classifier.js";
 import { processCaption } from "../lib/transcript-segmenter.js";
 import { enrichSegment, enrichSermon } from "../lib/sermon-enricher.js";
 import { invalidateIndex, searchByScripture } from "../lib/sermon-search.js";
+import { listPublishedSermons } from "../lib/canonical-sermon-store.js";
 import { detectSermonStartFromSegments, getFinalSermonStart } from "../lib/sermon-start-detector.js";
 import {
   generateSermonAudio, getAudioFilePath, getAudioFileUrl, AUDIO_DIR,
@@ -727,7 +728,7 @@ router.post("/youtube-archive/search", async (req: Request, res: Response) => {
 // Used by the chapter-level "Preached Here" badge in the Bible reader.
 
 router.get("/youtube-archive/preached-here", async (req: Request, res: Response) => {
-  const bookId = String(req.query.bookId ?? "").trim();
+  const bookId  = String(req.query.bookId ?? "").trim();
   const chapter = req.query.chapter
     ? parseInt(String(req.query.chapter), 10)
     : undefined;
@@ -737,7 +738,79 @@ router.get("/youtube-archive/preached-here", async (req: Request, res: Response)
     return;
   }
 
-  const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
+  // ── 1. Canonical DB sermons — priority source ─────────────────────────────
+  //
+  // Match published canonical sermons by scripture_book_ids (+ chapter when provided).
+  // These are returned first, and their youtube_video_id suppresses archive duplicates.
+
+  const suppressedVideoIds = new Set<string>();
+  let canonicalChapterSermons: object[] = [];
+  let canonicalBookSermons:    object[] = [];
+
+  try {
+    const published = await listPublishedSermons();
+    const normBook  = bookId.toLowerCase();
+
+    const chapterMatches = published.filter(s =>
+      s.scriptureBookIds.some(id => id.toLowerCase() === normBook) &&
+      (chapter === undefined || s.scriptureChapters.includes(chapter))
+    );
+    const bookMatches = published.filter(s =>
+      s.scriptureBookIds.some(id => id.toLowerCase() === normBook) &&
+      !chapterMatches.includes(s)
+    );
+
+    // Build response objects compatible with the frontend's SermonSearchResult shape
+    function toPreachedHereShape(s: typeof published[0]) {
+      if (s.youtubeVideoId) suppressedVideoIds.add(s.youtubeVideoId);
+      return {
+        sermonId:           s.id,
+        segmentId:          s.id,
+        title:              s.title,
+        speaker:            s.speaker,
+        sermonDate:         s.sermonDate,
+        series:             s.series || undefined,
+        scriptureReference: s.scriptureReference,
+        youtubeUrl:         s.youtubeUrl,
+        timestampedUrl:     s.youtubeUrl,
+        startTimeSeconds:   0,
+        endTimeSeconds:     0,
+        timestampLabel:     "",
+        transcriptEvidence: s.summary,
+        summary:            s.summary,
+        relevanceScore:     20,
+        absoluteStartSeconds: 0,
+        relativeStartSeconds: 0,
+        source:             "canonical",
+      };
+    }
+
+    canonicalChapterSermons = chapterMatches.map(toPreachedHereShape);
+    canonicalBookSermons    = bookMatches.map(toPreachedHereShape);
+  } catch (err) {
+    logger.warn({ err }, "preached-here: canonical lookup failed (non-fatal)");
+  }
+
+  // ── 2. YouTube archive — legacy fallback (deduplicated) ───────────────────
+
+  let archiveChapter: object[] = [];
+  let archiveBook:    object[] = [];
+
+  try {
+    const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
+    archiveChapter = chapterSermons.filter(
+      (s: { sermonId?: string }) => !suppressedVideoIds.has(s.sermonId ?? "")
+    );
+    archiveBook = bookSermons.filter(
+      (s: { sermonId?: string }) => !suppressedVideoIds.has(s.sermonId ?? "")
+    );
+  } catch (err) {
+    logger.warn({ err }, "preached-here: archive lookup failed (non-fatal)");
+  }
+
+  const chapterSermons = [...canonicalChapterSermons, ...archiveChapter];
+  const bookSermons    = [...canonicalBookSermons,    ...archiveBook];
+
   // `sermons` kept for backward compatibility (chapter-specific only)
   res.json({ sermons: chapterSermons, chapterSermons, bookSermons });
 });

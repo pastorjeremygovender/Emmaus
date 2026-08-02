@@ -5,7 +5,7 @@
  *   1. Daily Rhythm
  *   2. Daily Devotionals
  *   3. Journeys  (Journey Library | Collections subtabs)
- *   4. Sermon Companions
+ *   4. Sermons
  *   5. Media Studio  (YouTube Archive | Media Library subtabs)
  *
  * Navigation is internal state. Admin.tsx only knows the "content-studio" section.
@@ -94,7 +94,7 @@ const TOP_NAV: TopTab[] = [
   { id: 'daily-rhythm',    label: 'Daily Rhythm',      Icon: Sun      },
   { id: 'devotionals',     label: 'Daily Devotionals', Icon: BookHeart },
   { id: 'journeys',        label: 'Journeys',          Icon: Map       },
-  { id: 'sermons',         label: 'Sermon Companions', Icon: Mic2      },
+  { id: 'sermons',         label: 'Sermons',            Icon: Mic2      },
   { id: 'media-studio',    label: 'Media Studio',      Icon: Film      },
   { id: 'bible-studio',    label: 'Bible Study',       Icon: Scroll    },
 ];
@@ -307,12 +307,12 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: 'Preview' });
         break;
 
-      // Sermon Companions
+      // Sermons
       case 'sermons':
-        crumbs.push({ label: 'Sermon Companions' });
+        crumbs.push({ label: 'Sermons' });
         break;
       case 'sermon-editor':
-        crumbs.push({ label: 'Sermon Companions', onClick: () => navigate({ id: 'sermons' }) });
+        crumbs.push({ label: 'Sermons', onClick: () => navigate({ id: 'sermons' }) });
         crumbs.push({ label: view.sermonId ? 'Edit Companion' : 'New Sermon Companion' });
         break;
 
@@ -598,7 +598,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           />
         );
 
-      // ── Sermon Companions ─────────────────────────────────────────────────
+      // ── Sermons ───────────────────────────────────────────────────────────
       case 'sermons':
         return (
           <SermonsList

@@ -22,6 +22,7 @@ import DevotionalDay from '@/pages/DevotionalDay';
 import DevotionalPreviousDays from '@/pages/DevotionalPreviousDays';
 import SermonCompanionReader from '@/pages/SermonCompanionReader';
 import SermonCompanionPreviousDays from '@/pages/SermonCompanionPreviousDays';
+import SermonHome from '@/pages/SermonHome';
 import WalkCompletePage from '@/pages/WalkCompletePage';
 import Bible from '@/pages/Bible';
 import Journeys from '@/pages/Journeys';
@@ -147,6 +148,7 @@ function Router() {
       {/* Sermon companion reader — for AI-generated companions in the sermon_companion table */}
       <Route path="/sermon-companion/:id/previous" component={SermonCompanionPreviousDays} />
       <Route path="/sermon-companion/:id/day/:day" component={SermonCompanionReader} />
+      <Route path="/sermon/:id" component={SermonHome} />
 
       {/* Bible */}
       <Route path="/bible" component={Bible} />
