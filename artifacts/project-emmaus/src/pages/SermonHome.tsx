@@ -14,7 +14,7 @@ import { useLocation } from 'wouter';
 import {
   ArrowLeft, ExternalLink, BookOpen, Mic2, Calendar, Loader2, AlertCircle,
 } from 'lucide-react';
-import BottomNav from '@/components/BottomNav';
+import { BottomNav } from '@/components/BottomNav';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
