@@ -15,7 +15,7 @@
  * Route: /journeys
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
@@ -587,39 +587,59 @@ function WalksPanel({
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction, onViewPreviousDays,
+  current, previous, onAction,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  onViewPreviousDays: (id: string) => void;
 }) {
+  const [, setLocation] = useLocation();
+
+  // Build a companionId → canonicalSermonId lookup from published canonical sermons.
+  // Used to route the current-week card to SermonHome instead of the companion reader.
+  const [canonicalMap, setCanonicalMap] = React.useState<Map<string, string>>(new Map());
+  React.useEffect(() => {
+    fetch('/api/sermons', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((sermons: Array<{ id: string; companionId?: string | null }>) => {
+        const m = new Map<string, string>();
+        for (const s of sermons) {
+          if (s.companionId) m.set(s.companionId, s.id);
+        }
+        setCanonicalMap(m);
+      })
+      .catch(() => {/* non-fatal — fall back to companion reader */});
+  }, []);
+
   if (!current && previous.length === 0) {
     return <EmptyState message="No Sermon Companions are available yet." />;
   }
 
-  function previousDaysAction(item: NextStepsItem) {
-    if (!item.route.startsWith('/sermon-companion/')) return undefined;
-    if (item.memberProgressState === 'not-started') return undefined;
-    return { label: 'View Previous Reflections →', onPress: () => onViewPreviousDays(item.id) };
-  }
-
-  function companionCard(item: NextStepsItem) {
+  function companionCard(item: NextStepsItem, isCurrent: boolean) {
     const isPaused = item.memberProgressState === 'paused';
-    // item.primaryActionLabel is null when all published days are complete.
-    // EmmausContentCard expects string | undefined — convert null → undefined
-    // so the primary button is omitted entirely (no empty button space).
     const actionLabel = item.primaryActionLabel ?? undefined;
+
+    // When a canonical sermon is linked to this companion, tap the whole card
+    // to navigate to SermonHome. Pass the companion route as a query param so
+    // SermonHome can offer a "Continue Companion" CTA.
+    const canonicalSermonId = canonicalMap.get(item.id);
+    const onCardPress = isCurrent && canonicalSermonId
+      ? () => {
+          const companionRoute = encodeURIComponent(item.route);
+          setLocation(`/sermon/${canonicalSermonId}?companionRoute=${companionRoute}`);
+        }
+      : undefined;
+
     return (
       <EmmausContentCard
-        label="SERMON COMPANION"
+        label={isCurrent ? "THIS WEEK'S SERMON" : "SERMON COMPANION"}
         title={item.title}
         description={item.description}
-        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : '5 Days'}
+        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : undefined}
         primaryActionLabel={actionLabel}
-        onAction={actionLabel ? () => onAction(item) : undefined}
+        onAction={actionLabel ? () => { onAction(item); } : undefined}
         headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-        secondaryAction={previousDaysAction(item)}
+        onCardPress={onCardPress}
       />
     );
   }
@@ -629,7 +649,7 @@ function SermonCompanionsPanel({
       {current && (
         <section className="space-y-3">
           <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          {companionCard(current)}
+          {companionCard(current, true)}
         </section>
       )}
 
@@ -638,7 +658,7 @@ function SermonCompanionsPanel({
           <SectionLabel>Previous Sermon Companions</SectionLabel>
           <div className="space-y-3">
             {previous.map(item => (
-              <div key={item.id}>{companionCard(item)}</div>
+              <div key={item.id}>{companionCard(item, false)}</div>
             ))}
           </div>
         </section>
@@ -967,7 +987,6 @@ export default function Journeys() {
                 current={data.currentSermonCompanion}
                 previous={data.previousSermonCompanions}
                 onAction={handleSermonCompanionAction}
-                onViewPreviousDays={(id) => setLocation(`/sermon-companion/${id}/previous?from=nextStepsSermons`)}
               />
             )}
           </>

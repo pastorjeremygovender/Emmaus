@@ -79,6 +79,12 @@ export interface EmmausContentCardProps {
   /** Optional text link shown below the primary button. */
   secondaryAction?: { label: string; onPress: () => void };
   /**
+   * When provided, the entire card becomes a pressable surface that fires this
+   * callback. Interactive children (buttons) stop propagation so they work
+   * independently. Use for cards where the whole surface should navigate.
+   */
+  onCardPress?: () => void;
+  /**
    * 'featured' — subtle primary tint (bg-primary/5 border-primary/20).
    * Use for the highest-priority card on the home screen.
    * Default: plain bg-card border-border.
@@ -110,10 +116,12 @@ export function EmmausContentCard({
   secondaryAction,
   variant = 'default',
   badge,
+  onCardPress,
 }: EmmausContentCardProps) {
-  const cardClass = variant === 'featured'
+  const cardClass = (variant === 'featured'
     ? 'relative rounded-2xl border p-5 bg-primary/5 border-primary/20'
-    : 'relative rounded-2xl border p-5 bg-card border-border';
+    : 'relative rounded-2xl border p-5 bg-card border-border')
+    + (onCardPress ? ' cursor-pointer active:opacity-80 transition-opacity' : '');
 
   // ── Spacing: Label→12px→Title→8px→Desc→12px→Meta→20px→Button ────────────────
   // Each element carries its own bottom margin so omitting an element doesn't
@@ -142,7 +150,7 @@ export function EmmausContentCard({
   const metaMb = hasProgress ? 'mb-3' : hasButton ? 'mb-5' : 'mb-0';
 
   return (
-    <div className={cardClass}>
+    <div className={cardClass} onClick={onCardPress} role={onCardPress ? 'button' : undefined} tabIndex={onCardPress ? 0 : undefined} onKeyDown={onCardPress ? (e) => { if (e.key === 'Enter' || e.key === ' ') onCardPress(); } : undefined}>
 
       {/* ── Smart Content Indicator badge ──────────────────────────────────── */}
       <ContentBadge badge={badge ?? null} />
@@ -186,7 +194,7 @@ export function EmmausContentCard({
       ) : primaryActionLabel ? (
         <Button
           className={T.button}
-          onClick={onAction}
+          onClick={(e) => { e.stopPropagation(); onAction?.(); }}
           disabled={disabled || loading}
         >
           {loading

@@ -61,31 +61,9 @@ sermonsRouter.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// ─── Member: get one published sermon ────────────────────────────────────────
-
-sermonsRouter.get("/:id", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
-  if (!userId) return;
-
-  // Catch the "admin" literal so it doesn't get matched here
-  if (req.params.id === "admin") {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  try {
-    const sermon = await store.getSermonById(String(req.params.id));
-    if (!sermon || sermon.status !== "Published") {
-      res.status(404).json({ error: "Sermon not found" });
-      return;
-    }
-    res.set("Cache-Control", "no-store");
-    res.json(sermon);
-  } catch (err) {
-    logger.error({ err }, "sermons: getMember failed");
-    res.status(500).json({ error: "Server error" });
-  }
-});
+// ─── Admin GET routes MUST precede /:id — Express matches in registration order ─
+// Placing GET /admin after GET /:id causes Express to match /admin as id="admin"
+// and short-circuit before the admin handler is ever reached.
 
 // ─── Admin: list all sermons ──────────────────────────────────────────────────
 
@@ -114,6 +92,25 @@ sermonsRouter.get("/admin/:id", async (req: Request, res: Response) => {
     res.json(sermon);
   } catch (err) {
     logger.error({ err }, "sermons: getAdmin failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Member: get one published sermon ────────────────────────────────────────
+
+sermonsRouter.get("/:id", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const sermon = await store.getSermonById(String(req.params.id));
+    if (!sermon || sermon.status !== "Published") {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(sermon);
+  } catch (err) {
+    logger.error({ err }, "sermons: getMember failed");
     res.status(500).json({ error: "Server error" });
   }
 });
