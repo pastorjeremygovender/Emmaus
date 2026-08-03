@@ -344,6 +344,17 @@ export async function listServerSermons(auth: AuthHeaders): Promise<AdminSermonR
   return getJson<AdminSermonRecord[]>("/admin-sermons", auth);
 }
 
+export async function getServerSermon(
+  id: string,
+  auth: AuthHeaders,
+): Promise<AdminSermonRecord | null> {
+  try {
+    return await getJson<AdminSermonRecord>(`/admin-sermons/${id}`, auth);
+  } catch {
+    return null;
+  }
+}
+
 export async function saveServerSermon(
   sermon: AdminSermonRecord,
   auth: AuthHeaders,

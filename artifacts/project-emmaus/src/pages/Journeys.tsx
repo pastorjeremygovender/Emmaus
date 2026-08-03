@@ -29,7 +29,7 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
   X, Pause, MoreHorizontal, Loader2,
-  BookHeart, Mic2, Map, Users, ChevronRight,
+  BookHeart, Mic2, Map as MapIcon, Users, ChevronRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';

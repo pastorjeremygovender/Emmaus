@@ -20,7 +20,9 @@ import { useAuth } from './AuthContext';
 
 type AdminContextType = {
   sermons: Sermon[];
-  addSermon: (sermon: Sermon) => void;
+  /** skipServerPersist: set true when the sermon is already saved in the canonical DB
+   *  (e.g. generator-created) to avoid writing a redundant JSON shadow record. */
+  addSermon: (sermon: Sermon, opts?: { skipServerPersist?: boolean }) => void;
   updateSermon: (sermon: Sermon) => void;
   removeSermon: (id: string) => void;
   prayerRequests: PrayerRequest[];
@@ -120,14 +122,16 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     });
   }, [user?.id]); // re-runs when auth hydrates (null → userId) or user switches
 
-  const addSermon = useCallback((sermon: Sermon) => {
+  const addSermon = useCallback((sermon: Sermon, opts?: { skipServerPersist?: boolean }) => {
     setSermons(prev => {
       const next = [...prev, sermon];
       localStorage.setItem('emmaus_admin_sermons', JSON.stringify(next));
       return next;
     });
-    // Best-effort server persist (non-blocking)
-    if (authHeaders) {
+    // Best-effort server persist (non-blocking).
+    // Skip when the sermon is already in the canonical DB (e.g. generator-created)
+    // to avoid writing a redundant JSON shadow record.
+    if (authHeaders && !opts?.skipServerPersist) {
       const record: AdminSermonRecord = {
         ...sermon,
         createdAt: sermon.updatedAt,

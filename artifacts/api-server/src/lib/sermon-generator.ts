@@ -18,7 +18,7 @@ import { getVideoMetadata } from "./youtube-client.js";
 import { listCaptionTracks, downloadCaptionTrack } from "./youtube-client.js";
 import { getValidAccessToken } from "./oauth-store.js";
 import { createCompanion, deleteCompanion } from "./sermon-companion-store.js";
-import { upsertAdminSermon } from "./admin-sermon-store.js";
+import { createSermon, deleteSermon as deleteCanonicalSermon } from "./canonical-sermon-store.js";
 import { logger } from "./logger.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -1215,17 +1215,98 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     );
   }
 
-  // 7. Save companion to DB — only reached when both AI outputs passed validation
-  const sermonId = randomUUID();
-  logger.info({ sermonId }, "sermon-generator: saving companion to DB");
-  const savedCompanion = await createCompanion({
-    sermonId,
-    title: companionDraft.companionTitle,
-    numberOfDays: companionDraft.days.length,  // store actual days, not a fixed 5
-    entries: companionDraft.days,
-  });
+  // 7. Persist sermon record directly to canonical DB — only reached when both AI
+  //    outputs passed validation. We create the canonical record first so its UUID
+  //    can be used as the FK on the companion; this replaces the old JSON→dual-write
+  //    path via admin-sermon-store / admin-drafts.json.
+  const now = new Date().toISOString();
 
-  // 7. Build sermon draft record — store both full and sermon-only transcripts
+  // Simple book-ID extractor (mirrors former syncToCanonical logic)
+  function parseBookIds(ref: string): string[] {
+    if (!ref) return [];
+    const lower = ref.toLowerCase();
+    const bookMap: Array<[RegExp, string]> = [
+      [/\bjohn\b/, "john"], [/\bluke\b/, "luke"], [/\bmark\b/, "mark"],
+      [/\bmatthew\b/, "matthew"], [/\bacts\b/, "acts"], [/\bromans\b/, "romans"],
+      [/\bgenesis\b/, "genesis"], [/\bpsalm/, "psalms"], [/\bproverbs\b/, "proverbs"],
+      [/\bisaiah\b/, "isaiah"], [/\bephesians\b/, "ephesians"],
+      [/\bphilippians\b/, "philippians"], [/\bhebrews\b/, "hebrews"],
+      [/\bcolossians\b/, "colossians"], [/\bgalatians\b/, "galatians"],
+    ];
+    return bookMap.filter(([re]) => re.test(lower)).map(([, id]) => id);
+  }
+
+  logger.info({
+    title: draftFields.title,
+    speaker: draftFields.speaker || "(empty — for pastor review)",
+    scriptureReference: draftFields.scriptureReference || "(empty — for pastor review)",
+    mainTheme,
+  }, "sermon-generator: persisting canonical sermon record");
+
+  let canonicalSermon: Awaited<ReturnType<typeof createSermon>>;
+  try {
+    canonicalSermon = await createSermon({
+      legacyJsonId:        null,
+      title:               draftFields.title,
+      speaker:             draftFields.speaker,
+      sermonDate:          meta.publishedAt.split("T")[0],
+      series:              draftFields.series,
+      scriptureReference:  draftFields.scriptureReference,
+      scriptureBookIds:    parseBookIds(draftFields.scriptureReference),
+      scriptureChapters:   [],
+      youtubeUrl:          meta.youtubeUrl,
+      youtubeVideoId:      videoId,
+      audioPath:           "",
+      notes:               "",
+      // transcript = sermon-section only (used by Ask Emmaus and companion generation)
+      transcript:          sermonTranscript || fullTranscript,
+      // fullTranscript = original full recording (retained for re-detection)
+      fullTranscript:      fullTranscript,
+      transcriptStatus:    fullTranscript ? "complete" : "none",
+      summary:             draftFields.summary,
+      themes:              draftFields.topics,
+      sections:            [],
+      keywords:            draftFields.keywords,
+      mainTheme,
+      // Detection metadata — preserved for editor re-detect and boundary display
+      sermonStartTime:     detectionStartSecs != null ? secsToHHMMSS(detectionStartSecs) : "",
+      sermonEndTime:       detectionEndSecs != null ? secsToHHMMSS(detectionEndSecs) : "",
+      detectionConfidence: detectionConfidence ?? 0,
+      detectionMethod:     detectionMethod ?? "none",
+      status:              "Draft",
+    });
+  } catch (sermonErr) {
+    logger.error({ err: sermonErr }, "sermon-generator: canonical sermon creation failed");
+    throw new Error("Failed to persist sermon draft. Please try again.");
+  }
+
+  const sermonId = canonicalSermon.id;
+  logger.info({ sermonId }, "sermon-generator: canonical sermon created, saving companion");
+
+  // Create companion linked to the canonical sermon UUID
+  let savedCompanion: Awaited<ReturnType<typeof createCompanion>>;
+  try {
+    savedCompanion = await createCompanion({
+      sermonId,           // sermon_id text column
+      sermonUuid: sermonId, // sermon_uuid FK to sermons.id
+      title: companionDraft.companionTitle,
+      numberOfDays: companionDraft.days.length,
+      entries: companionDraft.days,
+    });
+  } catch (companionErr) {
+    logger.error({ err: companionErr, sermonId }, "sermon-generator: companion creation failed — rolling back canonical sermon");
+    try {
+      await deleteCanonicalSermon(sermonId);
+      logger.info({ sermonId }, "sermon-generator: canonical sermon rolled back");
+    } catch (delErr) {
+      logger.error({ err: delErr, sermonId }, "sermon-generator: canonical sermon rollback also failed");
+    }
+    throw new Error("Failed to persist sermon draft. Please try again.");
+  }
+
+  logger.info({ sermonId, companionId: savedCompanion.id }, "sermon-generator: sermon record persisted server-side");
+
+  // Build the return sermon object for the frontend (mirrors former SermonDraftFields shape)
   const sermon: SermonDraftFields = {
     id: sermonId,
     title: draftFields.title,
@@ -1249,36 +1330,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
     mainTheme,
     status: "draft",
     pastorEdited: false,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
-
-  // 7. Persist sermon record server-side.
-  //    The companion (step 5) is already in PostgreSQL. If sermon persistence
-  //    fails we must delete the companion to avoid an orphaned DB record.
-  //    Both records being present is the only valid "draft exists" state.
-  logger.info({
-    sermonId,
-    companionId: savedCompanion.id,
-    title: sermon.title,
-    speaker: sermon.speaker || "(empty — for pastor review)",
-    scriptureReference: sermon.scriptureReference || "(empty — for pastor review)",
-    mainTheme: sermon.mainTheme,
-    summaryLength: sermon.summary?.length ?? 0,
-    companionEntryCount: savedCompanion.entries?.length ?? 0,
-  }, "sermon-generator: persisting sermon record");
-  try {
-    await upsertAdminSermon({ ...sermon, createdAt: sermon.updatedAt });
-    logger.info({ sermonId, companionId: savedCompanion.id }, "sermon-generator: sermon record persisted server-side");
-  } catch (sermonErr) {
-    logger.error({ err: sermonErr, sermonId }, "sermon-generator: sermon persistence failed — rolling back companion");
-    try {
-      await deleteCompanion(savedCompanion.id);
-      logger.info({ companionId: savedCompanion.id }, "sermon-generator: companion rolled back");
-    } catch (delErr) {
-      logger.error({ err: delErr, companionId: savedCompanion.id }, "sermon-generator: companion rollback also failed");
-    }
-    throw new Error("Failed to persist sermon draft. Please try again.");
-  }
 
   return {
     sermon,

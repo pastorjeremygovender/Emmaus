@@ -15,7 +15,11 @@ import {
   generateFromUrl, regenerateSermonField, redetectSermon, GenerationError,
   generateMainTheme, suggestAlternativeTheme, hasPrescription, buildSermonLink,
 } from "../lib/sermon-generator.js";
-import { getAdminSermonById, upsertAdminSermon, getAllAdminSermons } from "../lib/admin-sermon-store.js";
+import {
+  getSermonById,
+  updateSermon as updateCanonicalSermon,
+  getAllSermons,
+} from "../lib/canonical-sermon-store.js";
 import { getCompanionBySermonId } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
@@ -134,19 +138,28 @@ router.post("/sermon-generator/:sermonId/redetect", async (req: Request, res: Re
   if (!(await guardAdmin(req, res))) return;
   const sermonId = String(req.params.sermonId);
 
-  const existing = await getAdminSermonById(sermonId);
+  const existing = await getSermonById(sermonId);
   if (!existing) {
     res.status(404).json({ error: "Sermon not found" });
     return;
   }
-  if (!existing.transcript) {
+  // Re-detect uses the full recording transcript; fall back to sermon-only if not stored
+  const transcriptForDetection = existing.fullTranscript || existing.transcript;
+  if (!transcriptForDetection) {
     res.status(422).json({ error: "This sermon has no stored transcript to analyse." });
     return;
   }
 
   try {
-    const detection = await redetectSermon(existing.transcript);
-    await upsertAdminSermon({ ...existing, ...detection });
+    const detection = await redetectSermon(transcriptForDetection);
+    // Update canonical DB: store the re-detected sermon-section transcript and all detection metadata
+    await updateCanonicalSermon(sermonId, {
+      transcript:          detection.sermonTranscript || existing.transcript,
+      sermonStartTime:     detection.sermonStartTime,
+      sermonEndTime:       detection.sermonEndTime,
+      detectionConfidence: detection.detectionConfidence,
+      detectionMethod:     detection.detectionMethod,
+    });
     logger.info({ sermonId, confidence: detection.detectionConfidence }, "sermon-generator: re-detection complete");
     res.json({ success: true, detection });
   } catch (err) {
@@ -238,13 +251,13 @@ router.post("/sermon-generator/:sermonId/regenerate-theme", async (req: Request,
   if (!(await guardAdmin(req, res))) return;
   const sermonId = String(req.params.sermonId);
 
-  const existing = await getAdminSermonById(sermonId);
+  const existing = await getSermonById(sermonId);
   if (!existing) {
     res.status(404).json({ error: "Sermon not found" });
     return;
   }
 
-  const source = existing.sermonTranscript ?? existing.transcript;
+  const source = existing.transcript;
   if (!source) {
     res.status(422).json({ error: "This sermon has no stored transcript to analyse." });
     return;
@@ -273,7 +286,7 @@ router.get("/sermon-generator/audit", async (req: Request, res: Response) => {
   if (!userId) return;
 
   try {
-    const sermons = await getAllAdminSermons();
+    const sermons = await getAllSermons();
     const flags: Array<{
       sermonId: string;
       companionTitle: string;
@@ -286,7 +299,7 @@ router.get("/sermon-generator/audit", async (req: Request, res: Response) => {
     }> = [];
 
     for (const sermon of sermons) {
-      if (!sermon.companionJourneyId) continue;
+      if (!sermon.companionId) continue;
       const companion = await getCompanionBySermonId(sermon.id);
       if (!companion) continue;
 

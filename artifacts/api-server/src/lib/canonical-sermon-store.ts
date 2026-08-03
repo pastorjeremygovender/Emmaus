@@ -35,13 +35,24 @@ export interface CanonicalSermon {
   youtubeVideoId: string;        // links to YouTube archive videos.json for dedup
   audioPath: string;             // GCS object path (e.g. /objects/uploads/uuid.mp3)
   notes: string;                 // admin-only notes
+  /** Sermon-section-only transcript (trimmed to the sermon portion). */
   transcript: string;
+  /** Full recording transcript — retained for re-detection and editor use. */
+  fullTranscript: string;
   transcriptStatus: "none" | "pending" | "complete";
   summary: string;
   themes: string[];
   sections: SermonSection[];
   keywords: string[];
   mainTheme: string;
+  /** HH:MM:SS start of the detected sermon within the recording. */
+  sermonStartTime: string;
+  /** HH:MM:SS end of the detected sermon within the recording. */
+  sermonEndTime: string;
+  /** AI detection confidence 0–1. */
+  detectionConfidence: number;
+  /** How the sermon section was identified. */
+  detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none";
   status: "Draft" | "Review" | "Published";
   publishedAt: string | null;    // ISO timestamp
   createdAt: string;
@@ -54,37 +65,54 @@ export interface SermonSection {
   summary?: string;
 }
 
-export type CreateSermonData = Omit<CanonicalSermon, "id" | "createdAt" | "updatedAt" | "publishedAt">;
+// Detection/full-transcript fields are optional so legacy callers (migration,
+// manual sermon creation) don't need to supply them — they default to '' / 0 / 'none'.
+export type CreateSermonData = Omit<
+  CanonicalSermon,
+  "id" | "createdAt" | "updatedAt" | "publishedAt" |
+  "fullTranscript" | "sermonStartTime" | "sermonEndTime" | "detectionConfidence" | "detectionMethod"
+> & {
+  fullTranscript?: string;
+  sermonStartTime?: string;
+  sermonEndTime?: string;
+  detectionConfidence?: number;
+  detectionMethod?: CanonicalSermon["detectionMethod"];
+};
 export type UpdateSermonData = Partial<Omit<CanonicalSermon, "id" | "createdAt">>;
 
 // ─── Row → Domain ─────────────────────────────────────────────────────────────
 
 function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
   return {
-    id:                 String(row.id),
-    legacyJsonId:       row.legacy_json_id != null ? String(row.legacy_json_id) : null,
-    title:              String(row.title ?? ""),
-    speaker:            String(row.speaker ?? ""),
-    sermonDate:         String(row.sermon_date ?? ""),
-    series:             String(row.series ?? ""),
-    scriptureReference: String(row.scripture_reference ?? ""),
-    scriptureBookIds:   (row.scripture_book_ids as string[]) ?? [],
-    scriptureChapters:  (row.scripture_chapters as number[]) ?? [],
-    youtubeUrl:         String(row.youtube_url ?? ""),
-    youtubeVideoId:     String(row.youtube_video_id ?? ""),
-    audioPath:          String(row.audio_path ?? ""),
-    notes:              String(row.notes ?? ""),
-    transcript:         String(row.transcript ?? ""),
-    transcriptStatus:   (row.transcript_status as CanonicalSermon["transcriptStatus"]) ?? "none",
-    summary:            String(row.summary ?? ""),
-    themes:             (row.themes as string[]) ?? [],
-    sections:           (row.sections as SermonSection[]) ?? [],
-    keywords:           (row.keywords as string[]) ?? [],
-    mainTheme:          String(row.main_theme ?? ""),
-    status:             (row.status as CanonicalSermon["status"]) ?? "Draft",
-    publishedAt:        row.published_at != null ? String(row.published_at) : null,
-    createdAt:          String(row.created_at),
-    updatedAt:          String(row.updated_at),
+    id:                  String(row.id),
+    legacyJsonId:        row.legacy_json_id != null ? String(row.legacy_json_id) : null,
+    title:               String(row.title ?? ""),
+    speaker:             String(row.speaker ?? ""),
+    sermonDate:          String(row.sermon_date ?? ""),
+    series:              String(row.series ?? ""),
+    scriptureReference:  String(row.scripture_reference ?? ""),
+    scriptureBookIds:    (row.scripture_book_ids as string[]) ?? [],
+    scriptureChapters:   (row.scripture_chapters as number[]) ?? [],
+    youtubeUrl:          String(row.youtube_url ?? ""),
+    youtubeVideoId:      String(row.youtube_video_id ?? ""),
+    audioPath:           String(row.audio_path ?? ""),
+    notes:               String(row.notes ?? ""),
+    transcript:          String(row.transcript ?? ""),
+    fullTranscript:      String(row.full_transcript ?? ""),
+    transcriptStatus:    (row.transcript_status as CanonicalSermon["transcriptStatus"]) ?? "none",
+    summary:             String(row.summary ?? ""),
+    themes:              (row.themes as string[]) ?? [],
+    sections:            (row.sections as SermonSection[]) ?? [],
+    keywords:            (row.keywords as string[]) ?? [],
+    mainTheme:           String(row.main_theme ?? ""),
+    sermonStartTime:     String(row.sermon_start_time ?? ""),
+    sermonEndTime:       String(row.sermon_end_time ?? ""),
+    detectionConfidence: Number(row.detection_confidence ?? 0),
+    detectionMethod:     (row.detection_method as CanonicalSermon["detectionMethod"]) ?? "none",
+    status:              (row.status as CanonicalSermon["status"]) ?? "Draft",
+    publishedAt:         row.published_at != null ? String(row.published_at) : null,
+    createdAt:           String(row.created_at),
+    updatedAt:           String(row.updated_at),
   };
 }
 
@@ -160,33 +188,39 @@ export async function createSermon(data: CreateSermonData): Promise<CanonicalSer
     `INSERT INTO sermons (
        legacy_json_id, title, speaker, sermon_date, series, scripture_reference,
        scripture_book_ids, scripture_chapters, youtube_url, youtube_video_id,
-       audio_path, notes, transcript, transcript_status, summary, themes,
-       sections, keywords, main_theme, status, created_at, updated_at
+       audio_path, notes, transcript, full_transcript, transcript_status, summary, themes,
+       sections, keywords, main_theme, sermon_start_time, sermon_end_time,
+       detection_confidence, detection_method, status, created_at, updated_at
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$26
      ) RETURNING *`,
     [
-      data.legacyJsonId ?? null,
-      data.title,
-      data.speaker,
-      data.sermonDate,
-      data.series,
-      data.scriptureReference,
-      JSON.stringify(data.scriptureBookIds ?? []),
-      JSON.stringify(data.scriptureChapters ?? []),
-      data.youtubeUrl,
-      data.youtubeVideoId,
-      data.audioPath,
-      data.notes,
-      data.transcript,
-      data.transcriptStatus,
-      data.summary,
-      JSON.stringify(data.themes ?? []),
-      JSON.stringify(data.sections ?? []),
-      JSON.stringify(data.keywords ?? []),
-      data.mainTheme,
-      data.status,
-      now,
+      data.legacyJsonId ?? null,           // $1
+      data.title,                           // $2
+      data.speaker,                         // $3
+      data.sermonDate,                      // $4
+      data.series,                          // $5
+      data.scriptureReference,              // $6
+      JSON.stringify(data.scriptureBookIds ?? []),  // $7
+      JSON.stringify(data.scriptureChapters ?? []), // $8
+      data.youtubeUrl,                      // $9
+      data.youtubeVideoId,                  // $10
+      data.audioPath,                       // $11
+      data.notes,                           // $12
+      data.transcript,                      // $13 — sermon-section transcript
+      data.fullTranscript ?? "",            // $14 — full recording transcript
+      data.transcriptStatus,                // $15
+      data.summary,                         // $16
+      JSON.stringify(data.themes ?? []),    // $17
+      JSON.stringify(data.sections ?? []), // $18
+      JSON.stringify(data.keywords ?? []), // $19
+      data.mainTheme,                       // $20
+      data.sermonStartTime ?? "",           // $21
+      data.sermonEndTime ?? "",             // $22
+      data.detectionConfidence ?? 0,        // $23
+      data.detectionMethod ?? "none",       // $24
+      data.status,                          // $25
+      now,                                  // $26 — created_at + updated_at
     ]
   );
   return rowToSermon(result.rows[0]);
@@ -198,26 +232,31 @@ export async function updateSermon(
 ): Promise<CanonicalSermon | null> {
   // Build SET clause dynamically from only the provided keys
   const columnMap: Record<string, string> = {
-    title:              "title",
-    speaker:            "speaker",
-    sermonDate:         "sermon_date",
-    series:             "series",
-    scriptureReference: "scripture_reference",
-    scriptureBookIds:   "scripture_book_ids",
-    scriptureChapters:  "scripture_chapters",
-    youtubeUrl:         "youtube_url",
-    youtubeVideoId:     "youtube_video_id",
-    audioPath:          "audio_path",
-    notes:              "notes",
-    transcript:         "transcript",
-    transcriptStatus:   "transcript_status",
-    summary:            "summary",
-    themes:             "themes",
-    sections:           "sections",
-    keywords:           "keywords",
-    mainTheme:          "main_theme",
-    status:             "status",
-    publishedAt:        "published_at",
+    title:               "title",
+    speaker:             "speaker",
+    sermonDate:          "sermon_date",
+    series:              "series",
+    scriptureReference:  "scripture_reference",
+    scriptureBookIds:    "scripture_book_ids",
+    scriptureChapters:   "scripture_chapters",
+    youtubeUrl:          "youtube_url",
+    youtubeVideoId:      "youtube_video_id",
+    audioPath:           "audio_path",
+    notes:               "notes",
+    transcript:          "transcript",
+    fullTranscript:      "full_transcript",
+    transcriptStatus:    "transcript_status",
+    summary:             "summary",
+    themes:              "themes",
+    sections:            "sections",
+    keywords:            "keywords",
+    mainTheme:           "main_theme",
+    sermonStartTime:     "sermon_start_time",
+    sermonEndTime:       "sermon_end_time",
+    detectionConfidence: "detection_confidence",
+    detectionMethod:     "detection_method",
+    status:              "status",
+    publishedAt:         "published_at",
   };
 
   const jsonbCols = new Set(["scripture_book_ids", "scripture_chapters", "themes", "sections", "keywords"]);
@@ -287,6 +326,51 @@ export async function deleteSermon(id: string): Promise<boolean> {
 }
 
 /**
+ * Atomically delete a canonical sermon and all its associated companion data
+ * (sermon_companion, entries, progress) in a single transaction.
+ *
+ * Use this instead of separate deleteSermonCompanionContent + deleteSermon calls
+ * to guarantee the DB is never left in a state where the companion is gone but
+ * the sermon record remains visible (or vice-versa).
+ */
+export async function deleteSermonFully(sermonId: string): Promise<{ deleted: boolean; companionId: string | null }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Resolve companion UUID inside the transaction for consistency
+    const companionRes = await client.query(
+      "SELECT id FROM sermon_companion WHERE sermon_uuid = $1 LIMIT 1",
+      [sermonId]
+    );
+    const companionId: string | null = companionRes.rows[0]?.id ?? null;
+
+    if (companionId) {
+      await client.query("DELETE FROM sermon_companion_progress WHERE companion_id = $1", [companionId]);
+      await client.query("DELETE FROM sermon_companion_entry   WHERE companion_id = $1", [companionId]);
+      await client.query("DELETE FROM sermon_companion         WHERE id = $1",            [companionId]);
+    }
+
+    const sermonRes = await client.query(
+      "DELETE FROM sermons WHERE id = $1 RETURNING id",
+      [sermonId]
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      deleted:     (sermonRes.rowCount ?? 0) > 0,
+      companionId,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Upsert by legacy_json_id — used during JSON migration.
  * Uses explicit SELECT + INSERT/UPDATE to avoid relying on ON CONFLICT index
  * availability during the migration boot window.
@@ -342,15 +426,16 @@ export async function upsertByLegacyId(data: CreateSermonData & { legacyJsonId: 
     return rowToSermon(result.rows[0]);
   }
 
-  // No existing record — insert fresh
+  // No existing record — insert fresh (detection fields default to empty)
   const result = await pool.query(
     `INSERT INTO sermons (
        legacy_json_id, title, speaker, sermon_date, series, scripture_reference,
        scripture_book_ids, scripture_chapters, youtube_url, youtube_video_id,
-       audio_path, notes, transcript, transcript_status, summary, themes,
-       sections, keywords, main_theme, status, created_at, updated_at
+       audio_path, notes, transcript, full_transcript, transcript_status, summary, themes,
+       sections, keywords, main_theme, sermon_start_time, sermon_end_time,
+       detection_confidence, detection_method, status, created_at, updated_at
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$26
      ) RETURNING *`,
     [
       data.legacyJsonId,
@@ -366,12 +451,17 @@ export async function upsertByLegacyId(data: CreateSermonData & { legacyJsonId: 
       data.audioPath ?? "",
       data.notes ?? "",
       data.transcript ?? "",
+      data.fullTranscript ?? "",
       data.transcriptStatus ?? "none",
       data.summary ?? "",
       JSON.stringify(data.themes ?? []),
       JSON.stringify(data.sections ?? []),
       JSON.stringify(data.keywords ?? []),
       data.mainTheme ?? "",
+      data.sermonStartTime ?? "",
+      data.sermonEndTime ?? "",
+      data.detectionConfidence ?? 0,
+      data.detectionMethod ?? "none",
       data.status ?? "Draft",
       now,
     ]

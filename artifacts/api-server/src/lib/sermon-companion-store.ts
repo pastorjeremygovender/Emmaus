@@ -63,6 +63,8 @@ export interface CompanionProgress {
 
 export async function createCompanion(data: {
   sermonId: string;
+  /** Optional canonical UUID FK — set to link companion.sermon_uuid to sermons.id */
+  sermonUuid?: string;
   title: string;
   numberOfDays?: number;
   entries: Array<Omit<CompanionEntry, 'id' | 'companionId' | 'createdAt' | 'updatedAt' | 'status'> & { status?: string }>;
@@ -79,9 +81,9 @@ export async function createCompanion(data: {
     await client.query("BEGIN");
 
     await client.query(
-      `INSERT INTO sermon_companion (id, sermon_id, title, number_of_days, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'Draft', NOW(), NOW())`,
-      [id, data.sermonId, data.title, data.numberOfDays ?? 5]
+      `INSERT INTO sermon_companion (id, sermon_id, sermon_uuid, title, number_of_days, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'Draft', NOW(), NOW())`,
+      [id, data.sermonId, data.sermonUuid ?? null, data.title, data.numberOfDays ?? 5]
     );
 
     for (const entry of data.entries) {

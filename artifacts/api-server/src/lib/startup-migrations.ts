@@ -657,6 +657,25 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: sermons table + sermon_companion.sermon_uuid ensured (idempotent)");
   }
 
+  // ── Sermon detection metadata columns (2026-08) ───────────────────────────────
+  // Stores the full recording transcript, sermon boundary times, and AI
+  // detection fields so the editor can re-detect without losing the original data.
+  {
+    const detectionDDL = [
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS full_transcript TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS sermon_start_time TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS sermon_end_time TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS detection_confidence FLOAT NOT NULL DEFAULT 0`,
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS detection_method TEXT NOT NULL DEFAULT 'none'`,
+    ];
+    for (const ddl of detectionDDL) {
+      try { await pool.query(ddl); } catch (err) {
+        logger.warn({ err }, "Startup migration: sermon detection column DDL step failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: sermon detection metadata columns ensured (idempotent)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate

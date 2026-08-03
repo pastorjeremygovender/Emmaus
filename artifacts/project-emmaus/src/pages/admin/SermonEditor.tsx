@@ -28,6 +28,7 @@ import {
   setCurrentWeekCompanion,
   suggestAlternativeTheme,
   regenerateSermonTheme,
+  getServerSermon,
 
   ApiError,
   type SermonDraftResult,
@@ -1156,6 +1157,9 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     existing ? { ...existing } : { ...EMPTY_SERMON }
   );
   const [sermonId_, setSermonId_] = useState<string | null>(sermonId);
+  // Track whether we are mid-fetch for a canonical-DB sermon not yet in AdminContext
+  const [loadingFromDb, setLoadingFromDb] = useState(false);
+  const [loadFromDbError, setLoadFromDbError] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1174,10 +1178,30 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
 
   const auth = user ? { userId: user.id, userRole: user.role } : null;
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // ── Load from canonical DB when not in AdminContext ──────────────────────────
+  // Sermons created via the generator now live only in the canonical DB. If a
+  // admin navigates to one whose UUID isn't in the in-memory sermon list (e.g.
+  // after a page reload), fetch it from the server and hydrate the form.
+  useEffect(() => {
+    if (!sermonId || !auth || existing) return;  // already have it
+    setLoadingFromDb(true);
+    getServerSermon(sermonId, auth).then(record => {
+      if (!record) { setLoadFromDbError(true); return; }
+      // Hydrate form and add to AdminContext so subsequent saves work
+      setForm({ ...EMPTY_SERMON, ...record });
+      // skipServerPersist: true — sermon already lives in the canonical DB
+      addSermon({ ...record, id: sermonId } as Sermon, { skipServerPersist: true });
+    }).catch(() => {
+      setLoadFromDbError(true);
+    }).finally(() => setLoadingFromDb(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sermonId, user?.id]);
+
   // ── Companion hydration for existing sermons ─────────────────────────────────
   // When opening an existing sermon whose companionJourneyId is a UUID (new-style
   // companion saved in DB), fetch the full companion so the Companion tab works.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   useEffect(() => {
     const cid = existing?.companionJourneyId;
     if (!cid || !UUID_RE.test(cid) || !auth) return;
@@ -1372,7 +1396,8 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       companionJourneyId: result.companion.id,
       status: 'draft',
     };
-    addSermon(sermonRecord);
+    // skipServerPersist: true — generator already saved to canonical DB
+    addSermon(sermonRecord, { skipServerPersist: true });
     setSermonId_(result.sermon.id);
     setCompanionData(result.companion);
     setIsDirty(false);
@@ -1660,6 +1685,35 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   }
 
   // ── Review / edit phase ──────────────────────────────────────────────────────
+
+  // While fetching a canonical-DB sermon that isn't in AdminContext yet, block
+  // the editor so the user can't save an empty form over the stored content.
+  if (loadingFromDb) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
+        <svg className="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        <span className="text-sm">Loading sermon…</span>
+      </div>
+    );
+  }
+
+  if (loadFromDbError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-500 p-8 text-center">
+        <p className="text-sm font-medium">Couldn't load this sermon.</p>
+        <p className="text-xs text-gray-400">Please go back and try again.</p>
+        <button
+          onClick={onBack}
+          className="mt-2 px-4 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+        >
+          Back to Sermons
+        </button>
+      </div>
+    );
+  }
 
   const showCompanionTab = !!companionData || !!form.companionJourneyId;
 
