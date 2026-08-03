@@ -607,6 +607,20 @@ export default function Walk() {
   } | null>(null);
   const [startingCompanionId, setStartingCompanionId] = useState<string | null>(null);
 
+  // companion-id → canonical sermon UUID — lets the current-week card tap to SermonHome.
+  const [scCanonicalMap, setScCanonicalMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${BASE_URL}/api/sermons`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((sermons: Array<{ id: string; companionId?: string | null }>) => {
+        const m = new Map<string, string>();
+        for (const s of sermons) { if (s.companionId) m.set(s.companionId, s.id); }
+        setScCanonicalMap(m);
+      })
+      .catch(() => {/* non-fatal */});
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) return;
     fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, { credentials: 'include' })
@@ -952,6 +966,20 @@ export default function Walk() {
                 : `Day ${sc.currentDay} of ${total}`
               : total > 0 ? `Day 1 of ${total}` : 'Day 1';
 
+          // Tapping the whole card navigates to SermonHome when the canonical sermon
+          // is linked (current-week), or back into the companion reader otherwise.
+          // This ensures the card is always tappable — even when fully complete with
+          // no "Continue" button.
+          const canonicalSermonId = scCanonicalMap.get(sc.id);
+          const cardPressRoute = sc.isCurrentWeek && canonicalSermonId
+            ? (() => {
+                const companionRoute = encodeURIComponent(
+                  `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`
+                );
+                return `/sermon/${canonicalSermonId}?companionRoute=${companionRoute}`;
+              })()
+            : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
+
           return (
             <motion.section
               key={sc.id}
@@ -964,7 +992,7 @@ export default function Walk() {
                 title={sc.title}
                 description={description}
                 metadata={`${sc.numberOfDays} Days`}
-                // Hide Continue when all days are complete.
+                // Hide Continue when all days are complete — card tap handles navigation.
                 primaryActionLabel={sc.currentDay > sc.numberOfDays ? undefined : 'Continue'}
                 badge={sc.badge ?? null}
                 onAction={
@@ -975,6 +1003,10 @@ export default function Walk() {
                         setLocation(`/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`);
                       }
                 }
+                onCardPress={() => {
+                  void dismissBadge('companion', sc.id);
+                  setLocation(cardPressRoute);
+                }}
                 headerTrailing={
                   <WalkMoreMenu
                     onPause={() => setPauseTarget({
