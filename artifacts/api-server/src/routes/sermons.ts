@@ -76,8 +76,15 @@ sermonsRouter.get("/admin", async (req: Request, res: Response) => {
     res.set("Cache-Control", "no-store");
     res.json(sermons);
   } catch (err) {
-    logger.error({ err }, "sermons: listAll failed");
-    res.status(500).json({ error: "Server error" });
+    // Log full detail so the exact DB/query error is visible in production logs.
+    logger.error(
+      { err, errMessage: err instanceof Error ? err.message : String(err) },
+      "sermons: listAll failed"
+    );
+    res.status(500).json({
+      error: "Failed to load sermon list",
+      detail: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 });
 

@@ -120,8 +120,22 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     try {
       const data = await listAdminSermons();
       setSermons(data);
-    } catch {
-      setLoadError('Failed to load sermons. Please refresh.');
+    } catch (err) {
+      // Surface the actual status code so production failures can be diagnosed
+      // without needing to inspect server logs. Common causes:
+      //   401 — session expired, sign out and back in
+      //   403 — account does not have admin access
+      //   500 — server error (check deployment logs)
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('401')) {
+        setLoadError('Session expired. Please sign out and sign back in.');
+      } else if (msg.includes('403')) {
+        setLoadError('Access denied. Admin permission required.');
+      } else if (msg.includes('5')) {
+        setLoadError(`Server error loading sermons. Please refresh. (${msg})`);
+      } else {
+        setLoadError(`Failed to load sermons. Please refresh. (${msg})`);
+      }
     } finally {
       setLoading(false);
     }

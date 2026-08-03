@@ -139,8 +139,24 @@ function rowToSermonWithCompanion(row: Record<string, unknown>): CanonicalSermon
 }
 
 export async function getAllSermons(): Promise<CanonicalSermonWithCompanion[]> {
+  // Explicitly select columns — intentionally exclude `transcript` and
+  // `full_transcript`. These can be hundreds of kilobytes each and are not
+  // needed for the admin list view; they are returned individually by
+  // getSermonById() when the admin opens a specific sermon for editing.
+  // Returning them here caused large response payloads that could trigger
+  // serialization pressure or proxy timeouts in production.
   const result = await pool.query(
-    `SELECT s.*,
+    `SELECT
+       s.id, s.legacy_json_id, s.title, s.speaker, s.sermon_date,
+       s.series, s.scripture_reference, s.scripture_book_ids, s.scripture_chapters,
+       s.youtube_url, s.youtube_video_id, s.audio_path, s.notes,
+       s.transcript_status, s.summary, s.themes, s.sections, s.keywords,
+       s.main_theme, s.sermon_start_time, s.sermon_end_time,
+       s.detection_confidence, s.detection_method,
+       s.status, s.published_at, s.created_at, s.updated_at,
+       s.processing_stage, s.processing_error,
+       '' AS transcript,
+       '' AS full_transcript,
        sc.id AS companion_id,
        COALESCE(sc.is_current_week, false) AS is_current_week
      FROM sermons s
@@ -172,8 +188,19 @@ export async function getSermonByLegacyId(legacyId: string): Promise<CanonicalSe
  * Used by Ask Emmaus retrieval and Preached Here.
  */
 export async function listPublishedSermons(): Promise<CanonicalSermonWithCompanion[]> {
+  // Explicit column list — excludes transcript/full_transcript (same reasoning as getAllSermons).
   const result = await pool.query(
-    `SELECT s.*,
+    `SELECT
+       s.id, s.legacy_json_id, s.title, s.speaker, s.sermon_date,
+       s.series, s.scripture_reference, s.scripture_book_ids, s.scripture_chapters,
+       s.youtube_url, s.youtube_video_id, s.audio_path, s.notes,
+       s.transcript_status, s.summary, s.themes, s.sections, s.keywords,
+       s.main_theme, s.sermon_start_time, s.sermon_end_time,
+       s.detection_confidence, s.detection_method,
+       s.status, s.published_at, s.created_at, s.updated_at,
+       s.processing_stage, s.processing_error,
+       '' AS transcript,
+       '' AS full_transcript,
        sc.id AS companion_id,
        COALESCE(sc.is_current_week, false) AS is_current_week
      FROM sermons s
