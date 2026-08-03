@@ -41,3 +41,16 @@ Frontend: `processingStage` state in `SermonEditor` initialized from `existing.p
 `SermonsList` "Process Sermon" button = primary (requires audio); "Save as Draft" = secondary (no processing). Default speaker pre-filled to 'Pastor Jeremy Govender'.
 
 `handlePublish` in SermonEditor is now atomic: also publishes companion if it's Draft.
+
+## ffmpeg PATH in deployed environment — critical
+`spawn("ffmpeg")` fails with `ENOENT` in the deployed server process because Node.js uses a stripped PATH that excludes Nix store paths visible in the interactive shell.
+
+**Fix (in audio-transcription.ts):** `resolveFfmpegPath()` runs `execSync("which ffmpeg")` via `/bin/sh` at module load time — the shell has the full Nix PATH. The resolved absolute path is stored as `FFMPEG_BIN` and used in all `spawn()` calls. Never use bare `"ffmpeg"` as the spawn command; always use the cached `FFMPEG_BIN`.
+
+## Large-file transcription pipeline (audio-transcription.ts)
+Three-stage pipeline — all automatic, no admin action required:
+1. File ≤ 24 MB → Whisper directly (single call)
+2. File > 24 MB → `compressWithFfmpeg()` (16 kHz mono 32 kbps MP3 via `FFMPEG_BIN`). 82.6 MB at 128 kbps stereo → ~21 MB.
+3. Compressed result still > 24 MB (sermon > ~100 min) → `transcribeInChunks()`: segments into 15-min chunks via `ffmpeg -f segment`, transcribes each chunk sequentially, concatenates results.
+
+**Why post-compression guard is required:** `compressedBytes` must be checked against `WHISPER_MAX_BYTES` after compression, not only before. Original code only logged it; missing guard caused > 25 MB compressed files to hit Whisper and return 413.
