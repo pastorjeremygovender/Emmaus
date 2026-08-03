@@ -47,12 +47,13 @@ async function guardAdmin(req: Request, res: Response): Promise<string | null> {
 }
 
 // ─── Member: list published sermons ──────────────────────────────────────────
+// Returns CanonicalSermonWithCompanion[] so clients can route to SermonHome.
 
 sermonsRouter.get("/", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   try {
-    const sermons = await store.listPublishedSermons();
+    const sermons = await store.listPublishedSermons(); // includes companionId
     res.set("Cache-Control", "no-store");
     res.json(sermons);
   } catch (err) {
@@ -97,12 +98,13 @@ sermonsRouter.get("/admin/:id", async (req: Request, res: Response) => {
 });
 
 // ─── Member: get one published sermon ────────────────────────────────────────
+// Returns CanonicalSermonWithCompanion so SermonHome can show the companion CTA.
 
 sermonsRouter.get("/:id", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   try {
-    const sermon = await store.getSermonById(String(req.params.id));
+    const sermon = await store.getPublishedSermonById(String(req.params.id));
     if (!sermon || sermon.status !== "Published") {
       res.status(404).json({ error: "Sermon not found" });
       return;
@@ -256,6 +258,49 @@ sermonsRouter.delete("/admin/:id", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, "sermons: delete failed");
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Admin: transcribe uploaded audio via OpenAI Whisper ─────────────────────
+//
+// Downloads the audio from object storage and calls Whisper-1.
+// Saves the transcript to the sermon record and returns the updated sermon.
+// Can take 30–120 seconds for typical sermon audio.
+
+sermonsRouter.post("/admin/:id/transcribe", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+
+  try {
+    const sermon = await store.getSermonById(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    if (!sermon.audioPath) {
+      res.status(400).json({ error: "No audio file uploaded for this sermon. Upload audio first." });
+      return;
+    }
+
+    // Mark as pending immediately so client can show progress
+    await store.updateSermon(id, { transcriptStatus: "pending" });
+
+    const { transcribeAudio } = await import("../lib/audio-transcription.js");
+    const transcript = await transcribeAudio(sermon.audioPath);
+
+    const updated = await store.updateSermon(id, {
+      transcript,
+      fullTranscript: transcript,
+      transcriptStatus: "complete",
+    });
+
+    logger.info({ sermonId: id, chars: transcript.length }, "sermons: transcription complete");
+    res.json(updated);
+  } catch (err) {
+    // Reset status to none on failure so admin can retry
+    await store.updateSermon(id, { transcriptStatus: "none" }).catch(() => {});
+    logger.error({ err, sermonId: id }, "sermons: transcription failed");
+    res.status(500).json({ error: err instanceof Error ? err.message : "Transcription failed" });
   }
 });
 

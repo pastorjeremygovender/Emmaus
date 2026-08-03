@@ -160,3 +160,36 @@ export async function requestAudioUploadUrl(
   if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
   return res.json();
 }
+
+// ─── Transcribe audio (admin) ─────────────────────────────────────────────────
+// Triggers Whisper transcription on the server for the uploaded audio file.
+// Returns the updated sermon with transcript and transcriptStatus='complete'.
+
+export async function transcribeSermonAudio(sermonId: string): Promise<CanonicalSermon> {
+  const res = await fetch(apiUrl(`/sermons/admin/${sermonId}/transcribe`), {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 400) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "No audio uploaded");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Transcription failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+// ─── List published sermons (member) ─────────────────────────────────────────
+// Used by Journeys.tsx to build the companionId → sermonId lookup map.
+
+export async function listPublishedSermons(): Promise<CanonicalSermon[]> {
+  const res = await fetch(apiUrl("/sermons"), {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`Failed to load published sermons: ${res.status}`);
+  return res.json();
+}

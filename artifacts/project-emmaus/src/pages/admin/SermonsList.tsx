@@ -6,11 +6,11 @@
  *
  * Actions: Edit | Quick Publish/Unpublish | Delete
  */
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
-  ArrowLeft, X, RefreshCw,
+  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle,
 } from 'lucide-react';
 import {
   type CanonicalSermon,
@@ -19,6 +19,7 @@ import {
   unpublishAdminSermon,
   deleteAdminSermon,
   createAdminSermon,
+  requestAudioUploadUrl,
 } from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
@@ -67,11 +68,46 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const [unpublishTarget, setUnpublishTarget] = useState<CanonicalSermon | null>(null);
   const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
 
-  // New sermon creation modal
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [newTitle, setNewTitle]         = useState('');
-  const [newCreating, setNewCreating]   = useState(false);
-  const [newError, setNewError]         = useState('');
+  // New sermon creation modal — metadata
+  const [showNewModal, setShowNewModal]     = useState(false);
+  const [newTitle, setNewTitle]             = useState('');
+  const [newSpeaker, setNewSpeaker]         = useState('');
+  const [newDate, setNewDate]               = useState(() => new Date().toISOString().split('T')[0]);
+  const [newScripture, setNewScripture]     = useState('');
+  const [newSeries, setNewSeries]           = useState('');
+  const [newYoutubeUrl, setNewYoutubeUrl]   = useState('');
+  const [newNotes, setNewNotes]             = useState('');
+  const [newCreating, setNewCreating]       = useState(false);
+  const [newError, setNewError]             = useState('');
+  const [newCreateStep, setNewCreateStep]   = useState<'form' | 'uploading'>('form');
+  const [newUploadProgress, setNewUploadProgress] = useState(0);
+
+  // Audio file for new sermon
+  const [newAudioFile, setNewAudioFile]     = useState<File | null>(null);
+  const [newAudioError, setNewAudioError]   = useState('');
+  const newAudioInputRef                    = useRef<HTMLInputElement>(null);
+
+  const ACCEPTED_AUDIO = '.mp3,.m4a,.wav,.mp4,.mpeg,.webm';
+  const ACCEPTED_MIMES = ['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/wav','video/mp4','audio/webm'];
+  const MAX_AUDIO_MB   = 25;
+
+  function fmtBytes(b: number) {
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
+    return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  function handleNewAudioSelect(f: File) {
+    setNewAudioError('');
+    if (!ACCEPTED_MIMES.some(m => f.type === m) && !/\.(mp3|m4a|wav|mp4|mpeg|webm)$/i.test(f.name)) {
+      setNewAudioError('Unsupported type. Use MP3, M4A, WAV, MP4, MPEG or WEBM.');
+      return;
+    }
+    if (f.size > MAX_AUDIO_MB * 1024 * 1024) {
+      setNewAudioError(`File too large (${fmtBytes(f.size)}). Max ${MAX_AUDIO_MB} MB.`);
+      return;
+    }
+    setNewAudioFile(f);
+  }
 
   // ── Load sermons ────────────────────────────────────────────────────────────
 
@@ -99,25 +135,70 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
 
   // ── New canonical sermon ──────────────────────────────────────────────────────
 
-  const handleOpenNewModal = () => { setShowNewModal(true); setNewTitle(''); setNewError(''); };
-  const handleCloseNewModal = () => { setShowNewModal(false); setNewTitle(''); setNewError(''); };
+  const handleOpenNewModal = () => {
+    setShowNewModal(true); setNewTitle(''); setNewSpeaker(''); setNewScripture('');
+    setNewSeries(''); setNewYoutubeUrl(''); setNewNotes(''); setNewError('');
+    setNewAudioFile(null); setNewAudioError(''); setNewCreateStep('form');
+    setNewUploadProgress(0);
+    setNewDate(new Date().toISOString().split('T')[0]);
+  };
+  const handleCloseNewModal = () => {
+    if (newCreating) return;
+    setShowNewModal(false);
+  };
 
   const handleCreateSermon = async () => {
+    if (newCreating) return;
     setNewCreating(true);
     setNewError('');
     try {
+      // Step 1: Create the record with all metadata
       const created = await createAdminSermon({
-        title: newTitle.trim() || 'New Sermon',
-        status: 'Draft',
-        sermonDate: new Date().toISOString().split('T')[0],
+        title:              newTitle.trim()      || 'New Sermon',
+        speaker:            newSpeaker.trim()    || '',
+        sermonDate:         newDate              || new Date().toISOString().split('T')[0],
+        scriptureReference: newScripture.trim()  || '',
+        series:             newSeries.trim()     || '',
+        youtubeUrl:         newYoutubeUrl.trim() || '',
+        notes:              newNotes.trim()      || '',
+        status:             'Draft',
       });
+
+      // Step 2: Upload audio if selected
+      if (newAudioFile) {
+        setNewCreateStep('uploading');
+        try {
+          const { uploadURL } = await requestAudioUploadUrl(created.id, {
+            name:        newAudioFile.name,
+            size:        newAudioFile.size,
+            contentType: newAudioFile.type || 'audio/mpeg',
+          });
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadURL);
+            xhr.setRequestHeader('Content-Type', newAudioFile.type || 'audio/mpeg');
+            xhr.upload.addEventListener('progress', e => {
+              if (e.lengthComputable) setNewUploadProgress(Math.round(e.loaded / e.total * 100));
+            });
+            xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`));
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(newAudioFile);
+          });
+        } catch (uploadErr) {
+          // Non-fatal: sermon was created, just no audio — editor can upload later
+          console.warn('Audio upload failed (non-fatal):', uploadErr);
+        }
+      }
+
       setSermons(prev => [created, ...prev]);
-      handleCloseNewModal();
+      setShowNewModal(false);
       onEdit(editId(created));
     } catch (err) {
       setNewError(err instanceof Error ? err.message : 'Failed to create sermon');
+      setNewCreateStep('form');
     } finally {
       setNewCreating(false);
+      setNewUploadProgress(0);
     }
   };
 
@@ -429,8 +510,9 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
             <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
               <button
                 onClick={handleCloseNewModal}
+                disabled={newCreating}
                 aria-label="Cancel"
-                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0"
+                className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0 disabled:opacity-40"
               >
                 <ArrowLeft size={14} />
                 Cancel
@@ -441,22 +523,36 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
               <div className="w-20 flex-shrink-0 flex justify-end">
                 <button
                   onClick={handleCloseNewModal}
+                  disabled={newCreating}
                   aria-label="Close"
-                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors"
+                  className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-700 transition-colors disabled:opacity-40"
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            {/* Step progress */}
-            <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
-              <div className="h-[3px] rounded-full flex-1 bg-teal-500" />
-            </div>
+            {/* Upload progress bar */}
+            {newCreateStep === 'uploading' && (
+              <div className="flex-shrink-0 px-5 pt-3 pb-1 space-y-1">
+                <div className="flex justify-between text-[11px] text-gray-500">
+                  <span>Uploading audio…</span>
+                  <span>{newUploadProgress}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all"
+                    style={{ width: `${newUploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Content */}
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
               <div className="space-y-4">
+
+                {/* Title */}
                 <div>
                   <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
                     Sermon Title
@@ -467,18 +563,144 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                     type="text"
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !newCreating) handleCreateSermon();
-                    }}
                     placeholder="e.g. The God Who Sees"
                     className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
                   />
-                  <p className="mt-2 text-[12px] text-gray-500 leading-relaxed">
-                    You can update the title inside the editor. Leave blank to start with a placeholder.
-                  </p>
                 </div>
+
+                {/* Speaker + Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Speaker</label>
+                    <input
+                      type="text"
+                      value={newSpeaker}
+                      onChange={e => setNewSpeaker(e.target.value)}
+                      placeholder="Pastor name"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={newDate}
+                      onChange={e => setNewDate(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Scripture + Series */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">Main Scripture</label>
+                    <input
+                      type="text"
+                      value={newScripture}
+                      onChange={e => setNewScripture(e.target.value)}
+                      placeholder="e.g. John 3:1-21"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                      Series
+                      <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newSeries}
+                      onChange={e => setNewSeries(e.target.value)}
+                      placeholder="Series name"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Audio Upload */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1.5">
+                    Upload Sermon Audio
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <input
+                    ref={newAudioInputRef}
+                    type="file"
+                    accept={ACCEPTED_AUDIO}
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) handleNewAudioSelect(f);
+                      e.target.value = '';
+                    }}
+                  />
+                  {newAudioFile ? (
+                    <div className="flex items-center gap-2.5 p-3 rounded-xl border border-teal-200 bg-teal-50">
+                      <FileAudio size={16} className="text-teal-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-gray-800 truncate">{newAudioFile.name}</p>
+                        <p className="text-[11px] text-gray-500">{fmtBytes(newAudioFile.size)}</p>
+                      </div>
+                      <button
+                        onClick={() => setNewAudioFile(null)}
+                        className="p-1 rounded hover:bg-teal-100 text-gray-400 hover:text-gray-700"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => newAudioInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-gray-200 hover:border-teal-300 hover:bg-gray-50 rounded-xl p-4 text-center transition-colors"
+                    >
+                      <Upload size={16} className="mx-auto mb-1.5 text-gray-400" />
+                      <p className="text-[12px] font-medium text-gray-600">Click to select audio</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">MP3, M4A, WAV, MP4, MPEG, WEBM · Max 25 MB</p>
+                    </button>
+                  )}
+                  {newAudioError && (
+                    <p className="mt-1.5 text-[11px] text-red-600 flex items-center gap-1">
+                      <AlertCircle size={11} /> {newAudioError}
+                    </p>
+                  )}
+                </div>
+
+                {/* YouTube URL */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                    YouTube URL
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={newYoutubeUrl}
+                    onChange={e => setNewYoutubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=…"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-[12px] font-semibold text-gray-700 mb-1">
+                    Notes
+                    <span className="ml-1 text-[10px] font-normal text-gray-400">optional</span>
+                  </label>
+                  <textarea
+                    value={newNotes}
+                    onChange={e => setNewNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Admin notes about this sermon…"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-[13px] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
+                  />
+                </div>
+
                 {newError && (
-                  <p className="text-sm text-red-600">{newError}</p>
+                  <p className="text-[12px] text-red-600 flex items-center gap-1.5">
+                    <AlertCircle size={12} /> {newError}
+                  </p>
                 )}
               </div>
             </div>
@@ -487,18 +709,18 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
             <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
               <button
                 onClick={handleCreateSermon}
-                disabled={newCreating}
+                disabled={newCreating || !!newAudioError}
                 className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
               >
                 {newCreating
-                  ? <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>
-                  : <span>Create Sermon</span>
+                  ? <><Loader2 size={15} className="animate-spin" /><span>{newCreateStep === 'uploading' ? 'Uploading audio…' : 'Creating…'}</span></>
+                  : <span>{newAudioFile ? 'Create Sermon + Upload Audio' : 'Create Sermon'}</span>
                 }
               </button>
               <button
-                onClick={() => { handleCloseNewModal(); onNew(); }}
+                onClick={() => { if (!newCreating) { handleCloseNewModal(); onNew(); } }}
                 disabled={newCreating}
-                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
+                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-40"
               >
                 Or generate from a YouTube URL →
               </button>

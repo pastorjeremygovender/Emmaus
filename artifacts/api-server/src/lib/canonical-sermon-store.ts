@@ -159,13 +159,34 @@ export async function getSermonByLegacyId(legacyId: string): Promise<CanonicalSe
 
 /**
  * Returns all published canonical sermons, ordered by most recent first.
+ * Includes companion linkage so member clients can route to SermonHome correctly.
  * Used by Ask Emmaus retrieval and Preached Here.
  */
-export async function listPublishedSermons(): Promise<CanonicalSermon[]> {
+export async function listPublishedSermons(): Promise<CanonicalSermonWithCompanion[]> {
   const result = await pool.query(
-    `SELECT * FROM sermons WHERE status = 'Published' ORDER BY published_at DESC NULLS LAST`
+    `SELECT s.*,
+       (SELECT id FROM sermon_companion WHERE sermon_uuid = s.id LIMIT 1) AS companion_id
+     FROM sermons s
+     WHERE s.status = 'Published'
+     ORDER BY s.published_at DESC NULLS LAST`
   );
-  return result.rows.map(rowToSermon);
+  return result.rows.map(rowToSermonWithCompanion);
+}
+
+/**
+ * Returns a single published sermon by UUID, with companion linkage.
+ * Used by SermonHome member page.
+ */
+export async function getPublishedSermonById(id: string): Promise<CanonicalSermonWithCompanion | null> {
+  const result = await pool.query(
+    `SELECT s.*,
+       (SELECT id FROM sermon_companion WHERE sermon_uuid = s.id LIMIT 1) AS companion_id
+     FROM sermons s
+     WHERE s.id = $1`,
+    [id]
+  );
+  if (!result.rows[0]) return null;
+  return rowToSermonWithCompanion(result.rows[0]);
 }
 
 /**

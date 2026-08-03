@@ -46,6 +46,7 @@ import {
   Loader2, RefreshCw, Check, X, ChevronRight,
   AlertCircle, CheckCircle2, Trash2,
 } from 'lucide-react';
+import SermonAudioUpload from './SermonAudioUpload';
 
 type Props = {
   sermonId: string | null;
@@ -1747,7 +1748,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              {tab === 'companion' ? 'Companion' : 'Sermon'}
+              {tab === 'companion' ? '5-Day Companion' : 'Sermon'}
             </button>
           ))}
         </div>
@@ -1827,9 +1828,29 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                 </Field>
               </div>
 
-              <Field label="YouTube URL">
-                <TextInput value={form.youtubeUrl} onChange={e => patch('youtubeUrl', e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
-              </Field>
+              {/* ── Audio & Video ─────────────────────────────────────────────── */}
+              <div className="pt-1 border-t border-gray-100 space-y-4">
+                <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-1">
+                  Audio &amp; Video
+                </h3>
+
+                <Field label="Upload Sermon Audio">
+                  <SermonAudioUpload
+                    sermonId={sermonId_ ?? null}
+                    currentPath={form.audioPath ?? ''}
+                    transcriptStatus={(form.transcriptStatus as 'none' | 'pending' | 'complete') ?? 'none'}
+                    onAudioSaved={path => patch('audioPath', path)}
+                    onTranscribed={transcript => {
+                      patch('transcript', transcript);
+                      patch('transcriptStatus', 'complete');
+                    }}
+                  />
+                </Field>
+
+                <Field label="YouTube URL">
+                  <TextInput value={form.youtubeUrl} onChange={e => patch('youtubeUrl', e.target.value)} placeholder="https://www.youtube.com/watch?v=…" />
+                </Field>
+              </div>
 
               {/* Summary */}
               <Field label="Summary">
