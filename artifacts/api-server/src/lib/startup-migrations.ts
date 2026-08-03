@@ -28,6 +28,7 @@
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 
+import { execSync } from "node:child_process";
 import { pool } from "@workspace/db";
 import { logger } from "./logger.js";
 import { setStartSharedReady } from "./feature-flags.js";
@@ -721,5 +722,33 @@ export async function runStartupMigrations(): Promise<void> {
     );
   } catch (err) {
     logger.warn({ err }, "Startup migration: content inventory check failed (non-fatal)");
+  }
+
+  // ── ffmpeg availability probe ─────────────────────────────────────────────
+  // Proves the binary is reachable at the resolved absolute path in this
+  // exact runtime environment. A failed probe here means transcription will
+  // fail too — catch it early before an admin uploads a 80 MB sermon.
+  try {
+    const ffmpegBin = execSync("which ffmpeg", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+
+    if (!ffmpegBin) throw new Error("which ffmpeg returned empty");
+
+    const versionLine = execSync(`"${ffmpegBin}" -version`, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).split("\n")[0]?.trim() ?? "";
+
+    logger.info(
+      { bin: ffmpegBin, version: versionLine },
+      "Startup migration: ffmpeg available",
+    );
+  } catch (ffErr) {
+    logger.error(
+      { err: ffErr },
+      "Startup migration: ffmpeg NOT available — audio transcription will fail for files > 24 MB",
+    );
   }
 }

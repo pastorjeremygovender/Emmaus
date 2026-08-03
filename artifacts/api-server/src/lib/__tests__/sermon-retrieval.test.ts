@@ -72,6 +72,8 @@ before(async () => {
     sections: [],
     keywords: ["nicodemus", "john 3:16"],
     mainTheme: "new birth",
+    processingStage: "idle",
+    processingError: "",
     status: "Draft",
   });
 

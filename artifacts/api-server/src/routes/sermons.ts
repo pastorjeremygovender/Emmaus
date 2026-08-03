@@ -387,9 +387,9 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
       return;
     }
 
-    // Mark as transcribing immediately so the client can start polling
+    // Clear any previous error and set initial stage so the client can start polling
     const pending = await store.updateSermon(id, {
-      processingStage: "transcribing",
+      processingStage: "preparing",
       processingError: "",
     });
 
@@ -405,10 +405,15 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
         const { transcribeAudio }                      = await import("../lib/audio-transcription.js");
         const { generateSermonContentFromTranscript }  = await import("../lib/sermon-generator.js");
 
+        // Persist each sub-stage to the DB so the polling client sees live progress
+        const onProgress = async (stage: string) => {
+          await store.updateSermon(id, { processingStage: stage }).catch(() => {});
+        };
+
         // Stage 1 — transcribe
         let fullTranscript: string;
         try {
-          fullTranscript = await transcribeAudio(sermon.audioPath);
+          fullTranscript = await transcribeAudio(sermon.audioPath, onProgress);
         } catch (transcribeErr) {
           await store.updateSermon(id, {
             processingStage: "failed:transcribing",
@@ -432,8 +437,9 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
         // Stage 2 — generate sermon draft + companion
         try {
           await generateSermonContentFromTranscript(id, fullTranscript, {
-            title:   sermon.title,
-            speaker: sermon.speaker,
+            title:      sermon.title,
+            speaker:    sermon.speaker,
+            onProgress,
           });
         } catch (genErr) {
           await store.updateSermon(id, {

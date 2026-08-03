@@ -1359,9 +1359,17 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
 export async function generateSermonContentFromTranscript(
   sermonId: string,
   fullTranscript: string,
-  opts: { title?: string; speaker?: string } = {}
+  opts: {
+    title?: string;
+    speaker?: string;
+    /** Emits live sub-stage updates so the polling client sees granular progress. */
+    onProgress?: (stage: string) => Promise<void> | void;
+  } = {}
 ): Promise<void> {
+  const { onProgress } = opts;
+
   // 1. Auto-detect sermon section (no confirmation gate)
+  await onProgress?.("detecting");
   let sermonTranscript = fullTranscript;
   let detectionStartSecs: number | null = null;
   let detectionEndSecs: number | null = null;
@@ -1389,6 +1397,7 @@ export async function generateSermonContentFromTranscript(
   }
 
   // 3. Generate sermon draft fields from the transcript
+  await onProgress?.("drafting");
   const draftFields = await generateSermonDraft({
     title:       opts.title ?? "",
     description: "",
@@ -1396,6 +1405,7 @@ export async function generateSermonContentFromTranscript(
   });
 
   // 4. Generate 5-day companion
+  await onProgress?.("companion");
   const companionDraft = await generateCompanion({
     sermonTitle:        draftFields.title || opts.title || "Sermon",
     scriptureReference: draftFields.scriptureReference,
