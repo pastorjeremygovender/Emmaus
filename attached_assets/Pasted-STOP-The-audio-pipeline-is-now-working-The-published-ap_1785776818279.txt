@@ -1,0 +1,205 @@
+STOP. The audio pipeline is now working.
+
+The published app successfully reached and completed:
+
+- Preparing audio
+- Compressing audio
+- Transcribing sermon audio
+
+The current failure is:
+
+400 Unsupported value: 'temperature' does not support 0.2 with this model.
+Only the default (1) value is supported.
+
+This is now blocking:
+
+- Identifying sermon sections and themes
+- Generating summary and keywords
+- Creating the 5-Day Companion
+
+Fix this specific production API configuration issue now.
+
+==================================================
+1. FIND EVERY UNSUPPORTED TEMPERATURE PARAMETER
+==================================================
+
+Search the entire server codebase for:
+
+- temperature: 0.2
+- temperature:
+- top_p:
+- frequency_penalty:
+- presence_penalty:
+
+Inspect every OpenAI generation call used by:
+
+- sermon analysis
+- section generation
+- theme generation
+- summary generation
+- keyword generation
+- Scripture extraction
+- 5-Day Companion generation
+- Bible Links generation
+- Ask Emmaus preparation
+- Sermon Home preparation
+- retry processing
+
+Determine which model is being called in each stage.
+
+For any model that supports only the default temperature:
+
+- remove the temperature field entirely
+- do not replace it with temperature: 1
+- allow the model default to apply
+
+Do the same for any other unsupported sampling parameters.
+
+==================================================
+2. CENTRALISE MODEL OPTIONS
+==================================================
+
+Do not configure temperature independently in multiple sermon functions.
+
+Create or use one central model configuration helper.
+
+It must:
+
+- identify the selected model
+- include only parameters supported by that model
+- omit unsupported fields entirely
+- be used by every sermon-generation stage
+- prevent this error from recurring elsewhere
+
+Example principle:
+
+const request = {
+  model,
+  input,
+  ...getSupportedModelOptions(model)
+}
+
+Do not blindly attach temperature, top_p, penalties or legacy completion parameters to every request.
+
+==================================================
+3. PRESERVE COMPLETED TRANSCRIPTION
+==================================================
+
+Do not retranscribe the 82.6 MB sermon.
+
+The transcript has already completed successfully.
+
+Retry Processing must resume from the first failed generation stage:
+
+- Identifying sermon sections and themes
+
+It must reuse:
+
+- the existing stored audio
+- the completed transcript
+- the existing sermon record
+- the current processing attempt data where appropriate
+
+Do not repeat compression or Whisper transcription unless the transcript is genuinely missing.
+
+==================================================
+4. RETRY FAILED STAGES ONLY
+==================================================
+
+The processing state machine should support stage-level retry.
+
+For this sermon:
+
+Completed:
+- Audio uploaded
+- Preparing audio
+- Compressing audio
+- Transcribing sermon audio
+
+Retry from:
+- Identifying sermon sections and themes
+
+Then continue:
+
+- Generating summary and keywords
+- Creating 5-Day Companion
+- Generating Bible Links
+- Preparing Ask Emmaus
+- Preparing Sermon Home
+- Ready for review
+
+Do not restart the entire pipeline.
+
+==================================================
+5. IMPROVE ERROR DISPLAY
+==================================================
+
+Do not mark all later stages red as though they independently failed.
+
+Only the stage that actually returned the API error should show Failed.
+
+Later stages should show:
+
+Waiting — previous stage failed
+
+After retry, they should continue normally.
+
+Display a useful admin message such as:
+
+“Sermon transcription completed, but content generation could not continue because of an AI configuration error. No audio or transcript was lost.”
+
+==================================================
+6. VERIFY EVERY GENERATION CALL
+==================================================
+
+Test each stage individually in the published runtime:
+
+1. Generate sermon sections and themes.
+2. Generate summary and keywords.
+3. Generate Scripture references.
+4. Generate the complete 5-Day Companion.
+5. Generate Bible Links.
+6. Prepare Ask Emmaus retrieval content.
+7. Prepare Sermon Home.
+
+Confirm no request sends unsupported model parameters.
+
+==================================================
+7. COMPLETE THE EXISTING SERMON
+==================================================
+
+Use the existing sermon record and completed transcript.
+
+Do not ask me to upload again.
+
+After fixing and publishing:
+
+1. Retry Processing.
+2. Confirm it resumes after transcription.
+3. Confirm sections and themes are generated.
+4. Confirm summary and keywords are generated.
+5. Confirm the 5-Day Companion is generated.
+6. Confirm Bible Links are generated.
+7. Confirm Ask Emmaus preparation completes.
+8. Confirm Sermon Home preparation completes.
+9. Confirm status reaches READY_FOR_REVIEW.
+10. Confirm the generated Review Sermon page opens with populated content.
+
+==================================================
+8. REPORT BACK
+==================================================
+
+Report:
+
+1. Exact file and function that sent temperature: 0.2.
+2. Model used by that request.
+3. Every affected generation call.
+4. Central model-config change made.
+5. Confirmation that transcription was reused.
+6. Confirmation that retry resumed from the failed stage.
+7. Confirmation that the existing sermon reached READY_FOR_REVIEW.
+8. Published deployment/commit tested.
+
+Do not report success merely because the temperature field was removed from one function.
+
+Test the complete remaining pipeline in production using the existing sermon.

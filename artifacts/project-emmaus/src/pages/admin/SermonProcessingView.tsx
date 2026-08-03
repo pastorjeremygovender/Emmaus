@@ -80,9 +80,12 @@ const ROW_DEFS: RowDef[] = [
   { key: 'chunking',     rank: 3,  mandatory: false },
   { key: 'transcribing', rank: 4,  mandatory: true,  failPrefix: 'failed:transcribing' },
   { key: 'combining',    rank: 5,  mandatory: false },
-  { key: 'detecting',    rank: 6,  mandatory: true,  failPrefix: 'failed:generating' },
-  { key: 'drafting',     rank: 7,  mandatory: true,  failPrefix: 'failed:generating' },
-  { key: 'companion',    rank: 8,  mandatory: true,  failPrefix: 'failed:generating' },
+  // Each generation sub-stage has its own failPrefix so only the row that
+  // actually failed is shown red; later rows show "Waiting — previous stage failed".
+  // Legacy fallback: 'failed:generating' (old DB rows) is treated as failed:detecting.
+  { key: 'detecting',    rank: 6,  mandatory: true,  failPrefix: 'failed:detecting' },
+  { key: 'drafting',     rank: 7,  mandatory: true,  failPrefix: 'failed:drafting' },
+  { key: 'companion',    rank: 8,  mandatory: true,  failPrefix: 'failed:companion' },
   { key: 'ready',        rank: 10, mandatory: true  },
 ];
 
@@ -231,9 +234,18 @@ export default function SermonProcessingView({
     setError('');
     try {
       await onRetry();
-      // Reset to 'preparing' so the view shows fresh progress
-      setStage('preparing');
-      setSeenStages(inferSeenStages('preparing'));
+      // If the failure was in a generation sub-stage (transcript was already complete),
+      // reset the view to 'generating' so transcription rows remain green and the
+      // admin can see the pipeline resuming from the correct point.
+      // For transcription failures, reset all the way back to 'preparing'.
+      const isGenerationFailure =
+        stage === 'failed:detecting' ||
+        stage === 'failed:drafting'  ||
+        stage === 'failed:companion' ||
+        stage === 'failed:generating'; // legacy alias
+      const resetStage = isGenerationFailure ? 'generating' : 'preparing';
+      setStage(resetStage);
+      setSeenStages(inferSeenStages(resetStage));
     } finally {
       setRetrying(false);
     }
@@ -241,6 +253,15 @@ export default function SermonProcessingView({
 
   // ── Build display rows ────────────────────────────────────────────────────
   const currentRank = stageRank(stage);
+
+  // Rank of the stage that actually failed (used to determine which rows come
+  // *after* the failure and should show "Waiting — previous stage failed").
+  // Legacy 'failed:generating' maps to rank 6 (detecting).
+  const failedRank = isFailed
+    ? stage === 'failed:generating'
+      ? 6  // legacy alias → detecting rank
+      : stageRank(stage.replace(/^failed:/, ''))
+    : -1;
 
   const visibleRows = ROW_DEFS.filter(row =>
     row.mandatory || seenStages.has(row.key)
@@ -266,10 +287,23 @@ export default function SermonProcessingView({
         {/* Stage list */}
         <div className="space-y-2.5">
           {visibleRows.map(row => {
-            const isActive      = stageBaseKey(stage) === row.key && !isFailed;
-            const isDone        = !isFailed && currentRank > row.rank;
-            const isStageFailed = row.failPrefix ? stage.startsWith(row.failPrefix) : false;
-            const isPending     = !isActive && !isDone && !isStageFailed;
+            const isActive = stageBaseKey(stage) === row.key && !isFailed;
+            const isDone   = !isFailed && currentRank > row.rank;
+
+            // A row is "failed" if it matches the exact stage that failed.
+            // Legacy 'failed:generating' is treated as 'failed:detecting' — only the
+            // detecting row shows red, not all downstream generation rows.
+            const isStageFailed = isFailed && (
+              (row.failPrefix ? stage.startsWith(row.failPrefix) : false) ||
+              (stage === 'failed:generating' && row.key === 'detecting')
+            );
+
+            // Rows that come *after* the failed stage — they never ran.
+            // Show "Waiting — previous stage failed" instead of a plain grey clock.
+            const isWaitingAfterFailure =
+              isFailed && !isDone && !isStageFailed && !isActive && row.rank > failedRank;
+
+            const isPending = !isActive && !isDone && !isStageFailed && !isWaitingAfterFailure;
 
             let icon: React.ReactNode;
             if (isStageFailed) {
@@ -278,27 +312,33 @@ export default function SermonProcessingView({
               icon = <CheckCircle2 size={17} className="text-teal-500" />;
             } else if (isActive) {
               icon = <Loader2 size={17} className="animate-spin text-teal-600" />;
+            } else if (isWaitingAfterFailure) {
+              icon = <Clock size={17} className="text-amber-400" />;
             } else {
               icon = <Clock size={17} className={isPending ? 'text-gray-300' : 'text-teal-500'} />;
             }
 
-            const label = rowLabel(row.key, stage);
+            const label = isWaitingAfterFailure
+              ? 'Waiting — previous stage failed'
+              : rowLabel(row.key, stage);
 
             return (
               <div
                 key={row.key}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                  isStageFailed ? 'bg-red-50 border border-red-100'
-                  : isActive    ? 'bg-teal-50 border border-teal-100'
-                  : isDone      ? 'bg-gray-50 border border-transparent'
+                  isStageFailed          ? 'bg-red-50 border border-red-100'
+                  : isActive             ? 'bg-teal-50 border border-teal-100'
+                  : isDone               ? 'bg-gray-50 border border-transparent'
+                  : isWaitingAfterFailure? 'bg-amber-50 border border-amber-100'
                   : 'bg-white border border-transparent'
                 }`}
               >
                 <span className="shrink-0">{icon}</span>
                 <span className={`text-sm ${
-                  isStageFailed ? 'text-red-700 font-medium'
-                  : isActive    ? 'text-teal-700 font-medium'
-                  : isDone      ? 'text-gray-700'
+                  isStageFailed           ? 'text-red-700 font-medium'
+                  : isActive              ? 'text-teal-700 font-medium'
+                  : isDone                ? 'text-gray-700'
+                  : isWaitingAfterFailure ? 'text-amber-700'
                   : 'text-gray-400'
                 }`}>
                   {label}

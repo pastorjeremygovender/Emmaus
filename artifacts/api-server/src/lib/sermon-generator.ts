@@ -24,6 +24,40 @@ import { logger } from "./logger.js";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
+// ─── Model capability detection ───────────────────────────────────────────────
+
+/**
+ * True for models that reject sampling parameters such as `temperature`.
+ * gpt-5 and o-series reasoning models only accept the default temperature (1)
+ * and will return a 400 if any other value is sent.
+ */
+const IS_REASONING_MODEL = /^o\d/i.test(MODEL) || /^gpt-5/i.test(MODEL);
+
+/**
+ * Returns only the OpenAI completion parameters that the active model supports.
+ *
+ * Usage:
+ *   openai.chat.completions.create({
+ *     model: MODEL,
+ *     ...getSupportedModelOptions(),   // safe — omits temperature for gpt-5 / o-series
+ *     messages: [...],
+ *   })
+ *
+ * Rules:
+ * - Reasoning models (gpt-5, o-series): no temperature, no top_p, no penalties.
+ *   The API returns 400 "Unsupported value: 'temperature'" if these are included.
+ * - Standard models: temperature and other sampling params are allowed. Callers
+ *   that previously hard-coded a non-default temperature should migrate here.
+ *   Omit the parameter entirely (rather than sending 1) to let the model default apply.
+ */
+function getSupportedModelOptions(): Record<string, unknown> {
+  if (IS_REASONING_MODEL) return {};
+  // Standard models: return no extra params here — callers that truly need a
+  // non-default temperature can spread their own value, but the sermon pipeline
+  // no longer sets temperature explicitly (model defaults are sufficient).
+  return {};
+}
+
 // ─── Structured generation errors ────────────────────────────────────────────
 
 /**
@@ -794,8 +828,10 @@ Summary: ${context.summary}${transcriptSnippet}`;
 
   const res = await openai.chat.completions.create({
     model: MODEL,
-    // Low temperature: extraction and controlled summarisation, not creative generation.
-    temperature: 0.2,
+    // Do NOT set temperature here — reasoning models (gpt-5, o-series) reject any
+    // non-default value and return 400. Use getSupportedModelOptions() which returns
+    // {} for reasoning models, letting the API default (1) apply for all models.
+    ...getSupportedModelOptions(),
     messages: [
       { role: "system", content: COMPANION_SYSTEM },
       { role: "user", content: userMsg },

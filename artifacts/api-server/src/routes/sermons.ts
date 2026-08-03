@@ -399,9 +399,20 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
       return;
     }
 
+    // Smart resume: if the transcript is already complete, skip audio processing
+    // and jump straight to content generation. This lets Retry resume from the
+    // first failed generation stage without re-running Whisper on the full audio.
+    const hasTranscript =
+      sermon.transcriptStatus === "complete" &&
+      typeof sermon.fullTranscript === "string" &&
+      sermon.fullTranscript.length > 0;
+
+    const initialStage = hasTranscript ? "generating" : "preparing";
+    logger.info({ sermonId: id, hasTranscript, initialStage }, "sermons: process — starting pipeline");
+
     // Clear any previous error and set initial stage so the client can start polling
     const pending = await store.updateSermon(id, {
-      processingStage: "preparing",
+      processingStage: initialStage,
       processingError: "",
     });
 
@@ -417,34 +428,46 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
         const { transcribeAudio }                      = await import("../lib/audio-transcription.js");
         const { generateSermonContentFromTranscript }  = await import("../lib/sermon-generator.js");
 
+        // Track the last sub-stage emitted by onProgress so that when generation
+        // fails we can record `failed:<stage>` (e.g. `failed:detecting`) instead of
+        // the blanket `failed:generating`. This lets the UI mark only the actual
+        // failed row red; later rows show "Waiting — previous stage failed".
+        let lastProgressStage = "detecting";
+
         // Persist each sub-stage to the DB so the polling client sees live progress
         const onProgress = async (stage: string) => {
+          lastProgressStage = stage;
           await store.updateSermon(id, { processingStage: stage }).catch(() => {});
         };
 
-        // Stage 1 — transcribe
+        // Stage 1 — transcribe (skipped when transcript already exists)
         let fullTranscript: string;
-        try {
-          fullTranscript = await transcribeAudio(sermon.audioPath, onProgress);
-        } catch (transcribeErr) {
-          await store.updateSermon(id, {
-            processingStage: "failed:transcribing",
-            processingError: transcribeErr instanceof Error
-              ? transcribeErr.message
-              : "Transcription failed",
-            transcriptStatus: "none",
-          }).catch(() => {});
-          logger.error({ err: transcribeErr, sermonId: id }, "sermons: process — transcription failed");
-          return;
-        }
+        if (hasTranscript) {
+          fullTranscript = sermon.fullTranscript;
+          logger.info({ sermonId: id, chars: fullTranscript.length }, "sermons: process — reusing existing transcript");
+        } else {
+          try {
+            fullTranscript = await transcribeAudio(sermon.audioPath, onProgress);
+          } catch (transcribeErr) {
+            await store.updateSermon(id, {
+              processingStage: "failed:transcribing",
+              processingError: transcribeErr instanceof Error
+                ? transcribeErr.message
+                : "Transcription failed",
+              transcriptStatus: "none",
+            }).catch(() => {});
+            logger.error({ err: transcribeErr, sermonId: id }, "sermons: process — transcription failed");
+            return;
+          }
 
-        // Persist the transcript and advance stage
-        await store.updateSermon(id, {
-          transcript:      fullTranscript,
-          fullTranscript,
-          transcriptStatus: "complete",
-          processingStage:  "generating",
-        }).catch(() => {});
+          // Persist the transcript and advance stage
+          await store.updateSermon(id, {
+            transcript:      fullTranscript,
+            fullTranscript,
+            transcriptStatus: "complete",
+            processingStage:  "generating",
+          }).catch(() => {});
+        }
 
         // Stage 2 — generate sermon draft + companion
         try {
@@ -454,13 +477,19 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
             onProgress,
           });
         } catch (genErr) {
+          // Use the last known sub-stage for a precise failure key so the UI can
+          // mark only that row red (not all downstream generation rows).
+          const failedStage = `failed:${lastProgressStage}`;
+          const transcriptNote = hasTranscript
+            ? "Sermon transcription completed, but content generation could not continue. No audio or transcript was lost.\n\nError: "
+            : "";
           await store.updateSermon(id, {
-            processingStage: "failed:generating",
-            processingError: genErr instanceof Error
+            processingStage: failedStage,
+            processingError: transcriptNote + (genErr instanceof Error
               ? genErr.message
-              : "Content generation failed",
+              : "Content generation failed"),
           }).catch(() => {});
-          logger.error({ err: genErr, sermonId: id }, "sermons: process — generation failed");
+          logger.error({ err: genErr, sermonId: id, failedStage }, "sermons: process — generation failed");
           return;
         }
 
