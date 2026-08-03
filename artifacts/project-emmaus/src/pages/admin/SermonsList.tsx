@@ -91,7 +91,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
 
   const ACCEPTED_AUDIO = '.mp3,.m4a,.wav,.mp4,.mpeg,.webm';
   const ACCEPTED_MIMES = ['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/wav','video/mp4','audio/webm'];
-  const MAX_AUDIO_MB   = 25;
+  const MAX_AUDIO_MB   = 250;
 
   function fmtBytes(b: number) {
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
@@ -101,11 +101,11 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   function handleNewAudioSelect(f: File) {
     setNewAudioError('');
     if (!ACCEPTED_MIMES.some(m => f.type === m) && !/\.(mp3|m4a|wav|mp4|mpeg|webm)$/i.test(f.name)) {
-      setNewAudioError('Unsupported type. Use MP3, M4A, WAV, MP4, MPEG or WEBM.');
+      setNewAudioError('This file format is not supported. Use MP3, M4A, WAV, MP4, MPEG or WEBM.');
       return;
     }
     if (f.size > MAX_AUDIO_MB * 1024 * 1024) {
-      setNewAudioError(`File too large (${fmtBytes(f.size)}). Max ${MAX_AUDIO_MB} MB.`);
+      setNewAudioError(`The file exceeds the ${MAX_AUDIO_MB} MB maximum (${fmtBytes(f.size)}).`);
       return;
     }
     setNewAudioFile(f);

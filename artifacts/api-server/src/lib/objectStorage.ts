@@ -129,7 +129,7 @@ export class ObjectStorageService {
       bucketName,
       objectName,
       method: 'PUT',
-      ttlSec: 900,
+      ttlSec: 3600, // 1 hour — enough headroom for 250 MB on a slow connection
     });
   }
 
