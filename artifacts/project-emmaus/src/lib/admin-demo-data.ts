@@ -8,6 +8,7 @@ export type Sermon = {
   series?: string;
   scriptureReference: string;
   youtubeUrl: string;
+  audioPath?: string;
   summary?: string;
   topics: string[];
   keywords: string[];

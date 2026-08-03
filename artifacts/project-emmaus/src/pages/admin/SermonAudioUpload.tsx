@@ -131,7 +131,7 @@ export default function SermonAudioUpload({
     try {
       const updated = await transcribeSermonAudio(sermonId);
       setPhase('transcribed');
-      onTranscribed(updated.transcript ?? updated.fullTranscript ?? '');
+      onTranscribed(updated.transcript ?? '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transcription failed. Please try again.');
       setPhase('error');

@@ -14,11 +14,12 @@
  * Error / edge cases handled gracefully — this page NEVER renders blank.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
 import {
   ArrowLeft, ExternalLink, BookOpen, Mic2, Calendar,
   Loader2, AlertCircle, MessageCircle, ChevronRight, RefreshCw,
+  Play, Pause, Volume2,
 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 
@@ -136,6 +137,120 @@ function ActionRow({
   );
 }
 
+// ─── Inline audio player ──────────────────────────────────────────────────────
+
+interface AudioPlayerProps {
+  src: string;
+  title: string;
+}
+
+function AudioPlayer({ src, title }: AudioPlayerProps) {
+  const audioRef               = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration]       = useState(0);
+  const [loadError, setLoadError]     = useState(false);
+
+  const togglePlay = useCallback(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      el.play().catch(() => setLoadError(true));
+    } else {
+      el.pause();
+    }
+  }, []);
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = audioRef.current;
+    if (!el) return;
+    const t = Number(e.target.value);
+    el.currentTime = t;
+    setCurrentTime(t);
+  }, []);
+
+  function fmt(secs: number): string {
+    if (!isFinite(secs) || isNaN(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  if (loadError) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-4 text-center">
+        <p className="text-[13px] text-gray-400">
+          Audio is temporarily unavailable. Try again later.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 space-y-3">
+      {/* Label */}
+      <div className="flex items-center gap-2">
+        <Volume2 size={13} className="text-teal-600 flex-shrink-0" />
+        <p className="text-[11px] font-semibold tracking-widest text-teal-600 uppercase truncate">
+          Listen
+        </p>
+      </div>
+
+      {/* Controls row */}
+      <div className="flex items-center gap-3">
+        {/* Play / Pause button */}
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          className="flex-shrink-0 w-10 h-10 rounded-full bg-teal-600 hover:bg-teal-700 active:scale-95 transition-all flex items-center justify-center shadow-sm"
+        >
+          {isPlaying
+            ? <Pause size={16} className="text-white" />
+            : <Play size={16} className="text-white translate-x-[1px]" />
+          }
+        </button>
+
+        {/* Scrub bar + timestamps */}
+        <div className="flex-1 space-y-1">
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.5}
+            value={currentTime}
+            onChange={handleSeek}
+            className="w-full h-1.5 rounded-full accent-teal-600 cursor-pointer"
+            style={{ background: duration
+              ? `linear-gradient(to right, #0d9488 ${(currentTime / duration) * 100}%, #e5e7eb ${(currentTime / duration) * 100}%)`
+              : '#e5e7eb'
+            }}
+          />
+          <div className="flex justify-between text-[11px] text-gray-400 font-mono">
+            <span>{fmt(currentTime)}</span>
+            <span>{fmt(duration)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden native audio element */}
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+        onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
+        onError={() => setLoadError(true)}
+        aria-label={title}
+        className="sr-only"
+      />
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SermonHome() {
@@ -146,9 +261,51 @@ export default function SermonHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
+  // Audio presigned URL — fetched lazily once sermon is loaded and has audioPath
+  const [audioUrl, setAudioUrl]         = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioFailed, setAudioFailed]   = useState(false);
+
   // Read the source back-destination from URL so the back button returns correctly.
   // Companion route is also read here — it's set when Journeys.tsx navigates here.
   const companionRouteFromUrl = getCompanionRouteFromSearch();
+
+  // Fetch presigned audio URL once the sermon loads and has an audioPath.
+  // An AbortController cancels any in-flight request when the sermon ID or
+  // audioPath changes, preventing a delayed response from a previous sermon
+  // from overwriting the current sermon's audio state.
+  useEffect(() => {
+    // Reset every time the key (id + audioPath) changes — including navigation.
+    setAudioUrl(null);
+    setAudioFailed(false);
+    setAudioLoading(false);
+
+    if (!sermon?.audioPath?.trim() || !params.id) return;
+
+    const controller = new AbortController();
+    setAudioLoading(true);
+
+    fetch(`${BASE}/api/sermons/${encodeURIComponent(params.id)}/audio-url`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('unavailable');
+        return r.json() as Promise<{ url: string }>;
+      })
+      .then(data => {
+        setAudioUrl(data.url);
+        setAudioLoading(false);
+      })
+      .catch(err => {
+        // Ignore cancellation — the component has moved on to a different sermon.
+        if ((err as Error).name === 'AbortError') return;
+        setAudioFailed(true);
+        setAudioLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [sermon?.audioPath, params.id]);
 
   const fetchSermon = useCallback(() => {
     if (!params.id) {
@@ -352,6 +509,24 @@ export default function SermonHome() {
               Audio, video and summary are not yet available for this sermon.
             </p>
           </div>
+        )}
+
+        {/* ── Audio player ────────────────────────────────────────────────── */}
+        {hasAudio && (
+          audioLoading ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-4 flex items-center gap-3">
+              <Loader2 size={16} className="animate-spin text-teal-500 flex-shrink-0" />
+              <p className="text-[13px] text-gray-500">Loading audio…</p>
+            </div>
+          ) : audioFailed ? (
+            <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-4 text-center">
+              <p className="text-[13px] text-gray-400">
+                Audio is temporarily unavailable. Try again later.
+              </p>
+            </div>
+          ) : audioUrl ? (
+            <AudioPlayer src={audioUrl} title={sermon.title} />
+          ) : null
         )}
 
         {/* ── Actions ────────────────────────────────────────────────────── */}

@@ -97,6 +97,44 @@ sermonsRouter.get("/admin/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Member: presigned audio download URL ────────────────────────────────────
+// Returns a short-lived (~1 hour) presigned GCS GET URL for the sermon's audio.
+// The URL is generated at request time — never stored or cached.
+// 404 when sermon not found or has no audioPath.
+// 410 (Gone) when the file no longer exists in storage.
+
+sermonsRouter.get("/:id/audio-url", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const id = String(req.params.id);
+  try {
+    const sermon = await store.getPublishedSermonById(id);
+    if (!sermon || sermon.status !== "Published") {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    if (!sermon.audioPath?.trim()) {
+      res.status(404).json({ error: "No audio available for this sermon" });
+      return;
+    }
+    try {
+      const url = await objectStorage.getObjectEntityDownloadURL(sermon.audioPath.trim(), 3600);
+      res.set("Cache-Control", "no-store");
+      res.json({ url });
+    } catch (storageErr: unknown) {
+      const name = storageErr instanceof Error ? storageErr.name : "";
+      if (name === "ObjectNotFoundError") {
+        res.status(410).json({ error: "Audio file is no longer available" });
+        return;
+      }
+      throw storageErr;
+    }
+  } catch (err) {
+    logger.error({ err, sermonId: id }, "sermons: audio-url failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── Member: get one published sermon ────────────────────────────────────────
 // Returns CanonicalSermonWithCompanion so SermonHome can show the companion CTA.
 

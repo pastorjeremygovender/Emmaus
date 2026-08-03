@@ -50,6 +50,7 @@ function canonicalToAdmin(s: CanonicalSermonWithCompanion): AdminSermonRecord {
     series:              s.series,
     scriptureReference:  s.scriptureReference,
     youtubeUrl:          s.youtubeUrl,
+    audioPath:           s.audioPath,
     summary:             s.summary,
     topics:              s.themes,
     keywords:            s.keywords,
@@ -76,7 +77,7 @@ function canonicalToAdmin(s: CanonicalSermonWithCompanion): AdminSermonRecord {
 function adminPatchToCanonical(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   // Direct-mapped fields (camelCase → camelCase in canonical)
-  const direct = ["title","speaker","sermonDate","series","scriptureReference","youtubeUrl","summary","keywords","mainTheme","transcriptStatus","sermonStartTime","sermonEndTime","detectionConfidence","detectionMethod"];
+  const direct = ["title","speaker","sermonDate","series","scriptureReference","youtubeUrl","audioPath","summary","keywords","mainTheme","transcriptStatus","sermonStartTime","sermonEndTime","detectionConfidence","detectionMethod"];
   for (const k of direct) if (k in body) out[k] = body[k];
   // transcript in AdminSermonRecord = full recording transcript → canonical fullTranscript
   if ("transcript" in body) out.fullTranscript = body.transcript;

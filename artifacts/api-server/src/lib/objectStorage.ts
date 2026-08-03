@@ -209,6 +209,40 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  /**
+   * Generate a short-lived presigned GET URL for a stored object.
+   * objectPath must be in the normalised form returned by normalizeObjectEntityPath,
+   * e.g. "/objects/uploads/<uuid>".
+   * Throws ObjectNotFoundError if the file does not exist in the bucket.
+   */
+  async getObjectEntityDownloadURL(objectPath: string, ttlSec: number = 3600): Promise<string> {
+    if (!objectPath.startsWith('/objects/')) {
+      throw new ObjectNotFoundError();
+    }
+
+    const parts = objectPath.slice(1).split('/');
+    if (parts.length < 2) {
+      throw new ObjectNotFoundError();
+    }
+
+    const entityId = parts.slice(1).join('/');
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith('/')) {
+      entityDir = `${entityDir}/`;
+    }
+    const objectEntityPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
+
+    const bucket = objectStorageClient.bucket(bucketName);
+    const objectFile = bucket.file(objectName);
+    const [exists] = await objectFile.exists();
+    if (!exists) {
+      throw new ObjectNotFoundError();
+    }
+
+    return signObjectURL({ bucketName, objectName, method: 'GET', ttlSec });
+  }
 }
 
 function parseObjectPath(path: string): {
