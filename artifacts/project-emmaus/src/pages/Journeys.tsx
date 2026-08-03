@@ -596,7 +596,8 @@ function SermonCompanionsPanel({
   const [, setLocation] = useLocation();
 
   // Build a companionId → canonicalSermonId lookup from published canonical sermons.
-  // Used to route the current-week card to SermonHome instead of the companion reader.
+  // Populated asynchronously — cards are ALWAYS tappable (fallback to companion reader)
+  // so the async timing never leaves the card dead.
   const [canonicalMap, setCanonicalMap] = React.useState<Map<string, string>>(new Map());
   React.useEffect(() => {
     fetch('/api/sermons', { credentials: 'include' })
@@ -608,7 +609,7 @@ function SermonCompanionsPanel({
         }
         setCanonicalMap(m);
       })
-      .catch(() => {/* non-fatal — fall back to companion reader */});
+      .catch(() => {/* non-fatal — card falls back to companion reader */});
   }, []);
 
   if (!current && previous.length === 0) {
@@ -619,16 +620,20 @@ function SermonCompanionsPanel({
     const isPaused = item.memberProgressState === 'paused';
     const actionLabel = item.primaryActionLabel ?? undefined;
 
-    // When a canonical sermon is linked to this companion, tap the whole card
-    // to navigate to SermonHome. Pass the companion route as a query param so
-    // SermonHome can offer a "Continue Companion" CTA.
+    // The card is ALWAYS tappable — tap navigates to SermonHome when the canonical
+    // sermon is loaded, otherwise falls back to the companion reader directly.
+    // This means the card works even if the /api/sermons fetch hasn't returned yet.
     const canonicalSermonId = canonicalMap.get(item.id);
-    const onCardPress = isCurrent && canonicalSermonId
+    const handleCardPress = isCurrent && canonicalSermonId
       ? () => {
           const companionRoute = encodeURIComponent(item.route);
           setLocation(`/sermon/${canonicalSermonId}?companionRoute=${companionRoute}`);
         }
-      : undefined;
+      : () => {
+          // Fallback: go directly into the companion reader.
+          // Also used for non-current-week companions.
+          onAction(item);
+        };
 
     return (
       <EmmausContentCard
@@ -639,7 +644,7 @@ function SermonCompanionsPanel({
         primaryActionLabel={actionLabel}
         onAction={actionLabel ? () => { onAction(item); } : undefined}
         headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-        onCardPress={onCardPress}
+        onCardPress={handleCardPress}
       />
     );
   }
