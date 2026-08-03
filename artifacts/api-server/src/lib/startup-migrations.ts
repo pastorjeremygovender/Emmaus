@@ -28,11 +28,11 @@
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 
-import { execSync } from "node:child_process";
 import { pool } from "@workspace/db";
 import { logger } from "./logger.js";
 import { setStartSharedReady } from "./feature-flags.js";
 import { verifySermonStore } from "./sermon-store.js";
+import { FFMPEG_BIN, FFMPEG_AVAILABLE } from "./audio-transcription.js";
 
 export async function runStartupMigrations(): Promise<void> {
   // ── Sermon store diagnostic (runs every boot — confirms data is reachable) ──
@@ -724,31 +724,34 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: content inventory check failed (non-fatal)");
   }
 
-  // ── ffmpeg availability probe ─────────────────────────────────────────────
-  // Proves the binary is reachable at the resolved absolute path in this
-  // exact runtime environment. A failed probe here means transcription will
-  // fail too — catch it early before an admin uploads a 80 MB sermon.
-  try {
-    const ffmpegBin = execSync("which ffmpeg", {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-
-    if (!ffmpegBin) throw new Error("which ffmpeg returned empty");
-
-    const versionLine = execSync(`"${ffmpegBin}" -version`, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).split("\n")[0]?.trim() ?? "";
-
-    logger.info(
-      { bin: ffmpegBin, version: versionLine },
-      "Startup migration: ffmpeg available",
-    );
-  } catch (ffErr) {
+  // ── ffmpeg health check ───────────────────────────────────────────────────
+  // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
+  // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
+  // Logs the absolute path + version on success.
+  // Logs a hard error if unavailable so the issue is visible in deployment logs
+  // before any admin attempts to run a sermon through the pipeline.
+  if (!FFMPEG_AVAILABLE) {
     logger.error(
-      { err: ffErr },
-      "Startup migration: ffmpeg NOT available — audio transcription will fail for files > 24 MB",
+      { bin: FFMPEG_BIN },
+      "Startup: ffmpeg NOT available — sermon audio processing will fail. " +
+      "Ensure ffmpeg-static is in production dependencies and onlyBuiltDependencies.",
     );
+  } else {
+    try {
+      const { execSync } = await import("node:child_process");
+      const versionLine = execSync(`"${FFMPEG_BIN}" -version`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).split("\n")[0]?.trim() ?? "";
+      logger.info(
+        { bin: FFMPEG_BIN, version: versionLine },
+        "Startup: ffmpeg available",
+      );
+    } catch (ffErr) {
+      logger.error(
+        { err: ffErr, bin: FFMPEG_BIN },
+        "Startup: ffmpeg binary found but -version failed — check binary integrity",
+      );
+    }
   }
 }

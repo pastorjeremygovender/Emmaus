@@ -112,6 +112,7 @@ async function buildAll() {
       "wrangler",
       "zeromq",
       "zeromq-prebuilt",
+      "ffmpeg-static",
       "fluent-ffmpeg",
       "@distube/ytdl-core",
       "playwright",

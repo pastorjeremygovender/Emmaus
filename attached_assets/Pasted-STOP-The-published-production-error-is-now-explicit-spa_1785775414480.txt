@@ -1,0 +1,169 @@
+STOP. The published production error is now explicit:
+
+spawn ffmpeg ENOENT
+
+This means the deployed runtime still cannot execute FFmpeg.
+
+Do not change the UI. Do not ask me to retry until the production runtime is proven to have a working FFmpeg executable.
+
+Fix the deployment/runtime dependency now.
+
+==================================================
+1. PROVE THE ACTUAL PRODUCTION RUNTIME
+==================================================
+
+Inspect the deployed production environment, not the development shell.
+
+Report:
+
+- deployment type
+- runtime image/build environment
+- current PATH
+- whether ffmpeg exists anywhere in the deployed filesystem
+- output of:
+  - which ffmpeg
+  - command -v ffmpeg
+  - ffmpeg -version
+- exact deployment commit currently live
+
+The application must not rely on FFmpeg being available implicitly.
+
+==================================================
+2. PACKAGE FFMPEG WITH THE APPLICATION
+==================================================
+
+Install and package a production-safe FFmpeg binary as an application dependency.
+
+Use a supported static FFmpeg package or explicitly provision FFmpeg in the deployment build.
+
+Preferred approach:
+
+- use an npm package that supplies a static binary compatible with the deployed Linux runtime, such as ffmpeg-static
+- resolve its absolute binary path in server code
+- pass that absolute path to every spawn/exec call
+
+Do not call:
+
+spawn("ffmpeg", ...)
+
+Instead call the resolved absolute binary path, for example:
+
+spawn(resolvedFfmpegPath, args)
+
+Verify the package is in production dependencies, not devDependencies.
+
+Do not depend on a developer-shell PATH or manually installed system package.
+
+==================================================
+3. CENTRALISE FFMPEG RESOLUTION
+==================================================
+
+Create one server utility used everywhere, for example:
+
+resolveFfmpegPath()
+
+It must:
+
+- resolve the packaged static FFmpeg binary
+- verify the file exists
+- verify it is executable
+- run ffmpeg -version once at startup
+- return the absolute path
+- fail startup with a clear deployment error if unavailable
+
+All audio code must use this utility:
+
+- compression
+- format conversion
+- chunking
+- duration probing where FFmpeg is used
+- Retry Processing
+- Process Sermon
+- direct transcription routes
+- background workers
+
+Search the full codebase for every spawn/exec of ffmpeg and replace all bare command usage.
+
+==================================================
+4. ADD A STARTUP HEALTH CHECK
+==================================================
+
+On production startup:
+
+1. Resolve FFmpeg.
+2. Execute:
+   ffmpeg -version
+3. Log:
+   - absolute path
+   - version
+   - success
+4. Expose the result in a protected admin diagnostics endpoint or server health log.
+
+The application must never allow sermon processing to begin if FFmpeg health is false.
+
+Instead show:
+
+“Audio processing is temporarily unavailable. The server audio tool is not ready.”
+
+Do not upload and begin a job that is guaranteed to fail.
+
+==================================================
+5. RETRY THE EXISTING STORED AUDIO
+==================================================
+
+Do not ask me to upload the 82.6 MB file again.
+
+Once FFmpeg is verified in the published runtime:
+
+- clear the failed attempt error
+- reuse the stored original audio
+- start a new processing attempt
+- run Preparing Audio
+- run Compressing Audio
+- verify compressed output size
+- chunk automatically if required
+- transcribe
+- continue the complete sermon pipeline
+
+==================================================
+6. TEST IN THE PUBLISHED RUNTIME
+==================================================
+
+Before reporting completion, prove all of these in production:
+
+1. ffmpeg -version succeeds.
+2. The absolute packaged FFmpeg path is logged.
+3. A real compression command succeeds.
+4. The existing 82.6 MB sermon is retrieved from object storage.
+5. Compression creates a valid output file.
+6. Output duration is non-zero.
+7. Output size is logged.
+8. Transcription begins.
+9. The sermon proceeds beyond “Transcribing sermon audio.”
+10. It reaches Ready for Review.
+
+Do not use a development preview as proof.
+
+==================================================
+7. REPORT BACK WITH EVIDENCE
+==================================================
+
+Report:
+
+- exact root cause
+- FFmpeg package/provisioning method used
+- absolute FFmpeg path in production
+- FFmpeg version
+- files changed
+- production dependency changes
+- deployment commit tested
+- original audio size
+- compressed audio size
+- number of chunks, if used
+- confirmation that the existing sermon reached Ready for Review
+
+Do not report this as fixed until the exact production error:
+
+spawn ffmpeg ENOENT
+
+can no longer occur.

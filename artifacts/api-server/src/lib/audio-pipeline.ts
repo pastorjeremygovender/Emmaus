@@ -21,6 +21,11 @@ import { mkdir, stat, unlink } from "node:fs/promises";
 import { createWriteStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "./logger.js";
+import { FFMPEG_BIN } from "./audio-transcription.js";
+
+// Tell fluent-ffmpeg exactly where the static binary lives.
+// Without this it falls back to PATH, which is not set correctly in production.
+ffmpeg.setFfmpegPath(FFMPEG_BIN);
 
 // ─── Storage directory ────────────────────────────────────────────────────────
 

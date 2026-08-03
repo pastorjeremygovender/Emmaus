@@ -376,6 +376,18 @@ sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => 
   if (!(await guardAdmin(req, res))) return;
   const id = String(req.params.id);
 
+  // Guard: reject immediately if the ffmpeg binary is unavailable.
+  // This prevents starting a pipeline that is guaranteed to fail and leaves a
+  // misleading "processing…" state in the UI. The error surfaces a clear,
+  // admin-readable message instead.
+  const { FFMPEG_AVAILABLE } = await import("../lib/audio-transcription.js");
+  if (!FFMPEG_AVAILABLE) {
+    res.status(503).json({
+      error: "Audio processing is temporarily unavailable. The server audio tool is not ready.",
+    });
+    return;
+  }
+
   try {
     const sermon = await store.getSermonById(id);
     if (!sermon) {

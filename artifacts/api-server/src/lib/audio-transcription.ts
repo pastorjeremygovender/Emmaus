@@ -19,51 +19,65 @@
 
 import { ObjectStorageService } from "./objectStorage.js";
 import { logger } from "./logger.js";
-import { spawn, execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeFile, readFile, readdir, unlink } from "node:fs/promises";
+import { writeFile, readFile, readdir, unlink, access, constants as fsConstants } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 
 const objectStorage = new ObjectStorageService();
 
 // ─── Resolve ffmpeg binary path ───────────────────────────────────────────────
 //
-// Node.js spawn() uses a restricted PATH that excludes Nix store paths visible
-// in the interactive shell. execSync("which ffmpeg") runs via /bin/sh, which
-// inherits the full shell PATH and correctly resolves the Nix-managed binary.
-// The absolute path is cached at module load time; zero overhead per call.
+// ffmpeg-static is a production npm dependency that bundles a platform-specific
+// static ffmpeg binary and downloads it during `pnpm install` via its postinstall
+// script. This is the only approach that works reliably in both the Replit dev
+// workspace AND production deployments (which have a restricted PATH with no
+// Nix store entries visible to /bin/sh).
 //
-// Exported so startup-migrations can log and verify it on boot.
+// Resolution order:
+//   1. ffmpeg-static (primary — static binary shipped with the app)
+//   2. PATH / Nix shell fallback (dev convenience — non-critical)
+//   3. Bare "ffmpeg" — will fail with ENOENT if reached; that failure is caught
+//      by the startup health check and the process endpoint guard.
+//
+// FFMPEG_BIN and FFMPEG_AVAILABLE are both exported so callers can gate on
+// availability before attempting to spawn the binary.
 
-function resolveFfmpegPath(): string {
-  // Step 1: Try via shell PATH (works in the Replit dev workspace where the
-  // interactive shell's PATH includes the Nix runtime).
+const _require = createRequire(import.meta.url);
+
+async function resolveFfmpegPath(): Promise<string> {
+  // Step 1: ffmpeg-static — the only production-safe option.
   try {
+    const staticPath: string | null = _require("ffmpeg-static");
+    if (typeof staticPath === "string" && staticPath) {
+      // Verify the binary actually exists and is executable before trusting it.
+      await access(staticPath, fsConstants.X_OK);
+      return staticPath;
+    }
+  } catch { /* binary missing or not executable — fall through */ }
+
+  // Step 2: Shell PATH fallback (works in the Replit dev workspace where the
+  // interactive shell exposes the Nix runtime PATH to /bin/sh).
+  try {
+    const { execSync } = await import("node:child_process");
     const p = execSync("which ffmpeg", {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     if (p) return p;
-  } catch { /* fall through */ }
+  } catch { /* PATH lookup failed — fall through */ }
 
-  // Step 2: Search the Nix store for the replit-runtime-path bundle.
-  // In production deployments, /bin/sh has a restricted PATH that does NOT
-  // include the Nix store, so `which` fails. But the binary is present at a
-  // well-known Nix bundle path — a glob expansion finds it instantly.
-  try {
-    const p = execSync(
-      "ls /nix/store/*-replit-runtime-path*/bin/ffmpeg 2>/dev/null | head -1",
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-    ).trim();
-    if (p) return p;
-  } catch { /* fall through */ }
-
-  // Last resort: bare name; spawn will produce a clear ENOENT if unavailable.
+  // Bare fallback — produces a clear ENOENT on spawn. The startup health check
+  // and the process-endpoint guard both detect this and surface a user-visible
+  // error instead of silently starting a job that will fail.
   return "ffmpeg";
 }
 
-export const FFMPEG_BIN = resolveFfmpegPath();
+// Resolve at module load time (top-level await in ESM).
+export const FFMPEG_BIN: string       = await resolveFfmpegPath();
+export const FFMPEG_AVAILABLE: boolean = FFMPEG_BIN !== "ffmpeg";
 
 // ─── Stage-progress callback ──────────────────────────────────────────────────
 

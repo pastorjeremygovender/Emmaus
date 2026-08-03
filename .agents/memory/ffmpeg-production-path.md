@@ -1,22 +1,34 @@
 ---
-name: ffmpeg production PATH fix
-description: In Replit production deployments, `which ffmpeg` fails because /bin/sh has a restricted PATH that excludes Nix store directories. The fix is a two-step resolution in resolveFfmpegPath().
+name: ffmpeg production path — use ffmpeg-static
+description: Production deployments have a restricted PATH with no Nix store. The only reliable fix is ffmpeg-static as a production npm dep. Records the full setup required.
 ---
 
 ## Rule
-`resolveFfmpegPath()` in `audio-transcription.ts` must try two strategies before falling back to the bare `"ffmpeg"` name:
+Use `ffmpeg-static` as a **production npm dependency** in `artifacts/api-server`. It ships a static Linux x64 binary via its postinstall download script. `resolveFfmpegPath()` in `audio-transcription.ts` loads it via `createRequire` as its primary source.
 
-1. `which ffmpeg` via execSync — works in the dev workspace (interactive shell has full Nix PATH)
-2. `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg 2>/dev/null | head -1` — works in production deployments where /bin/sh has a restricted PATH
+**Why:** The Replit production deployment container's `/bin/sh` has a restricted PATH with no Nix store entries. `which ffmpeg` exits code 1. The Nix glob fallback (`ls /nix/store/*-replit-runtime-path*/bin/ffmpeg`) also fails — the Nix store is not present in the deployment container. The only approach that works in both dev and production is bundling the binary with the app via `ffmpeg-static`.
 
-**Why:** The Replit production deployment container runs Node.js with a shell that does NOT have the Nix runtime in its PATH. The ffmpeg binary is present at `/nix/store/<hash>-replit-runtime-path/bin/ffmpeg` but `which ffmpeg` exits with code 1. The glob expansion `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly without a slow `find` traversal.
+**How to apply:**
+1. `ffmpeg-static` must be in `dependencies` (not `devDependencies`) in `artifacts/api-server/package.json`
+2. `ffmpeg-static` must be in `onlyBuiltDependencies` in `pnpm-workspace.yaml` — without this, pnpm blocks its postinstall download script and the binary is never downloaded
+3. `ffmpeg-static` must be in the `external` list in `build.mjs` — so esbuild doesn't bundle the import and it resolves at runtime from `node_modules`
+4. `resolveFfmpegPath()` uses `createRequire(import.meta.url)('ffmpeg-static')` to get the absolute path synchronously
+5. `FFMPEG_BIN` and `FFMPEG_AVAILABLE` are both exported from `audio-transcription.ts`
+6. `audio-pipeline.ts` calls `ffmpeg.setFfmpegPath(FFMPEG_BIN)` so fluent-ffmpeg also finds the binary
+7. The `/admin/:id/process` route checks `FFMPEG_AVAILABLE` and returns 503 if false, preventing misleading "processing…" states
 
-**How to apply:** Any code that spawns ffmpeg must use `FFMPEG_BIN` (resolved at module load via `resolveFfmpegPath()`). Never hardcode `"ffmpeg"` as the command. Never use `find /nix/store -name ffmpeg` (too slow — Nix store has thousands of packages).
+## Confirmed static binary details
+- Package: `ffmpeg-static@5.3.0`
+- Version delivered: `ffmpeg version 7.0.2-static https://johnvansickle.com/ffmpeg/`
+- Dev path: `.../node_modules/.pnpm/ffmpeg-static@5.3.0/.../ffmpeg-static/ffmpeg`
 
-## Symptom
-Production log: `"spawn ffmpeg ENOENT"` + `"path":"ffmpeg"` (bare name in spawnargs)
-Production startup log: `"Startup migration: ffmpeg NOT available"` with `"Command failed: which ffmpeg"`
-Dev startup log (correct): `"Startup migration: ffmpeg available"` with full absolute path
+## Startup health check log (success)
+```
+Startup: ffmpeg available
+    bin: ".../ffmpeg-static/ffmpeg"
+    version: "ffmpeg version 7.0.2-static..."
+```
 
-## Confirmed working path (may change with Nix package updates)
-`/nix/store/jj9hkc8i90yb3dpcyyqlncijyj71w9id-replit-runtime-path/bin/ffmpeg`
+## Symptom of old/broken state
+`spawn ffmpeg ENOENT` + `"path":"ffmpeg"` in production logs  
+`Startup migration: ffmpeg NOT available` + `Command failed: which ffmpeg`
