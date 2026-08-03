@@ -17,8 +17,8 @@ import { randomUUID } from "node:crypto";
 import { getVideoMetadata } from "./youtube-client.js";
 import { listCaptionTracks, downloadCaptionTrack } from "./youtube-client.js";
 import { getValidAccessToken } from "./oauth-store.js";
-import { createCompanion, deleteCompanion } from "./sermon-companion-store.js";
-import { createSermon, deleteSermon as deleteCanonicalSermon } from "./canonical-sermon-store.js";
+import { createCompanion, deleteCompanion, getCompanionBySermonId } from "./sermon-companion-store.js";
+import { createSermon, deleteSermon as deleteCanonicalSermon, updateSermon as updateCanonicalSermon } from "./canonical-sermon-store.js";
 import { logger } from "./logger.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -1341,4 +1341,102 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       entries: savedCompanion.entries ?? [],
     },
   };
+}
+
+// ─── Audio-first pipeline ─────────────────────────────────────────────────────
+
+/**
+ * Generates sermon metadata + 5-day companion from a Whisper transcript,
+ * updating an EXISTING sermon record (already created with admin-provided
+ * metadata from the New Sermon form).
+ *
+ * Unlike generateFromUrl, this path:
+ * - Skips YouTube metadata fetch (no video ID needed)
+ * - Auto-confirms sermon detection and theme (no client confirmation gates)
+ * - Updates the existing sermon record rather than creating a new one
+ * - Replaces any existing companion with a freshly generated one
+ */
+export async function generateSermonContentFromTranscript(
+  sermonId: string,
+  fullTranscript: string,
+  opts: { title?: string; speaker?: string } = {}
+): Promise<void> {
+  // 1. Auto-detect sermon section (no confirmation gate)
+  let sermonTranscript = fullTranscript;
+  let detectionStartSecs: number | null = null;
+  let detectionEndSecs: number | null = null;
+  let detectionConfidence = 0.95;
+  let detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none" = "none";
+
+  try {
+    const detection = await detectSermonSection(fullTranscript, undefined);
+    sermonTranscript     = detection.sermonTranscript;
+    detectionStartSecs   = detection.startSecs;
+    detectionEndSecs     = detection.endSecs;
+    detectionConfidence  = detection.confidence;
+    detectionMethod      = "ai-auto";
+    logger.info({ sermonId, confidence: detection.confidence }, "sermon-generator: sermon section detected (audio-first)");
+  } catch (detErr) {
+    logger.warn({ err: detErr, sermonId }, "sermon-generator: detection failed, using full transcript");
+  }
+
+  // 2. Generate main theme (auto, no confirmation)
+  let mainTheme = "";
+  try {
+    mainTheme = await generateMainTheme(sermonTranscript);
+  } catch (themeErr) {
+    logger.warn({ err: themeErr, sermonId }, "sermon-generator: theme generation failed");
+  }
+
+  // 3. Generate sermon draft fields from the transcript
+  const draftFields = await generateSermonDraft({
+    title:       opts.title ?? "",
+    description: "",
+    transcript:  sermonTranscript,
+  });
+
+  // 4. Generate 5-day companion
+  const companionDraft = await generateCompanion({
+    sermonTitle:        draftFields.title || opts.title || "Sermon",
+    scriptureReference: draftFields.scriptureReference,
+    summary:            draftFields.summary,
+    transcript:         sermonTranscript,
+    mainTheme,
+    videoId:            undefined,
+  });
+
+  // 5. Update existing sermon record with generated content
+  await updateCanonicalSermon(sermonId, {
+    transcript:          sermonTranscript,
+    fullTranscript:      fullTranscript,
+    transcriptStatus:    "complete",
+    summary:             draftFields.summary,
+    themes:              draftFields.topics,
+    keywords:            draftFields.keywords,
+    mainTheme,
+    sermonStartTime:     detectionStartSecs != null ? secsToHHMMSS(detectionStartSecs) : "",
+    sermonEndTime:       detectionEndSecs   != null ? secsToHHMMSS(detectionEndSecs)   : "",
+    detectionConfidence,
+    detectionMethod,
+    scriptureReference:  draftFields.scriptureReference,
+    processingStage:     "complete",
+    processingError:     "",
+  });
+
+  // 6. Replace any existing companion with freshly generated one
+  const existingCompanion = await getCompanionBySermonId(sermonId);
+  if (existingCompanion) {
+    await deleteCompanion(existingCompanion.id);
+    logger.info({ sermonId, oldId: existingCompanion.id }, "sermon-generator: replaced existing companion");
+  }
+
+  await createCompanion({
+    sermonId,
+    sermonUuid:  sermonId,
+    title:       companionDraft.companionTitle,
+    numberOfDays: companionDraft.days.length,
+    entries:     companionDraft.days,
+  });
+
+  logger.info({ sermonId, days: companionDraft.days.length }, "sermon-generator: audio-first pipeline complete");
 }

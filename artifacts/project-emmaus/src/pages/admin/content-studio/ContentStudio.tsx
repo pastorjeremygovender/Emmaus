@@ -313,7 +313,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         break;
       case 'sermon-editor':
         crumbs.push({ label: 'Sermons', onClick: () => navigate({ id: 'sermons' }) });
-        crumbs.push({ label: view.sermonId ? 'Edit Companion' : 'New Sermon Companion' });
+        crumbs.push({ label: view.sermonId ? 'Review Sermon' : 'New Sermon' });
         break;
 
       // Media Studio

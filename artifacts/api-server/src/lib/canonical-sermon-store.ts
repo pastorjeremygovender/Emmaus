@@ -55,6 +55,9 @@ export interface CanonicalSermon {
   detectionMethod: "ai-auto" | "ai-confirmed" | "manual" | "none";
   status: "Draft" | "Review" | "Published";
   publishedAt: string | null;    // ISO timestamp
+  /** Background processing pipeline state. Values: idle | transcribing | generating | complete | failed:<stage> */
+  processingStage: string;
+  processingError: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +114,8 @@ function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
     detectionMethod:     (row.detection_method as CanonicalSermon["detectionMethod"]) ?? "none",
     status:              (row.status as CanonicalSermon["status"]) ?? "Draft",
     publishedAt:         row.published_at != null ? String(row.published_at) : null,
+    processingStage:     String(row.processing_stage ?? "idle"),
+    processingError:     String(row.processing_error ?? ""),
     createdAt:           String(row.created_at),
     updatedAt:           String(row.updated_at),
   };
@@ -284,6 +289,8 @@ export async function updateSermon(
     detectionMethod:     "detection_method",
     status:              "status",
     publishedAt:         "published_at",
+    processingStage:     "processing_stage",
+    processingError:     "processing_error",
   };
 
   const jsonbCols = new Set(["scripture_book_ids", "scripture_chapters", "themes", "sections", "keywords"]);

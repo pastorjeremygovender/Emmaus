@@ -676,6 +676,23 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: sermon detection metadata columns ensured (idempotent)");
   }
 
+  // ── Sermon processing stage columns (2026-08) ────────────────────────────────
+  // Tracks background processing pipeline state so the admin UI can poll for
+  // progress without a separate jobs table. processingStage values:
+  //   idle | transcribing | generating | complete | failed:transcribing | failed:generating
+  {
+    const processingDDL = [
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS processing_stage TEXT NOT NULL DEFAULT 'idle'`,
+      `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS processing_error TEXT NOT NULL DEFAULT ''`,
+    ];
+    for (const ddl of processingDDL) {
+      try { await pool.query(ddl); } catch (err) {
+        logger.warn({ err }, "Startup migration: sermon processing column DDL step failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: sermon processing stage columns ensured (idempotent)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate

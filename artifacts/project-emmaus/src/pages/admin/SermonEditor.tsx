@@ -47,6 +47,8 @@ import {
   AlertCircle, CheckCircle2, Trash2,
 } from 'lucide-react';
 import SermonAudioUpload from './SermonAudioUpload';
+import SermonProcessingView from './SermonProcessingView';
+import { processSermon as processSermonApi, getAdminSermon } from '@/lib/canonical-sermon-api';
 
 type Props = {
   sermonId: string | null;
@@ -1172,6 +1174,11 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState('');
   const [publishError, setPublishError] = useState('');
+  // Tracks the background processing pipeline stage so the editor can show
+  // SermonProcessingView when audio-first processing is active.
+  const [processingStage, setProcessingStage] = useState<string>(() =>
+    (existing as Record<string, unknown> | undefined)?.processingStage as string ?? 'idle'
+  );
 
   // Per-field regen state
   type RegenField = 'title' | 'speaker' | 'scriptureReference' | 'summary' | 'topics' | 'keywords';
@@ -1193,6 +1200,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       if (!record) { setLoadFromDbError(true); return; }
       // Hydrate form and add to AdminContext so subsequent saves work
       setForm({ ...EMPTY_SERMON, ...record });
+      setProcessingStage((record as unknown as Record<string, unknown>).processingStage as string ?? 'idle');
       // skipServerPersist: true — sermon already lives in the canonical DB
       addSermon({ ...record, id: sermonId } as Sermon, { skipServerPersist: true });
     }).catch(() => {
@@ -1234,6 +1242,36 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     }
   }, [companionData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Poll processingStage while pipeline is active ──────────────────────────
+  useEffect(() => {
+    if (!sermonId_) return;
+    const isActive = processingStage === 'transcribing' || processingStage === 'generating';
+    if (!isActive) return;
+    const poll = async () => {
+      try {
+        const updated = await getAdminSermon(sermonId_);
+        const s = updated.processingStage ?? 'idle';
+        if (s !== processingStage) setProcessingStage(s);
+        if (s === 'complete' && auth) {
+          // Reload sermon fields + companion once pipeline finishes
+          getServerSermon(sermonId_, auth).then(rec => {
+            if (!rec) return;
+            setForm({ ...EMPTY_SERMON, ...rec });
+            const cid = (rec as unknown as Record<string, unknown>).companionJourneyId as string;
+            if (cid && UUID_RE.test(cid)) {
+              getCompanion(cid, auth).then(c => {
+                setCompanionData({ id: c.id, title: c.title, isCurrentWeek: c.isCurrentWeek ?? false, entries: c.entries ?? [] });
+                setCompanionStatusLocal(c.status ?? 'Draft');
+              }).catch(() => {});
+            }
+          }).catch(() => {});
+        }
+      } catch { /* non-fatal, keep polling */ }
+    };
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, [sermonId_, processingStage]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleCompanionPublish = useCallback(async () => {
     if (!companionData?.id || !auth) return;
     setCompanionPublishing(true);
@@ -1267,6 +1305,20 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       console.error('Failed to set current week companion', err);
     }
   }, [companionData?.id, auth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger the audio-first processing pipeline from within the editor
+  // (used by the unprocessed-sermon banner and the retry button).
+  const handleProcessSermon = useCallback(async () => {
+    if (!sermonId_ || !auth) return;
+    setPublishError('');
+    try {
+      await processSermonApi(sermonId_);
+      setProcessingStage('transcribing');
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Failed to start processing');
+      setTimeout(() => setPublishError(''), 5000);
+    }
+  }, [sermonId_, auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (k: keyof typeof form, v: unknown) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -1315,6 +1367,15 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         // Use minimal status-only payload to avoid 413 from large transcripts
         await patchServerSermon(id, { status: 'published', updatedAt: now }, auth);
         updateSermon(updated);
+      }
+      // Atomic: also publish the companion when it's still in Draft
+      if (companionData?.id && companionStatusLocal !== 'Published') {
+        try {
+          await publishSermonCompanion(companionData.id, auth, companionNotifyMembers);
+          setCompanionStatusLocal('Published');
+        } catch {
+          // Non-fatal — companion can be published separately from the Companion tab
+        }
       }
       setForm(f => ({ ...f, status: 'published' }));
       setIsDirty(false);
@@ -1717,6 +1778,37 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     );
   }
 
+  // ── Show processing progress while background pipeline is running ──────────
+  if (sermonId_ && (
+    processingStage === 'transcribing' ||
+    processingStage === 'generating'   ||
+    processingStage.startsWith('failed:')
+  )) {
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <div className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-white">
+          <button
+            onClick={onBack}
+            className="text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            ← Back
+          </button>
+          <span className="text-[15px] font-semibold text-gray-900 truncate flex-1">
+            {form.title || 'Processing Sermon…'}
+          </span>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <SermonProcessingView
+            sermonId={sermonId_}
+            initialStage={processingStage}
+            onComplete={() => setProcessingStage('complete')}
+            onRetry={handleProcessSermon}
+          />
+        </div>
+      </div>
+    );
+  }
+
   const showCompanionTab = !!companionData || !!form.companionJourneyId;
 
   return (
@@ -1767,6 +1859,21 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
               <div className="flex items-start gap-2 p-3 bg-teal-50 border border-teal-200 rounded-xl text-sm text-teal-700">
                 <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
                 <span>AI draft generated. Review all fields carefully — use Regenerate to get a new suggestion for any field.</span>
+              </div>
+            )}
+
+            {/* Unprocessed sermon banner — audio uploaded but AI content not yet generated */}
+            {processingStage === 'idle' && !form.summary && !!form.audioPath && !!sermonId_ && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <span className="text-sm text-amber-800 flex-1">
+                  Audio is uploaded. Run the pipeline to generate sermon content and the 5-Day Companion automatically.
+                </span>
+                <button
+                  onClick={handleProcessSermon}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 transition-colors"
+                >
+                  Process Sermon
+                </button>
               </div>
             )}
 
@@ -1897,25 +2004,16 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
                 )}
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Status">
-                  <div className="flex items-center gap-2 h-[38px] px-1">
-                    <StatusBadge status={form.status} />
-                    <span className="text-xs text-gray-400">
-                      {form.status === 'published'
-                        ? 'Use Unpublish in the toolbar to change.'
-                        : 'Use Publish in the toolbar to publish.'}
-                    </span>
-                  </div>
-                </Field>
-                <Field label="Transcript status">
-                  <Select value={form.transcriptStatus} onChange={e => patch('transcriptStatus', e.target.value)}>
-                    <option value="none">None</option>
-                    <option value="pending">Pending</option>
-                    <option value="complete">Complete</option>
-                  </Select>
-                </Field>
-              </div>
+              <Field label="Status">
+                <div className="flex items-center gap-2 h-[38px] px-1">
+                  <StatusBadge status={form.status} />
+                  <span className="text-xs text-gray-400">
+                    {form.status === 'published'
+                      ? 'Use Unpublish in the toolbar to change.'
+                      : 'Use Publish in the toolbar to publish.'}
+                  </span>
+                </div>
+              </Field>
 
               <Field label="Transcript">
                 <TextArea rows={6} value={form.transcript ?? ''} onChange={e => patch('transcript', e.target.value)} placeholder="Full sermon transcript (optional)." />

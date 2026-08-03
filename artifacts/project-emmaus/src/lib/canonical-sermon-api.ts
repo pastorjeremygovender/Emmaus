@@ -38,6 +38,9 @@ export interface CanonicalSermon {
   mainTheme: string;
   status: "Draft" | "Review" | "Published";
   publishedAt: string | null;
+  /** Background processing pipeline state. idle | transcribing | generating | complete | failed:<stage> */
+  processingStage: string;
+  processingError: string;
   createdAt: string;
   updatedAt: string;
   // Companion linkage (included in list responses)
@@ -189,6 +192,27 @@ export async function transcribeSermonAudio(sermonId: string): Promise<Canonical
 // ─── Set current week (admin) ─────────────────────────────────────────────────
 // Marks the companion of the given sermon as This Week's Sermon.
 // Atomically clears the flag on all other companions (handled server-side).
+
+// ─── Trigger full processing pipeline (admin) ─────────────────────────────────
+// Starts the audio-first pipeline: transcription → AI generation → companion.
+// Returns 202 immediately; the sermon's processingStage advances via polling.
+
+export async function processSermon(sermonId: string): Promise<CanonicalSermon> {
+  const res = await fetch(apiUrl(`/sermons/admin/${sermonId}/process`), {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (res.status === 400) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? "Cannot process this sermon");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Processing failed: ${res.status}`);
+  }
+  return res.json();
+}
 
 export async function setCurrentWeekSermon(companionId: string): Promise<void> {
   const res = await fetch(apiUrl(`/sermon-companions/${companionId}/set-current-week`), {

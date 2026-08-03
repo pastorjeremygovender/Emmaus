@@ -363,6 +363,104 @@ sermonsRouter.post("/admin/:id/transcribe", async (req: Request, res: Response) 
   }
 });
 
+// ─── Admin: run full processing pipeline ─────────────────────────────────────
+//
+// Triggers the full audio-first pipeline in the background:
+//   transcribing → generating → complete (or failed:<stage>)
+//
+// Returns 202 immediately after setting processingStage = 'transcribing'.
+// The client polls GET /admin/:id until processingStage reaches 'complete'
+// or a 'failed:...' value.
+
+sermonsRouter.post("/admin/:id/process", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  const id = String(req.params.id);
+
+  try {
+    const sermon = await store.getSermonById(id);
+    if (!sermon) {
+      res.status(404).json({ error: "Sermon not found" });
+      return;
+    }
+    if (!sermon.audioPath) {
+      res.status(400).json({ error: "No audio uploaded for this sermon. Upload audio first." });
+      return;
+    }
+
+    // Mark as transcribing immediately so the client can start polling
+    const pending = await store.updateSermon(id, {
+      processingStage: "transcribing",
+      processingError: "",
+    });
+
+    // Return 202 before the long background work starts
+    res.status(202).json(pending);
+
+    // ── Background pipeline ──────────────────────────────────────────────
+    // Runs after the HTTP response is sent. Fire-and-forget — if the server
+    // restarts mid-run, processingStage stays at its last value and the admin
+    // can retry from the processing screen.
+    (async () => {
+      try {
+        const { transcribeAudio }                      = await import("../lib/audio-transcription.js");
+        const { generateSermonContentFromTranscript }  = await import("../lib/sermon-generator.js");
+
+        // Stage 1 — transcribe
+        let fullTranscript: string;
+        try {
+          fullTranscript = await transcribeAudio(sermon.audioPath);
+        } catch (transcribeErr) {
+          await store.updateSermon(id, {
+            processingStage: "failed:transcribing",
+            processingError: transcribeErr instanceof Error
+              ? transcribeErr.message
+              : "Transcription failed",
+            transcriptStatus: "none",
+          }).catch(() => {});
+          logger.error({ err: transcribeErr, sermonId: id }, "sermons: process — transcription failed");
+          return;
+        }
+
+        // Persist the transcript and advance stage
+        await store.updateSermon(id, {
+          transcript:      fullTranscript,
+          fullTranscript,
+          transcriptStatus: "complete",
+          processingStage:  "generating",
+        }).catch(() => {});
+
+        // Stage 2 — generate sermon draft + companion
+        try {
+          await generateSermonContentFromTranscript(id, fullTranscript, {
+            title:   sermon.title,
+            speaker: sermon.speaker,
+          });
+        } catch (genErr) {
+          await store.updateSermon(id, {
+            processingStage: "failed:generating",
+            processingError: genErr instanceof Error
+              ? genErr.message
+              : "Content generation failed",
+          }).catch(() => {});
+          logger.error({ err: genErr, sermonId: id }, "sermons: process — generation failed");
+          return;
+        }
+
+        logger.info({ sermonId: id }, "sermons: process pipeline complete");
+      } catch (bgErr) {
+        await store.updateSermon(id, {
+          processingStage: "failed:transcribing",
+          processingError: bgErr instanceof Error ? bgErr.message : "Processing failed",
+        }).catch(() => {});
+        logger.error({ err: bgErr, sermonId: id }, "sermons: process — unexpected background failure");
+      }
+    })();
+  } catch (err) {
+    logger.error({ err, sermonId: id }, "sermons: process request setup failed");
+    res.status(500).json({ error: err instanceof Error ? err.message : "Processing failed" });
+  }
+});
+
 // ─── Admin: request presigned audio upload URL ────────────────────────────────
 //
 // Returns a GCS presigned PUT URL so the client can upload audio directly.

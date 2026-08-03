@@ -21,6 +21,7 @@ import {
   createAdminSermon,
   requestAudioUploadUrl,
   setCurrentWeekSermon,
+  processSermon,
 } from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
@@ -138,7 +139,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   // ── New canonical sermon ──────────────────────────────────────────────────────
 
   const handleOpenNewModal = () => {
-    setShowNewModal(true); setNewTitle(''); setNewSpeaker(''); setNewScripture('');
+    setShowNewModal(true); setNewTitle(''); setNewSpeaker('Pastor Jeremy Govender'); setNewScripture('');
     setNewSeries(''); setNewYoutubeUrl(''); setNewNotes(''); setNewError('');
     setNewAudioFile(null); setNewAudioError(''); setNewCreateStep('form');
     setNewUploadProgress(0);
@@ -191,6 +192,70 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           console.warn('Audio upload failed (non-fatal):', uploadErr);
         }
       }
+
+      setSermons(prev => [created, ...prev]);
+      setShowNewModal(false);
+      onEdit(editId(created));
+    } catch (err) {
+      setNewError(err instanceof Error ? err.message : 'Failed to create sermon');
+      setNewCreateStep('form');
+    } finally {
+      setNewCreating(false);
+      setNewUploadProgress(0);
+    }
+  };
+
+  // ── Process Sermon — create + upload + trigger AI pipeline ───────────────────
+  // Primary "new sermon" action when audio is available. Creates the record,
+  // uploads the audio, triggers the background pipeline, then opens the editor
+  // which shows the SermonProcessingView progress screen.
+
+  const handleCreateAndProcess = async () => {
+    if (newCreating) return;
+    if (!newAudioFile) {
+      setNewError('Please upload sermon audio to use Process Sermon.');
+      return;
+    }
+    setNewCreating(true);
+    setNewError('');
+    try {
+      const created = await createAdminSermon({
+        title:              newTitle.trim()      || 'New Sermon',
+        speaker:            newSpeaker.trim()    || 'Pastor Jeremy Govender',
+        sermonDate:         newDate              || new Date().toISOString().split('T')[0],
+        scriptureReference: newScripture.trim()  || '',
+        series:             newSeries.trim()     || '',
+        youtubeUrl:         newYoutubeUrl.trim() || '',
+        notes:              newNotes.trim()      || '',
+        status:             'Draft',
+      });
+
+      setNewCreateStep('uploading');
+      try {
+        const { uploadURL } = await requestAudioUploadUrl(created.id, {
+          name:        newAudioFile.name,
+          size:        newAudioFile.size,
+          contentType: newAudioFile.type || 'audio/mpeg',
+        });
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', uploadURL);
+          xhr.setRequestHeader('Content-Type', newAudioFile.type || 'audio/mpeg');
+          xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) setNewUploadProgress(Math.round(e.loaded / e.total * 100));
+          });
+          xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`));
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.send(newAudioFile);
+        });
+      } catch (uploadErr) {
+        setNewError('Audio upload failed. Please try again.');
+        setNewCreateStep('form');
+        return;
+      }
+
+      // Trigger background pipeline — returns 202 immediately
+      await processSermon(created.id);
 
       setSermons(prev => [created, ...prev]);
       setShowNewModal(false);
@@ -709,7 +774,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                     >
                       <Upload size={16} className="mx-auto mb-1.5 text-gray-400" />
                       <p className="text-[12px] font-medium text-gray-600">Click to select audio</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">MP3, M4A, WAV, MP4, MPEG, WEBM · Max 25 MB</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">MP3, M4A, WAV, MP4, MPEG, WEBM · Max 250 MB</p>
                     </button>
                   )}
                   {newAudioError && (
@@ -759,20 +824,37 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
 
             {/* Footer */}
             <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 space-y-2">
+              {/* Primary — Process Sermon (requires audio) */}
+              <button
+                onClick={handleCreateAndProcess}
+                disabled={newCreating || !!newAudioError || !newAudioFile}
+                title={!newAudioFile ? 'Upload sermon audio to enable this' : undefined}
+                className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
+              >
+                {newCreating && newCreateStep === 'uploading'
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Uploading audio…</span></>
+                  : newCreating
+                  ? <><Loader2 size={15} className="animate-spin" /><span>Starting pipeline…</span></>
+                  : <span>Process Sermon</span>
+                }
+              </button>
+              {!newAudioFile && (
+                <p className="text-center text-[11px] text-gray-400 -mt-1">
+                  Upload audio above to enable Process Sermon
+                </p>
+              )}
+              {/* Secondary — Save as Draft (no audio required, no AI processing) */}
               <button
                 onClick={handleCreateSermon}
                 disabled={newCreating || !!newAudioError}
-                className="w-full h-12 rounded-2xl text-[15px] font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-teal-600 hover:bg-teal-700 text-white"
+                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-40"
               >
-                {newCreating
-                  ? <><Loader2 size={15} className="animate-spin" /><span>{newCreateStep === 'uploading' ? 'Uploading audio…' : 'Creating…'}</span></>
-                  : <span>{newAudioFile ? 'Create Sermon + Upload Audio' : 'Create Sermon'}</span>
-                }
+                {newCreating && newCreateStep === 'uploading' ? 'Uploading…' : 'Save as Draft →'}
               </button>
               <button
                 onClick={() => { if (!newCreating) { handleCloseNewModal(); onNew(); } }}
                 disabled={newCreating}
-                className="w-full h-10 rounded-xl text-[13px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors disabled:opacity-40"
+                className="w-full h-8 rounded-xl text-[12px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
               >
                 Or generate from a YouTube URL →
               </button>

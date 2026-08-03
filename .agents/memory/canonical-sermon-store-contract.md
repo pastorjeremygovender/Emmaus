@@ -30,3 +30,14 @@ When `sermonId` is a UUID not yet in `AdminContext` (post-reload), the editor fe
 
 ## Detection metadata columns (added 2026-08)
 `sermons` table has: `full_transcript`, `sermon_start_time`, `sermon_end_time`, `detection_confidence`, `detection_method`. These are optional in `CreateSermonData` (legacy callers default to `""` / `0` / `"none"`).
+
+## Audio-first processing pipeline (added 2026-08)
+Two new columns on `sermons`: `processing_stage` (TEXT default `'idle'`) and `processing_error` (TEXT default `''`). Values: `idle | transcribing | generating | complete | failed:transcribing | failed:generating`.
+
+`POST /api/sermons/admin/:id/process` sets stage to `'transcribing'`, returns 202, then background: `transcribeAudio → updateSermon(generating) → generateSermonContentFromTranscript → updateSermon(complete)`.
+
+Frontend: `processingStage` state in `SermonEditor` initialized from `existing.processingStage`. Polls `getAdminSermon` every 3s when active. Shows `SermonProcessingView` (full-screen progress) when stage is `transcribing | generating | failed:*`. On `complete`, reloads sermon + companion.
+
+`SermonsList` "Process Sermon" button = primary (requires audio); "Save as Draft" = secondary (no processing). Default speaker pre-filled to 'Pastor Jeremy Govender'.
+
+`handlePublish` in SermonEditor is now atomic: also publishes companion if it's Draft.
