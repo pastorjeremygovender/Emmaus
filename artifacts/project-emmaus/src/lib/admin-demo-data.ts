@@ -12,6 +12,8 @@ export type Sermon = {
   summary?: string;
   topics: string[];
   keywords: string[];
+  /** Path to the uploaded sermon audio file in object storage */
+  audioPath?: string;
   /** Full church-service transcript (retained for reference) */
   transcript?: string;
   /** Sermon-only transcript — canonical source for all AI generation */

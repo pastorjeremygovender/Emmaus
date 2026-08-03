@@ -60,13 +60,29 @@ sermonCompanionsRouter.get("/current-week/member", async (req: Request, res: Res
 // ─── POST /:companionId/set-current-week ──────────────────────────────────────
 // Admin only. Atomically marks this companion as This Week's Sermon and clears
 // the flag on all others.
+//
+// Guard: the companion must exist AND be Published. A Draft/Archived companion
+// must not become the current week — doing so would clear the existing flag
+// without surfacing any sermon to members.
 
 sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
   if (!adminId) return;
 
+  const companionId = String(req.params.companionId);
   try {
-    await store.setCurrentWeekCompanion(String(req.params.companionId));
+    const companion = await store.getCompanionById(companionId);
+    if (!companion) {
+      res.status(404).json({ error: "Sermon companion not found" });
+      return;
+    }
+    if (companion.status !== "Published") {
+      res.status(422).json({
+        error: "Only a Published companion can be set as This Week's Sermon",
+      });
+      return;
+    }
+    await store.setCurrentWeekCompanion(companionId);
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "sermon-companions: setCurrentWeek failed");

@@ -122,20 +122,24 @@ function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
 
 export interface CanonicalSermonWithCompanion extends CanonicalSermon {
   companionId: string | null;
+  isCurrentWeek: boolean;
 }
 
 function rowToSermonWithCompanion(row: Record<string, unknown>): CanonicalSermonWithCompanion {
   return {
     ...rowToSermon(row),
     companionId: row.companion_id != null ? String(row.companion_id) : null,
+    isCurrentWeek: row.is_current_week === true || row.is_current_week === "true",
   };
 }
 
 export async function getAllSermons(): Promise<CanonicalSermonWithCompanion[]> {
   const result = await pool.query(
     `SELECT s.*,
-       (SELECT id FROM sermon_companion WHERE sermon_uuid = s.id LIMIT 1) AS companion_id
+       sc.id AS companion_id,
+       COALESCE(sc.is_current_week, false) AS is_current_week
      FROM sermons s
+     LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
      ORDER BY s.created_at DESC`
   );
   return result.rows.map(rowToSermonWithCompanion);
@@ -165,8 +169,10 @@ export async function getSermonByLegacyId(legacyId: string): Promise<CanonicalSe
 export async function listPublishedSermons(): Promise<CanonicalSermonWithCompanion[]> {
   const result = await pool.query(
     `SELECT s.*,
-       (SELECT id FROM sermon_companion WHERE sermon_uuid = s.id LIMIT 1) AS companion_id
+       sc.id AS companion_id,
+       COALESCE(sc.is_current_week, false) AS is_current_week
      FROM sermons s
+     LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
      WHERE s.status = 'Published'
      ORDER BY s.published_at DESC NULLS LAST`
   );

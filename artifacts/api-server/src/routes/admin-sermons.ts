@@ -160,7 +160,7 @@ adminSermonsRouter.get("/:id", async (req: Request, res: Response) => {
     if (canonical) {
       // Resolve companion ID from the DB so the editor can open the companion tab
       const companion = await getCompanionBySermonId(id).catch(() => null);
-      res.json(canonicalToAdmin({ ...canonical, companionId: companion?.id ?? null }));
+      res.json(canonicalToAdmin({ ...canonical, companionId: companion?.id ?? null, isCurrentWeek: false }));
       return;
     }
     // Not in canonical DB — fall back to legacy JSON
@@ -303,7 +303,7 @@ adminSermonsRouter.patch("/:id", async (req: Request, res: Response) => {
       }
       // Resolve companion so the response carries the correct companionJourneyId
       const companion = await getCompanionBySermonId(id).catch(() => null);
-      res.json(canonicalToAdmin({ ...updated, companionId: companion?.id ?? null }));
+      res.json(canonicalToAdmin({ ...updated, companionId: companion?.id ?? null, isCurrentWeek: false }));
       return;
     }
     // Not in canonical DB — fall back to legacy JSON store

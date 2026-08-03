@@ -10,7 +10,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
-  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle,
+  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle, Star,
 } from 'lucide-react';
 import {
   type CanonicalSermon,
@@ -20,6 +20,7 @@ import {
   deleteAdminSermon,
   createAdminSermon,
   requestAudioUploadUrl,
+  setCurrentWeekSermon,
 } from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
@@ -67,6 +68,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const [publishing, setPublishing]           = useState<Record<string, boolean>>({});
   const [unpublishTarget, setUnpublishTarget] = useState<CanonicalSermon | null>(null);
   const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
+  const [settingCurrentWeek, setSettingCurrentWeek] = useState<Record<string, boolean>>({});
 
   // New sermon creation modal — metadata
   const [showNewModal, setShowNewModal]     = useState(false);
@@ -202,6 +204,31 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     }
   };
 
+  // ── Set current week ──────────────────────────────────────────────────────────
+
+  const handleSetCurrentWeek = async (sermon: CanonicalSermon & { companionId?: string | null }) => {
+    const companionId = sermon.companionId;
+    if (!companionId) return;
+    setSettingCurrentWeek(prev => ({ ...prev, [sermon.id]: true }));
+    setOpenMenuId(null);
+    setErrorMessage(''); setSuccessMessage('');
+    try {
+      await setCurrentWeekSermon(companionId);
+      // Update list in-place: clear old current-week, set new one
+      setSermons(prev => prev.map(s => ({
+        ...s,
+        isCurrentWeek: s.id === sermon.id ? true : false,
+      })));
+      setSuccessMessage('Set as This Week\'s Sermon.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch {
+      setErrorMessage("We couldn't set this as This Week's Sermon. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setSettingCurrentWeek(prev => { const copy = { ...prev }; delete copy[sermon.id]; return copy; });
+    }
+  };
+
   // ── Publish / Unpublish ──────────────────────────────────────────────────────
 
   const handlePublish = async (sermon: CanonicalSermon, e: React.MouseEvent) => {
@@ -320,10 +347,12 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
         )}
 
         {filtered.map(s => {
-          const isPublished      = s.status === 'Published';
-          const isPublishingThis = !!publishing[s.id];
-          const isMenuOpen       = openMenuId === s.id;
-          const companionId      = (s as CanonicalSermon & { companionId?: string | null }).companionId;
+          const isPublished          = s.status === 'Published';
+          const isPublishingThis     = !!publishing[s.id];
+          const isMenuOpen           = openMenuId === s.id;
+          const companionId          = (s as CanonicalSermon & { companionId?: string | null }).companionId;
+          const isCurrentWeek        = !!(s as CanonicalSermon & { isCurrentWeek?: boolean }).isCurrentWeek;
+          const isSettingCurrentWeek = !!settingCurrentWeek[s.id];
 
           return (
             <ContentStudioListItem
@@ -363,7 +392,17 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                   </div>
                 </div>
               }
-              status={<StatusBadge status={isPublished ? 'published' : s.status.toLowerCase()} />}
+              status={
+                <div className="flex items-center gap-1.5">
+                  {isCurrentWeek && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-amber-100 text-amber-700 border border-amber-200">
+                      <Star size={8} className="fill-amber-500 text-amber-500" />
+                      THIS WEEK
+                    </span>
+                  )}
+                  <StatusBadge status={isPublished ? 'published' : s.status.toLowerCase()} />
+                </div>
+              }
               actions={
                 <>
                   {/* Edit */}
@@ -405,7 +444,20 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
                     {isMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-44">
+                        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-48">
+                          {/* Set as This Week — Published sermons with a companion that aren't already current */}
+                          {isPublished && companionId && !isCurrentWeek && (
+                            <button
+                              onClick={() => handleSetCurrentWeek(s as CanonicalSermon & { companionId?: string | null })}
+                              disabled={isSettingCurrentWeek}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                            >
+                              {isSettingCurrentWeek
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <Star size={13} />}
+                              Set as This Week
+                            </button>
+                          )}
                           {s.youtubeUrl && (
                             <a
                               href={s.youtubeUrl}

@@ -40,6 +40,8 @@ export interface CanonicalSermon {
   updatedAt: string;
   // Companion linkage (included in list responses)
   companionId?: string | null;
+  // Set when this sermon's companion is the current week's sermon
+  isCurrentWeek?: boolean;
 }
 
 export interface SermonSection {
@@ -180,6 +182,23 @@ export async function transcribeSermonAudio(sermonId: string): Promise<Canonical
     throw new Error((body as { error?: string }).error ?? `Transcription failed: ${res.status}`);
   }
   return res.json();
+}
+
+// ─── Set current week (admin) ─────────────────────────────────────────────────
+// Marks the companion of the given sermon as This Week's Sermon.
+// Atomically clears the flag on all other companions (handled server-side).
+
+export async function setCurrentWeekSermon(companionId: string): Promise<void> {
+  const res = await fetch(apiUrl(`/sermon-companions/${companionId}/set-current-week`), {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Set current week failed: ${res.status}`);
+  }
 }
 
 // ─── List published sermons (member) ─────────────────────────────────────────
