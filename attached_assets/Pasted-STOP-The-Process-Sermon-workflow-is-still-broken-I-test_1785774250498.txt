@@ -1,0 +1,286 @@
+STOP. The Process Sermon workflow is still broken.
+
+I tested the published application with the 82.6 MB sermon.
+
+Actual sequence:
+
+1. Open Admin → Sermons.
+2. Click New Sermon.
+3. Attach the audio.
+4. Click Process Sermon.
+5. Audio uploads successfully.
+6. Processing screen appears.
+7. “Preparing audio” completes.
+8. “Transcribing sermon audio” begins.
+9. Before the full processing pipeline completes, the app exits the processing screen and opens the OLD manual sermon editor.
+
+The old editor then shows:
+
+- placeholder title “New Sermon”
+- no generated Main Theme
+- no generated Scripture
+- empty transcript
+- manual Topics and Keywords placeholders
+- separate “Transcribe with Whisper” button
+- Save Draft and Publish available
+- no 5-Day Companion review
+- no Bible Links review
+- no Ask Emmaus Preview
+- no Sermon Home Preview
+
+This is not the approved workflow.
+
+The app must remain in the processing experience until the full backend pipeline has either:
+
+A. reached READY_FOR_REVIEW, or
+B. returned a clear processing failure.
+
+It must never navigate into the old manual editor merely because the sermon record was created or the audio upload completed.
+
+==================================================
+1. TRACE THE PREMATURE NAVIGATION
+==================================================
+
+Identify the exact code path that moves the user from the Processing Sermon screen to the editor.
+
+Check for all of the following:
+
+- navigation triggered when a sermon ID is created
+- navigation triggered when upload completes
+- navigation triggered by any status other than READY_FOR_REVIEW
+- polling that treats an empty or unknown status as complete
+- polling request failure that falls back to the editor
+- timeout that navigates away after a fixed number of minutes
+- component unmount/remount caused by route replacement
+- stale sermon status returned from the database
+- background processing request returning before the background job finishes
+- redirect in the Process Sermon API response
+- browser refresh or route state loss
+
+Report the exact root cause before declaring this fixed.
+
+==================================================
+2. DEFINE ONE AUTHORITATIVE PROCESSING STATE MACHINE
+==================================================
+
+Use one server-controlled processing state machine.
+
+Recommended states:
+
+DRAFT
+UPLOADING
+AUDIO_UPLOADED
+PREPARING_AUDIO
+TRANSCRIBING
+ANALYSING_SERMON
+GENERATING_SUMMARY
+GENERATING_COMPANION
+GENERATING_BIBLE_LINKS
+PREPARING_ASK_EMMAUS
+PREPARING_SERMON_HOME
+READY_FOR_REVIEW
+PROCESSING_FAILED
+PUBLISHED
+
+The frontend must not infer completion from missing data or elapsed time.
+
+Navigation rule:
+
+- READY_FOR_REVIEW → open the generated Review Sermon page.
+- PROCESSING_FAILED → remain on the processing page and show the failure with Retry Failed Stage.
+- Any other processing state → remain on the processing page.
+- Empty, null, unknown or temporary API failure → remain on the processing page and retry polling; do not open the editor.
+
+==================================================
+3. REMOVE THE OLD EDITOR FROM THE NEW-SERMON PATH
+==================================================
+
+The new-sermon route must not fall back to the old manual Companion editor.
+
+After Process Sermon is clicked:
+
+New Sermon form
+→ Processing Sermon
+→ Generated Review Sermon
+
+The old manual editor must not appear anywhere in that flow.
+
+The page visible after processing must be the new Review Sermon page containing generated content.
+
+The separate “Transcribe with Whisper” button must not appear for a sermon already submitted through Process Sermon.
+
+==================================================
+4. KEEP PROCESSING RUNNING SERVER-SIDE
+==================================================
+
+The full pipeline must continue on the server even if:
+
+- the user leaves the page
+- the browser refreshes
+- the network temporarily disconnects
+- the frontend polling request fails
+- the user closes the browser
+
+The Process Sermon request should create a durable processing job or durable processing state, then return the sermon ID and processing attempt ID.
+
+The frontend should poll or stream status from that processing attempt.
+
+Do not tie the lifetime of transcription and generation to the browser request remaining open.
+
+==================================================
+5. RESUME CORRECTLY
+==================================================
+
+If the admin leaves and later returns:
+
+- open the sermon from the Sermons list
+- if processing is still active, reopen the Processing Sermon screen
+- if processing failed, show the failed stage and Retry
+- if processing completed, open Review Sermon
+- never open an empty manual editor
+
+The sermon list should display:
+
+Processing
+Ready for Review
+Failed
+Draft
+Published
+
+accurately.
+
+==================================================
+6. GENERATED REVIEW PAGE REQUIREMENTS
+==================================================
+
+Only after READY_FOR_REVIEW should the Review Sermon page open.
+
+It must already contain generated content in these sections:
+
+1. Sermon Details
+   - generated or confirmed title
+   - speaker
+   - date
+   - main Scripture
+   - additional Scriptures
+   - series, if supplied
+
+2. Audio & Video
+   - stored audio
+   - YouTube URL, if supplied
+
+3. Main Theme and Summary
+   - generated Main Theme
+   - generated summary
+   - generated topics
+   - generated keywords
+
+4. Transcript and Sections
+   - complete transcript
+   - timestamped sections where available
+
+5. 5-Day Companion
+   - all five generated days
+   - Scripture
+   - reflection
+   - prayer
+   - next step
+   - relevant sermon timestamps
+
+6. Bible Links
+   - verified Scripture links
+   - Preached Here preparation
+
+7. Ask Emmaus Preview
+   - searchable sections
+   - source metadata
+   - sample retrieval preview
+
+8. Sermon Home Preview
+   - the exact member-facing page
+
+Each section may have Edit, Save and Regenerate.
+
+==================================================
+7. PUBLISH MUST REMAIN DISABLED
+==================================================
+
+For newly processed sermons, Publish must remain disabled until:
+
+- processing_status = READY_FOR_REVIEW
+- transcript exists
+- generated sermon analysis exists
+- 5-Day Companion exists
+- Sermon Home data exists
+- required fields validate
+
+Do not allow Publish while the sermon is still transcribing or while the generated fields are empty.
+
+==================================================
+8. DO NOT LOSE THE ORIGINAL INPUT
+==================================================
+
+The current sermon should retain:
+
+- original filename: Sermon 25.01.2026.mp3
+- original size: 82.6 MB
+- persistent object-storage path
+- supplied speaker
+- supplied date
+- supplied title, if any
+- supplied Scripture, if any
+- supplied YouTube URL, if any
+
+Do not replace supplied data with the placeholder “New Sermon.”
+
+If title was left blank, use a temporary display label such as:
+
+Processing sermon from 3 August 2026
+
+Do not treat that temporary label as the final generated title.
+
+==================================================
+9. TEST THE SAME STORED SERMON
+==================================================
+
+Do not ask me to upload the file again.
+
+Use the existing stored 82.6 MB sermon and its current canonical sermon record.
+
+Retry the full process and verify this exact sequence in the published application:
+
+1. Processing screen opens.
+2. Preparing audio completes.
+3. Transcription completes.
+4. Sections and themes complete.
+5. Summary and keywords complete.
+6. 5-Day Companion completes.
+7. Bible Links complete.
+8. Ask Emmaus preparation completes.
+9. Sermon Home preparation completes.
+10. Status becomes READY_FOR_REVIEW.
+11. Only then does Review Sermon open.
+12. The generated fields are populated.
+13. The old “Transcribe with Whisper” button is absent.
+14. Publish becomes available only after review readiness.
+
+==================================================
+10. REPORT WITH EVIDENCE
+==================================================
+
+Report:
+
+1. Exact root cause of the premature redirect.
+2. Frontend file and function that triggered it.
+3. Backend processing-state changes made.
+4. Whether processing is now durable/server-side.
+5. The processing attempt ID used for the 82.6 MB sermon.
+6. Every state reached by that attempt.
+7. Confirmation that READY_FOR_REVIEW was reached.
+8. Confirmation that the generated Review Sermon page opened.
+9. Confirmation that the old manual editor did not appear.
+10. Published deployment/commit tested.
+
+Do not report this as fixed based on screenshots of code or a small test file.
+
+Test the complete published workflow using the existing 82.6 MB sermon.

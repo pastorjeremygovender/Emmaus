@@ -254,10 +254,17 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
         return;
       }
 
-      // Trigger background pipeline — returns 202 immediately
-      await processSermon(created.id);
+      // Trigger background pipeline — returns 202 with updated processingStage
+      const pending = await processSermon(created.id);
+      // Merge the returned processingStage into the in-memory record so
+      // SermonEditor initialises with the correct stage ('preparing') rather
+      // than the stale 'idle' from the original createAdminSermon response.
+      const withStage: typeof created = {
+        ...created,
+        processingStage: pending?.processingStage ?? 'preparing',
+      };
 
-      setSermons(prev => [created, ...prev]);
+      setSermons(prev => [withStage, ...prev]);
       setShowNewModal(false);
       onEdit(editId(created));
     } catch (err) {

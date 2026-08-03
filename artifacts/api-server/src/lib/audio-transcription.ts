@@ -37,6 +37,8 @@ const objectStorage = new ObjectStorageService();
 // Exported so startup-migrations can log and verify it on boot.
 
 function resolveFfmpegPath(): string {
+  // Step 1: Try via shell PATH (works in the Replit dev workspace where the
+  // interactive shell's PATH includes the Nix runtime).
   try {
     const p = execSync("which ffmpeg", {
       encoding: "utf8",
@@ -44,7 +46,20 @@ function resolveFfmpegPath(): string {
     }).trim();
     if (p) return p;
   } catch { /* fall through */ }
-  // Bare name fallback — spawn will produce a clear ENOENT if not found
+
+  // Step 2: Search the Nix store for the replit-runtime-path bundle.
+  // In production deployments, /bin/sh has a restricted PATH that does NOT
+  // include the Nix store, so `which` fails. But the binary is present at a
+  // well-known Nix bundle path — a glob expansion finds it instantly.
+  try {
+    const p = execSync(
+      "ls /nix/store/*-replit-runtime-path*/bin/ffmpeg 2>/dev/null | head -1",
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    if (p) return p;
+  } catch { /* fall through */ }
+
+  // Last resort: bare name; spawn will produce a clear ENOENT if unavailable.
   return "ffmpeg";
 }
 

@@ -1243,16 +1243,32 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   }, [companionData?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Poll processingStage while pipeline is active ──────────────────────────
+  //
+  // isActiveProcessingStage returns true for any stage that is not yet terminal.
+  // Terminal stages: '' | 'idle' | 'complete' | 'READY_FOR_REVIEW' | 'failed:*'
+  // Active stages include all granular pipeline values:
+  //   preparing → compressing → chunking:N → transcribing:N:X → combining →
+  //   detecting → drafting → companion
+  //   (legacy aliases: transcribing, generating)
+  //
+  // The function is defined at component scope so it can be used in both the
+  // polling effect and the render condition below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const isActiveProcessingStage = (stage: string): boolean => {
+    if (!stage || stage === 'idle' || stage === 'complete' || stage === 'READY_FOR_REVIEW') return false;
+    if (stage.startsWith('failed:')) return false;
+    return true;
+  };
+
   useEffect(() => {
     if (!sermonId_) return;
-    const isActive = processingStage === 'transcribing' || processingStage === 'generating';
-    if (!isActive) return;
+    if (!isActiveProcessingStage(processingStage)) return;
     const poll = async () => {
       try {
         const updated = await getAdminSermon(sermonId_);
         const s = updated.processingStage ?? 'idle';
         if (s !== processingStage) setProcessingStage(s);
-        if (s === 'complete' && auth) {
+        if ((s === 'complete' || s === 'READY_FOR_REVIEW') && auth) {
           // Reload sermon fields + companion once pipeline finishes
           getServerSermon(sermonId_, auth).then(rec => {
             if (!rec) return;
@@ -1313,7 +1329,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     setPublishError('');
     try {
       await processSermonApi(sermonId_);
-      setProcessingStage('transcribing');
+      setProcessingStage('preparing');
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Failed to start processing');
       setTimeout(() => setPublishError(''), 5000);
@@ -1779,11 +1795,12 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   }
 
   // ── Show processing progress while background pipeline is running ──────────
-  if (sermonId_ && (
-    processingStage === 'transcribing' ||
-    processingStage === 'generating'   ||
-    processingStage.startsWith('failed:')
-  )) {
+  // Show the processing view for any non-terminal stage, including 'preparing',
+  // all granular stages (compressing, chunking:N, transcribing:N:X, combining,
+  // detecting, drafting, companion), legacy stages (transcribing, generating),
+  // and failure states (failed:*). Terminal stages (idle, complete,
+  // READY_FOR_REVIEW) fall through to the editor below.
+  if (sermonId_ && (isActiveProcessingStage(processingStage) || processingStage.startsWith('failed:'))) {
     return (
       <div className="flex flex-col h-full min-h-0">
         <div className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b border-gray-200 bg-white">
@@ -1801,7 +1818,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
           <SermonProcessingView
             sermonId={sermonId_}
             initialStage={processingStage}
-            onComplete={() => setProcessingStage('complete')}
+            onComplete={() => setProcessingStage('READY_FOR_REVIEW')}
             onRetry={handleProcessSermon}
           />
         </div>

@@ -42,7 +42,7 @@ function stageRank(stage: string): number {
   if (stage === 'detecting' || stage === 'generating')          return 6;
   if (stage === 'drafting')                                     return 7;
   if (stage === 'companion')                                    return 8;
-  if (stage === 'complete')                                     return 10;
+  if (stage === 'complete' || stage === 'READY_FOR_REVIEW')     return 10;
   return 0;
 }
 
@@ -178,7 +178,7 @@ export default function SermonProcessingView({
   stageRef.current = stage;
 
   const isFailed   = stage.startsWith('failed:');
-  const isComplete = stage === 'complete';
+  const isComplete = stage === 'complete' || stage === 'READY_FOR_REVIEW';
 
   // ── Polling ───────────────────────────────────────────────────────────────
   const poll = useCallback(async () => {
@@ -201,7 +201,7 @@ export default function SermonProcessingView({
         });
       }
 
-      if (s === 'complete') {
+      if (s === 'complete' || s === 'READY_FOR_REVIEW') {
         onComplete();
       } else if (s.startsWith('failed:')) {
         setError(sermon.processingError || 'Processing stopped unexpectedly.');
@@ -231,9 +231,9 @@ export default function SermonProcessingView({
     setError('');
     try {
       await onRetry();
-      const next = 'preparing';
-      setStage(next);
-      setSeenStages(inferSeenStages(next));
+      // Reset to 'preparing' so the view shows fresh progress
+      setStage('preparing');
+      setSeenStages(inferSeenStages('preparing'));
     } finally {
       setRetrying(false);
     }

@@ -1429,7 +1429,7 @@ export async function generateSermonContentFromTranscript(
     detectionConfidence,
     detectionMethod,
     scriptureReference:  draftFields.scriptureReference,
-    processingStage:     "complete",
+    processingStage:     "READY_FOR_REVIEW",
     processingError:     "",
   });
 

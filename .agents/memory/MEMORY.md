@@ -33,3 +33,4 @@
 - [prod-data-sync](prod-data-sync.md) — three-part countermeasure against dev/prod DB drift: export:seed script + data-safety workflow gate + always-upsert boot sync.
 - [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
+- [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
