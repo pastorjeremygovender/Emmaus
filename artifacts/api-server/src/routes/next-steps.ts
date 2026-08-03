@@ -414,12 +414,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       // check used by the Today's Steps card (currentDay > numberOfDays).
       const isAllComplete = publishedEntryCount > 0 && currentDay > publishedEntryCount;
 
-      // Strip any subtitle appended to the companion title by AI generation
-      // (e.g. "Jesus at the Center: 5 Days of Intentional Living" → "Jesus at the Center").
-      const title = c.title.includes(": ") ? c.title.split(": ")[0].trim() : c.title;
+      // Strip subtitle appended to companion title by AI generation
+      // e.g. "Jesus at the Center: 5 Days of Intentional Living" → title + subtitle
+      const hasSeparator = c.title.includes(": ");
+      const title    = hasSeparator ? c.title.split(": ")[0].trim() : c.title;
+      const subtitle = hasSeparator ? c.title.split(": ").slice(1).join(": ").trim() : undefined;
 
-      // Progress-aware description — mirrors the formula in buildDevotionalItem and
-      // Walk.tsx > DevotionalCard so Today's Steps and Next Steps always agree.
+      // Progress-aware description for Today's Steps card
       const publishedEntries = companionEntriesMap.get(c.id) ?? [];
       const completedCount = prog?.completedDays.length ?? 0;
       const allComplete = publishedEntryCount > 0 && completedCount >= publishedEntryCount;
@@ -427,14 +428,19 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       const nextEntryTitle = nextEntry?.title || undefined;
 
       const description = allComplete
-        ? `${publishedEntryCount} of ${publishedEntryCount} completed`
+        ? `${publishedEntryCount} of ${publishedEntryCount} steps completed`
         : completedCount > 0
           ? nextEntryTitle
-            ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
-            : `Day ${currentDay} of ${publishedEntryCount}`
+            ? `Step ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
+            : `Step ${currentDay} of ${publishedEntryCount}`
           : publishedEntryCount > 0
-            ? `Day 1 of ${publishedEntryCount}`
-            : "Day 1";
+            ? `Step 1 of ${publishedEntryCount}`
+            : "Step 1";
+
+      // Action label — complete companions now show "Review Companion" instead of no button.
+      const actionLabel = allComplete
+        ? "Review Companion"
+        : primaryActionLabel("sermon-devotional", state);
 
       return {
         id: c.id,
@@ -445,15 +451,14 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         metadata: {
           durationDays: c.numberOfDays,
           publishedAt: c.publishedAt ?? undefined,
+          // subtitle lets the Next Steps discovery card show "5 Days of Intentional Living"
+          // instead of the progress-based description.
+          subtitle: subtitle || undefined,
         },
-        // When all days are complete, point to the previous-days page rather than
-        // a nonexistent next day; the primary button will be absent so navigation
-        // from the card only happens via "View Previous Reflections →".
-        route: isAllComplete
-          ? `/sermon-companion/${c.id}/previous`
-          : `/sermon-companion/${c.id}/day/${currentDay}`,
-        // null → EmmausContentCard renders no primary button (no "Continue").
-        primaryActionLabel: isAllComplete ? null : primaryActionLabel("sermon-devotional", state),
+        // All cards route to the overview; the overview decides whether to
+        // open step 1 / current step / review based on progress.
+        route: `/sermon-companion/${c.id}/overview`,
+        primaryActionLabel: actionLabel,
         badge: computeBadge(c.notifyPublishedAt ?? null, prog?.lastOpenedAt ?? null, !!prog),
       };
     }

@@ -250,7 +250,7 @@ export default function SermonCompanionReader() {
       : '';
     actionButton = (
       <EmmausCompletionCard
-        heading={`Day ${day} complete.`}
+        heading={`Step ${day} complete.`}
         subMessage={
           hasNextEntry
             ? 'The next reflection is available when you\'re ready.'
@@ -268,7 +268,7 @@ export default function SermonCompanionReader() {
     // Replay mode — member came from Previous Reflections; no secondary link needed
     actionButton = (
       <EmmausCompletionCard
-        heading={`Day ${day} complete.`}
+        heading={`Step ${day} complete.`}
         subMessage="May the Lord continue His work in your heart today."
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnDest)}

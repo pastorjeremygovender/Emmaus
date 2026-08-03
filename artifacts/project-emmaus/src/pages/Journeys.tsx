@@ -587,7 +587,7 @@ function WalksPanel({
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction,
+  current, previous, onAction: _onAction,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
@@ -595,56 +595,43 @@ function SermonCompanionsPanel({
 }) {
   const [, setLocation] = useLocation();
 
-  // Build a companionId → canonicalSermonId lookup from published canonical sermons.
-  // Populated asynchronously — cards are ALWAYS tappable (fallback to companion reader)
-  // so the async timing never leaves the card dead.
-  const [canonicalMap, setCanonicalMap] = React.useState<Map<string, string>>(new Map());
-  React.useEffect(() => {
-    fetch('/api/sermons', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then((sermons: Array<{ id: string; companionId?: string | null }>) => {
-        const m = new Map<string, string>();
-        for (const s of sermons) {
-          if (s.companionId) m.set(s.companionId, s.id);
-        }
-        setCanonicalMap(m);
-      })
-      .catch(() => {/* non-fatal — card falls back to companion reader */});
-  }, []);
-
   if (!current && previous.length === 0) {
     return <EmptyState message="No Sermon Companions are available yet." />;
   }
 
-  function companionCard(item: NextStepsItem, isCurrent: boolean) {
-    const isPaused = item.memberProgressState === 'paused';
-    const actionLabel = item.primaryActionLabel ?? undefined;
+  // Discovery card action label — computed from progress state since the API
+  // returns a generic label; we want sermon-specific language here.
+  function discoveryActionLabel(state: string, apiLabel: string | null | undefined): string {
+    if (state === 'completed') return 'Review Companion';
+    if (state === 'in-progress' || state === 'paused') return 'Continue Companion';
+    if (state === 'not-started') return 'Start Companion';
+    return apiLabel ?? 'Open';
+  }
 
-    // The card is ALWAYS tappable — tap navigates to SermonHome when the canonical
-    // sermon is loaded, otherwise falls back to the companion reader directly.
-    // This means the card works even if the /api/sermons fetch hasn't returned yet.
-    const canonicalSermonId = canonicalMap.get(item.id);
-    const handleCardPress = isCurrent && canonicalSermonId
-      ? () => {
-          const companionRoute = encodeURIComponent(item.route);
-          setLocation(`/sermon/${canonicalSermonId}?companionRoute=${companionRoute}`);
-        }
-      : () => {
-          // Fallback: go directly into the companion reader.
-          // Also used for non-current-week companions.
-          onAction(item);
-        };
+  // Both card tap AND button always navigate to the Overview screen.
+  // The overview handles start / continue / review based on progress.
+  function overviewRoute(item: NextStepsItem): string {
+    return `/sermon-companion/${item.id}/overview?source=nextStepsSermons`;
+  }
+
+  function companionCard(item: NextStepsItem, isCurrent: boolean) {
+    const isPaused      = item.memberProgressState === 'paused';
+    // Subtitle from metadata ("5 Days of Intentional Living") used as discovery description.
+    // Fall back to progress-based description for companions that predate subtitle extraction.
+    const displayDesc   = item.metadata.subtitle ?? item.description;
+    const actionLabel   = discoveryActionLabel(item.memberProgressState, item.primaryActionLabel);
+    const destination   = overviewRoute(item);
 
     return (
       <EmmausContentCard
         label={isCurrent ? "THIS WEEK'S SERMON" : "SERMON COMPANION"}
         title={item.title}
-        description={item.description}
-        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Days` : undefined}
+        description={displayDesc}
+        metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Steps` : undefined}
         primaryActionLabel={actionLabel}
-        onAction={actionLabel ? () => { onAction(item); } : undefined}
+        onAction={() => setLocation(destination)}
         headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-        onCardPress={handleCardPress}
+        onCardPress={() => setLocation(destination)}
       />
     );
   }

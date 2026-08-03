@@ -76,7 +76,7 @@ export default function SermonCompanionPreviousDays() {
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
-      title: e.title || `Day ${e.dayNumber}`,
+      title: e.title || `Step ${e.dayNumber}`,
       subtitle: e.scriptureReference || undefined,
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
@@ -93,7 +93,8 @@ export default function SermonCompanionPreviousDays() {
         setLocation(`/sermon-companion/${companionId}/day/${day}${sourceParam}`)
       }
       backLabel={backLabel}
-      emptyMessage="No previous companion days are available yet."
+      screenTitle="Previous Steps"
+      emptyMessage="No previous companion steps are available yet."
     />
   );
 }
