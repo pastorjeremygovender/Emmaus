@@ -219,8 +219,10 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     setNewCreating(true);
     setNewError('');
     try {
+      const autoTitleDate = newDate ? new Date(newDate + 'T00:00:00') : new Date();
+      const autoTitle = `Processing sermon from ${autoTitleDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
       const created = await createAdminSermon({
-        title:              newTitle.trim()      || 'New Sermon',
+        title:              newTitle.trim()      || autoTitle,
         speaker:            newSpeaker.trim()    || 'Pastor Jeremy Govender',
         sermonDate:         newDate              || new Date().toISOString().split('T')[0],
         scriptureReference: newScripture.trim()  || '',
