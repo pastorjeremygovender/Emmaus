@@ -8,11 +8,10 @@ export type Sermon = {
   series?: string;
   scriptureReference: string;
   youtubeUrl: string;
-  audioPath?: string;
   summary?: string;
   topics: string[];
   keywords: string[];
-  /** Path to the uploaded sermon audio file in object storage */
+  /** GCS object path for the uploaded sermon audio file (e.g. /objects/uploads/uuid) */
   audioPath?: string;
   /** Full church-service transcript (retained for reference) */
   transcript?: string;

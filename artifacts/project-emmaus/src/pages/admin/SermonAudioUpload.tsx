@@ -17,8 +17,7 @@ import {
   Upload, FileAudio, X, CheckCircle2, AlertCircle,
   Loader2, RefreshCw, Mic2,
 } from 'lucide-react';
-import { requestAudioUploadUrl, transcribeSermonAudio } from '@/lib/canonical-sermon-api';
-
+import { requestAudioUploadUrl, transcribeSermonAudio, getAdminSermon } from '@/lib/canonical-sermon-api';
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const ACCEPTED_TYPES = '.mp3,.m4a,.wav,.mp4,.mpeg,.webm';
@@ -129,9 +128,37 @@ export default function SermonAudioUpload({
     setPhase('transcribing');
     setError('');
     try {
-      const updated = await transcribeSermonAudio(sermonId);
-      setPhase('transcribed');
-      onTranscribed(updated.transcript ?? '');
+      // POST returns 202 immediately — transcription runs in the background.
+      await transcribeSermonAudio(sermonId);
+
+      // Poll GET /admin/:id until transcriptStatus leaves "pending".
+      // Timeout after ~3 minutes (36 polls × 5 s).
+      const MAX_POLLS = 36;
+      const POLL_INTERVAL_MS = 5_000;
+      let polls = 0;
+
+      await new Promise<void>((resolve, reject) => {
+        const check = async () => {
+          try {
+            const sermon = await getAdminSermon(sermonId);
+            if (sermon.transcriptStatus === 'complete') {
+              onTranscribed(sermon.transcript ?? sermon.fullTranscript ?? '');
+              setPhase('transcribed');
+              resolve();
+            } else if (sermon.transcriptStatus === 'none') {
+              // Server reset to "none" → background job failed
+              reject(new Error('Transcription failed on the server. Please try again.'));
+            } else if (++polls >= MAX_POLLS) {
+              reject(new Error('Transcription is taking longer than expected. Check back shortly — the server is still processing.'));
+            } else {
+              setTimeout(check, POLL_INTERVAL_MS);
+            }
+          } catch (pollErr) {
+            reject(pollErr);
+          }
+        };
+        setTimeout(check, POLL_INTERVAL_MS);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Transcription failed. Please try again.');
       setPhase('error');

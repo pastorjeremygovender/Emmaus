@@ -72,6 +72,7 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
   series: '',
   scriptureReference: '',
   youtubeUrl: '',
+  audioPath: '',
   summary: '',
   topics: [],
   keywords: [],

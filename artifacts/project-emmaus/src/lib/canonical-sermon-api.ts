@@ -28,6 +28,8 @@ export interface CanonicalSermon {
   audioPath: string;
   notes: string;
   transcript: string;
+  /** Full unabridged transcript (same as transcript for Whisper uploads). */
+  fullTranscript?: string;
   transcriptStatus: "none" | "pending" | "complete";
   summary: string;
   themes: string[];
