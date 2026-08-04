@@ -335,14 +335,65 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
   const userId = await requireRecorderAccess(req, res);
   if (!userId) return;
   const id = String(req.params.id);
+  const { status, force, ...rest } = req.body as
+    Parameters<typeof store.updateSession>[1] & { force?: boolean };
+
   try {
-    const body = req.body as Parameters<typeof store.updateSession>[1];
-    await store.updateSession(id, body);
+    // Guard: cancelling a session that already has attendance records
+    if (status === "cancelled") {
+      const session = await store.getSession(id);
+      if (!session) { res.status(404).json({ error: "Session not found." }); return; }
+      if (session.status !== "scheduled") {
+        // Only allow cancellation from 'scheduled'; completed sessions with data
+        // should be restored, not cancelled silently.
+        if (session.status === "completed") {
+          const count = await store.countAttendanceRecords(id);
+          if (count > 0 && !force) {
+            res.status(409).json({
+              error: `This session has ${count} attendance record${count !== 1 ? "s" : ""}. Cancelling will hide them from reports. Confirm to proceed.`,
+              attendanceCount: count,
+              requiresConfirmation: true,
+            });
+            return;
+          }
+        }
+      } else {
+        // scheduled → cancelled: check for any existing attendance
+        const count = await store.countAttendanceRecords(id);
+        if (count > 0 && !force) {
+          res.status(409).json({
+            error: `This session has ${count} attendance record${count !== 1 ? "s" : ""}. Cancelling will hide them from reports. Confirm to proceed.`,
+            attendanceCount: count,
+            requiresConfirmation: true,
+          });
+          return;
+        }
+      }
+    }
+
+    const patch: Parameters<typeof store.updateSession>[1] = {
+      ...rest,
+      ...(status !== undefined ? { status } : {}),
+    };
+    await store.updateSession(id, patch);
 
     // Auto-generate care signals whenever a session is marked complete
-    if (body.status === "completed") {
+    if (status === "completed") {
       store.generateCareSignals(id).catch((err) => {
         logger.warn({ err, sessionId: id }, "pastoral: generateCareSignals failed (non-fatal)");
+      });
+    }
+
+    // Audit-log status transitions
+    if (status !== undefined) {
+      await store.logPastoralAudit({
+        entityType: "meeting_session",
+        entityId: id,
+        action: status === "cancelled" ? "cancel" : status === "completed" ? "complete" : "update",
+        sessionId: id,
+        newValue: { status },
+        changedBy: userId,
+        reason: force ? "force-confirmed by admin" : "",
       });
     }
 

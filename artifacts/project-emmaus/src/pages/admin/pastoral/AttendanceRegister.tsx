@@ -13,7 +13,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Search, Plus, Users, CheckCircle2, Loader2,
-  AlertCircle, X, UserCheck, Clock, MapPin,
+  AlertCircle, X, UserCheck, Clock, MapPin, RotateCcw,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +61,8 @@ export default function AttendanceRegister({ session, onBack }: Props) {
   const [bulkSaving, setBulkSaving]   = useState(false);
   const [saveConfirm, setSaveConfirm] = useState('');
   const saveConfirmTimer              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [restoring, setRestoring]     = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<api.SessionStatus>(session.status);
 
   // Add visitor / new person modal
   const [showAddPerson, setShowAddPerson] = useState(false);
@@ -76,6 +78,19 @@ export default function AttendanceRegister({ session, onBack }: Props) {
   const [linkQuery, setLinkQuery]           = useState('');
   const [linkSaving, setLinkSaving]         = useState(false);
   const [linkError, setLinkError]           = useState('');
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      await api.restoreSession(auth, session.id);
+      setSessionStatus('completed');
+      flash('Session restored');
+    } catch {
+      flash('Could not restore session — please try again');
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const flash = (msg: string) => {
     setSaveConfirm(msg);
@@ -327,6 +342,26 @@ export default function AttendanceRegister({ session, onBack }: Props) {
           </div>
         )}
       </div>
+
+      {/* ── Cancelled banner ───────────────────────────────────────────────── */}
+      {sessionStatus === 'cancelled' && (
+        <div className="shrink-0 mx-4 mt-3 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle size={15} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-red-700">This session has been cancelled</p>
+            <p className="text-[12px] text-red-500 mt-0.5">
+              Attendance records are preserved but hidden from reports. Restore the session to make them active again.
+            </p>
+          </div>
+          <button
+            onClick={handleRestore}
+            disabled={restoring}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-[12px] font-medium hover:bg-amber-100 disabled:opacity-40 transition-colors shrink-0">
+            {restoring ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+            Restore
+          </button>
+        </div>
+      )}
 
       {/* ── List ───────────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">

@@ -5,7 +5,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Plus, CalendarDays, Clock, MapPin, CheckCircle, XCircle,
-  Loader2, AlertCircle, ChevronRight, Users,
+  Loader2, AlertCircle, ChevronRight, Users, RotateCcw,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,8 +66,27 @@ export default function Sessions({ onOpenRegister }: Props) {
   };
 
   const handleStatusChange = async (s: api.MeetingSession, status: api.SessionStatus) => {
+    if (status === 'cancelled') {
+      const result = await api.cancelSession(auth, s.id, false);
+      if ('requiresConfirmation' in result) {
+        const confirmed = window.confirm(
+          `${result.error}\n\nThe records will be preserved but hidden from reports until the session is restored. Cancel anyway?`
+        );
+        if (!confirmed) return;
+        try { await api.cancelSession(auth, s.id, true); await load(); }
+        catch { setError('Could not cancel session.'); }
+        return;
+      }
+      await load();
+      return;
+    }
     try { await api.updateSession(auth, s.id, { status }); await load(); }
     catch { setError('Could not update session.'); }
+  };
+
+  const handleRestore = async (s: api.MeetingSession) => {
+    try { await api.restoreSession(auth, s.id); await load(); }
+    catch { setError('Could not restore session.'); }
   };
 
   const inp  = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500';
@@ -214,6 +233,19 @@ export default function Sessions({ onOpenRegister }: Props) {
                         <XCircle size={15} />
                       </button>
                     </>
+                  )}
+                  {s.status === 'completed' && (
+                    <button onClick={() => handleStatusChange(s, 'cancelled')} title="Cancel session"
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                      <XCircle size={15} />
+                    </button>
+                  )}
+                  {s.status === 'cancelled' && (
+                    <button
+                      onClick={() => onOpenRegister(s)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-[12px] font-medium hover:bg-amber-100 transition-colors">
+                      <RotateCcw size={11} /> View / Restore
+                    </button>
                   )}
                   {s.status !== 'cancelled' && (
                     <button

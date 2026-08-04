@@ -238,11 +238,37 @@ export const getSession = (auth: AuthHeaders, id: string) =>
 export const updateSession = (
   auth: AuthHeaders,
   id: string,
-  patch: Partial<Pick<MeetingSession, "sessionDate" | "startTime" | "location" | "notes" | "status">>
+  patch: Partial<Pick<MeetingSession, "sessionDate" | "startTime" | "location" | "notes" | "status">> & { force?: boolean }
 ) => apiFetch<{ ok: boolean }>(`/sessions/${id}`, "PATCH", auth, patch);
 
-// ─── Attendance ───────────────────────────────────────────────────────────────
-
+/** Cancel a session. Returns { requiresConfirmation, attendanceCount } if the session
+ *  has existing attendance records and force is not set. */
+export async function cancelSession(
+  auth: AuthHeaders,
+  id: string,
+  force = false
+): Promise<{ ok: true } | { requiresConfirmation: true; attendanceCount: number; error: string }> {
+  const res = await fetch(`${API}/sessions/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-User-Id":    auth.userId,
+      "X-User-Role":  auth.userRole,
+    },
+    body: JSON.stringify({ status: "cancelled", force }),
+  });
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as Record<string, unknown>;
+  if (res.status === 409 && data.requiresConfirmation) {
+    return {
+      requiresConfirmation: true,
+      attendanceCount: Number(data.attendanceCount ?? 0),
+      error: String(data.error ?? ""),
+    };
+  }
+  if (!res.ok) throw new Error(String(data.error ?? `HTTP ${res.status}`));
+  return { ok: true };
+}
 export const getRegister = (auth: AuthHeaders, sessionId: string) =>
   apiFetch<AttendanceRecord[]>(`/sessions/${sessionId}/register`, "GET", auth);
 
@@ -400,6 +426,10 @@ export const getPastoralAuditLog = (auth: AuthHeaders, opts?: {
   if (opts?.limit)      p.set("limit",      String(opts.limit));
   return apiFetch<PastoralAuditEntry[]>(`/audit-log${p.toString() ? `?${p}` : ""}`, "GET", auth);
 };
+
+/** Restore a cancelled session back to completed. */
+export const restoreSession = (auth: AuthHeaders, id: string) =>
+  apiFetch<{ ok: boolean }>(`/sessions/${id}`, "PATCH", auth, { status: "completed" });
 
 export type DiscipleshipSummary =
   | { available: false; reason?: string }

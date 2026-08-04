@@ -654,8 +654,14 @@ export async function updateSession(
   );
 }
 
-// ─── Attendance Records ───────────────────────────────────────────────────────
-
+/** Returns the total number of attendance records for a session. */
+export async function countAttendanceRecords(sessionId: string): Promise<number> {
+  const res = await pool.query(
+    `SELECT COUNT(*) AS n FROM attendance_records WHERE session_id = $1 AND church_id = $2`,
+    [sessionId, CHURCH_ID]
+  );
+  return Number(res.rows[0]?.n ?? 0);
+}
 export async function getRegister(sessionId: string): Promise<AttendanceRecord[]> {
   const res = await pool.query(
     `SELECT ar.*,
