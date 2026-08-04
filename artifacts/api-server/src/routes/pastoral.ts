@@ -577,11 +577,19 @@ pastoralRouter.get("/people/:personKey/attendance-history", async (req: Request,
 
 /** GET /pastoral/care-signals — list open (or all) care signals */
 pastoralRouter.get("/care-signals", async (req: Request, res: Response) => {
-  const userId = await requireRecorderAccess(req, res);
+  const withVisit = req.query.withVisit === "true";
+
+  // Visit notes are sensitive pastoral data — require pastor access when the
+  // caller wants the visited-signals view (which surfaces visit notes).
+  const userId = withVisit
+    ? await requirePastorAccess(req, res)
+    : await requireRecorderAccess(req, res);
   if (!userId) return;
+
   try {
     const signals = await store.getCareSignals({
       includesDismissed: req.query.includesDismissed === "true",
+      withVisit,
       personId:   req.query.personId   ? String(req.query.personId)   : undefined,
       personType: req.query.personType ? String(req.query.personType) as store.PersonType : undefined,
       limit: req.query.limit ? Number(req.query.limit) : 200,

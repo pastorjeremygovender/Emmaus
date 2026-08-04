@@ -988,9 +988,38 @@ export interface CareSignal {
   dismissedAt: string | null;
   dismissedBy: string | null;
   createdAt: string;
+  // Visit info (populated when a visit was scheduled and/or completed)
+  visitDate?: string;
+  visitReason?: string;
+  visitScheduledAt?: string;
+  visitCompleted: boolean;
+  visitNote?: string;
+  visitCompletedAt?: string | null;
 }
 
 function rowToCareSignal(r: Record<string, unknown>): CareSignal {
+  // Parse JSON blobs written by scheduleVisit and completeVisit
+  let visitDate: string | undefined;
+  let visitReason: string | undefined;
+  if (r.visit_scheduled_value != null) {
+    try {
+      const v = typeof r.visit_scheduled_value === "string"
+        ? JSON.parse(r.visit_scheduled_value)
+        : r.visit_scheduled_value;
+      visitDate   = v?.visitDate  ?? undefined;
+      visitReason = v?.reason     ?? undefined;
+    } catch { /* non-fatal */ }
+  }
+  let visitNote: string | undefined;
+  if (r.visit_completed_value != null) {
+    try {
+      const v = typeof r.visit_completed_value === "string"
+        ? JSON.parse(r.visit_completed_value)
+        : r.visit_completed_value;
+      visitNote = v?.note ?? undefined;
+    } catch { /* non-fatal */ }
+  }
+
   return {
     id:              String(r.id),
     churchId:        String(r.church_id),
@@ -1005,11 +1034,18 @@ function rowToCareSignal(r: Record<string, unknown>): CareSignal {
     dismissedAt:     r.dismissed_at != null ? String(r.dismissed_at) : null,
     dismissedBy:     r.dismissed_by != null ? String(r.dismissed_by) : null,
     createdAt:       String(r.created_at),
+    visitDate,
+    visitReason,
+    visitScheduledAt: r.visit_scheduled_at != null ? String(r.visit_scheduled_at) : undefined,
+    visitCompleted:   r.visit_completed_at != null,
+    visitNote,
+    visitCompletedAt: r.visit_completed_at != null ? String(r.visit_completed_at) : null,
   };
 }
 
 export async function getCareSignals(opts?: {
   includesDismissed?: boolean;
+  withVisit?: boolean;
   personId?: string;
   personType?: PersonType;
   limit?: number;
@@ -1018,7 +1054,11 @@ export async function getCareSignals(opts?: {
   const vals: unknown[] = [CHURCH_ID];
   let idx = 2;
 
-  if (!opts?.includesDismissed) {
+  if (opts?.withVisit) {
+    // Show dismissed signals that have a completed visit record
+    conditions.push("cs.dismissed_at IS NOT NULL");
+    conditions.push("pal_done.id IS NOT NULL");
+  } else if (!opts?.includesDismissed) {
     conditions.push("cs.dismissed_at IS NULL");
   }
   if (opts?.personId) {
@@ -1030,6 +1070,29 @@ export async function getCareSignals(opts?: {
     vals.push(opts.personType);
   }
 
+  // Visit audit joins are only included for the withVisit (pastor-only) path.
+  // This ensures visit notes are never fetched or serialized for recorder-accessible queries.
+  const visitJoins = opts?.withVisit
+    ? `LEFT JOIN pastoral_audit_log pal_sched
+         ON pal_sched.entity_type = 'care_signal'
+        AND pal_sched.action      = 'visit_scheduled'
+        AND pal_sched.entity_id   = cs.id
+        AND pal_sched.church_id   = $1
+       LEFT JOIN pastoral_audit_log pal_done
+         ON pal_done.entity_type = 'pastoral_visit'
+        AND pal_done.action      = 'visit_completed'
+        AND pal_done.entity_id   = pal_sched.id
+        AND pal_done.church_id   = $1`
+    : "";
+
+  const visitColumns = opts?.withVisit
+    ? `,
+            pal_sched.new_value  AS visit_scheduled_value,
+            pal_sched.changed_at AS visit_scheduled_at,
+            pal_done.new_value   AS visit_completed_value,
+            pal_done.changed_at  AS visit_completed_at`
+    : "";
+
   const res = await pool.query(
     `SELECT cs.*,
             ms.session_date,
@@ -1038,7 +1101,7 @@ export async function getCareSignals(opts?: {
               pp.full_name,
               up.preferred_name,
               cs.person_id
-            ) AS person_name
+            ) AS person_name${visitColumns}
      FROM care_signals cs
      JOIN meeting_sessions ms ON ms.id = cs.session_id
      JOIN meeting_types mt ON mt.id = ms.meeting_type_id
@@ -1046,6 +1109,7 @@ export async function getCareSignals(opts?: {
        ON cs.person_type = 'pastoral_person' AND pp.id::text = cs.person_id
      LEFT JOIN user_profiles up
        ON cs.person_type = 'emmaus_user' AND up.email = cs.person_id
+     ${visitJoins}
      WHERE ${conditions.join(" AND ")}
      ORDER BY ms.session_date DESC, person_name ASC
      LIMIT $${idx}`,

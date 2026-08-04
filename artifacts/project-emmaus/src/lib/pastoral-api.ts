@@ -370,14 +370,22 @@ export interface CareSignal {
   dismissedAt: string | null;
   dismissedBy: string | null;
   createdAt: string;
+  // Visit info
+  visitDate?: string;
+  visitReason?: string;
+  visitScheduledAt?: string;
+  visitCompleted: boolean;
+  visitNote?: string;
+  visitCompletedAt?: string | null;
 }
 
 export const listCareSignals = (
   auth: AuthHeaders,
-  opts?: { includesDismissed?: boolean; personId?: string; limit?: number }
+  opts?: { includesDismissed?: boolean; withVisit?: boolean; personId?: string; limit?: number }
 ) => {
   const p = new URLSearchParams();
   if (opts?.includesDismissed) p.set("includesDismissed", "true");
+  if (opts?.withVisit)         p.set("withVisit", "true");
   if (opts?.personId)          p.set("personId", opts.personId);
   if (opts?.limit)             p.set("limit", String(opts.limit));
   return apiFetch<CareSignal[]>(`/care-signals${p.toString() ? `?${p}` : ""}`, "GET", auth);

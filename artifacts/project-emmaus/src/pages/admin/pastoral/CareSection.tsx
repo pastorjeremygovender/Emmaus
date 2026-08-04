@@ -7,12 +7,15 @@
  *  • per-person grouping with attendance context
  *  • session name + date shown on each signal card; click Info to expand full session detail
  *  • inline "Schedule visit" form per signal
+ *  • "Visited" filter tab — shows dismissed signals that have a completed visit note
+ *  • "Visit done" chip on visited signals with expandable note
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Heart, RefreshCw, CheckCheck, AlertCircle, Loader2,
   Calendar, Users, ChevronDown, ChevronUp, CalendarPlus, X, Info,
+  ClipboardCheck,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,6 +36,7 @@ function triggerLabel(trigger: api.CareSignal['trigger']): string {
     default: return 'Care signal';
   }
 }
+
 interface SignalCardProps {
   signal: api.CareSignal;
   onDismiss: (id: string) => void;
@@ -40,6 +44,8 @@ interface SignalCardProps {
   dismissing: boolean;
   scheduling: boolean;
   scheduled: boolean;
+  /** When true the card is in the "visited" view — no dismiss/schedule actions */
+  visitedView?: boolean;
 }
 
 function todayIso(): string {
@@ -50,17 +56,19 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
-function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling, scheduled }: SignalCardProps) {
-  const [showForm, setShowForm]     = useState(false);
-  const [expanded, setExpanded]     = useState(false);
-  const [visitDate, setVisitDate]   = useState('');
-  const [reason, setReason]         = useState('');
-  const [formError, setFormError]   = useState('');
+function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling, scheduled, visitedView }: SignalCardProps) {
+  const [showForm, setShowForm]         = useState(false);
+  const [expanded, setExpanded]         = useState(false);
+  const [visitDate, setVisitDate]       = useState('');
+  const [reason, setReason]             = useState('');
+  const [formError, setFormError]       = useState('');
+  const [noteExpanded, setNoteExpanded] = useState(false);
   const dateRef = useRef<HTMLInputElement>(null);
   const minDate = todayIso();
 
   const busy = dismissing || scheduling || scheduled;
   const hasSessionDetail = !!(signal.meetingTypeName || signal.sessionDate);
+  const hasVisitDone = signal.visitCompleted;
 
   const handleOpenForm = () => {
     setFormError('');
@@ -74,7 +82,6 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
     setFormError('');
     try {
       await onScheduleVisit(signal.id, visitDate, reason);
-      // parent briefly shows confirmation then removes this card
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not schedule visit. Please try again.');
     }
@@ -90,11 +97,19 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
         </div>
       )}
 
+      {/* Visit done banner (visited view) */}
+      {visitedView && hasVisitDone && (
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 border-b border-emerald-100">
+          <ClipboardCheck size={12} className="text-emerald-600 shrink-0" />
+          <p className="text-[11px] font-medium text-emerald-700">Visit completed</p>
+        </div>
+      )}
+
       {/* Main row */}
       <div className="flex items-center justify-between gap-3 py-2.5 px-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="shrink-0 w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center">
-            <Calendar size={13} className="text-rose-400" />
+          <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${visitedView ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+            <Calendar size={13} className={visitedView ? 'text-emerald-400' : 'text-rose-400'} />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium text-gray-800 truncate">
@@ -111,8 +126,21 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
         </div>
 
         <div className="shrink-0 flex items-center gap-1.5">
-          {/* Info / session detail toggle */}
-          {hasSessionDetail && (
+          {/* Visit done chip (visited view) */}
+          {visitedView && hasVisitDone && (
+            <button
+              onClick={() => setNoteExpanded((v) => !v)}
+              title={noteExpanded ? 'Hide visit note' : 'Show visit note'}
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition-colors"
+            >
+              <ClipboardCheck size={10} />
+              Visit done
+              {noteExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            </button>
+          )}
+
+          {/* Info / session detail toggle (open signals only) */}
+          {!visitedView && hasSessionDetail && (
             <button
               onClick={() => setExpanded((v) => !v)}
               title={expanded ? 'Hide session detail' : 'Show session detail'}
@@ -122,36 +150,75 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
             </button>
           )}
 
-          {/* Schedule visit */}
-          <button
-            onClick={handleOpenForm}
-            disabled={busy || showForm}
-            title="Schedule a follow-up visit"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
-          >
-            <CalendarPlus size={11} />
-            Schedule visit
-          </button>
+          {/* Schedule visit (open signals only) */}
+          {!visitedView && (
+            <button
+              onClick={handleOpenForm}
+              disabled={busy || showForm}
+              title="Schedule a follow-up visit"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+            >
+              <CalendarPlus size={11} />
+              Schedule visit
+            </button>
+          )}
 
-          {/* Dismiss */}
-          <button
-            onClick={() => onDismiss(signal.id)}
-            disabled={busy}
-            title="Dismiss signal"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {dismissing ? (
-              <Loader2 size={11} className="animate-spin" />
-            ) : (
-              <CheckCheck size={11} />
-            )}
-            Dismiss
-          </button>
+          {/* Dismiss (open signals only) */}
+          {!visitedView && (
+            <button
+              onClick={() => onDismiss(signal.id)}
+              disabled={busy}
+              title="Dismiss signal"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {dismissing ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <CheckCheck size={11} />
+              )}
+              Dismiss
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Expanded session detail */}
-      {expanded && hasSessionDetail && (
+      {/* Visit note expansion (visited view) */}
+      {visitedView && noteExpanded && (
+        <div className="px-3 pb-3 pt-0">
+          <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2 flex flex-col gap-1">
+            <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">
+              Visit notes
+            </p>
+            {signal.visitDate && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-500 w-20 shrink-0">Visit date</span>
+                <span className="text-[11px] font-medium text-gray-800">
+                  {fmtDate(signal.visitDate)}
+                </span>
+              </div>
+            )}
+            {signal.visitNote ? (
+              <div className="flex items-start gap-2">
+                <span className="text-[11px] text-gray-500 w-20 shrink-0">Note</span>
+                <span className="text-[11px] text-gray-800 whitespace-pre-wrap">
+                  {signal.visitNote}
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400 italic">No note recorded.</p>
+            )}
+            {signal.visitReason && (
+              <div className="flex items-start gap-2">
+                <span className="text-[11px] text-gray-500 w-20 shrink-0">Reason</span>
+                <span className="text-[11px] text-gray-800">{signal.visitReason}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Expanded session detail (open signals) */}
+      {!visitedView && expanded && hasSessionDetail && (
         <div className="px-3 pb-3 pt-0">
           <div className="rounded-md bg-gray-50 border border-gray-100 px-3 py-2 flex flex-col gap-1">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
@@ -178,7 +245,7 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
       )}
 
       {/* Inline schedule-visit form */}
-      {showForm && (
+      {!visitedView && showForm && (
         <form
           onSubmit={handleSubmit}
           className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2.5 flex flex-col gap-2"
@@ -245,25 +312,26 @@ interface PersonGroupProps {
   dismissingId: string | null;
   schedulingId: string | null;
   scheduledId: string | null;
+  visitedView?: boolean;
 }
 
-function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissingId, schedulingId, scheduledId }: PersonGroupProps) {
+function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissingId, schedulingId, scheduledId, visitedView }: PersonGroupProps) {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className={`border rounded-xl overflow-hidden ${visitedView ? 'border-emerald-200' : 'border-gray-200'}`}>
       {/* Header */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+        className={`w-full flex items-center justify-between gap-2 px-4 py-3 transition-colors ${visitedView ? 'bg-emerald-50 hover:bg-emerald-100' : 'bg-gray-50 hover:bg-gray-100'}`}
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-rose-100 flex items-center justify-center">
-            <Users size={13} className="text-rose-500" />
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${visitedView ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+            <Users size={13} className={visitedView ? 'text-emerald-500' : 'text-rose-500'} />
           </div>
           <span className="text-[13px] font-semibold text-gray-800">{personName}</span>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">
-            {signals.length} {signals.length === 1 ? 'signal' : 'signals'}
+          <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${visitedView ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+            {signals.length} {signals.length === 1 ? (visitedView ? 'visit' : 'signal') : (visitedView ? 'visits' : 'signals')}
           </span>
         </div>
         {expanded ? (
@@ -285,6 +353,7 @@ function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissi
               dismissing={dismissingId === s.id}
               scheduling={schedulingId === s.id}
               scheduled={scheduledId === s.id}
+              visitedView={visitedView}
             />
           ))}
         </div>
@@ -293,12 +362,17 @@ function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissi
   );
 }
 
+// ─── Filter tab ───────────────────────────────────────────────────────────────
+
+type ViewFilter = 'open' | 'visited';
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function CareSection() {
   const { user } = useAuth();
   const auth: api.AuthHeaders = { userId: user?.id ?? '', userRole: user?.role ?? 'admin' };
 
+  const [filter, setFilter]           = useState<ViewFilter>('open');
   const [signals, setSignals]         = useState<api.CareSignal[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
@@ -308,10 +382,12 @@ export default function CareSection() {
   const [schedulingId, setScheduling] = useState<string | null>(null);
   const [scheduledId, setScheduled]   = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (currentFilter: ViewFilter) => {
     setLoading(true); setError('');
     try {
-      const data = await api.listCareSignals(auth);
+      const data = await api.listCareSignals(auth, {
+        withVisit: currentFilter === 'visited',
+      });
       setSignals(data);
     } catch {
       setError('Could not load care signals.');
@@ -320,7 +396,7 @@ export default function CareSection() {
     }
   }, [auth.userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(filter); }, [filter, load]);
 
   const handleGenerate = async () => {
     setGenerating(true); setGenMsg('');
@@ -331,7 +407,7 @@ export default function CareSection() {
           ? 'No new signals — everyone accounted for.'
           : `${result.created} new signal${result.created === 1 ? '' : 's'} created.`
       );
-      await load();
+      await load(filter);
     } catch (err: unknown) {
       setGenMsg(err instanceof Error ? err.message : 'Generation failed.');
     } finally {
@@ -383,6 +459,8 @@ export default function CareSection() {
     );
   }, [signals]);
 
+  const isVisited = filter === 'visited';
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -393,7 +471,7 @@ export default function CareSection() {
           <Heart size={16} className="text-rose-500" />
           <h2 className="text-[14px] font-semibold text-gray-900">Pastoral Care</h2>
           {!loading && signals.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px] font-semibold">
+            <span className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${isVisited ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
               {signals.length}
             </span>
           )}
@@ -403,19 +481,49 @@ export default function CareSection() {
           {genMsg && (
             <span className="text-[12px] text-gray-500">{genMsg}</span>
           )}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[12px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {generating ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <RefreshCw size={13} />
-            )}
-            {generating ? 'Scanning…' : 'Generate signals'}
-          </button>
+          {/* Generate button — only shown on the open signals tab */}
+          {!isVisited && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[12px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {generating ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              {generating ? 'Scanning…' : 'Generate signals'}
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="shrink-0 flex items-center gap-1 px-6 pt-3 pb-0 border-b border-gray-100">
+        <button
+          onClick={() => setFilter('open')}
+          className={`px-3 py-1.5 rounded-t-md text-[12px] font-medium transition-colors border-b-2 -mb-px ${
+            filter === 'open'
+              ? 'border-rose-500 text-rose-600 bg-rose-50/60'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Open signals
+        </button>
+        <button
+          onClick={() => setFilter('visited')}
+          className={`px-3 py-1.5 rounded-t-md text-[12px] font-medium transition-colors border-b-2 -mb-px ${
+            filter === 'visited'
+              ? 'border-emerald-500 text-emerald-600 bg-emerald-50/60'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <span className="flex items-center gap-1">
+            <ClipboardCheck size={12} />
+            Visited
+          </span>
+        </button>
       </div>
 
       {/* Body */}
@@ -431,18 +539,34 @@ export default function CareSection() {
           </div>
         ) : signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center mb-4">
-              <Heart size={22} className="text-rose-400" />
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${isVisited ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+              {isVisited ? (
+                <ClipboardCheck size={22} className="text-emerald-400" />
+              ) : (
+                <Heart size={22} className="text-rose-400" />
+              )}
             </div>
-            <p className="text-[14px] font-medium text-gray-700 mb-1">No open care signals</p>
-            <p className="text-[12px] text-gray-400 max-w-xs">
-              Click "Generate signals" to check all completed sessions for unrecorded absences.
-            </p>
+            {isVisited ? (
+              <>
+                <p className="text-[14px] font-medium text-gray-700 mb-1">No completed visits yet</p>
+                <p className="text-[12px] text-gray-400 max-w-xs">
+                  Visits marked as done will appear here with their notes.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[14px] font-medium text-gray-700 mb-1">No open care signals</p>
+                <p className="text-[12px] text-gray-400 max-w-xs">
+                  Click "Generate signals" to check all completed sessions for unrecorded absences.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3 max-w-2xl">
             <p className="text-[12px] text-gray-400 mb-1">
-              {groups.length} {groups.length === 1 ? 'person' : 'people'} with open signals
+              {groups.length} {groups.length === 1 ? 'person' : 'people'}{' '}
+              {isVisited ? 'with completed visits' : 'with open signals'}
             </p>
             {groups.map(({ personName, signals: grpSignals }) => (
               <PersonGroup
@@ -454,6 +578,7 @@ export default function CareSection() {
                 dismissingId={dismissingId}
                 schedulingId={schedulingId}
                 scheduledId={scheduledId}
+                visitedView={isVisited}
               />
             ))}
           </div>
