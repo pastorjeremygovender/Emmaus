@@ -71,7 +71,14 @@ function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => 
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    // Stop ALL clicks inside this component from reaching the card's onClick.
+    // Every interactive element below also calls stopPropagation for defence-in-depth.
+    <div
+      ref={ref}
+      className="relative"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* ── Three-dot trigger ──────────────────────────────────────────────── */}
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(p => !p); }}
         className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
@@ -79,6 +86,8 @@ function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => 
       >
         <MoreHorizontal size={17} />
       </button>
+
+      {/* ── Dropdown panel ─────────────────────────────────────────────────── */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -87,15 +96,19 @@ function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => 
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.12 }}
             className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-44"
+            onClick={(e) => e.stopPropagation()}
           >
+            {/* Pause — remove from Today's Steps, preserve progress, stay on page */}
             <button
-              onClick={() => { setOpen(false); onPause(); }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen(false); onPause(); }}
               className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
             >
               <Pause size={13} className="text-muted-foreground" /> Pause
             </button>
+
+            {/* Hide — remove card from Today's Steps, preserve progress, stay on page */}
             <button
-              onClick={() => { setOpen(false); onHide(); }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen(false); onHide(); }}
               className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
             >
               <EyeOff size={13} className="text-muted-foreground" /> Hide from Today's Steps
