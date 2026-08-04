@@ -413,7 +413,23 @@ export interface VisitHistoryItem {
   reason: string;
   scheduledBy: string;
   scheduledAt: string;
+  isCompleted: boolean;
+  completedNote: string;
+  completedAt: string | null;
 }
+
+export const completeVisit = (
+  auth: AuthHeaders,
+  visitEntryId: string,
+  personId: string,
+  note: string
+) =>
+  apiFetch<{ ok: boolean }>(
+    `/visits/${visitEntryId}/complete`,
+    "PATCH",
+    auth,
+    { personId, note }
+  );
 export const getPastoralAuditLog = (auth: AuthHeaders, opts?: {
   personId?: string;
   sessionId?: string;
@@ -587,23 +603,13 @@ export const getProfileSummary = (
   return apiFetch<PersonProfileSummary>(`/people/${key}/profile-summary`, "GET", auth);
 };
 
-/** Returns all visit_scheduled audit entries for a given person, newest first. */
-export async function getVisitHistory(
+/**
+ * Returns all visits for a person (scheduled + completion status) via the
+ * server-side join endpoint.  Pass the full personKey (e.g. "pp-uuid" or
+ * "eu-email%40example.com") so the route can scope the query correctly.
+ */
+export const getVisitHistory = (
   auth: AuthHeaders,
-  personId: string,
-  limit = 50
-): Promise<VisitHistoryItem[]> {
-  const entries = await getPastoralAuditLog(auth, { personId, limit });
-  return entries
-    .filter((e) => e.action === "visit_scheduled")
-    .map((e) => {
-      const nv = (e.newValue ?? {}) as Record<string, unknown>;
-      return {
-        id:          e.id,
-        visitDate:   String(nv.visitDate ?? ""),
-        reason:      String(nv.reason ?? e.reason ?? ""),
-        scheduledBy: e.changedBy,
-        scheduledAt: e.changedAt,
-      };
-    });
-}
+  pKey: string
+): Promise<VisitHistoryItem[]> =>
+  apiFetch<VisitHistoryItem[]>(`/people/${pKey}/visits`, "GET", auth);

@@ -1269,8 +1269,93 @@ export async function scheduleVisit(data: {
   }
 }
 
-// ─── Pastoral audit log ───────────────────────────────────────────────────────
+export interface VisitHistoryEntry {
+  id:            string;
+  visitDate:     string;
+  reason:        string;
+  scheduledBy:   string;
+  scheduledAt:   string;
+  isCompleted:   boolean;
+  completedNote: string;
+  completedAt:   string | null;
+}
+/**
+ * Record that a previously-scheduled visit has taken place.
+ *
+ * Transactional: verifies the target audit entry exists for this church/person
+ * with action='visit_scheduled', and has not already been completed.
+ * Propagates any database write failure — does NOT swallow errors.
+ *
+ * Returns { ok: false, error } for business-rule violations (4xx) so the
+ * caller can distinguish them from unexpected server errors (5xx).
+ */
+export async function completeVisit(data: {
+  visitAuditEntryId: string;
+  personId: string;
+  note: string;
+  completedBy: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
+    // 1. Verify the target is a real visit_scheduled entry scoped to this church + person.
+    const target = await client.query(
+      `SELECT id FROM pastoral_audit_log
+       WHERE id        = $1
+         AND church_id = $2
+         AND action    = 'visit_scheduled'
+         AND person_id = $3`,
+      [data.visitAuditEntryId, CHURCH_ID, data.personId]
+    );
+    if (target.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "Visit not found or does not belong to this person." };
+    }
+
+    // 2. Prevent duplicate completions.
+    const already = await client.query(
+      `SELECT id FROM pastoral_audit_log
+       WHERE entity_id = $1
+         AND church_id = $2
+         AND action    = 'visit_completed'`,
+      [data.visitAuditEntryId, CHURCH_ID]
+    );
+    if (already.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "This visit has already been marked as done." };
+    }
+
+    // 3. Write the completion entry — any DB failure throws and rolls back.
+    await client.query(
+      `INSERT INTO pastoral_audit_log
+         (church_id, entity_type, entity_id, action,
+          person_id, session_id, previous_value, new_value,
+          changed_by, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        CHURCH_ID,
+        "pastoral_visit",
+        data.visitAuditEntryId,
+        "visit_completed",
+        data.personId,
+        null,
+        null,
+        JSON.stringify({ note: data.note }),
+        data.completedBy,
+        data.note,
+      ]
+    );
+
+    await client.query("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 export async function getPastoralAuditLog(opts: {
   entityType?: string;
   entityId?: string;
@@ -1892,4 +1977,48 @@ export async function getAttendanceRhythm(
     totalMarked: parseInt(r.total_marked,  10),
     absent:      parseInt(r.absent,        10),
   }));
+}
+
+/**
+ * Server-side join: returns every scheduled visit for a person together with
+ * its completion status.  No pagination cap — all visits are returned so
+ * older records are never silently omitted as the audit log grows.
+ */
+export async function getVisitHistoryForPerson(
+  personId: string
+): Promise<VisitHistoryEntry[]> {
+  const res = await pool.query(
+    `SELECT
+       s.id,
+       s.new_value  AS schedule_nv,
+       s.changed_by AS scheduled_by,
+       s.changed_at AS scheduled_at,
+       c.new_value  AS completion_nv,
+       c.changed_at AS completed_at
+     FROM pastoral_audit_log s
+     LEFT JOIN pastoral_audit_log c
+       ON  c.entity_id = s.id
+       AND c.church_id = $2
+       AND c.action    = 'visit_completed'
+     WHERE s.church_id = $2
+       AND s.person_id = $1
+       AND s.action    = 'visit_scheduled'
+     ORDER BY s.changed_at DESC`,
+    [personId, CHURCH_ID]
+  );
+
+  return res.rows.map((r) => {
+    const snv = (r.schedule_nv   ?? {}) as Record<string, unknown>;
+    const cnv = (r.completion_nv ?? {}) as Record<string, unknown>;
+    return {
+      id:            String(r.id),
+      visitDate:     String(snv.visitDate ?? ""),
+      reason:        String(snv.reason ?? ""),
+      scheduledBy:   String(r.scheduled_by),
+      scheduledAt:   String(r.scheduled_at),
+      isCompleted:   r.completed_at != null,
+      completedNote: r.completed_at != null ? String(cnv.note ?? "") : "",
+      completedAt:   r.completed_at != null ? String(r.completed_at) : null,
+    };
+  });
 }

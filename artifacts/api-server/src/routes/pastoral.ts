@@ -841,6 +841,51 @@ pastoralRouter.get("/people/:personKey/discipleship-summary", async (req: Reques
     res.status(500).json({ error: "Server error" });
   }
 });
+// ─── Visit history / complete visit ──────────────────────────────────────────
+
+/** GET /pastoral/people/:personKey/visits — server-side joined visit history */
+pastoralRouter.get("/people/:personKey/visits", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    const visits = await store.getVisitHistoryForPerson(parsed.personId);
+    res.json(visits);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getVisitHistoryForPerson failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** PATCH /pastoral/visits/:entryId/complete */
+pastoralRouter.patch("/visits/:entryId/complete", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  const entryId = String(req.params.entryId);
+  const { personId, note } = req.body as { personId?: string; note?: string };
+  if (!personId?.trim()) {
+    res.status(400).json({ error: "personId is required." });
+    return;
+  }
+  try {
+    const result = await store.completeVisit({
+      visitAuditEntryId: entryId,
+      personId: personId.trim(),
+      note: note?.trim() ?? "",
+      completedBy: userId,
+    });
+    if (!result.ok) {
+      res.status(409).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: completeVisit failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── Audit log ────────────────────────────────────────────────────────────────
 
 pastoralRouter.get("/audit-log", async (req: Request, res: Response) => {

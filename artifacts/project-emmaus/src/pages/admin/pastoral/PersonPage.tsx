@@ -20,7 +20,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, Bell, Calendar, X, AlertCircle, Loader2,
   MapPin, Clock, Activity, Star, BookOpen, CalendarDays,
-  Shield, CheckCircle2,
+  Shield, CheckCircle2, ClipboardCheck,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,7 +60,8 @@ function Section({ title, icon: Icon, iconColor, children }: {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmt(d: string, opts?: Intl.DateTimeFormatOptions) {
+function fmt(d: string | null | undefined, opts?: Intl.DateTimeFormatOptions) {
+  if (!d) return '—';
   const date = new Date(d.includes('T') ? d : d + 'T12:00:00');
   return date.toLocaleDateString('en-ZA', opts ?? { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -70,6 +71,7 @@ function fmt(d: string, opts?: Intl.DateTimeFormatOptions) {
 export default function PersonPage({ person, onBack }: Props) {
   const { user } = useAuth();
   const auth: api.AuthHeaders = { userId: user?.id ?? '', userRole: user?.role ?? 'admin' };
+  const pKey = api.personKey(person.id, person.personType);
 
   // ── Data state ─────────────────────────────────────────────────────────────
   const [history,      setHistory]      = useState<api.AttendanceHistoryItem[]>([]);
@@ -94,7 +96,7 @@ export default function PersonPage({ person, onBack }: Props) {
   const [arLoading,   setArLoading]   = useState(true);
   const [milLoading,  setMilLoading]  = useState(true);
 
-  const [saveMsg, setSaveMsg]   = useState('');
+  const [saveMsg,  setSaveMsg]  = useState('');
   const [isLinked, setLinked]   = useState(person.isLinked);
   const [linkedId, setLinkedId] = useState(person.linkedUserId);
 
@@ -105,6 +107,11 @@ export default function PersonPage({ person, onBack }: Props) {
   const [scheduleSaving,   setScheduleSaving]   = useState(false);
   const [scheduleError,    setScheduleError]    = useState('');
   const [dismissingId,     setDismissingId]     = useState<string | null>(null);
+
+  // ── Mark visit done state ──────────────────────────────────────────────────
+  const [markingDoneId, setMarkingDoneId] = useState<string | null>(null);
+  const [doneNote,      setDoneNote]      = useState('');
+  const [doneSaving,    setDoneSaving]    = useState(false);
 
   const flash = (msg: string) => { setSaveMsg(msg); setTimeout(() => setSaveMsg(''), 2500); };
 
@@ -118,7 +125,7 @@ export default function PersonPage({ person, onBack }: Props) {
         api.getExpectations(auth, person.id, person.personType),
         api.listMeetingTypes(auth),
         api.listPeople(auth),
-        api.getVisitHistory(auth, person.id),
+        api.getVisitHistory(auth, pKey),
         api.listCareSignals(auth, { personId: person.id, includesDismissed: false }),
       ]);
       setHistory(hist); setExpectations(exps); setMeetingTypes(types);
@@ -200,6 +207,19 @@ export default function PersonPage({ person, onBack }: Props) {
     } finally { setScheduleSaving(false); }
   };
 
+  const handleMarkDone = async (visitId: string) => {
+    setDoneSaving(true);
+    try {
+      await api.completeVisit(auth, visitId, person.id, doneNote.trim());
+      setMarkingDoneId(null);
+      setDoneNote('');
+      const updated = await api.getVisitHistory(auth, pKey);
+      setVisits(updated);
+      flash('Visit marked as done');
+    } catch { flash('Save failed'); }
+    finally { setDoneSaving(false); }
+  };
+
   const handleAddExpectation = async (mtId: string, exp: api.Expectation, notes: string) => {
     await api.setExpectation(auth, person.id, person.personType, mtId, exp, notes);
     await loadCore(); flash('Expectation saved');
@@ -239,7 +259,7 @@ export default function PersonPage({ person, onBack }: Props) {
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const upcomingVisits = visits.filter(
-    v => v.visitDate && new Date(v.visitDate + 'T12:00:00') >= new Date()
+    v => !v.isCompleted && v.visitDate && new Date(v.visitDate + 'T12:00:00') >= new Date()
   );
 
   const inp = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 bg-white';
@@ -391,23 +411,81 @@ export default function PersonPage({ person, onBack }: Props) {
                   {visits.map(v => {
                     const d = v.visitDate ? new Date(v.visitDate + 'T12:00:00') : null;
                     const isPast = d ? d < new Date() : false;
+                    const isMarkingThis = markingDoneId === v.id;
                     return (
-                      <div key={v.id} className="flex items-start gap-3 px-4 py-3">
-                        {d ? (
-                          <div className={`text-center border rounded-lg px-2 py-1.5 w-11 shrink-0 ${isPast ? 'bg-gray-50 border-gray-100' : 'bg-teal-50 border-teal-100'}`}>
-                            <p className={`text-[9px] font-semibold uppercase ${isPast ? 'text-gray-400' : 'text-teal-500'}`}>
-                              {d.toLocaleString('en', { month: 'short' })}
-                            </p>
-                            <p className={`text-[15px] font-bold leading-none ${isPast ? 'text-gray-700' : 'text-teal-700'}`}>{d.getDate()}</p>
+                      <div key={v.id} className="px-4 py-3 space-y-2">
+                        <div className="flex items-start gap-3">
+                          {d ? (
+                            <div className={`text-center border rounded-lg px-2 py-1.5 w-11 shrink-0 ${
+                              v.isCompleted ? 'bg-green-50 border-green-100' :
+                              isPast ? 'bg-gray-50 border-gray-100' : 'bg-teal-50 border-teal-100'
+                            }`}>
+                              <p className={`text-[9px] font-semibold uppercase ${
+                                v.isCompleted ? 'text-green-500' :
+                                isPast ? 'text-gray-400' : 'text-teal-500'
+                              }`}>
+                                {d.toLocaleString('en', { month: 'short' })}
+                              </p>
+                              <p className={`text-[15px] font-bold leading-none ${
+                                v.isCompleted ? 'text-green-700' :
+                                isPast ? 'text-gray-700' : 'text-teal-700'
+                              }`}>{d.getDate()}</p>
+                            </div>
+                          ) : <div className="w-11 shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-medium text-gray-900">{v.reason || 'Pastoral visit'}</p>
+                            <p className="text-[11px] text-gray-400 mt-0.5">Scheduled by {v.scheduledBy} · {fmt(v.scheduledAt)}</p>
+                            {v.isCompleted && v.completedNote && (
+                              <p className="text-[12px] text-gray-600 mt-1 italic">"{v.completedNote}"</p>
+                            )}
+                            {v.isCompleted && v.completedAt && (
+                              <p className="text-[11px] text-green-600 mt-0.5">Done · {fmt(v.completedAt)}</p>
+                            )}
                           </div>
-                        ) : <div className="w-11 shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-medium text-gray-900">{v.reason || 'Pastoral visit'}</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">Scheduled by {v.scheduledBy} · {fmt(v.scheduledAt)}</p>
+                          <div className="shrink-0 flex flex-col items-end gap-1.5 mt-0.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              v.isCompleted ? 'bg-green-100 text-green-700' :
+                              isPast ? 'bg-gray-100 text-gray-500' : 'bg-teal-50 text-teal-700'
+                            }`}>
+                              {v.isCompleted ? 'Done' : isPast ? 'Past' : 'Upcoming'}
+                            </span>
+                            {!v.isCompleted && (
+                              <button
+                                onClick={() => { setMarkingDoneId(isMarkingThis ? null : v.id); setDoneNote(''); }}
+                                className="flex items-center gap-1 text-[11px] text-teal-600 hover:text-teal-800 transition-colors"
+                              >
+                                <ClipboardCheck size={11} /> Mark done
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPast ? 'bg-gray-100 text-gray-500' : 'bg-teal-50 text-teal-700'}`}>
-                          {isPast ? 'Past' : 'Upcoming'}
-                        </span>
+
+                        {/* Inline mark-done form */}
+                        {isMarkingThis && (
+                          <div className="pl-14 space-y-2">
+                            <textarea
+                              value={doneNote}
+                              onChange={e => setDoneNote(e.target.value)}
+                              placeholder="Add a visit note (optional)…"
+                              rows={2}
+                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[12px] resize-none focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => { setMarkingDoneId(null); setDoneNote(''); }}
+                                className="px-3 py-1.5 rounded-lg text-[12px] text-gray-600 hover:bg-gray-100 transition-colors"
+                              >Cancel</button>
+                              <button
+                                onClick={() => handleMarkDone(v.id)}
+                                disabled={doneSaving}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-[12px] font-medium hover:bg-green-700 disabled:opacity-40 transition-colors"
+                              >
+                                {doneSaving ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
