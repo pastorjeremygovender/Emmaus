@@ -371,17 +371,33 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
       }
     }
 
-    const patch: Parameters<typeof store.updateSession>[1] = {
-      ...rest,
-      ...(status !== undefined ? { status } : {}),
-    };
-    await store.updateSession(id, patch);
+    let alertCount = 0;
 
-    // Auto-generate care signals whenever a session is marked complete
     if (status === "completed") {
-      store.generateCareSignals(id).catch((err) => {
-        logger.warn({ err, sessionId: id }, "pastoral: generateCareSignals failed (non-fatal)");
-      });
+      // Atomically claim the scheduled→completed transition via a conditional
+      // UPDATE (WHERE status = 'scheduled').  Only the request whose UPDATE
+      // touches a row generates care signals; concurrent requests and repeated
+      // closes return won=false and skip signal generation.
+      const won = await store.tryCompleteSession(id);
+
+      if (won) {
+        // generateCareSignals is idempotent (ON CONFLICT DO NOTHING in care_signals)
+        // and guards against cancelled sessions and non-care-signal meeting types.
+        alertCount = await store.generateCareSignals(id);
+        logger.info({ sessionId: id, alertCount }, "pastoral: care signals generated on session close");
+      }
+
+      // Apply any remaining patch fields (notes, location, etc.) other than status,
+      // which was already written by tryCompleteSession.
+      if (Object.keys(rest).length > 0) {
+        await store.updateSession(id, rest as Parameters<typeof store.updateSession>[1]);
+      }
+    } else {
+      const patch: Parameters<typeof store.updateSession>[1] = {
+        ...rest,
+        ...(status !== undefined ? { status } : {}),
+      };
+      await store.updateSession(id, patch);
     }
 
     // Audit-log status transitions
@@ -397,7 +413,7 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
       });
     }
 
-    res.json({ ok: true });
+    res.json({ ok: true, alertCount });
   } catch (err) {
     logger.error({ err }, "pastoral: updateSession failed");
     res.status(500).json({ error: "Server error" });

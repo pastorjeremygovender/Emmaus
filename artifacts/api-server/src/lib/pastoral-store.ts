@@ -874,9 +874,98 @@ export async function getPersonAttendanceHistory(
     updatedAt:       String(r.updated_at),
   }));
 }
+/**
+ * Called when a session is marked 'completed'.
+ *
+ * For every person who has expectation='expected' for the session's meeting
+ * type and whose attendance record is missing or shows 'absent', an
+ * 'absence_alert' entry is written to pastoral_audit_log.
+ *
+ * No alert is generated when:
+ *   • The meeting type has care_signal_enabled = false
+ *   • The person's attendance record status is 'apology'
+ *   • The person's attendance record status is 'not_expected'
+ *   • The person's attendance record status is 'present' or 'visitor'
+ *
+ * Returns the list of personIds for whom an alert was generated.
+ */
+export async function generateAbsenceAlerts(
+  sessionId: string,
+  triggeredBy = "system"
+): Promise<string[]> {
+  // 1. Load the session + meeting type
+  const sessRow = await pool.query(
+    `SELECT ms.id, ms.meeting_type_id, mt.care_signal_enabled
+     FROM meeting_sessions ms
+     JOIN meeting_types mt ON mt.id = ms.meeting_type_id
+     WHERE ms.id = $1 AND ms.church_id = $2`,
+    [sessionId, CHURCH_ID]
+  );
+  if (!sessRow.rows[0]) return [];
 
-// ─── Care Signals ─────────────────────────────────────────────────────────────
+  const { meeting_type_id: meetingTypeId, care_signal_enabled } = sessRow.rows[0] as {
+    meeting_type_id: string;
+    care_signal_enabled: boolean;
+  };
 
+  if (!care_signal_enabled) return [];
+
+  // 2. Find all people expected at this meeting type
+  const expRows = await pool.query(
+    `SELECT person_id, person_type
+     FROM person_attendance_expectations
+     WHERE meeting_type_id = $1
+       AND church_id = $2
+       AND expectation = 'expected'`,
+    [meetingTypeId, CHURCH_ID]
+  );
+
+  if (expRows.rows.length === 0) return [];
+
+  // 3. Load all attendance records for this session in one query
+  const arRows = await pool.query(
+    `SELECT person_id, person_type, status
+     FROM attendance_records
+     WHERE session_id = $1 AND church_id = $2`,
+    [sessionId, CHURCH_ID]
+  );
+
+  // Build a lookup keyed by "personId|personType"
+  const attendanceMap = new Map<string, string>();
+  for (const row of arRows.rows as { person_id: string; person_type: string; status: string }[]) {
+    attendanceMap.set(`${row.person_id}|${row.person_type}`, row.status);
+  }
+
+  // 4. Determine who needs an alert
+  const alerted: string[] = [];
+  for (const exp of expRows.rows as { person_id: string; person_type: string }[]) {
+    const key = `${exp.person_id}|${exp.person_type}`;
+    const status = attendanceMap.get(key);
+
+    // No alert for apologies or explicit 'not_expected' overrides
+    if (status === "apology" || status === "not_expected" || status === "present" || status === "visitor") {
+      continue;
+    }
+
+    // Alert: either absent record or no record at all
+    const alertReason = status === "absent" ? "absent" : "no_record";
+
+    await logPastoralAudit({
+      entityType: "session",
+      entityId: sessionId,
+      action: "absence_alert",
+      personId: exp.person_id,
+      sessionId,
+      previousValue: null,
+      newValue: { reason: alertReason, personType: exp.person_type },
+      changedBy: triggeredBy,
+    });
+
+    alerted.push(exp.person_id);
+  }
+
+  return alerted;
+}
 export type CareSignalTrigger = "missed_session";
 
 export interface CareSignal {
@@ -1014,6 +1103,25 @@ export async function dismissCareSignal(
   return res.rows.length > 0;
 }
 
+/**
+ * Atomically transitions a session from 'scheduled' to 'completed'.
+ *
+ * Uses a conditional UPDATE (WHERE status = 'scheduled') so that only one
+ * concurrent request can win the transition.  Returns `true` when this call
+ * performed the transition; `false` when the session was already in any other
+ * state (including 'completed' or 'cancelled').
+ *
+ * Callers should generate care signals only when `true` is returned.
+ */
+export async function tryCompleteSession(id: string): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE meeting_sessions
+     SET status = 'completed', updated_at = NOW()
+     WHERE id = $1 AND church_id = $2 AND status = 'scheduled'`,
+    [id, CHURCH_ID]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
 /**
  * For a single completed session, find every person with an 'expected' expectation
  * for that meeting type and no 'present', 'visitor', or 'apology' attendance record.
