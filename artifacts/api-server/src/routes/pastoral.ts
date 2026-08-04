@@ -607,6 +607,21 @@ pastoralRouter.patch("/care-signals/:id/schedule-visit", async (req: Request, re
     res.status(400).json({ error: "visitDate is required." });
     return;
   }
+
+  // Reject dates more than 7 days in the past to prevent accidental back-dating.
+  const parsed = new Date(visitDate.trim());
+  if (isNaN(parsed.getTime())) {
+    res.status(400).json({ error: "visitDate is not a valid date." });
+    return;
+  }
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+  if (parsed < sevenDaysAgo) {
+    res.status(400).json({ error: "visitDate cannot be more than 7 days in the past." });
+    return;
+  }
+
   try {
     const ok = await store.scheduleVisit({
       signalId:    id,

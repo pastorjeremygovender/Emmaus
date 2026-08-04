@@ -35,12 +35,21 @@ interface SignalCardProps {
   scheduling: boolean;
 }
 
+function todayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling }: SignalCardProps) {
   const [showForm, setShowForm]   = useState(false);
   const [visitDate, setVisitDate] = useState('');
   const [reason, setReason]       = useState('');
   const [formError, setFormError] = useState('');
   const dateRef = useRef<HTMLInputElement>(null);
+  const minDate = todayIso();
 
   const busy = dismissing || scheduling;
 
@@ -132,6 +141,7 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
               ref={dateRef}
               type="date"
               value={visitDate}
+              min={minDate}
               onChange={(e) => setVisitDate(e.target.value)}
               required
               className="flex-none w-36 px-2 py-1 rounded-md border border-indigo-200 text-[11px] text-gray-800 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
