@@ -42,9 +42,9 @@ vi.mock('@/components/BottomNav', () => ({
   BottomNav: () => <div data-testid="bottom-nav" />,
 }));
 
-// ── DevotionalReading — surface only the actionButton ────────────────────────
-vi.mock('@/components/DevotionalReading', () => ({
-  DevotionalReading: ({ actionButton }: { actionButton: React.ReactNode }) => (
+// ── SermonCompanionReading — surface only the actionButton ───────────────────
+vi.mock('@/components/SermonCompanionReading', () => ({
+  SermonCompanionReading: ({ actionButton }: { actionButton: React.ReactNode }) => (
     <div data-testid="reading-area">{actionButton}</div>
   ),
 }));

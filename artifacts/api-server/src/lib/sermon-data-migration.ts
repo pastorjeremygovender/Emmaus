@@ -152,6 +152,8 @@ export async function runSermonDataMigration(): Promise<void> {
         keywords:           draft.keywords ?? [],
         mainTheme:          draft.mainTheme ?? "",
         status:             mapStatus(draft.status ?? "draft"),
+        processingStage:    "idle",
+        processingError:    "",
       });
 
       migrated++;

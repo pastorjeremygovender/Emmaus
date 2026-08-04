@@ -1310,6 +1310,8 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       detectionConfidence: detectionConfidence ?? 0,
       detectionMethod:     detectionMethod ?? "none",
       status:              "Draft",
+      processingStage:     "idle",
+      processingError:     "",
     });
   } catch (sermonErr) {
     logger.error({ err: sermonErr }, "sermon-generator: canonical sermon creation failed");
@@ -1448,7 +1450,7 @@ export async function generateSermonContentFromTranscript(
     summary:            draftFields.summary,
     transcript:         sermonTranscript,
     mainTheme,
-    videoId:            undefined,
+    videoId:            "",
   });
 
   // 5. Update existing sermon record with generated content

@@ -19,7 +19,7 @@
 
 import { ObjectStorageService } from "./objectStorage.js";
 import { logger } from "./logger.js";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, readFile, readdir, unlink, access, constants as fsConstants } from "node:fs/promises";

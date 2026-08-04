@@ -198,6 +198,8 @@ sermonsRouter.post("/admin", async (req: Request, res: Response) => {
       keywords:           Array.isArray(body.keywords) ? body.keywords as string[] : [],
       mainTheme:          String(body.mainTheme ?? ""),
       status:             (body.status as store.CanonicalSermon["status"]) ?? "Draft",
+      processingStage:    "idle",
+      processingError:    "",
     });
     res.status(201).json(sermon);
   } catch (err) {
