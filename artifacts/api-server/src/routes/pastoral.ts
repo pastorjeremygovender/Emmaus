@@ -885,3 +885,101 @@ pastoralRouter.get("/people/:personKey/profile-summary", async (req: Request, re
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ── Checkpoint 3: Discipleship Profile endpoints ──────────────────────────────
+
+pastoralRouter.get("/people/:personKey/journey-timeline", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    const events = await store.getJourneyTimeline(parsed.personId, parsed.personType);
+    res.json(events);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getJourneyTimeline failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.get("/people/:personKey/spiritual-rhythm", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    const days = await store.getSpiritualRhythm(parsed.personId, parsed.personType);
+    res.json(days);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getSpiritualRhythm failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.get("/people/:personKey/attendance-rhythm", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    const months = await store.getAttendanceRhythm(parsed.personId, parsed.personType);
+    res.json(months);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getAttendanceRhythm failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.get("/people/:personKey/milestones", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    const items = await store.getPastoralMilestones(parsed.personId, parsed.personType);
+    res.json(items);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getPastoralMilestones failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.post("/people/:personKey/milestones", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  const { milestoneType = "other", title, milestoneDate, notes } = req.body as {
+    milestoneType?: string; title?: string; milestoneDate?: string; notes?: string;
+  };
+  if (!title?.trim()) { res.status(400).json({ error: "title is required." }); return; }
+  try {
+    const item = await store.createPastoralMilestone({
+      personId:      parsed.personId,
+      personType:    parsed.personType,
+      milestoneType: milestoneType ?? "other",
+      title:         title.trim(),
+      milestoneDate: milestoneDate ?? null,
+      notes:         notes ?? null,
+      createdBy:     userId,
+    });
+    res.status(201).json(item);
+  } catch (err) {
+    logger.error({ err }, "pastoral: createPastoralMilestone failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.delete("/people/:personKey/milestones/:milestoneId", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+  try {
+    await store.deletePastoralMilestone(String(req.params.milestoneId), CHURCH_ID);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: deletePastoralMilestone failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});

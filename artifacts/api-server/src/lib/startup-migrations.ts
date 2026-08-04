@@ -1012,6 +1012,36 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: care_signals table failed (non-fatal)");
   }
 
+  // ── Pastoral Care — Phase 4: pastoral_milestones table (2026-08-CP3) ───────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pastoral_milestones (
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id      TEXT        NOT NULL DEFAULT 'icc',
+        person_id      TEXT        NOT NULL,
+        person_type    TEXT        NOT NULL
+                       CHECK (person_type IN ('emmaus_user','pastoral_person')),
+        milestone_type TEXT        NOT NULL DEFAULT 'other',
+        title          TEXT        NOT NULL,
+        milestone_date DATE,
+        notes          TEXT,
+        is_active      BOOLEAN     NOT NULL DEFAULT true,
+        created_by     TEXT        NOT NULL DEFAULT '',
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS pastoral_milestones_person_idx
+        ON pastoral_milestones (church_id, person_id, person_type)
+        WHERE is_active = true;
+      CREATE INDEX IF NOT EXISTS pastoral_milestones_date_idx
+        ON pastoral_milestones (milestone_date DESC NULLS LAST)
+        WHERE is_active = true;
+    `);
+    logger.info("Startup migration: pastoral_milestones table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: pastoral_milestones table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

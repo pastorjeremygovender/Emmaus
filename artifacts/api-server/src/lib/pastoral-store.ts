@@ -1322,6 +1322,17 @@ export async function getPastoralAuditLog(opts: {
   }));
 }
 
+// ─── Shared helper: resolve Emmaus user ID ────────────────────────────────────
+
+async function resolveEmmausId(personId: string, personType: PersonType): Promise<string | null> {
+  if (personType === "emmaus_user") return personId;
+  const r = await pool.query<{ linked_user_id: string | null }>(
+    `SELECT linked_user_id FROM pastoral_persons WHERE id = $1 AND church_id = $2`,
+    [personId, CHURCH_ID]
+  );
+  return r.rows[0]?.linked_user_id ?? null;
+}
+
 // ─── Person Profile Summary ───────────────────────────────────────────────────
 
 export interface PersonProfileSummary {
@@ -1333,6 +1344,68 @@ export interface PersonProfileSummary {
   activeWalkTitle: string | null;
   activeWalkProgress: string | null;          // e.g. "Day 12 of 30"
   lastEmmausActivityDate: string | null;      // ISO date
+  /** Rule-based pastoral summary sentence. */
+  pastoralSummary: string;
+  attendanceTrend: "consistent" | "improving" | "declining" | "new" | "unknown";
+  activeWalkCount: number;
+  completedWalkCount: number;
+  activeDevotionalCount: number;
+  roomCount: number;
+}
+
+/** Builds a single-sentence rule-based pastoral assessment. No invented data. */
+function buildPastoralSummary(data: {
+  firstName: string;
+  attendanceTrend: PersonProfileSummary["attendanceTrend"];
+  daysSinceLastAttendance: number | null;
+  openCareSignalCount: number;
+  activeWalkCount: number;
+  completedWalkCount: number;
+  activeDevotionalCount: number;
+  roomCount: number;
+}): string {
+  const { firstName: fn, attendanceTrend: trend, daysSinceLastAttendance: days } = data;
+  const parts: string[] = [];
+
+  // Attendance statement (always first)
+  if (trend === "consistent")       parts.push(`${fn} has been attending consistently`);
+  else if (trend === "improving")   parts.push(`${fn}'s attendance has been improving`);
+  else if (trend === "declining")   parts.push(`Attendance has declined after previous engagement`);
+  else if (trend === "new")         parts.push(`${fn} is a new attendee`);
+  else if (days !== null) {
+    const label = days === 0 ? "today" : days === 1 ? "yesterday"
+      : days < 7 ? `${days} days ago`
+      : days < 14 ? "last week"
+      : days < 30 ? `${Math.floor(days / 7)} weeks ago`
+      : `${Math.floor(days / 30)} month${days < 60 ? "" : "s"} ago`;
+    parts.push(`${fn} last attended ${label}`);
+  } else {
+    parts.push(`No attendance has been recorded for ${fn}`);
+  }
+
+  // Discipleship activity
+  if (data.activeWalkCount > 0) {
+    parts.push(`is progressing through ${data.activeWalkCount === 1 ? "a Walk" : `${data.activeWalkCount} Walks`}`);
+  } else if (data.completedWalkCount > 0) {
+    parts.push(`has completed ${data.completedWalkCount === 1 ? "a Walk" : `${data.completedWalkCount} Walks`}`);
+  }
+  if (data.activeDevotionalCount > 0) parts.push(`is engaged with Daily Rhythm`);
+  if (data.roomCount > 0) {
+    parts.push(`is part of ${data.roomCount === 1 ? "a Room" : `${data.roomCount} Rooms`}`);
+  }
+
+  // Care signal conclusion
+  if (data.openCareSignalCount > 0) {
+    parts.push(`and a pastoral follow-up may be appropriate`);
+  } else if (trend === "consistent" || trend === "improving") {
+    parts.push(`currently has no open care signals`);
+  }
+
+  if (parts.length === 0) return `No data is currently available for ${fn}.`;
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + ".";
+  const last = parts.pop()!;
+  const body = parts.join(", ");
+  return (body.charAt(0).toUpperCase() + body.slice(1)) + ", " + last + ".";
 }
 
 /**
@@ -1353,6 +1426,9 @@ export async function getPersonProfileSummary(
   const statsRes = await pool.query<{
     last_att: string | null;
     open_signals: string;
+    recent_att: string;
+    prev_att: string;
+    total_att: string;
   }>(
     `SELECT
        (SELECT MAX(ms.session_date)::text
@@ -1361,12 +1437,33 @@ export async function getPersonProfileSummary(
         WHERE  ar.person_id = $1
           AND  ar.church_id = $2
           AND  ar.status    IN ('present', 'visitor')
-          AND  ms.status    = 'completed') AS last_att,
+          AND  ms.status    = 'completed')                    AS last_att,
        (SELECT COUNT(*)::int
         FROM   care_signals
         WHERE  person_id    = $1
           AND  church_id    = $2
-          AND  dismissed_at IS NULL)       AS open_signals`,
+          AND  dismissed_at IS NULL)                          AS open_signals,
+       (SELECT COUNT(*)::int
+        FROM   attendance_records ar2
+        JOIN   meeting_sessions ms2 ON ms2.id = ar2.session_id
+        WHERE  ar2.person_id = $1 AND ar2.church_id = $2
+          AND  ar2.status IN ('present','visitor')
+          AND  ms2.status = 'completed'
+          AND  ms2.session_date >= NOW() - INTERVAL '8 weeks') AS recent_att,
+       (SELECT COUNT(*)::int
+        FROM   attendance_records ar3
+        JOIN   meeting_sessions ms3 ON ms3.id = ar3.session_id
+        WHERE  ar3.person_id = $1 AND ar3.church_id = $2
+          AND  ar3.status IN ('present','visitor')
+          AND  ms3.status = 'completed'
+          AND  ms3.session_date <  NOW() - INTERVAL  '8 weeks'
+          AND  ms3.session_date >= NOW() - INTERVAL '16 weeks') AS prev_att,
+       (SELECT COUNT(*)::int
+        FROM   attendance_records ar4
+        JOIN   meeting_sessions ms4 ON ms4.id = ar4.session_id
+        WHERE  ar4.person_id = $1 AND ar4.church_id = $2
+          AND  ar4.status IN ('present','visitor')
+          AND  ms4.status = 'completed')                      AS total_att`,
     [personId, CHURCH_ID]
   );
 
@@ -1376,6 +1473,19 @@ export async function getPersonProfileSummary(
   const daysSince    = lastAttDate
     ? Math.floor((Date.now() - new Date(lastAttDate + "T12:00:00Z").getTime()) / 86_400_000)
     : null;
+  const recentAtt    = parseInt(String(row.recent_att ?? "0"), 10) || 0;
+  const prevAtt      = parseInt(String(row.prev_att    ?? "0"), 10) || 0;
+  const totalAtt     = parseInt(String(row.total_att   ?? "0"), 10) || 0;
+
+  let attendanceTrend: PersonProfileSummary["attendanceTrend"];
+  if (totalAtt === 0)                                   attendanceTrend = "unknown";
+  else if (totalAtt <= 3)                               attendanceTrend = "new";
+  else if (prevAtt === 0 && recentAtt > 0)              attendanceTrend = "improving";
+  else if (recentAtt === 0 && prevAtt > 0)              attendanceTrend = "declining";
+  else if (recentAtt > prevAtt * 1.25)                  attendanceTrend = "improving";
+  else if (recentAtt < prevAtt * 0.75 && prevAtt > 1)  attendanceTrend = "declining";
+  else if (recentAtt > 0 && prevAtt > 0)                attendanceTrend = "consistent";
+  else                                                  attendanceTrend = "unknown";
 
   // 2. Resolve Emmaus userId for activity queries
   let emmausUserId: string | null = null;
@@ -1393,9 +1503,13 @@ export async function getPersonProfileSummary(
   let activeWalkTitle: string | null = null;
   let activeWalkProgress: string | null = null;
   let lastEmmausActivityDate: string | null = null;
+  let activeWalkCount = 0;
+  let completedWalkCount = 0;
+  let activeDevotionalCount = 0;
+  let roomCount = 0;
 
   if (emmausUserId) {
-    const [walkRes, activityRes] = await Promise.all([
+    const [walkRes, activityRes, walkCountRes, devotionalRes, roomRes] = await Promise.all([
       pool.query<{ title: string; current_day: number; duration_days: number }>(
         `SELECT j.title, ujp.current_day, j.duration_days
          FROM   user_journey_progress ujp
@@ -1415,6 +1529,22 @@ export async function getPersonProfileSummary(
          )::text AS last_activity`,
         [emmausUserId]
       ),
+      pool.query<{ active_walks: string; completed_walks: string }>(
+        `SELECT
+           COUNT(*) FILTER (WHERE status NOT IN ('completed','paused'))::int AS active_walks,
+           COUNT(*) FILTER (WHERE status = 'completed')::int                AS completed_walks
+         FROM user_journey_progress WHERE user_id = $1`,
+        [emmausUserId]
+      ),
+      pool.query<{ active_devotionals: string }>(
+        `SELECT COUNT(*) FILTER (WHERE status <> 'completed')::int AS active_devotionals
+         FROM devotional_progress WHERE user_id = $1`,
+        [emmausUserId]
+      ),
+      pool.query<{ room_count: string }>(
+        `SELECT COUNT(*)::int AS room_count FROM room_members WHERE user_id = $1`,
+        [emmausUserId]
+      ),
     ]);
 
     const walk = walkRes.rows[0];
@@ -1425,7 +1555,11 @@ export async function getPersonProfileSummary(
         : `Day ${walk.current_day}`;
     }
     const lastAct = activityRes.rows[0]?.last_activity ?? null;
-    lastEmmausActivityDate = lastAct ? lastAct.slice(0, 10) : null;
+    lastEmmausActivityDate   = lastAct ? lastAct.slice(0, 10) : null;
+    activeWalkCount          = parseInt(String(walkCountRes.rows[0]?.active_walks    ?? "0"), 10) || 0;
+    completedWalkCount       = parseInt(String(walkCountRes.rows[0]?.completed_walks ?? "0"), 10) || 0;
+    activeDevotionalCount    = parseInt(String(devotionalRes.rows[0]?.active_devotionals ?? "0"), 10) || 0;
+    roomCount                = parseInt(String(roomRes.rows[0]?.room_count ?? "0"), 10) || 0;
   }
 
   // 4. Compute engagement status
@@ -1442,6 +1576,21 @@ export async function getPersonProfileSummary(
   else if (recent > 0 && now - recent <= D90)    engagementStatus = "fading";
   else                                            engagementStatus = "unknown";
 
+  // 5. Rule-based pastoral summary
+  const firstName   = (personType === "emmaus_user"
+    ? personId.split("@")[0]
+    : personId).replace(/[-_.]/g, " ").split(" ")[0];
+  const pastoralSummary = buildPastoralSummary({
+    firstName:              firstName || "This person",
+    attendanceTrend,
+    daysSinceLastAttendance: daysSince,
+    openCareSignalCount:    openCount,
+    activeWalkCount,
+    completedWalkCount,
+    activeDevotionalCount,
+    roomCount,
+  });
+
   return {
     engagementStatus,
     lastAttendanceDate:       lastAttDate,
@@ -1450,5 +1599,297 @@ export async function getPersonProfileSummary(
     activeWalkTitle,
     activeWalkProgress,
     lastEmmausActivityDate,
+    pastoralSummary,
+    attendanceTrend,
+    activeWalkCount,
+    completedWalkCount,
+    activeDevotionalCount,
+    roomCount,
   };
+}
+
+// ─── Life Milestones ──────────────────────────────────────────────────────────
+
+export interface MilestoneItem {
+  id: string;
+  milestoneType: string;
+  title: string;
+  milestoneDate: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export async function getPastoralMilestones(
+  personId: string,
+  personType: PersonType,
+): Promise<MilestoneItem[]> {
+  const rows = await pool.query<{
+    id: string; milestone_type: string; title: string;
+    milestone_date: string | null; notes: string | null;
+    created_by: string; created_at: string;
+  }>(
+    `SELECT id::text, milestone_type, title, milestone_date::text, notes, created_by, created_at::text
+     FROM pastoral_milestones
+     WHERE person_id = $1 AND church_id = $2 AND is_active = true
+     ORDER BY COALESCE(milestone_date, '1900-01-01') ASC, created_at ASC`,
+    [personId, CHURCH_ID]
+  );
+  return rows.rows.map(r => ({
+    id: r.id, milestoneType: r.milestone_type, title: r.title,
+    milestoneDate: r.milestone_date ?? null, notes: r.notes ?? null,
+    createdBy: r.created_by, createdAt: r.created_at,
+  }));
+}
+
+export async function createPastoralMilestone(data: {
+  personId: string; personType: PersonType; milestoneType: string;
+  title: string; milestoneDate: string | null; notes: string | null; createdBy: string;
+}): Promise<MilestoneItem> {
+  const row = await pool.query<{
+    id: string; milestone_type: string; title: string;
+    milestone_date: string | null; notes: string | null;
+    created_by: string; created_at: string;
+  }>(
+    `INSERT INTO pastoral_milestones
+       (church_id, person_id, person_type, milestone_type, title, milestone_date, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id::text, milestone_type, title, milestone_date::text, notes, created_by, created_at::text`,
+    [CHURCH_ID, data.personId, data.personType, data.milestoneType,
+     data.title, data.milestoneDate || null, data.notes || null, data.createdBy]
+  );
+  const r = row.rows[0];
+  return {
+    id: r.id, milestoneType: r.milestone_type, title: r.title,
+    milestoneDate: r.milestone_date ?? null, notes: r.notes ?? null,
+    createdBy: r.created_by, createdAt: r.created_at,
+  };
+}
+
+export async function deletePastoralMilestone(id: string, churchId: string): Promise<void> {
+  await pool.query(
+    `UPDATE pastoral_milestones SET is_active = false, updated_at = NOW()
+     WHERE id = $1 AND church_id = $2`,
+    [id, churchId]
+  );
+}
+
+// ─── Journey Timeline ─────────────────────────────────────────────────────────
+
+export type TimelineEventType =
+  | "attendance"
+  | "walk_started" | "walk_completed"
+  | "devotional_started" | "devotional_completed"
+  | "room_joined"
+  | "sermon_companion_started"
+  | "milestone"
+  | "care_alert"
+  | "visit_scheduled";
+
+export interface TimelineEvent {
+  id: string;
+  date: string;              // ISO datetime
+  eventType: TimelineEventType;
+  title: string;
+  subtitle?: string;
+}
+
+export async function getJourneyTimeline(
+  personId: string,
+  personType: PersonType,
+): Promise<TimelineEvent[]> {
+  const events: TimelineEvent[] = [];
+  const emmausUserId = await resolveEmmausId(personId, personType);
+
+  // 1. Attendance events
+  const attRows = await pool.query<{
+    id: string; session_date: string; meeting_type: string; status: string;
+  }>(
+    `SELECT ar.id::text, ms.session_date::text, mt.name AS meeting_type, ar.status
+     FROM attendance_records ar
+     JOIN meeting_sessions ms ON ms.id = ar.session_id
+     JOIN meeting_types mt    ON mt.id = ms.meeting_type_id
+     WHERE ar.person_id = $1 AND ar.church_id = $2
+       AND ar.status IN ('present','visitor') AND ms.status = 'completed'
+     ORDER BY ms.session_date DESC LIMIT 50`,
+    [personId, CHURCH_ID]
+  );
+  for (const r of attRows.rows) {
+    events.push({
+      id: `att-${r.id}`, date: r.session_date + "T12:00:00",
+      eventType: "attendance", title: `Attended ${r.meeting_type}`,
+      subtitle: r.status === "visitor" ? "Visitor" : undefined,
+    });
+  }
+
+  // 2. Pastoral milestones
+  const milRows = await pool.query<{
+    id: string; title: string; milestone_date: string | null; notes: string | null;
+  }>(
+    `SELECT id::text, title, milestone_date::text, notes
+     FROM pastoral_milestones
+     WHERE person_id = $1 AND church_id = $2 AND is_active = true`,
+    [personId, CHURCH_ID]
+  );
+  for (const r of milRows.rows) {
+    events.push({
+      id: `mil-${r.id}`,
+      date: r.milestone_date ? r.milestone_date + "T12:00:00" : new Date(0).toISOString(),
+      eventType: "milestone", title: r.title,
+      subtitle: r.notes ?? undefined,
+    });
+  }
+
+  // 3. Emmaus events (only when account is linked)
+  if (emmausUserId) {
+    const [walkRows, devRows, roomRows, scRows] = await Promise.all([
+      pool.query<{
+        journey_id: string; title: string; started_at: string | null;
+        updated_at: string; last_completed_at: string | null; status: string;
+      }>(
+        `SELECT ujp.journey_id, j.title, ujp.started_at::text, ujp.updated_at::text,
+                ujp.last_completed_at::text, ujp.status
+         FROM user_journey_progress ujp
+         JOIN journeys j ON j.id = ujp.journey_id
+         WHERE ujp.user_id = $1`,
+        [emmausUserId]
+      ),
+      pool.query<{
+        series_id: string; title: string; started_at: string | null;
+        updated_at: string; status: string;
+      }>(
+        `SELECT dp.series_id::text, ds.title, dp.started_at::text, dp.updated_at::text, dp.status
+         FROM devotional_progress dp
+         JOIN devotional_series ds ON ds.id = dp.series_id
+         WHERE dp.user_id = $1`,
+        [emmausUserId]
+      ),
+      pool.query<{ room_id: string; room_name: string; joined_at: string | null; role: string }>(
+        `SELECT rm.room_id::text, r.name AS room_name, rm.joined_at::text, rm.role
+         FROM room_members rm JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.user_id = $1`,
+        [emmausUserId]
+      ),
+      pool.query<{
+        companion_id: string; title: string; started_at: string | null; updated_at: string; status: string;
+      }>(
+        `SELECT scp.companion_id::text, sc.title, scp.started_at::text, scp.updated_at::text, scp.status
+         FROM sermon_companion_progress scp
+         JOIN sermon_companion sc ON sc.id = scp.companion_id
+         WHERE scp.user_id = $1`,
+        [emmausUserId]
+      ),
+    ]);
+
+    for (const w of walkRows.rows) {
+      if (w.started_at) events.push({ id: `walk-start-${w.journey_id}`, date: w.started_at, eventType: "walk_started", title: `Started ${w.title}` });
+      if (w.status === "completed") events.push({ id: `walk-done-${w.journey_id}`, date: w.last_completed_at ?? w.updated_at, eventType: "walk_completed", title: `Completed ${w.title}` });
+    }
+    for (const d of devRows.rows) {
+      if (d.started_at) events.push({ id: `dev-start-${d.series_id}`, date: d.started_at, eventType: "devotional_started", title: `Started ${d.title}` });
+      if (d.status === "completed") events.push({ id: `dev-done-${d.series_id}`, date: d.updated_at, eventType: "devotional_completed", title: `Completed ${d.title}` });
+    }
+    for (const r of roomRows.rows) {
+      if (r.joined_at) events.push({ id: `room-${r.room_id}`, date: r.joined_at, eventType: "room_joined", title: `Joined ${r.room_name}`, subtitle: r.role === "admin" ? "Room Leader" : undefined });
+    }
+    for (const sc of scRows.rows) {
+      if (sc.started_at) events.push({ id: `sc-${sc.companion_id}`, date: sc.started_at, eventType: "sermon_companion_started", title: `Started ${sc.title}` });
+    }
+  }
+
+  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return events.slice(0, 120);
+}
+
+// ─── Spiritual Rhythm ─────────────────────────────────────────────────────────
+
+export interface RhythmDay {
+  date: string;            // YYYY-MM-DD
+  level: 0 | 1 | 2 | 3;   // 0 = no activity, 3 = very active
+}
+
+export async function getSpiritualRhythm(
+  personId: string,
+  personType: PersonType,
+): Promise<RhythmDay[]> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 181);
+  const startStr = startDate.toISOString().slice(0, 10);
+
+  const activityMap = new Map<string, number>();
+  const emmausUserId = await resolveEmmausId(personId, personType);
+
+  // Attendance dates (church presence)
+  const attRows = await pool.query<{ d: string }>(
+    `SELECT DISTINCT ms.session_date::text AS d
+     FROM attendance_records ar
+     JOIN meeting_sessions ms ON ms.id = ar.session_id
+     WHERE ar.person_id = $1 AND ar.church_id = $2
+       AND ar.status IN ('present','visitor') AND ms.status = 'completed'
+       AND ms.session_date >= $3`,
+    [personId, CHURCH_ID, startStr]
+  );
+  for (const r of attRows.rows) activityMap.set(r.d, (activityMap.get(r.d) ?? 0) + 1);
+
+  if (emmausUserId) {
+    const [wDates, dDates, scDates] = await Promise.all([
+      pool.query<{ d: string }>(`SELECT DISTINCT DATE(updated_at)::text AS d FROM user_journey_progress WHERE user_id = $1 AND updated_at >= $2`, [emmausUserId, startStr]),
+      pool.query<{ d: string }>(`SELECT DISTINCT DATE(updated_at)::text AS d FROM devotional_progress WHERE user_id = $1 AND updated_at >= $2`, [emmausUserId, startStr]),
+      pool.query<{ d: string }>(`SELECT DISTINCT DATE(updated_at)::text AS d FROM sermon_companion_progress WHERE user_id = $1 AND updated_at >= $2`, [emmausUserId, startStr]),
+    ]);
+    for (const r of [...wDates.rows, ...dDates.rows, ...scDates.rows]) {
+      activityMap.set(r.d, (activityMap.get(r.d) ?? 0) + 1);
+    }
+  }
+
+  const days: RhythmDay[] = [];
+  for (let i = 0; i < 182; i++) {
+    const d = new Date(startDate); d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const count = activityMap.get(dateStr) ?? 0;
+    days.push({ date: dateStr, level: (count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : 3) as 0|1|2|3 });
+  }
+  return days;
+}
+
+// ─── Attendance Rhythm ────────────────────────────────────────────────────────
+
+export interface MonthlyAttendance {
+  month: string;       // "Jan 2026"
+  yearMonth: string;   // "2026-01"
+  attended: number;
+  totalMarked: number;
+  absent: number;
+}
+
+export async function getAttendanceRhythm(
+  personId: string,
+  _personType: PersonType,
+): Promise<MonthlyAttendance[]> {
+  const rows = await pool.query<{
+    year_month: string; month_key: string;
+    attended: string; total_marked: string; absent: string;
+  }>(
+    `SELECT
+       TO_CHAR(DATE_TRUNC('month', ms.session_date::date), 'Mon YYYY') AS year_month,
+       TO_CHAR(DATE_TRUNC('month', ms.session_date::date), 'YYYY-MM')  AS month_key,
+       COUNT(*) FILTER (WHERE ar.status IN ('present','visitor'))::int  AS attended,
+       COUNT(*)::int                                                    AS total_marked,
+       COUNT(*) FILTER (WHERE ar.status = 'absent')::int               AS absent
+     FROM attendance_records ar
+     JOIN meeting_sessions ms ON ms.id = ar.session_id
+     WHERE ar.person_id = $1 AND ar.church_id = $2
+       AND ms.session_date >= NOW() - INTERVAL '12 months'
+       AND ms.status = 'completed'
+     GROUP BY DATE_TRUNC('month', ms.session_date::date)
+     ORDER BY DATE_TRUNC('month', ms.session_date::date) ASC`,
+    [personId, CHURCH_ID]
+  );
+  return rows.rows.map(r => ({
+    month:       r.year_month,
+    yearMonth:   r.month_key,
+    attended:    parseInt(r.attended,      10),
+    totalMarked: parseInt(r.total_marked,  10),
+    absent:      parseInt(r.absent,        10),
+  }));
 }

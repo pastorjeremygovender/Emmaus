@@ -491,7 +491,88 @@ export interface PersonProfileSummary {
   activeWalkTitle: string | null;
   activeWalkProgress: string | null;
   lastEmmausActivityDate: string | null;
+  pastoralSummary: string;
+  attendanceTrend: "consistent" | "improving" | "declining" | "new" | "unknown";
+  activeWalkCount: number;
+  completedWalkCount: number;
+  activeDevotionalCount: number;
+  roomCount: number;
 }
+
+// ─── Journey Timeline ─────────────────────────────────────────────────────────
+
+export type TimelineEventType =
+  | "attendance"
+  | "walk_started" | "walk_completed"
+  | "devotional_started" | "devotional_completed"
+  | "room_joined"
+  | "sermon_companion_started"
+  | "milestone"
+  | "care_alert"
+  | "visit_scheduled";
+
+export interface TimelineEvent {
+  id: string;
+  date: string;          // ISO datetime
+  eventType: TimelineEventType;
+  title: string;
+  subtitle?: string;
+}
+
+export const getJourneyTimeline = (auth: AuthHeaders, personId: string, personType: PersonType) =>
+  apiFetch<TimelineEvent[]>(`/people/${personKey(personId, personType)}/journey-timeline`, "GET", auth);
+
+// ─── Spiritual Rhythm ─────────────────────────────────────────────────────────
+
+export interface RhythmDay {
+  date: string;          // YYYY-MM-DD
+  level: 0 | 1 | 2 | 3; // 0 = none, 3 = very active
+}
+
+export const getSpiritualRhythm = (auth: AuthHeaders, personId: string, personType: PersonType) =>
+  apiFetch<RhythmDay[]>(`/people/${personKey(personId, personType)}/spiritual-rhythm`, "GET", auth);
+
+// ─── Attendance Rhythm ────────────────────────────────────────────────────────
+
+export interface MonthlyAttendance {
+  month: string;        // "Jan 2026"
+  yearMonth: string;    // "2026-01"
+  attended: number;
+  totalMarked: number;
+  absent: number;
+}
+
+export const getAttendanceRhythm = (auth: AuthHeaders, personId: string, personType: PersonType) =>
+  apiFetch<MonthlyAttendance[]>(`/people/${personKey(personId, personType)}/attendance-rhythm`, "GET", auth);
+
+// ─── Life Milestones ──────────────────────────────────────────────────────────
+
+export interface MilestoneItem {
+  id: string;
+  milestoneType: string;
+  title: string;
+  milestoneDate: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export const listMilestones = (auth: AuthHeaders, personId: string, personType: PersonType) =>
+  apiFetch<MilestoneItem[]>(`/people/${personKey(personId, personType)}/milestones`, "GET", auth);
+
+export const createMilestone = (
+  auth: AuthHeaders,
+  personId: string,
+  personType: PersonType,
+  body: { milestoneType: string; title: string; milestoneDate?: string; notes?: string },
+) => apiFetch<MilestoneItem>(`/people/${personKey(personId, personType)}/milestones`, "POST", auth, body);
+
+export const deleteMilestone = (
+  auth: AuthHeaders,
+  personId: string,
+  personType: PersonType,
+  milestoneId: string,
+) => apiFetch<{ ok: boolean }>(`/people/${personKey(personId, personType)}/milestones/${milestoneId}`, "DELETE", auth);
 
 /**
  * Returns the holistic spiritual-health snapshot for a person.
