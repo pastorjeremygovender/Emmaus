@@ -15,10 +15,12 @@ import {
   BookOpen,
   ClipboardList,
   Heart,
+  BarChart2,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
 import PastoralDashboard from './admin/PastoralDashboard';
+import AnalyticsCentre from './admin/AnalyticsCentre';
 import AdminSettings from './admin/Settings';
 import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
@@ -32,6 +34,7 @@ import AuditLog from './admin/AuditLog';
 export type AdminSection =
   | 'dashboard'
   | 'pastoral-dashboard'
+  | 'analytics'
   | 'content-studio'
   | 'bible-study'
   | 'people'
@@ -53,6 +56,7 @@ export type AdminNav = {
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
   { id: 'dashboard',           label: 'Dashboard',           Icon: LayoutDashboard },
   { id: 'pastoral-dashboard',  label: 'Pastoral Dashboard',  Icon: Heart },
+  { id: 'analytics',           label: 'Analytics',           Icon: BarChart2 },
   { id: 'content-studio',      label: 'Content Studio',      Icon: PenSquare },
   { id: 'bible-study',         label: 'Bible Study',         Icon: BookOpen },
   { id: 'people',              label: 'People',              Icon: Users },
@@ -90,6 +94,7 @@ export default function Admin() {
   const sectionLabel: Record<AdminSection, string> = {
     dashboard:             'Dashboard',
     'pastoral-dashboard':  'Pastoral Dashboard',
+    analytics:             'Analytics Centre',
     'content-studio':      'Content Studio',
     'bible-study':         'Bible Study',
     people:                'People',
@@ -135,6 +140,8 @@ export default function Admin() {
         );
       case 'pastoral-dashboard':
         return <PastoralDashboard onNavigate={navigate} />;
+      case 'analytics':
+        return <AnalyticsCentre onNavigate={navigate} />;
       case 'testing':
         return <Testing />;
       default:

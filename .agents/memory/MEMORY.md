@@ -38,3 +38,4 @@
 - [Discipleship Profile architecture](discipleship-profile.md) — Checkpoint 3 complete: 9-section profile; 6 new store functions + routes; PersonPage.tsx is thin orchestrator; pastoral_milestones table live.
 - [Care Signals Engine](care-signals-engine.md) — Checkpoint 4: discipleship_signals table, 18-rule engine, 5 routes, SignalsDashboard + CareSignalsSection; circular-import rule: engine file has no DB access.
 - [Pastoral Dashboard](pastoral-dashboard.md) — Checkpoint 5: 9-section dashboard as a separate nav item; dashboard-store.ts holds aggregate queries; useAutoFetch hook per section; prayer count from AdminContext (no DB table yet).
+- [Analytics Centre](analytics-centre.md) — Checkpoint 6: 11 analytics routes at /api/analytics; analytics-store.ts; column quirks (duration_days not step_count; completed_days not completed_steps; qualify status in joins).

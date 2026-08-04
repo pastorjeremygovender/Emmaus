@@ -1121,6 +1121,27 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: signal_rule_config table failed (non-fatal)");
   }
 
+  // ── Analytics saved reports table (CP6) ──────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS analytics_saved_reports (
+        id          uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        church_id   text        NOT NULL DEFAULT 'icc',
+        name        text        NOT NULL,
+        description text        NOT NULL DEFAULT '',
+        config      jsonb       NOT NULL DEFAULT '{}',
+        created_by  text        NOT NULL DEFAULT '',
+        created_at  timestamptz NOT NULL DEFAULT NOW(),
+        UNIQUE (church_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS analytics_saved_reports_church_idx
+        ON analytics_saved_reports (church_id, created_at DESC);
+    `);
+    logger.info("Startup migration: analytics_saved_reports table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: analytics_saved_reports table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
