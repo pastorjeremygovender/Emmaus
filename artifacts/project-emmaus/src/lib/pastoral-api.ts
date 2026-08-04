@@ -407,8 +407,13 @@ export const scheduleVisit = (
     { visitDate, reason }
   );
 
-// ─── Audit Log ────────────────────────────────────────────────────────────────
-
+export interface VisitHistoryItem {
+  id: string;
+  visitDate: string;
+  reason: string;
+  scheduledBy: string;
+  scheduledAt: string;
+}
 export const getPastoralAuditLog = (auth: AuthHeaders, opts?: {
   personId?: string;
   sessionId?: string;
@@ -474,4 +479,25 @@ export interface DiscipleshipSermonCompanion {
   completedCount: number;
   startedAt: string | null;
   updatedAt: string | null;
+}
+
+/** Returns all visit_scheduled audit entries for a given person, newest first. */
+export async function getVisitHistory(
+  auth: AuthHeaders,
+  personId: string,
+  limit = 50
+): Promise<VisitHistoryItem[]> {
+  const entries = await getPastoralAuditLog(auth, { personId, limit });
+  return entries
+    .filter((e) => e.action === "visit_scheduled")
+    .map((e) => {
+      const nv = (e.newValue ?? {}) as Record<string, unknown>;
+      return {
+        id:          e.id,
+        visitDate:   String(nv.visitDate ?? ""),
+        reason:      String(nv.reason ?? e.reason ?? ""),
+        scheduledBy: e.changedBy,
+        scheduledAt: e.changedAt,
+      };
+    });
 }

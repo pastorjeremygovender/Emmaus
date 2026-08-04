@@ -9,7 +9,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, CalendarDays, UserCheck, Plus, Trash2,
   Loader2, AlertCircle, CheckCircle2, X,
-  BookOpen, Users, Heart, Mic,
+  BookOpen, Users, Heart, Mic, MapPin,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,6 +40,7 @@ export default function PersonPage({ person, onBack }: Props) {
   const [history, setHistory]         = useState<api.AttendanceHistoryItem[]>([]);
   const [expectations, setExpectations] = useState<api.AttendanceExpectation[]>([]);
   const [meetingTypes, setMeetingTypes] = useState<api.MeetingType[]>([]);
+  const [visits, setVisits]           = useState<api.VisitHistoryItem[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
   const [discipleship, setDiscipleship] = useState<api.DiscipleshipSummary | null>(null);
@@ -74,16 +75,18 @@ export default function PersonPage({ person, onBack }: Props) {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [hist, exps, types, allP] = await Promise.all([
+      const [hist, exps, types, allP, vis] = await Promise.all([
         api.getAttendanceHistory(auth, person.id, person.personType, 30),
         api.getExpectations(auth, person.id, person.personType),
         api.listMeetingTypes(auth),
         api.listPeople(auth),
+        api.getVisitHistory(auth, person.id),
       ]);
       setHistory(hist);
       setExpectations(exps);
       setMeetingTypes(types);
       setAllPeople(allP);
+      setVisits(vis);
       if (types.length > 0 && !newMtId) setNewMtId(types[0].id);
     } catch { setError('Could not load person details.'); }
     finally { setLoading(false); }
@@ -340,6 +343,56 @@ export default function PersonPage({ person, onBack }: Props) {
                       </span>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            {/* ── Visits ────────────────────────────────────────────────── */}
+            <section className="space-y-2">
+              <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Visits Scheduled</h3>
+              {visits.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <MapPin size={24} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-[12px]">No visits have been scheduled yet.</p>
+                </div>
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+                  {visits.map((v) => {
+                    const d = v.visitDate ? new Date(v.visitDate + 'T12:00:00') : null;
+                    const isPast = d ? d < new Date() : false;
+                    return (
+                      <div key={v.id} className="flex items-start gap-3 px-4 py-3">
+                        {d ? (
+                          <div className={`text-center border rounded-lg px-2.5 py-1.5 w-12 shrink-0 ${isPast ? 'bg-gray-50 border-gray-100' : 'bg-teal-50 border-teal-100'}`}>
+                            <p className={`text-[9px] font-semibold uppercase ${isPast ? 'text-gray-400' : 'text-teal-500'}`}>
+                              {d.toLocaleString('en', { month: 'short' })}
+                            </p>
+                            <p className={`text-[16px] font-bold leading-none ${isPast ? 'text-gray-700' : 'text-teal-700'}`}>
+                              {d.getDate()}
+                            </p>
+                            <p className={`text-[9px] ${isPast ? 'text-gray-400' : 'text-teal-400'}`}>
+                              {d.getFullYear()}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="w-12 shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium text-gray-900">
+                            {v.reason || 'Pastoral visit'}
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            Scheduled by {v.scheduledBy}
+                            {' · '}
+                            {new Date(v.scheduledAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${isPast ? 'bg-gray-100 text-gray-500' : 'bg-teal-50 text-teal-700'}`}>
+                          {isPast ? 'Past' : 'Upcoming'}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
