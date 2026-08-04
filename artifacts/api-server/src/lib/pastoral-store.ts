@@ -2067,7 +2067,7 @@ export async function getVisitHistoryForPerson(
        c.changed_at AS completed_at
      FROM pastoral_audit_log s
      LEFT JOIN pastoral_audit_log c
-       ON  c.entity_id = s.id
+       ON  c.entity_id = s.id::text
        AND c.church_id = $2
        AND c.action    = 'visit_completed'
      WHERE s.church_id = $2
