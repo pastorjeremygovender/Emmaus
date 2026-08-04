@@ -1079,6 +1079,27 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: discipleship_signals table failed (non-fatal)");
   }
 
+  // ── Pastoral Care — Phase 6: signal_engine_runs log table (nightly cron) ──
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS signal_engine_runs (
+        id           SERIAL PRIMARY KEY,
+        church_id    TEXT NOT NULL DEFAULT 'icc',
+        triggered_by TEXT NOT NULL DEFAULT 'scheduler',  -- 'scheduler' | 'manual'
+        processed    INT  NOT NULL DEFAULT 0,
+        created      INT  NOT NULL DEFAULT 0,
+        updated      INT  NOT NULL DEFAULT 0,
+        resolved     INT  NOT NULL DEFAULT 0,
+        ran_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS signal_engine_runs_church_idx
+        ON signal_engine_runs (church_id, ran_at DESC);
+    `);
+    logger.info("Startup migration: signal_engine_runs table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: signal_engine_runs table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

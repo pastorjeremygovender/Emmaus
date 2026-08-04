@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,49 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  scheduleNightlySignalsEngine();
 });
+
+// ─── Nightly signals engine ───────────────────────────────────────────────────
+
+/**
+ * Schedules the signals engine to run every day at 02:00 local server time.
+ * Calculates the delay to the next 2am, then repeats every 24 hours.
+ */
+function scheduleNightlySignalsEngine(): void {
+  const now = new Date();
+  const next2am = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    2, 0, 0, 0,
+  );
+  // If 2am has already passed today, schedule for tomorrow
+  if (next2am.getTime() <= now.getTime()) {
+    next2am.setDate(next2am.getDate() + 1);
+  }
+  const msUntilFirst = next2am.getTime() - now.getTime();
+
+  logger.info(
+    { nextRunAt: next2am.toISOString(), msUntilFirst },
+    "Signals engine: nightly run scheduled",
+  );
+
+  setTimeout(() => {
+    void runNightlySignalsEngine();
+    // Repeat every 24 hours thereafter
+    setInterval(() => { void runNightlySignalsEngine(); }, 24 * 60 * 60 * 1000);
+  }, msUntilFirst);
+}
+
+async function runNightlySignalsEngine(): Promise<void> {
+  logger.info("Signals engine: nightly run starting");
+  try {
+    const result = await runSignalsEngine();
+    await logEngineRun(result, "scheduler");
+    logger.info(result, "Signals engine: nightly run complete");
+  } catch (err) {
+    logger.error({ err }, "Signals engine: nightly run failed");
+  }
+}

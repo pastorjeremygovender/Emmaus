@@ -1061,6 +1061,20 @@ pastoralRouter.get("/discipleship-signals", async (req: Request, res: Response) 
   }
 });
 
+/** GET /pastoral/discipleship-signals/engine-status */
+pastoralRouter.get("/discipleship-signals/engine-status", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  try {
+    const last = await store.getLastEngineRun();
+    res.json({ ok: true, lastRun: last ?? null });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Server error";
+    logger.error({ err }, "pastoral: getLastEngineRun failed");
+    res.status(500).json({ error: msg });
+  }
+});
+
 /** POST /pastoral/discipleship-signals/run-engine */
 pastoralRouter.post("/discipleship-signals/run-engine", async (req: Request, res: Response) => {
   const userId = await requirePastorAccess(req, res);
@@ -1072,6 +1086,10 @@ pastoralRouter.post("/discipleship-signals/run-engine", async (req: Request, res
         ? { personId: String(personId), personType: personType as store.PersonType | undefined }
         : undefined,
     );
+    // Log the run (non-fatal) — only log when running for all members, not single-person runs
+    if (!personId) {
+      await store.logEngineRun(result, "manual");
+    }
     res.json({ ok: true, ...result });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Server error";

@@ -684,6 +684,24 @@ export const listDiscipleshipSignals = (
   );
 };
 
+export interface EngineRunRecord {
+  id: number;
+  churchId: string;
+  triggeredBy: 'scheduler' | 'manual';
+  processed: number;
+  created: number;
+  updated: number;
+  resolved: number;
+  ranAt: string;
+}
+
+export const getEngineStatus = (auth: AuthHeaders) =>
+  apiFetch<{ ok: boolean; lastRun: EngineRunRecord | null }>(
+    "/discipleship-signals/engine-status",
+    "GET",
+    auth,
+  );
+
 export const runSignalsEngine = (
   auth: AuthHeaders,
   opts?: { personId?: string; personType?: PersonType }

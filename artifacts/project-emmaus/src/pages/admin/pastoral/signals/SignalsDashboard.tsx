@@ -62,6 +62,19 @@ function fmtDate(iso: string) {
   } catch { return iso; }
 }
 
+function fmtLastRun(iso: string): string {
+  try {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const mins  = Math.floor(diffMs / 60_000);
+    const hours = Math.floor(diffMs / 3_600_000);
+    const days  = Math.floor(diffMs / 86_400_000);
+    if (mins  <  1)  return 'just now';
+    if (mins  < 60)  return `${mins}m ago`;
+    if (hours < 24)  return `${hours}h ago`;
+    return `${days}d ago`;
+  } catch { return iso; }
+}
+
 function initials(name: string): string {
   return name.split(' ').filter(Boolean).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
 }
@@ -335,6 +348,14 @@ export default function SignalsDashboard({ onOpenProfile }: Props) {
   const [running,   setRunning]   = useState(false);
   const [runMsg,    setRunMsg]    = useState('');
   const [busyId,    setBusyId]    = useState<string | null>(null);
+  const [lastRun,   setLastRun]   = useState<api.EngineRunRecord | null>(null);
+
+  const loadEngineStatus = useCallback(async () => {
+    try {
+      const { lastRun: lr } = await api.getEngineStatus(auth);
+      setLastRun(lr);
+    } catch { /* non-fatal */ }
+  }, [auth.userId]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -345,14 +366,14 @@ export default function SignalsDashboard({ onOpenProfile }: Props) {
     finally { setLoading(false); }
   }, [auth.userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadEngineStatus(); }, [load, loadEngineStatus]);
 
   const handleRun = async () => {
     setRunning(true); setRunMsg('');
     try {
       const r = await api.runSignalsEngine(auth);
       setRunMsg(`Done — ${r.created} new, ${r.updated} updated, ${r.resolved} resolved.`);
-      await load();
+      await Promise.all([load(), loadEngineStatus()]);
     } catch (err: unknown) {
       setRunMsg(err instanceof Error ? err.message : 'Engine failed.');
     } finally {
@@ -444,7 +465,15 @@ export default function SignalsDashboard({ onOpenProfile }: Props) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {runMsg && <span className="text-[12px] text-gray-500">{runMsg}</span>}
+          {runMsg
+            ? <span className="text-[12px] text-gray-500">{runMsg}</span>
+            : lastRun && (
+              <span className="text-[11px] text-gray-400">
+                Last updated: {fmtLastRun(lastRun.ranAt)}
+                {lastRun.triggeredBy === 'scheduler' ? ' (auto)' : ''}
+              </span>
+            )
+          }
           <button
             onClick={handleRun}
             disabled={running || loading}

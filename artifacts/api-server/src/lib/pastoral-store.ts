@@ -2388,6 +2388,63 @@ async function upsertDiscipleshipSignal(data: {
 
 // ─── Engine runner ────────────────────────────────────────────────────────────
 
+// ─── Signal engine run log ────────────────────────────────────────────────────
+
+export interface EngineRunRecord {
+  id: number;
+  churchId: string;
+  triggeredBy: "scheduler" | "manual";
+  processed: number;
+  created: number;
+  updated: number;
+  resolved: number;
+  ranAt: string;
+}
+
+/** Record a completed engine run. Non-fatal on failure. */
+export async function logEngineRun(
+  result: { processed: number; created: number; updated: number; resolved: number },
+  triggeredBy: "scheduler" | "manual" = "manual"
+): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO signal_engine_runs (church_id, triggered_by, processed, created, updated, resolved)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [CHURCH_ID, triggeredBy, result.processed, result.created, result.updated, result.resolved]
+    );
+  } catch (err) {
+    logger.warn({ err }, "pastoral-store: logEngineRun failed (non-fatal)");
+  }
+}
+
+/** Return the most recent engine run for the church, or null if none. */
+export async function getLastEngineRun(): Promise<EngineRunRecord | null> {
+  try {
+    const res = await pool.query(
+      `SELECT * FROM signal_engine_runs
+       WHERE church_id = $1
+       ORDER BY ran_at DESC
+       LIMIT 1`,
+      [CHURCH_ID]
+    );
+    if (!res.rows[0]) return null;
+    const r = res.rows[0];
+    return {
+      id:          Number(r.id),
+      churchId:    String(r.church_id),
+      triggeredBy: String(r.triggered_by) as EngineRunRecord["triggeredBy"],
+      processed:   Number(r.processed),
+      created:     Number(r.created),
+      updated:     Number(r.updated),
+      resolved:    Number(r.resolved),
+      ranAt:       String(r.ran_at),
+    };
+  } catch (err) {
+    logger.warn({ err }, "pastoral-store: getLastEngineRun failed (non-fatal)");
+    return null;
+  }
+}
+
 export async function runSignalsEngine(opts?: {
   personId?: string;
   personType?: PersonType;
