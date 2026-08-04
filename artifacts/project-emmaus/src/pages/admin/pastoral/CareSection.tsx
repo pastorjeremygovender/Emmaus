@@ -5,12 +5,14 @@
  *  • one-click dismiss per signal
  *  • "Generate signals" button to scan all completed eligible sessions
  *  • per-person grouping with attendance context
+ *  • session name + date shown on each signal card; click Info to expand full session detail
+ *  • inline "Schedule visit" form per signal
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Heart, RefreshCw, CheckCheck, AlertCircle, Loader2,
-  Calendar, Users, ChevronDown, ChevronUp, CalendarPlus, X,
+  Calendar, Users, ChevronDown, ChevronUp, CalendarPlus, X, Info,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,8 +27,12 @@ function fmtDate(iso: string): string {
   } catch { return iso; }
 }
 
-// ─── Signal card ──────────────────────────────────────────────────────────────
-
+function triggerLabel(trigger: api.CareSignal['trigger']): string {
+  switch (trigger) {
+    case 'missed_session': return 'Missed session';
+    default: return 'Care signal';
+  }
+}
 interface SignalCardProps {
   signal: api.CareSignal;
   onDismiss: (id: string) => void;
@@ -44,14 +50,16 @@ function todayIso(): string {
 }
 
 function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling }: SignalCardProps) {
-  const [showForm, setShowForm]   = useState(false);
-  const [visitDate, setVisitDate] = useState('');
-  const [reason, setReason]       = useState('');
-  const [formError, setFormError] = useState('');
+  const [showForm, setShowForm]     = useState(false);
+  const [expanded, setExpanded]     = useState(false);
+  const [visitDate, setVisitDate]   = useState('');
+  const [reason, setReason]         = useState('');
+  const [formError, setFormError]   = useState('');
   const dateRef = useRef<HTMLInputElement>(null);
   const minDate = todayIso();
 
   const busy = dismissing || scheduling;
+  const hasSessionDetail = !!(signal.meetingTypeName || signal.sessionDate);
 
   const handleOpenForm = () => {
     setFormError('');
@@ -81,15 +89,30 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium text-gray-800 truncate">
-              Missed {signal.meetingTypeName ?? 'session'}
+              {triggerLabel(signal.trigger)}
             </p>
-            <p className="text-[11px] text-gray-400">
-              {signal.sessionDate ? fmtDate(signal.sessionDate) : '—'}
+            {/* Always-visible session summary */}
+            <p className="text-[11px] text-gray-500 truncate">
+              {signal.meetingTypeName ?? 'Unknown meeting'}
+              {signal.sessionDate ? (
+                <span className="text-gray-400"> · {fmtDate(signal.sessionDate)}</span>
+              ) : null}
             </p>
           </div>
         </div>
 
         <div className="shrink-0 flex items-center gap-1.5">
+          {/* Info / session detail toggle */}
+          {hasSessionDetail && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? 'Hide session detail' : 'Show session detail'}
+              className="flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <Info size={12} />
+            </button>
+          )}
+
           {/* Schedule visit */}
           <button
             onClick={handleOpenForm}
@@ -117,6 +140,33 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
           </button>
         </div>
       </div>
+
+      {/* Expanded session detail */}
+      {expanded && hasSessionDetail && (
+        <div className="px-3 pb-3 pt-0">
+          <div className="rounded-md bg-gray-50 border border-gray-100 px-3 py-2 flex flex-col gap-1">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">
+              Session that triggered this alert
+            </p>
+            {signal.meetingTypeName && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-500 w-20 shrink-0">Meeting</span>
+                <span className="text-[11px] font-medium text-gray-800">
+                  {signal.meetingTypeName}
+                </span>
+              </div>
+            )}
+            {signal.sessionDate && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-500 w-20 shrink-0">Date</span>
+                <span className="text-[11px] font-medium text-gray-800">
+                  {fmtDate(signal.sessionDate)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Inline schedule-visit form */}
       {showForm && (
