@@ -459,7 +459,14 @@ function PriorityTodaySection({
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-black/5">
                 <button
-                  onClick={() => onNavigate({ section: 'people', peopleTab: 'signals' })}
+                  onClick={() => onNavigate({
+                    section: 'people',
+                    personDeepLink: {
+                      personId: s.personId,
+                      personType: s.personType,
+                      personName: s.personName,
+                    },
+                  })}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-[11px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   <UserCircle size={11} /> Open Profile

@@ -19,7 +19,7 @@ import PersonPage from './pastoral/PersonPage';
 import CareSection from './pastoral/CareSection';
 import SignalsDashboard from './pastoral/signals/SignalsDashboard';
 import SignalSettings from './pastoral/signals/SignalSettings';
-import type { UnifiedPerson } from '@/lib/pastoral-api';
+import type { UnifiedPerson, PersonType } from '@/lib/pastoral-api';
 
 export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' | 'signals' | 'signal-settings';
 
@@ -38,6 +38,10 @@ type MembersSubView = 'emmaus' | 'all-people';
 interface Props {
   activeTab: PeopleTab;
   onTabChange: (tab: PeopleTab) => void;
+  /** When set, bypass the tab list and open this person's profile directly. */
+  overridePerson?: { personId: string; personType: PersonType; personName?: string };
+  /** Called when the user presses back on the overridePerson profile. Defaults to navigating to the members tab. */
+  onOverridePersonBack?: () => void;
 }
 
 /**
@@ -106,8 +110,34 @@ function MembersTab() {
   );
 }
 
-export default function People({ activeTab, onTabChange }: Props) {
+export default function People({ activeTab, onTabChange, overridePerson, onOverridePersonBack }: Props) {
   const [signalsSelectedPerson, setSignalsSelectedPerson] = useState<UnifiedPerson | null>(null);
+
+  // Deep-link from Pastoral Dashboard → open a person directly, bypassing tabs
+  if (overridePerson) {
+    const syntheticPerson: UnifiedPerson = {
+      id: overridePerson.personId,
+      sourceId: overridePerson.personId,
+      personType: overridePerson.personType,
+      fullName: overridePerson.personName ?? 'Unknown',
+      email: null,
+      phone: null,
+      linkedUserId: null,
+      isLinked: false,
+      subType: overridePerson.personType === 'emmaus_user' ? 'emmaus_user' : 'attendance_only',
+      lastAttendanceDate: null,
+      lastAttendanceStatus: null,
+      churchId: '',
+    };
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <PersonPage
+          person={syntheticPerson}
+          onBack={onOverridePersonBack ?? (() => onTabChange('members'))}
+        />
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (activeTab) {

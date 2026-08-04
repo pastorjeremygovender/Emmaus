@@ -30,6 +30,7 @@ import type { PeopleTab } from './admin/People';
 import Testing from './admin/Testing';
 import BibleStudyAdmin from './admin/BibleStudyAdmin';
 import AuditLog from './admin/AuditLog';
+import type { PersonType } from '@/lib/pastoral-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ export type AdminNav = {
   journeyId?: string;
   // People sub-tab
   peopleTab?: PeopleTab;
+  // People deep-link — open a specific person's profile directly
+  personDeepLink?: { personId: string; personType: PersonType; personName?: string };
 };
 
 // ─── Sidebar nav items (4 only) ───────────────────────────────────────────────
@@ -127,6 +130,12 @@ export default function Admin() {
           <People
             activeTab={nav.peopleTab ?? 'members'}
             onTabChange={(tab) => navigate({ section: 'people', peopleTab: tab })}
+            overridePerson={nav.personDeepLink}
+            onOverridePersonBack={
+              nav.personDeepLink
+                ? () => navigate({ section: 'pastoral-dashboard' })
+                : undefined
+            }
           />
         );
       case 'settings':
