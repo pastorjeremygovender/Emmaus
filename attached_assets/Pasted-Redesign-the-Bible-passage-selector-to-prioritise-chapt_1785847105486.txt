@@ -1,0 +1,179 @@
+Redesign the Bible passage selector to prioritise chapter selection.
+
+CURRENT PROBLEM:
+When the user taps the current passage selector, for example “Ezekiel 16”:
+
+- the Go To panel opens
+- the search field receives focus automatically
+- the keyboard opens
+- the user must close the keyboard
+- then select the book
+- then select the chapter
+
+This is too many steps for the most common action, which is simply changing chapters.
+
+==================================================
+1. DEFAULT OPENING STATE
+==================================================
+
+When the user taps the current passage reference, open the selector directly to the CURRENT BOOK’S CHAPTER GRID.
+
+Example:
+
+Ezekiel
+1   2   3   4   5
+6   7   8   9  10
+11 12 13 14 15
+16 17 18 19 20
+...
+48
+
+The currently open chapter must be visually highlighted.
+
+Do not:
+
+- autofocus the search field
+- open the keyboard
+- begin in the full book list
+- require another tap before showing chapters
+
+The user must be able to move from Ezekiel 16 to Ezekiel 15 or Ezekiel 17 with one additional tap after opening the selector.
+
+==================================================
+2. SELECTOR HEADER
+==================================================
+
+Use a simple header:
+
+Go to Passage
+
+Current book:
+Ezekiel
+
+Provide a secondary action:
+
+Change Book
+
+Tapping “Change Book” opens the Bible book list.
+
+Do not make the book list the default view.
+
+==================================================
+3. CHAPTER GRID
+==================================================
+
+Display chapters in a compact responsive grid similar to the reference screenshot.
+
+Requirements:
+
+- large, easy-to-tap chapter buttons
+- clear chapter numbers
+- current chapter highlighted
+- only valid chapters for the selected book
+- no unnecessary descriptions or chevrons
+- no “Intro” button unless Emmaus actually contains useful book-introduction content
+
+When a chapter is tapped:
+
+- close the selector immediately
+- load the chosen chapter
+- retain the current Bible translation
+- scroll the Bible reader to the top
+- do not navigate away from the Bible reader
+
+==================================================
+4. CHANGE BOOK FLOW
+==================================================
+
+When the user taps “Change Book”, show a clean list of Bible books.
+
+The search field may appear here, but:
+
+- it must not autofocus
+- the keyboard must not open automatically
+- the user must deliberately tap the search field before typing
+
+Organise the list under:
+
+- Old Testament
+- New Testament
+
+A selected book must open its chapter grid inside the same selector.
+
+Do not immediately close the selector after choosing a book.
+
+Flow:
+
+Tap passage selector
+→ current book chapter grid
+→ Change Book
+→ select book
+→ selected book chapter grid
+→ select chapter
+→ return to Bible reader
+
+==================================================
+5. SEARCH BEHAVIOUR
+==================================================
+
+Search is optional and secondary.
+
+Search should allow entries such as:
+
+- John
+- Romans
+- Psalm
+- Ezekiel
+- John 3
+- Romans 8
+- Psalm 23
+
+Only open the keyboard after the user explicitly taps the search field.
+
+If the search includes a valid book and chapter, selecting the result should load it directly.
+
+==================================================
+6. BACK BEHAVIOUR
+==================================================
+
+Inside the selector:
+
+- From book list, Back returns to the current book’s chapter grid.
+- Close dismisses the selector and leaves the current passage unchanged.
+- Android system Back should behave the same way.
+
+==================================================
+7. ACCEPTANCE TESTS
+==================================================
+
+TEST 1:
+Open Ezekiel 16 and tap “Ezekiel 16”.
+
+Expected:
+The Ezekiel chapter grid appears immediately.
+The keyboard does not open.
+
+TEST 2:
+Tap chapter 15.
+
+Expected:
+The selector closes and Ezekiel 15 loads.
+
+TEST 3:
+Open the selector again and tap Change Book.
+
+Expected:
+The book list appears.
+The keyboard remains closed.
+
+TEST 4:
+Select Romans.
+
+Expected:
+The Romans chapter grid appears inside the selector.
+
+TEST 5:
+Tap Romans 8.
+
+Expected:
+Romans 
