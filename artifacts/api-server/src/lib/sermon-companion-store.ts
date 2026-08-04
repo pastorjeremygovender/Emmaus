@@ -36,6 +36,8 @@ export interface Companion {
   /** Canonical sermon UUID (sermons.id) — null when companion was created before the sermons table existed. */
   sermonUuid?: string | null;
   title: string;
+  /** Admin-authored companion-level introduction shown at the top of the member overview. */
+  description: string;
   numberOfDays: number;
   status: string;
   isCurrentWeek: boolean;
@@ -323,12 +325,13 @@ type CompanionStatus = typeof ALLOWED_COMPANION_STATUSES[number];
 
 export async function updateCompanion(
   id: string,
-  patch: { title?: string; status?: CompanionStatus }
+  patch: { title?: string; description?: string; status?: CompanionStatus }
 ): Promise<void> {
   const sets: string[] = [];
   const vals: unknown[] = [];
   let idx = 1;
   if (patch.title !== undefined) { sets.push(`title = $${idx++}`); vals.push(patch.title); }
+  if (patch.description !== undefined) { sets.push(`description = $${idx++}`); vals.push(patch.description); }
   if (patch.status !== undefined) {
     if (!ALLOWED_COMPANION_STATUSES.includes(patch.status)) {
       throw new Error(`Invalid status: ${patch.status}`);
@@ -457,6 +460,7 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     sermonId: String(row.sermon_id),
     sermonUuid: row.sermon_uuid != null ? String(row.sermon_uuid) : null,
     title: String(row.title ?? ''),
+    description: String(row.description ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
     status: String(row.status ?? 'Draft'),
     isCurrentWeek: row.is_current_week === true || row.is_current_week === 'true',

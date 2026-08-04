@@ -95,6 +95,7 @@ const EMPTY_SERMON: Omit<Sermon, 'id'> = {
 function CompanionDayEditor({
   companionId,
   companionTitle,
+  companionDescription: initialDescription,
   entries,
   auth,
   companionStatus,
@@ -106,6 +107,7 @@ function CompanionDayEditor({
 }: {
   companionId: string;
   companionTitle: string;
+  companionDescription: string;
   entries: CompanionEntry[];
   auth: { userId: string; userRole: string };
   companionStatus: string;
@@ -123,6 +125,32 @@ function CompanionDayEditor({
   const [errorMsg, setErrorMsg] = useState('');
   const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<Partial<CompanionEntry> | null>(null);
+
+  // Companion-level description (intro shown on the member overview page)
+  const [description, setDescription] = useState(initialDescription);
+  const descAutosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDescriptionChange = (val: string) => {
+    setDescription(val);
+    if (descAutosaveRef.current) clearTimeout(descAutosaveRef.current);
+    descAutosaveRef.current = setTimeout(async () => {
+      try {
+        const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+        await fetch(`${BASE}/api/sermon-companions/${companionId}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-Id': auth.userId,
+            'X-User-Role': auth.userRole,
+          },
+          body: JSON.stringify({ description: val }),
+        });
+      } catch {
+        // Silent autosave failure
+      }
+    }, 1200);
+  };
 
   const current = localEntries.find(e => e.dayNumber === selectedDay);
 
@@ -296,6 +324,17 @@ function CompanionDayEditor({
             <AlertCircle size={12} className="text-amber-500 flex-shrink-0" />
             All companion days are saved as Draft. Pastoral review required before publishing.
           </div>
+
+          <Field label="Companion Introduction">
+            <textarea
+              value={description}
+              onChange={e => handleDescriptionChange(e.target.value)}
+              rows={4}
+              placeholder="Write a brief introduction for this companion — what the sermon was about and why this companion will help members go deeper…"
+              className={TextareaCls}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Shown at the top of the member overview. Auto-saved. Falls back to the sermon summary if left empty.</p>
+          </Field>
 
           <Field label="Title">
             <input value={current.title} onChange={e => patchEntry('title', e.target.value)}
@@ -2116,6 +2155,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
             <CompanionDayEditor
               companionId={companionData.id}
               companionTitle={companionData.title}
+              companionDescription={(companionData as any).description ?? ''}
               entries={companionData.entries}
               auth={auth!}
               companionStatus={companionStatusLocal}

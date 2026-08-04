@@ -76,6 +76,16 @@ export async function runStartupMigrations(): Promise<void> {
 
   try {
     await pool.query(`
+      ALTER TABLE sermon_companion
+        ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
+    `);
+    logger.info("Startup migration: sermon_companion.description column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: sermon_companion.description column failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS sermon_companion (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         sermon_id text NOT NULL,

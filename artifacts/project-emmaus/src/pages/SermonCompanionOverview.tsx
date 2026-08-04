@@ -29,6 +29,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   setActiveSermonCompanionContext,
 } from '@/lib/sermon-companion-context';
+import {
+  setPendingContext,
+  setReturnDestination,
+  sourceSectionFromPath,
+} from '@/lib/emmaus-pending';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -64,6 +69,8 @@ interface SCProgress {
 interface MemberCompanion {
   id: string;
   title: string;
+  /** Admin-authored companion-level introduction (from sermon_companion.description). */
+  description: string;
   numberOfDays: number;
   entries: SCEntry[];
   progress: SCProgress | null;
@@ -296,6 +303,9 @@ export default function SermonCompanionOverview() {
   // Transcript modal
   const [showTranscript, setShowTranscript] = useState(false);
 
+  // §1 — Always start at the top when the companion changes
+  useEffect(() => { window.scrollTo(0, 0); }, [companionId]);
+
   // ── Data load ─────────────────────────────────────────────────────────────
 
   const load = useCallback(async () => {
@@ -347,6 +357,18 @@ export default function SermonCompanionOverview() {
 
   const { sermonTitle, subtitle } = parseTitle(companion?.title ?? '');
   const sermon                    = companion?.sermon ?? null;
+
+  // §3 — Companion intro: admin-written description > sermon summary > generic fallback
+  const introText = companion?.description?.trim() || sermon?.summary?.trim() || null;
+
+  // §6 — Related scriptures: unique non-empty references across all published entries
+  const relatedScriptures = Array.from(
+    new Set(
+      entries
+        .map(e => e.scriptureReference?.trim())
+        .filter((s): s is string => !!s),
+    ),
+  );
 
   const nextEntry = !isComplete
     ? entries.find(e => e.dayNumber === currentDay)
@@ -462,8 +484,6 @@ export default function SermonCompanionOverview() {
 
   // ── Full render ───────────────────────────────────────────────────────────
 
-  const hasSermonIdentity = !!(sermon?.speaker || sermon?.sermonDate || sermon?.scriptureReference || sermon?.mainTheme);
-  const introText = sermon?.summary?.trim() || null;
   const showListen = !!(sermon?.hasAudio && sermon?.sermonId);
   const showWatch  = !!sermon?.youtubeUrl;
   const showRead   = !!sermon?.hasTranscript;
@@ -488,64 +508,50 @@ export default function SermonCompanionOverview() {
 
       <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-5 pb-10">
 
-        {/* ── 1. Title block ─────────────────────────────────────────────── */}
-        <div className="space-y-1.5">
-          {sermon?.series && (
-            <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-              {sermon.series}
-            </p>
-          )}
-          <h1 className="text-[22px] font-bold text-foreground leading-tight">
+        {/* ── §1 + §2: THIS WEEK'S SERMON identity block ─────────────────── */}
+        <div className="space-y-3">
+          <p className="text-[11px] font-semibold tracking-widest text-primary uppercase">
+            THIS WEEK'S SERMON
+          </p>
+
+          <h1 className="text-[24px] font-bold text-foreground leading-tight">
             {sermonTitle || companion.title}
           </h1>
-          {subtitle && (
-            <p className="text-[15px] text-primary font-medium">{subtitle}</p>
+
+          {(sermon?.speaker || sermon?.sermonDate) && (
+            <div className="space-y-0.5">
+              {sermon?.speaker && (
+                <p className="text-[15px] text-foreground font-medium">{sermon.speaker}</p>
+              )}
+              {sermon?.sermonDate && (
+                <p className="text-[14px] text-muted-foreground">{formatDate(sermon.sermonDate)}</p>
+              )}
+            </div>
+          )}
+
+          {(sermon?.scriptureReference || sermon?.mainTheme) && (
+            <div className="space-y-2 pt-1">
+              {sermon?.scriptureReference && (
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                    Main Scripture
+                  </p>
+                  <p className="text-[14px] text-foreground">{sermon.scriptureReference}</p>
+                </div>
+              )}
+              {sermon?.mainTheme && (
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+                    Main Theme
+                  </p>
+                  <p className="text-[14px] text-foreground leading-snug">{sermon.mainTheme}</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* ── 2. Sermon Identity card ────────────────────────────────────── */}
-        {hasSermonIdentity && (
-          <div className="rounded-2xl border border-border bg-muted/30 divide-y divide-border/60 overflow-hidden">
-            {sermon?.speaker && (
-              <div className="flex items-start gap-3 px-4 py-3">
-                <User size={13} className="text-muted-foreground shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Speaker</p>
-                  <p className="text-[14px] font-medium text-foreground">{sermon.speaker}</p>
-                </div>
-              </div>
-            )}
-            {sermon?.sermonDate && (
-              <div className="flex items-start gap-3 px-4 py-3">
-                <Calendar size={13} className="text-muted-foreground shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Date</p>
-                  <p className="text-[14px] font-medium text-foreground">{formatDate(sermon.sermonDate)}</p>
-                </div>
-              </div>
-            )}
-            {sermon?.scriptureReference && (
-              <div className="flex items-start gap-3 px-4 py-3">
-                <BookOpen size={13} className="text-muted-foreground shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Main Scripture</p>
-                  <p className="text-[14px] font-medium text-foreground">{sermon.scriptureReference}</p>
-                </div>
-              </div>
-            )}
-            {sermon?.mainTheme && (
-              <div className="flex items-start gap-3 px-4 py-3">
-                <Hash size={13} className="text-muted-foreground shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Theme</p>
-                  <p className="text-[14px] font-medium text-foreground">{sermon.mainTheme}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── 3. Introduction ────────────────────────────────────────────── */}
+        {/* ── §3. Introduction ────────────────────────────────────────────── */}
         <p className="text-[14px] text-muted-foreground leading-relaxed">
           {introText ??
             `A ${totalSteps}-step companion based on this week's sermon — designed to help you reflect, respond and live it out.`}
@@ -709,29 +715,69 @@ export default function SermonCompanionOverview() {
           </button>
         )}
 
-        {/* ── 8. Related Resources ───────────────────────────────────────── */}
+        {/* ── §6 + §7: CONTINUE EXPLORING ────────────────────────────────── */}
         <div className="space-y-2 pt-2">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-            Related Resources
+            Continue Exploring
           </p>
           <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border/60">
-            {/* Ask Emmaus about this sermon */}
+
+            {/* §7 — Ask Emmaus with sermon context pre-loaded */}
             <button
-              onClick={() => setLocation('/personal/ask-emmaus')}
+              onClick={() => {
+                const ctx = {
+                  entryPoint: 'personal' as const,
+                  sermonId: sermon?.sermonId,
+                  sermonTitle: sermonTitle || companion.title,
+                  scriptureReference: sermon?.scriptureReference,
+                  chapterHeading: sermonTitle || companion.title,
+                  userName: user?.preferredName,
+                };
+                setPendingContext(ctx);
+                setReturnDestination({
+                  pathname: `/sermon-companion/${companionId}/overview?source=${source}`,
+                  scrollY: window.scrollY,
+                  sourceSection: sourceSectionFromPath(window.location.pathname),
+                });
+                setLocation('/personal/ask-emmaus');
+              }}
               className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/60 transition-colors"
             >
               <MessageSquare size={15} className="text-primary shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-medium text-foreground">Ask Emmaus about this sermon</p>
                 <p className="text-[12px] text-muted-foreground">
-                  Get deeper insights, questions answered
+                  {sermonTitle ? `Discussing: ${sermonTitle}` : 'Get deeper insights, questions answered'}
                 </p>
               </div>
               <ChevronRight size={14} className="text-muted-foreground shrink-0" />
             </button>
 
-            {/* Open main scripture in Bible reader */}
-            {sermon?.scriptureReference && (
+            {/* §6 — Related Scriptures: unique refs from published companion steps */}
+            {relatedScriptures.length > 0 && (
+              <div className="px-4 py-3.5">
+                <div className="flex items-start gap-3">
+                  <BookOpen size={15} className="text-primary shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium text-foreground mb-2">Related Scriptures</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {relatedScriptures.map(ref => (
+                        <button
+                          key={ref}
+                          onClick={() => setLocation('/bible')}
+                          className="px-2.5 py-1 rounded-lg bg-primary/8 border border-primary/15 text-[12px] font-medium text-primary hover:bg-primary/14 transition-colors"
+                        >
+                          {ref}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Open main sermon scripture in Bible reader */}
+            {sermon?.scriptureReference && !relatedScriptures.includes(sermon.scriptureReference) && (
               <button
                 onClick={() => setLocation('/bible')}
                 className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/60 transition-colors"
