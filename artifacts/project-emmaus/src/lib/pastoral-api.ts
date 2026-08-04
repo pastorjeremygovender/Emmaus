@@ -369,10 +369,20 @@ export const dismissCareSignal = (auth: AuthHeaders, id: string) =>
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
-export const getPastoralAuditLog = (auth: AuthHeaders, opts?: { personId?: string; entityType?: string; limit?: number }) => {
+export const getPastoralAuditLog = (auth: AuthHeaders, opts?: {
+  personId?: string;
+  sessionId?: string;
+  entityType?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+}) => {
   const p = new URLSearchParams();
   if (opts?.personId)   p.set("personId",   opts.personId);
+  if (opts?.sessionId)  p.set("sessionId",  opts.sessionId);
   if (opts?.entityType) p.set("entityType", opts.entityType);
+  if (opts?.dateFrom)   p.set("dateFrom",   opts.dateFrom);
+  if (opts?.dateTo)     p.set("dateTo",     opts.dateTo);
   if (opts?.limit)      p.set("limit",      String(opts.limit));
   return apiFetch<PastoralAuditEntry[]>(`/audit-log${p.toString() ? `?${p}` : ""}`, "GET", auth);
 };

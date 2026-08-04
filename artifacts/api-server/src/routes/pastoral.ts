@@ -722,7 +722,10 @@ pastoralRouter.get("/audit-log", async (req: Request, res: Response) => {
       entityType: req.query.entityType ? String(req.query.entityType) : undefined,
       entityId:   req.query.entityId   ? String(req.query.entityId)   : undefined,
       personId:   req.query.personId   ? String(req.query.personId)   : undefined,
-      limit:      req.query.limit      ? Number(req.query.limit)      : 100,
+      sessionId:  req.query.sessionId  ? String(req.query.sessionId)  : undefined,
+      dateFrom:   req.query.dateFrom   ? String(req.query.dateFrom)   : undefined,
+      dateTo:     req.query.dateTo     ? String(req.query.dateTo)     : undefined,
+      limit:      req.query.limit      ? Number(req.query.limit)      : 200,
     });
     res.json(log);
   } catch (err) {

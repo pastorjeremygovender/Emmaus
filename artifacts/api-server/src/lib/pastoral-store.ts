@@ -1042,6 +1042,9 @@ export async function getPastoralAuditLog(opts: {
   entityType?: string;
   entityId?: string;
   personId?: string;
+  sessionId?: string;
+  dateFrom?: string;
+  dateTo?: string;
   limit?: number;
 }): Promise<Array<{
   id: string;
@@ -1062,7 +1065,10 @@ export async function getPastoralAuditLog(opts: {
   if (opts.entityType) { conditions.push(`entity_type = $${idx++}`); vals.push(opts.entityType); }
   if (opts.entityId)   { conditions.push(`entity_id = $${idx++}`);   vals.push(opts.entityId); }
   if (opts.personId)   { conditions.push(`person_id = $${idx++}`);   vals.push(opts.personId); }
-  vals.push(opts.limit ?? 100);
+  if (opts.sessionId)  { conditions.push(`session_id = $${idx++}`);  vals.push(opts.sessionId); }
+  if (opts.dateFrom)   { conditions.push(`changed_at >= $${idx++}`); vals.push(opts.dateFrom); }
+  if (opts.dateTo)     { conditions.push(`changed_at < $${idx++}`);  vals.push(opts.dateTo); }
+  vals.push(opts.limit ?? 200);
   const res = await pool.query(
     `SELECT * FROM pastoral_audit_log WHERE ${conditions.join(" AND ")}
      ORDER BY changed_at DESC LIMIT $${idx}`,

@@ -3,13 +3,14 @@
  */
 
 import React, { useState } from 'react';
-import { Settings2, CalendarDays, ClipboardCheck } from 'lucide-react';
+import { Settings2, CalendarDays, ShieldCheck } from 'lucide-react';
 import MeetingTypes from './MeetingTypes';
 import Sessions from './Sessions';
 import AttendanceRegister from './AttendanceRegister';
+import PastoralAuditLog from './PastoralAuditLog';
 import type { MeetingSession } from '@/lib/pastoral-api';
 
-type SubView = 'types' | 'sessions' | 'register';
+type SubView = 'types' | 'sessions' | 'register' | 'audit';
 
 export default function AttendanceSection() {
   const [subView, setSubView]             = useState<SubView>('sessions');
@@ -27,6 +28,7 @@ export default function AttendanceSection() {
   const tabs: { id: SubView; label: string; Icon: React.ElementType }[] = [
     { id: 'sessions', label: 'Sessions',      Icon: CalendarDays },
     { id: 'types',    label: 'Meeting Types', Icon: Settings2 },
+    { id: 'audit',    label: 'Audit Log',     Icon: ShieldCheck },
   ];
 
   return (
@@ -53,6 +55,7 @@ export default function AttendanceSection() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {subView === 'types'    && <MeetingTypes />}
+        {subView === 'audit'    && <PastoralAuditLog />}
         {subView === 'sessions' && (
           <Sessions
             onOpenRegister={(session) => {
