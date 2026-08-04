@@ -19,6 +19,7 @@ import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
 import { logAuditEvent } from "../lib/audit-log.js";
+import { upsertKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
 
 export const sermonCompanionsRouter = Router();
 
@@ -45,7 +46,7 @@ sermonCompanionsRouter.get("/current-week/member", async (req: Request, res: Res
   if (!userId) return;
 
   try {
-    const companion = await store.getCurrentWeekPublicCompanion();
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "No current week sermon companion" });
       return;
@@ -72,7 +73,7 @@ sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Reques
 
   const companionId = String(req.params.companionId);
   try {
-    const companion = await store.getCompanionById(companionId);
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "Sermon companion not found" });
       return;
@@ -170,7 +171,7 @@ sermonCompanionsRouter.get("/by-sermon/:sermonId", async (req: Request, res: Res
   if (!adminId) return;
 
   try {
-    const companion = await store.getCompanionBySermonId(String(req.params.sermonId));
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "No companion found for this sermon" });
       return;
@@ -189,7 +190,7 @@ sermonCompanionsRouter.get("/:companionId", async (req: Request, res: Response) 
   if (!adminId) return;
 
   try {
-    const companion = await store.getCompanionById(String(req.params.companionId));
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "Companion not found" });
       return;
@@ -281,24 +282,20 @@ sermonCompanionsRouter.get("/:companionId/progress", async (req: Request, res: R
   if (!userId) return;
 
   try {
-    const prog = await store.getProgressForUser(userId, String(req.params.companionId));
-    if (!prog) {
-      res.status(404).json({ error: "No progress found" });
-      return;
-    }
+    const prog = await store.markDayComplete(userId, String(req.params.companionId), dayNumber);
     res.json(prog);
   } catch (err) {
-    logger.error({ err }, "sermon-companions: getProgress failed");
+    logger.error({ err }, "sermon-companions: startCompanion failed");
     res.status(500).json({ error: "Server error" });
   }
 });
 
-sermonCompanionsRouter.post("/:companionId/progress/start", async (req: Request, res: Response) => {
+sermonCompanionsRouter.post("/:companionId/progress/complete-day", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
   try {
-    const prog = await store.startCompanion(userId, String(req.params.companionId));
+    const prog = await store.markDayComplete(userId, String(req.params.companionId), dayNumber);
     res.json(prog);
   } catch (err) {
     logger.error({ err }, "sermon-companions: startCompanion failed");
@@ -341,26 +338,6 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
   try {
     const id = String(req.params.companionId);
     const notifyMembers = req.body?.notifyMembers === true;
-    // P2-12: use atomic helper so companion header + entries publish in a single transaction
-    await store.publishCompanionAtomic(id, notifyMembers);
-    await logAuditEvent({
-      contentType: "sermon_companion",
-      contentId: id,
-      action: "publish",
-      performedBy: adminId,
-      previousState: null,
-      newState: { status: "Published" },
-    });
-    res.json({ ok: true, status: "Published" });
-  } catch (err) {
-    logger.error({ err }, "sermon-companions: publish failed");
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ─── POST /:companionId/unpublish ─────────────────────────────────────────────
-
-sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
   if (!adminId) return;
 
@@ -390,13 +367,18 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
 sermonCompanionsRouter.get("/:companionId/transcript", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
+
   try {
     const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion?.sermonUuid) {
       res.status(404).json({ error: "No sermon linked to this companion" });
       return;
     }
-    const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+      const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+
+        const publishedEntries = (companion.entries ?? []).filter(
+          (e) => e.status === "Published",
+        );
     if (!canonical?.transcript?.trim()) {
       res.status(404).json({ error: "No transcript available" });
       return;
@@ -441,6 +423,10 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
 
     if (companion.sermonUuid) {
       const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+
+        const publishedEntries = (companion.entries ?? []).filter(
+          (e) => e.status === "Published",
+        );
       if (canonical) {
         sermon = {
           sermonId:           canonical.id,
@@ -464,3 +450,14 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
     res.status(500).json({ error: "Server error" });
   }
 });
+
+        const prayerThemes = publishedEntries
+          .map((e) => e.prayer)
+          .filter(Boolean)
+          .join(" ");
+
+        const stepTitles = publishedEntries.map((e) => e.title).filter(Boolean);
+
+        const stepContent = publishedEntries
+          .map((e) => [e.greeting, e.reflection, e.nextStep, e.closing].filter(Boolean).join(" "))
+          .join(" ");

@@ -33,6 +33,8 @@ export interface CompanionEntry {
 export interface Companion {
   id: string;
   sermonId: string;
+  /** Canonical sermon UUID (sermons.id) — null when companion was created before the sermons table existed. */
+  sermonUuid?: string | null;
   title: string;
   numberOfDays: number;
   status: string;
@@ -453,6 +455,7 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
   return {
     id: String(row.id),
     sermonId: String(row.sermon_id),
+    sermonUuid: row.sermon_uuid != null ? String(row.sermon_uuid) : null,
     title: String(row.title ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
     status: String(row.status ?? 'Draft'),

@@ -694,6 +694,43 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: sermon processing stage columns ensured (idempotent)");
   }
 
+  // ── Emmaus Knowledge Index (2026-08) ─────────────────────────────────────────
+  // Stores enriched sermon + companion data so Ask Emmaus and search can match
+  // on step content, prayer themes, and teaching points — not just the top-level
+  // sermon metadata on the canonical sermons table.
+  // Upserted automatically when a companion or sermon is published.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS emmaus_knowledge_index (
+        id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        sermon_id           TEXT NOT NULL UNIQUE,
+        companion_id        UUID,
+        title               TEXT NOT NULL DEFAULT '',
+        speaker             TEXT NOT NULL DEFAULT '',
+        sermon_date         TEXT NOT NULL DEFAULT '',
+        series              TEXT NOT NULL DEFAULT '',
+        scripture_reference TEXT NOT NULL DEFAULT '',
+        scripture_book_ids  JSONB NOT NULL DEFAULT '[]',
+        scripture_chapters  JSONB NOT NULL DEFAULT '[]',
+        themes              JSONB NOT NULL DEFAULT '[]',
+        keywords            JSONB NOT NULL DEFAULT '[]',
+        main_theme          TEXT NOT NULL DEFAULT '',
+        summary             TEXT NOT NULL DEFAULT '',
+        step_titles         JSONB NOT NULL DEFAULT '[]',
+        step_content        TEXT NOT NULL DEFAULT '',
+        prayer_themes       TEXT NOT NULL DEFAULT '',
+        youtube_url         TEXT NOT NULL DEFAULT '',
+        audio_path          TEXT NOT NULL DEFAULT '',
+        published_at        TIMESTAMPTZ,
+        indexed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    logger.info("Startup migration: emmaus_knowledge_index table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: emmaus_knowledge_index table failed (non-fatal)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate

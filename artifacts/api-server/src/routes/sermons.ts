@@ -31,6 +31,7 @@ import { deleteSermonCompanionContent } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
+import { upsertKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
 
 export const sermonsRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -227,6 +228,34 @@ sermonsRouter.patch("/admin/:id", async (req: Request, res: Response) => {
       res.status(404).json({ error: "Sermon not found" });
       return;
     }
+
+    // ── Re-index when the sermon is already Published (propagate title/speaker/scripture) ──
+    // Only re-index Published sermons to keep the index clean. Draft/Review edits
+    // are not indexed — they will be indexed when the sermon is eventually published.
+    if (updated.status === "Published") {
+      upsertKnowledgeIndex({
+        sermonId:           updated.id,
+        companionId:        null,  // companion upsert preserves its own companionId
+        title:              updated.title,
+        speaker:            updated.speaker,
+        sermonDate:         updated.sermonDate,
+        series:             updated.series,
+        scriptureReference: updated.scriptureReference,
+        scriptureBookIds:   updated.scriptureBookIds,
+        scriptureChapters:  updated.scriptureChapters,
+        themes:             updated.themes,
+        keywords:           updated.keywords,
+        mainTheme:          updated.mainTheme,
+        summary:            updated.summary,
+        stepTitles:         [],
+        stepContent:        "",
+        prayerThemes:       "",
+        youtubeUrl:         updated.youtubeUrl,
+        audioPath:          updated.audioPath,
+        publishedAt:        updated.publishedAt,
+      }).catch(err => logger.warn({ err, sermonId: id }, "sermons: knowledge index re-index failed (non-fatal)"));
+    }
+
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "sermons: update failed");
@@ -245,6 +274,32 @@ sermonsRouter.post("/admin/:id/publish", async (req: Request, res: Response) => 
       res.status(404).json({ error: "Sermon not found" });
       return;
     }
+
+    // ── Index into Emmaus Knowledge Index (fire-and-forget) ──────────────────
+    // Indexes sermon metadata only; step content is added when the companion publishes.
+    // Non-blocking — failure never prevents the publish from succeeding.
+    upsertKnowledgeIndex({
+      sermonId:           sermon.id,
+      companionId:        null,
+      title:              sermon.title,
+      speaker:            sermon.speaker,
+      sermonDate:         sermon.sermonDate,
+      series:             sermon.series,
+      scriptureReference: sermon.scriptureReference,
+      scriptureBookIds:   sermon.scriptureBookIds,
+      scriptureChapters:  sermon.scriptureChapters,
+      themes:             sermon.themes,
+      keywords:           sermon.keywords,
+      mainTheme:          sermon.mainTheme,
+      summary:            sermon.summary,
+      stepTitles:         [],
+      stepContent:        "",
+      prayerThemes:       "",
+      youtubeUrl:         sermon.youtubeUrl,
+      audioPath:          sermon.audioPath,
+      publishedAt:        sermon.publishedAt,
+    }).catch(err => logger.warn({ err, sermonId: id }, "sermons: knowledge index upsert failed (non-fatal)"));
+
     res.json(sermon);
   } catch (err) {
     logger.error({ err }, "sermons: publish failed");

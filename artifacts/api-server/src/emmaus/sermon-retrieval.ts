@@ -27,6 +27,7 @@ import {
   getPublishedYoutubeVideoIds,
   type CanonicalSermon,
 } from "../lib/canonical-sermon-store.js";
+import { searchKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
 
 // ─── Verified Sermon Registry (hardcoded demo fallback) ───────────────────────
 //
@@ -243,7 +244,51 @@ export async function retrieveSermon(
     logger.warn({ err: String(err) }, "Canonical sermon retrieval failed — falling back to archive");
   }
 
-  // ── 2. YouTube Archive search (suppress canonical-linked videos) ──────────
+  // ── 2. Knowledge Index search (richer step/reflection content matching) ───
+  //
+  // The knowledge index stores companion step text, prayer themes, and teaching
+  // points that the canonical sermons table does not expose. It can surface a
+  // match when the query references something specific from a companion step
+  // rather than the top-level sermon metadata.
+  //
+  // Only runs when the canonical DB query found no result (score below threshold).
+
+  try {
+    const indexResults = await Promise.race([
+      searchKnowledgeIndex(query, bibleBookId, bibleChapter),
+      new Promise<null>((r) => setTimeout(() => r(null), RETRIEVAL_TIMEOUT_MS)),
+    ]);
+
+    if (indexResults && indexResults.length > 0) {
+      const best = indexResults[0];
+      if (best.score >= minScore) {
+        logger.info(
+          { source: "knowledge-index", sermonId: best.sermonId, score: best.score, ms: Date.now() - tStart },
+          "Sermon retrieved from knowledge index"
+        );
+        const audioUrl = best.audioPath
+          ? `${process.env.BASE_URL ?? ""}/storage/objects/${best.audioPath.replace(/^\/objects\//, "")}`
+          : undefined;
+        return {
+          sermonId: best.sermonId,
+          title: best.title,
+          speaker: best.speaker,
+          sermonDate: best.sermonDate,
+          series: best.series || undefined,
+          scriptureReference: best.scriptureReference,
+          youtubeUrl: best.youtubeUrl,
+          timestampedUrl: best.youtubeUrl,
+          summary: best.summary || best.mainTheme,
+          source: "canonical",
+          audioUrl,
+        };
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: String(err) }, "Knowledge index search failed — falling back to archive");
+  }
+
+  // ── 3. YouTube Archive search (suppress canonical-linked videos) ──────────
 
   // Fetch the set of youtube_video_ids covered by canonical sermons so we
   // don't return both a canonical card AND an archive card for the same sermon.
@@ -259,7 +304,7 @@ export async function retrieveSermon(
     ]);
 
     if (archiveResults && archiveResults.length > 0) {
-      // Skip results whose video is already covered by a canonical sermon
+      // Skip results whose video is already covered by a canonical sermon or knowledge index
       const best = archiveResults.find(r => !suppressedVideoIds.has(r.sermonId));
       if (best) {
         logger.info(
