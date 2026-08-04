@@ -21,6 +21,7 @@ import { auditLogRouter } from "./audit-log";
 import prodMigrationRouter from "./prod-migration";
 import storageRouter from "./storage";
 import { sermonsRouter } from "./sermons";
+import { pastoralRouter } from "./pastoral";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(badgesRouter);
 router.use(auditLogRouter);
 router.use(prodMigrationRouter);
 router.use("/sermons", sermonsRouter);
+router.use("/pastoral", pastoralRouter);
 
 export default router;

@@ -34,3 +34,4 @@
 - [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
 - [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
+- [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.

@@ -805,6 +805,183 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: content inventory check failed (non-fatal)");
   }
 
+  // ── Pastoral Care — Phase 1 tables ───────────────────────────────────────
+
+  try {
+    await pool.query(`
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS pastoral_role TEXT;
+    `);
+    logger.info("Startup migration: user_profiles.pastoral_role column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_profiles.pastoral_role failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pastoral_persons (
+        id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id    TEXT        NOT NULL DEFAULT 'icc',
+        full_name    TEXT        NOT NULL,
+        display_name TEXT        NOT NULL DEFAULT '',
+        email        TEXT,
+        phone        TEXT,
+        linked_user_id TEXT,
+        person_type  TEXT        NOT NULL DEFAULT 'attendance_only'
+                     CHECK (person_type IN ('attendance_only','visitor')),
+        notes        TEXT        NOT NULL DEFAULT '',
+        is_active    BOOLEAN     NOT NULL DEFAULT true,
+        created_by   TEXT        NOT NULL DEFAULT '',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (church_id, linked_user_id)
+      );
+      CREATE INDEX IF NOT EXISTS pastoral_persons_church_idx
+        ON pastoral_persons (church_id);
+      CREATE INDEX IF NOT EXISTS pastoral_persons_linked_user_idx
+        ON pastoral_persons (linked_user_id)
+        WHERE linked_user_id IS NOT NULL;
+    `);
+    logger.info("Startup migration: pastoral_persons table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: pastoral_persons table failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meeting_types (
+        id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id            TEXT        NOT NULL DEFAULT 'icc',
+        name                 TEXT        NOT NULL,
+        category             TEXT        NOT NULL DEFAULT 'general',
+        description          TEXT        NOT NULL DEFAULT '',
+        usual_day            TEXT,
+        usual_time           TEXT,
+        responsible_ministry TEXT,
+        is_active            BOOLEAN     NOT NULL DEFAULT true,
+        track_attendance     BOOLEAN     NOT NULL DEFAULT true,
+        care_signal_enabled  BOOLEAN     NOT NULL DEFAULT false,
+        is_sensitive         BOOLEAN     NOT NULL DEFAULT false,
+        created_by           TEXT        NOT NULL DEFAULT '',
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS meeting_types_church_idx
+        ON meeting_types (church_id, is_active);
+    `);
+    logger.info("Startup migration: meeting_types table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: meeting_types table failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meeting_sessions (
+        id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id       TEXT        NOT NULL DEFAULT 'icc',
+        meeting_type_id UUID        NOT NULL REFERENCES meeting_types(id),
+        session_date    DATE        NOT NULL,
+        start_time      TEXT,
+        location        TEXT        NOT NULL DEFAULT '',
+        notes           TEXT        NOT NULL DEFAULT '',
+        status          TEXT        NOT NULL DEFAULT 'scheduled'
+                        CHECK (status IN ('scheduled','completed','cancelled')),
+        created_by      TEXT        NOT NULL DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS meeting_sessions_church_date_idx
+        ON meeting_sessions (church_id, session_date DESC);
+      CREATE INDEX IF NOT EXISTS meeting_sessions_type_idx
+        ON meeting_sessions (meeting_type_id);
+    `);
+    logger.info("Startup migration: meeting_sessions table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: meeting_sessions table failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS attendance_records (
+        id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id   TEXT        NOT NULL DEFAULT 'icc',
+        session_id  UUID        NOT NULL REFERENCES meeting_sessions(id) ON DELETE CASCADE,
+        person_id   TEXT        NOT NULL,
+        person_type TEXT        NOT NULL
+                    CHECK (person_type IN ('emmaus_user','pastoral_person')),
+        status      TEXT        NOT NULL
+                    CHECK (status IN ('present','visitor','apology','absent','not_expected')),
+        recorded_by TEXT        NOT NULL DEFAULT '',
+        recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_by  TEXT,
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (session_id, person_id, person_type)
+      );
+      CREATE INDEX IF NOT EXISTS attendance_records_session_idx
+        ON attendance_records (session_id);
+      CREATE INDEX IF NOT EXISTS attendance_records_person_idx
+        ON attendance_records (person_id, person_type);
+      CREATE INDEX IF NOT EXISTS attendance_records_status_idx
+        ON attendance_records (church_id, status);
+    `);
+    logger.info("Startup migration: attendance_records table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: attendance_records table failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS person_attendance_expectations (
+        id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id       TEXT        NOT NULL DEFAULT 'icc',
+        person_id       TEXT        NOT NULL,
+        person_type     TEXT        NOT NULL
+                        CHECK (person_type IN ('emmaus_user','pastoral_person')),
+        meeting_type_id UUID        NOT NULL REFERENCES meeting_types(id) ON DELETE CASCADE,
+        expectation     TEXT        NOT NULL DEFAULT 'expected'
+                        CHECK (expectation IN ('expected','not_expected')),
+        notes           TEXT        NOT NULL DEFAULT '',
+        created_by      TEXT        NOT NULL DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (person_id, person_type, meeting_type_id)
+      );
+      CREATE INDEX IF NOT EXISTS expectations_person_idx
+        ON person_attendance_expectations (person_id, person_type);
+    `);
+    logger.info("Startup migration: person_attendance_expectations table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: person_attendance_expectations table failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pastoral_audit_log (
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id      TEXT        NOT NULL DEFAULT 'icc',
+        entity_type    TEXT        NOT NULL,
+        entity_id      TEXT        NOT NULL,
+        action         TEXT        NOT NULL,
+        person_id      TEXT,
+        session_id     TEXT,
+        previous_value JSONB,
+        new_value      JSONB,
+        changed_by     TEXT        NOT NULL DEFAULT '',
+        changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reason         TEXT        NOT NULL DEFAULT ''
+      );
+      CREATE INDEX IF NOT EXISTS pastoral_audit_log_entity_idx
+        ON pastoral_audit_log (entity_type, entity_id);
+      CREATE INDEX IF NOT EXISTS pastoral_audit_log_person_idx
+        ON pastoral_audit_log (person_id)
+        WHERE person_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS pastoral_audit_log_changed_at_idx
+        ON pastoral_audit_log (changed_at DESC);
+    `);
+    logger.info("Startup migration: pastoral_audit_log table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: pastoral_audit_log table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
