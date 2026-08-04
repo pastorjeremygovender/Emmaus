@@ -1028,3 +1028,97 @@ pastoralRouter.delete("/people/:personKey/milestones/:milestoneId", async (req: 
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ─── Discipleship Signals ─────────────────────────────────────────────────────
+
+/** GET /pastoral/discipleship-signals */
+pastoralRouter.get("/discipleship-signals", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    const { category, status, personId, personType, limit } = req.query as Record<string, string>;
+    const statuses = status ? (status.split(",") as store.SignalStatus[]) : undefined;
+    const signals  = await store.listDiscipleshipSignals({
+      category:  category  as store.SignalCategory | undefined,
+      status:    statuses,
+      personId:  personId  || undefined,
+      personType: personType as store.PersonType | undefined,
+      limit:     limit ? Math.min(Number(limit), 500) : undefined,
+    });
+    res.json(signals);
+  } catch (err) {
+    logger.error({ err }, "pastoral: listDiscipleshipSignals failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** POST /pastoral/discipleship-signals/run-engine */
+pastoralRouter.post("/discipleship-signals/run-engine", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  try {
+    const { personId, personType } = req.body as { personId?: string; personType?: string };
+    const result = await store.runSignalsEngine(
+      personId
+        ? { personId: String(personId), personType: personType as store.PersonType | undefined }
+        : undefined,
+    );
+    res.json({ ok: true, ...result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Server error";
+    logger.error({ err }, "pastoral: runSignalsEngine failed");
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** PATCH /pastoral/discipleship-signals/:id/status */
+pastoralRouter.patch("/discipleship-signals/:id/status", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const id = String(req.params.id);
+  const { status } = req.body as { status?: store.SignalStatus };
+  const VALID: store.SignalStatus[] = ["new", "acknowledged", "following_up", "resolved", "dismissed"];
+  if (!status || !VALID.includes(status)) {
+    res.status(400).json({ error: `status must be one of: ${VALID.join(", ")}` });
+    return;
+  }
+  try {
+    const ok = await store.updateSignalStatus(id, status, userId);
+    if (!ok) { res.status(404).json({ error: "Signal not found." }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: updateSignalStatus failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** PATCH /pastoral/discipleship-signals/:id/note */
+pastoralRouter.patch("/discipleship-signals/:id/note", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const id   = String(req.params.id);
+  const note = String((req.body as { note?: string }).note ?? "").slice(0, 2000);
+  try {
+    await store.updateSignalNote(id, note, userId);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: updateSignalNote failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** PATCH /pastoral/discipleship-signals/:id/assign */
+pastoralRouter.patch("/discipleship-signals/:id/assign", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  const id       = String(req.params.id);
+  const assignTo = (req.body as { assignTo?: string }).assignTo ?? null;
+  try {
+    const ok = await store.assignSignal(id, assignTo ? String(assignTo) : null, userId);
+    if (!ok) { res.status(404).json({ error: "Signal not found." }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: assignSignal failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});

@@ -613,3 +613,93 @@ export const getVisitHistory = (
   pKey: string
 ): Promise<VisitHistoryItem[]> =>
   apiFetch<VisitHistoryItem[]>(`/people/${pKey}/visits`, "GET", auth);
+
+// ─── Discipleship Signals ─────────────────────────────────────────────────────
+
+export type SignalCategory =
+  | "celebration"
+  | "growth"
+  | "attention"
+  | "follow_up"
+  | "significant";
+
+export type SignalStatus =
+  | "new"
+  | "acknowledged"
+  | "following_up"
+  | "resolved"
+  | "dismissed";
+
+export interface DiscipleshipSignal {
+  id: string;
+  churchId: string;
+  personId: string;
+  personType: PersonType;
+  personName?: string;
+  category: SignalCategory;
+  signalType: string;
+  title: string;
+  explanation: string;
+  evidence: Record<string, unknown>;
+  status: SignalStatus;
+  assignedTo: string | null;
+  pastoralNote: string | null;
+  detectedAt: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const listDiscipleshipSignals = (
+  auth: AuthHeaders,
+  opts?: {
+    category?: SignalCategory;
+    status?: SignalStatus | SignalStatus[];
+    personId?: string;
+    personType?: PersonType;
+    limit?: number;
+  }
+): Promise<DiscipleshipSignal[]> => {
+  const p = new URLSearchParams();
+  if (opts?.category) p.set("category", opts.category);
+  if (opts?.status) {
+    const ss = Array.isArray(opts.status) ? opts.status : [opts.status];
+    p.set("status", ss.join(","));
+  }
+  if (opts?.personId)   p.set("personId",   opts.personId);
+  if (opts?.personType) p.set("personType", opts.personType);
+  if (opts?.limit)      p.set("limit",      String(opts.limit));
+  return apiFetch<DiscipleshipSignal[]>(
+    `/discipleship-signals${p.toString() ? `?${p}` : ""}`,
+    "GET",
+    auth,
+  );
+};
+
+export const runSignalsEngine = (
+  auth: AuthHeaders,
+  opts?: { personId?: string; personType?: PersonType }
+) =>
+  apiFetch<{ ok: boolean; processed: number; created: number; updated: number; resolved: number }>(
+    "/discipleship-signals/run-engine",
+    "POST",
+    auth,
+    opts ?? {},
+  );
+
+export const updateSignalStatus = (
+  auth: AuthHeaders,
+  id: string,
+  status: SignalStatus
+) =>
+  apiFetch<{ ok: boolean }>(`/discipleship-signals/${id}/status`, "PATCH", auth, { status });
+
+export const updateSignalNote = (auth: AuthHeaders, id: string, note: string) =>
+  apiFetch<{ ok: boolean }>(`/discipleship-signals/${id}/note`, "PATCH", auth, { note });
+
+export const assignSignal = (
+  auth: AuthHeaders,
+  id: string,
+  assignTo: string | null
+) =>
+  apiFetch<{ ok: boolean }>(`/discipleship-signals/${id}/assign`, "PATCH", auth, { assignTo });

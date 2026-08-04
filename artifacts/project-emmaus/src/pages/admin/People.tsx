@@ -8,7 +8,7 @@
 
 import React, { useState } from 'react';
 import {
-  Users, DoorOpen, HeartHandshake, ClipboardList, Heart,
+  Users, DoorOpen, HeartHandshake, ClipboardList, Heart, Zap,
 } from 'lucide-react';
 import AdminUsers from './Users';
 import AdminRooms from './AdminRooms';
@@ -17,9 +17,10 @@ import AttendanceSection from './pastoral/AttendanceSection';
 import PastoralPeople from './pastoral/PastoralPeople';
 import PersonPage from './pastoral/PersonPage';
 import CareSection from './pastoral/CareSection';
+import SignalsDashboard from './pastoral/signals/SignalsDashboard';
 import type { UnifiedPerson } from '@/lib/pastoral-api';
 
-export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care';
+export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' | 'signals';
 
 const TABS: { id: PeopleTab; label: string; Icon: React.ElementType }[] = [
   { id: 'members',    label: 'Members',    Icon: Users },
@@ -27,6 +28,7 @@ const TABS: { id: PeopleTab; label: string; Icon: React.ElementType }[] = [
   { id: 'prayer',     label: 'Prayer',     Icon: HeartHandshake },
   { id: 'attendance', label: 'Attendance', Icon: ClipboardList },
   { id: 'care',       label: 'Care',       Icon: Heart },
+  { id: 'signals',    label: 'Signals',    Icon: Zap },
 ];
 
 type MembersSubView = 'emmaus' | 'all-people';
@@ -91,6 +93,8 @@ function MembersTab() {
 }
 
 export default function People({ activeTab, onTabChange }: Props) {
+  const [signalsSelectedPerson, setSignalsSelectedPerson] = useState<UnifiedPerson | null>(null);
+
   const renderContent = () => {
     switch (activeTab) {
       case 'members':    return <MembersTab />;
@@ -98,6 +102,16 @@ export default function People({ activeTab, onTabChange }: Props) {
       case 'prayer':     return <PrayerRequests />;
       case 'attendance': return <AttendanceSection />;
       case 'care':       return <CareSection />;
+      case 'signals':
+        if (signalsSelectedPerson) {
+          return (
+            <PersonPage
+              person={signalsSelectedPerson}
+              onBack={() => setSignalsSelectedPerson(null)}
+            />
+          );
+        }
+        return <SignalsDashboard onOpenProfile={setSignalsSelectedPerson} />;
     }
   };
 

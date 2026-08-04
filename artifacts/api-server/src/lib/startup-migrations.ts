@@ -1042,6 +1042,43 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: pastoral_milestones table failed (non-fatal)");
   }
 
+  // ── Pastoral Care — Phase 5: discipleship_signals table (CP4) ───────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS discipleship_signals (
+        id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id     TEXT        NOT NULL DEFAULT 'icc',
+        person_id     TEXT        NOT NULL,
+        person_type   TEXT        NOT NULL
+                      CHECK (person_type IN ('emmaus_user','pastoral_person')),
+        category      TEXT        NOT NULL
+                      CHECK (category IN ('celebration','growth','attention','follow_up','significant')),
+        signal_type   TEXT        NOT NULL,
+        title         TEXT        NOT NULL,
+        explanation   TEXT        NOT NULL DEFAULT '',
+        evidence      JSONB       NOT NULL DEFAULT '{}',
+        status        TEXT        NOT NULL DEFAULT 'new'
+                      CHECK (status IN ('new','acknowledged','following_up','resolved','dismissed')),
+        assigned_to   TEXT,
+        pastoral_note TEXT,
+        detected_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resolved_at   TIMESTAMPTZ,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (church_id, person_id, person_type, signal_type)
+      );
+      CREATE INDEX IF NOT EXISTS disc_signals_church_status_idx
+        ON discipleship_signals (church_id, status, detected_at DESC);
+      CREATE INDEX IF NOT EXISTS disc_signals_person_idx
+        ON discipleship_signals (church_id, person_id, person_type);
+      CREATE INDEX IF NOT EXISTS disc_signals_category_idx
+        ON discipleship_signals (church_id, category, status, detected_at DESC);
+    `);
+    logger.info("Startup migration: discipleship_signals table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: discipleship_signals table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

@@ -11,6 +11,12 @@
 import { pool } from "@workspace/db";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
+import {
+  detectSignals,
+  ALL_RULES,
+  type SignalCategory,
+  type PersonContext,
+} from "./care-signals-engine.js";
 
 export const CHURCH_ID = "icc";
 
@@ -2021,4 +2027,366 @@ export async function getVisitHistoryForPerson(
       completedAt:   r.completed_at != null ? String(r.completed_at) : null,
     };
   });
+}
+
+// ─── Discipleship Signals ─────────────────────────────────────────────────────
+
+export { type SignalCategory };
+export type SignalStatus =
+  | "new"
+  | "acknowledged"
+  | "following_up"
+  | "resolved"
+  | "dismissed";
+
+export interface DiscipleshipSignal {
+  id: string;
+  churchId: string;
+  personId: string;
+  personType: PersonType;
+  personName?: string;
+  category: SignalCategory;
+  signalType: string;
+  title: string;
+  explanation: string;
+  evidence: Record<string, unknown>;
+  status: SignalStatus;
+  assignedTo: string | null;
+  pastoralNote: string | null;
+  detectedAt: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function rowToDiscipleshipSignal(r: Record<string, unknown>): DiscipleshipSignal {
+  return {
+    id:           String(r.id),
+    churchId:     String(r.church_id),
+    personId:     String(r.person_id),
+    personType:   String(r.person_type) as PersonType,
+    personName:   r.person_name != null ? String(r.person_name) : undefined,
+    category:     String(r.category) as SignalCategory,
+    signalType:   String(r.signal_type),
+    title:        String(r.title),
+    explanation:  String(r.explanation),
+    evidence:     typeof r.evidence === "object" && r.evidence !== null
+                    ? (r.evidence as Record<string, unknown>)
+                    : {},
+    status:       String(r.status) as SignalStatus,
+    assignedTo:   r.assigned_to != null ? String(r.assigned_to) : null,
+    pastoralNote: r.pastoral_note != null ? String(r.pastoral_note) : null,
+    detectedAt:   String(r.detected_at),
+    resolvedAt:   r.resolved_at != null ? String(r.resolved_at) : null,
+    createdAt:    String(r.created_at),
+    updatedAt:    String(r.updated_at),
+  };
+}
+
+export async function listDiscipleshipSignals(opts?: {
+  category?: SignalCategory;
+  status?: SignalStatus | SignalStatus[];
+  excludeStatus?: SignalStatus[];
+  personId?: string;
+  personType?: PersonType;
+  limit?: number;
+}): Promise<DiscipleshipSignal[]> {
+  const conditions: string[] = ["ds.church_id = $1"];
+  const vals: unknown[] = [CHURCH_ID];
+  let idx = 2;
+
+  if (opts?.category) {
+    conditions.push(`ds.category = $${idx++}`);
+    vals.push(opts.category);
+  }
+  if (opts?.status) {
+    const ss = Array.isArray(opts.status) ? opts.status : [opts.status];
+    conditions.push(`ds.status = ANY($${idx++}::text[])`);
+    vals.push(ss);
+  }
+  if (opts?.excludeStatus?.length) {
+    conditions.push(`ds.status != ALL($${idx++}::text[])`);
+    vals.push(opts.excludeStatus);
+  }
+  if (opts?.personId) {
+    conditions.push(`ds.person_id = $${idx++}`);
+    vals.push(opts.personId);
+  }
+  if (opts?.personType) {
+    conditions.push(`ds.person_type = $${idx++}`);
+    vals.push(opts.personType);
+  }
+
+  const res = await pool.query(
+    `SELECT ds.*,
+            COALESCE(pp.full_name, up.preferred_name, ds.person_id) AS person_name
+     FROM discipleship_signals ds
+     LEFT JOIN pastoral_persons pp
+       ON ds.person_type = 'pastoral_person' AND pp.id::text = ds.person_id
+     LEFT JOIN user_profiles up
+       ON ds.person_type = 'emmaus_user' AND up.email = ds.person_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY ds.detected_at DESC
+     LIMIT $${idx}`,
+    [...vals, opts?.limit ?? 500],
+  );
+  return res.rows.map(rowToDiscipleshipSignal);
+}
+
+export async function updateSignalStatus(
+  id: string,
+  status: SignalStatus,
+  updatedBy: string,
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE discipleship_signals
+     SET status      = $1,
+         resolved_at = CASE WHEN $1 = 'resolved' THEN NOW() ELSE resolved_at END,
+         updated_at  = NOW()
+     WHERE id = $2 AND church_id = $3
+     RETURNING id`,
+    [status, id, CHURCH_ID],
+  );
+  if (res.rows.length > 0) {
+    await logPastoralAudit({
+      entityType: "discipleship_signal",
+      entityId:   id,
+      action:     `status_${status}`,
+      changedBy:  updatedBy,
+    });
+  }
+  return res.rows.length > 0;
+}
+
+export async function updateSignalNote(
+  id: string,
+  note: string,
+  updatedBy: string,
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE discipleship_signals
+     SET pastoral_note = $1, updated_at = NOW()
+     WHERE id = $2 AND church_id = $3
+     RETURNING id`,
+    [note || null, id, CHURCH_ID],
+  );
+  return res.rows.length > 0;
+}
+
+export async function assignSignal(
+  id: string,
+  assignTo: string | null,
+  updatedBy: string,
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE discipleship_signals
+     SET assigned_to = $1, updated_at = NOW()
+     WHERE id = $2 AND church_id = $3
+     RETURNING id`,
+    [assignTo || null, id, CHURCH_ID],
+  );
+  if (res.rows.length > 0) {
+    await logPastoralAudit({
+      entityType: "discipleship_signal",
+      entityId:   id,
+      action:     assignTo ? `assigned_to_${assignTo}` : "unassigned",
+      changedBy:  updatedBy,
+    });
+  }
+  return res.rows.length > 0;
+}
+
+// ─── Engine context gathering ─────────────────────────────────────────────────
+
+async function gatherPersonContext(
+  personId: string,
+  personType: PersonType,
+): Promise<PersonContext> {
+  const emmausUserId = await resolveEmmausId(personId, personType);
+
+  const attRows = await pool.query<{
+    session_date: string; status: string; meeting_type_name: string;
+  }>(
+    `SELECT ms.session_date::text, ar.status, mt.name AS meeting_type_name
+     FROM attendance_records ar
+     JOIN meeting_sessions ms ON ms.id = ar.session_id
+     JOIN meeting_types mt    ON mt.id = ms.meeting_type_id
+     WHERE ar.person_id = $1 AND ar.church_id = $2 AND ms.status = 'completed'
+     ORDER BY ms.session_date DESC LIMIT 16`,
+    [personId, CHURCH_ID],
+  );
+
+  let walks: PersonContext["walks"] = [];
+  let devotionals: PersonContext["devotionals"] = [];
+  let rooms: PersonContext["rooms"] = [];
+
+  if (emmausUserId) {
+    const [walkRows, devRows, roomRows] = await Promise.all([
+      pool.query<{
+        id: string; title: string; started_at: string | null;
+        updated_at: string; status: string; last_completed_at: string | null;
+      }>(
+        `SELECT ujp.journey_id AS id, j.title,
+                ujp.started_at::text, ujp.updated_at::text,
+                ujp.status, ujp.last_completed_at::text
+         FROM user_journey_progress ujp JOIN journeys j ON j.id = ujp.journey_id
+         WHERE ujp.user_id = $1`,
+        [emmausUserId],
+      ),
+      pool.query<{
+        id: string; title: string; started_at: string | null;
+        updated_at: string; status: string;
+      }>(
+        `SELECT dp.series_id::text AS id, ds.title,
+                dp.started_at::text, dp.updated_at::text, dp.status
+         FROM devotional_progress dp JOIN devotional_series ds ON ds.id = dp.series_id
+         WHERE dp.user_id = $1`,
+        [emmausUserId],
+      ),
+      pool.query<{ id: string; name: string; joined_at: string | null }>(
+        `SELECT rm.room_id::text AS id, r.name, rm.joined_at::text
+         FROM room_members rm JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.user_id = $1`,
+        [emmausUserId],
+      ),
+    ]);
+
+    walks = walkRows.rows.map((r) => ({
+      id: r.id, title: r.title, startedAt: r.started_at,
+      updatedAt: r.updated_at, status: r.status, lastCompletedAt: r.last_completed_at,
+    }));
+    devotionals = devRows.rows.map((r) => ({
+      id: r.id, title: r.title, startedAt: r.started_at,
+      updatedAt: r.updated_at, status: r.status,
+    }));
+    rooms = roomRows.rows.map((r) => ({
+      id: r.id, name: r.name, joinedAt: r.joined_at,
+    }));
+  }
+
+  const milRows = await pool.query<{
+    type: string; title: string; milestone_date: string | null; created_at: string;
+  }>(
+    `SELECT milestone_type AS type, title, milestone_date::text, created_at::text
+     FROM pastoral_milestones
+     WHERE person_id = $1 AND church_id = $2 AND is_active = true`,
+    [personId, CHURCH_ID],
+  );
+
+  return {
+    personId,
+    personType,
+    emmausUserId,
+    attendanceRecords: attRows.rows.map((r) => ({
+      sessionDate: r.session_date, status: r.status, meetingTypeName: r.meeting_type_name,
+    })),
+    walks,
+    devotionals,
+    rooms,
+    milestones: milRows.rows.map((r) => ({
+      type: r.type, title: r.title, date: r.milestone_date, createdAt: r.created_at,
+    })),
+  };
+}
+
+/** Upsert a signal. Returns 'created', 'updated', or 'no-change'. */
+async function upsertDiscipleshipSignal(data: {
+  personId: string; personType: PersonType;
+} & import("./care-signals-engine.js").SignalDetected): Promise<"created" | "updated" | "no-change"> {
+  const id = randomUUID();
+  const res = await pool.query<{ xmax: string }>(
+    `INSERT INTO discipleship_signals
+       (id, church_id, person_id, person_type, category, signal_type, title, explanation, evidence)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (church_id, person_id, person_type, signal_type) DO UPDATE SET
+       title       = EXCLUDED.title,
+       explanation = EXCLUDED.explanation,
+       evidence    = EXCLUDED.evidence,
+       detected_at = CASE
+         WHEN discipleship_signals.status IN ('resolved','dismissed') THEN NOW()
+         ELSE discipleship_signals.detected_at
+       END,
+       status      = CASE
+         WHEN discipleship_signals.status IN ('resolved','dismissed') THEN 'new'
+         ELSE discipleship_signals.status
+       END,
+       updated_at  = NOW()
+     RETURNING xmax::text`,
+    [
+      id, CHURCH_ID, data.personId, data.personType,
+      data.category, data.signalType,
+      data.title, data.explanation, JSON.stringify(data.evidence),
+    ],
+  );
+  if (res.rows.length === 0) return "no-change";
+  return res.rows[0].xmax === "0" ? "created" : "updated";
+}
+
+// ─── Engine runner ────────────────────────────────────────────────────────────
+
+export async function runSignalsEngine(opts?: {
+  personId?: string;
+  personType?: PersonType;
+}): Promise<{ processed: number; created: number; updated: number; resolved: number }> {
+  const allPeople = await listUnifiedPeople();
+  const targets = opts?.personId
+    ? allPeople.filter(
+        (p) =>
+          p.id === opts.personId &&
+          (!opts.personType || p.personType === opts.personType),
+      )
+    : allPeople;
+
+  let created = 0, updated = 0, resolved = 0;
+
+  // IDs of all state-based rules (these can be auto-resolved)
+  const stateBasedIds = new Set(
+    ALL_RULES.filter((r) => r.isStateBased && r.enabled).map((r) => r.id),
+  );
+
+  for (const person of targets) {
+    try {
+      const ctx = await gatherPersonContext(
+        person.id,
+        person.personType as PersonType,
+      );
+      const detected    = detectSignals(ctx);
+      const detectedSet = new Set(detected.map((s) => s.signalType));
+
+      for (const signal of detected) {
+        const outcome = await upsertDiscipleshipSignal({
+          personId: person.id,
+          personType: person.personType as PersonType,
+          ...signal,
+        });
+        if (outcome === "created") created++;
+        else if (outcome === "updated") updated++;
+      }
+
+      // Auto-resolve state-based signals whose condition no longer holds
+      const existing = await pool.query<{ id: string; signal_type: string }>(
+        `SELECT id, signal_type
+         FROM discipleship_signals
+         WHERE church_id = $1 AND person_id = $2 AND person_type = $3
+           AND status NOT IN ('resolved','dismissed')`,
+        [CHURCH_ID, person.id, person.personType],
+      );
+      for (const row of existing.rows) {
+        const st = row.signal_type;
+        if (stateBasedIds.has(st) && !detectedSet.has(st)) {
+          await pool.query(
+            `UPDATE discipleship_signals
+             SET status = 'resolved', resolved_at = NOW(), updated_at = NOW()
+             WHERE id = $1`,
+            [row.id],
+          );
+          resolved++;
+        }
+      }
+    } catch {
+      // Per-person failures are non-fatal — engine continues.
+    }
+  }
+
+  return { processed: targets.length, created, updated, resolved };
 }

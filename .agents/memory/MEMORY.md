@@ -36,3 +36,4 @@
 - [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
 - [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.
 - [Discipleship Profile architecture](discipleship-profile.md) — Checkpoint 3 complete: 9-section profile; 6 new store functions + routes; PersonPage.tsx is thin orchestrator; pastoral_milestones table live.
+- [Care Signals Engine](care-signals-engine.md) — Checkpoint 4: discipleship_signals table, 18-rule engine, 5 routes, SignalsDashboard + CareSignalsSection; circular-import rule: engine file has no DB access.

@@ -26,6 +26,7 @@ import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
 
 import HeroSummaryCard     from './profile/HeroSummaryCard';
+import CareSignalsSection  from './profile/CareSignalsSection';
 import JourneyTimeline     from './profile/JourneyTimeline';
 import SpiritualRhythm     from './profile/SpiritualRhythm';
 import AttendanceRhythm    from './profile/AttendanceRhythm';
@@ -294,6 +295,13 @@ export default function PersonPage({ person, onBack }: Props) {
           discipleship={discipleship}
           careSignals={careSignals}
           loading={snapLoading}
+        />
+
+        {/* 1b. Care Signals — directly below Hero Summary per spec */}
+        <CareSignalsSection
+          personId={person.id}
+          personType={person.personType}
+          auth={auth}
         />
 
         {/* 2. Discipleship Timeline */}
