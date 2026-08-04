@@ -177,6 +177,13 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
                         <UserX size={12} className="text-gray-300" />
                       </span>
                     )}
+                    {(p.openSignals ?? 0) > 0 && (
+                      <span
+                        title={`${p.openSignals} open care alert${(p.openSignals ?? 0) > 1 ? 's' : ''}`}
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-rose-100 text-rose-700">
+                        {p.openSignals}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400 flex-wrap">
                     {p.email && <span className="truncate">{p.email}</span>}

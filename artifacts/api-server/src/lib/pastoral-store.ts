@@ -361,7 +361,8 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
        up.email,
        up.preferred_name,
        ar_latest.session_date  AS last_attendance_date,
-       ar_latest.status        AS last_attendance_status
+       ar_latest.status        AS last_attendance_status,
+       COALESCE(sig.open_count, 0) AS open_signals
      FROM user_profiles up
      LEFT JOIN LATERAL (
        SELECT ar.status, ms.session_date
@@ -373,6 +374,15 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
        ORDER BY ms.session_date DESC
        LIMIT 1
      ) ar_latest ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS open_count
+       FROM care_signals cs
+       WHERE cs.person_id = up.email
+         AND cs.person_type = 'emmaus_user'
+         AND cs.church_id = $1
+         AND cs.dismissed_at IS NULL
+         AND cs.auto_dismissed = false
+     ) sig ON true
      ORDER BY COALESCE(up.preferred_name, up.email) ASC`,
     [CHURCH_ID]
   );
@@ -382,7 +392,8 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
     `SELECT
        pp.*,
        ar_latest.session_date  AS last_attendance_date,
-       ar_latest.status        AS last_attendance_status
+       ar_latest.status        AS last_attendance_status,
+       COALESCE(sig.open_count, 0) AS open_signals
      FROM pastoral_persons pp
      LEFT JOIN LATERAL (
        SELECT ar.status, ms.session_date
@@ -394,6 +405,15 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
        ORDER BY ms.session_date DESC
        LIMIT 1
      ) ar_latest ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS open_count
+       FROM care_signals cs
+       WHERE cs.person_id = pp.id::text
+         AND cs.person_type = 'pastoral_person'
+         AND cs.church_id = $1
+         AND cs.dismissed_at IS NULL
+         AND cs.auto_dismissed = false
+     ) sig ON true
      WHERE pp.church_id = $1 AND pp.is_active = true
      ORDER BY pp.full_name ASC`,
     [CHURCH_ID]
@@ -411,6 +431,7 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
     subType:              "emmaus_user" as const,
     lastAttendanceDate:   r.last_attendance_date ? String(r.last_attendance_date).slice(0, 10) : null,
     lastAttendanceStatus: r.last_attendance_status ? String(r.last_attendance_status) : null,
+    openSignals:          Number(r.open_signals ?? 0),
     churchId:             CHURCH_ID,
   }));
 
@@ -426,6 +447,7 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
     subType:              String(r.person_type) as "attendance_only" | "visitor",
     lastAttendanceDate:   r.last_attendance_date ? String(r.last_attendance_date).slice(0, 10) : null,
     lastAttendanceStatus: r.last_attendance_status ? String(r.last_attendance_status) : null,
+    openSignals:          Number(r.open_signals ?? 0),
     churchId:             CHURCH_ID,
   }));
 

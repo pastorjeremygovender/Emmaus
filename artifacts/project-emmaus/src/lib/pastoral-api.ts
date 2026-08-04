@@ -59,6 +59,7 @@ export interface UnifiedPerson {
   subType: "emmaus_user" | "attendance_only" | "visitor";
   lastAttendanceDate: string | null;
   lastAttendanceStatus: string | null;
+  openSignals?: number;
   churchId: string;
 }
 
