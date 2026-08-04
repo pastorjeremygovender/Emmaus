@@ -847,6 +847,195 @@ export async function getPersonAttendanceHistory(
   }));
 }
 
+// ─── Care Signals ─────────────────────────────────────────────────────────────
+
+export type CareSignalTrigger = "missed_session";
+
+export interface CareSignal {
+  id: string;
+  churchId: string;
+  personId: string;
+  personType: PersonType;
+  personName?: string;
+  trigger: CareSignalTrigger;
+  sessionId: string;
+  sessionDate?: string;
+  meetingTypeName?: string;
+  autoDismissed: boolean;
+  dismissedAt: string | null;
+  dismissedBy: string | null;
+  createdAt: string;
+}
+
+function rowToCareSignal(r: Record<string, unknown>): CareSignal {
+  return {
+    id:              String(r.id),
+    churchId:        String(r.church_id),
+    personId:        String(r.person_id),
+    personType:      String(r.person_type) as PersonType,
+    personName:      r.person_name != null ? String(r.person_name) : undefined,
+    trigger:         String(r.trigger) as CareSignalTrigger,
+    sessionId:       String(r.session_id),
+    sessionDate:     r.session_date != null ? String(r.session_date).slice(0, 10) : undefined,
+    meetingTypeName: r.meeting_type_name != null ? String(r.meeting_type_name) : undefined,
+    autoDismissed:   Boolean(r.auto_dismissed),
+    dismissedAt:     r.dismissed_at != null ? String(r.dismissed_at) : null,
+    dismissedBy:     r.dismissed_by != null ? String(r.dismissed_by) : null,
+    createdAt:       String(r.created_at),
+  };
+}
+
+export async function getCareSignals(opts?: {
+  includesDismissed?: boolean;
+  personId?: string;
+  personType?: PersonType;
+  limit?: number;
+}): Promise<CareSignal[]> {
+  const conditions: string[] = ["cs.church_id = $1"];
+  const vals: unknown[] = [CHURCH_ID];
+  let idx = 2;
+
+  if (!opts?.includesDismissed) {
+    conditions.push("cs.dismissed_at IS NULL");
+  }
+  if (opts?.personId) {
+    conditions.push(`cs.person_id = $${idx++}`);
+    vals.push(opts.personId);
+  }
+  if (opts?.personType) {
+    conditions.push(`cs.person_type = $${idx++}`);
+    vals.push(opts.personType);
+  }
+
+  const res = await pool.query(
+    `SELECT cs.*,
+            ms.session_date,
+            mt.name AS meeting_type_name,
+            COALESCE(
+              pp.full_name,
+              up.preferred_name,
+              cs.person_id
+            ) AS person_name
+     FROM care_signals cs
+     JOIN meeting_sessions ms ON ms.id = cs.session_id
+     JOIN meeting_types mt ON mt.id = ms.meeting_type_id
+     LEFT JOIN pastoral_persons pp
+       ON cs.person_type = 'pastoral_person' AND pp.id::text = cs.person_id
+     LEFT JOIN user_profiles up
+       ON cs.person_type = 'emmaus_user' AND up.email = cs.person_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY ms.session_date DESC, person_name ASC
+     LIMIT $${idx}`,
+    [...vals, opts?.limit ?? 200]
+  );
+  return res.rows.map(rowToCareSignal);
+}
+
+/** Insert a care signal. Silently ignores duplicate (person+session). */
+export async function createCareSignal(data: {
+  personId: string;
+  personType: PersonType;
+  sessionId: string;
+  trigger?: CareSignalTrigger;
+}): Promise<CareSignal | null> {
+  const id = randomUUID();
+  const res = await pool.query(
+    `INSERT INTO care_signals
+       (id, church_id, person_id, person_type, trigger, session_id)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (person_id, person_type, session_id) DO NOTHING
+     RETURNING id`,
+    [
+      id, CHURCH_ID,
+      data.personId, data.personType,
+      data.trigger ?? "missed_session",
+      data.sessionId,
+    ]
+  );
+  if (res.rows.length === 0) return null; // duplicate — no-op
+  const created = await pool.query(
+    `SELECT cs.*, ms.session_date, mt.name AS meeting_type_name
+     FROM care_signals cs
+     JOIN meeting_sessions ms ON ms.id = cs.session_id
+     JOIN meeting_types mt ON mt.id = ms.meeting_type_id
+     WHERE cs.id = $1`,
+    [id]
+  );
+  return created.rows[0] ? rowToCareSignal(created.rows[0]) : null;
+}
+
+export async function dismissCareSignal(
+  id: string,
+  dismissedBy: string
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE care_signals
+     SET dismissed_at = NOW(), dismissed_by = $1
+     WHERE id = $2 AND church_id = $3 AND dismissed_at IS NULL
+     RETURNING id`,
+    [dismissedBy, id, CHURCH_ID]
+  );
+  if (res.rows.length > 0) {
+    await logPastoralAudit({
+      entityType: "care_signal",
+      entityId: id,
+      action: "dismiss",
+      changedBy: dismissedBy,
+    });
+  }
+  return res.rows.length > 0;
+}
+
+/**
+ * For a single completed session, find every person with an 'expected' expectation
+ * for that meeting type and no 'present', 'visitor', or 'apology' attendance record.
+ * Creates one care_signal per missing person (skips duplicates and cancelled sessions).
+ * Returns the count of newly-created signals.
+ */
+export async function generateCareSignals(sessionId: string): Promise<number> {
+  // Validate session: must be completed, not cancelled, and care_signal_enabled on its type
+  const sessRes = await pool.query(
+    `SELECT ms.id, ms.status, ms.meeting_type_id, mt.care_signal_enabled
+     FROM meeting_sessions ms
+     JOIN meeting_types mt ON mt.id = ms.meeting_type_id
+     WHERE ms.id = $1 AND ms.church_id = $2`,
+    [sessionId, CHURCH_ID]
+  );
+  const sess = sessRes.rows[0];
+  if (!sess) throw new Error("Session not found.");
+  if (sess.status === "cancelled") return 0;
+  if (!sess.care_signal_enabled) return 0;
+  if (sess.status !== "completed") return 0;
+
+  // Find everyone expected at this meeting type who has no present/visitor/apology record
+  const expectedRes = await pool.query(
+    `SELECT ae.person_id, ae.person_type
+     FROM person_attendance_expectations ae
+     WHERE ae.church_id = $1
+       AND ae.meeting_type_id = $2
+       AND ae.expectation = 'expected'
+       AND NOT EXISTS (
+         SELECT 1 FROM attendance_records ar
+         WHERE ar.session_id = $3
+           AND ar.person_id = ae.person_id
+           AND ar.person_type = ae.person_type
+           AND ar.status IN ('present','visitor','apology')
+       )`,
+    [CHURCH_ID, sess.meeting_type_id, sessionId]
+  );
+
+  let created = 0;
+  for (const row of expectedRes.rows) {
+    const signal = await createCareSignal({
+      personId:   String(row.person_id),
+      personType: String(row.person_type) as PersonType,
+      sessionId,
+    });
+    if (signal !== null) created++;
+  }
+  return created;
+}
+
 // ─── Pastoral audit log ───────────────────────────────────────────────────────
 
 export async function getPastoralAuditLog(opts: {

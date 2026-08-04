@@ -313,6 +313,48 @@ export const getAttendanceHistory = (auth: AuthHeaders, pid: string, pType: Pers
     auth
   );
 
+// ─── Care Signals ─────────────────────────────────────────────────────────────
+
+export type CareSignalTrigger = "missed_session";
+
+export interface CareSignal {
+  id: string;
+  churchId: string;
+  personId: string;
+  personType: PersonType;
+  personName?: string;
+  trigger: CareSignalTrigger;
+  sessionId: string;
+  sessionDate?: string;
+  meetingTypeName?: string;
+  autoDismissed: boolean;
+  dismissedAt: string | null;
+  dismissedBy: string | null;
+  createdAt: string;
+}
+
+export const listCareSignals = (
+  auth: AuthHeaders,
+  opts?: { includesDismissed?: boolean; personId?: string; limit?: number }
+) => {
+  const p = new URLSearchParams();
+  if (opts?.includesDismissed) p.set("includesDismissed", "true");
+  if (opts?.personId)          p.set("personId", opts.personId);
+  if (opts?.limit)             p.set("limit", String(opts.limit));
+  return apiFetch<CareSignal[]>(`/care-signals${p.toString() ? `?${p}` : ""}`, "GET", auth);
+};
+
+export const generateCareSignals = (auth: AuthHeaders, sessionId?: string) =>
+  apiFetch<{ ok: boolean; created: number; sessionsScanned?: number }>(
+    "/care-signals/generate",
+    "POST",
+    auth,
+    sessionId ? { sessionId } : {}
+  );
+
+export const dismissCareSignal = (auth: AuthHeaders, id: string) =>
+  apiFetch<{ ok: boolean }>(`/care-signals/${id}/dismiss`, "PATCH", auth);
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 export const getPastoralAuditLog = (auth: AuthHeaders, opts?: { personId?: string; entityType?: string; limit?: number }) => {

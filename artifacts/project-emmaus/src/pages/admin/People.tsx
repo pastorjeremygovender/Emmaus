@@ -16,6 +16,7 @@ import PrayerRequests from './PrayerRequests';
 import AttendanceSection from './pastoral/AttendanceSection';
 import PastoralPeople from './pastoral/PastoralPeople';
 import PersonPage from './pastoral/PersonPage';
+import CareSection from './pastoral/CareSection';
 import type { UnifiedPerson } from '@/lib/pastoral-api';
 
 export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care';
@@ -33,23 +34,6 @@ type MembersSubView = 'emmaus' | 'all-people';
 interface Props {
   activeTab: PeopleTab;
   onTabChange: (tab: PeopleTab) => void;
-}
-
-function CarePlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-28 px-6 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-rose-50 flex items-center justify-center mb-5">
-        <Heart size={26} className="text-rose-400" />
-      </div>
-      <h2 className="text-[17px] font-semibold text-gray-900 mb-2">Pastoral Care</h2>
-      <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-        Care signals, pastoral follow-up, inactivity alerts, and prayer assignment will appear here.
-      </p>
-      <span className="mt-4 inline-block px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-medium">
-        Checkpoint 2
-      </span>
-    </div>
-  );
 }
 
 /**
@@ -113,7 +97,7 @@ export default function People({ activeTab, onTabChange }: Props) {
       case 'rooms':      return <AdminRooms />;
       case 'prayer':     return <PrayerRequests />;
       case 'attendance': return <AttendanceSection />;
-      case 'care':       return <CarePlaceholder />;
+      case 'care':       return <CareSection />;
     }
   };
 

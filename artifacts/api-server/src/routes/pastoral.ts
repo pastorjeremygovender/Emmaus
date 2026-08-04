@@ -484,6 +484,76 @@ pastoralRouter.get("/people/:personKey/attendance-history", async (req: Request,
   }
 });
 
+// ─── Care Signals ─────────────────────────────────────────────────────────────
+
+/** GET /pastoral/care-signals — list open (or all) care signals */
+pastoralRouter.get("/care-signals", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    const signals = await store.getCareSignals({
+      includesDismissed: req.query.includesDismissed === "true",
+      personId:   req.query.personId   ? String(req.query.personId)   : undefined,
+      personType: req.query.personType ? String(req.query.personType) as store.PersonType : undefined,
+      limit: req.query.limit ? Number(req.query.limit) : 200,
+    });
+    res.json(signals);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getCareSignals failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * POST /pastoral/care-signals/generate
+ * Body: { sessionId: string } — or omit to scan all completed eligible sessions.
+ */
+pastoralRouter.post("/care-signals/generate", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  try {
+    const { sessionId } = req.body as { sessionId?: string };
+
+    if (sessionId) {
+      const created = await store.generateCareSignals(String(sessionId));
+      res.json({ ok: true, created });
+      return;
+    }
+
+    // Scan all completed sessions that have care_signal_enabled
+    const sessions = await store.listSessions({ limit: 500 });
+    const eligible = sessions.filter((s) => s.status === "completed");
+    let totalCreated = 0;
+    for (const s of eligible) {
+      try {
+        totalCreated += await store.generateCareSignals(s.id);
+      } catch { /* per-session errors are non-fatal */ }
+    }
+    res.json({ ok: true, created: totalCreated, sessionsScanned: eligible.length });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Server error";
+    res.status(400).json({ error: msg });
+  }
+});
+
+/** PATCH /pastoral/care-signals/:id/dismiss */
+pastoralRouter.patch("/care-signals/:id/dismiss", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  const id = String(req.params.id);
+  try {
+    const dismissed = await store.dismissCareSignal(id, userId);
+    if (!dismissed) {
+      res.status(404).json({ error: "Signal not found or already dismissed." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "pastoral: dismissCareSignal failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── Audit log ────────────────────────────────────────────────────────────────
 
 pastoralRouter.get("/audit-log", async (req: Request, res: Response) => {

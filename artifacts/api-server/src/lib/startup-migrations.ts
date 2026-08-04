@@ -982,6 +982,36 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: pastoral_audit_log table failed (non-fatal)");
   }
 
+  // ── Pastoral Care — Phase 3: care_signals table (2026-08) ────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS care_signals (
+        id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        church_id      TEXT        NOT NULL DEFAULT 'icc',
+        person_id      TEXT        NOT NULL,
+        person_type    TEXT        NOT NULL
+                       CHECK (person_type IN ('emmaus_user','pastoral_person')),
+        trigger        TEXT        NOT NULL DEFAULT 'missed_session',
+        session_id     UUID        NOT NULL REFERENCES meeting_sessions(id) ON DELETE CASCADE,
+        auto_dismissed BOOLEAN     NOT NULL DEFAULT false,
+        dismissed_at   TIMESTAMPTZ,
+        dismissed_by   TEXT,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (person_id, person_type, session_id)
+      );
+      CREATE INDEX IF NOT EXISTS care_signals_church_idx
+        ON care_signals (church_id, dismissed_at)
+        WHERE dismissed_at IS NULL;
+      CREATE INDEX IF NOT EXISTS care_signals_person_idx
+        ON care_signals (person_id, person_type);
+      CREATE INDEX IF NOT EXISTS care_signals_session_idx
+        ON care_signals (session_id);
+    `);
+    logger.info("Startup migration: care_signals table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: care_signals table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
