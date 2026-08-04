@@ -34,7 +34,6 @@ import {
   setReturnDestination,
   sourceSectionFromPath,
 } from '@/lib/emmaus-pending';
-
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,8 +56,9 @@ interface SCEntry {
   dayNumber: number;
   title: string;
   scriptureReference: string;
-  sermonLink?: string;
   status: string;
+  /** Timestamped YouTube URL or plain MM:SS string. */
+  sermonLink?: string | null;
 }
 
 interface SCProgress {
@@ -104,6 +104,26 @@ function resolveBack(source: string | null): { path: string; label: string } {
   return { path: '/journeys?tab=sermons', label: 'Sermon Companions' };
 }
 
+/** Extract display label from a sermonLink value (YouTube URL with ?t= or plain MM:SS). */
+function sermonLinkLabel(sermonLink?: string | null): string | null {
+  if (!sermonLink) return null;
+  if (sermonLink.startsWith('http')) {
+    try {
+      const t = new URL(sermonLink).searchParams.get('t');
+      if (t) {
+        const secs = parseInt(t.replace(/s$/i, ''), 10);
+        if (!isNaN(secs) && secs >= 0) {
+          const m = Math.floor(secs / 60);
+          const s = secs % 60;
+          return `${m}:${String(s).padStart(2, '0')}`;
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+  if (/^\d+:\d{2}$/.test(sermonLink.trim())) return sermonLink.trim();
+  return null;
+}
 /**
  * Extract a playback timestamp (seconds) from a YouTube-style URL or a plain
  * "MM:SS" / "H:MM:SS" string stored in sermonLink.
@@ -150,11 +170,11 @@ function StepRow({
   stepNumber: number;
   title: string;
   scripture?: string;
-  sermonLink?: string;
+  sermonLink?: string | null;
   status: 'completed' | 'current' | 'upcoming';
   onClick?: () => void;
 }) {
-  const ts = parseSermonLinkTimestamp(sermonLink);
+  const ts = parseSermonLinkTimestamp(sermonLink ?? undefined);
 
   return (
     <button
@@ -200,7 +220,7 @@ function StepRow({
             <BookOpen size={10} className="shrink-0" /> {scripture}
           </p>
         )}
-        {ts && (
+        {ts && status !== 'upcoming' && (
           <p className="text-[11px] text-muted-foreground/70 mt-0.5">
             From this week's sermon · {ts.display}
           </p>

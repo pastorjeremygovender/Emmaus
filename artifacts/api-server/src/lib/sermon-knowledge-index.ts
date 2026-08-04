@@ -76,7 +76,7 @@ export async function upsertKnowledgeIndex(entry: KnowledgeIndexEntry): Promise<
          indexed_at, updated_at
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
        ON CONFLICT (sermon_id) DO UPDATE SET
-         companion_id        = EXCLUDED.companion_id,
+         -- Always refresh sermon metadata fields.
          title               = EXCLUDED.title,
          speaker             = EXCLUDED.speaker,
          sermon_date         = EXCLUDED.sermon_date,
@@ -88,13 +88,18 @@ export async function upsertKnowledgeIndex(entry: KnowledgeIndexEntry): Promise<
          keywords            = EXCLUDED.keywords,
          main_theme          = EXCLUDED.main_theme,
          summary             = EXCLUDED.summary,
-         step_titles         = EXCLUDED.step_titles,
-         step_content        = EXCLUDED.step_content,
-         prayer_themes       = EXCLUDED.prayer_themes,
          youtube_url         = EXCLUDED.youtube_url,
          audio_path          = EXCLUDED.audio_path,
          published_at        = EXCLUDED.published_at,
-         updated_at          = NOW()`,
+         updated_at          = NOW(),
+         -- Companion-derived fields: only overwrite when the incoming value is non-empty.
+         -- Sermon publish/edit calls pass empty arrays/strings; companion publish passes
+         -- real content. COALESCE/CASE preserves step text when a sermon metadata edit
+         -- runs after the companion has already been indexed.
+         companion_id        = COALESCE(EXCLUDED.companion_id, emmaus_knowledge_index.companion_id),
+         step_titles         = CASE WHEN EXCLUDED.step_titles::text = '[]' THEN emmaus_knowledge_index.step_titles ELSE EXCLUDED.step_titles END,
+         step_content        = CASE WHEN EXCLUDED.step_content = '' THEN emmaus_knowledge_index.step_content ELSE EXCLUDED.step_content END,
+         prayer_themes       = CASE WHEN EXCLUDED.prayer_themes = '' THEN emmaus_knowledge_index.prayer_themes ELSE EXCLUDED.prayer_themes END`,
       [
         entry.sermonId,
         entry.companionId ?? null,

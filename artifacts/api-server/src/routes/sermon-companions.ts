@@ -1,15 +1,17 @@
 /**
  * sermon-companions.ts — CRUD routes for sermon companion records and entries.
  *
- * GET  /api/sermon-companions/by-sermon/:sermonId     — get companion for a sermon
- * GET  /api/sermon-companions/:companionId            — get companion by id
- * PATCH /api/sermon-companions/:companionId           — update title/status
- * PATCH /api/sermon-companions/:companionId/entries/:day — update one entry
+ * GET  /api/sermon-companions/current-week/member       — current week companion (member)
+ * GET  /api/sermon-companions/member/engagements        — all in-progress companions (member)
+ * GET  /api/sermon-companions/by-sermon/:sermonId       — get companion for a sermon (admin)
+ * GET  /api/sermon-companions/:companionId              — get companion by id (admin)
+ * PATCH /api/sermon-companions/:companionId             — update title/status (admin)
+ * PATCH /api/sermon-companions/:companionId/entries/:day — update one entry (admin)
  *
  * Member progress:
  * POST /api/sermon-companions/:companionId/progress/start
  * POST /api/sermon-companions/:companionId/progress/complete-day
- * GET  /api/sermon-companions/:companionId/progress   — get my progress
+ * GET  /api/sermon-companions/:companionId/progress
  */
 
 import { Router, type Request, type Response } from "express";
@@ -46,7 +48,7 @@ sermonCompanionsRouter.get("/current-week/member", async (req: Request, res: Res
   if (!userId) return;
 
   try {
-    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    const companion = await store.getCurrentWeekPublicCompanion();
     if (!companion) {
       res.status(404).json({ error: "No current week sermon companion" });
       return;
@@ -73,7 +75,8 @@ sermonCompanionsRouter.post("/:companionId/set-current-week", async (req: Reques
 
   const companionId = String(req.params.companionId);
   try {
-    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    // Admin must be able to check Draft companions too (to produce the 422 guard).
+    const companion = await store.getCompanionById(companionId);
     if (!companion) {
       res.status(404).json({ error: "Sermon companion not found" });
       return;
@@ -128,10 +131,6 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
     const { computeBadge } = await import("../lib/badge.js");
     const result = companions.map(c => {
       const progress = progressMap[c.id] ?? null;
-      // Null out progress for paused companions — Walk.tsx filters on `progress !== null`
-      // so this naturally hides paused companions without client-side status checks.
-      // Hidden companions keep their progress so Next Steps can still surface them as
-      // "in progress"; Walk.tsx filters them separately via hiddenFromToday.
       const activeProgress = progress && progress.status !== "paused" ? progress : null;
       const badge = computeBadge(
         c.notifyPublishedAt ?? null,
@@ -171,7 +170,7 @@ sermonCompanionsRouter.get("/by-sermon/:sermonId", async (req: Request, res: Res
   if (!adminId) return;
 
   try {
-    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    const companion = await store.getCompanionBySermonId(String(req.params.sermonId));
     if (!companion) {
       res.status(404).json({ error: "No companion found for this sermon" });
       return;
@@ -190,7 +189,8 @@ sermonCompanionsRouter.get("/:companionId", async (req: Request, res: Response) 
   if (!adminId) return;
 
   try {
-    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    // Admin can load Draft and Published companions — use unrestricted lookup.
+    const companion = await store.getCompanionById(String(req.params.companionId));
     if (!companion) {
       res.status(404).json({ error: "Companion not found" });
       return;
@@ -282,20 +282,24 @@ sermonCompanionsRouter.get("/:companionId/progress", async (req: Request, res: R
   if (!userId) return;
 
   try {
-    const prog = await store.markDayComplete(userId, String(req.params.companionId), dayNumber);
+    const prog = await store.getProgressForUser(userId, String(req.params.companionId));
+    if (!prog) {
+      res.status(404).json({ error: "No progress found" });
+      return;
+    }
     res.json(prog);
   } catch (err) {
-    logger.error({ err }, "sermon-companions: startCompanion failed");
+    logger.error({ err }, "sermon-companions: getProgress failed");
     res.status(500).json({ error: "Server error" });
   }
 });
 
-sermonCompanionsRouter.post("/:companionId/progress/complete-day", async (req: Request, res: Response) => {
+sermonCompanionsRouter.post("/:companionId/progress/start", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
   try {
-    const prog = await store.markDayComplete(userId, String(req.params.companionId), dayNumber);
+    const prog = await store.startCompanion(userId, String(req.params.companionId));
     res.json(prog);
   } catch (err) {
     logger.error({ err }, "sermon-companions: startCompanion failed");
@@ -339,12 +343,6 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
     const id = String(req.params.companionId);
     const notifyMembers = req.body?.notifyMembers === true;
 
-    const companion = await store.getPublicCompanionById(String(req.params.companionId));
-    if (!companion) {
-      res.status(404).json({ error: "Companion not found" });
-      return;
-    }
-
     // Atomic publish: companion header + all entries in one transaction.
     await store.publishCompanionAtomic(id, notifyMembers);
     await logAuditEvent({
@@ -352,23 +350,36 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
       contentId: id,
       action: "publish",
       performedBy: adminId,
-      previousState: { status: companion.status },
+      previousState: null,
       newState: { status: "Published" },
     });
 
     // Upsert knowledge index so Ask Emmaus can find this companion's step content,
     // prayer themes, and reflection text immediately after publish.
     // Non-blocking fire-and-forget: indexing failure must never prevent publish.
-    if (companion.sermonUuid) {
-      sermonStore.getSermonById(companion.sermonUuid).then((canonical) => {
+    (async () => {
+      try {
+        const companion = await store.getCompanionById(id);
+        // Resolve canonical sermon — prefer sermonUuid FK, fall back to sermonId text column
+        // for legacy companions created before the FK was introduced.
+        let canonical = null;
+        if (companion?.sermonUuid) {
+          canonical = await sermonStore.getSermonById(companion.sermonUuid);
+        } else if (companion?.sermonId) {
+          canonical = await sermonStore.getSermonByLegacyId?.(companion.sermonId)
+            ?? await sermonStore.getSermonById(companion.sermonId);
+        }
         if (!canonical) return;
-        const entries = companion.entries ?? [];
-        const prayerThemes = entries.map((e) => e.prayer).filter(Boolean).join(" ");
-        const stepTitles = entries.map((e) => e.title).filter(Boolean);
-        const stepContent = entries
-          .map((e) => [e.greeting, e.reflection, e.nextStep, e.closing].filter(Boolean).join(" "))
+
+        const allEntries = await store.getEntriesForCompanion(id);
+        const pubEntries = allEntries.filter(e => e.status === "Published");
+        const stepTitles   = pubEntries.map(e => e.title).filter(Boolean);
+        const prayerThemes = pubEntries.map(e => e.prayer).filter(Boolean).join(" ");
+        const stepContent  = pubEntries
+          .map(e => [e.greeting, e.reflection, e.nextStep, e.closing].filter(Boolean).join(" "))
           .join(" ");
-        return upsertKnowledgeIndex({
+
+        await upsertKnowledgeIndex({
           sermonId:           canonical.id,
           companionId:        id,
           title:              canonical.title,
@@ -387,12 +398,12 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
           prayerThemes,
           youtubeUrl:         canonical.youtubeUrl,
           audioPath:          canonical.audioPath,
-          publishedAt:        new Date().toISOString(),
+          publishedAt:        canonical.publishedAt ?? null,
         });
-      }).catch((err) =>
-        logger.warn({ err, companionId: id }, "sermon-companions: knowledge index upsert failed (non-fatal)"),
-      );
-    }
+      } catch (err) {
+        logger.warn({ err, companionId: id }, "sermon-companions: knowledge index upsert failed (non-fatal)");
+      }
+    })();
 
     res.json({ ok: true, status: "Published" });
   } catch (err) {
@@ -402,7 +413,6 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
 });
 
 // ─── POST /:companionId/unpublish ─────────────────────────────────────────────
-// Admin only. Reverts a Published companion back to Draft.
 
 sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
@@ -441,7 +451,7 @@ sermonCompanionsRouter.get("/:companionId/transcript", async (req: Request, res:
       res.status(404).json({ error: "No sermon linked to this companion" });
       return;
     }
-      const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+    const canonical = await sermonStore.getSermonById(companion.sermonUuid);
     if (!canonical?.transcript?.trim()) {
       res.status(404).json({ error: "No transcript available" });
       return;

@@ -12,9 +12,9 @@
  * journey progress). The page auto-starts a progress record on first visit.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft, ExternalLink } from 'lucide-react';
+import { Loader2, ChevronLeft, Play } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { SermonCompanionReading } from '@/components/SermonCompanionReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
 import { dismissBadge } from '@/lib/badge-api';
+import { setActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -60,12 +61,20 @@ interface SCProgress {
   completedDays: number[];
 }
 
+interface SermonMeta {
+  sermonId: string;
+  hasAudio: boolean;
+  youtubeUrl: string;
+  scriptureReference?: string;
+}
+
 interface MemberCompanion {
   id: string;
   title: string;
   numberOfDays: number;
   entries: SCEntry[];
   progress: SCProgress | null;
+  sermon?: SermonMeta | null;
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -98,6 +107,49 @@ async function completeDayApi(id: string, dayNumber: number): Promise<SCProgress
   return res.json();
 }
 
+// ─── Timestamp parsing ───────────────────────────────────────────────────────
+
+/**
+ * Parse a `sermonLink` value into a displayable MM:SS string and an optional href.
+ *
+ * Handles two formats stored by the generation pipeline:
+ *   • YouTube URL with ?t=Ns  → href = full URL, mmss = "M:SS"
+ *   • Plain "M:SS" string     → href = null (no YouTube URL available)
+ */
+function parseSermonLinkTimestamp(sermonLink: string): {
+  href: string | null;
+  mmss: string | null;
+  seekSeconds: number | null;
+} {
+  if (!sermonLink) return { href: null, mmss: null, seekSeconds: null };
+
+  // YouTube URL with ?t= parameter
+  if (sermonLink.startsWith('http')) {
+    try {
+      const url = new URL(sermonLink);
+      const tParam = url.searchParams.get('t');
+      if (tParam) {
+        const secs = parseInt(tParam.replace(/s$/i, ''), 10);
+        if (!isNaN(secs) && secs >= 0) {
+          const m = Math.floor(secs / 60);
+          const s = secs % 60;
+          return { href: sermonLink, mmss: `${m}:${String(s).padStart(2, '0')}`, seekSeconds: secs };
+        }
+      }
+    } catch { /* malformed URL — fall through */ }
+    return { href: sermonLink, mmss: null, seekSeconds: null };
+  }
+
+  // Plain MM:SS format (audio-first pipeline, no YouTube URL)
+  if (/^\d+:\d{2}$/.test(sermonLink.trim())) {
+    const [mStr, sStr] = sermonLink.trim().split(':');
+    const seekSeconds = parseInt(mStr, 10) * 60 + parseInt(sStr, 10);
+    return { href: null, mmss: sermonLink.trim(), seekSeconds };
+  }
+
+  return { href: null, mmss: null, seekSeconds: null };
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SermonCompanionReader() {
@@ -120,6 +172,36 @@ export default function SermonCompanionReader() {
   const [saveError, setSaveError]       = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
 
+  // Inline audio player for audio-first companions (no YouTube URL)
+  const audioRef                          = useRef<HTMLAudioElement>(null);
+  const [audioUrl, setAudioUrl]           = useState<string | null>(null);
+  const [audioLoading, setAudioLoading]   = useState(false);
+
+  const handleSermonTimestampClick = useCallback(async (seekSeconds: number) => {
+    const sermonId = companion?.sermon?.sermonId;
+    if (!sermonId) return;
+    if (audioUrl) {
+      // Audio already loaded — seek and play
+      if (audioRef.current) {
+        audioRef.current.currentTime = seekSeconds;
+        audioRef.current.play().catch(() => {});
+      }
+      return;
+    }
+    setAudioLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/sermons/${sermonId}/audio-url`, { credentials: 'include' });
+      if (!res.ok) throw new Error('unavailable');
+      const { url } = await res.json();
+      setAudioUrl(url);
+      // Seek happens via onLoadedMetadata on the audio element
+    } catch {
+      // Non-fatal — chip remains visible but player won't open
+    } finally {
+      setAudioLoading(false);
+    }
+  }, [companion?.sermon?.sermonId, audioUrl]);
+
   const load = useCallback(async () => {
     if (!companionId || !user?.id) return;
     setLoading(true);
@@ -127,6 +209,15 @@ export default function SermonCompanionReader() {
     try {
       const data = await loadMemberCompanion(companionId);
       setCompanion(data);
+
+      // Broadcast sermon context so the floating Ask Emmaus button can pre-fill
+      // the current sermon when the member asks a question from the reader.
+      setActiveSermonCompanionContext({
+        companionId,
+        sermonId:           data.sermon?.sermonId,
+        sermonTitle:        data.title,
+        scriptureReference: data.sermon?.scriptureReference,
+      });
 
       if (!data.progress) {
         // Auto-start on first visit — no confirmation needed, member is already reading
@@ -150,6 +241,11 @@ export default function SermonCompanionReader() {
   }, [day]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Clear sermon context when leaving the reader page
+  useEffect(() => {
+    return () => setActiveSermonCompanionContext(null);
+  }, []);
 
   // Restore to Today's Steps — clears hidden_from_today when the member opens
   // the content from Next Steps (or any other surface). Fire-and-forget; non-fatal.
@@ -306,20 +402,62 @@ export default function SermonCompanionReader() {
         </div>
       </header>
 
-      {/* Sermon timestamp link — opens the exact sermon moment this entry reflects on */}
-      {entry.sermonLink && (
-        <div className="max-w-[480px] mx-auto px-5 pt-4 pb-1">
-          <a
-            href={entry.sermonLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[14px] text-primary font-medium hover:underline"
-          >
-            <ExternalLink size={14} className="shrink-0" />
-            Listen to this sermon moment
-          </a>
-        </div>
-      )}
+      {/* Sermon timestamp chip — "From this week's sermon · MM:SS" */}
+      {entry.sermonLink && (() => {
+        const { href, mmss, seekSeconds } = parseSermonLinkTimestamp(entry.sermonLink ?? '');
+        if (!href && !mmss) return null;
+        const label = mmss
+          ? `From this week's sermon · ${mmss}`
+          : "From this week's sermon";
+        const hasAudio = companion.sermon?.hasAudio && !companion.sermon?.youtubeUrl;
+        return (
+          <div className="max-w-[480px] mx-auto px-5 pt-4 pb-1 space-y-2">
+            {href ? (
+              // YouTube companion — deep link to that moment
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 text-teal-700 text-[13px] font-medium hover:bg-teal-100 transition-colors"
+              >
+                <Play size={11} className="shrink-0 fill-teal-700" />
+                {label}
+              </a>
+            ) : hasAudio && seekSeconds !== null ? (
+              // Audio-only companion — seek the inline player to the right moment
+              <button
+                onClick={() => handleSermonTimestampClick(seekSeconds)}
+                disabled={audioLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-teal-50 text-teal-700 text-[13px] font-medium hover:bg-teal-100 transition-colors disabled:opacity-60"
+              >
+                <Play size={11} className="shrink-0 fill-teal-700" />
+                {audioLoading ? 'Loading…' : label}
+              </button>
+            ) : (
+              // No playable media — display only
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 text-[13px] font-medium">
+                <Play size={11} className="shrink-0 fill-gray-600" />
+                {label}
+              </span>
+            )}
+            {/* Inline audio player — appears once the signed URL is loaded */}
+            {audioUrl && (
+              <audio
+                ref={audioRef}
+                src={audioUrl}
+                controls
+                className="w-full rounded-lg"
+                onLoadedMetadata={() => {
+                  if (audioRef.current && seekSeconds !== null) {
+                    audioRef.current.currentTime = seekSeconds;
+                    audioRef.current.play().catch(() => {});
+                  }
+                }}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Reading content */}
       <main className="max-w-[480px] mx-auto">

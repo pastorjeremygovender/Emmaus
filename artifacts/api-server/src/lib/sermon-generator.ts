@@ -725,15 +725,10 @@ export function hasPrescription(text: string): boolean {
 }
 
 // ─── Sermon-link builder ──────────────────────────────────────────────────────
-
-/**
- * Build a timestamped YouTube URL from a videoId and start time in seconds.
- * Returns '' when either input is missing or startSeconds is invalid.
- */
-export function buildSermonLink(videoId: string, startSeconds: number | null | undefined): string {
-  if (!videoId || startSeconds == null || !isFinite(startSeconds) || startSeconds < 0) return '';
-  return `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(startSeconds)}s`;
-}
+// Imported for use within this file; also re-exported so callers can import
+// from either sermon-generator or sermon-timestamp-utils directly.
+import { buildSermonLink, buildSermonTimeline } from "./sermon-timestamp-utils.js";
+export { buildSermonLink, buildSermonTimeline };
 
 // ─── OpenAI: companion generation ────────────────────────────────────────────
 
@@ -778,7 +773,10 @@ EACH DAY MUST CONTAIN:
   begin with "Lord," or "Father,"; never "Dear God"
 - nextStep: 1 sentence; one gentle, non-formulaic action directly from the
   preacher's emphasis; no counts, no repetition, no cards, no rituals
-- sources: at least one object identifying the sermon segment for this day
+- sources: at least one object identifying the sermon segment for this day.
+  Use the SERMON TIMESTAMP LANDMARKS provided below (if any) to set startSeconds.
+  Pick the landmark whose content most closely matches the idea for this day.
+  If no landmarks are provided, estimate startSeconds as best you can from context.
 
 Return ONLY valid JSON — no markdown, no explanation.
 
@@ -810,6 +808,12 @@ async function generateCompanion(context: {
   transcript: string;
   mainTheme: string;
   videoId: string;
+  /** VTT timed cues from the caption track — used to build real timestamp anchors. */
+  timedCues?: TimedCue[];
+  /** Detected sermon start time in seconds (used to filter timedCues to sermon window). */
+  sermonStartSecs?: number | null;
+  /** Detected sermon end time in seconds. */
+  sermonEndSecs?: number | null;
 }): Promise<{
   companionTitle: string;
   days: CompanionEntryDraft[];
@@ -820,11 +824,26 @@ async function generateCompanion(context: {
     ? `\n\nSermon transcript:\n${context.transcript.split(/\s+/).slice(0, 8000).join(" ")}`
     : "";
 
+  // Build real timestamp landmarks when timedCues are available so the model can
+  // anchor sources[0].startSeconds to genuine caption timestamps rather than guessing.
+  let timelineSnippet = "";
+  if (context.timedCues && context.timedCues.length > 0) {
+    const landmarks = buildSermonTimeline(
+      context.timedCues,
+      context.sermonStartSecs ?? null,
+      context.sermonEndSecs ?? null,
+    );
+    if (landmarks.length > 0) {
+      timelineSnippet = "\n\nSERMON TIMESTAMP LANDMARKS (real times — pick the nearest `secs` value for sources[0].startSeconds):\n"
+        + landmarks.map(l => `[${l.mmss} = ${l.secs}s] "${l.preview}"`).join("\n");
+    }
+  }
+
   const userMsg = `Confirmed Main Theme: ${context.mainTheme}
 
 Sermon title: ${context.sermonTitle}
 Scripture: ${context.scriptureReference}
-Summary: ${context.summary}${transcriptSnippet}`;
+Summary: ${context.summary}${transcriptSnippet}${timelineSnippet}`;
 
   const res = await openai.chat.completions.create({
     model: MODEL,
@@ -858,7 +877,16 @@ Summary: ${context.summary}${transcriptSnippet}`;
     const startSeconds = typeof firstSource.startSeconds === "number"
       ? firstSource.startSeconds
       : null;
-    const sermonLink = buildSermonLink(context.videoId, startSeconds);
+
+    // Only generate a seek link when we have real VTT timestamps to anchor it.
+    // Audio-first companions have no timed cues — the AI estimates relative to a
+    // plain-text transcript, which is unreliable for playback seek. Showing a chip
+    // that takes a member to the wrong moment is worse than showing none.
+    const hasRealTimestamps =
+      (context.timedCues && context.timedCues.length > 0) || Boolean(context.videoId);
+    const sermonLink = hasRealTimestamps
+      ? buildSermonLink(context.videoId, startSeconds, context.sermonStartSecs)
+      : '';
 
     // sermonIdea is stored in the `greeting` field (repurposed from personal greeting).
     const sermonIdea = typeof d.sermonIdea === "string" ? d.sermonIdea : "";
@@ -1218,6 +1246,9 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       transcript: sermonTranscript,   // ← sermon only
       mainTheme,
       videoId,                         // ← needed for timestamped sermon links
+      timedCues,                        // ← real VTT timestamps for landmark anchoring
+      sermonStartSecs: detectionStartSecs,
+      sermonEndSecs:   detectionEndSecs,
     });
   } catch (err) {
     logger.error({ err }, "sermon-generator: OpenAI companion generation failed");
@@ -1451,6 +1482,10 @@ export async function generateSermonContentFromTranscript(
     transcript:         sermonTranscript,
     mainTheme,
     videoId:            "",
+    // Pass detected sermon start so buildSermonLink can convert the AI's 0-based
+    // transcript estimates into absolute offsets within the full uploaded audio file.
+    sermonStartSecs:    detectionStartSecs ?? 0,
+    sermonEndSecs:      detectionEndSecs ?? undefined,
   });
 
   // 5. Update existing sermon record with generated content
