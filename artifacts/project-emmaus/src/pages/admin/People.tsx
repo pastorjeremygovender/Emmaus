@@ -46,13 +46,25 @@ interface Props {
 function MembersTab() {
   const [subView, setSubView] = useState<MembersSubView>('all-people');
   const [selectedPerson, setSelectedPerson] = useState<UnifiedPerson | null>(null);
+  const [scrollToSignals, setScrollToSignals] = useState(false);
+
+  const handleSelectPerson = (person: UnifiedPerson, hasSignals?: boolean) => {
+    setSelectedPerson(person);
+    setScrollToSignals(hasSignals ?? false);
+  };
+
+  const handleBack = () => {
+    setSelectedPerson(null);
+    setScrollToSignals(false);
+  };
 
   if (subView === 'all-people' && selectedPerson) {
     return (
       <div className="flex flex-col h-full min-h-0">
         <PersonPage
           person={selectedPerson}
-          onBack={() => setSelectedPerson(null)}
+          onBack={handleBack}
+          scrollToCareSignals={scrollToSignals}
         />
       </div>
     );
@@ -69,7 +81,7 @@ function MembersTab() {
           ]).map(({ id, label }) => (
             <button
               key={id}
-              onClick={() => { setSubView(id); setSelectedPerson(null); }}
+              onClick={() => { setSubView(id); handleBack(); }}
               className={`px-3 py-1.5 text-[12px] font-medium rounded-t-lg border-b-2 transition-colors -mb-px whitespace-nowrap ${
                 subView === id
                   ? 'border-teal-600 text-teal-700 bg-white'
@@ -85,7 +97,7 @@ function MembersTab() {
       <div className="flex-1 overflow-y-auto min-h-0">
         {subView === 'emmaus'     && <AdminUsers />}
         {subView === 'all-people' && (
-          <PastoralPeople onSelectPerson={setSelectedPerson} />
+          <PastoralPeople onSelectPerson={handleSelectPerson} />
         )}
       </div>
     </div>

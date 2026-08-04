@@ -16,7 +16,7 @@
  *   9. Administrative Details
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Bell, Calendar, X, AlertCircle, Loader2,
   MapPin, Clock, Activity, Star, BookOpen, CalendarDays,
@@ -40,6 +40,7 @@ import AdminDetails        from './profile/AdminDetails';
 interface Props {
   person: api.UnifiedPerson;
   onBack: () => void;
+  scrollToCareSignals?: boolean;
 }
 
 // ── Section shell ─────────────────────────────────────────────────────────────
@@ -69,10 +70,11 @@ function fmt(d: string | null | undefined, opts?: Intl.DateTimeFormatOptions) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function PersonPage({ person, onBack }: Props) {
+export default function PersonPage({ person, onBack, scrollToCareSignals }: Props) {
   const { user } = useAuth();
   const auth: api.AuthHeaders = { userId: user?.id ?? '', userRole: user?.role ?? 'admin' };
   const pKey = api.personKey(person.id, person.personType);
+  const careSignalsRef = useRef<HTMLDivElement>(null);
 
   // ── Data state ─────────────────────────────────────────────────────────────
   const [history,      setHistory]      = useState<api.AttendanceHistoryItem[]>([]);
@@ -181,6 +183,15 @@ export default function PersonPage({ person, onBack }: Props) {
     loadCore(); loadSnapshot(); loadDiscipleship();
     loadTimeline(); loadRhythm(); loadAttRhythm(); loadMilestones();
   }, [loadCore, loadSnapshot, loadDiscipleship, loadTimeline, loadRhythm, loadAttRhythm, loadMilestones]);
+
+  // Scroll to Care Signals section when opened from a flagged person row
+  useEffect(() => {
+    if (!scrollToCareSignals) return;
+    const t = setTimeout(() => {
+      careSignalsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [scrollToCareSignals]);
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
@@ -298,11 +309,13 @@ export default function PersonPage({ person, onBack }: Props) {
         />
 
         {/* 1b. Care Signals — directly below Hero Summary per spec */}
-        <CareSignalsSection
-          personId={person.id}
-          personType={person.personType}
-          auth={auth}
-        />
+        <div ref={careSignalsRef}>
+          <CareSignalsSection
+            personId={person.id}
+            personType={person.personType}
+            auth={auth}
+          />
+        </div>
 
         {/* 2. Discipleship Timeline */}
         <Section title="Discipleship Timeline" icon={Clock} iconColor="text-teal-600">

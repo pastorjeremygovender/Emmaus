@@ -14,7 +14,7 @@ import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
-  onSelectPerson: (person: api.UnifiedPerson) => void;
+  onSelectPerson: (person: api.UnifiedPerson, scrollToSignals?: boolean) => void;
 }
 
 type Filter = 'all' | 'emmaus' | 'attendance_only' | 'visitor' | 'unlinked';
@@ -44,15 +44,23 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
   const { user } = useAuth();
   const auth: api.AuthHeaders = { userId: user?.id ?? '', userRole: user?.role ?? 'admin' };
 
-  const [people, setPeople]     = useState<api.UnifiedPerson[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [search, setSearch]     = useState('');
-  const [filter, setFilter]     = useState<Filter>('all');
+  const [people, setPeople]       = useState<api.UnifiedPerson[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [search, setSearch]       = useState('');
+  const [filter, setFilter]       = useState<Filter>('all');
+  const [signalCounts, setSignalCounts] = useState<Map<string, api.PersonSignalCounts>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
-    try { setPeople(await api.listPeople(auth)); }
+    try {
+      const [people, counts] = await Promise.all([
+        api.listPeople(auth),
+        api.getDiscipleshipSignalCounts(auth).catch(() => [] as api.PersonSignalCounts[]),
+      ]);
+      setPeople(people);
+      setSignalCounts(new Map(counts.map(c => [c.personId, c])));
+    }
     catch { setError('Could not load people.'); }
     finally { setLoading(false); }
   }, [auth.userId]);
@@ -69,6 +77,19 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
     if (filter === 'unlinked')        return p.personType === 'pastoral_person' && !p.isLinked;
     return true;
   });
+
+  // Category badge colours match the established palette in CareSignalsSection
+  const SIGNAL_CAT_BADGE: Array<{
+    key: keyof api.PersonSignalCounts;
+    label: string;
+    cls: string;
+  }> = [
+    { key: 'significant', label: 'Significant', cls: 'bg-rose-100 text-rose-700' },
+    { key: 'followUp',    label: 'Follow-up',   cls: 'bg-orange-100 text-orange-700' },
+    { key: 'attention',   label: 'Attention',   cls: 'bg-amber-100 text-amber-700' },
+    { key: 'growth',      label: 'Growth',      cls: 'bg-teal-100 text-teal-700' },
+    { key: 'celebration', label: 'Celebration', cls: 'bg-green-100 text-green-700' },
+  ];
 
   const subTypeBadge: Record<string, string> = {
     emmaus_user:      'bg-teal-50 text-teal-700',
@@ -149,10 +170,14 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {filtered.map(p => (
+            {filtered.map(p => {
+              const sc = signalCounts.get(p.id);
+              const hasSignals = (sc?.total ?? 0) > 0;
+
+              return (
               <button
                 key={p.id}
-                onClick={() => onSelectPerson(p)}
+                onClick={() => onSelectPerson(p, hasSignals)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/60 transition-colors">
 
                 {/* Avatar */}
@@ -177,13 +202,19 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
                         <UserX size={12} className="text-gray-300" />
                       </span>
                     )}
-                    {(p.openSignals ?? 0) > 0 && (
-                      <span
-                        title={`${p.openSignals} open care alert${(p.openSignals ?? 0) > 1 ? 's' : ''}`}
-                        className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-rose-100 text-rose-700">
-                        {p.openSignals}
-                      </span>
-                    )}
+                    {/* Per-category signal badges — one per non-zero category */}
+                    {sc && SIGNAL_CAT_BADGE.map(({ key, label, cls }) => {
+                      const count = sc[key] as number;
+                      if (!count) return null;
+                      return (
+                        <span
+                          key={key}
+                          title={`${count} ${label} signal${count > 1 ? 's' : ''}`}
+                          className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${cls}`}>
+                          {count}
+                        </span>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-[11px] text-gray-400 flex-wrap">
                     {p.email && <span className="truncate">{p.email}</span>}
@@ -206,7 +237,8 @@ export default function PastoralPeople({ onSelectPerson }: Props) {
 
                 <ChevronRight size={14} className="text-gray-300 shrink-0" />
               </button>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

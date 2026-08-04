@@ -658,6 +658,16 @@ export interface DiscipleshipSignal {
   updatedAt: string;
 }
 
+export interface PersonSignalCounts {
+  personId: string;
+  personType: PersonType;
+  significant: number;
+  followUp: number;
+  attention: number;
+  growth: number;
+  celebration: number;
+  total: number;
+}
 export const listDiscipleshipSignals = (
   auth: AuthHeaders,
   opts?: {
@@ -790,3 +800,7 @@ export const getDashMovement      = (auth: AuthHeaders) => dashFetch<DashMovemen
 export const getDashEngagement    = (auth: AuthHeaders) => dashFetch<DashEngagementData>("/engagement", auth);
 export const getDashNewBelievers  = (auth: AuthHeaders) => dashFetch<DashNewBeliever[]>("/new-believers", auth);
 export const getDashActivity      = (auth: AuthHeaders) => dashFetch<DashActivityItem[]>("/activity", auth);
+
+/** Returns open discipleship-signal counts grouped by person and category. */
+export const getDiscipleshipSignalCounts = (auth: AuthHeaders) =>
+  apiFetch<PersonSignalCounts[]>("/discipleship-signals/counts", "GET", auth);

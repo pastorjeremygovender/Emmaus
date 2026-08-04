@@ -1075,6 +1075,19 @@ pastoralRouter.get("/discipleship-signals/engine-status", async (req: Request, r
   }
 });
 
+/** GET /pastoral/discipleship-signals/counts — open signal counts per person, grouped by category */
+pastoralRouter.get("/discipleship-signals/counts", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    const counts = await store.getDiscipleshipSignalCounts();
+    res.json(counts);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDiscipleshipSignalCounts failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /** POST /pastoral/discipleship-signals/run-engine */
 pastoralRouter.post("/discipleship-signals/run-engine", async (req: Request, res: Response) => {
   const userId = await requirePastorAccess(req, res);

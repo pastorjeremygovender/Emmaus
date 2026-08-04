@@ -2197,6 +2197,16 @@ export async function listDiscipleshipSignals(opts?: {
   return res.rows.map(rowToDiscipleshipSignal);
 }
 
+export interface DiscipleshipSignalCountRow {
+  personId: string;
+  personType: PersonType;
+  significant: number;
+  followUp: number;
+  attention: number;
+  growth: number;
+  celebration: number;
+  total: number;
+}
 export async function updateSignalStatus(
   id: string,
   status: SignalStatus,
@@ -2510,4 +2520,34 @@ export async function runSignalsEngine(opts?: {
   }
 
   return { processed: targets.length, created, updated, resolved };
+}
+
+/** Returns open discipleship-signal counts grouped by person and category. */
+export async function getDiscipleshipSignalCounts(): Promise<DiscipleshipSignalCountRow[]> {
+  const res = await pool.query(
+    `SELECT
+       person_id,
+       person_type,
+       COUNT(*) FILTER (WHERE category = 'significant')::int  AS significant,
+       COUNT(*) FILTER (WHERE category = 'follow_up')::int    AS follow_up,
+       COUNT(*) FILTER (WHERE category = 'attention')::int    AS attention,
+       COUNT(*) FILTER (WHERE category = 'growth')::int       AS growth,
+       COUNT(*) FILTER (WHERE category = 'celebration')::int  AS celebration,
+       COUNT(*)::int                                          AS total
+     FROM discipleship_signals
+     WHERE church_id = $1
+       AND status NOT IN ('resolved', 'dismissed')
+     GROUP BY person_id, person_type`,
+    [CHURCH_ID],
+  );
+  return res.rows.map((r) => ({
+    personId:    String(r.person_id),
+    personType:  String(r.person_type) as PersonType,
+    significant: Number(r.significant ?? 0),
+    followUp:    Number(r.follow_up ?? 0),
+    attention:   Number(r.attention ?? 0),
+    growth:      Number(r.growth ?? 0),
+    celebration: Number(r.celebration ?? 0),
+    total:       Number(r.total ?? 0),
+  }));
 }
