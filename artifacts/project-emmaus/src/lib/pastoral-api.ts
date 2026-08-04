@@ -313,6 +313,18 @@ export const getAttendanceHistory = (auth: AuthHeaders, pid: string, pType: Pers
     auth
   );
 
+export interface DiscipleshipJourney {
+  journeyId: string;
+  title: string;
+  journeyType: string;
+  currentDay: number;
+  totalDays: number;
+  completedDays: number;
+  status: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+}
+
 // ─── Care Signals ─────────────────────────────────────────────────────────────
 
 export type CareSignalTrigger = "missed_session";
@@ -364,3 +376,48 @@ export const getPastoralAuditLog = (auth: AuthHeaders, opts?: { personId?: strin
   if (opts?.limit)      p.set("limit",      String(opts.limit));
   return apiFetch<PastoralAuditEntry[]>(`/audit-log${p.toString() ? `?${p}` : ""}`, "GET", auth);
 };
+
+export type DiscipleshipSummary =
+  | { available: false; reason?: string }
+  | {
+      available: true;
+      userId: string;
+      journeys: DiscipleshipJourney[];
+      rooms: DiscipleshipRoom[];
+      devotionals: DiscipleshipDevotional[];
+      sermonCompanions: DiscipleshipSermonCompanion[];
+    };
+
+export interface DiscipleshipDevotional {
+  seriesId: string;
+  title: string;
+  currentDay: number;
+  completedCount: number;
+  status: string;
+  startedAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface DiscipleshipRoom {
+  roomId: string;
+  roomName: string;
+  role: string;
+  joinedAt: string | null;
+}
+
+export const getDiscipleshipSummary = (auth: AuthHeaders, pid: string, pType: PersonType) =>
+  apiFetch<DiscipleshipSummary>(
+    `/people/${personKey(pid, pType)}/discipleship-summary`,
+    "GET",
+    auth
+  );
+
+export interface DiscipleshipSermonCompanion {
+  companionId: string;
+  title: string;
+  currentDay: number;
+  totalDays: number;
+  completedCount: number;
+  startedAt: string | null;
+  updatedAt: string | null;
+}

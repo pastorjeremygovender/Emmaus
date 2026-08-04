@@ -9,6 +9,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, CalendarDays, UserCheck, Plus, Trash2,
   Loader2, AlertCircle, CheckCircle2, X,
+  BookOpen, Users, Heart, Mic,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,6 +42,8 @@ export default function PersonPage({ person, onBack }: Props) {
   const [meetingTypes, setMeetingTypes] = useState<api.MeetingType[]>([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
+  const [discipleship, setDiscipleship] = useState<api.DiscipleshipSummary | null>(null);
+  const [discipleshipLoading, setDiscipleshipLoading] = useState(false);
 
   // Link modal
   const [showLink, setShowLink]   = useState(false);
@@ -58,6 +61,15 @@ export default function PersonPage({ person, onBack }: Props) {
   const [newExp, setNewExp]             = useState<api.Expectation>('expected');
   const [newExpNotes, setNewExpNotes]   = useState('');
   const [addExpSaving, setAddExpSaving] = useState(false);
+
+  const loadDiscipleship = useCallback(async () => {
+    setDiscipleshipLoading(true);
+    try {
+      const summary = await api.getDiscipleshipSummary(auth, person.id, person.personType);
+      setDiscipleship(summary);
+    } catch { /* non-critical — silently omit */ }
+    finally { setDiscipleshipLoading(false); }
+  }, [person.id, person.personType, auth.userId]);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -78,6 +90,13 @@ export default function PersonPage({ person, onBack }: Props) {
   }, [person.id, person.personType, auth.userId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Fetch/re-fetch discipleship summary whenever eligibility changes (incl. after linking)
+  useEffect(() => {
+    if (person.personType === 'emmaus_user' || linked) {
+      loadDiscipleship();
+    }
+  }, [linked, loadDiscipleship, person.personType]);
 
   const flash = (msg: string) => {
     setSaveMsg(msg);
@@ -325,9 +344,171 @@ export default function PersonPage({ person, onBack }: Props) {
               )}
             </section>
 
-            <p className="text-[11px] text-gray-400 text-center pb-4">
-              Full discipleship profile (Walks, Rooms, Emmaus activity) coming in Checkpoint 2.
-            </p>
+            {/* ── Discipleship ──────────────────────────────────────────── */}
+            {(person.personType === 'emmaus_user' || linked) && (
+              <section className="space-y-2">
+                <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Discipleship</h3>
+
+                {discipleshipLoading ? (
+                  <div className="flex items-center gap-2 py-4 text-[12px] text-gray-400">
+                    <Loader2 size={13} className="animate-spin" /> Loading activity…
+                  </div>
+                ) : !discipleship ? (
+                  <p className="text-[12px] text-gray-400 py-2">Could not load discipleship data.</p>
+                ) : !discipleship.available ? (
+                  <p className="text-[12px] text-gray-400 py-2">No linked Emmaus account — no discipleship data available.</p>
+                ) : (
+                  <div className="space-y-3">
+
+                    {/* Walks */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                        <BookOpen size={12} className="text-teal-600" />
+                        <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Walks</span>
+                        <span className="ml-auto text-[11px] text-gray-400">{discipleship.journeys.length} active</span>
+                      </div>
+                      {discipleship.journeys.length === 0 ? (
+                        <p className="px-4 py-3 text-[12px] text-gray-400">No walks in progress.</p>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {discipleship.journeys.map(j => {
+                            const pct = j.totalDays > 0 ? Math.round((j.completedDays / j.totalDays) * 100) : 0;
+                            const isComplete = j.status === 'completed';
+                            return (
+                              <div key={j.journeyId} className="px-4 py-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-medium text-gray-900 truncate">{j.title}</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                      {isComplete
+                                        ? 'Completed'
+                                        : `Day ${j.currentDay}${j.totalDays > 0 ? ` of ${j.totalDays}` : ''}`}
+                                      {j.updatedAt && (
+                                        <> · Last active {new Date(j.updatedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</>
+                                      )}
+                                    </p>
+                                  </div>
+                                  <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                    isComplete ? 'bg-green-50 text-green-700' :
+                                    j.status === 'active' ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-500'
+                                  }`}>
+                                    {isComplete ? 'Done' : j.status}
+                                  </span>
+                                </div>
+                                {j.totalDays > 0 && (
+                                  <div className="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${isComplete ? 'bg-green-400' : 'bg-teal-400'}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Rooms */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                        <Users size={12} className="text-purple-600" />
+                        <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Rooms</span>
+                        <span className="ml-auto text-[11px] text-gray-400">{discipleship.rooms.length} room{discipleship.rooms.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      {discipleship.rooms.length === 0 ? (
+                        <p className="px-4 py-3 text-[12px] text-gray-400">Not a member of any room.</p>
+                      ) : (
+                        <div className="divide-y divide-gray-100">
+                          {discipleship.rooms.map(r => (
+                            <div key={r.roomId} className="flex items-center gap-3 px-4 py-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-medium text-gray-900 truncate">{r.roomName}</p>
+                                {r.joinedAt && (
+                                  <p className="text-[11px] text-gray-400 mt-0.5">
+                                    Joined {new Date(r.joinedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                  </p>
+                                )}
+                              </div>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${r.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {r.role === 'admin' ? 'Leader' : 'Member'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Devotionals */}
+                    {discipleship.devotionals.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                          <Heart size={12} className="text-rose-500" />
+                          <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Devotionals</span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {discipleship.devotionals.map(d => (
+                            <div key={d.seriesId} className="flex items-center gap-3 px-4 py-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[13px] font-medium text-gray-900 truncate">{d.title}</p>
+                                <p className="text-[11px] text-gray-400 mt-0.5">
+                                  {d.completedCount} day{d.completedCount !== 1 ? 's' : ''} completed
+                                  {d.updatedAt && (
+                                    <> · {new Date(d.updatedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</>
+                                  )}
+                                </p>
+                              </div>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                d.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-rose-50 text-rose-700'
+                              }`}>
+                                {d.status === 'completed' ? 'Done' : 'Active'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sermon Companions */}
+                    {discipleship.sermonCompanions.length > 0 && (
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                          <Mic size={12} className="text-amber-600" />
+                          <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Sermon Companions</span>
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {discipleship.sermonCompanions.map(sc => {
+                            const pct = sc.totalDays > 0 ? Math.round((sc.completedCount / sc.totalDays) * 100) : 0;
+                            return (
+                              <div key={sc.companionId} className="px-4 py-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-medium text-gray-900 truncate">{sc.title}</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">
+                                      {sc.completedCount}{sc.totalDays > 0 ? ` of ${sc.totalDays}` : ''} days
+                                      {sc.updatedAt && (
+                                        <> · {new Date(sc.updatedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}</>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                {sc.totalDays > 0 && (
+                                  <div className="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </div>

@@ -29,6 +29,7 @@
 
 import { Router, type Request, type Response } from "express";
 import * as store from "../lib/pastoral-store.js";
+import { CHURCH_ID } from "../lib/pastoral-store.js";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../emmaus/auth.js";
 import { logger } from "../lib/logger.js";
@@ -554,6 +555,154 @@ pastoralRouter.patch("/care-signals/:id/dismiss", async (req: Request, res: Resp
   }
 });
 
+// ─── Discipleship summary ─────────────────────────────────────────────────────
+
+/**
+ * GET /pastoral/people/:personKey/discipleship-summary
+ *
+ * Returns aggregated Walk/Room/Devotional/Sermon-Companion activity for a
+ * person. Only available when the person has a linked Emmaus account (or IS
+ * an Emmaus user). Non-admin roles cannot call this endpoint.
+ */
+pastoralRouter.get("/people/:personKey/discipleship-summary", async (req: Request, res: Response) => {
+  const callerId = await requirePastorAccess(req, res);
+  if (!callerId) return;
+
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+
+  try {
+    // Resolve the Emmaus userId for this person, with authorization checks.
+    let emmausUserId: string | null = null;
+
+    if (parsed.personType === "emmaus_user") {
+      // Verify this user exists in the system (user_profiles is the canonical user store).
+      const userRow = await pool.query(
+        `SELECT email FROM user_profiles WHERE email = $1`,
+        [parsed.personId]
+      );
+      if (userRow.rows.length === 0) {
+        res.status(404).json({ error: "User not found." });
+        return;
+      }
+      emmausUserId = parsed.personId;
+    } else {
+      // pastoral_person — scope to this church before reading linked_user_id.
+      const row = await pool.query(
+        `SELECT linked_user_id FROM pastoral_persons WHERE id = $1 AND church_id = $2`,
+        [parsed.personId, CHURCH_ID]
+      );
+      if (row.rows.length === 0) {
+        res.status(404).json({ error: "Person not found." });
+        return;
+      }
+      emmausUserId = row.rows[0]?.linked_user_id ?? null;
+    }
+
+    if (!emmausUserId) {
+      res.json({ available: false, reason: "no_emmaus_account" });
+      return;
+    }
+
+    // Run all four queries in parallel
+    const [journeysRes, roomsRes, devotionalsRes, companionsRes] = await Promise.all([
+      // 1. Journey progress
+      pool.query(
+        `SELECT ujp.journey_id, ujp.current_day, ujp.completed_days, ujp.status,
+                ujp.started_at, ujp.updated_at,
+                j.title, j.duration_days, j.journey_type
+         FROM   user_journey_progress ujp
+         JOIN   journeys j ON j.id = ujp.journey_id
+         WHERE  ujp.user_id = $1
+           AND  ujp.status NOT IN ('paused')
+         ORDER  BY ujp.updated_at DESC NULLS LAST
+         LIMIT  10`,
+        [emmausUserId]
+      ),
+      // 2. Room memberships
+      pool.query(
+        `SELECT rm.room_id, rm.role, rm.joined_at, r.name AS room_name
+         FROM   room_members rm
+         JOIN   rooms r ON r.id = rm.room_id
+         WHERE  rm.user_id = $1
+         ORDER  BY rm.joined_at DESC NULLS LAST`,
+        [emmausUserId]
+      ),
+      // 3. Devotional progress
+      pool.query(
+        `SELECT dp.series_id, dp.current_day, dp.completed_days, dp.status,
+                dp.started_at, dp.updated_at,
+                ds.title
+         FROM   devotional_progress dp
+         JOIN   devotional_series ds ON ds.id = dp.series_id
+         WHERE  dp.user_id = $1
+         ORDER  BY dp.updated_at DESC NULLS LAST
+         LIMIT  10`,
+        [emmausUserId]
+      ),
+      // 4. Sermon companion progress
+      pool.query(
+        `SELECT scp.companion_id, scp.current_day, scp.completed_days, scp.started_at, scp.updated_at,
+                sc.title, sc.number_of_days, sc.status AS companion_status
+         FROM   sermon_companion_progress scp
+         JOIN   sermon_companion sc ON sc.id = scp.companion_id
+         WHERE  scp.user_id = $1
+         ORDER  BY scp.updated_at DESC NULLS LAST
+         LIMIT  10`,
+        [emmausUserId]
+      ),
+    ]);
+
+    const completedCount = (days: unknown): number => {
+      if (Array.isArray(days)) return days.length;
+      if (days && typeof days === "object") return Object.keys(days).length;
+      return 0;
+    };
+
+    res.json({
+      available: true,
+      userId: emmausUserId,
+      journeys: journeysRes.rows.map(r => ({
+        journeyId:     String(r.journey_id),
+        title:         String(r.title),
+        journeyType:   String(r.journey_type ?? ""),
+        currentDay:    Number(r.current_day ?? 1),
+        totalDays:     Number(r.duration_days ?? 0),
+        completedDays: completedCount(r.completed_days),
+        status:        String(r.status ?? ""),
+        startedAt:     r.started_at ? String(r.started_at) : null,
+        updatedAt:     r.updated_at ? String(r.updated_at) : null,
+      })),
+      rooms: roomsRes.rows.map(r => ({
+        roomId:   String(r.room_id),
+        roomName: String(r.room_name),
+        role:     String(r.role ?? "member"),
+        joinedAt: r.joined_at ? String(r.joined_at) : null,
+      })),
+      devotionals: devotionalsRes.rows.map(r => ({
+        seriesId:       String(r.series_id),
+        title:          String(r.title),
+        currentDay:     Number(r.current_day ?? 1),
+        completedCount: completedCount(r.completed_days),
+        status:         String(r.status ?? ""),
+        startedAt:      r.started_at ? String(r.started_at) : null,
+        updatedAt:      r.updated_at ? String(r.updated_at) : null,
+      })),
+      sermonCompanions: companionsRes.rows.map(r => ({
+        companionId:    String(r.companion_id),
+        title:          String(r.title),
+        currentDay:     Number(r.current_day ?? 1),
+        totalDays:      Number(r.number_of_days ?? 0),
+        completedCount: completedCount(r.completed_days),
+        startedAt:      r.started_at ? String(r.started_at) : null,
+        updatedAt:      r.updated_at ? String(r.updated_at) : null,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDiscipleshipSummary failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // ─── Audit log ────────────────────────────────────────────────────────────────
 
 pastoralRouter.get("/audit-log", async (req: Request, res: Response) => {
