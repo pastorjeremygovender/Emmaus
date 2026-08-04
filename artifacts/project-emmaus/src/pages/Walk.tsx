@@ -73,7 +73,7 @@ function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(p => !p)}
+        onClick={(e) => { e.stopPropagation(); setOpen(p => !p); }}
         className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
         aria-label="More actions"
       >

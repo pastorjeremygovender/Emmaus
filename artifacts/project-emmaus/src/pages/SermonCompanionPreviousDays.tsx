@@ -76,6 +76,7 @@ export default function SermonCompanionPreviousDays() {
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
+      label: `Step ${e.dayNumber}`,
       title: e.title || `Step ${e.dayNumber}`,
       subtitle: e.scriptureReference || undefined,
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',

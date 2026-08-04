@@ -16,7 +16,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, ExternalLink } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
-import { DevotionalReading } from '@/components/DevotionalReading';
+import { SermonCompanionReading } from '@/components/SermonCompanionReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -323,9 +323,9 @@ export default function SermonCompanionReader() {
 
       {/* Reading content */}
       <main className="max-w-[480px] mx-auto">
-        <DevotionalReading
-          seriesTitle={companion.title}
-          dayNumber={day}
+        <SermonCompanionReading
+          companionTitle={companion.title}
+          stepNumber={day}
           title={entry.title}
           greeting={entry.greeting}
           scripture={entry.scriptureReference}
