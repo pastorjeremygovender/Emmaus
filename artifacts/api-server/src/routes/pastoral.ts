@@ -336,7 +336,16 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
   if (!userId) return;
   const id = String(req.params.id);
   try {
-    await store.updateSession(id, req.body as Parameters<typeof store.updateSession>[1]);
+    const body = req.body as Parameters<typeof store.updateSession>[1];
+    await store.updateSession(id, body);
+
+    // Auto-generate care signals whenever a session is marked complete
+    if (body.status === "completed") {
+      store.generateCareSignals(id).catch((err) => {
+        logger.warn({ err, sessionId: id }, "pastoral: generateCareSignals failed (non-fatal)");
+      });
+    }
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "pastoral: updateSession failed");
