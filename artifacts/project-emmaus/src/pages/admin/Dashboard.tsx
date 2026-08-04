@@ -326,11 +326,26 @@ function PriorityTodaySection({
   );
   const { data, loading, error, refresh } = useAutoFetch(fetch);
 
-  const [busy,       setBusy]       = useState<string | null>(null);
-  const [taskForm,   setTaskForm]   = useState<CreateTaskForm | null>(null);
-  const [taskNote,   setTaskNote]   = useState('');
-  const [taskBusy,   setTaskBusy]   = useState(false);
-  const [dismissed,  setDismissed]  = useState<Set<string>>(new Set());
+  const [busy,          setBusy]          = useState<string | null>(null);
+  const [taskForm,      setTaskForm]      = useState<CreateTaskForm | null>(null);
+  const [taskNote,      setTaskNote]      = useState('');
+  const [taskBusy,      setTaskBusy]      = useState(false);
+  const [dismissed,     setDismissed]     = useState<Set<string>>(new Set());
+  const [engineRunning, setEngineRunning] = useState(false);
+  const [engineConfirm, setEngineConfirm] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRunEngine = async () => {
+    setEngineRunning(true);
+    try {
+      await pastoralApi.runSignalsEngine(pAuth);
+      await refresh();
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setEngineConfirm(true);
+      confirmTimer.current = setTimeout(() => setEngineConfirm(false), 3000);
+    } catch { /* no-op */ }
+    finally { setEngineRunning(false); }
+  };
 
   const sorted = [...(data ?? [])]
     .sort((a, b) => (PRIORITY_SORT[a.category] ?? 5) - (PRIORITY_SORT[b.category] ?? 5))
@@ -388,14 +403,30 @@ function PriorityTodaySection({
         }
       />
 
+      {engineConfirm && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-teal-50 border border-teal-200 text-[12px] text-teal-700 font-medium">
+          <CheckCheck size={13} className="text-teal-600 shrink-0" /> Signals updated
+        </div>
+      )}
+
       {loading ? <WidgetLoading /> : error ? <WidgetError msg={error} /> :
        sorted.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 py-8 text-center">
           <Zap size={20} className="mx-auto mb-2 text-gray-200" />
           <p className="text-[13px] font-medium text-gray-700">No open signals</p>
-          <p className="text-[12px] text-gray-400 mt-1">
-            Run the signals engine from People → Signals to detect care needs.
+          <p className="text-[12px] text-gray-400 mt-1 mb-4">
+            Run the signals engine to detect care needs.
           </p>
+          <button
+            disabled={engineRunning}
+            onClick={handleRunEngine}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 text-white text-[12px] font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors"
+          >
+            {engineRunning
+              ? <><Loader2 size={13} className="animate-spin" /> Running…</>
+              : <><Zap size={13} /> Run signals engine</>
+            }
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
