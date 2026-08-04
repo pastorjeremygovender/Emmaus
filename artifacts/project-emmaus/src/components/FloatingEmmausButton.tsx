@@ -26,6 +26,7 @@ import {
   sourceSectionFromPath,
 } from '@/lib/emmaus-pending';
 import type { FlatContext } from '@/lib/emmaus-client';
+import { getActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
 
 // ─── Gradient palette ─────────────────────────────────────────────────────────
 
@@ -138,6 +139,18 @@ function buildContext(
     const rooms = userId ? getMyRooms(userId) : [];
     const room = rooms.find((r) => r.id === roomId);
     return { entryPoint: 'personal', conversationId: undefined, chapterHeading: room?.name };
+  }
+
+  // Sermon Companion — overview and step reader
+  if (path.match(/^\/sermon-companion\//)) {
+    const ctx = getActiveSermonCompanionContext();
+    return {
+      entryPoint: 'personal' as const,
+      sermonId: ctx?.sermonId,
+      sermonTitle: ctx?.sermonTitle,
+      scriptureReference: ctx?.scriptureReference,
+      chapterHeading: ctx?.sermonTitle ?? 'Sermon Companion',
+    };
   }
 
   // Bible hub / sub-pages

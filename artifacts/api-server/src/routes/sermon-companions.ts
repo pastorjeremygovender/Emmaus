@@ -14,6 +14,7 @@
 
 import { Router, type Request, type Response } from "express";
 import * as store from "../lib/sermon-companion-store.js";
+import * as sermonStore from "../lib/canonical-sermon-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
@@ -381,6 +382,32 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
   }
 });
 
+// ─── GET /:companionId/transcript ─────────────────────────────────────────────
+// Any authenticated member. Returns the sermon-section transcript (trimmed, not
+// the full recording) so the member UI can show a "Read" view without including
+// transcript text in the already-large /:companionId/member payload.
+
+sermonCompanionsRouter.get("/:companionId/transcript", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    if (!companion?.sermonUuid) {
+      res.status(404).json({ error: "No sermon linked to this companion" });
+      return;
+    }
+    const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+    if (!canonical?.transcript?.trim()) {
+      res.status(404).json({ error: "No transcript available" });
+      return;
+    }
+    res.json({ transcript: canonical.transcript });
+  } catch (err) {
+    logger.error({ err }, "sermon-companions: transcript failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── GET /:companionId/member ─────────────────────────────────────────────────
 // Any authenticated member. Returns a Published companion with only its
 // Published entries, plus the caller's progress record. Returns 404 for Draft
@@ -396,8 +423,42 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
       res.status(404).json({ error: "Companion not found or not published" });
       return;
     }
+
+    // Fetch linked sermon metadata so the overview page can display sermon identity
+    // (speaker, date, scripture, theme, summary) without a second round-trip.
+    let sermon: {
+      sermonId: string;
+      speaker: string;
+      sermonDate: string;
+      scriptureReference: string;
+      mainTheme: string;
+      summary: string;
+      series: string;
+      youtubeUrl: string;
+      hasAudio: boolean;
+      hasTranscript: boolean;
+    } | null = null;
+
+    if (companion.sermonUuid) {
+      const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+      if (canonical) {
+        sermon = {
+          sermonId:           canonical.id,
+          speaker:            canonical.speaker,
+          sermonDate:         canonical.sermonDate,
+          scriptureReference: canonical.scriptureReference,
+          mainTheme:          canonical.mainTheme,
+          summary:            canonical.summary,
+          series:             canonical.series,
+          youtubeUrl:         canonical.youtubeUrl,
+          hasAudio:           !!canonical.audioPath?.trim(),
+          hasTranscript:      canonical.transcriptStatus === "complete",
+        };
+      }
+    }
+
     const progress = await store.getProgressForUser(userId, companion.id);
-    res.json({ ...companion, progress: progress ?? null });
+    res.json({ ...companion, progress: progress ?? null, sermon });
   } catch (err) {
     logger.error({ err }, "sermon-companions: getMember failed");
     res.status(500).json({ error: "Server error" });
