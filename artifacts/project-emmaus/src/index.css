@@ -41,12 +41,21 @@
 
 /* ── Global page-bottom clearance ───────────────────────────────────────────
    Every scrollable page should use pb-page-safe instead of a hard-coded pb-N.
-   Accounts for: bottom nav (h-16 = 4rem) + Ask Emmaus FAB bottom offset (5rem)
-   + FAB height (44px ≈ 2.75rem) + comfortable touch margin (1rem)
-   + device safe-area (gesture navigation bar).
-   When FloatingEmmausButton.tsx changes its bottom offset, update this too. */
+   Guarantees the final line of content can scroll completely above the floating
+   Ask Emmaus button on any standard page (i.e. pages whose BottomNav is the
+   only fixed bar at the bottom).
+
+   Formula for standard pages (BottomNav only):
+     FAB bottom offset (5rem) + FAB height (48px = 3rem) + breathing room (1rem)
+     = 9rem + safe-area.
+
+   ⚠ Bible chapter reader is a special case: it stacks a chapter nav (h-14 =
+   3.5rem) below the BottomNav, so FloatingEmmausButton raises its bottom to
+   8.5rem on that route. ChapterReader.tsx uses its own inline paddingBottom:
+     FAB raised bottom (8.5rem) + FAB height (3rem) + breathing (1rem) = 12.5rem
+   Update ChapterReader.tsx if FloatingEmmausButton changes the Bible offset. */
 :root {
-  --page-safe-bottom: calc(5rem + 2.75rem + 1rem + env(safe-area-inset-bottom, 0px));
+  --page-safe-bottom: calc(5rem + 3rem + 1rem + env(safe-area-inset-bottom, 0px));
 }
 
 @utility pb-page-safe {

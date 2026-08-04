@@ -13,7 +13,7 @@ import { getBibleBook, getPrevBook, getNextBook } from '@/lib/bible-data';
 import { useBible, HighlightColor } from '@/contexts/BibleContext';
 import { useChapter } from '@/hooks/useChapter';
 import { getVerseSermonLinks } from '@/data/sermon-verse-links';
-import { BibleReferencePicker } from '@/components/BibleReferencePicker';
+import { BibleBookChapterSheet } from '@/components/BibleBookChapterSheet';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
 import { BottomNav } from '@/components/BottomNav';
@@ -358,15 +358,14 @@ export default function ChapterReader() {
   return (
     <div className="min-h-[100dvh] bg-background">
 
-      {/* ── Bible Reference Picker overlay ──────────────────────────────────── */}
-      {pickerOpen && (
-        <BibleReferencePicker
-          currentBookId={resolvedBookId}
-          currentChapter={chapterNum}
-          onNavigate={handlePickerNavigate}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
+      {/* ── Bible Book + Chapter sheet ───────────────────────────────────────── */}
+      <BibleBookChapterSheet
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        currentBookId={resolvedBookId}
+        currentChapter={chapterNum}
+        onNavigate={handlePickerNavigate}
+      />
 
       {/* ── Sticky Header ───────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
@@ -506,10 +505,10 @@ export default function ChapterReader() {
       </header>
 
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
-      {/* pb accounts for: chapter nav (h-14=3.5rem) + BottomNav (h-16=4rem) + safe-area + breathing room */}
+      {/* pb accounts for the raised FAB on the bible reader: FAB bottom 8.5rem + FAB height 3rem + breathing 1rem */}
       <main
         className="px-5 pt-8 max-w-[600px] mx-auto"
-        style={{ paddingBottom: 'calc(9rem + env(safe-area-inset-bottom, 0px))' }}
+        style={{ paddingBottom: 'calc(12.5rem + env(safe-area-inset-bottom, 0px))' }}
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
