@@ -142,8 +142,51 @@ export async function searchKnowledgeIndex(
 ): Promise<KnowledgeIndexResult[]> {
   let rows: Record<string, unknown>[];
   try {
-    const res = await pool.query(`SELECT * FROM emmaus_knowledge_index`);
-    rows = res.rows;
+    const hasTextQuery = query.trim().length > 0;
+    const hasBibleFilter = !!bibleBookId;
+
+    if (hasTextQuery || hasBibleFilter) {
+      // Build a predicate covering both FTS and Bible-context retrieval:
+      //   - Text queries use the GIN-indexed tsvector for O(log n) pre-filtering.
+      //   - Bible book filters use JSONB containment so scripture-matched rows are
+      //     never dropped even when the sermon content doesn't textually repeat the
+      //     book name. OR ensures either condition alone surfaces a row.
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      if (hasTextQuery) {
+        conditions.push(`content_tsv @@ plainto_tsquery('english', $${paramIdx})`);
+        params.push(query);
+        paramIdx++;
+      }
+
+      if (hasBibleFilter) {
+        // scripture_book_ids is stored as JSONB array — @> containment check
+        conditions.push(`scripture_book_ids @> $${paramIdx}::jsonb`);
+        params.push(JSON.stringify([bibleBookId]));
+        paramIdx++;
+      }
+
+      const whereClause = conditions.join(" OR ");
+      try {
+        const res = await pool.query(
+          `SELECT * FROM emmaus_knowledge_index WHERE ${whereClause}`,
+          params,
+        );
+        rows = res.rows;
+      } catch (ftsErr) {
+        // content_tsv column may not exist yet (migration pending) — fall back
+        // to a full scan so search keeps working on a freshly provisioned DB.
+        logger.warn({ ftsErr }, "knowledge-index: FTS query failed, falling back to full scan");
+        const fallback = await pool.query(`SELECT * FROM emmaus_knowledge_index`);
+        rows = fallback.rows;
+      }
+    } else {
+      // No filters at all — fetch all rows; in-process scoring selects results.
+      const res = await pool.query(`SELECT * FROM emmaus_knowledge_index`);
+      rows = res.rows;
+    }
   } catch (err) {
     logger.warn({ err }, "knowledge-index: search query failed (non-fatal)");
     return [];

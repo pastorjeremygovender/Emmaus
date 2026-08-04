@@ -741,6 +741,40 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: emmaus_knowledge_index table failed (non-fatal)");
   }
 
+  // ── emmaus_knowledge_index: full-text search column + GIN index (2026-08) ────
+  // Adds a generated tsvector column so searchKnowledgeIndex can pre-filter rows
+  // in Postgres rather than fetching every row into Node.js memory.
+  // keywords is JSONB — casting to text produces searchable tokens e.g. ["faith","grace"].
+  // ADD COLUMN IF NOT EXISTS is a no-op on subsequent boots (idempotent).
+  try {
+    await pool.query(`
+      ALTER TABLE emmaus_knowledge_index
+        ADD COLUMN IF NOT EXISTS content_tsv tsvector
+          GENERATED ALWAYS AS (
+            to_tsvector('english',
+              coalesce(title, '') || ' ' ||
+              coalesce(main_theme, '') || ' ' ||
+              coalesce(step_content, '') || ' ' ||
+              coalesce(prayer_themes, '') || ' ' ||
+              coalesce(keywords::text, '')
+            )
+          ) STORED
+    `);
+    logger.info("Startup migration: emmaus_knowledge_index.content_tsv column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: emmaus_knowledge_index.content_tsv column failed (non-fatal)");
+  }
+
+  try {
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_emmaus_knowledge_index_content_tsv
+        ON emmaus_knowledge_index USING gin(content_tsv)
+    `);
+    logger.info("Startup migration: emmaus_knowledge_index GIN index ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: emmaus_knowledge_index GIN index failed (non-fatal)");
+  }
+
   // ── Content safety assertion ──────────────────────────────────────────────────
   // Logs a count of authored content rows on every boot. This creates a visible
   // audit trail in server logs proving that startup migrations did not mutate
