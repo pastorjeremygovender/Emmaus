@@ -34,6 +34,7 @@ import LifeMilestones      from './profile/LifeMilestones';
 import CurrentDiscipleship from './profile/CurrentDiscipleship';
 import AttendanceHistory   from './profile/AttendanceHistory';
 import AdminDetails        from './profile/AdminDetails';
+import { CareHistorySection } from '../workflows/CareHistorySection';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -519,6 +520,17 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
 
         {/* 8. Attendance History (collapsed by default) */}
         <AttendanceHistory history={history} loading={coreLoading} />
+
+        {/* 8b. Care History — tasks & pastoral notes for this person */}
+        <Section title="Care History" icon={CheckCircle2} iconColor="text-emerald-600">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-4">
+            <CareHistorySection
+              auth={{ "x-user-id": user?.id ?? "", "x-user-role": user?.role ?? "admin" }}
+              personId={person.id}
+              personType={person.personType}
+            />
+          </div>
+        </Section>
 
         {/* 9. Administrative Details (collapsed by default) */}
         <AdminDetails

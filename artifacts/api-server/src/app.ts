@@ -7,6 +7,7 @@ import { logger } from "./lib/logger";
 import { runStartupMigrations } from "./lib/startup-migrations.js";
 import { runProdDataSync } from "./lib/prod-data-sync.js";
 import { runSermonDataMigration } from "./lib/sermon-data-migration.js";
+import { ensureSystemTemplates } from "./lib/workflows-store.js";
 
 const app: Express = express();
 
@@ -40,6 +41,8 @@ app.use("/api", router);
 runStartupMigrations()
   .then(() => runProdDataSync())
   .then(() => runSermonDataMigration())
+  .then(() => ensureSystemTemplates())
+  .then(() => logger.info("Startup: system task templates ensured"))
   .catch(err =>
     logger.warn({ err }, "Startup migrations / prod-data-sync encountered a non-fatal error")
   );

@@ -23,6 +23,7 @@ import storageRouter from "./storage";
 import { sermonsRouter } from "./sermons";
 import { pastoralRouter } from "./pastoral";
 import { analyticsRouter } from "./analytics";
+import { workflowsRouter } from "./workflows";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(prodMigrationRouter);
 router.use("/sermons", sermonsRouter);
 router.use("/pastoral", pastoralRouter);
 router.use("/analytics", analyticsRouter);
+router.use("/workflows", workflowsRouter);
 
 export default router;

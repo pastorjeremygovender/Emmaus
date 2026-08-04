@@ -1121,6 +1121,96 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: signal_rule_config table failed (non-fatal)");
   }
 
+  // ── Ministry Tasks (CP7) ─────────────────────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ministry_tasks (
+        id           uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        church_id    text        NOT NULL DEFAULT 'icc',
+        title        text        NOT NULL,
+        reason       text        NOT NULL DEFAULT '',
+        person_id    text,
+        person_type  text        CHECK (person_type IN ('emmaus_user','pastoral_person') OR person_type IS NULL),
+        source       text        NOT NULL DEFAULT 'manual'
+                                 CHECK (source IN ('care_signal','manual','attendance','walk','prayer_request')),
+        priority     text        NOT NULL DEFAULT 'normal'
+                                 CHECK (priority IN ('low','normal','high','urgent')),
+        assigned_to  text,
+        due_date     date,
+        status       text        NOT NULL DEFAULT 'new'
+                                 CHECK (status IN ('new','assigned','in_progress','waiting','completed','cancelled')),
+        notes        text        NOT NULL DEFAULT '',
+        team         text        NOT NULL DEFAULT '',
+        checklist    jsonb       NOT NULL DEFAULT '[]',
+        signal_id    uuid,
+        created_by   text        NOT NULL DEFAULT '',
+        created_at   timestamptz NOT NULL DEFAULT NOW(),
+        updated_at   timestamptz NOT NULL DEFAULT NOW(),
+        archived_at  timestamptz
+      );
+      CREATE INDEX IF NOT EXISTS ministry_tasks_church_status_idx
+        ON ministry_tasks (church_id, status, due_date NULLS LAST)
+        WHERE archived_at IS NULL;
+      CREATE INDEX IF NOT EXISTS ministry_tasks_assigned_idx
+        ON ministry_tasks (assigned_to, due_date NULLS LAST)
+        WHERE archived_at IS NULL;
+      CREATE INDEX IF NOT EXISTS ministry_tasks_person_idx
+        ON ministry_tasks (person_id, person_type)
+        WHERE archived_at IS NULL;
+    `);
+    logger.info("Startup migration: ministry_tasks table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: ministry_tasks table failed (non-fatal)");
+  }
+
+  // ── Task Templates (CP7) ─────────────────────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id                  uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        church_id           text        NOT NULL DEFAULT 'icc',
+        name                text        NOT NULL,
+        category            text        NOT NULL DEFAULT '',
+        default_title       text        NOT NULL DEFAULT '',
+        suggested_questions text[]      NOT NULL DEFAULT '{}',
+        bible_ref           text        NOT NULL DEFAULT '',
+        prayer_reminder     text        NOT NULL DEFAULT '',
+        checklist           jsonb       NOT NULL DEFAULT '[]',
+        is_system           boolean     NOT NULL DEFAULT false,
+        created_by          text        NOT NULL DEFAULT 'system',
+        created_at          timestamptz NOT NULL DEFAULT NOW(),
+        UNIQUE (church_id, name)
+      );
+    `);
+    logger.info("Startup migration: task_templates table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: task_templates table failed (non-fatal)");
+  }
+
+  // ── Pastoral Workflow Notes (CP7) ─────────────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pastoral_workflow_notes (
+        id              uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        church_id       text        NOT NULL DEFAULT 'icc',
+        person_id       text,
+        person_type     text,
+        task_id         uuid,
+        content         text        NOT NULL,
+        is_confidential boolean     NOT NULL DEFAULT false,
+        author_id       text        NOT NULL DEFAULT '',
+        created_at      timestamptz NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS pastoral_workflow_notes_person_idx
+        ON pastoral_workflow_notes (person_id, person_type, created_at DESC);
+      CREATE INDEX IF NOT EXISTS pastoral_workflow_notes_task_idx
+        ON pastoral_workflow_notes (task_id, created_at DESC);
+    `);
+    logger.info("Startup migration: pastoral_workflow_notes table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: pastoral_workflow_notes table failed (non-fatal)");
+  }
+
   // ── Analytics saved reports table (CP6) ──────────────────────────────────
   try {
     await pool.query(`

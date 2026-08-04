@@ -39,3 +39,4 @@
 - [Care Signals Engine](care-signals-engine.md) — Checkpoint 4: discipleship_signals table, 18-rule engine, 5 routes, SignalsDashboard + CareSignalsSection; circular-import rule: engine file has no DB access.
 - [Pastoral Dashboard](pastoral-dashboard.md) — Checkpoint 5: 9-section dashboard as a separate nav item; dashboard-store.ts holds aggregate queries; useAutoFetch hook per section; prayer count from AdminContext (no DB table yet).
 - [Analytics Centre](analytics-centre.md) — Checkpoint 6: 11 analytics routes at /api/analytics; analytics-store.ts; column quirks (duration_days not step_count; completed_days not completed_steps; qualify status in joins).
+- [Pastoral Workflows](pastoral-workflows.md) — Checkpoint 7: ministry_tasks + task_templates + pastoral_workflow_notes tables; 9 workflow routes; 8 system templates seeded in app.ts (not startup-migrations); discipleship_signals.explanation not description.

@@ -16,11 +16,13 @@ import {
   ClipboardList,
   Heart,
   BarChart2,
+  ListChecks,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
 import PastoralDashboard from './admin/PastoralDashboard';
 import AnalyticsCentre from './admin/AnalyticsCentre';
+import { PastoralWorkflows } from './admin/PastoralWorkflows';
 import AdminSettings from './admin/Settings';
 import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
@@ -35,6 +37,7 @@ export type AdminSection =
   | 'dashboard'
   | 'pastoral-dashboard'
   | 'analytics'
+  | 'workflows'
   | 'content-studio'
   | 'bible-study'
   | 'people'
@@ -57,6 +60,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
   { id: 'dashboard',           label: 'Dashboard',           Icon: LayoutDashboard },
   { id: 'pastoral-dashboard',  label: 'Pastoral Dashboard',  Icon: Heart },
   { id: 'analytics',           label: 'Analytics',           Icon: BarChart2 },
+  { id: 'workflows',           label: 'Workflows',           Icon: ListChecks },
   { id: 'content-studio',      label: 'Content Studio',      Icon: PenSquare },
   { id: 'bible-study',         label: 'Bible Study',         Icon: BookOpen },
   { id: 'people',              label: 'People',              Icon: Users },
@@ -95,6 +99,7 @@ export default function Admin() {
     dashboard:             'Dashboard',
     'pastoral-dashboard':  'Pastoral Dashboard',
     analytics:             'Analytics Centre',
+    workflows:             'Ministry Workflows',
     'content-studio':      'Content Studio',
     'bible-study':         'Bible Study',
     people:                'People',
@@ -142,6 +147,8 @@ export default function Admin() {
         return <PastoralDashboard onNavigate={navigate} />;
       case 'analytics':
         return <AnalyticsCentre onNavigate={navigate} />;
+      case 'workflows':
+        return <PastoralWorkflows />;
       case 'testing':
         return <Testing />;
       default:

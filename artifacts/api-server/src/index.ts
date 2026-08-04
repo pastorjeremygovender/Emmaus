@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
+import { ensureSystemTemplates } from "./lib/workflows-store.js";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,8 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 
   scheduleNightlySignalsEngine();
+
+  // Seed system task templates — deferred so startup migrations run first
 });
 
 // ─── Nightly signals engine ───────────────────────────────────────────────────

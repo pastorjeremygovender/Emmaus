@@ -1,0 +1,829 @@
+EMMAUS VOICE — PHASE 1: REPLACE THE CURRENT VOICE PROTOTYPE
+
+IMPORTANT: READ THIS ENTIRE PROMPT BEFORE CHANGING CODE.
+
+The current “Hear Emmaus” button and browser/system text-to-speech implementation are now obsolete.
+
+They may be removed completely.
+
+Do not patch, restyle or extend the current button.
+
+Build a new unified Emmaus Voice architecture inside the EXISTING Emmaus application.
+
+This is a major user mode, not a page-specific playback button.
+
+The long-term purpose is to let people use Emmaus naturally:
+
+- while driving;
+- while exercising;
+- while working;
+- while cooking;
+- when they cannot comfortably read a screen;
+- when they prefer listening and speaking.
+
+The final architecture must support:
+
+1. Natural spoken Bible reading.
+2. Natural spoken devotionals and Walk Steps.
+3. Spoken Ask Emmaus answers.
+4. Future realtime voice conversations.
+5. Future hands-free navigation and playback control.
+6. Background-friendly audio playback.
+7. One consistent Emmaus voice identity.
+
+==================================================
+FIRST: AUDIT THE EXISTING SYSTEM
+==================================================
+
+Before implementation, inspect and report:
+
+1. Every current voice, audio, microphone and speech-related component.
+2. Every use of:
+   - browser SpeechSynthesis;
+   - speechSynthesis;
+   - SpeechRecognition;
+   - webkitSpeechRecognition;
+   - MediaRecorder;
+   - current Hear Emmaus button;
+   - current microphone button;
+   - current audio player;
+   - current sermon audio player.
+3. Existing Ask Emmaus request and retrieval flow.
+4. Existing Ask Emmaus conversation state.
+5. Existing Bible data and chapter routes.
+6. Existing Daily Rhythm content routes.
+7. Existing devotional routes.
+8. Existing Walk and Step content routes.
+9. Existing sermon and transcript routes.
+10. Existing audio/object storage.
+11. Existing user progress and resume-position architecture.
+12. Existing mobile/PWA capabilities.
+13. Existing service worker and media-session support.
+14. Existing OpenAI server integration and model configuration.
+15. Any current API key exposure risk.
+
+Report which existing components can be reused and which obsolete voice components will be removed.
+
+Do not begin implementation until the audit is complete.
+
+==================================================
+CORE ARCHITECTURE
+==================================================
+
+Create one central Emmaus Voice system.
+
+Recommended conceptual layers:
+
+VoiceProvider
+VoiceSessionManager
+VoiceContentAdapter
+VoiceAudioPlayer
+VoiceQueue
+VoiceProgressStore
+VoiceCommandRouter
+VoiceApiClient
+VoiceMiniPlayer
+VoiceModeScreen
+
+Do not implement separate unrelated voice logic inside Bible, devotionals, Walks and Ask Emmaus.
+
+Every module must feed content into the same voice player and session architecture.
+
+==================================================
+REMOVE THE CURRENT PROTOTYPE
+==================================================
+
+Remove all user-facing instances of the current:
+
+- Hear Emmaus button;
+- browser/system robotic voice;
+- duplicate play buttons created only for the prototype;
+- obsolete speech hooks;
+- obsolete voice state.
+
+Do not remove ordinary sermon audio playback.
+
+Do not remove the Ask Emmaus microphone transcription input unless it is being cleanly migrated into the new Voice architecture.
+
+Ensure removal does not leave:
+
+- blank spacing;
+- broken click handlers;
+- unused imports;
+- dead routes;
+- hidden floating overlays;
+- duplicated audio controls.
+
+==================================================
+PHASE 1 SCOPE
+==================================================
+
+BUILD NOW:
+
+1. Full-screen Emmaus Voice Mode.
+2. Natural generated speech from existing text.
+3. Bible chapter narration.
+4. Daily Rhythm narration.
+5. Daily Devotional narration.
+6. Walk Step narration.
+7. Sermon transcript narration where appropriate.
+8. Spoken playback of completed Ask Emmaus text answers.
+9. Persistent mini-player.
+10. Playback progress and resume.
+11. Audio caching.
+12. Media controls.
+13. Clear accessibility transcript.
+14. Server-side voice API integration.
+15. Voice settings.
+
+DO NOT BUILD YET:
+
+- open-microphone hands-free conversation;
+- wake word;
+- continuous background listening;
+- native Android Auto or Apple CarPlay;
+- unrestricted voice commands;
+- offline full-Bible downloads;
+- custom cloned human voice;
+- voice biometrics.
+
+Design for those later without pretending they already work.
+
+==================================================
+VOICE ENTRY POINT
+==================================================
+
+Add one consistent Voice entry point.
+
+Recommended placement:
+
+- persistent Voice icon in the main app shell;
+- available from Today’s Steps;
+- available from My Bible;
+- available from Ask Emmaus;
+- available from any supported content page.
+
+Tapping it opens Emmaus Voice Mode.
+
+Do not place multiple differently styled voice buttons across individual screens.
+
+When opened from content, Voice Mode should automatically know the source:
+
+- current Bible chapter;
+- current devotional;
+- current Walk Step;
+- current sermon;
+- current Ask Emmaus answer.
+
+When opened without a source, show a simple Voice Home.
+
+==================================================
+VOICE HOME
+==================================================
+
+Create a clean, low-distraction Voice Home with:
+
+Continue Listening
+
+Today’s Daily Rhythm
+
+Today’s Devotional
+
+Continue Current Walk
+
+Read the Bible
+
+Ask Emmaus
+
+Recent Audio
+
+Do not make Voice Home a second copy of the main app.
+
+Prioritise listening and conversation actions only.
+
+==================================================
+FULL-SCREEN VOICE MODE
+==================================================
+
+The Voice Mode screen must show:
+
+- Emmaus logo or subtle voice visualiser;
+- current content title;
+- current section, chapter or Step;
+- concise text/transcript excerpt;
+- progress;
+- previous;
+- rewind;
+- play/pause;
+- forward;
+- next;
+- playback speed;
+- queue;
+- close/minimise.
+
+Large controls.
+
+Minimal visual distraction.
+
+No small tap targets.
+
+No normal bottom navigation competing with the player.
+
+The screen must never be blocked by the Ask Emmaus floating button.
+
+==================================================
+PERSISTENT MINI-PLAYER
+==================================================
+
+When Voice Mode is minimised:
+
+- keep audio playing;
+- show a compact mini-player above bottom navigation;
+- display title;
+- play/pause;
+- reopen Voice Mode;
+- close audio.
+
+The mini-player must not hide page text or navigation.
+
+Use safe-area spacing.
+
+Only one audio source may play at a time.
+
+Starting sermon audio must pause generated narration.
+
+Starting generated narration must pause sermon audio.
+
+==================================================
+CONTENT ADAPTERS
+==================================================
+
+Create reusable adapters that turn existing Emmaus content into a voice queue.
+
+Bible adapter:
+- book;
+- chapter;
+- verse number;
+- verse text;
+- previous/next chapter.
+
+Daily Rhythm adapter:
+- title;
+- Scripture;
+- reflection;
+- prayer;
+- next step.
+
+Devotional adapter:
+- title;
+- Scripture;
+- reflection;
+- prayer;
+- next action.
+
+Walk adapter:
+- Walk title;
+- Step title;
+- Scripture;
+- content sections;
+- prayer;
+- next step;
+- previous/next Step.
+
+Sermon transcript adapter:
+- sermon title;
+- speaker;
+- timestamped sections;
+- transcript;
+- related playback source.
+
+Ask Emmaus adapter:
+- user question;
+- final approved Emmaus answer;
+- Scripture citations;
+- sermon source references;
+- suggested next step.
+
+Do not read buttons, menu labels, progress metadata or technical page content aloud.
+
+==================================================
+TEXT PREPARATION
+==================================================
+
+Create a server-side text preparation pipeline before speech generation.
+
+It must:
+
+- remove markdown symbols;
+- convert headings into natural pauses;
+- pronounce Scripture references naturally;
+- handle verse numbers appropriately;
+- expand abbreviations;
+- avoid reading URLs;
+- avoid reading citation metadata awkwardly;
+- preserve meaningful paragraph breaks;
+- divide long content into stable sections;
+- prevent duplicate paragraphs;
+- exclude hidden UI text.
+
+Bible narration should not mechanically announce every verse number by default.
+
+Add a user setting:
+
+Verse Numbers
+- Off
+- At paragraph breaks
+- Every verse
+
+Default:
+At paragraph breaks
+
+==================================================
+VOICE QUALITY
+==================================================
+
+Do not use browser SpeechSynthesis for primary Emmaus narration.
+
+Use the configured server-side speech generation API.
+
+Select one temporary natural Emmaus voice for Phase 1.
+
+The voice should feel:
+
+- warm;
+- calm;
+- clear;
+- natural;
+- pastoral without impersonating a pastor;
+- respectful when reading Scripture;
+- conversational when reading Ask Emmaus answers;
+- not theatrical;
+- not overly emotional;
+- not robotic.
+
+Allow authorised administrators to compare approved voice options in Settings before locking the default.
+
+Do not clone Pastor Jeremy’s voice or any real person’s voice without a separate explicit consent and governance process.
+
+==================================================
+DELIVERY MODES
+==================================================
+
+Support two narration styles using the same voice identity.
+
+NARRATION MODE
+For:
+- Bible;
+- devotionals;
+- Walks;
+- prayers;
+- long-form reading.
+
+Characteristics:
+- slightly slower;
+- steady;
+- reverent;
+- longer pauses between sections.
+
+CONVERSATION MODE
+For:
+- Ask Emmaus answers;
+- prompts;
+- confirmations;
+- future voice conversation.
+
+Characteristics:
+- natural;
+- responsive;
+- shorter pauses;
+- conversational pacing.
+
+Do not create completely unrelated voice identities.
+
+==================================================
+SERVER-SIDE API
+==================================================
+
+Create authenticated server endpoints for speech generation.
+
+Example concepts:
+
+POST /api/voice/speech
+POST /api/voice/prepare-content
+GET /api/voice/audio/:id
+GET /api/voice/resume
+PUT /api/voice/resume
+DELETE /api/voice/cache/:id where authorised
+
+Never expose provider API keys to the browser.
+
+Validate:
+
+- authentication;
+- church/tenant;
+- source content access;
+- input length;
+- supported content type;
+- requested voice;
+- requested speaking style.
+
+Do not allow the client to submit arbitrary unlimited text for unrestricted speech generation.
+
+Prefer source IDs:
+
+- bible book/chapter;
+- devotional ID;
+- Walk Step ID;
+- sermon ID/section ID;
+- Ask Emmaus message ID.
+
+The server should retrieve and verify canonical text itself.
+
+==================================================
+AUDIO CHUNKING
+==================================================
+
+Long content must be divided into natural sections.
+
+Do not send an entire Bible book or long transcript as one request.
+
+Chunk at:
+
+- headings;
+- paragraphs;
+- Scripture sections;
+- devotional sections;
+- sermon sections.
+
+Each chunk must store:
+
+- source type;
+- source ID;
+- sequence;
+- text hash;
+- voice;
+- style;
+- audio object path;
+- duration;
+- created at.
+
+Playback must sound continuous.
+
+Preload the next chunk before the current chunk ends.
+
+Avoid audible gaps where possible.
+
+==================================================
+AUDIO CACHE
+==================================================
+
+Do not regenerate identical content every time.
+
+Cache generated audio using a deterministic key based on:
+
+- canonical content ID;
+- content version;
+- prepared-text hash;
+- selected voice;
+- narration style;
+- speaking speed.
+
+Store generated audio in persistent object storage.
+
+When content changes:
+- invalidate only affected audio;
+- do not invalidate unrelated chapters or devotionals.
+
+Allow streaming before the full item has finished generating where technically practical.
+
+Do not make first playback wait for an entire long chapter if the first section is ready.
+
+==================================================
+PLAYBACK PROGRESS
+==================================================
+
+Persist user progress for:
+
+- source type;
+- source ID;
+- chunk;
+- playback seconds;
+- completed status;
+- last played at.
+
+Resume accurately across:
+
+- browser refresh;
+- mobile and desktop;
+- leaving and returning;
+- temporary network interruption.
+
+Do not change discipleship completion merely because audio played.
+
+Existing completion rules remain authoritative.
+
+When the user reaches the correct completion point, use the existing completion action rather than inventing a separate voice-progress system.
+
+==================================================
+MEDIA CONTROLS
+==================================================
+
+Use browser Media Session support where available.
+
+Provide metadata:
+
+- title;
+- artist/speaker where appropriate;
+- album/context;
+- artwork;
+- previous;
+- next;
+- seek backward;
+- seek forward;
+- play;
+- pause.
+
+Handle:
+
+- phone call interruptions;
+- Bluetooth disconnects;
+- headphones removed;
+- app/tab backgrounding;
+- route changes.
+
+Where a capability is not supported in the current web deployment, fail gracefully and document the limitation honestly.
+
+==================================================
+VOICE SETTINGS
+==================================================
+
+Create:
+
+Settings → Voice
+
+User settings:
+
+- Voice Mode enabled
+- Playback speed
+- Narration voice
+- Verse-number preference
+- Auto-play next section
+- Resume automatically
+- Download over Wi-Fi only, reserved for later
+- Show spoken transcript
+
+Admin settings:
+
+- approved voices
+- default Emmaus voice
+- narration instructions
+- conversation instructions
+- speech provider/model
+- cache behaviour
+- maximum generated length
+- feature availability
+
+Do not expose API keys.
+
+==================================================
+ASK EMMAUS SPOKEN ANSWERS
+==================================================
+
+Phase 1 does not require live voice conversation.
+
+However, every completed Ask Emmaus text answer must support:
+
+Listen to Answer
+
+This action must:
+
+- use the exact displayed answer;
+- preserve Scripture-first structure;
+- read source references naturally;
+- avoid reading raw URLs;
+- allow pause/resume;
+- link back to the conversation;
+- stop if the answer is regenerated or replaced.
+
+Do not run a second Ask Emmaus answer-generation call merely for audio.
+
+Generate speech from the already approved response.
+
+==================================================
+BIBLE EXPERIENCE
+==================================================
+
+On Bible pages, Voice Mode must support:
+
+- Read chapter;
+- continue from selected verse;
+- pause;
+- resume;
+- previous chapter;
+- next chapter;
+- go back one verse;
+- advance one verse;
+- stop after chapter;
+- continue automatically, based on preference.
+
+The existing Bible navigation must remain unchanged outside Voice Mode.
+
+Do not create a second Bible database.
+
+Use the canonical Bible text already used by Emmaus.
+
+==================================================
+DEVOTIONAL AND WALK EXPERIENCE
+==================================================
+
+Voice Mode must read content in a meaningful sequence:
+
+1. Title
+2. Scripture
+3. Reflection
+4. Prayer
+5. Next Step
+
+Allow the user to jump between those sections.
+
+At the end:
+
+- do not auto-complete without the existing completion requirement;
+- provide a large “Complete and Continue” action;
+- preserve the normal Walk and devotional progress.
+
+==================================================
+ERROR HANDLING
+==================================================
+
+Never show a blank or frozen voice screen.
+
+Handle:
+
+- microphone permission not relevant in Phase 1;
+- speech generation failure;
+- missing content;
+- invalid source ID;
+- expired audio cache;
+- network loss;
+- object-storage failure;
+- unsupported browser media controls;
+- interrupted playback.
+
+Show:
+
+“We couldn’t prepare this audio.”
+
+Actions:
+- Try Again
+- Read Instead
+- Back
+
+If a later chunk fails:
+- preserve current position;
+- retry that chunk;
+- do not restart the whole item.
+
+==================================================
+ANALYTICS AND PRIVACY
+==================================================
+
+Track only useful product events:
+
+- Voice Mode opened;
+- source type;
+- playback started;
+- playback completed;
+- playback error;
+- resume used;
+- speed preference.
+
+Do not store raw ambient audio.
+
+Do not turn on the microphone in Phase 1.
+
+Do not analyse private spoken content because live conversation is not part of this checkpoint.
+
+Do not create pastoral-care signals from Voice usage.
+
+==================================================
+PERFORMANCE AND COST CONTROL
+==================================================
+
+Use caching aggressively for shared canonical content such as:
+
+- Bible chapters;
+- published devotionals;
+- published Walk Steps.
+
+For personalised or user-specific Ask Emmaus answers:
+
+- generate on demand;
+- apply retention and cleanup rules;
+- do not retain indefinitely without policy.
+
+Add rate limits.
+
+Prevent repeated taps from creating duplicate speech jobs.
+
+Show generation progress clearly.
+
+==================================================
+ACCESSIBILITY
+==================================================
+
+Include:
+
+- visible transcript;
+- keyboard controls;
+- screen-reader labels;
+- high-contrast focus states;
+- reduced-motion support;
+- large touch targets;
+- no meaning communicated by animation alone.
+
+Voice is an additional access mode.
+
+It must not replace readable text.
+
+==================================================
+TESTING
+==================================================
+
+Test in the published application, not only preview.
+
+Test:
+
+1. Remove the current Hear Emmaus prototype without regressions.
+2. Open Voice Mode from Today’s Steps.
+3. Read a full Daily Rhythm.
+4. Read a Daily Devotional.
+5. Read a multi-section Walk Step.
+6. Read Psalm 23.
+7. Read a long Bible chapter.
+8. Start from a selected verse.
+9. Navigate previous/next chapter.
+10. Pause and resume.
+11. Refresh and resume accurately.
+12. Minimise to mini-player.
+13. Navigate elsewhere while audio continues.
+14. Reopen full Voice Mode.
+15. Change playback speed.
+16. Change verse-number setting.
+17. Speak an existing Ask Emmaus answer.
+18. Confirm sermon audio and narration do not play simultaneously.
+19. Test poor network recovery.
+20. Test expired session.
+21. Test mobile phone.
+22. Test tablet.
+23. Test desktop.
+24. Test Bluetooth audio where available.
+25. Test background playback limits.
+26. Confirm existing Bible, Walk, devotional and Ask Emmaus functionality still works.
+27. Confirm no provider API key reaches the browser.
+28. Confirm cached Bible audio is reused.
+29. Confirm changed content invalidates the correct cache.
+30. Confirm no blank or trapped screen exists.
+
+==================================================
+SUCCESS CRITERIA
+==================================================
+
+Phase 1 is complete only when a user can:
+
+- open Emmaus Voice;
+- choose or continue content;
+- listen in a natural voice;
+- pause and resume;
+- move between sections;
+- minimise the player;
+- navigate through Emmaus while listening;
+- return later at the same position;
+- hear an Ask Emmaus answer;
+- use Bible and devotional narration without the old robotic browser voice.
+
+The target experience is:
+
+ONE VOICE MODE
+
+ONE PLAYER
+
+ONE VOICE IDENTITY
+
+EVERY SUPPORTED CONTENT SOURCE
+
+Do not begin live realtime conversation yet.
+
+After Phase 1 is published and verified, stop and report:
+
+1. Audit findings.
+2. Obsolete components removed.
+3. Components reused.
+4. New architecture.
+5. API routes.
+6. Object-storage/cache design.
+7. Playback-progress design.
+8. Published devices tested.
+9. Known web-platform limitations.
+10. Cost-control approach.
+11. Phase 2 plan for realtime Ask Emmaus conversation.
