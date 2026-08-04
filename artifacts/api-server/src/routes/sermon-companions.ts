@@ -338,6 +338,13 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
   try {
     const id = String(req.params.companionId);
     const notifyMembers = req.body?.notifyMembers === true;
+
+    const companion = await store.getPublicCompanionById(String(req.params.companionId));
+    if (!companion) {
+      res.status(404).json({ error: "Companion not found" });
+      return;
+    }
+
     // Atomic publish: companion header + all entries in one transaction.
     await store.publishCompanionAtomic(id, notifyMembers);
     await logAuditEvent({
@@ -345,61 +352,47 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
       contentId: id,
       action: "publish",
       performedBy: adminId,
-      previousState: null,
+      previousState: { status: companion.status },
       newState: { status: "Published" },
     });
 
     // Upsert knowledge index so Ask Emmaus can find this companion's step content,
     // prayer themes, and reflection text immediately after publish.
     // Non-blocking fire-and-forget: indexing failure must never prevent publish.
-    (async () => {
-      try {
-        const companion = await store.getPublicCompanionById(id);
-        if (!companion?.sermonUuid) return;
-        const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+    if (companion.sermonUuid) {
+      sermonStore.getSermonById(companion.sermonUuid).then((canonical) => {
         if (!canonical) return;
-
-        const publishedEntries = (companion.entries ?? []).filter(
-          (e) => e.status === "Published",
-        );
-        const prayerThemes = publishedEntries
-          .map((e) => (e as any).prayer)
-          .filter(Boolean)
+        const entries = companion.entries ?? [];
+        const prayerThemes = entries.map((e) => e.prayer).filter(Boolean).join(" ");
+        const stepTitles = entries.map((e) => e.title).filter(Boolean);
+        const stepContent = entries
+          .map((e) => [e.greeting, e.reflection, e.nextStep, e.closing].filter(Boolean).join(" "))
           .join(" ");
-        const stepTitles = publishedEntries.map((e) => e.title).filter(Boolean);
-        const stepContent = publishedEntries
-          .map((e) =>
-            [(e as any).greeting, (e as any).reflection, (e as any).nextStep, (e as any).closing]
-              .filter(Boolean)
-              .join(" "),
-          )
-          .join(" ");
-
-        await upsertKnowledgeIndex({
+        return upsertKnowledgeIndex({
           sermonId:           canonical.id,
-          companionId:        companion.id,
-          title:              (canonical as any).title ?? companion.title,
+          companionId:        id,
+          title:              canonical.title,
           speaker:            canonical.speaker,
           sermonDate:         canonical.sermonDate,
           series:             canonical.series,
           scriptureReference: canonical.scriptureReference,
-          scriptureBookIds:   [],
-          scriptureChapters:  [],
-          themes:             canonical.mainTheme ? [canonical.mainTheme] : [],
-          keywords:           [],
+          scriptureBookIds:   canonical.scriptureBookIds,
+          scriptureChapters:  canonical.scriptureChapters,
+          themes:             canonical.themes,
+          keywords:           canonical.keywords,
           mainTheme:          canonical.mainTheme,
           summary:            canonical.summary,
           stepTitles,
           stepContent,
           prayerThemes,
           youtubeUrl:         canonical.youtubeUrl,
-          audioPath:          (canonical as any).audioPath ?? "",
-          publishedAt:        (canonical as any).publishedAt ?? null,
+          audioPath:          canonical.audioPath,
+          publishedAt:        new Date().toISOString(),
         });
-      } catch (err) {
-        logger.warn({ err }, "sermon-companions: knowledge index upsert failed (non-fatal)");
-      }
-    })();
+      }).catch((err) =>
+        logger.warn({ err, companionId: id }, "sermon-companions: knowledge index upsert failed (non-fatal)"),
+      );
+    }
 
     res.json({ ok: true, status: "Published" });
   } catch (err) {
@@ -409,6 +402,7 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
 });
 
 // ─── POST /:companionId/unpublish ─────────────────────────────────────────────
+// Admin only. Reverts a Published companion back to Draft.
 
 sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);
@@ -440,13 +434,14 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
 sermonCompanionsRouter.get("/:companionId/transcript", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
+
   try {
     const companion = await store.getPublicCompanionById(String(req.params.companionId));
     if (!companion?.sermonUuid) {
       res.status(404).json({ error: "No sermon linked to this companion" });
       return;
     }
-    const canonical = await sermonStore.getSermonById(companion.sermonUuid);
+      const canonical = await sermonStore.getSermonById(companion.sermonUuid);
     if (!canonical?.transcript?.trim()) {
       res.status(404).json({ error: "No transcript available" });
       return;
@@ -501,8 +496,8 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
           summary:            canonical.summary,
           series:             canonical.series,
           youtubeUrl:         canonical.youtubeUrl,
-          hasAudio:           !!(canonical as any).audioPath?.trim(),
-          hasTranscript:      (canonical as any).transcriptStatus === "complete",
+          hasAudio:           !!canonical.audioPath?.trim(),
+          hasTranscript:      canonical.transcriptStatus === "complete",
         };
       }
     }

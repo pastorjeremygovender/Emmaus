@@ -130,6 +130,7 @@ export async function createCompanion(data: {
     id,
     sermonId: data.sermonId,
     title: data.title,
+    description: '',
     numberOfDays: data.numberOfDays ?? 5,
     status: 'Draft',
     isCurrentWeek: false,
