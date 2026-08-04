@@ -1315,3 +1315,134 @@ export async function getPastoralAuditLog(opts: {
     reason:         String(r.reason ?? ""),
   }));
 }
+
+// ─── Person Profile Summary ───────────────────────────────────────────────────
+
+export interface PersonProfileSummary {
+  /** Computed engagement status based on attendance, Emmaus activity, and open alerts. */
+  engagementStatus: "active" | "fading" | "needs_care" | "unknown";
+  lastAttendanceDate: string | null;          // ISO date (YYYY-MM-DD)
+  daysSinceLastAttendance: number | null;
+  openCareSignalCount: number;
+  activeWalkTitle: string | null;
+  activeWalkProgress: string | null;          // e.g. "Day 12 of 30"
+  lastEmmausActivityDate: string | null;      // ISO date
+}
+
+/**
+ * Returns a holistic spiritual-health snapshot for a person.
+ * Answers: "How is this person doing, and should someone follow up?"
+ *
+ * Engagement status logic:
+ *   needs_care  — one or more open care alerts
+ *   active      — attended or engaged with Emmaus tools in the last 14 days
+ *   fading      — last activity 15–90 days ago
+ *   unknown     — no data or last activity > 90 days ago
+ */
+export async function getPersonProfileSummary(
+  personId: string,
+  personType: PersonType,
+): Promise<PersonProfileSummary> {
+  // 1. Last attended date + open signal count (one round-trip)
+  const statsRes = await pool.query<{
+    last_att: string | null;
+    open_signals: string;
+  }>(
+    `SELECT
+       (SELECT MAX(ms.session_date)::text
+        FROM   attendance_records ar
+        JOIN   meeting_sessions ms ON ms.id = ar.session_id
+        WHERE  ar.person_id = $1
+          AND  ar.church_id = $2
+          AND  ar.status    IN ('present', 'visitor')
+          AND  ms.status    = 'completed') AS last_att,
+       (SELECT COUNT(*)::int
+        FROM   care_signals
+        WHERE  person_id    = $1
+          AND  church_id    = $2
+          AND  dismissed_at IS NULL)       AS open_signals`,
+    [personId, CHURCH_ID]
+  );
+
+  const row       = statsRes.rows[0] ?? {};
+  const lastAttDate  = row.last_att ?? null;
+  const openCount    = parseInt(String(row.open_signals ?? "0"), 10) || 0;
+  const daysSince    = lastAttDate
+    ? Math.floor((Date.now() - new Date(lastAttDate + "T12:00:00Z").getTime()) / 86_400_000)
+    : null;
+
+  // 2. Resolve Emmaus userId for activity queries
+  let emmausUserId: string | null = null;
+  if (personType === "emmaus_user") {
+    emmausUserId = personId;
+  } else {
+    const linkRow = await pool.query<{ linked_user_id: string | null }>(
+      `SELECT linked_user_id FROM pastoral_persons WHERE id = $1 AND church_id = $2`,
+      [personId, CHURCH_ID]
+    );
+    emmausUserId = linkRow.rows[0]?.linked_user_id ?? null;
+  }
+
+  // 3. Emmaus activity (only when linked)
+  let activeWalkTitle: string | null = null;
+  let activeWalkProgress: string | null = null;
+  let lastEmmausActivityDate: string | null = null;
+
+  if (emmausUserId) {
+    const [walkRes, activityRes] = await Promise.all([
+      pool.query<{ title: string; current_day: number; duration_days: number }>(
+        `SELECT j.title, ujp.current_day, j.duration_days
+         FROM   user_journey_progress ujp
+         JOIN   journeys j ON j.id = ujp.journey_id
+         WHERE  ujp.user_id = $1
+           AND  ujp.status NOT IN ('completed', 'paused')
+         ORDER  BY ujp.updated_at DESC NULLS LAST
+         LIMIT  1`,
+        [emmausUserId]
+      ),
+      pool.query<{ last_activity: string | null }>(
+        `SELECT GREATEST(
+           (SELECT MAX(updated_at) FROM user_journey_progress    WHERE user_id = $1),
+           (SELECT MAX(joined_at)  FROM room_members             WHERE user_id = $1),
+           (SELECT MAX(updated_at) FROM devotional_progress      WHERE user_id = $1),
+           (SELECT MAX(updated_at) FROM sermon_companion_progress WHERE user_id = $1)
+         )::text AS last_activity`,
+        [emmausUserId]
+      ),
+    ]);
+
+    const walk = walkRes.rows[0];
+    if (walk) {
+      activeWalkTitle    = walk.title;
+      activeWalkProgress = walk.duration_days > 0
+        ? `Day ${walk.current_day} of ${walk.duration_days}`
+        : `Day ${walk.current_day}`;
+    }
+    const lastAct = activityRes.rows[0]?.last_activity ?? null;
+    lastEmmausActivityDate = lastAct ? lastAct.slice(0, 10) : null;
+  }
+
+  // 4. Compute engagement status
+  const now    = Date.now();
+  const D14    = 14  * 86_400_000;
+  const D90    = 90  * 86_400_000;
+  const attMs  = lastAttDate           ? new Date(lastAttDate           + "T12:00:00Z").getTime() : 0;
+  const emmMs  = lastEmmausActivityDate ? new Date(lastEmmausActivityDate + "T12:00:00Z").getTime() : 0;
+  const recent = Math.max(attMs, emmMs);
+
+  let engagementStatus: PersonProfileSummary["engagementStatus"];
+  if (openCount > 0)                             engagementStatus = "needs_care";
+  else if (recent > 0 && now - recent <= D14)    engagementStatus = "active";
+  else if (recent > 0 && now - recent <= D90)    engagementStatus = "fading";
+  else                                            engagementStatus = "unknown";
+
+  return {
+    engagementStatus,
+    lastAttendanceDate:       lastAttDate,
+    daysSinceLastAttendance:  daysSince,
+    openCareSignalCount:      openCount,
+    activeWalkTitle,
+    activeWalkProgress,
+    lastEmmausActivityDate,
+  };
+}

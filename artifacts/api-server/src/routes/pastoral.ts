@@ -847,3 +847,26 @@ pastoralRouter.get("/audit-log", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+/**
+ * GET /pastoral/people/:personKey/profile-summary
+ *
+ * Returns a holistic spiritual-health snapshot: engagement status, last
+ * attendance, open alert count, active Walk, last Emmaus activity date.
+ * Used by the Discipleship Profile page to answer "How is this person doing?"
+ */
+pastoralRouter.get("/people/:personKey/profile-summary", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+
+  const parsed = parsePersonKey(String(req.params.personKey));
+  if (!parsed) { res.status(400).json({ error: "Invalid personKey." }); return; }
+
+  try {
+    const summary = await store.getPersonProfileSummary(parsed.personId, parsed.personType);
+    res.json(summary);
+  } catch (err) {
+    logger.error({ err }, "pastoral: getPersonProfileSummary failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});

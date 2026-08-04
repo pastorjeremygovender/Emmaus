@@ -481,6 +481,31 @@ export interface DiscipleshipSermonCompanion {
   updatedAt: string | null;
 }
 
+// ─── Person Profile Summary ───────────────────────────────────────────────────
+
+export interface PersonProfileSummary {
+  engagementStatus: "active" | "fading" | "needs_care" | "unknown";
+  lastAttendanceDate: string | null;
+  daysSinceLastAttendance: number | null;
+  openCareSignalCount: number;
+  activeWalkTitle: string | null;
+  activeWalkProgress: string | null;
+  lastEmmausActivityDate: string | null;
+}
+
+/**
+ * Returns the holistic spiritual-health snapshot for a person.
+ * Primary answer to: "How is this person doing, and should someone follow up?"
+ */
+export const getProfileSummary = (
+  auth: AuthHeaders,
+  personId: string,
+  personType: PersonType,
+): Promise<PersonProfileSummary> => {
+  const key = personKey(personId, personType);
+  return apiFetch<PersonProfileSummary>(`/people/${key}/profile-summary`, "GET", auth);
+};
+
 /** Returns all visit_scheduled audit entries for a given person, newest first. */
 export async function getVisitHistory(
   auth: AuthHeaders,

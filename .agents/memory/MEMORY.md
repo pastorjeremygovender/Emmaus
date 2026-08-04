@@ -35,3 +35,4 @@
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
 - [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.
 - [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.
+- [Discipleship Profile architecture](discipleship-profile.md) — PersonPage is a Discipleship Profile, not an attendance view; section order encodes shepherding priority; Section+Card shell components; profile-summary endpoint answers "how is this person doing?".
