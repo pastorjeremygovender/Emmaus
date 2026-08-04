@@ -339,14 +339,21 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
     Parameters<typeof store.updateSession>[1] & { force?: boolean };
 
   try {
-    // Guard: cancelling a session that already has attendance records
-    if (status === "cancelled") {
+    // Read current session upfront for any status transition so we can apply
+    // guards and make correct care-signal decisions without a second DB call.
+    let priorStatus: string | null = null;
+    if (status !== undefined) {
       const session = await store.getSession(id);
       if (!session) { res.status(404).json({ error: "Session not found." }); return; }
-      if (session.status !== "scheduled") {
+      priorStatus = session.status;
+    }
+
+    // Guard: cancelling a session that already has attendance records
+    if (status === "cancelled") {
+      if (priorStatus !== "scheduled") {
         // Only allow cancellation from 'scheduled'; completed sessions with data
         // should be restored, not cancelled silently.
-        if (session.status === "completed") {
+        if (priorStatus === "completed") {
           const count = await store.countAttendanceRecords(id);
           if (count > 0 && !force) {
             res.status(409).json({
@@ -373,16 +380,16 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
 
     let alertCount = 0;
 
-    if (status === "completed") {
-      // Atomically claim the scheduled→completed transition via a conditional
-      // UPDATE (WHERE status = 'scheduled').  Only the request whose UPDATE
-      // touches a row generates care signals; concurrent requests and repeated
+    if (status === "completed" && priorStatus !== "cancelled") {
+      // Normal close: atomically claim the scheduled→completed transition via a
+      // conditional UPDATE (WHERE status = 'scheduled').  Only the request whose
+      // UPDATE touches a row generates care signals; concurrent or repeated
       // closes return won=false and skip signal generation.
       const won = await store.tryCompleteSession(id);
 
       if (won) {
         // generateCareSignals is idempotent (ON CONFLICT DO NOTHING in care_signals)
-        // and guards against cancelled sessions and non-care-signal meeting types.
+        // and guards against non-care-signal meeting types.
         alertCount = await store.generateCareSignals(id);
         logger.info({ sessionId: id, alertCount }, "pastoral: care signals generated on session close");
       }
@@ -392,6 +399,11 @@ pastoralRouter.patch("/sessions/:id", async (req: Request, res: Response) => {
       if (Object.keys(rest).length > 0) {
         await store.updateSession(id, rest as Parameters<typeof store.updateSession>[1]);
       }
+    } else if (status === "completed" && priorStatus === "cancelled") {
+      // Restore path: cancelled → completed. Write the status directly without
+      // the scheduled-only guard, and skip care-signal generation — the session
+      // never ran while it was cancelled.
+      await store.updateSession(id, { ...rest, status });
     } else {
       const patch: Parameters<typeof store.updateSession>[1] = {
         ...rest,
@@ -639,16 +651,19 @@ pastoralRouter.patch("/care-signals/:id/schedule-visit", async (req: Request, re
   }
 
   try {
-    const ok = await store.scheduleVisit({
+    const outcome = await store.scheduleVisit({
       signalId:    id,
       visitDate:   visitDate.trim(),
       reason:      reason?.trim() ?? "",
       scheduledBy: userId,
     });
-    if (!ok) {
+    if (outcome === "not_found") {
       res.status(404).json({ error: "Signal not found or already dismissed." });
       return;
     }
+    // "ok" and "already_scheduled" are both treated as success —
+    // "already_scheduled" means the first submission went through and the
+    // signal is now gone; returning 200 lets the client clean up normally.
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof Error && err.message.toLowerCase().includes("visitdate")) {

@@ -39,6 +39,7 @@ interface SignalCardProps {
   onScheduleVisit: (id: string, visitDate: string, reason: string) => Promise<void>;
   dismissing: boolean;
   scheduling: boolean;
+  scheduled: boolean;
 }
 
 function todayIso(): string {
@@ -49,7 +50,7 @@ function todayIso(): string {
   return `${y}-${m}-${day}`;
 }
 
-function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling }: SignalCardProps) {
+function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling, scheduled }: SignalCardProps) {
   const [showForm, setShowForm]     = useState(false);
   const [expanded, setExpanded]     = useState(false);
   const [visitDate, setVisitDate]   = useState('');
@@ -58,7 +59,7 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
   const dateRef = useRef<HTMLInputElement>(null);
   const minDate = todayIso();
 
-  const busy = dismissing || scheduling;
+  const busy = dismissing || scheduling || scheduled;
   const hasSessionDetail = !!(signal.meetingTypeName || signal.sessionDate);
 
   const handleOpenForm = () => {
@@ -73,7 +74,7 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
     setFormError('');
     try {
       await onScheduleVisit(signal.id, visitDate, reason);
-      // parent removes this card from the list on success
+      // parent briefly shows confirmation then removes this card
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not schedule visit. Please try again.');
     }
@@ -81,6 +82,14 @@ function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling
 
   return (
     <div className="rounded-lg bg-white border border-gray-100 hover:border-gray-200 transition-colors overflow-hidden">
+      {/* Scheduled confirmation banner */}
+      {scheduled && (
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border-b border-green-100">
+          <CheckCheck size={12} className="text-green-600 shrink-0" />
+          <p className="text-[11px] font-medium text-green-700">Visit scheduled</p>
+        </div>
+      )}
+
       {/* Main row */}
       <div className="flex items-center justify-between gap-3 py-2.5 px-3">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -235,9 +244,10 @@ interface PersonGroupProps {
   onScheduleVisit: (id: string, visitDate: string, reason: string) => Promise<void>;
   dismissingId: string | null;
   schedulingId: string | null;
+  scheduledId: string | null;
 }
 
-function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissingId, schedulingId }: PersonGroupProps) {
+function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissingId, schedulingId, scheduledId }: PersonGroupProps) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -274,6 +284,7 @@ function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissi
               onScheduleVisit={onScheduleVisit}
               dismissing={dismissingId === s.id}
               scheduling={schedulingId === s.id}
+              scheduled={scheduledId === s.id}
             />
           ))}
         </div>
@@ -295,6 +306,7 @@ export default function CareSection() {
   const [genMsg, setGenMsg]           = useState('');
   const [dismissingId, setDismissing] = useState<string | null>(null);
   const [schedulingId, setScheduling] = useState<string | null>(null);
+  const [scheduledId, setScheduled]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -344,12 +356,17 @@ export default function CareSection() {
     setScheduling(id);
     try {
       await api.scheduleVisit(auth, id, visitDate, reason);
-      setSignals((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       setScheduling(null);
       throw err; // re-throw so SignalCard can surface the message in the form
     }
+    // Show a brief "Visit scheduled" confirmation on the card before it disappears.
     setScheduling(null);
+    setScheduled(id);
+    setTimeout(() => {
+      setSignals((prev) => prev.filter((s) => s.id !== id));
+      setScheduled(null);
+    }, 1400);
   };
 
   // Group signals by person
@@ -436,6 +453,7 @@ export default function CareSection() {
                 onScheduleVisit={handleScheduleVisit}
                 dismissingId={dismissingId}
                 schedulingId={schedulingId}
+                scheduledId={scheduledId}
               />
             ))}
           </div>

@@ -1172,8 +1172,6 @@ export async function generateCareSignals(sessionId: string): Promise<number> {
   return created;
 }
 
-// ─── Schedule Visit ──────────────────────────────────────────────────────────
-
 /**
  * Schedule a follow-up visit for a care signal.
  *
@@ -1184,12 +1182,13 @@ export async function generateCareSignals(sessionId: string): Promise<number> {
  * Returns false if the signal was not found or already dismissed.
  * Throws if visitDate is not a valid ISO calendar date (YYYY-MM-DD).
  */
+export type ScheduleVisitOutcome = "ok" | "already_scheduled" | "not_found";
 export async function scheduleVisit(data: {
   signalId: string;
   visitDate: string;   // must be YYYY-MM-DD
   reason: string;
   scheduledBy: string;
-}): Promise<boolean> {
+}): Promise<ScheduleVisitOutcome> {
   // Server-side date validation — must be a real YYYY-MM-DD calendar date.
   // We parse into UTC components and round-trip them back to catch overflow
   // dates like 2024-02-31 (which JS normalises to 2024-03-02 rather than throwing).
@@ -1225,9 +1224,16 @@ export async function scheduleVisit(data: {
     );
 
     if (claim.rows.length === 0) {
-      // Signal not found or was already dismissed/scheduled
       await client.query("ROLLBACK");
-      return false;
+      // Distinguish "already visit-scheduled" (idempotent double-submit) from
+      // "not found or dismissed for another reason" by checking the audit log.
+      const prior = await pool.query(
+        `SELECT id FROM pastoral_audit_log
+         WHERE entity_type = 'care_signal' AND entity_id = $1 AND action = 'visit_scheduled'
+         LIMIT 1`,
+        [data.signalId]
+      );
+      return prior.rows.length > 0 ? "already_scheduled" : "not_found";
     }
 
     const { person_id, session_id } = claim.rows[0] as Record<string, unknown>;
@@ -1254,7 +1260,7 @@ export async function scheduleVisit(data: {
     );
 
     await client.query("COMMIT");
-    return true;
+    return "ok";
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
