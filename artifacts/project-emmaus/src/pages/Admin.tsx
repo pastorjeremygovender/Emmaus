@@ -14,9 +14,11 @@ import {
   FlaskConical,
   BookOpen,
   ClipboardList,
+  Heart,
 } from 'lucide-react';
 
 import AdminDashboard from './admin/Dashboard';
+import PastoralDashboard from './admin/PastoralDashboard';
 import AdminSettings from './admin/Settings';
 import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
@@ -29,6 +31,7 @@ import AuditLog from './admin/AuditLog';
 
 export type AdminSection =
   | 'dashboard'
+  | 'pastoral-dashboard'
   | 'content-studio'
   | 'bible-study'
   | 'people'
@@ -48,13 +51,14 @@ export type AdminNav = {
 // ─── Sidebar nav items (4 only) ───────────────────────────────────────────────
 
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
-  { id: 'dashboard',      label: 'Dashboard',       Icon: LayoutDashboard },
-  { id: 'content-studio', label: 'Content Studio',  Icon: PenSquare },
-  { id: 'bible-study',    label: 'Bible Study',     Icon: BookOpen },
-  { id: 'people',         label: 'People',          Icon: Users },
-  { id: 'settings',       label: 'Settings',        Icon: Settings2 },
-  { id: 'audit-log',      label: 'Audit Log',       Icon: ClipboardList },
-  { id: 'testing',        label: 'Testing',         Icon: FlaskConical },
+  { id: 'dashboard',           label: 'Dashboard',           Icon: LayoutDashboard },
+  { id: 'pastoral-dashboard',  label: 'Pastoral Dashboard',  Icon: Heart },
+  { id: 'content-studio',      label: 'Content Studio',      Icon: PenSquare },
+  { id: 'bible-study',         label: 'Bible Study',         Icon: BookOpen },
+  { id: 'people',              label: 'People',              Icon: Users },
+  { id: 'settings',            label: 'Settings',            Icon: Settings2 },
+  { id: 'audit-log',           label: 'Audit Log',           Icon: ClipboardList },
+  { id: 'testing',             label: 'Testing',             Icon: FlaskConical },
 ];
 
 // ─── Admin shell ──────────────────────────────────────────────────────────────
@@ -84,13 +88,14 @@ export default function Admin() {
   // ─── Section label for mobile header ──────────────────────────────────────
 
   const sectionLabel: Record<AdminSection, string> = {
-    dashboard:        'Dashboard',
-    'content-studio': 'Content Studio',
-    'bible-study':    'Bible Study',
-    people:           'People',
-    settings:         'Settings',
-    'audit-log':      'Audit Log',
-    testing:          'Testing',
+    dashboard:             'Dashboard',
+    'pastoral-dashboard':  'Pastoral Dashboard',
+    'content-studio':      'Content Studio',
+    'bible-study':         'Bible Study',
+    people:                'People',
+    settings:              'Settings',
+    'audit-log':           'Audit Log',
+    testing:               'Testing',
   };
 
   // ─── Content renderer ─────────────────────────────────────────────────────
@@ -128,6 +133,8 @@ export default function Admin() {
             <AuditLog />
           </div>
         );
+      case 'pastoral-dashboard':
+        return <PastoralDashboard onNavigate={navigate} />;
       case 'testing':
         return <Testing />;
       default:

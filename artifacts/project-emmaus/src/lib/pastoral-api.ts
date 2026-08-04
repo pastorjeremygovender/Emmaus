@@ -711,3 +711,64 @@ export const assignSignal = (
   assignTo: string | null
 ) =>
   apiFetch<{ ok: boolean }>(`/discipleship-signals/${id}/assign`, "PATCH", auth, { assignTo });
+
+// ─── Pastoral Dashboard (Checkpoint 5) ───────────────────────────────────────
+
+export interface DashTodayStats {
+  attendance: { present: number; expected: number; sessionCount: number };
+  activeWalks: number;
+  activeDevotionals: number;
+  devotionalActivityToday: number;
+  newPeopleThisWeek: { pastoralPersons: number; emmausAccounts: number };
+  followUpSignalCount: number;
+}
+
+export interface DashMovementCard {
+  id: string;
+  label: string;
+  count: number;
+  sublabel?: string;
+}
+
+export interface DashAttendancePoint {
+  date: string;
+  present: number;
+  expected: number;
+  meetingType: string;
+}
+
+export interface DashTimePoint { date: string; count: number; }
+
+export interface DashEngagementData {
+  attendanceLast12: DashAttendancePoint[];
+  devotionalLast30: DashTimePoint[];
+  walkStartsLast90: DashTimePoint[];
+  walkCompletionsLast90: DashTimePoint[];
+  roomJoinsLast90: DashTimePoint[];
+}
+
+export interface DashNewBeliever {
+  userId: string;
+  personName: string;
+  journeyTitle: string;
+  completedAt: string;
+  hasBaptism: boolean;
+  hasRoom: boolean;
+}
+
+export interface DashActivityItem {
+  id: string;
+  type: string;
+  personName: string;
+  detail: string;
+  eventAt: string;
+}
+
+const dashFetch = <T>(path: string, auth: AuthHeaders): Promise<T> =>
+  apiFetch<T>(`/dashboard${path}`, "GET", auth);
+
+export const getDashTodayStats    = (auth: AuthHeaders) => dashFetch<DashTodayStats>("/today-stats", auth);
+export const getDashMovement      = (auth: AuthHeaders) => dashFetch<DashMovementCard[]>("/movement", auth);
+export const getDashEngagement    = (auth: AuthHeaders) => dashFetch<DashEngagementData>("/engagement", auth);
+export const getDashNewBelievers  = (auth: AuthHeaders) => dashFetch<DashNewBeliever[]>("/new-believers", auth);
+export const getDashActivity      = (auth: AuthHeaders) => dashFetch<DashActivityItem[]>("/activity", auth);

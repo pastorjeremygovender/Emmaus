@@ -37,3 +37,4 @@
 - [Pastoral Care Module](pastoral-care-module.md) — Checkpoint 1 schema (6 tables), permission model, personKey URL format, unified people list, frontend wiring, checkpoint boundaries.
 - [Discipleship Profile architecture](discipleship-profile.md) — Checkpoint 3 complete: 9-section profile; 6 new store functions + routes; PersonPage.tsx is thin orchestrator; pastoral_milestones table live.
 - [Care Signals Engine](care-signals-engine.md) — Checkpoint 4: discipleship_signals table, 18-rule engine, 5 routes, SignalsDashboard + CareSignalsSection; circular-import rule: engine file has no DB access.
+- [Pastoral Dashboard](pastoral-dashboard.md) — Checkpoint 5: 9-section dashboard as a separate nav item; dashboard-store.ts holds aggregate queries; useAutoFetch hook per section; prayer count from AdminContext (no DB table yet).

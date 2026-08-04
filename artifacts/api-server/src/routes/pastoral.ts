@@ -30,6 +30,7 @@
 import { Router, type Request, type Response } from "express";
 import * as store from "../lib/pastoral-store.js";
 import { CHURCH_ID } from "../lib/pastoral-store.js";
+import * as dash from "../lib/dashboard-store.js";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../emmaus/auth.js";
 import { logger } from "../lib/logger.js";
@@ -1127,6 +1128,69 @@ pastoralRouter.patch("/discipleship-signals/:id/assign", async (req: Request, re
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "pastoral: assignSignal failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Pastoral Dashboard (Checkpoint 5) ───────────────────────────────────────
+
+/** GET /pastoral/dashboard/today-stats */
+pastoralRouter.get("/dashboard/today-stats", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await dash.getTodayStats());
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDashTodayStats failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** GET /pastoral/dashboard/movement */
+pastoralRouter.get("/dashboard/movement", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await dash.getDiscipleshipMovement());
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDashMovement failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** GET /pastoral/dashboard/engagement */
+pastoralRouter.get("/dashboard/engagement", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await dash.getEngagementData());
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDashEngagement failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** GET /pastoral/dashboard/new-believers */
+pastoralRouter.get("/dashboard/new-believers", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await dash.getNewBelievers());
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDashNewBelievers failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/** GET /pastoral/dashboard/activity */
+pastoralRouter.get("/dashboard/activity", async (req: Request, res: Response) => {
+  const userId = await requireRecorderAccess(req, res);
+  if (!userId) return;
+  try {
+    const limit = Math.min(Number(req.query.limit ?? 25), 50);
+    res.json(await dash.getRecentActivity(limit));
+  } catch (err) {
+    logger.error({ err }, "pastoral: getDashActivity failed");
     res.status(500).json({ error: "Server error" });
   }
 });
