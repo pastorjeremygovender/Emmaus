@@ -90,6 +90,14 @@ export interface SignalDetected {
 
 // ─── Rule definition ──────────────────────────────────────────────────────────
 
+export interface ThresholdDef {
+  key: string;
+  label: string;
+  default: number;
+  min: number;
+  max: number;
+}
+
 export interface SignalRule {
   id: string;
   category: SignalCategory;
@@ -97,7 +105,9 @@ export interface SignalRule {
   title: string;
   description: string;
   isStateBased: boolean;
-  detect(ctx: PersonContext): SignalDetected | null;
+  /** Numeric thresholds that superAdmins can tune per-church. */
+  thresholdDefs?: ThresholdDef[];
+  detect(ctx: PersonContext, thresholds?: Record<string, number>): SignalDetected | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -388,10 +398,12 @@ export const ALL_RULES: SignalRule[] = [
     isStateBased: true,
     title: "Walk inactive for 14 days",
     description: "An active Walk has had no progress for 14 or more days.",
-    detect(ctx) {
+    thresholdDefs: [{ key: "inactiveDays", label: "Days inactive", default: 14, min: 7, max: 90 }],
+    detect(ctx, thresholds) {
       if (!ctx.emmausUserId) return null;
+      const minDays = thresholds?.inactiveDays ?? 14;
       const inactive = ctx.walks.filter(
-        (w) => isActive(w.status) && daysAgo(w.updatedAt) >= 14,
+        (w) => isActive(w.status) && daysAgo(w.updatedAt) >= minDays,
       );
       if (inactive.length === 0) return null;
       // Pick the one with the most days inactive
@@ -401,7 +413,7 @@ export const ALL_RULES: SignalRule[] = [
       return {
         signalType: "walk_inactive_14_days",
         category: "attention",
-        title: "Walk inactive for 14 days",
+        title: `Walk inactive for ${minDays} days`,
         explanation: `"${w.title}" has had no progress for ${d} day${d === 1 ? "" : "s"}.`,
         evidence: { walkTitle: w.title, lastActivityDate: w.updatedAt, daysInactive: d },
         isStateBased: true,
@@ -416,10 +428,12 @@ export const ALL_RULES: SignalRule[] = [
     isStateBased: true,
     title: "Daily Rhythm stopped",
     description: "An active devotional has had no progress for 14 or more days.",
-    detect(ctx) {
+    thresholdDefs: [{ key: "inactiveDays", label: "Days inactive", default: 14, min: 7, max: 90 }],
+    detect(ctx, thresholds) {
       if (!ctx.emmausUserId) return null;
+      const minDays = thresholds?.inactiveDays ?? 14;
       const stopped = ctx.devotionals.filter(
-        (d) => isActive(d.status) && daysAgo(d.updatedAt) >= 14,
+        (d) => isActive(d.status) && daysAgo(d.updatedAt) >= minDays,
       );
       if (stopped.length === 0) return null;
       stopped.sort((a, b) => daysAgo(b.updatedAt) - daysAgo(a.updatedAt));
@@ -445,7 +459,9 @@ export const ALL_RULES: SignalRule[] = [
     isStateBased: true,
     title: "Missed three expected services",
     description: "Missed three or more consecutive expected services.",
-    detect(ctx) {
+    thresholdDefs: [{ key: "consecutiveMissed", label: "Consecutive missed services", default: 3, min: 1, max: 10 }],
+    detect(ctx, thresholds) {
+      const minMissed = thresholds?.consecutiveMissed ?? 3;
       const eligible = ctx.attendanceRecords.filter((r) => r.status !== "not_expected");
       let consecutive = 0;
       const missed: AttRecord[] = [];
@@ -453,11 +469,11 @@ export const ALL_RULES: SignalRule[] = [
         if (r.status === "absent") { consecutive++; missed.push(r); }
         else break;
       }
-      if (consecutive < 3) return null;
+      if (consecutive < minMissed) return null;
       return {
         signalType: "missed_three_services",
         category: "follow_up",
-        title: "Missed three expected services",
+        title: `Missed ${minMissed} expected service${minMissed === 1 ? "" : "s"}`,
         explanation:
           `Missed ${consecutive} consecutive expected service${consecutive === 1 ? "" : "s"}. ` +
           `Most recent: ${missed[0]?.meetingTypeName ?? "service"} on ${fmtDate(missed[0]?.sessionDate)}.`,
@@ -480,10 +496,12 @@ export const ALL_RULES: SignalRule[] = [
     isStateBased: true,
     title: "No Emmaus activity for 30 days",
     description: "A linked Emmaus user has had no app activity in 30 or more days.",
-    detect(ctx) {
+    thresholdDefs: [{ key: "inactiveDays", label: "Days inactive", default: 30, min: 14, max: 180 }],
+    detect(ctx, thresholds) {
       if (!ctx.emmausUserId) return null;
       // Only signal if they were ever meaningfully active
       if (ctx.walks.length === 0 && ctx.devotionals.length === 0) return null;
+      const minDays = thresholds?.inactiveDays ?? 30;
       const allDates = [
         ...ctx.walks.map((w) => w.updatedAt),
         ...ctx.devotionals.map((d) => d.updatedAt),
@@ -491,11 +509,11 @@ export const ALL_RULES: SignalRule[] = [
       if (allDates.length === 0) return null;
       const lastDate = allDates[0];
       const d = daysAgo(lastDate);
-      if (d < 30) return null;
+      if (d < minDays) return null;
       return {
         signalType: "no_emmaus_activity_30_days",
         category: "follow_up",
-        title: "No Emmaus activity for 30 days",
+        title: `No Emmaus activity for ${minDays} days`,
         explanation: `Last Emmaus activity was ${d} day${d === 1 ? "" : "s"} ago (${fmtDate(lastDate)}).`,
         evidence: { lastActivityDate: lastDate, daysInactive: d },
         isStateBased: true,
@@ -622,16 +640,21 @@ export const ALL_RULES: SignalRule[] = [
 
 // ─── Engine entry point ───────────────────────────────────────────────────────
 
+export type RuleConfigMap = Map<string, { enabled?: boolean; thresholds?: Record<string, number> }>;
+
 /**
  * Run all enabled rules against a person context.
+ * Pass `ruleConfig` to apply per-church enabled/threshold overrides.
  * Returns an array of detected signals (may be empty).
  */
-export function detectSignals(ctx: PersonContext): SignalDetected[] {
+export function detectSignals(ctx: PersonContext, ruleConfig?: RuleConfigMap): SignalDetected[] {
   const results: SignalDetected[] = [];
   for (const rule of ALL_RULES) {
-    if (!rule.enabled) continue;
+    const cfg = ruleConfig?.get(rule.id);
+    const enabled = cfg?.enabled !== undefined ? cfg.enabled : rule.enabled;
+    if (!enabled) continue;
     try {
-      const signal = rule.detect(ctx);
+      const signal = rule.detect(ctx, cfg?.thresholds);
       if (signal) results.push(signal);
     } catch {
       // Per-rule failures are non-fatal — engine continues.

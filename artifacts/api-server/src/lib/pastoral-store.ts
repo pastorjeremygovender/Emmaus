@@ -16,6 +16,7 @@ import {
   ALL_RULES,
   type SignalCategory,
   type PersonContext,
+  type RuleConfigMap,
 } from "./care-signals-engine.js";
 
 export const CHURCH_ID = "icc";
@@ -2396,10 +2397,13 @@ async function upsertDiscipleshipSignal(data: {
   return res.rows[0].xmax === "0" ? "created" : "updated";
 }
 
-// ─── Engine runner ────────────────────────────────────────────────────────────
-
-// ─── Signal engine run log ────────────────────────────────────────────────────
-
+export interface SignalRuleConfig {
+  ruleId: string;
+  enabled: boolean;
+  thresholds: Record<string, number>;
+  updatedBy: string;
+  updatedAt: string;
+}
 export interface EngineRunRecord {
   id: number;
   churchId: string;
@@ -2455,10 +2459,45 @@ export async function getLastEngineRun(): Promise<EngineRunRecord | null> {
   }
 }
 
+/**
+ * Bulk-resolve all open (non-resolved, non-dismissed) signals of a given
+ * signal_type for this church.  Called when a rule is disabled so that
+ * existing alerts don't linger in pastor triage indefinitely.
+ *
+ * Returns the number of rows updated.
+ */
+export async function resolveOpenSignalsByType(
+  signalType: string,
+  resolvedBy: string,
+): Promise<number> {
+  const res = await pool.query<{ id: string }>(
+    `UPDATE discipleship_signals
+        SET status      = 'resolved',
+            resolved_at = NOW(),
+            updated_at  = NOW()
+      WHERE church_id   = $1
+        AND signal_type = $2
+        AND status NOT IN ('resolved', 'dismissed')
+      RETURNING id`,
+    [CHURCH_ID, signalType],
+  );
+  const count = res.rowCount ?? 0;
+  if (count > 0) {
+    logger.info(
+      { signalType, resolvedBy, count },
+      "pastoral-store: resolveOpenSignalsByType — rule disabled; existing signals resolved",
+    );
+  }
+  return count;
+}
+
 export async function runSignalsEngine(opts?: {
   personId?: string;
   personType?: PersonType;
 }): Promise<{ processed: number; created: number; updated: number; resolved: number }> {
+  // Load per-church rule config from DB so the engine respects admin overrides.
+  const ruleConfig = await getSignalRuleConfigMap();
+
   const allPeople = await listUnifiedPeople();
   const targets = opts?.personId
     ? allPeople.filter(
@@ -2470,9 +2509,28 @@ export async function runSignalsEngine(opts?: {
 
   let created = 0, updated = 0, resolved = 0;
 
-  // IDs of all state-based rules (these can be auto-resolved)
+  // Sweep: resolve any open signals belonging to rules that are now disabled.
+  // This handles the gap between when a rule was disabled and the next engine run.
+  // Only applies when running the full engine (not a targeted per-person run).
+  if (!opts?.personId) {
+    for (const rule of ALL_RULES) {
+      const cfg = ruleConfig.get(rule.id);
+      if (cfg?.enabled === false) {
+        const n = await resolveOpenSignalsByType(rule.id, "engine:rule_disabled_sweep");
+        resolved += n;
+      }
+    }
+  }
+
+  // IDs of all state-based rules that are currently enabled (can be auto-resolved)
   const stateBasedIds = new Set(
-    ALL_RULES.filter((r) => r.isStateBased && r.enabled).map((r) => r.id),
+    ALL_RULES
+      .filter((r) => r.isStateBased)
+      .filter((r) => {
+        const cfg = ruleConfig.get(r.id);
+        return cfg?.enabled !== undefined ? cfg.enabled : r.enabled;
+      })
+      .map((r) => r.id),
   );
 
   for (const person of targets) {
@@ -2481,7 +2539,7 @@ export async function runSignalsEngine(opts?: {
         person.id,
         person.personType as PersonType,
       );
-      const detected    = detectSignals(ctx);
+      const detected    = detectSignals(ctx, ruleConfig);
       const detectedSet = new Set(detected.map((s) => s.signalType));
 
       for (const signal of detected) {
@@ -2522,6 +2580,25 @@ export async function runSignalsEngine(opts?: {
   return { processed: targets.length, created, updated, resolved };
 }
 
+/** Returns all 18 rules merged with any per-church overrides from DB. */
+export async function listSignalRulesWithConfig(): Promise<SignalRuleWithConfig[]> {
+  const configMap = await getSignalRuleConfigMap();
+  return ALL_RULES.map((rule) => {
+    const cfg = configMap.get(rule.id);
+    return {
+      id:             rule.id,
+      category:       rule.category,
+      title:          rule.title,
+      description:    rule.description,
+      isStateBased:   rule.isStateBased,
+      defaultEnabled: rule.enabled,
+      enabled:        cfg?.enabled !== undefined ? cfg.enabled : rule.enabled,
+      thresholds:     cfg?.thresholds ?? {},
+      thresholdDefs:  rule.thresholdDefs,
+    };
+  });
+}
+
 /** Returns open discipleship-signal counts grouped by person and category. */
 export async function getDiscipleshipSignalCounts(): Promise<DiscipleshipSignalCountRow[]> {
   const res = await pool.query(
@@ -2550,4 +2627,57 @@ export async function getDiscipleshipSignalCounts(): Promise<DiscipleshipSignalC
     celebration: Number(r.celebration ?? 0),
     total:       Number(r.total ?? 0),
   }));
+}
+
+/** Load per-church rule config from DB as a quick-lookup map. */
+export async function getSignalRuleConfigMap(): Promise<RuleConfigMap> {
+  try {
+    const res = await pool.query<{ rule_id: string; enabled: boolean; thresholds: unknown }>(
+      `SELECT rule_id, enabled, thresholds FROM signal_rule_config WHERE church_id = $1`,
+      [CHURCH_ID],
+    );
+    const map: RuleConfigMap = new Map();
+    for (const r of res.rows) {
+      map.set(r.rule_id, {
+        enabled:    Boolean(r.enabled),
+        thresholds: typeof r.thresholds === "object" && r.thresholds !== null
+          ? (r.thresholds as Record<string, number>)
+          : {},
+      });
+    }
+    return map;
+  } catch {
+    return new Map(); // table may not exist yet on first boot
+  }
+}
+
+/** Upsert one rule's config override (enabled flag + optional thresholds). */
+export async function upsertSignalRuleConfig(data: {
+  ruleId: string;
+  enabled: boolean;
+  thresholds: Record<string, number>;
+  updatedBy: string;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO signal_rule_config (church_id, rule_id, enabled, thresholds, updated_by)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (church_id, rule_id) DO UPDATE SET
+       enabled    = EXCLUDED.enabled,
+       thresholds = EXCLUDED.thresholds,
+       updated_by = EXCLUDED.updated_by,
+       updated_at = NOW()`,
+    [CHURCH_ID, data.ruleId, data.enabled, JSON.stringify(data.thresholds), data.updatedBy],
+  );
+}
+
+export interface SignalRuleWithConfig {
+  id: string;
+  category: SignalCategory;
+  title: string;
+  description: string;
+  isStateBased: boolean;
+  defaultEnabled: boolean;
+  enabled: boolean;
+  thresholds: Record<string, number>;
+  thresholdDefs?: { key: string; label: string; default: number; min: number; max: number }[];
 }

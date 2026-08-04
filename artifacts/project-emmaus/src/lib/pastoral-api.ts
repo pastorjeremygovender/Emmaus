@@ -740,8 +740,13 @@ export const assignSignal = (
 ) =>
   apiFetch<{ ok: boolean }>(`/discipleship-signals/${id}/assign`, "PATCH", auth, { assignTo });
 
-// ─── Pastoral Dashboard (Checkpoint 5) ───────────────────────────────────────
-
+export interface ThresholdDef {
+  key: string;
+  label: string;
+  default: number;
+  min: number;
+  max: number;
+}
 export interface DashTodayStats {
   attendance: { present: number; expected: number; sessionCount: number };
   activeWalks: number;
@@ -801,6 +806,28 @@ export const getDashEngagement    = (auth: AuthHeaders) => dashFetch<DashEngagem
 export const getDashNewBelievers  = (auth: AuthHeaders) => dashFetch<DashNewBeliever[]>("/new-believers", auth);
 export const getDashActivity      = (auth: AuthHeaders) => dashFetch<DashActivityItem[]>("/activity", auth);
 
+export const listSignalRuleConfig = (auth: AuthHeaders): Promise<SignalRuleWithConfig[]> =>
+  apiFetch<SignalRuleWithConfig[]>("/signal-rule-config", "GET", auth);
+
 /** Returns open discipleship-signal counts grouped by person and category. */
 export const getDiscipleshipSignalCounts = (auth: AuthHeaders) =>
   apiFetch<PersonSignalCounts[]>("/discipleship-signals/counts", "GET", auth);
+
+export const updateSignalRuleConfig = (
+  auth: AuthHeaders,
+  ruleId: string,
+  patch: { enabled: boolean; thresholds?: Record<string, number> }
+): Promise<{ ok: boolean }> =>
+  apiFetch<{ ok: boolean }>(`/signal-rule-config/${ruleId}`, "PATCH", auth, patch);
+
+export interface SignalRuleWithConfig {
+  id: string;
+  category: SignalCategory;
+  title: string;
+  description: string;
+  isStateBased: boolean;
+  defaultEnabled: boolean;
+  enabled: boolean;
+  thresholds: Record<string, number>;
+  thresholdDefs?: ThresholdDef[];
+}

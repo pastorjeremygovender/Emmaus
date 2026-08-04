@@ -1100,6 +1100,27 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: signal_engine_runs table failed (non-fatal)");
   }
 
+  // ── Signal Rule Config table (2026-08) ───────────────────────────────────
+  // Per-church on/off toggles and numeric threshold overrides for all 18
+  // care-signal rules. Keyed by (church_id, rule_id).
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS signal_rule_config (
+        id          uuid          NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        church_id   text          NOT NULL,
+        rule_id     text          NOT NULL,
+        enabled     boolean       NOT NULL DEFAULT true,
+        thresholds  jsonb         NOT NULL DEFAULT '{}',
+        updated_by  text          NOT NULL DEFAULT '',
+        updated_at  timestamptz   NOT NULL DEFAULT NOW(),
+        UNIQUE (church_id, rule_id)
+      );
+    `);
+    logger.info("Startup migration: signal_rule_config table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: signal_rule_config table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

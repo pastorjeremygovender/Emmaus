@@ -8,7 +8,7 @@
 
 import React, { useState } from 'react';
 import {
-  Users, DoorOpen, HeartHandshake, ClipboardList, Heart, Zap,
+  Users, DoorOpen, HeartHandshake, ClipboardList, Heart, Zap, Settings,
 } from 'lucide-react';
 import AdminUsers from './Users';
 import AdminRooms from './AdminRooms';
@@ -18,17 +18,19 @@ import PastoralPeople from './pastoral/PastoralPeople';
 import PersonPage from './pastoral/PersonPage';
 import CareSection from './pastoral/CareSection';
 import SignalsDashboard from './pastoral/signals/SignalsDashboard';
+import SignalSettings from './pastoral/signals/SignalSettings';
 import type { UnifiedPerson } from '@/lib/pastoral-api';
 
-export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' | 'signals';
+export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' | 'signals' | 'signal-settings';
 
 const TABS: { id: PeopleTab; label: string; Icon: React.ElementType }[] = [
-  { id: 'members',    label: 'Members',    Icon: Users },
-  { id: 'rooms',      label: 'Rooms',      Icon: DoorOpen },
-  { id: 'prayer',     label: 'Prayer',     Icon: HeartHandshake },
-  { id: 'attendance', label: 'Attendance', Icon: ClipboardList },
-  { id: 'care',       label: 'Care',       Icon: Heart },
-  { id: 'signals',    label: 'Signals',    Icon: Zap },
+  { id: 'members',         label: 'Members',    Icon: Users },
+  { id: 'rooms',           label: 'Rooms',      Icon: DoorOpen },
+  { id: 'prayer',          label: 'Prayer',     Icon: HeartHandshake },
+  { id: 'attendance',      label: 'Attendance', Icon: ClipboardList },
+  { id: 'care',            label: 'Care',       Icon: Heart },
+  { id: 'signals',         label: 'Signals',    Icon: Zap },
+  { id: 'signal-settings', label: 'Settings',   Icon: Settings },
 ];
 
 type MembersSubView = 'emmaus' | 'all-people';
@@ -124,6 +126,8 @@ export default function People({ activeTab, onTabChange }: Props) {
           );
         }
         return <SignalsDashboard onOpenProfile={setSignalsSelectedPerson} />;
+      case 'signal-settings':
+        return <SignalSettings />;
     }
   };
 

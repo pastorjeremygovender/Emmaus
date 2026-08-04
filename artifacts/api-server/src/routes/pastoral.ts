@@ -31,6 +31,8 @@ import { Router, type Request, type Response } from "express";
 import * as store from "../lib/pastoral-store.js";
 import { CHURCH_ID } from "../lib/pastoral-store.js";
 import * as dash from "../lib/dashboard-store.js";
+import { ALL_RULES } from "../lib/care-signals-engine.js";
+import { getUserRole } from "../lib/user-role-store.js";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../emmaus/auth.js";
 import { logger } from "../lib/logger.js";
@@ -41,18 +43,18 @@ export const pastoralRouter = Router();
 
 /**
  * Returns userId if the caller has any pastoral access:
- * superAdmin, admin, or pastoral_role IN ('pastor','recorder') via user_profiles.
+ * superAdmin or admin (from server-side role store — never request headers),
+ * or pastoral_role IN ('pastor','recorder') verified from user_profiles DB.
  */
 async function requirePastoralAccess(req: Request, res: Response): Promise<string | null> {
   const userId = requireAuth(req, res);
   if (!userId) return null;
 
-  const roleClaim = String(req.headers["x-user-role"] ?? "");
-  if (roleClaim === "superAdmin" || roleClaim === "admin" || userId === "demo-superadmin-1") {
-    return userId;
-  }
+  // Use the server-side role store — never trust the client-supplied X-User-Role header.
+  const serverRole = await getUserRole(userId);
+  if (serverRole === "superAdmin" || serverRole === "admin") return userId;
 
-  // Check pastoral_role in user_profiles
+  // Fallback: check pastoral_role in user_profiles (for users assigned pastoral duties)
   try {
     const result = await pool.query(
       `SELECT pastoral_role FROM user_profiles WHERE email = $1`,
@@ -76,15 +78,18 @@ async function requireRecorderAccess(req: Request, res: Response): Promise<strin
 
 /**
  * Pastor/admin only — can correct records, view pastoral notes.
+ * Admin and superAdmin are verified from the server-side role store;
+ * never from the client-supplied X-User-Role header.
  */
 async function requirePastorAccess(req: Request, res: Response): Promise<string | null> {
   const userId = requireAuth(req, res);
   if (!userId) return null;
 
-  const roleClaim = String(req.headers["x-user-role"] ?? "");
-  if (roleClaim === "superAdmin" || roleClaim === "admin" || userId === "demo-superadmin-1") {
-    return userId;
-  }
+  // Use the server-side role store — never trust the client-supplied X-User-Role header.
+  const serverRole = await getUserRole(userId);
+  if (serverRole === "superAdmin" || serverRole === "admin") return userId;
+
+  // Fallback: pastoral users with pastor role can access pastor-level routes
   try {
     const result = await pool.query(
       `SELECT pastoral_role FROM user_profiles WHERE email = $1`,
@@ -1143,6 +1148,125 @@ pastoralRouter.patch("/discipleship-signals/:id/note", async (req: Request, res:
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "pastoral: updateSignalNote failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Signal Rule Config ───────────────────────────────────────────────────────
+
+/**
+ * GET /pastoral/signal-rule-config
+ * Returns all 18 rules merged with the church's per-rule overrides.
+ * Accessible to all pastoral roles (read-only config is fine for any pastor).
+ */
+pastoralRouter.get("/signal-rule-config", async (req: Request, res: Response) => {
+  const userId = await requirePastoralAccess(req, res);
+  if (!userId) return;
+  try {
+    const rules = await store.listSignalRulesWithConfig();
+    res.json(rules);
+  } catch (err) {
+    logger.error({ err }, "pastoral: listSignalRulesWithConfig failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
+ * PATCH /pastoral/signal-rule-config/:ruleId
+ * Body: { enabled: boolean, thresholds?: Record<string, number> }
+ *
+ * Admins can toggle any rule on/off.
+ * SuperAdmins can also adjust numeric thresholds.
+ *
+ * Authorization note: superAdmin status is verified using the same mechanism
+ * (`x-user-role` header + demo-user fallback) used throughout this module's
+ * `requirePastorAccess` / `requireSuperAdmin` guards — consistent with the
+ * app's current auth model.  Non-superAdmin callers have their thresholds
+ * field ignored and existing DB thresholds are preserved, so the elevated
+ * check only gates additive data (threshold values), not destructive access.
+ */
+pastoralRouter.patch("/signal-rule-config/:ruleId", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+
+  const ruleId = String(req.params.ruleId);
+
+  // ── Validate ruleId against the canonical rule list ───────────────────────
+  const rule = ALL_RULES.find((r) => r.id === ruleId);
+  if (!rule) {
+    res.status(404).json({ error: `Unknown signal rule: ${ruleId}` });
+    return;
+  }
+
+  const { enabled, thresholds } = req.body as {
+    enabled?: boolean;
+    thresholds?: unknown;
+  };
+
+  if (typeof enabled !== "boolean") {
+    res.status(400).json({ error: "enabled (boolean) is required." });
+    return;
+  }
+
+  // ── Determine threshold values ────────────────────────────────────────────
+  // SuperAdmin check uses the server-side role store (user-role-store.ts),
+  // never the client-supplied X-User-Role header.
+  const serverRole = await getUserRole(userId);
+  const isSuperAdmin = serverRole === "superAdmin";
+
+  let finalThresholds: Record<string, number>;
+
+  if (isSuperAdmin && thresholds !== null && typeof thresholds === "object" && !Array.isArray(thresholds)) {
+    // Validate each key against the rule's declared thresholdDefs.
+    // Keys not in thresholdDefs are silently dropped; values are clamped to
+    // the declared min/max and rounded to the nearest integer.
+    const safeThresholds: Record<string, number> = {};
+    if (rule.thresholdDefs) {
+      for (const def of rule.thresholdDefs) {
+        const raw = (thresholds as Record<string, unknown>)[def.key];
+        if (raw !== undefined) {
+          const n = Number(raw);
+          if (isFinite(n)) {
+            safeThresholds[def.key] = Math.max(def.min, Math.min(def.max, Math.round(n)));
+          }
+        }
+      }
+    }
+    finalThresholds = safeThresholds;
+  } else {
+    // Non-superAdmin toggle: read the existing config from DB and preserve
+    // whatever thresholds a superAdmin may have previously configured.
+    // This prevents a plain toggle from silently wiping threshold overrides.
+    const configMap = await store.getSignalRuleConfigMap();
+    finalThresholds = configMap.get(ruleId)?.thresholds ?? {};
+  }
+
+  try {
+    await store.upsertSignalRuleConfig({
+      ruleId,
+      enabled,
+      thresholds: finalThresholds,
+      updatedBy: userId,
+    });
+
+    // When a rule is disabled, immediately resolve all of its open signals so
+    // they don't linger in pastor triage.  Re-enabling allows fresh detection
+    // on the next engine run.
+    let resolvedCount = 0;
+    if (!enabled) {
+      resolvedCount = await store.resolveOpenSignalsByType(ruleId, userId);
+    }
+
+    await store.logPastoralAudit({
+      entityType: "signal_rule_config",
+      entityId:   ruleId,
+      action:     enabled ? "rule_enabled" : "rule_disabled",
+      newValue:   { enabled, thresholds: finalThresholds, resolvedSignals: resolvedCount },
+      changedBy:  userId,
+    });
+    res.json({ ok: true, resolvedSignals: resolvedCount });
+  } catch (err) {
+    logger.error({ err }, "pastoral: upsertSignalRuleConfig failed");
     res.status(500).json({ error: "Server error" });
   }
 });
