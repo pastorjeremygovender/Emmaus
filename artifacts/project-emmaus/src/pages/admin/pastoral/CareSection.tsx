@@ -7,10 +7,10 @@
  *  • per-person grouping with attendance context
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Heart, RefreshCw, CheckCheck, AlertCircle, Loader2,
-  Calendar, Users, ChevronDown, ChevronUp,
+  Calendar, Users, ChevronDown, ChevronUp, CalendarPlus, X,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,39 +30,138 @@ function fmtDate(iso: string): string {
 interface SignalCardProps {
   signal: api.CareSignal;
   onDismiss: (id: string) => void;
+  onScheduleVisit: (id: string, visitDate: string, reason: string) => Promise<void>;
   dismissing: boolean;
+  scheduling: boolean;
 }
 
-function SignalCard({ signal, onDismiss, dismissing }: SignalCardProps) {
+function SignalCard({ signal, onDismiss, onScheduleVisit, dismissing, scheduling }: SignalCardProps) {
+  const [showForm, setShowForm]   = useState(false);
+  const [visitDate, setVisitDate] = useState('');
+  const [reason, setReason]       = useState('');
+  const [formError, setFormError] = useState('');
+  const dateRef = useRef<HTMLInputElement>(null);
+
+  const busy = dismissing || scheduling;
+
+  const handleOpenForm = () => {
+    setFormError('');
+    setShowForm(true);
+    setTimeout(() => dateRef.current?.focus(), 50);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!visitDate) return;
+    setFormError('');
+    try {
+      await onScheduleVisit(signal.id, visitDate, reason);
+      // parent removes this card from the list on success
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not schedule visit. Please try again.');
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg bg-white border border-gray-100 hover:border-gray-200 transition-colors">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="shrink-0 w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center">
-          <Calendar size={13} className="text-rose-400" />
+    <div className="rounded-lg bg-white border border-gray-100 hover:border-gray-200 transition-colors overflow-hidden">
+      {/* Main row */}
+      <div className="flex items-center justify-between gap-3 py-2.5 px-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="shrink-0 w-7 h-7 rounded-full bg-rose-50 flex items-center justify-center">
+            <Calendar size={13} className="text-rose-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium text-gray-800 truncate">
+              Missed {signal.meetingTypeName ?? 'session'}
+            </p>
+            <p className="text-[11px] text-gray-400">
+              {signal.sessionDate ? fmtDate(signal.sessionDate) : '—'}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[12px] font-medium text-gray-800 truncate">
-            Missed {signal.meetingTypeName ?? 'session'}
-          </p>
-          <p className="text-[11px] text-gray-400">
-            {signal.sessionDate ? fmtDate(signal.sessionDate) : '—'}
-          </p>
+
+        <div className="shrink-0 flex items-center gap-1.5">
+          {/* Schedule visit */}
+          <button
+            onClick={handleOpenForm}
+            disabled={busy || showForm}
+            title="Schedule a follow-up visit"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
+          >
+            <CalendarPlus size={11} />
+            Schedule visit
+          </button>
+
+          {/* Dismiss */}
+          <button
+            onClick={() => onDismiss(signal.id)}
+            disabled={busy}
+            title="Dismiss signal"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {dismissing ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <CheckCheck size={11} />
+            )}
+            Dismiss
+          </button>
         </div>
       </div>
 
-      <button
-        onClick={() => onDismiss(signal.id)}
-        disabled={dismissing}
-        title="Dismiss signal"
-        className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-      >
-        {dismissing ? (
-          <Loader2 size={11} className="animate-spin" />
-        ) : (
-          <CheckCheck size={11} />
-        )}
-        Dismiss
-      </button>
+      {/* Inline schedule-visit form */}
+      {showForm && (
+        <form
+          onSubmit={handleSubmit}
+          className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2.5 flex flex-col gap-2"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-indigo-700">Schedule visit</p>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Cancel"
+            >
+              <X size={13} />
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              ref={dateRef}
+              type="date"
+              value={visitDate}
+              onChange={(e) => setVisitDate(e.target.value)}
+              required
+              className="flex-none w-36 px-2 py-1 rounded-md border border-indigo-200 text-[11px] text-gray-800 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            />
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Brief reason (optional)"
+              maxLength={200}
+              className="flex-1 min-w-0 px-2 py-1 rounded-md border border-indigo-200 text-[11px] text-gray-800 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            />
+          </div>
+
+          {formError && (
+            <p className="text-[11px] text-rose-600">{formError}</p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={!visitDate || scheduling}
+              className="flex items-center gap-1 px-3 py-1 rounded-md text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {scheduling ? <Loader2 size={11} className="animate-spin" /> : <CalendarPlus size={11} />}
+              Confirm
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -73,10 +172,12 @@ interface PersonGroupProps {
   personName: string;
   signals: api.CareSignal[];
   onDismiss: (id: string) => void;
+  onScheduleVisit: (id: string, visitDate: string, reason: string) => Promise<void>;
   dismissingId: string | null;
+  schedulingId: string | null;
 }
 
-function PersonGroup({ personName, signals, onDismiss, dismissingId }: PersonGroupProps) {
+function PersonGroup({ personName, signals, onDismiss, onScheduleVisit, dismissingId, schedulingId }: PersonGroupProps) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -110,7 +211,9 @@ function PersonGroup({ personName, signals, onDismiss, dismissingId }: PersonGro
               key={s.id}
               signal={s}
               onDismiss={onDismiss}
+              onScheduleVisit={onScheduleVisit}
               dismissing={dismissingId === s.id}
+              scheduling={schedulingId === s.id}
             />
           ))}
         </div>
@@ -131,6 +234,7 @@ export default function CareSection() {
   const [generating, setGenerating]   = useState(false);
   const [genMsg, setGenMsg]           = useState('');
   const [dismissingId, setDismissing] = useState<string | null>(null);
+  const [schedulingId, setScheduling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -174,6 +278,18 @@ export default function CareSection() {
     } finally {
       setDismissing(null);
     }
+  };
+
+  const handleScheduleVisit = async (id: string, visitDate: string, reason: string) => {
+    setScheduling(id);
+    try {
+      await api.scheduleVisit(auth, id, visitDate, reason);
+      setSignals((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      setScheduling(null);
+      throw err; // re-throw so SignalCard can surface the message in the form
+    }
+    setScheduling(null);
   };
 
   // Group signals by person
@@ -257,7 +373,9 @@ export default function CareSection() {
                 personName={personName}
                 signals={grpSignals}
                 onDismiss={handleDismiss}
+                onScheduleVisit={handleScheduleVisit}
                 dismissingId={dismissingId}
+                schedulingId={schedulingId}
               />
             ))}
           </div>

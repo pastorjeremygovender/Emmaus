@@ -546,6 +546,38 @@ pastoralRouter.post("/care-signals/generate", async (req: Request, res: Response
   }
 });
 
+/** PATCH /pastoral/care-signals/:id/schedule-visit */
+pastoralRouter.patch("/care-signals/:id/schedule-visit", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  const id = String(req.params.id);
+  const { visitDate, reason } = req.body as { visitDate?: string; reason?: string };
+  if (!visitDate?.trim()) {
+    res.status(400).json({ error: "visitDate is required." });
+    return;
+  }
+  try {
+    const ok = await store.scheduleVisit({
+      signalId:    id,
+      visitDate:   visitDate.trim(),
+      reason:      reason?.trim() ?? "",
+      scheduledBy: userId,
+    });
+    if (!ok) {
+      res.status(404).json({ error: "Signal not found or already dismissed." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof Error && err.message.toLowerCase().includes("visitdate")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    logger.error({ err }, "pastoral: scheduleVisit failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 /** PATCH /pastoral/care-signals/:id/dismiss */
 pastoralRouter.patch("/care-signals/:id/dismiss", async (req: Request, res: Response) => {
   const userId = await requireRecorderAccess(req, res);

@@ -1058,6 +1058,97 @@ export async function generateCareSignals(sessionId: string): Promise<number> {
   return created;
 }
 
+// ─── Schedule Visit ──────────────────────────────────────────────────────────
+
+/**
+ * Schedule a follow-up visit for a care signal.
+ *
+ * Atomically claims the signal (single UPDATE … WHERE dismissed_at IS NULL RETURNING)
+ * and writes the visit_scheduled audit entry inside one transaction, so concurrent
+ * dismiss or double-schedule requests cannot produce duplicate or conflicting records.
+ *
+ * Returns false if the signal was not found or already dismissed.
+ * Throws if visitDate is not a valid ISO calendar date (YYYY-MM-DD).
+ */
+export async function scheduleVisit(data: {
+  signalId: string;
+  visitDate: string;   // must be YYYY-MM-DD
+  reason: string;
+  scheduledBy: string;
+}): Promise<boolean> {
+  // Server-side date validation — must be a real YYYY-MM-DD calendar date.
+  // We parse into UTC components and round-trip them back to catch overflow
+  // dates like 2024-02-31 (which JS normalises to 2024-03-02 rather than throwing).
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.visitDate)) {
+    throw new Error("visitDate must be a valid ISO calendar date (YYYY-MM-DD).");
+  }
+  const [yStr, mStr, dStr] = data.visitDate.split("-");
+  const inputYear  = parseInt(yStr, 10);
+  const inputMonth = parseInt(mStr, 10);
+  const inputDay   = parseInt(dStr, 10);
+  const utc = new Date(Date.UTC(inputYear, inputMonth - 1, inputDay));
+  if (
+    utc.getUTCFullYear()     !== inputYear  ||
+    utc.getUTCMonth() + 1    !== inputMonth ||
+    utc.getUTCDate()         !== inputDay
+  ) {
+    throw new Error("visitDate is not a valid calendar date.");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Atomically dismiss the signal only if it is still open.
+    // The WHERE dismissed_at IS NULL clause acts as the guard;
+    // RETURNING gives us the person/session context without a prior SELECT.
+    const claim = await client.query(
+      `UPDATE care_signals
+       SET dismissed_at = NOW(), dismissed_by = $1
+       WHERE id = $2 AND church_id = $3 AND dismissed_at IS NULL
+       RETURNING id, person_id, session_id`,
+      [data.scheduledBy, data.signalId, CHURCH_ID]
+    );
+
+    if (claim.rows.length === 0) {
+      // Signal not found or was already dismissed/scheduled
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    const { person_id, session_id } = claim.rows[0] as Record<string, unknown>;
+
+    // Write audit entry in the same transaction
+    await client.query(
+      `INSERT INTO pastoral_audit_log
+         (church_id, entity_type, entity_id, action,
+          person_id, session_id, previous_value, new_value,
+          changed_by, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        CHURCH_ID,
+        "care_signal",
+        data.signalId,
+        "visit_scheduled",
+        String(person_id),
+        String(session_id),
+        null,
+        JSON.stringify({ visitDate: data.visitDate, reason: data.reason }),
+        data.scheduledBy,
+        data.reason,
+      ]
+    );
+
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Pastoral audit log ───────────────────────────────────────────────────────
 
 export async function getPastoralAuditLog(opts: {

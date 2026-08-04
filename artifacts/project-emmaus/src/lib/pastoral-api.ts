@@ -368,6 +368,19 @@ export const generateCareSignals = (auth: AuthHeaders, sessionId?: string) =>
 export const dismissCareSignal = (auth: AuthHeaders, id: string) =>
   apiFetch<{ ok: boolean }>(`/care-signals/${id}/dismiss`, "PATCH", auth);
 
+export const scheduleVisit = (
+  auth: AuthHeaders,
+  id: string,
+  visitDate: string,
+  reason: string
+) =>
+  apiFetch<{ ok: boolean }>(
+    `/care-signals/${id}/schedule-visit`,
+    "PATCH",
+    auth,
+    { visitDate, reason }
+  );
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 export const getPastoralAuditLog = (auth: AuthHeaders, opts?: {
