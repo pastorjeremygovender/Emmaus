@@ -6,9 +6,9 @@
  *               pastoral API alongside the existing Emmaus Accounts view.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Users, DoorOpen, HeartHandshake, ClipboardList, Heart, Zap, Settings,
+  Users, DoorOpen, HeartHandshake, ClipboardList, Heart, Zap, Settings, Loader2,
 } from 'lucide-react';
 import AdminUsers from './Users';
 import AdminRooms from './AdminRooms';
@@ -20,6 +20,8 @@ import CareSection from './pastoral/CareSection';
 import SignalsDashboard from './pastoral/signals/SignalsDashboard';
 import SignalSettings from './pastoral/signals/SignalSettings';
 import type { UnifiedPerson, PersonType } from '@/lib/pastoral-api';
+import { listPeople } from '@/lib/pastoral-api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' | 'signals' | 'signal-settings';
 
@@ -111,10 +113,65 @@ function MembersTab() {
 }
 
 export default function People({ activeTab, onTabChange, overridePerson, onOverridePersonBack }: Props) {
+  const { user } = useAuth();
   const [signalsSelectedPerson, setSignalsSelectedPerson] = useState<UnifiedPerson | null>(null);
 
-  // Deep-link from Pastoral Dashboard → open a person directly, bypassing tabs
+  // Full UnifiedPerson fetched when navigating via overridePerson deep-link.
+  // null = still loading; false = fetch done but person not found (fall back to synthetic).
+  const [resolvedOverridePerson, setResolvedOverridePerson] = useState<UnifiedPerson | null | false>(null);
+
+  useEffect(() => {
+    if (!overridePerson) {
+      setResolvedOverridePerson(null);
+      return;
+    }
+
+    // Reset to "loading" whenever the target identity changes.
+    setResolvedOverridePerson(null);
+
+    let cancelled = false;
+    const auth = { userId: user?.id ?? '', userRole: user?.role ?? 'admin' };
+
+    listPeople(auth)
+      .then(people => {
+        if (cancelled) return;
+        const found = people.find(
+          p => p.id === overridePerson.personId && p.personType === overridePerson.personType,
+        );
+        // `false` signals "fetch complete, not found" so we can render the synthetic fallback.
+        setResolvedOverridePerson(found ?? false);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedOverridePerson(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [overridePerson?.personId, overridePerson?.personType, user?.id]);
+
+  // Deep-link from Pastoral Dashboard → open a person directly, bypassing tabs.
+  //
+  // We defer mounting <PersonPage> until the full record is available because
+  // PersonPage latches person.isLinked / person.linkedUserId into local state on
+  // first render — switching from a synthetic record to the resolved one after mount
+  // would leave those state values stale and corrupt the Administrative Details UI.
+  //
+  // While the fetch is in flight (resolvedOverridePerson === null) we show a spinner.
+  // If the fetch completes without finding the person (=== false) we fall back to the
+  // synthetic record so the profile still opens (PersonPage re-fetches section data).
   if (overridePerson) {
+    const handleBack = onOverridePersonBack ?? (() => onTabChange('members'));
+
+    // Still fetching.
+    if (resolvedOverridePerson === null) {
+      return (
+        <div className="flex flex-col h-full min-h-0 items-center justify-center gap-2 text-gray-400">
+          <Loader2 size={20} className="animate-spin" />
+          <span className="text-[13px]">Loading profile…</span>
+        </div>
+      );
+    }
+
+    // Resolved (or fell back to synthetic).
     const syntheticPerson: UnifiedPerson = {
       id: overridePerson.personId,
       sourceId: overridePerson.personId,
@@ -129,11 +186,14 @@ export default function People({ activeTab, onTabChange, overridePerson, onOverr
       lastAttendanceStatus: null,
       churchId: '',
     };
+    const personToShow = resolvedOverridePerson || syntheticPerson;
+
     return (
       <div className="flex flex-col h-full min-h-0">
         <PersonPage
-          person={syntheticPerson}
-          onBack={onOverridePersonBack ?? (() => onTabChange('members'))}
+          key={`${personToShow.id}:${personToShow.personType}`}
+          person={personToShow}
+          onBack={handleBack}
         />
       </div>
     );
