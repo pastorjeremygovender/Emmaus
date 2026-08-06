@@ -926,6 +926,11 @@ export default function AdminDashboard({ onNavigate }: Props) {
 
   return (
     <div className="p-5 lg:p-8 max-w-5xl pb-16">
+      {/* ⚠️ TEMPORARY DEPLOY TEST BANNER — remove after confirming live build ⚠️ */}
+      <div style={{ background: '#dc2626', color: '#fff', fontWeight: 700, fontSize: 14, padding: '10px 16px', borderRadius: 8, marginBottom: 20, letterSpacing: 0.3 }}>
+        🚀 DEPLOY TEST — BUILD VERIFIED {new Date().getFullYear()} — REMOVE AFTER CONFIRMING LIVE
+      </div>
+
       {/* S1: Greeting */}
       <GreetingSection />
 
