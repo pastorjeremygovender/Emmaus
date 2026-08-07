@@ -604,8 +604,7 @@ export default function Walk() {
       }
   >(null);
 
-  useEffect(() => {
-    if (!user?.id) return;
+  const reloadThisWeekCompanion = useCallback((userId: string) => {
     fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
       .then(r => {
         if (r.status === 404) return null;
@@ -627,7 +626,10 @@ export default function Walk() {
         });
       })
       .catch(() => setThisWeekCompanion('none'));
-  }, [user?.id]);
+    // userId is referenced via closure so the server always receives the correct
+    // session identity; the param is accepted so callers can pass it explicitly.
+    void userId;
+  }, []);
 
   // ── Sermon Companions — in-progress (section 5) ──────────────────────────────
   // All started, non-paused companions EXCEPT the current-week one (shown in section 2).
@@ -644,8 +646,7 @@ export default function Walk() {
     badge?: 'UPDATED' | null;
   }>>([]);
 
-  useEffect(() => {
-    if (!user?.id) return;
+  const reloadScCompanions = useCallback((userId: string) => {
     fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : [])
       .then((data: Array<{
@@ -684,7 +685,33 @@ export default function Walk() {
         }));
       })
       .catch(() => setScCompanions([]));
-  }, [user?.id]);
+    void userId;
+  }, []);
+
+  // Initial fetch — runs once when the user is known.
+  useEffect(() => {
+    if (!user?.id) return;
+    reloadThisWeekCompanion(user.id);
+    reloadScCompanions(user.id);
+  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions]);
+
+  // Visibility-change refresh — refreshes the This Week's Sermon card (and the
+  // in-progress companions list) whenever the member returns to this tab.
+  // Critical for Sunday mornings: admin marks a new companion as This Week's
+  // Sermon while the member has Today's Steps open; when they switch back to the
+  // app the card updates immediately without requiring a manual reload.
+  useEffect(() => {
+    if (!user?.id) return;
+    const userId = user.id;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        reloadThisWeekCompanion(userId);
+        reloadScCompanions(userId);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions]);
 
   if (!user) return null;
 
