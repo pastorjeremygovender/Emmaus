@@ -28,7 +28,7 @@ import ContentStudio from './admin/content-studio/ContentStudio';
 import People from './admin/People';
 import type { PeopleTab } from './admin/People';
 import Testing from './admin/Testing';
-import BibleStudyAdmin from './admin/BibleStudyAdmin';
+import UnifiedBibleStudy from './admin/UnifiedBibleStudy';
 import AuditLog from './admin/AuditLog';
 import type { PersonType } from '@/lib/pastoral-api';
 
@@ -62,11 +62,11 @@ export type AdminNav = {
 const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] = [
   { id: 'dashboard',           label: 'Dashboard',           Icon: LayoutDashboard },
   { id: 'pastoral-dashboard',  label: 'Pastoral Dashboard',  Icon: Heart },
+  { id: 'people',              label: 'People',              Icon: Users },
   { id: 'analytics',           label: 'Analytics',           Icon: BarChart2 },
   { id: 'workflows',           label: 'Workflows',           Icon: ListChecks },
   { id: 'content-studio',      label: 'Content Studio',      Icon: PenSquare },
   { id: 'bible-study',         label: 'Bible Study',         Icon: BookOpen },
-  { id: 'people',              label: 'People',              Icon: Users },
   { id: 'settings',            label: 'Settings',            Icon: Settings2 },
   { id: 'audit-log',           label: 'Audit Log',           Icon: ClipboardList },
   { id: 'testing',             label: 'Testing',             Icon: FlaskConical },
@@ -141,11 +141,7 @@ export default function Admin() {
       case 'settings':
         return <AdminSettings />;
       case 'bible-study':
-        return (
-          <div className="p-6 lg:p-8 max-w-4xl">
-            <BibleStudyAdmin />
-          </div>
-        );
+        return <UnifiedBibleStudy />;
       case 'audit-log':
         return (
           <div className="p-0">

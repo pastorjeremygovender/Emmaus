@@ -127,7 +127,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
     setTimeout(() => setDeleteSuccess(''), 4000);
   };
 
-  const pageTitle = isLibrary ? 'Walk Library' : (standaloneOnly ? 'Standalone Walks' : 'Walks');
+  const pageTitle = isLibrary ? 'Walks' : (standaloneOnly ? 'Standalone Walks' : 'Walks');
   const pageDescription = isLibrary
     ? 'Every walk across all journeys and standalone.'
     : (standaloneOnly ? 'Walks without a journey assignment.' : 'All walks in this journey.');

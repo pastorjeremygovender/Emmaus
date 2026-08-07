@@ -20,9 +20,9 @@
 
 import React, { useState } from 'react';
 import {
-  Sun, BookHeart, Map, Mic2, Film,
-  FolderOpen, BookOpen, Clapperboard, ImagePlay,
-  ChevronRight, Scroll,
+  Sun, BookHeart, Map, Mic2,
+  FolderOpen, BookOpen,
+  ChevronRight,
 } from 'lucide-react';
 
 import DailyRhythmStudio from './DailyRhythmStudio';
@@ -91,15 +91,15 @@ type StudioView =
 type TopTab = { id: string; label: string; Icon: React.ElementType };
 
 const TOP_NAV: TopTab[] = [
-  { id: 'daily-rhythm',    label: 'Daily Rhythm',      Icon: Sun      },
-  { id: 'devotionals',     label: 'Daily Devotionals', Icon: BookHeart },
-  { id: 'journeys',        label: 'Journeys',          Icon: Map       },
-  { id: 'sermons',         label: 'Sermons',            Icon: Mic2      },
-  { id: 'media-studio',    label: 'Media Studio',      Icon: Film      },
-  { id: 'bible-studio',    label: 'Bible Study',       Icon: Scroll    },
+  { id: 'daily-rhythm', label: 'Daily Rhythm',      Icon: Sun       },
+  { id: 'devotionals',  label: 'Daily Devotionals', Icon: BookHeart  },
+  { id: 'walks',        label: 'Walks',             Icon: BookOpen   },
+  { id: 'journeys',     label: 'Journeys',          Icon: FolderOpen },
+  { id: 'sermons',      label: 'Sermons',           Icon: Mic2       },
 ];
 
 // Map view.id → top-tab id
+// Note: 'journey-editor' is computed dynamically (fromLibrary → 'walks', else → 'journeys')
 const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'daily-rhythm':               'daily-rhythm',
   'daily-rhythm-editor':        'daily-rhythm',
@@ -107,55 +107,30 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'devotionals':                'devotionals',
   'devotional-editor':          'devotionals',
   'devotional-entry-editor':    'devotionals',
-  'journeys-library':           'journeys',
+  // Walks tab — individual walk library and walk-level editors
+  'journeys-library':           'walks',
+  'journeys-standalone':        'walks',
+  'legacy-journey-editor':      'walks',
+  'legacy-day-editor':          'walks',
+  'legacy-day-preview':         'walks',
+  // Journeys tab — ordered collections of walks
   'journeys-collections':       'journeys',
   'collection-editor':          'journeys',
   'collection-detail':          'journeys',
   'journey-detail':             'journeys',
   'journey-day-editor':         'journeys',
-  'journeys-standalone':        'journeys',
-  'journey-editor':             'journeys',
-  'legacy-journey-editor':      'journeys',
-  'legacy-day-editor':          'journeys',
-  'legacy-day-preview':         'journeys',
   'sermons':                    'sermons',
   'sermon-editor':              'sermons',
-  'youtube-archive':            'media-studio',
-  'media':                      'media-studio',
-  'kit-wizard':                 'media-studio',
-  'kit-editor':                 'media-studio',
-  'bible-progress':             'bible-studio',
-  'bible-generator':            'bible-studio',
-  'bible-book-intros':          'bible-studio',
 };
 
 // Default view when a top tab is clicked
 const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
-  'daily-rhythm':  { id: 'daily-rhythm' },
-  'devotionals':   { id: 'devotionals' },
-  // Journey Library is the primary entry point — administrators think "Journey", not "Collection"
-  'journeys':      { id: 'journeys-library' },
-  'sermons':       { id: 'sermons' },
-  'media-studio':  { id: 'youtube-archive' },
-  'bible-studio':  { id: 'bible-progress' },
+  'daily-rhythm': { id: 'daily-rhythm' },
+  'devotionals':  { id: 'devotionals' },
+  'walks':        { id: 'journeys-library' },
+  'journeys':     { id: 'journeys-collections' },
+  'sermons':      { id: 'sermons' },
 };
-
-// ─── Subtab helpers ───────────────────────────────────────────────────────────
-
-type JourneysSubTab = 'library' | 'collections';
-type MediaSubTab    = 'youtube' | 'library';
-
-function getJourneysSubTab(view: StudioView): JourneysSubTab {
-  // Library tab: the primary flat list of all journeys
-  if (view.id === 'journeys-library') return 'library';
-  if (view.id === 'journey-editor' && (view as { fromLibrary?: boolean }).fromLibrary) return 'library';
-  // Collections tab: organisational hierarchy (collections → detail → journey)
-  return 'collections';
-}
-
-function getMediaSubTab(view: StudioView): MediaSubTab {
-  return view.id === 'youtube-archive' ? 'youtube' : 'library';
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -180,7 +155,13 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     window.scrollTo(0, 0);
   };
 
-  const activeTabId = VIEW_TO_TAB[view.id] ?? 'daily-rhythm';
+  // journey-editor active tab depends on how it was opened
+  const activeTabId = (() => {
+    if (view.id === 'journey-editor') {
+      return (view as { fromLibrary?: boolean }).fromLibrary ? 'walks' : 'journeys';
+    }
+    return VIEW_TO_TAB[view.id] ?? 'daily-rhythm';
+  })();
 
   // ── Breadcrumb ──────────────────────────────────────────────────────────────
 
@@ -217,29 +198,25 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: `Day ${view.day}` });
         break;
 
-      // Journeys — Library (primary)
+      // Walks tab — flat library of individual walks
       case 'journeys-library':
-        crumbs.push({ label: 'Journeys' });
-        crumbs.push({ label: 'Journey Library' });
+        crumbs.push({ label: 'Walks' });
         break;
 
-      // Journeys — Journey management (secondary organisational view)
+      // Journeys tab — ordered collections of walks
       case 'journeys-collections':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Journeys' });
         break;
       case 'collection-editor':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
         crumbs.push({ label: view.collectionId ? 'Edit Journey' : 'New Journey' });
         break;
       case 'collection-detail':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
         crumbs.push({ label: view.collectionTitle ?? 'Journey' });
         break;
       case 'journey-detail':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
         if (view.collectionId) {
           crumbs.push({
             label: view.collectionTitle ?? 'Journey',
@@ -249,7 +226,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: view.journeyTitle ?? 'Walk' });
         break;
       case 'journey-day-editor':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
         if (view.collectionId) {
           crumbs.push({
             label: view.collectionTitle ?? 'Journey',
@@ -269,41 +246,35 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: view.day === null ? 'New Day' : `Day ${view.day}` });
         break;
 
-      // Journeys — Standalone (used for "new from journey" flow; 'Standalone' label removed from IA)
+      // Walks — new walk from collection context
       case 'journeys-standalone':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
-        crumbs.push({ label: view.collectionId ? 'Journey' : 'Journey Library' });
+        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+        crumbs.push({ label: view.collectionId ? 'Journey' : 'Walks' });
         break;
       case 'journey-editor':
-        crumbs.push({
-          label: 'Journeys',
-          onClick: () => navigate(
-            view.fromLibrary ? { id: 'journeys-library' } :
-            view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }
-          ),
-        });
-        crumbs.push({
-          label: view.fromLibrary ? 'Journey Library' : (view.fromStandalone ? 'Journey Library' : 'Journeys'),
-          onClick: () => navigate(
-            view.fromLibrary ? { id: 'journeys-library' } :
-            view.fromStandalone ? { id: 'journeys-standalone' } : { id: 'journeys-collections' }
-          ),
-        });
-        crumbs.push({ label: 'Journey Editor' });
+        if (view.fromLibrary) {
+          crumbs.push({ label: 'Walks', onClick: () => navigate({ id: 'journeys-library' }) });
+        } else {
+          crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-collections' }) });
+          if (view.fromStandalone) {
+            crumbs.push({ label: 'Walks', onClick: () => navigate({ id: 'journeys-standalone' }) });
+          }
+        }
+        crumbs.push({ label: 'Walk Editor' });
         break;
 
-      // Legacy editors
+      // Legacy walk editors
       case 'legacy-journey-editor':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
+        crumbs.push({ label: 'Walks', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Legacy Editor' });
         break;
       case 'legacy-day-editor':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
+        crumbs.push({ label: 'Walks', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Legacy Editor', onClick: () => navigate({ id: 'legacy-journey-editor', journeyId: view.journeyId }) });
         crumbs.push({ label: 'Day Editor' });
         break;
       case 'legacy-day-preview':
-        crumbs.push({ label: 'Journeys', onClick: () => navigate({ id: 'journeys-library' }) });
+        crumbs.push({ label: 'Walks', onClick: () => navigate({ id: 'journeys-library' }) });
         crumbs.push({ label: 'Preview' });
         break;
 
@@ -354,64 +325,6 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
   };
 
   // ── Subtab renderers ────────────────────────────────────────────────────────
-
-  function renderJourneysSubTabs() {
-    const sub = getJourneysSubTab(view);
-    const tabs: { id: JourneysSubTab; label: string; Icon: React.ElementType }[] = [
-      { id: 'library',     label: 'Journey Library', Icon: BookOpen   },
-      { id: 'collections', label: 'Journeys',         Icon: FolderOpen },
-    ];
-    return (
-      <div className="flex items-center gap-4 px-6 pt-2 pb-2 border-b border-gray-100 bg-gray-50">
-        {tabs.map(({ id, label, Icon }) => {
-          const active = sub === id;
-          return (
-            <button
-              key={id}
-              onClick={() => navigate(id === 'library' ? { id: 'journeys-library' } : { id: 'journeys-collections' })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
-                active
-                  ? 'bg-teal-50 text-teal-700'
-                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              <Icon size={12} />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  function renderMediaSubTabs() {
-    const sub = getMediaSubTab(view);
-    const tabs: { id: MediaSubTab; label: string; Icon: React.ElementType }[] = [
-      { id: 'youtube',  label: 'YouTube Archive', Icon: Clapperboard },
-      { id: 'library',  label: 'Media Library',   Icon: ImagePlay    },
-    ];
-    return (
-      <div className="flex items-center gap-4 px-6 pt-2 pb-2 border-b border-gray-100 bg-gray-50">
-        {tabs.map(({ id, label, Icon }) => {
-          const active = sub === id;
-          return (
-            <button
-              key={id}
-              onClick={() => navigate(id === 'youtube' ? { id: 'youtube-archive' } : { id: 'media' })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
-                active
-                  ? 'bg-teal-50 text-teal-700'
-                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              <Icon size={12} />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
 
   // ── View renderer ────────────────────────────────────────────────────────────
 
@@ -676,10 +589,6 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
   };
 
   const crumbs = renderBreadcrumb();
-  // Show Journey Library / Collections subtabs on all top-level journey list views.
-  // Hide them when deep inside an editor or detail view.
-  const showJourneysSubTabs  = activeTabId === 'journeys'      && !['journey-editor', 'journey-day-editor', 'journey-detail', 'collection-editor', 'collection-detail', 'legacy-journey-editor', 'legacy-day-editor', 'legacy-day-preview'].includes(view.id);
-  const showMediaSubTabs     = activeTabId === 'media-studio'  && !['kit-wizard', 'kit-editor'].includes(view.id);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -712,12 +621,6 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             );
           })}
         </div>
-
-        {/* Journeys subtabs */}
-        {showJourneysSubTabs && renderJourneysSubTabs()}
-
-        {/* Media Studio subtabs */}
-        {showMediaSubTabs && renderMediaSubTabs()}
 
         {/* Breadcrumb */}
         {crumbs.length > 1 && (

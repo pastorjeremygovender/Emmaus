@@ -577,9 +577,9 @@ function CrossRefAdmin({ headers }: { headers: Record<string, string> }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function BibleStudyAdmin() {
+export default function BibleStudyAdmin({ defaultTab = 'notes' }: { defaultTab?: 'notes' | 'crossrefs' }) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'notes' | 'crossrefs'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'crossrefs'>(defaultTab);
   const [notes, setNotes] = useState<StudyNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
