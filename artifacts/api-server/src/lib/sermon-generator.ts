@@ -546,7 +546,7 @@ The Big Idea is:
 
 Rules:
 - ONE sentence only — never a list, never a paragraph
-- Plain, pastoral language the pastor himself would use
+- Plain, pastoral language
 - No theological jargon ("Christocentric", "covenantal", "eschatological", etc.)
 - No vague generic phrases ("we should trust God", "faith is important")
 - Specific to THIS sermon — not a spiritual platitude that could apply to any sermon
@@ -758,9 +758,21 @@ Never add "supporting verses" or "related passages".
 Never quote a verse merely because it fits the theme.
 
 DAYS RULE:
-Generate between 1 and 5 days based on the number of distinct ideas the preacher actually preached.
-Do not stretch weak material. Do not invent extra days merely to reach 5.
-If the sermon has only 2 or 3 clear ideas, generate only 2 or 3 days.
+Target exactly 5 days. Identify all the distinct ideas from the sermon and group or expand
+them into 5 days. Minor related ideas may be combined into a single day, or a strong point
+may be extended across two days, so long as every day is genuinely grounded in the transcript.
+Generate fewer than 5 only when the sermon genuinely cannot support 5 days of devotional material
+— for example, a short 10-minute sermon with only 2 clear ideas should yield 2 days, not a padded 5.
+Never invent ideas not present in the transcript to reach 5.
+
+SPEAKER RULE:
+Never refer to the speaker as "the pastor", "the preacher", or "the speaker".
+If a speakerName is provided in the context, use it naturally where attribution genuinely matters
+(e.g. "Pastor Jeremy reminded us...", "Pastor Jeremy drew our attention to...").
+Where personal attribution is not needed, prefer communal language:
+"we reflected on", "we saw", "we spoke about", "in the sermon we heard".
+Do not insert the speaker's name into every paragraph — use it sparingly and naturally.
+If no speakerName is provided, use only communal phrasing; never invent a name.
 
 EACH DAY MUST CONTAIN:
 - title: derived from what the preacher said, not invented
@@ -808,6 +820,8 @@ async function generateCompanion(context: {
   transcript: string;
   mainTheme: string;
   videoId: string;
+  /** Speaker's name (e.g. "Jeremy Govender"). Used in generated content instead of "the pastor". */
+  speakerName?: string;
   /** VTT timed cues from the caption track — used to build real timestamp anchors. */
   timedCues?: TimedCue[];
   /** Detected sermon start time in seconds (used to filter timedCues to sermon window). */
@@ -839,10 +853,17 @@ async function generateCompanion(context: {
     }
   }
 
+  // Build a "Pastor X" style label for use in content, or fall back to communal phrasing.
+  // The SPEAKER RULE in COMPANION_SYSTEM governs how this is used — see that prompt.
+  const speakerLabel = context.speakerName
+    ? `Pastor ${context.speakerName.split(" ")[0]}`  // e.g. "Jeremy Govender" → "Pastor Jeremy"
+    : "";
+
   const userMsg = `Confirmed Main Theme: ${context.mainTheme}
 
 Sermon title: ${context.sermonTitle}
 Scripture: ${context.scriptureReference}
+Speaker: ${speakerLabel || "(not specified — use communal 'we' language instead of any pastor reference)"}
 Summary: ${context.summary}${transcriptSnippet}${timelineSnippet}`;
 
   const res = await openai.chat.completions.create({
@@ -1245,6 +1266,7 @@ export async function generateFromUrl(youtubeUrl: string, options: GenerationOpt
       summary: draftFields.summary,
       transcript: sermonTranscript,   // ← sermon only
       mainTheme,
+      speakerName: draftFields.speaker || undefined,  // ← drives speaker attribution in content
       videoId,                         // ← needed for timestamped sermon links
       timedCues,                        // ← real VTT timestamps for landmark anchoring
       sermonStartSecs: detectionStartSecs,
@@ -1481,6 +1503,7 @@ export async function generateSermonContentFromTranscript(
     summary:            draftFields.summary,
     transcript:         sermonTranscript,
     mainTheme,
+    speakerName:        opts.speaker || draftFields.speaker || undefined,
     videoId:            "",
     // Pass detected sermon start so buildSermonLink can convert the AI's 0-based
     // transcript estimates into absolute offsets within the full uploaded audio file.

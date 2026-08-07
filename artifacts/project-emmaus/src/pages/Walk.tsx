@@ -2,9 +2,11 @@
  * Walk — "What is Jesus inviting me to continue today?"
  *
  * Visual hierarchy (top → bottom):
- *   1. Today's 10 Minutes with Jesus  (highest priority — always first)
- *   2. Your Journeys                  (started journeys; "Explore Journeys →" if none)
- *   3. This Week's Sermon Devotional  (companion journey, only when active)
+ *   1. Today's 10 Minutes with Jesus   (highest priority — always first)
+ *   2. This Week's Sermon              (permanent card — always visible; empty state when no companion)
+ *   3. Daily Devotionals               (self-paced series the member has started)
+ *   4. Your Journeys                   (started growth journeys)
+ *   5. Sermon Companions               (other in-progress companions beyond the current week)
  *
  * Ask Emmaus floats above the nav — not part of this hierarchy.
  */
@@ -564,24 +566,8 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
-  const handleBeginCompanion = useCallback(async (companionId: string) => {
-    if (!user) return;
-    setStartingCompanionId(companionId);
-    try {
-      await fetch(`${BASE_URL}/api/sermon-companions/${companionId}/progress/start`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      // Dismiss any NEW badge — progress now exists; opening it clears the indicator.
-      void dismissBadge('companion', companionId);
-      setUnstartedCurrentWeekCompanion(null);
-      setLocation(`/sermon-companion/${companionId}/day/1?source=today`);
-    } catch {
-      // ignore — user can retry
-    } finally {
-      setStartingCompanionId(null);
-    }
-  }, [user, setLocation]);
+  // handleBeginCompanion removed — the permanent This Week's Sermon card routes
+  // directly to /sermon-companion/:id/overview which handles starting the companion.
 
   // ── Pause / Remove dialog state ──────────────────────────────────────────────
   // Tracks which card is showing the confirm-pause dialog.
@@ -598,10 +584,52 @@ export default function Walk() {
   // rather than mutating the shared context.
   const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
 
-  // ── Sermon Companion (from sermon_companion table via API) ───────────────────
-  // currentWeeklySermonCompanionId is set by the admin in Media Studio and stored
-  // in localStorage. Loading it here (before early returns) satisfies Rules of Hooks.
-  // All in-progress sermon companions — not just the current-week one.
+  // ── This Week's Sermon — permanent card (section 2) ─────────────────────────
+  // Always rendered. null = loading, 'none' = no current companion published.
+  // Fetched from the dedicated current-week endpoint (is_current_week flag in DB).
+  const [thisWeekCompanion, setThisWeekCompanion] = useState<
+    | null
+    | 'none'
+    | {
+        id: string;
+        title: string;
+        /** Number of published entries — the definitive day count. */
+        publishedDayCount: number;
+        progress: {
+          currentDay: number;
+          completedDays: number[];
+          status: string;
+        } | null;
+      }
+  >(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
+      .then(r => {
+        if (r.status === 404) return null;
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((data: {
+        id: string;
+        title: string;
+        entries: { id: string; dayNumber: number }[];
+        progress: { currentDay: number; completedDays: number[]; status: string } | null;
+      } | null) => {
+        if (!data) { setThisWeekCompanion('none'); return; }
+        setThisWeekCompanion({
+          id: data.id,
+          title: data.title,
+          publishedDayCount: data.entries.length,
+          progress: data.progress ?? null,
+        });
+      })
+      .catch(() => setThisWeekCompanion('none'));
+  }, [user?.id]);
+
+  // ── Sermon Companions — in-progress (section 5) ──────────────────────────────
+  // All started, non-paused companions EXCEPT the current-week one (shown in section 2).
   const [scCompanions, setScCompanions] = useState<Array<{
     id: string;
     title: string;
@@ -614,14 +642,6 @@ export default function Walk() {
     /** Smart Content Indicator — UPDATED only on Today's Steps */
     badge?: 'UPDATED' | null;
   }>>([]);
-  /** Current-week companion the member hasn't started yet — shown as a discovery card. */
-  const [unstartedCurrentWeekCompanion, setUnstartedCurrentWeekCompanion] = useState<{
-    id: string; title: string; numberOfDays: number;
-  } | null>(null);
-  const [startingCompanionId, setStartingCompanionId] = useState<string | null>(null);
-
-  // scCanonicalMap removed — Today's Steps companion cards now route to
-  // /sermon-companion/:id/overview (complete) or /sermon-companion/:id/day/:day (active).
 
   useEffect(() => {
     if (!user?.id) return;
@@ -636,9 +656,15 @@ export default function Walk() {
         progress: { currentDay: number; completedDays: number[]; status: string } | null;
         badge?: 'NEW' | 'UPDATED' | null;
       }>) => {
-        // Show only companions the member has started, not paused, and not hidden.
+        // Show only companions the member has started, not paused, not hidden,
+        // and NOT the current-week companion (shown in the permanent section 2 card).
         const started = data
-          .filter(c => c.progress !== null && c.progress.status !== 'paused' && !(c.progress as { hiddenFromToday?: boolean }).hiddenFromToday)
+          .filter(c =>
+            c.progress !== null &&
+            c.progress.status !== 'paused' &&
+            !(c.progress as { hiddenFromToday?: boolean }).hiddenFromToday &&
+            !c.isCurrentWeek,          // current-week lives in the permanent card
+          )
           .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
         setScCompanions(started.map(c => {
           const currentDay = c.progress!.currentDay;
@@ -655,16 +681,8 @@ export default function Walk() {
             badge: c.badge === 'UPDATED' ? 'UPDATED' : null,
           };
         }));
-        // Surface the current-week companion as a discovery card for members who
-        // haven't started any companion yet (progress === null).
-        const unstartedCW = data.find(c => c.progress === null && c.isCurrentWeek);
-        setUnstartedCurrentWeekCompanion(
-          unstartedCW
-            ? { id: unstartedCW.id, title: unstartedCW.title, numberOfDays: unstartedCW.numberOfDays }
-            : null,
-        );
       })
-      .catch(() => { setScCompanions([]); setUnstartedCurrentWeekCompanion(null); });
+      .catch(() => setScCompanions([]));
   }, [user?.id]);
 
   if (!user) return null;
@@ -874,7 +892,74 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. Daily Devotionals — self-paced (all active series) ─────────── */}
+        {/* ── 2. This Week's Sermon — permanent card ─────────────────────────── */}
+        <motion.section
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.07 }}
+        >
+          {thisWeekCompanion === null ? (
+            // Skeleton while loading
+            <div className="rounded-2xl border border-border p-5 space-y-3 animate-pulse">
+              <div className="h-3 w-32 rounded bg-muted" />
+              <div className="h-5 w-48 rounded bg-muted" />
+              <div className="h-3 w-40 rounded bg-muted" />
+            </div>
+          ) : thisWeekCompanion === 'none' ? (
+            // Empty state — no current companion published yet
+            <div className="rounded-2xl border border-dashed border-border p-5">
+              <p className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-2">
+                This Week&#39;s Sermon
+              </p>
+              <p className="text-[14px] text-muted-foreground leading-snug">
+                This week&#39;s Sermon Companion will appear here when it is published.
+              </p>
+            </div>
+          ) : (() => {
+            // Companion exists — compute progress and CTA
+            const { id, title, publishedDayCount, progress } = thisWeekCompanion;
+            const completedCount = progress?.completedDays.length ?? 0;
+            const currentDay = progress?.currentDay ?? 1;
+            const allComplete = publishedDayCount > 0 && currentDay > publishedDayCount;
+            const hasStarted = progress !== null;
+
+            const description = !hasStarted
+              ? publishedDayCount > 0 ? `${publishedDayCount} Steps` : undefined
+              : allComplete
+                ? `${publishedDayCount} of ${publishedDayCount} steps completed`
+                : completedCount > 0
+                  ? `Step ${currentDay} of ${publishedDayCount}`
+                  : `Step 1 of ${publishedDayCount}`;
+
+            const ctaLabel = !hasStarted
+              ? 'Start Companion'
+              : allComplete
+                ? 'Review Companion'
+                : 'Continue';
+
+            const destination = allComplete
+              ? `/sermon-companion/${id}/overview?source=today`
+              : `/sermon-companion/${id}/overview?source=today`;
+
+            // Strip subtitle from title if present (e.g. "God Uses the Unlikely: 5 Days…")
+            const displayTitle = title.includes(': ') ? title.split(': ')[0].trim() : title;
+
+            return (
+              <EmmausContentCard
+                label="THIS WEEK'S SERMON"
+                title={displayTitle}
+                description={description}
+                metadata={publishedDayCount > 0 ? `${publishedDayCount} Steps` : undefined}
+                primaryActionLabel={ctaLabel}
+                badge={null}
+                onAction={() => setLocation(destination)}
+                onCardPress={() => setLocation(destination)}
+              />
+            );
+          })()}
+        </motion.section>
+
+        {/* ── 3. Daily Devotionals — self-paced (all active series) ─────────── */}
         {activeDevotionals.length > 0
           ? activeDevotionals.map(activeDevotional => {
               const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
@@ -937,7 +1022,7 @@ export default function Walk() {
           : null
         }
 
-        {/* ── 3. Your Journeys ───────────────────────────────────────────────── */}
+        {/* ── 4. Your Journeys ───────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -955,7 +1040,7 @@ export default function Walk() {
           />
         </motion.div>
 
-        {/* ── 4. Sermon Companions — all in-progress ─────────────────────────── */}
+        {/* ── 5. Sermon Companions — other in-progress (not current-week) ──────── */}
         {scCompanions.map(sc => {
           const completedCount = sc.completedDays.length;
           const total = sc.numberOfDays;

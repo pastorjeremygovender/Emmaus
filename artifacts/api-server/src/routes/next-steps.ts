@@ -301,25 +301,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // ("Day N of M · Entry Title") that mirrors Today's Steps exactly.
     const companionEntriesMap = new Map<string, sermonCompanionStore.CompanionEntry[]>();
 
-    // Fetch published steps per journey-source companion.
-    // Used by buildJourneyItem to compute the same progress-aware description
-    // for companions stored in the journeys table (legacy/manual companions).
-    const journeyCompanionStepsMap = new Map<string, journeyStore.FrontendStep[]>();
-
-    await Promise.all([
-      ...scTableCompanions.map(async c => {
+    await Promise.all(
+      scTableCompanions.map(async c => {
         const entries = await sermonCompanionStore.getEntriesForCompanion(c.id);
         const published = entries.filter(e => e.status === "Published");
         companionEntriesMap.set(c.id, published);
       }),
-      ...publishedJourneys
-        .filter(j => j.journeyType === "companion")
-        .map(async j => {
-          const steps = await journeyStore.listSteps(j.id);
-          const published = steps.filter(s => s.status === "Published");
-          journeyCompanionStepsMap.set(j.id, published);
-        }),
-    ]);
+    );
 
     // ── Daily Devotionals ────────────────────────────────────────────────────
 
@@ -328,67 +316,20 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       .map(s => buildDevotionalItem(s, seriesEntriesMap.get(s.id) ?? [], devProgressMap));
 
     // ── Sermon Companions ──────────────────────────────────────────────────────
-    // Two sources are merged into one list:
-    //   1. journeys table (journeyType='companion') — manually created / legacy
-    //   2. sermon_companion table — AI-generated via the sermon generation pipeline
+    // Single source of truth: the sermon_companion table, managed exclusively via
+    // Admin → Content Studio → Sermons. Legacy journeys with journeyType='companion'
+    // are excluded — the sermons table is the sole authoritative content source.
     //
-    // Eligibility for both: Published status AND at least one published entry.
-    // listPublishedJourneys() already enforces Published status; the journey-step
-    // count is not re-checked here because the journey editor controls entry status.
-    // listPublishedSermonCompanions() enforces both status and published entry count.
+    // listPublishedSermonCompanions() enforces Published status and at least one
+    // published entry. Results are already sorted newest-published first.
 
-    type UnifiedCompanion =
-      | { source: "journey"; data: journeyStore.FrontendJourney }
-      | { source: "sermon-table"; data: sermonCompanionStore.Companion & { publishedEntryCount: number } };
+    // Current = companion explicitly marked is_current_week = true.
+    // Falls back to the most-recently-published companion when the flag is not set.
+    const currentCompanion = scTableCompanions.find(c => c.isCurrentWeek) ?? scTableCompanions[0] ?? null;
+    const previousCompanions = scTableCompanions.filter(c => c.id !== currentCompanion?.id);
 
-    const seenIds = new Set<string>();
-    const allCompanions: UnifiedCompanion[] = [];
-
-    for (const j of publishedJourneys.filter(j => j.journeyType === "companion")) {
-      if (seenIds.has(j.id)) continue;
-      seenIds.add(j.id);
-      allCompanions.push({ source: "journey", data: j });
-    }
-    for (const c of scTableCompanions) {
-      if (seenIds.has(c.id)) continue;
-      seenIds.add(c.id);
-      allCompanions.push({ source: "sermon-table", data: c });
-    }
-
-    // Sort newest-published first so the fallback current-companion is consistent.
-    allCompanions.sort((a, b) => {
-      const aDate = a.source === "journey" ? (a.data.publishedAt ?? "") : (a.data.publishedAt ?? "");
-      const bDate = b.source === "journey" ? (b.data.publishedAt ?? "") : (b.data.publishedAt ?? "");
-      return bDate.localeCompare(aDate);
-    });
-
-    // Current = companion explicitly marked is_current_week = true in the DB.
-    // Falls back to the most-recently-published companion (first in the sorted list)
-    // when no companion has the flag set — covers the window between the column
-    // being added (startup migration) and the admin clicking Set as This Week's Sermon.
-    const sermonTableCompanions = allCompanions.filter(c => c.source === "sermon-table");
-    const currentCompanionUnified =
-      sermonTableCompanions.find(
-        c => (c.data as sermonCompanionStore.Companion).isCurrentWeek,
-      ) ??
-      (sermonTableCompanions[0] ?? null);
-    const previousCompanionsUnified = allCompanions.filter(
-      c => c.data.id !== currentCompanionUnified?.data.id,
-    );
-
-    // Build NextStepsItem from either source type.
-    function buildCompanionItem(u: UnifiedCompanion): NextStepsItem {
-      if (u.source === "journey") {
-        return buildJourneyItem(
-          u.data,
-          "sermon-devotional",
-          journeyProgress,
-          new Set(), // no intro-step routing needed for companions
-          journeyCompanionStepsMap.get(u.data.id),
-        );
-      }
-      // sermon-table companion
-      const c = u.data;
+    // Build a NextStepsItem from a sermon_companion table record.
+    function buildCompanionItem(c: sermonCompanionStore.Companion & { publishedEntryCount: number }): NextStepsItem {
       const prog = scProgressMap[c.id];
 
       // Use the actual published entry count as the final-day threshold.
@@ -463,10 +404,8 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       };
     }
 
-    const currentSermonCompanion = currentCompanionUnified
-      ? buildCompanionItem(currentCompanionUnified)
-      : null;
-    const previousSermonCompanions = previousCompanionsUnified.map(buildCompanionItem);
+    const currentSermonCompanion = currentCompanion ? buildCompanionItem(currentCompanion) : null;
+    const previousSermonCompanions = previousCompanions.map(buildCompanionItem);
 
     // ── Journey grouping ──────────────────────────────────────────────────────
     // Exclude companion and daily-rhythm types — they live in their own tabs.

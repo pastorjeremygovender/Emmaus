@@ -41,3 +41,4 @@
 - [Analytics Centre](analytics-centre.md) — Checkpoint 6: 11 analytics routes at /api/analytics; analytics-store.ts; column quirks (duration_days not step_count; completed_days not completed_steps; qualify status in joins).
 - [Pastoral Workflows](pastoral-workflows.md) — Checkpoint 7: ministry_tasks + task_templates + pastoral_workflow_notes tables; 9 workflow routes; 8 system templates seeded in app.ts (not startup-migrations); discipleship_signals.explanation not description.
 - [Admin Nav Refactor](admin-nav-refactor.md) — left nav order; Content Studio: Walks+Journeys split, Media Studio hidden, Bible Study removed; UnifiedBibleStudy 5-tab wrapper.
+- [Sermon Companion Single Source of Truth](sermon-companion-single-source.md) — root cause: journey-type companion merge in next-steps.ts; fix: remove merge; permanent Walk card; 5-day prompt; speaker attribution.

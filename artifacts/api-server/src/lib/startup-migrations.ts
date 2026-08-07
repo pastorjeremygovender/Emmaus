@@ -1232,6 +1232,61 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: analytics_saved_reports table failed (non-fatal)");
   }
 
+  // ── Orphan sermon companion cleanup (2026-08) ────────────────────────────────
+  // Unpublish any sermon_companion that is NOT linked to a valid canonical sermon.
+  // Two cases:
+  //   1. sermon_uuid IS NOT NULL but the linked sermon was deleted from the sermons table.
+  //   2. sermon_uuid IS NULL — legacy/pre-canonical companions with no sermon link.
+  //      These cannot be served by the canonical pipeline and must not appear in member UI.
+  // This ensures the member app derives its companion list exclusively from sermons
+  // managed in Admin → Content Studio → Sermons. Idempotent.
+  try {
+    const orphanRes = await pool.query(`
+      UPDATE sermon_companion
+      SET    status = 'Draft', updated_at = NOW()
+      WHERE  status = 'Published'
+        AND (
+          -- Case 1: linked sermon was deleted
+          (sermon_uuid IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM sermons WHERE id = sermon_companion.sermon_uuid
+          ))
+          OR
+          -- Case 2: no canonical sermon link at all (legacy/pre-pipeline content)
+          sermon_uuid IS NULL
+        )
+    `);
+    if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+      logger.warn(
+        { count: orphanRes.rowCount },
+        "Startup migration: unpublished orphan/unlinked sermon companions (stale or pre-canonical content)",
+      );
+    } else {
+      logger.info("Startup migration: orphan sermon companion check — no orphans found");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: orphan sermon companion cleanup failed (non-fatal)");
+  }
+
+  // ── Replace 'the pastor' in companion entries (2026-08) ──────────────────────
+  // Generated companion entries may refer to the speaker as "the pastor" or
+  // "The pastor". Replace with "Pastor Jeremy" for existing ICC content generated
+  // before the speaker-name rule was introduced.
+  // Uses PostgreSQL word-boundary regex (\m start-of-word, \M end-of-word).
+  // Idempotent — REGEXP_REPLACE on text with no match is a no-op.
+  try {
+    const entryFields = ['reflection', 'greeting', 'prayer', 'next_step', 'closing', 'title'];
+    for (const field of entryFields) {
+      await pool.query(`
+        UPDATE sermon_companion_entry
+        SET    ${field} = REGEXP_REPLACE(${field}, '\\mthe pastor\\M', 'Pastor Jeremy', 'gi')
+        WHERE  ${field} ~* '\\mthe pastor\\M'
+      `);
+    }
+    logger.info("Startup migration: 'the pastor' → 'Pastor Jeremy' replacement applied to companion entries (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: 'the pastor' replacement in companion entries failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
