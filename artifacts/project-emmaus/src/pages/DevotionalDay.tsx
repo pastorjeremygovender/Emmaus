@@ -82,6 +82,16 @@ export default function DevotionalDay() {
         getProgress(seriesId, auth),
       ]);
       setSeriesData(d);
+      // Record history view (fire-and-forget)
+      if (d?.title) {
+        const { recordView } = await import('@/lib/history-api');
+        recordView({
+          contentType: 'devotional',
+          contentId: seriesId,
+          contentTitle: d.title,
+          contentRoute: `/devotional/${seriesId}/day/${day}`,
+        });
+      }
 
       // Auto-start as a fallback if the member navigated here directly
       if (!p) {

@@ -42,3 +42,4 @@
 - [Pastoral Workflows](pastoral-workflows.md) — Checkpoint 7: ministry_tasks + task_templates + pastoral_workflow_notes tables; 9 workflow routes; 8 system templates seeded in app.ts (not startup-migrations); discipleship_signals.explanation not description.
 - [Admin Nav Refactor](admin-nav-refactor.md) — left nav order; Content Studio: Walks+Journeys split, Media Studio hidden, Bible Study removed; UnifiedBibleStudy 5-tab wrapper.
 - [Sermon Companion Single Source of Truth](sermon-companion-single-source.md) — root cause: journey-type companion merge in next-steps.ts; fix: remove merge; permanent Walk card; 5-day prompt; speaker attribution.
+- [Navigation Redesign](nav-redesign.md) — new bottom nav order; Discover page; My Journey expansion; AskEmmausBar; Favourites+History+Search backend+frontend; DB import is @workspace/db not ../lib/db.js.

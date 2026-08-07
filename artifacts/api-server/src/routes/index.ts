@@ -24,6 +24,9 @@ import { sermonsRouter } from "./sermons";
 import { pastoralRouter } from "./pastoral";
 import { analyticsRouter } from "./analytics";
 import { workflowsRouter } from "./workflows";
+import { favouritesRouter } from "./favourites";
+import { historyRouter } from "./history";
+import { searchRouter } from "./search";
 
 const router: IRouter = Router();
 
@@ -52,5 +55,8 @@ router.use("/sermons", sermonsRouter);
 router.use("/pastoral", pastoralRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/workflows", workflowsRouter);
+router.use(favouritesRouter);
+router.use(historyRouter);
+router.use(searchRouter);
 
 export default router;

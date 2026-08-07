@@ -4,8 +4,8 @@ import { getReturnDestination } from '@/lib/emmaus-pending';
 
 // Navigation order (locked):
 // 1. Today's Steps  /walk
-// 2. Next Steps     /journeys
-// 3. My Bible       /bible
+// 2. My Bible       /bible
+// 3. Discover       /journeys
 // 4. My Journey     /personal
 
 export function BottomNav() {
@@ -13,8 +13,8 @@ export function BottomNav() {
 
   const navItems = [
     { path: '/walk',      label: "Today's Steps", icon: Footprints },
-    { path: '/journeys',  label: 'Next Steps',    icon: Compass },
     { path: '/bible',     label: 'My Bible',      icon: BookOpen },
+    { path: '/journeys',  label: 'Discover',      icon: Compass },
     { path: '/personal',  label: 'My Journey',    icon: User },
   ];
 

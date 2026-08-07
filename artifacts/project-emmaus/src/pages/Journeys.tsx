@@ -1,10 +1,10 @@
 /**
- * Next Steps — four-tab member content library.
+ * Discover — member content exploration library.
  *
- * Tabs (exact order, spec-locked):
- *   1. Daily Devotionals
- *   2. Walks      — standalone walks; each card opens that Walk directly
- *   3. Journeys   — discipleship pathways (collections); each card opens the Journey detail page
+ * Tabs (exact order):
+ *   1. Walks          — standalone walks; each card opens that Walk directly
+ *   2. Journeys       — discipleship pathways (collections)
+ *   3. Daily Devotionals
  *   4. Sermon Companions
  *
  * Hierarchy: Journey → Walk → Steps
@@ -28,9 +28,11 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, Pause, MoreHorizontal, Loader2,
+  X, Pause, MoreHorizontal, Loader2, Search,
   BookHeart, Mic2, Map as MapIcon, Users, ChevronRight,
 } from 'lucide-react';
+import { AskEmmausBar } from '@/components/AskEmmausBar';
+import { globalSearch, type SearchResult, CONTENT_TYPE_LABEL } from '@/lib/search-api';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
@@ -46,7 +48,7 @@ import { dismissBadge } from '@/lib/badge-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabId = 'devotionals' | 'journeys' | 'walks' | 'sermons';
+type TabId = 'walks' | 'journeys' | 'devotionals' | 'sermons';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,14 +72,14 @@ function sessionTab(): TabId {
   } catch { /* ignore */ }
   // Fall back to last-used tab from sessionStorage.
   try {
-    const saved = sessionStorage.getItem('next-steps-tab');
+    const saved = sessionStorage.getItem('discover-tab');
     if (saved === 'devotionals' || saved === 'journeys' || saved === 'walks' || saved === 'sermons') return saved as TabId;
   } catch { /* ignore */ }
-  return 'devotionals';
+  return 'walks';
 }
 
 function saveTab(tab: TabId) {
-  try { sessionStorage.setItem('next-steps-tab', tab); } catch { /* ignore */ }
+  try { sessionStorage.setItem('discover-tab', tab); } catch { /* ignore */ }
 }
 
 // ─── Shared UI atoms ─────────────────────────────────────────────────────────
@@ -662,9 +664,9 @@ function SermonCompanionsPanel({
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'devotionals', label: 'Daily Devotionals' },
   { id: 'walks',       label: 'Walks'             },
   { id: 'journeys',    label: 'Journeys'          },
+  { id: 'devotionals', label: 'Daily Devotionals' },
   { id: 'sermons',     label: 'Sermon Companions' },
 ];
 
@@ -701,6 +703,34 @@ export default function Journeys() {
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
+
+  // ── Search state ──────────────────────────────────────────────────────────
+
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || q.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await globalSearch(q);
+        setSearchResults(results);
+      } catch { /* non-fatal */ }
+      finally { setSearchLoading(false); }
+    }, 350);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchQuery]);
+
+  const isSearching = searchQuery.trim().length >= 2;
 
   // ── Tab state ─────────────────────────────────────────────────────────────
 
@@ -882,53 +912,112 @@ export default function Journeys() {
         {/* Header */}
         <header className="space-y-1">
           <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-            Next Steps
+            Discover
           </h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Choose something to continue walking with Jesus.
-          </p>
-          <p className="text-[13px] text-muted-foreground/80 leading-relaxed mt-0.5">
-            Anything you start will appear on Today's Steps until you finish, pause or hide it.
+            What would you like to explore?
           </p>
         </header>
 
-        {/* My Rooms — prominent entry point */}
-        {(() => {
-          const myRooms = user ? getMyRooms(user.id) : [];
-          return (
+        {/* Ask Emmaus bar */}
+        <AskEmmausBar />
+
+        {/* Search bar */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
+          <input
+            type="search"
+            placeholder="Search walks, Bible studies, sermons…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-11 pl-9 pr-4 rounded-xl border border-border bg-muted/30 text-[14px] placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+          />
+          {searchQuery && (
             <button
-              onClick={() => setLocation('/rooms')}
-              className="mt-5 w-full flex items-center gap-3 p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-left"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
             >
-              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <Users size={17} />
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Search results (shown when query ≥ 2 chars) */}
+        {isSearching && (
+          <div className="space-y-2">
+            {searchLoading ? (
+              <div className="space-y-3 pt-2">
+                {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl bg-muted animate-pulse" />)}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-semibold text-foreground">My Rooms</p>
-                <p className="text-[12px] text-muted-foreground">
-                  {myRooms.length > 0
-                    ? `${myRooms.length} ${myRooms.length === 1 ? 'Room' : 'Rooms'}`
-                    : 'Walk journeys together with others'}
+            ) : searchResults.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-[14px] text-muted-foreground">
+                  No results for <strong>"{searchQuery}"</strong>
                 </p>
               </div>
-              <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-            </button>
+            ) : (
+              <div className="space-y-2 pt-1">
+                {searchResults.map((r) => (
+                  <button
+                    key={`${r.contentType}-${r.id}`}
+                    onClick={() => setLocation(r.route)}
+                    className="w-full text-left flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/30 transition-all"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-foreground leading-snug truncate">{r.title}</p>
+                      {r.subtitle && (
+                        <p className="text-[12px] text-muted-foreground truncate mt-0.5">{r.subtitle}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-[10px] font-semibold text-primary uppercase tracking-widest">
+                      {CONTENT_TYPE_LABEL[r.contentType] ?? r.contentType}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* My Rooms + tabs — hidden while searching */}
+        {!isSearching && (() => {
+          const myRooms = user ? getMyRooms(user.id) : [];
+          return (
+            <>
+              <button
+                onClick={() => setLocation('/rooms')}
+                className="mt-5 w-full flex items-center gap-3 p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-left"
+              >
+                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Users size={17} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-foreground">My Rooms</p>
+                  <p className="text-[12px] text-muted-foreground">
+                    {myRooms.length > 0
+                      ? `${myRooms.length} ${myRooms.length === 1 ? 'Room' : 'Rooms'}`
+                      : 'Walk journeys together with others'}
+                  </p>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+              </button>
+
+              {/* Tab bar */}
+              <TabBar active={activeTab} onChange={handleTabChange} />
+            </>
           );
         })()}
 
-        {/* Tab bar */}
-        <TabBar active={activeTab} onChange={handleTabChange} />
-
-        {/* Loading */}
-        {apiLoading && (
+        {/* Loading / Error / Tab content — hidden while searching */}
+        {!isSearching && apiLoading && (
           <div className="space-y-4 pt-6">
             <SkeletonCard />
             <SkeletonCard />
           </div>
         )}
 
-        {/* Error */}
-        {!apiLoading && apiError && (
+        {!isSearching && !apiLoading && apiError && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-6">
             <p className="text-[14px] text-destructive">{apiError}</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
@@ -937,8 +1026,7 @@ export default function Journeys() {
           </div>
         )}
 
-        {/* Tab content */}
-        {!apiLoading && data && (
+        {!isSearching && !apiLoading && data && (
           <>
             {activeTab === 'devotionals' && (
               <DevotionalsPanel

@@ -15,7 +15,7 @@ import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
 import { BottomNav } from '@/components/BottomNav';
 import { dismissBadge } from '@/lib/badge-api';
-
+import { recordView } from '@/lib/history-api';
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -48,6 +48,19 @@ export default function JourneyDay() {
   // Day is read-only if it's already been completed (any time — past or today)
   const isDayCompleted = journeyProgress?.completedDays?.includes(day) ?? false;
   const isDailyRhythmReadOnly = isDailyRhythmJourney && isDayCompleted;
+
+  // Record history view (fire-and-forget)
+  useEffect(() => {
+    if (journey && step && journeyId) {
+      recordView({
+        contentType: journey.journeyType === 'bible-study' ? 'bible-study' : 'journey',
+        contentId: journeyId,
+        contentTitle: journey.title,
+        contentRoute: `/journey/${journeyId}/day/${day}`,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeyId, day]);
 
   // All published steps for this journey — used to resolve the next lesson in the completion card.
   const allSteps = getStepsForJourney(journeyId || '');

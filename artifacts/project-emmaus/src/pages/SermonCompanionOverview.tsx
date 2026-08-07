@@ -25,10 +25,12 @@ import {
   MessageSquare, X, ChevronRight,
 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   setActiveSermonCompanionContext,
 } from '@/lib/sermon-companion-context';
+import { recordView } from '@/lib/history-api';
 import {
   setPendingContext,
   setReturnDestination,
@@ -340,6 +342,14 @@ export default function SermonCompanionOverview() {
       const data: MemberCompanion = await res.json();
       setCompanion(data);
 
+      // Record history view (fire-and-forget)
+      recordView({
+        contentType: 'sermon-companion',
+        contentId: companionId,
+        contentTitle: data.title,
+        contentRoute: `/sermon-companion/${companionId}/overview`,
+      });
+
       // Broadcast sermon context to the floating Ask Emmaus button
       const { sermonTitle } = parseTitle(data.title);
       setActiveSermonCompanionContext({
@@ -534,9 +544,19 @@ export default function SermonCompanionOverview() {
             THIS WEEK'S SERMON
           </p>
 
-          <h1 className="text-[24px] font-bold text-foreground leading-tight">
-            {sermonTitle || companion.title}
-          </h1>
+          <div className="flex items-start gap-2">
+            <h1 className="flex-1 text-[24px] font-bold text-foreground leading-tight">
+              {sermonTitle || companion.title}
+            </h1>
+            <FavouriteButton
+              contentType="sermon-companion"
+              contentId={companionId}
+              contentTitle={companion.title}
+              contentRoute={`/sermon-companion/${companionId}/overview`}
+              className="mt-0.5 shrink-0"
+              size={18}
+            />
+          </div>
 
           {(sermon?.speaker || sermon?.sermonDate) && (
             <div className="space-y-0.5">

@@ -15,11 +15,12 @@ import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
+import { AskEmmausBar } from '@/components/AskEmmausBar';
 import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
+import { CheckCircle2, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { isDevelopmentMode } from '@/lib/dev-mode';
@@ -892,6 +893,9 @@ export default function Walk() {
           </div>
         )}
 
+        {/* ── Ask Emmaus companion bar ────────────────────────────────────────── */}
+        <AskEmmausBar />
+
         {/* ── 2. This Week's Sermon — permanent card ─────────────────────────── */}
         <motion.section
           initial={{ opacity: 0, y: 6 }}
@@ -1102,10 +1106,21 @@ export default function Walk() {
           );
         })}
 
-        {/* Discovery cards for optional content have been removed from Today's Steps.
-            Optional content (Devotionals, Companions, Walks) begins life in Next Steps
-            and only appears here after the member intentionally starts it. */}
-
+        {/* ── 6. Discover More — entry point to the Discover tab ──────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.18 }}
+          className="pb-2"
+        >
+          <button
+            onClick={() => setLocation('/journeys')}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border bg-card hover:border-primary/30 hover:bg-card/80 transition-all text-[15px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Compass size={16} className="text-primary" strokeWidth={1.8} />
+            Discover More
+          </button>
+        </motion.div>
 
       </main>
 

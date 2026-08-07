@@ -56,7 +56,8 @@ const HIDDEN_PREFIXES = [
   '/join-room',
 ];
 
-const HIDDEN_EXACT = new Set(['/', '/auth', '/checkin']);
+// Primary screens use the inline AskEmmausBar instead of the FAB
+const HIDDEN_EXACT = new Set(['/', '/auth', '/checkin', '/walk', '/journeys', '/bible', '/personal']);
 
 function isHidden(path: string): boolean {
   if (HIDDEN_EXACT.has(path)) return true;

@@ -1232,6 +1232,41 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: analytics_saved_reports table failed (non-fatal)");
   }
 
+  // ── user_favourites + user_history tables (2026-08) ─────────────────────────
+  // Universal favourites and recently-viewed history for the My Journey screen.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_favourites (
+        id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id         TEXT        NOT NULL,
+        content_type    TEXT        NOT NULL,
+        content_id      TEXT        NOT NULL,
+        content_title   TEXT        NOT NULL DEFAULT '',
+        content_subtitle TEXT,
+        content_route   TEXT        NOT NULL DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, content_type, content_id)
+      );
+      CREATE INDEX IF NOT EXISTS user_favourites_user_idx
+        ON user_favourites (user_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS user_history (
+        id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id       TEXT        NOT NULL,
+        content_type  TEXT        NOT NULL,
+        content_id    TEXT        NOT NULL,
+        content_title TEXT        NOT NULL DEFAULT '',
+        content_route TEXT        NOT NULL DEFAULT '',
+        viewed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS user_history_user_time_idx
+        ON user_history (user_id, viewed_at DESC);
+    `);
+    logger.info("Startup migration: user_favourites + user_history tables ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_favourites/user_history tables failed (non-fatal)");
+  }
+
   // ── Orphan sermon companion cleanup (2026-08) ────────────────────────────────
   // Unpublish any sermon_companion that is NOT linked to a valid canonical sermon.
   // Two cases:

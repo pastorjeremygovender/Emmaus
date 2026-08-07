@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
 import { dismissBadge } from '@/lib/badge-api';
 import { setActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
+import { recordView } from '@/lib/history-api';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -162,6 +163,7 @@ export default function SermonCompanionReader() {
 
   // Read source once on mount — query string doesn't change during the page lifetime
   const source = new URLSearchParams(window.location.search).get('source');
+
   const { path: returnDest, label: returnLabel } = resolveReturn(source);
 
   const [companion, setCompanion]       = useState<MemberCompanion | null>(null);
@@ -217,6 +219,14 @@ export default function SermonCompanionReader() {
         sermonId:           data.sermon?.sermonId,
         sermonTitle:        data.title,
         scriptureReference: data.sermon?.scriptureReference,
+      });
+
+      // Record history view (fire-and-forget)
+      recordView({
+        contentType: 'sermon-companion',
+        contentId: companionId,
+        contentTitle: data.title,
+        contentRoute: `/sermon-companion/${companionId}/day/${day}`,
       });
 
       if (!data.progress) {
