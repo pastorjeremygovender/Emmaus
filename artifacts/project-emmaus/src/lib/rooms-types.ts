@@ -169,6 +169,34 @@ export interface RoomSession {
   metadata: Record<string, unknown>;
 }
 
+// ─── Highlights & Shared Notes ────────────────────────────────────────────────
+
+export interface RoomHighlight {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  book: string;
+  chapter: number;
+  verse: number;
+  verseText: string;
+  note: string | null;
+  isFocusVerse: boolean;
+  createdAt: string;
+}
+
+export interface SharedNote {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  text: string;
+  isPinned: boolean;
+  createdAt: string;
+}
+
 export type SessionEventType =
   | 'session_started'
   | 'session_ended'
@@ -177,7 +205,11 @@ export type SessionEventType =
   | 'focus_verse'
   | 'poll_started'
   | 'poll_result'
-  | 'session_state';
+  | 'session_state'
+  | 'highlight_added'
+  | 'highlight_focus_changed'
+  | 'note_added'
+  | 'note_pinned';
 
 export interface SessionEvent {
   type: SessionEventType;

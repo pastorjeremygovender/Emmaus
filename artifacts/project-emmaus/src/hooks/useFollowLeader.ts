@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
-import type { RoomSession, SessionEvent, SessionMode, ScriptureRef } from '@/lib/rooms-types';
+import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote } from '@/lib/rooms-types';
 
 export interface NavigatePayload {
   stepId?: string;
@@ -33,6 +33,9 @@ interface UseFollowLeaderOptions {
   onNavigate?: (payload: NavigatePayload) => void;
   /** Called when a mode_change event arrives (for all members, regardless of followLeader). */
   onModeChange?: (mode: SessionMode | string, leaderName: string) => void;
+  /** Called when a navigate event contains a scripture payload (even if followLeader is OFF,
+   *  so the member can see the notice and opt in). Receives the scripture ref + leaderName. */
+  onScriptureOpen?: (scripture: ScriptureRef, leaderName: string) => void;
 }
 
 interface UseFollowLeaderResult {
@@ -46,6 +49,16 @@ interface UseFollowLeaderResult {
   lastEvent: SessionEvent | null;
   /** The current session mode derived from the active session or events. */
   sessionMode: SessionMode;
+  /** The current scripture the leader has open (null if none). */
+  activeScripture: ScriptureRef | null;
+  /** New highlights from the SSE stream (cleared after each render cycle). */
+  incomingHighlights: RoomHighlight[];
+  /** New notes from the SSE stream (cleared after each render cycle). */
+  incomingNotes: SharedNote[];
+  /** Latest pin-change event from SSE. */
+  incomingPinChange: { noteId: string; isPinned: boolean } | null;
+  /** Latest focus-verse change from SSE. */
+  incomingFocusChange: string | null;
 }
 
 export function useFollowLeader({
@@ -53,20 +66,28 @@ export function useFollowLeader({
   userId,
   onNavigate,
   onModeChange,
+  onScriptureOpen,
 }: UseFollowLeaderOptions): UseFollowLeaderResult {
   const [activeSession, setActiveSession] = useState<RoomSession | null>(null);
   const [followLeader, setFollowLeader] = useState(true);
   const [lastEvent, setLastEvent] = useState<SessionEvent | null>(null);
   const [sessionMode, setSessionMode] = useState<SessionMode>('study');
+  const [activeScripture, setActiveScripture] = useState<ScriptureRef | null>(null);
+  const [incomingHighlights, setIncomingHighlights] = useState<RoomHighlight[]>([]);
+  const [incomingNotes, setIncomingNotes] = useState<SharedNote[]>([]);
+  const [incomingPinChange, setIncomingPinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
+  const [incomingFocusChange, setIncomingFocusChange] = useState<string | null>(null);
 
   // Refs for stable callbacks in the SSE loop
   const followLeaderRef = useRef(followLeader);
   const onNavigateRef = useRef(onNavigate);
   const onModeChangeRef = useRef(onModeChange);
+  const onScriptureOpenRef = useRef(onScriptureOpen);
 
   useEffect(() => { followLeaderRef.current = followLeader; }, [followLeader]);
   useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
   useEffect(() => { onModeChangeRef.current = onModeChange; }, [onModeChange]);
+  useEffect(() => { onScriptureOpenRef.current = onScriptureOpen; }, [onScriptureOpen]);
 
   const handleEvent = useCallback((event: SessionEvent) => {
     setLastEvent(event);
@@ -78,6 +99,9 @@ export function useFollowLeader({
         if (session?.currentMode) {
           setSessionMode(session.currentMode as SessionMode);
         }
+        if (session?.currentScripture) {
+          setActiveScripture(session.currentScripture);
+        }
         // Auto-enable follow leader when reconnecting to an active session
         if (session && session.status === 'active') {
           setFollowLeader(true);
@@ -86,7 +110,7 @@ export function useFollowLeader({
       }
 
       case 'session_started': {
-        // Will be followed by a full session_state, but set to active mode immediately
+        // Will be followed by a full session_state, but enable following immediately
         setFollowLeader(true);
         break;
       }
@@ -94,16 +118,22 @@ export function useFollowLeader({
       case 'session_ended': {
         setActiveSession(null);
         setSessionMode('study');
+        setActiveScripture(null);
         break;
       }
 
       case 'navigate': {
         const payload = event.payload as NavigatePayload;
-        if (event.payload.scripture && event.payload.scripture) {
+        if (payload.scripture) {
           setSessionMode('scripture');
-        } else if (event.payload.stepId) {
+          setActiveScripture(payload.scripture);
+          // Notify all members (even non-followers) so they can see the notice
+          onScriptureOpenRef.current?.(payload.scripture, payload.leaderName ?? '');
+        } else if (payload.stepId) {
           setSessionMode('study');
+          setActiveScripture(null);
         }
+        // Only auto-navigate (step changes) when followLeader is ON
         if (followLeaderRef.current && onNavigateRef.current) {
           onNavigateRef.current(payload);
         }
@@ -115,12 +145,42 @@ export function useFollowLeader({
         const leaderName = (event.payload.leaderName as string) ?? '';
         if (['study', 'scripture', 'discussion', 'prayer', 'poll'].includes(mode)) {
           setSessionMode(mode as SessionMode);
+          if (mode !== 'scripture') setActiveScripture(null);
         }
         onModeChangeRef.current?.(mode as SessionMode, leaderName);
         break;
       }
 
-      // focus_verse, poll_started, poll_result are available via lastEvent
+      case 'highlight_added': {
+        const highlight = event.payload.highlight as RoomHighlight;
+        if (highlight) {
+          setIncomingHighlights(prev => [...prev, highlight]);
+        }
+        break;
+      }
+
+      case 'highlight_focus_changed': {
+        const highlightId = event.payload.highlightId as string | null;
+        setIncomingFocusChange(highlightId ?? null);
+        break;
+      }
+
+      case 'note_added': {
+        const note = event.payload.note as SharedNote;
+        if (note) {
+          setIncomingNotes(prev => [...prev, note]);
+        }
+        break;
+      }
+
+      case 'note_pinned': {
+        const noteId = event.payload.noteId as string;
+        const pin = event.payload.pin as boolean;
+        setIncomingPinChange({ noteId, isPinned: pin });
+        break;
+      }
+
+      // focus_verse, poll_started, poll_result available via lastEvent
       default:
         break;
     }
@@ -188,5 +248,10 @@ export function useFollowLeader({
     setFollowLeader,
     lastEvent,
     sessionMode,
+    activeScripture,
+    incomingHighlights,
+    incomingNotes,
+    incomingPinChange,
+    incomingFocusChange,
   };
 }

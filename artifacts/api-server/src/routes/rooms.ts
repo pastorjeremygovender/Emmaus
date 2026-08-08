@@ -62,6 +62,13 @@ import {
   recordSessionLeave,
   getSessionAttendance,
   terminateAllSessionFromRoom,
+  addHighlight,
+  getHighlights,
+  setFocusVerse,
+  getSharedNotes,
+  addSharedNote,
+  pinNote,
+  getSessionByIdForRoom,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -1548,6 +1555,251 @@ router.get("/:roomId/session/events", async (req, res) => {
   }, 25_000);
 
   req.on("close", terminate);
+});
+
+// ─── Highlights — shared verse annotations ────────────────────────────────────
+//
+//  POST /:roomId/session/highlights                   — any member: add highlight
+//  GET  /:roomId/session/highlights?sessionId=        — any member: list highlights
+//  POST /:roomId/session/highlights/:id/focus         — leader only: set focus verse
+//  DELETE /:roomId/session/highlights/focus           — leader only: clear focus verse
+
+router.post("/:roomId/session/highlights", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId, book, chapter, verse, verseText, note, authorName } = req.body as {
+    sessionId?: string;
+    book?: string;
+    chapter?: number;
+    verse?: number;
+    verseText?: string;
+    note?: string;
+    authorName?: string;
+  };
+  if (!sessionId || !book || !chapter || !verse) {
+    res.status(400).json({ error: "sessionId, book, chapter, verse are required." });
+    return;
+  }
+  // Validate that the session belongs to this room (prevents cross-room data injection)
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const highlight = await addHighlight(
+      session.id, String(roomId), userId,
+      authorName ?? "", book, Number(chapter), Number(verse),
+      verseText ?? "", note
+    );
+    const event: SessionEvent = {
+      type: "highlight_added" as SessionEvent["type"],
+      payload: { highlight },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.status(201).json({ highlight });
+  } catch {
+    res.status(500).json({ error: "Failed to add highlight." });
+  }
+});
+
+router.get("/:roomId/session/highlights", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.query as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId query param is required." });
+    return;
+  }
+  // Validate that the session belongs to this room
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const highlights = await getHighlights(String(roomId), session.id);
+    res.json({ highlights });
+  } catch {
+    res.status(500).json({ error: "Failed to load highlights." });
+  }
+});
+
+router.post("/:roomId/session/highlights/:highlightId/focus", async (req, res) => {
+  const { roomId, highlightId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  // Validate that the session belongs to this room
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    await setFocusVerse(String(roomId), session.id, String(highlightId));
+    const event: SessionEvent = {
+      type: "highlight_focus_changed" as SessionEvent["type"],
+      payload: { highlightId: String(highlightId), sessionId: session.id },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to set focus verse." });
+  }
+});
+
+router.delete("/:roomId/session/highlights/focus", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  // Validate that the session belongs to this room
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    await setFocusVerse(String(roomId), session.id, null);
+    const event: SessionEvent = {
+      type: "highlight_focus_changed" as SessionEvent["type"],
+      payload: { highlightId: null, sessionId: session.id },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to clear focus verse." });
+  }
+});
+
+// ─── Shared Notes ─────────────────────────────────────────────────────────────
+//
+//  GET   /:roomId/session/notes?sessionId=   — any member: list notes
+//  POST  /:roomId/session/notes              — any member: add note
+//  PATCH /:roomId/session/notes/:id/pin      — leader only: pin/unpin note
+
+router.get("/:roomId/session/notes", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.query as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId query param is required." });
+    return;
+  }
+  // Validate that the session belongs to this room
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const notes = await getSharedNotes(String(roomId), session.id);
+    res.json({ notes });
+  } catch {
+    res.status(500).json({ error: "Failed to load shared notes." });
+  }
+});
+
+router.post("/:roomId/session/notes", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId, text, authorName } = req.body as {
+    sessionId?: string;
+    text?: string;
+    authorName?: string;
+  };
+  if (!sessionId || !text?.trim()) {
+    res.status(400).json({ error: "sessionId and text are required." });
+    return;
+  }
+  // Validate that the session belongs to this room
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const note = await addSharedNote(
+      session.id, String(roomId), userId, authorName ?? "", text.trim()
+    );
+    const event: SessionEvent = {
+      type: "note_added" as SessionEvent["type"],
+      payload: { note },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.status(201).json({ note });
+  } catch {
+    res.status(500).json({ error: "Failed to add shared note." });
+  }
+});
+
+router.patch("/:roomId/session/notes/:noteId/pin", async (req, res) => {
+  const { roomId, noteId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { pin = true, sessionId } = req.body as { pin?: boolean; sessionId?: string };
+  // Validate the session belongs to this room (when provided; pin is room-scoped so sessionId optional)
+  if (sessionId) {
+    const session = await getSessionByIdForRoom(sessionId, String(roomId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found for this room." });
+      return;
+    }
+  }
+  try {
+    await pinNote(String(noteId), String(roomId), Boolean(pin));
+    const event: SessionEvent = {
+      type: "note_pinned" as SessionEvent["type"],
+      payload: { noteId: String(noteId), pin: Boolean(pin) },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to pin note." });
+  }
 });
 
 export default router;

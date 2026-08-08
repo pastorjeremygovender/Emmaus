@@ -10,6 +10,7 @@ import type {
   RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress,
   VideoSessionStatus, PrayerRequest, ContentType,
   RoomSession, SessionMode, ScriptureRef, SessionAttendee,
+  RoomHighlight, SharedNote,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -522,4 +523,109 @@ export async function apiGetSessionEventsToken(
  */
 export function apiSessionEventsUrl(roomId: string, token: string): string {
   return getApiUrl(`/api/rooms/${roomId}/session/events?token=${encodeURIComponent(token)}`);
+}
+
+// ─── Highlights ────────────────────────────────────────────────────────────────
+
+/** Add a verse highlight for the current session. */
+export async function apiAddHighlight(
+  userId: string,
+  roomId: string,
+  params: {
+    sessionId: string;
+    book: string;
+    chapter: number;
+    verse: number;
+    verseText?: string;
+    note?: string;
+    authorName?: string;
+  }
+): Promise<RoomHighlight> {
+  const data = await roomsFetch<{ highlight: RoomHighlight }>(
+    `/api/rooms/${roomId}/session/highlights`, userId,
+    { method: 'POST', body: JSON.stringify(params) }
+  );
+  return data.highlight;
+}
+
+/** Get all highlights for a session. */
+export async function apiGetHighlights(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<RoomHighlight[]> {
+  const data = await roomsFetch<{ highlights: RoomHighlight[] }>(
+    `/api/rooms/${roomId}/session/highlights?sessionId=${encodeURIComponent(sessionId)}`, userId
+  );
+  return data.highlights;
+}
+
+/** Set a verse as the focus verse (leader only). */
+export async function apiSetFocusVerse(
+  userId: string,
+  roomId: string,
+  highlightId: string,
+  sessionId: string
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/session/highlights/${encodeURIComponent(highlightId)}/focus`,
+    userId,
+    { method: 'POST', body: JSON.stringify({ sessionId }) }
+  );
+}
+
+/** Clear the focus verse for a session (leader only). */
+export async function apiClearFocusVerse(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/session/highlights/focus`,
+    userId,
+    { method: 'DELETE', body: JSON.stringify({ sessionId }) }
+  );
+}
+
+// ─── Shared Notes ──────────────────────────────────────────────────────────────
+
+/** Get all shared notes for a session. */
+export async function apiGetSharedNotes(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<SharedNote[]> {
+  const data = await roomsFetch<{ notes: SharedNote[] }>(
+    `/api/rooms/${roomId}/session/notes?sessionId=${encodeURIComponent(sessionId)}`, userId
+  );
+  return data.notes;
+}
+
+/** Post a shared note to the session. */
+export async function apiAddSharedNote(
+  userId: string,
+  roomId: string,
+  sessionId: string,
+  text: string,
+  authorName?: string
+): Promise<SharedNote> {
+  const data = await roomsFetch<{ note: SharedNote }>(
+    `/api/rooms/${roomId}/session/notes`, userId,
+    { method: 'POST', body: JSON.stringify({ sessionId, text, authorName }) }
+  );
+  return data.note;
+}
+
+/** Pin or unpin a note (leader only). */
+export async function apiPinNote(
+  userId: string,
+  roomId: string,
+  noteId: string,
+  pin = true
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/session/notes/${encodeURIComponent(noteId)}/pin`,
+    userId,
+    { method: 'PATCH', body: JSON.stringify({ pin }) }
+  );
 }

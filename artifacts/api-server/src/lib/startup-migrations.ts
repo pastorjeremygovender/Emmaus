@@ -1463,6 +1463,69 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_session_attendance table failed (non-fatal)");
   }
 
+  // ── Room Highlights + Shared Notes (Task #436) ───────────────────────────────
+  // Placed AFTER room_sessions so the FK REFERENCES room_sessions(id) is valid.
+  // The DO blocks below retrofit the FK onto existing tables (idempotent).
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_highlights (
+        id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id     UUID NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+        room_id        UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id        TEXT NOT NULL,
+        author_name    TEXT NOT NULL DEFAULT '',
+        book           TEXT NOT NULL,
+        chapter        INT  NOT NULL,
+        verse          INT  NOT NULL,
+        verse_text     TEXT NOT NULL DEFAULT '',
+        note           TEXT,
+        is_focus_verse BOOLEAN NOT NULL DEFAULT false,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_highlights_room_session_idx
+        ON room_highlights(room_id, session_id);
+
+      CREATE TABLE IF NOT EXISTS room_shared_notes (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id  UUID NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id     TEXT NOT NULL,
+        author_name TEXT NOT NULL DEFAULT '',
+        text        TEXT NOT NULL,
+        is_pinned   BOOLEAN NOT NULL DEFAULT false,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_shared_notes_room_session_idx
+        ON room_shared_notes(room_id, session_id);
+
+      -- Retrofit FK for databases where tables already existed without the constraint
+      DO $rh$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'room_highlights_session_id_fkey' AND conrelid = 'room_highlights'::regclass
+        ) THEN
+          ALTER TABLE room_highlights
+            ADD CONSTRAINT room_highlights_session_id_fkey
+            FOREIGN KEY (session_id) REFERENCES room_sessions(id) ON DELETE CASCADE;
+        END IF;
+      END $rh$;
+
+      DO $rsn$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'room_shared_notes_session_id_fkey' AND conrelid = 'room_shared_notes'::regclass
+        ) THEN
+          ALTER TABLE room_shared_notes
+            ADD CONSTRAINT room_shared_notes_session_id_fkey
+            FOREIGN KEY (session_id) REFERENCES room_sessions(id) ON DELETE CASCADE;
+        END IF;
+      END $rsn$;
+    `);
+    logger.info("Startup migration: room_highlights + room_shared_notes tables + FK ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_highlights/room_shared_notes failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

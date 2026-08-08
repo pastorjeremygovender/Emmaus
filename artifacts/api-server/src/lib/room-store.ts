@@ -999,6 +999,24 @@ export async function getActiveSession(
   return rowToSession(rows[0] as Record<string, unknown>);
 }
 
+/**
+ * Validate that a session (by id) belongs to a specific room.
+ * Returns the session row if found, or null when the sessionId is unknown or
+ * belongs to a different room.  Routes use this to prevent cross-room data
+ * access via fabricated sessionIds.
+ */
+export async function getSessionByIdForRoom(
+  sessionId: string,
+  roomId: string
+): Promise<RoomSession | null> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_sessions WHERE id = $1 AND room_id = $2 LIMIT 1`,
+    [sessionId, roomId]
+  );
+  if (!rows[0]) return null;
+  return rowToSession(rows[0] as Record<string, unknown>);
+}
+
 /** Patch mutable fields on the active session. */
 export async function updateSessionState(
   roomId: string,
@@ -1155,6 +1173,182 @@ export function terminateAllSessionFromRoom(roomId: string): void {
     try { sub.terminate(); } catch { /* ignore */ }
   }
   sessionSubscribers.delete(roomId);
+}
+
+// ─── Room Highlights (Task #436) ──────────────────────────────────────────────
+
+export interface RoomHighlight {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  book: string;
+  chapter: number;
+  verse: number;
+  verseText: string;
+  note: string | null;
+  isFocusVerse: boolean;
+  createdAt: string;
+}
+
+function rowToHighlight(r: Record<string, unknown>): RoomHighlight {
+  return {
+    id: String(r.id),
+    sessionId: String(r.session_id),
+    roomId: String(r.room_id),
+    userId: String(r.user_id),
+    authorName: r.author_name && String(r.author_name).trim()
+      ? String(r.author_name).trim()
+      : "Member",
+    book: String(r.book),
+    chapter: Number(r.chapter),
+    verse: Number(r.verse),
+    verseText: String(r.verse_text ?? ""),
+    note: r.note ? String(r.note) : null,
+    isFocusVerse: Boolean(r.is_focus_verse),
+    createdAt: String(r.created_at),
+  };
+}
+
+/** Add a verse highlight for the current session. */
+export async function addHighlight(
+  sessionId: string,
+  roomId: string,
+  userId: string,
+  authorName: string,
+  book: string,
+  chapter: number,
+  verse: number,
+  verseText: string,
+  note?: string
+): Promise<RoomHighlight> {
+  const { rows } = await pool.query(
+    `INSERT INTO room_highlights
+       (session_id, room_id, user_id, author_name, book, chapter, verse, verse_text, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *`,
+    [sessionId, roomId, userId, authorName.trim() || "Member",
+     book, chapter, verse, verseText, note ?? null]
+  );
+  return rowToHighlight(rows[0] as Record<string, unknown>);
+}
+
+/** Get all highlights for a session. */
+export async function getHighlights(
+  roomId: string,
+  sessionId: string
+): Promise<RoomHighlight[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_highlights
+     WHERE room_id = $1 AND session_id = $2
+     ORDER BY created_at ASC`,
+    [roomId, sessionId]
+  );
+  return rows.map(r => rowToHighlight(r as Record<string, unknown>));
+}
+
+/**
+ * Set (or clear) a focus verse.
+ * Clears any existing focus verse first, then marks the target verse.
+ * Pass highlightId = null to just clear.
+ */
+export async function setFocusVerse(
+  roomId: string,
+  sessionId: string,
+  highlightId: string | null
+): Promise<void> {
+  // Clear any existing focus verse in this session
+  await pool.query(
+    `UPDATE room_highlights SET is_focus_verse = false
+     WHERE room_id = $1 AND session_id = $2 AND is_focus_verse = true`,
+    [roomId, sessionId]
+  );
+  if (highlightId) {
+    await pool.query(
+      `UPDATE room_highlights SET is_focus_verse = true
+       WHERE id = $1 AND room_id = $2 AND session_id = $3`,
+      [highlightId, roomId, sessionId]
+    );
+  }
+}
+
+// ─── Shared Notes (Task #436) ─────────────────────────────────────────────────
+
+export interface SharedNote {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  text: string;
+  isPinned: boolean;
+  createdAt: string;
+}
+
+function rowToNote(r: Record<string, unknown>): SharedNote {
+  return {
+    id: String(r.id),
+    sessionId: String(r.session_id),
+    roomId: String(r.room_id),
+    userId: String(r.user_id),
+    authorName: r.author_name && String(r.author_name).trim()
+      ? String(r.author_name).trim()
+      : "Member",
+    text: String(r.text),
+    isPinned: Boolean(r.is_pinned),
+    createdAt: String(r.created_at),
+  };
+}
+
+/** Get all shared notes for a session, pinned first. */
+export async function getSharedNotes(
+  roomId: string,
+  sessionId: string
+): Promise<SharedNote[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_shared_notes
+     WHERE room_id = $1 AND session_id = $2
+     ORDER BY is_pinned DESC, created_at ASC`,
+    [roomId, sessionId]
+  );
+  return rows.map(r => rowToNote(r as Record<string, unknown>));
+}
+
+/** Add a shared note to the session. */
+export async function addSharedNote(
+  sessionId: string,
+  roomId: string,
+  userId: string,
+  authorName: string,
+  text: string
+): Promise<SharedNote> {
+  const { rows } = await pool.query(
+    `INSERT INTO room_shared_notes (session_id, room_id, user_id, author_name, text)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [sessionId, roomId, userId, authorName.trim() || "Member", text.trim()]
+  );
+  return rowToNote(rows[0] as Record<string, unknown>);
+}
+
+/** Pin (or unpin) a note. Unpins all others first so only one note is pinned. */
+export async function pinNote(
+  noteId: string,
+  roomId: string,
+  pin: boolean
+): Promise<void> {
+  if (pin) {
+    // Unpin all existing pinned notes first
+    await pool.query(
+      `UPDATE room_shared_notes SET is_pinned = false WHERE room_id = $1 AND is_pinned = true`,
+      [roomId]
+    );
+  }
+  await pool.query(
+    `UPDATE room_shared_notes SET is_pinned = $1 WHERE id = $2 AND room_id = $3`,
+    [pin, noteId, roomId]
+  );
 }
 
 export interface PrayerRequest {

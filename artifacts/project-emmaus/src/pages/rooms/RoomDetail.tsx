@@ -8,12 +8,15 @@ import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, RefreshCw, ChevronRight, Sparkles,
   Share2, Trash2, LogOut, Pencil, Settings, Users2,
+  StickyNote,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
-import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode } from '@/lib/rooms-types';
+import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode, ScriptureRef, RoomHighlight, SharedNote } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
+import { SharedScripturePanel } from '@/components/SharedScripturePanel';
+import { SharedNotesPanel } from '@/components/SharedNotesPanel';
 import { useFollowLeader } from '@/hooks/useFollowLeader';
 import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave } from '@/lib/rooms-api';
 
@@ -41,15 +44,25 @@ export default function RoomDetail() {
   const [renameSaving, setRenameSaving] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [showGuideGroup, setShowGuideGroup] = useState(false);
+  // ── Task #436 — Shared Scripture + Notes panel state ──────────────────────
+  const [showSharedScripture, setShowSharedScripture] = useState(false);
+  const [showSharedNotes, setShowSharedNotes] = useState(false);
+  // Scripture notice banner (non-followers see this and can tap to open)
+  const [scripturePendingNotice, setScripturePendingNotice] = useState<{
+    scripture: ScriptureRef; leaderName: string;
+  } | null>(null);
+  // Accumulated SSE highlight/note payloads — consumed by the panels
+  const [sseHighlights, setSseHighlights] = useState<RoomHighlight[]>([]);
+  const [sseNotes, setSseNotes] = useState<SharedNote[]>([]);
+  const [ssePinChange, setSsePinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
+  const [sseFocusChange, setSseFocusChange] = useState<string | null>(null);
+
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
   useEffect(() => { roomRef.current = room; }, [room]);
 
   // ── Follow Leader / Session event bus ──────────────────────────────────────
-  // onNavigate fires when the leader navigates and followLeader is ON.
-  // For Task #435 the navigate event is received; deeper content navigation
-  // (e.g. opening a Bible passage) will be wired in Task #436.
   const {
     activeSession,
     setActiveSession,
@@ -57,24 +70,47 @@ export default function RoomDetail() {
     setFollowLeader,
     lastEvent,
     sessionMode,
+    activeScripture,
+    incomingHighlights,
+    incomingNotes,
+    incomingPinChange,
+    incomingFocusChange,
   } = useFollowLeader({
     roomId: String(roomId),
     userId: user?.id ?? '',
-    onNavigate: (payload) => {
-      // Navigate events from the leader: stepId='today'/'previous'/'next'
-      // will be used by Tasks #436+ for full content navigation.
-      // For now, surface a subtle toast via console (visible in dev mode).
-      if (payload.scripture) {
-        console.log('[Emmaus] Leader navigated to scripture:', payload.scripture);
-      }
-      if (payload.stepId) {
-        console.log('[Emmaus] Leader navigated to step:', payload.stepId);
-      }
+    onNavigate: (_payload) => {
+      // Step navigation handled by leader — members follow if followLeader is ON.
     },
-    onModeChange: (mode) => {
-      console.log('[Emmaus] Session mode changed to:', mode);
+    onModeChange: (_mode) => {
+      // Mode changes (discussion, prayer, etc.) surfaced via sessionMode.
+    },
+    onScriptureOpen: (scripture, leaderName) => {
+      // Always show the panel immediately for leaders; for members show a notice.
+      setScripturePendingNotice({ scripture, leaderName });
+      if (followLeader) {
+        setShowSharedScripture(true);
+        setScripturePendingNotice(null);
+      }
     },
   });
+
+  // Sync SSE payload refs into local state so panels receive them
+  useEffect(() => {
+    if (incomingHighlights.length > 0) {
+      setSseHighlights(prev => [...prev, ...incomingHighlights]);
+    }
+  }, [incomingHighlights]);
+  useEffect(() => {
+    if (incomingNotes.length > 0) {
+      setSseNotes(prev => [...prev, ...incomingNotes]);
+    }
+  }, [incomingNotes]);
+  useEffect(() => {
+    if (incomingPinChange) setSsePinChange(incomingPinChange);
+  }, [incomingPinChange]);
+  useEffect(() => {
+    if (incomingFocusChange !== undefined) setSseFocusChange(incomingFocusChange);
+  }, [incomingFocusChange]);
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -460,38 +496,121 @@ export default function RoomDetail() {
         />
       )}
 
+      {/* ── Shared Scripture Panel (Task #436) ───────────────────────────── */}
+      {showSharedScripture && activeScripture && (
+        <SharedScripturePanel
+          roomId={String(roomId)}
+          userId={user.id}
+          sessionId={activeSession?.id ?? ''}
+          scripture={activeScripture}
+          incomingHighlights={sseHighlights}
+          focusHighlightId={sseFocusChange}
+          isLeader={isAuthorizedLeader}
+          userName={user.preferredName || 'Member'}
+          onClose={() => {
+            setShowSharedScripture(false);
+            setSseHighlights([]);
+            setSseFocusChange(null);
+          }}
+        />
+      )}
+
+      {/* ── Shared Notes Panel (Task #436) ───────────────────────────────── */}
+      {showSharedNotes && activeSession && (
+        <SharedNotesPanel
+          roomId={String(roomId)}
+          userId={user.id}
+          sessionId={activeSession.id}
+          isLeader={isAuthorizedLeader}
+          userName={user.preferredName || 'Member'}
+          incomingNotes={sseNotes}
+          incomingPinChange={ssePinChange ?? undefined}
+          onClose={() => {
+            setShowSharedNotes(false);
+            setSseNotes([]);
+            setSsePinChange(null);
+          }}
+        />
+      )}
+
       <main className="px-5 pt-5 max-w-[480px] mx-auto space-y-6 pb-6">
 
         {/* ── Session banner: active session indicator + Follow Leader toggle */}
         {activeSession && (
-          <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary/8 border border-primary/20">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <div>
-                <p className="text-[13px] font-semibold text-foreground">
-                  Guided session active
-                </p>
-                <p className="text-[11px] text-muted-foreground capitalize">
-                  {sessionMode === 'prayer' ? 'Prayer Time' :
-                   sessionMode === 'discussion' ? 'Group Discussion' :
-                   sessionMode === 'scripture' ? 'Reading Scripture' :
-                   sessionMode === 'poll' ? 'Poll' :
-                   "Today's Study"}
-                </p>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary/8 border border-primary/20">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">
+                    Guided session active
+                  </p>
+                  <p className="text-[11px] text-muted-foreground capitalize">
+                    {sessionMode === 'prayer' ? 'Prayer Time' :
+                     sessionMode === 'discussion' ? 'Group Discussion' :
+                     sessionMode === 'scripture' ? 'Reading Scripture' :
+                     sessionMode === 'poll' ? 'Poll' :
+                     "Today's Study"}
+                  </p>
+                </div>
               </div>
+              {!isAuthorizedLeader && (
+                <button
+                  onClick={() => setFollowLeader(!followLeader)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
+                    followLeader
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+                  }`}
+                  title={followLeader ? 'Following leader — tap to browse freely' : 'Tap to follow leader'}
+                >
+                  {followLeader ? '● Following' : 'Follow Leader'}
+                </button>
+              )}
             </div>
-            {!isAuthorizedLeader && (
+
+            {/* Quick-access row: Open Scripture + Group Notes */}
+            <div className="flex gap-2">
+              {activeScripture && (
+                <button
+                  onClick={() => setShowSharedScripture(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[13px] font-semibold hover:bg-primary/10 transition-all"
+                >
+                  <BookOpen size={14} />
+                  {activeScripture.displayLabel ||
+                    `${activeScripture.book} ${activeScripture.chapter}`}
+                </button>
+              )}
               <button
-                onClick={() => setFollowLeader(!followLeader)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
-                  followLeader
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
-                }`}
-                title={followLeader ? 'Following leader — tap to browse freely' : 'Tap to follow leader'}
+                onClick={() => setShowSharedNotes(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border bg-card text-muted-foreground text-[13px] font-medium hover:text-foreground hover:border-primary/30 transition-all"
               >
-                {followLeader ? '● Following' : 'Follow Leader'}
+                <StickyNote size={14} />
+                Group Notes
               </button>
+            </div>
+
+            {/* Scripture notice for non-followers */}
+            {scripturePendingNotice && !showSharedScripture && (
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <p className="text-[12px] text-amber-700 dark:text-amber-300">
+                    <span className="font-semibold">{scripturePendingNotice.leaderName}</span> opened{' '}
+                    {scripturePendingNotice.scripture.displayLabel ||
+                      `${scripturePendingNotice.scripture.book} ${scripturePendingNotice.scripture.chapter}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSharedScripture(true);
+                    setScripturePendingNotice(null);
+                  }}
+                  className="text-[12px] text-amber-700 dark:text-amber-300 font-semibold shrink-0 ml-2"
+                >
+                  Open →
+                </button>
+              </div>
             )}
           </div>
         )}
