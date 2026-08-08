@@ -449,7 +449,11 @@ export default function RoomDetail() {
           </div>
 
           <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
-            {room.members.map(m => {
+            {[...room.members].sort((a, b) => {
+              const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
+              const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
+              return aOnline - bOnline;
+            }).map(m => {
               const isMe = m.userId === user.id;
               const name = isMe
                 ? `${m.preferredName || 'You'} (you)`
