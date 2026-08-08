@@ -46,6 +46,8 @@ import {
   getPrayerRequests,
   addPrayerRequest,
   markPrayerAnswered,
+  recordPresenceHeartbeat,
+  getOnlineUserIds,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -762,6 +764,41 @@ router.get("/:roomId/journeys/:journeyId/progress", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: "Failed to load journey progress." });
   }
+});
+
+// ─── Presence — heartbeat + online list ──────────────────────────────────────
+//
+//  POST /:roomId/presence   — caller sends a heartbeat (every 30 s)
+//  GET  /:roomId/presence   — returns the list of online userIds
+
+router.post("/:roomId/presence", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+
+  recordPresenceHeartbeat(String(roomId), userId);
+  res.json({ ok: true });
+});
+
+router.get("/:roomId/presence", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+
+  const onlineUserIds = getOnlineUserIds(String(roomId));
+  res.json({ onlineUserIds });
 });
 
 // ─── Chat — SSE stream (new messages pushed in real-time) ────────────────────

@@ -347,3 +347,23 @@ export async function apiGetJourneyProgress(
   );
   return data.progress;
 }
+
+/** Send a presence heartbeat so the caller shows as online for the next 60 s. */
+export async function apiSendPresenceHeartbeat(
+  userId: string,
+  roomId: string
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/presence`, userId, { method: 'POST' });
+}
+
+/** Fetch the list of userIds currently online in this room. */
+export async function apiGetPresence(
+  userId: string,
+  roomId: string
+): Promise<string[]> {
+  const data = await roomsFetch<{ onlineUserIds: string[] }>(
+    `/api/rooms/${roomId}/presence`,
+    userId
+  );
+  return data.onlineUserIds;
+}

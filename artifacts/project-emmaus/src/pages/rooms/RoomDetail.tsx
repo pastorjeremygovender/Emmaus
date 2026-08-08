@@ -13,7 +13,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
-import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom } from '@/lib/rooms-api';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresence } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -37,6 +37,7 @@ export default function RoomDetail() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [renameSaving, setRenameSaving] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
@@ -76,6 +77,23 @@ export default function RoomDetail() {
     const timer = setInterval(() => refreshProgress(true), PROGRESS_REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [room, refreshProgress]);
+
+  // ── Presence: send heartbeat + fetch who's online ──────────────────────────
+  useEffect(() => {
+    if (!roomId || !user) return;
+    const HEARTBEAT_MS = 30_000;
+    const sendHeartbeat = () => { apiSendPresenceHeartbeat(user.id, String(roomId)).catch(() => {}); };
+    const fetchPresence = () => {
+      apiGetPresence(user.id, String(roomId))
+        .then(ids => setOnlineUserIds(new Set(ids)))
+        .catch(() => {});
+    };
+    sendHeartbeat();
+    fetchPresence();
+    const hb = setInterval(sendHeartbeat, HEARTBEAT_MS);
+    const pr = setInterval(fetchPresence, HEARTBEAT_MS);
+    return () => { clearInterval(hb); clearInterval(pr); };
+  }, [roomId, user]);
 
   if (!user || !roomId) return null;
 
@@ -294,6 +312,13 @@ export default function RoomDetail() {
                       Invite Members
                     </button>
                     <button
+                      onClick={() => { setShowOverflow(false); setLocation(`/rooms/${roomId}/settings`); }}
+                      className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 border-t border-border/60"
+                    >
+                      <Settings size={15} className="text-muted-foreground shrink-0" />
+                      Room Settings
+                    </button>
+                    <button
                       onClick={() => { setShowOverflow(false); setConfirmDelete(true); }}
                       className="w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 border-t border-border/60"
                     >
@@ -441,7 +466,12 @@ export default function RoomDetail() {
                     <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[13px] font-semibold flex items-center justify-center">
                       {initials}
                     </div>
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-background" />
+                    <span
+                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background transition-colors ${
+                        onlineUserIds.has(m.userId) ? 'bg-emerald-400' : 'bg-muted-foreground/30'
+                      }`}
+                      title={onlineUserIds.has(m.userId) ? 'Online' : 'Offline'}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-medium text-foreground truncate">{name}</p>
@@ -661,3 +691,201 @@ export default function RoomDetail() {
     </div>
   );
 }
+
+  const { roomId } = useParams<{ roomId: string }>();
+
+                        const pct = journeySteps > 0
+                          ? isComplete ? 100 : Math.round((stepNum / journeySteps) * 100)
+                          : 0;
+
+    const timer = setInterval(() => refreshProgress(true), PROGRESS_REFRESH_INTERVAL_MS);
+
+  const primaryLinkedJourney = room.linkedContentId
+    ? getJourney(room.linkedContentId)
+    : null;
+
+  const handleLinkWalk = async (journeyId: string) => {
+    setLinkingId(journeyId);
+    try {
+      await apiLinkJourney(user.id, String(roomId), journeyId);
+      const detail = await loadRoomDetail(String(roomId));
+      if (detail) {
+        setRoom(detail);
+        apiGetJourneyProgress(user.id, String(roomId), journeyId)
+          .then(p => setProgressMap(prev => ({ ...prev, [journeyId]: p })))
+          .catch(() => {});
+      }
+      setShowLinkWalk(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to link walk');
+    } finally {
+      setLinkingId(null);
+    }
+  };
+
+  const openChat = () => {
+    history.replaceState({ ...history.state, roomName: room?.name ?? '' }, '');
+    setLocation(`/rooms/${roomId}/chat`);
+  };
+
+  const [showLinkWalk, setShowLinkWalk] = useState(false);
+
+              const journeySteps = getStepsForJourney(lj.journeyId).filter(s => s.status === 'Published').length;
+
+    const fetchPresence = () => {
+      apiGetPresence(user.id, String(roomId))
+        .then(ids => setOnlineUserIds(new Set(ids)))
+        .catch(() => {});
+    };
+
+  const contentTitle = primaryLinkedJourney?.title ?? null;
+
+    const heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+
+  const [room, setRoom] = useState<RoomDetailType | null>(null);
+
+  const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
+
+  const myProgressInLinkedJourney = room.linkedContentId
+    ? myProgress[room.linkedContentId]
+    : null;
+
+  const [showOverflow, setShowOverflow] = useState(false);
+
+  const isAdmin = room.currentUserRole === 'admin';
+
+  const handleDelete = async () => {
+    setActioning(true);
+    try {
+      await deleteRoom(String(roomId), user.id);
+      setLocation('/rooms');
+    } catch (err) {
+      setActioning(false);
+      alert(err instanceof Error ? err.message : 'Failed to delete room');
+    }
+  };
+
+                        const displayName = isMe ? `${memberLabel} (you)` : memberLabel;
+
+  const [loadError, setLoadError] = useState('');
+
+  const { getJourney, getStepsForJourney, journeys, progress: myProgress } = useJourney();
+
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+
+  const { user } = useAuth();
+
+  const roomRef = useRef<RoomDetailType | null>(null);
+
+  const refreshProgress = useCallback(async (silent = true) => {
+    if (!roomRef.current || !user || !roomId) return;
+    if (!silent) setRefreshing(true);
+    try {
+      await Promise.all(
+        roomRef.current.linkedJourneys.map(lj =>
+          apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
+            .then(p => setProgressMap(prev => ({ ...prev, [lj.journeyId]: p })))
+            .catch(() => {})
+        )
+      );
+    } finally {
+      if (!silent) setRefreshing(false);
+    }
+  }, [user, roomId]);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleLeave = async () => {
+    setActioning(true);
+    try {
+      await leaveRoom(String(roomId), user.id);
+      setLocation('/rooms');
+    } catch (err) {
+      setActioning(false);
+      alert(err instanceof Error ? err.message : 'Failed to leave room');
+    }
+  };
+
+  const totalSteps = room.linkedContentId
+    ? getStepsForJourney(room.linkedContentId).filter(s => s.status === 'Published').length
+    : 0;
+
+              const memberProgress = progressMap[lj.journeyId];
+
+  const { loadRoomDetail, leaveRoom, deleteRoom, removeMember } = useRooms();
+
+  const availableWalks = journeys.filter(j =>
+    j.status === 'Published' &&
+    myProgress[j.id] != null &&
+    !linkedJourneyIds.has(j.id)
+  );
+
+  const HEARTBEAT_INTERVAL_MS = 30_000;
+
+                        const isComplete = mp.status === 'completed';
+
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+
+                        const stepNum = mp.currentDay ?? 0;
+
+  const [, setLocation] = useLocation();
+
+  const [progressMap, setProgressMap] = useState<Record<string, MemberJourneyProgress[]>>({});
+
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+    const sendHeartbeat = () => {
+      apiSendPresenceHeartbeat(user.id, String(roomId)).catch(() => {});
+    };
+
+  const leaderMember = room.members.find(m => m.role === 'admin');
+
+  const handleBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else setLocation('/rooms');
+  };
+
+  const videoEligible = room.roomType !== 'personal';
+
+  const leaderName = leaderMember?.preferredName ?? 'Your leader';
+
+                        const isMe = mp.userId === user.id;
+
+  const handleRemoveMember = async (member: RoomMember) => {
+    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Room?`)) return;
+    try {
+      await removeMember(String(roomId), member.userId, user.id);
+      setRoom(prev => prev ? {
+        ...prev,
+        members: prev.members.filter(m => m.userId !== member.userId),
+        memberCount: prev.memberCount - 1,
+      } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  };
+
+  const [actioning, setActioning] = useState(false);
+
+    const presenceTimer = setInterval(fetchPresence, HEARTBEAT_INTERVAL_MS);
+
+              const initials = (m.preferredName || 'M')
+                .split(' ')
+                .map((w: string) => w[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase();
+
+              const name = isMe
+                ? `${m.preferredName || 'You'} (you)`
+                : m.preferredName || 'Member';
+
+                        const memberLabel = mp.preferredName || (isMe ? 'You' : 'Member');
+
+  const [refreshing, setRefreshing] = useState(false);
+
+              const journeyTitle = journey?.title ?? lj.journeyId;
+
+  const currentStep = myProgressInLinkedJourney?.currentDay ?? null;
+
+              const journey = getJourney(lj.journeyId);

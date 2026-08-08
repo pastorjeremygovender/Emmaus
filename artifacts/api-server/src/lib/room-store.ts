@@ -375,6 +375,8 @@ export async function deleteRoom(roomId: string): Promise<void> {
   // Close all open SSE streams before deleting so no subscriber receives
   // post-deletion events.
   terminateAllFromRoom(roomId);
+  // Clear in-memory presence for this room
+  clearRoomPresence(roomId);
   // FK CASCADE handles room_members, room_messages, room_journeys
   await pool.query(`DELETE FROM rooms WHERE id = $1`, [roomId]);
 }
@@ -713,8 +715,7 @@ export function terminateAllFromRoom(roomId: string): void {
   roomSubscribers.delete(roomId);
 }
 
-// ─── Prayer requests ──────────────────────────────────────────────────────────
-
+const PRESENCE_STALE_MS = 90_000; // prune entries older than 90 s
 export interface PrayerRequest {
   id: string;
   roomId: string;
@@ -1015,3 +1016,44 @@ export async function updateVideoSettings(
   }
   return getVideoSettings();
 }
+
+/**
+ * Returns the set of userIds whose last heartbeat was within the past 60 s.
+ */
+export function getOnlineUserIds(roomId: string): string[] {
+  const roomMap = presenceStore.get(roomId);
+  if (!roomMap) return [];
+  const cutoff = Date.now() - 60_000;
+  const online: string[] = [];
+  for (const [uid, ts] of roomMap) {
+    if (ts >= cutoff) online.push(uid);
+  }
+  return online;
+}
+
+/**
+ * Remove all presence entries for a room (e.g. after deleteRoom).
+ */
+export function clearRoomPresence(roomId: string): void {
+  presenceStore.delete(roomId);
+}
+
+/**
+ * Record a heartbeat for a user in a room.
+ * Prunes stale entries for this room on each call to keep the map tidy.
+ */
+export function recordPresenceHeartbeat(roomId: string, userId: string): void {
+  if (!presenceStore.has(roomId)) {
+    presenceStore.set(roomId, new Map());
+  }
+  const roomMap = presenceStore.get(roomId)!;
+  roomMap.set(userId, Date.now());
+
+  // Prune entries that have been silent for > PRESENCE_STALE_MS
+  const cutoff = Date.now() - PRESENCE_STALE_MS;
+  for (const [uid, ts] of roomMap) {
+    if (ts < cutoff) roomMap.delete(uid);
+  }
+}
+
+const presenceStore = new Map<string, Map<string, number>>();
