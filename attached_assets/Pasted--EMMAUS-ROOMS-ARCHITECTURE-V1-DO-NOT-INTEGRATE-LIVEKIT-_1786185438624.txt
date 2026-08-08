@@ -1,0 +1,250 @@
+# EMMAUS ROOMS ARCHITECTURE V1
+# DO NOT INTEGRATE LIVEKIT YET
+
+Pause the LiveKit implementation.
+
+Do NOT request API keys yet.
+
+Before connecting any video provider we must finalise the Emmaus Rooms architecture.
+
+Video is only one capability inside Rooms.
+
+Rooms are first and foremost a discipleship experience.
+
+==================================================
+ROOM PHILOSOPHY
+==================================================
+
+Emmaus Rooms exist to help people walk with Jesus together.
+
+Rooms are NOT video meetings.
+
+Rooms are shared discipleship spaces.
+
+Video is optional.
+
+==================================================
+ROOM TYPES
+==================================================
+
+Support the following Room types:
+
+• Walk Room
+• Journey Room
+• Daily Devotional Room
+• Bible Study Room
+• Sermon Companion Room
+
+Each Room is attached to ONE piece of Emmaus content.
+
+Never create empty generic Rooms.
+
+==================================================
+CREATING ROOMS
+==================================================
+
+Rooms should normally be created FROM content.
+
+Examples:
+
+User is reading:
+
+The Road to Emmaus
+
+Tap:
+
+Study Together
+
+Create Room
+
+Invite People
+
+The Room is automatically attached to that Walk.
+
+The same applies to:
+
+Walks
+
+Journeys
+
+Bible Studies
+
+Daily Devotionals
+
+Sermon Companions
+
+==================================================
+ROOM EXPERIENCE
+==================================================
+
+Every Room contains:
+
+Current content
+
+Members
+
+Chat
+
+Prayer Requests
+
+Discussion
+
+Shared progress
+
+Leader controls
+
+Optional Video
+
+Video is not the focus.
+
+Content is the focus.
+
+==================================================
+PERMISSIONS
+==================================================
+
+Support role-based permissions.
+
+Member
+
+• Join invited Rooms
+• Chat
+• Prayer requests
+• Participate
+
+Leader
+
+• Create Rooms
+• Start video
+• Moderate
+• Invite members
+• Leader controls
+
+Pastor
+
+• Full access
+
+Church Admin
+
+• Assign leaders
+• Configure permissions
+• Enable/disable video
+• View usage
+
+Permissions must be configurable by each church.
+
+==================================================
+VIDEO
+==================================================
+
+Video is optional.
+
+Only authorised leaders may start video meetings.
+
+Members can join.
+
+Video should feel completely native inside Emmaus.
+
+There should never be:
+
+Meeting IDs
+
+Passwords
+
+Manual links
+
+External Zoom windows
+
+When the architecture is complete we will integrate LiveKit.
+
+==================================================
+ROOM LAYOUT
+==================================================
+
+A Room should display:
+
+Header
+
+Content title
+
+Members
+
+Current Scripture
+
+Discussion
+
+Prayer
+
+Optional Video panel
+
+Chat
+
+Everything belongs to the same discipleship session.
+
+==================================================
+LEADER CONTROLS
+==================================================
+
+Design support for:
+
+Open Scripture for everyone
+
+Open today's Step
+
+Highlight today's discussion
+
+Launch poll
+
+Prayer time
+
+Video controls
+
+Do not implement yet.
+
+Only design the architecture.
+
+==================================================
+FUTURE FEATURES
+==================================================
+
+The architecture should allow future support for:
+
+Shared highlighting
+
+Shared notes
+
+Shared Ask Emmaus
+
+Emmaus Voice
+
+Attendance
+
+Media Studio integration
+
+without requiring a redesign.
+
+==================================================
+LIVEKIT
+==================================================
+
+Do NOT request credentials yet.
+
+Do NOT integrate LiveKit yet.
+
+Instead complete the Room architecture and UI first.
+
+Once complete, present the architecture for review.
+
+Only after approval should LiveKit be connected.
+
+==================================================
+GOAL
+==================================================
+
+Build Emmaus Rooms.
+
+Not Zoom inside Emmaus.
+
+Video is one capability.
+
+Discipleship is the product.

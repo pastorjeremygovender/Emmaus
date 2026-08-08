@@ -6,7 +6,7 @@
  */
 
 import { getApiUrl } from './api';
-import type { RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress } from './rooms-types';
+import type { RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress, VideoSessionStatus } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
 
@@ -245,6 +245,36 @@ export async function apiAdminGetRoomDetail(
     if (err instanceof Error && err.message.includes('404')) return null;
     throw err;
   }
+}
+
+// ─── Video session ─────────────────────────────────────────────────────────
+
+export async function apiGetVideoStatus(
+  userId: string,
+  roomId: string
+): Promise<VideoSessionStatus> {
+  return roomsFetch<VideoSessionStatus>(`/api/rooms/${roomId}/video/status`, userId);
+}
+
+export async function apiStartVideo(
+  userId: string,
+  roomId: string
+): Promise<{ ok: boolean; alreadyActive: boolean; livekitRoomName: string }> {
+  return roomsFetch(`/api/rooms/${roomId}/video/start`, userId, { method: 'POST' });
+}
+
+export async function apiGetVideoToken(
+  userId: string,
+  roomId: string
+): Promise<{ token: string; livekitUrl: string }> {
+  return roomsFetch(`/api/rooms/${roomId}/video/token`, userId, { method: 'POST' });
+}
+
+export async function apiEndVideo(
+  userId: string,
+  roomId: string
+): Promise<{ ok: boolean }> {
+  return roomsFetch(`/api/rooms/${roomId}/video/end`, userId, { method: 'POST' });
 }
 
 // ─── Linked journeys ───────────────────────────────────────────────────────

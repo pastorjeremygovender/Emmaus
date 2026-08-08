@@ -36,8 +36,8 @@ Endpoints: `GET /api/rooms/admin/video-settings`, `PATCH /api/rooms/admin/video-
 Admin UI: Settings → Rooms & Video Settings section.
 
 ## Build order
-- Step 1 (this session): room types, permissions, content linking, video settings schema ✅
-- Step 2 (future): LiveKit integration for Ministry Rooms
+- Step 1: room types, permissions, content linking, video settings schema ✅
+- Step 2: LiveKit video integration — packages installed, all endpoints live, VideoRoom component embedded ✅
 - Step 3 (future): Shared Scripture, highlighting, leader controls
 - Step 4 (future): Polls, attendance, moderation
 - Church Service Rooms: architecture only, no UI

@@ -83,6 +83,7 @@
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.23",
+    "@livekit/components-styles": "^1.2.0",
     "firebase": "^12.16.0",
     "livekit-client": "^2.21.0",
     "qrcode.react": "^4.2.0"

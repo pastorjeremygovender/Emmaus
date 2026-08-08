@@ -709,6 +709,123 @@ export function terminateAllFromRoom(roomId: string): void {
   roomSubscribers.delete(roomId);
 }
 
+// ─── Video session store ──────────────────────────────────────────────────────
+
+export interface VideoSessionStatus {
+  videoActive: boolean;
+  startedAt: string | null;
+  startedBy: string | null;
+  livekitRoomName: string | null;
+}
+
+/** Read the current video session state for a room. */
+export async function getVideoStatus(roomId: string): Promise<VideoSessionStatus> {
+  const { rows } = await pool.query(
+    `SELECT video_active, video_started_at, video_started_by, livekit_room_name
+     FROM rooms WHERE id = $1`,
+    [roomId]
+  );
+  if (!rows[0]) throw new Error("Room not found");
+  const r = rows[0];
+  return {
+    videoActive: Boolean(r.video_active),
+    startedAt: r.video_started_at ? String(r.video_started_at) : null,
+    startedBy: r.video_started_by ? String(r.video_started_by) : null,
+    livekitRoomName: r.livekit_room_name ? String(r.livekit_room_name) : null,
+  };
+}
+
+/** Mark the room's video session as active. */
+export async function startVideoSession(
+  roomId: string,
+  startedBy: string,
+  livekitRoomName: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE rooms
+     SET video_active = true,
+         video_started_at = NOW(),
+         video_started_by = $2,
+         livekit_room_name = $3
+     WHERE id = $1`,
+    [roomId, startedBy, livekitRoomName]
+  );
+}
+
+/** Mark the room's video session as ended. */
+export async function endVideoSession(roomId: string): Promise<void> {
+  await pool.query(
+    `UPDATE rooms
+     SET video_active = false,
+         video_started_at = NULL,
+         video_started_by = NULL,
+         livekit_room_name = NULL
+     WHERE id = $1`,
+    [roomId]
+  );
+}
+
+/**
+ * Count how many rooms in the DB currently have video_active = true.
+ * Used to enforce the maxConcurrentRooms church setting.
+ */
+export async function getActiveVideoRoomCount(): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM rooms WHERE video_active = true`
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * Count current room members (used for participant limit enforcement).
+ */
+export async function getRoomMemberCount(roomId: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM room_members WHERE room_id = $1`,
+    [roomId]
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * Check whether a user is authorised to host (start/end) video for this room.
+ *
+ * Conditions (ALL must be true):
+ *  1. User must be the room admin (room_members.role = 'admin').
+ *  2. User's role (app role OR pastoral role) must be in church allowedRoles.
+ *
+ * Never trust a client-supplied role — call getUserRole() before passing appRole.
+ */
+export async function canHostVideo(
+  userId: string,
+  roomId: string,
+  appRole: string,
+  allowedRoles: string[]
+): Promise<boolean> {
+  // 1. Must be the room admin
+  const { rows: memberRows } = await pool.query(
+    `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
+    [roomId, userId]
+  );
+  if (memberRows[0]?.role !== "admin") return false;
+
+  // 2. App admin always allowed if in allowedRoles
+  if (
+    (appRole === "admin" || appRole === "superAdmin") &&
+    allowedRoles.some(r => r === appRole)
+  ) {
+    return true;
+  }
+
+  // 3. Check pastoral_role
+  const { rows: profileRows } = await pool.query(
+    "SELECT pastoral_role FROM user_profiles WHERE user_id = $1",
+    [userId]
+  );
+  const pastoralRole: string = profileRows[0]?.pastoral_role ?? "";
+  return pastoralRole !== "" && allowedRoles.includes(pastoralRole);
+}
+
 // ─── Church video settings ────────────────────────────────────────────────────
 
 export interface VideoSettings {

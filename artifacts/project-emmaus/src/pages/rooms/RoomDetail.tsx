@@ -11,6 +11,7 @@ import {
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
 import { apiGetJourneyProgress, apiLinkJourney } from '@/lib/rooms-api';
+import { VideoRoom } from '@/components/VideoRoom';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -193,6 +194,18 @@ export default function RoomDetail() {
       </header>
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-10">
+
+        {/* Video Room — ministry and leadership rooms only */}
+        {(room.roomType === 'ministry' || room.roomType === 'leadership') && (
+          <section>
+            <VideoRoom
+              roomId={String(roomId)}
+              userId={user.id}
+              displayName={user.preferredName || 'Member'}
+              videoEligible={true}
+            />
+          </section>
+        )}
 
         {/* Chat */}
         <section>

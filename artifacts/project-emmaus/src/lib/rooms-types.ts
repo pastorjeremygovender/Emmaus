@@ -47,6 +47,22 @@ export interface MemberJourneyProgress {
   status: string | null; // 'active' | 'paused' | 'completed' | 'dropped' | null (not started)
 }
 
+export interface VideoSessionStatus {
+  /** false when LiveKit secrets are not yet configured */
+  configured: boolean;
+  /** Message shown when configured = false */
+  message?: string;
+  videoEnabled?: boolean;
+  videoActive: boolean;
+  startedAt: string | null;
+  startedBy: string | null;
+  livekitRoomName: string | null;
+  /** WebSocket URL safe to expose to browser (no secrets) */
+  livekitUrl: string | null;
+  /** Whether the current user can start / end video */
+  canHost?: boolean;
+}
+
 export interface RoomMessage {
   id: string;
   roomId: string;

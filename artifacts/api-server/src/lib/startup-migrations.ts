@@ -319,6 +319,20 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: church_video_settings table failed (non-fatal)");
   }
 
+  // ── Rooms video session columns (2026-08) ────────────────────────────────────
+  try {
+    await pool.query(`
+      ALTER TABLE rooms
+        ADD COLUMN IF NOT EXISTS video_active      BOOLEAN   NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS video_started_at  TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS video_started_by  TEXT,
+        ADD COLUMN IF NOT EXISTS livekit_room_name TEXT;
+    `);
+    logger.info("Startup migration: rooms video session columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms video session columns failed (non-fatal)");
+  }
+
   // ── Walk theme_color and version columns (2026-07) ───────────────────────────
   try {
     await pool.query(`

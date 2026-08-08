@@ -33,10 +33,23 @@ import {
   canCreateRoomType,
   getVideoSettings,
   updateVideoSettings,
+  getVideoStatus,
+  startVideoSession,
+  endVideoSession,
+  getActiveVideoRoomCount,
+  getRoomMemberCount,
+  canHostVideo,
   type RoomType,
   type VideoSettings,
 } from "../lib/room-store.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
+import {
+  isLiveKitConfigured,
+  getLiveKitUrl,
+  createLiveKitToken,
+  ensureLiveKitRoom,
+  deleteLiveKitRoom,
+} from "../lib/livekit.js";
 
 const router = Router();
 
@@ -82,6 +95,209 @@ router.get("/admin/:roomId", async (req, res) => {
     res.json({ room });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
+  }
+});
+
+// ─── Video: status ────────────────────────────────────────────────────────────
+//
+//  GET  /rooms/:roomId/video/status   — any room member
+//  POST /rooms/:roomId/video/start    — authorised host (room admin + pastoral role)
+//  POST /rooms/:roomId/video/token    — any room member (when video is active)
+//  POST /rooms/:roomId/video/end      — authorised host
+
+router.get("/:roomId/video/status", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  // Verify membership
+  const memberRole = await getMemberRole(String(roomId), userId);
+  if (!memberRole) {
+    res.status(403).json({ error: "You are not a member of this Room." });
+    return;
+  }
+
+  try {
+    if (!isLiveKitConfigured()) {
+      res.json({
+        configured: false,
+        message:
+          "Live video is not yet configured. " +
+          "Add LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET to Replit Secrets, then restart the server.",
+        videoActive: false,
+        startedAt: null,
+        startedBy: null,
+        livekitRoomName: null,
+        livekitUrl: null,
+      });
+      return;
+    }
+
+    const status = await getVideoStatus(String(roomId));
+    const settings = await getVideoSettings();
+    const appRole = await getUserRole(userId);
+    const canHost = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+
+    res.json({
+      configured: true,
+      videoEnabled: settings.videoEnabled,
+      canHost,
+      livekitUrl: getLiveKitUrl(),
+      ...status,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to load video status." });
+  }
+});
+
+router.post("/:roomId/video/start", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  if (!isLiveKitConfigured()) {
+    res.status(503).json({ error: "Live video is not configured on this server." });
+    return;
+  }
+
+  try {
+    const settings = await getVideoSettings();
+    if (!settings.videoEnabled) {
+      res.status(403).json({ error: "Video Rooms are not enabled for this church." });
+      return;
+    }
+
+    const appRole = await getUserRole(userId);
+    const allowed = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    if (!allowed) {
+      res.status(403).json({ error: "You are not authorised to start video for this Room." });
+      return;
+    }
+
+    // Concurrent room limit
+    const activeCount = await getActiveVideoRoomCount();
+    if (activeCount >= settings.maxConcurrentRooms) {
+      res.status(429).json({
+        error: `This church has reached its current live Room limit (${settings.maxConcurrentRooms}).`,
+      });
+      return;
+    }
+
+    const status = await getVideoStatus(String(roomId));
+    if (status.videoActive) {
+      // Already active — return current state
+      res.json({ ok: true, alreadyActive: true, livekitRoomName: status.livekitRoomName });
+      return;
+    }
+
+    const livekitRoomName = `emmaus-${String(roomId)}`;
+    await ensureLiveKitRoom(livekitRoomName, settings.maxDurationMinutes * 60);
+    await startVideoSession(String(roomId), userId, livekitRoomName);
+
+    res.json({ ok: true, alreadyActive: false, livekitRoomName });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to start video.";
+    res.status(500).json({ error: msg });
+  }
+});
+
+router.post("/:roomId/video/token", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  if (!isLiveKitConfigured()) {
+    res.status(503).json({ error: "Live video is not configured on this server." });
+    return;
+  }
+
+  // Verify membership
+  const memberRole = await getMemberRole(String(roomId), userId);
+  if (!memberRole) {
+    res.status(403).json({ error: "You are not a member of this Room." });
+    return;
+  }
+
+  try {
+    const settings = await getVideoSettings();
+    if (!settings.videoEnabled) {
+      res.status(403).json({ error: "Video Rooms are not enabled for this church." });
+      return;
+    }
+
+    const status = await getVideoStatus(String(roomId));
+    if (!status.videoActive || !status.livekitRoomName) {
+      res.status(409).json({ error: "No active video session for this Room." });
+      return;
+    }
+
+    // Participant limit
+    const memberCount = await getRoomMemberCount(String(roomId));
+    if (memberCount > settings.maxParticipantsPerRoom) {
+      res.status(429).json({
+        error: `This Room has reached its participant limit (${settings.maxParticipantsPerRoom}).`,
+      });
+      return;
+    }
+
+    const appRole = await getUserRole(userId);
+    const isHost = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+
+    // Resolve display name from user_profiles (never expose raw userId)
+    const { rows } = await import("@workspace/db").then(m =>
+      m.pool.query(
+        "SELECT preferred_name FROM user_profiles WHERE user_id = $1",
+        [userId]
+      )
+    );
+    const displayName: string =
+      rows[0]?.preferred_name?.trim() || "Member";
+
+    const token = await createLiveKitToken({
+      roomName: status.livekitRoomName,
+      identity: userId,
+      displayName,
+      canPublish: true,
+      canSubscribe: true,
+      roomAdmin: isHost,
+    });
+
+    res.json({ token, livekitUrl: getLiveKitUrl() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to issue video token.";
+    res.status(500).json({ error: msg });
+  }
+});
+
+router.post("/:roomId/video/end", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+
+  if (!isLiveKitConfigured()) {
+    res.status(503).json({ error: "Live video is not configured on this server." });
+    return;
+  }
+
+  try {
+    const settings = await getVideoSettings();
+    const appRole = await getUserRole(userId);
+    const allowed = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    if (!allowed) {
+      res.status(403).json({ error: "Only the room host can end the meeting." });
+      return;
+    }
+
+    const status = await getVideoStatus(String(roomId));
+    if (status.livekitRoomName) {
+      await deleteLiveKitRoom(status.livekitRoomName);
+    }
+    await endVideoSession(String(roomId));
+
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to end video session.";
+    res.status(500).json({ error: msg });
   }
 });
 
