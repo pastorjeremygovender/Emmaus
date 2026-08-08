@@ -36,11 +36,13 @@ const QUESTION_STARTERS = new Set([
   'help', 'tell',
 ]);
 
-// Bible book names — queries matching these are treated as searches, not questions
+// Bible book names — queries matching these are treated as searches, not questions.
+// Includes abbreviated/shared names (e.g. "corinthians" covers 1 & 2 Corinthians).
+// "song" catches "Song of Solomon" / "Song of Songs".
 const BIBLE_BOOKS = new Set([
   'genesis', 'exodus', 'leviticus', 'numbers', 'deuteronomy', 'joshua', 'judges',
   'ruth', 'samuel', 'kings', 'chronicles', 'ezra', 'nehemiah', 'esther', 'job',
-  'psalm', 'psalms', 'proverbs', 'ecclesiastes', 'isaiah', 'jeremiah',
+  'psalm', 'psalms', 'proverbs', 'ecclesiastes', 'song', 'isaiah', 'jeremiah',
   'lamentations', 'ezekiel', 'daniel', 'hosea', 'joel', 'amos', 'obadiah',
   'jonah', 'micah', 'nahum', 'habakkuk', 'zephaniah', 'haggai', 'zechariah',
   'malachi', 'matthew', 'mark', 'luke', 'john', 'acts', 'romans',
@@ -65,8 +67,13 @@ function detectIntent(input: string): 'question' | 'search' {
   // Question word at start
   if (QUESTION_STARTERS.has(firstWord)) return 'question';
 
-  // Bible reference pattern (e.g. "John 3", "Psalm 23") → search
-  if (BIBLE_BOOKS.has(firstWord) && words.length <= 3) return 'search';
+  // Bible reference — bare or with chapter/verse keywords (e.g. "John 3", "Romans 8:28",
+  // "Romans chapter 8 verse 28"). Up to 6 tokens to cover "Book chapter N verse N".
+  if (BIBLE_BOOKS.has(firstWord) && words.length <= 6) return 'search';
+
+  // Numbered Bible books (e.g. "1 John 3", "2 Corinthians chapter 13 verse 4").
+  // First token is a digit; second token is a recognised book name.
+  if (/^\d+$/.test(firstWord) && words.length >= 2 && BIBLE_BOOKS.has(words[1]) && words.length <= 6) return 'search';
 
   // Long natural-language sentences are questions
   if (words.length >= 5) return 'question';
