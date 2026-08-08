@@ -410,39 +410,52 @@ export function VideoRoom({
 
   // No gathering active
   if (!videoActive) {
-    // Non-leaders see nothing when no gathering is running — per spec, the
-    // Gather Together section is invisible to ordinary Room members.
-    if (!canHost) return null;
-
-    // Authorized leader: primary "Gather Together" CTA
-    return (
-      <div className="space-y-2">
-        <button
-          onClick={handleStart}
-          disabled={actioning}
-          className="w-full text-left p-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-              {actioning
-                ? <Loader2 size={20} className="text-white animate-spin" />
-                : <span className="text-[20px]">🟢</span>
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[17px] font-semibold text-white">Gather Together</div>
-              <div className="text-[13px] text-white/80 mt-0.5">
-                Start a live gathering with your group.
+    if (canHost) {
+      // Leader: primary "Gather Together" CTA
+      return (
+        <div className="space-y-2">
+          <button
+            onClick={handleStart}
+            disabled={actioning}
+            className="w-full text-left p-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                {actioning
+                  ? <Loader2 size={20} className="text-white animate-spin" />
+                  : <span className="text-[20px]">🟢</span>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[17px] font-semibold text-white">Gather Together</div>
+                <div className="text-[13px] text-white/80 mt-0.5">
+                  Start a live gathering with your group.
+                </div>
               </div>
             </div>
+          </button>
+          {actionError && (
+            <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
+              <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" />
+              <p className="text-[12px] text-destructive">{actionError}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Member: waiting state
+    return (
+      <div className="p-5 rounded-2xl border border-border bg-muted/30">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <span className="text-[18px] opacity-50">🟡</span>
           </div>
-        </button>
-        {actionError && (
-          <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
-            <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" />
-            <p className="text-[12px] text-destructive">{actionError}</p>
+          <div>
+            <p className="text-[15px] font-medium text-foreground">No gathering happening right now.</p>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Waiting for the leader to begin.</p>
           </div>
-        )}
+        </div>
       </div>
     );
   }

@@ -149,6 +149,13 @@ export async function apiGetRoomById(
   }
 }
 
+export async function apiRenameRoom(userId: string, roomId: string, name: string): Promise<void> {
+  await roomsFetch<{ ok: boolean }>(`/api/rooms/${roomId}`, userId, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function apiDeleteRoom(userId: string, roomId: string): Promise<void> {
   await roomsFetch(`/api/rooms/${roomId}`, userId, { method: 'DELETE' });
 }

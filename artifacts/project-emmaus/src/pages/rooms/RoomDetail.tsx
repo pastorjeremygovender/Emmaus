@@ -7,13 +7,13 @@ import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, RefreshCw, ChevronRight, Sparkles,
-  Share2, Trash2, LogOut,
+  Share2, Trash2, LogOut, Pencil,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
-import { apiGetJourneyProgress, apiLinkJourney } from '@/lib/rooms-api';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -34,6 +34,10 @@ export default function RoomDetail() {
   const [showLinkWalk, setShowLinkWalk] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [showOverflow, setShowOverflow] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
   useEffect(() => { roomRef.current = room; }, [room]);
@@ -179,6 +183,30 @@ export default function RoomDetail() {
     }
   };
 
+  const handleStartRename = () => {
+    setRenameValue(room?.name ?? '');
+    setRenaming(true);
+    setShowOverflow(false);
+    setTimeout(() => renameInputRef.current?.focus(), 50);
+  };
+
+  const handleRenameSubmit = async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    if (trimmed === room?.name) { setRenaming(false); return; }
+    if (trimmed.length > 80) return;
+    setRenameSaving(true);
+    try {
+      await apiRenameRoom(user.id, String(roomId), trimmed);
+      setRoom(prev => prev ? { ...prev, name: trimmed } : prev);
+      setRenaming(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to rename room');
+    } finally {
+      setRenameSaving(false);
+    }
+  };
+
   const openChat = () => {
     history.replaceState({ ...history.state, roomName: room?.name ?? '' }, '');
     setLocation(`/rooms/${roomId}/chat`);
@@ -200,9 +228,39 @@ export default function RoomDetail() {
             <ArrowLeft size={22} />
           </button>
 
-          <h1 className="flex-1 min-w-0 font-sans font-semibold text-[17px] truncate">
-            {room.name}
-          </h1>
+          {renaming ? (
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleRenameSubmit();
+                  if (e.key === 'Escape') setRenaming(false);
+                }}
+                maxLength={80}
+                className="flex-1 min-w-0 bg-transparent border-b border-primary text-[17px] font-semibold text-foreground outline-none py-0.5"
+                aria-label="Room name"
+              />
+              <button
+                onClick={handleRenameSubmit}
+                disabled={renameSaving || !renameValue.trim()}
+                className="text-[13px] text-primary font-semibold shrink-0 disabled:opacity-40"
+              >
+                {renameSaving ? <Loader2 size={14} className="animate-spin" /> : 'Save'}
+              </button>
+              <button
+                onClick={() => setRenaming(false)}
+                className="text-[13px] text-muted-foreground shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <h1 className="flex-1 min-w-0 font-sans font-semibold text-[17px] truncate">
+              {room.name}
+            </h1>
+          )}
 
           {/* Overflow (⋯) menu */}
           <div className="relative shrink-0">
@@ -222,8 +280,15 @@ export default function RoomDetail() {
                 {isAdmin ? (
                   <>
                     <button
-                      onClick={() => { setShowOverflow(false); setLocation(`/rooms/${roomId}/invite`); }}
+                      onClick={handleStartRename}
                       className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5"
+                    >
+                      <Pencil size={15} className="text-muted-foreground shrink-0" />
+                      Rename Room
+                    </button>
+                    <button
+                      onClick={() => { setShowOverflow(false); setLocation(`/rooms/${roomId}/invite`); }}
+                      className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 border-t border-border/60"
                     >
                       <Share2 size={15} className="text-muted-foreground shrink-0" />
                       Invite Members

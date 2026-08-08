@@ -365,6 +365,12 @@ export async function leaveRoom(roomId: string, userId: string): Promise<void> {
   terminateUserFromRoom(roomId, userId);
 }
 
+export async function updateRoomName(roomId: string, name: string): Promise<void> {
+  await pool.query(
+    `UPDATE rooms SET name = $1 WHERE id = $2`,
+    [name.trim(), roomId]
+  );
+}
 export async function deleteRoom(roomId: string): Promise<void> {
   // Close all open SSE streams before deleting so no subscriber receives
   // post-deletion events.

@@ -20,6 +20,7 @@ import {
   joinByToken,
   leaveRoom,
   deleteRoom,
+  updateRoomName,
   transferAdmin,
   removeMember,
   getMessages,
@@ -566,6 +567,38 @@ router.get("/:roomId", async (req, res) => {
     res.json({ room: sanitisedRoom, currentUserRole: role });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
+  }
+});
+
+// ─── Rename room (room admin only) ───────────────────────────────────────────
+
+router.patch("/:roomId", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { roomId } = req.params;
+  const { name } = req.body as { name?: string };
+
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: "Room name is required." });
+    return;
+  }
+  if (name.trim().length > 80) {
+    res.status(400).json({ error: "Room name must be 80 characters or fewer." });
+    return;
+  }
+
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Only the room admin can rename this room." });
+      return;
+    }
+
+    await updateRoomName(String(roomId), name.trim());
+    res.json({ ok: true, name: name.trim() });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to rename room." });
   }
 });
 
