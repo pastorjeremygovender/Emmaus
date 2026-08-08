@@ -1,0 +1,395 @@
+# EMMAUS ROOMS — STEP 2
+# LIVEKIT VIDEO INTEGRATION FOR AUTHORISED MINISTRY ROOMS
+
+This task implements ONLY Step 2 of the Emmaus Rooms architecture.
+
+Do NOT build shared Scripture, shared highlighting, polls, attendance, synchronized media, Emmaus Voice group participation, whiteboards, or Church Service Rooms yet.
+
+The goal is simple:
+
+An authorised Ministry Room leader can start a live video session.
+Invited Room members can join.
+Unauthorised members cannot start video.
+The entire experience remains inside Emmaus.
+
+====================================================
+1. USE LIVEKIT
+====================================================
+
+Integrate LiveKit as the real-time video/audio provider.
+
+Use LiveKit Cloud for now.
+
+Do NOT build our own WebRTC infrastructure.
+
+Keep the LiveKit implementation modular so the provider can be changed later if necessary.
+
+====================================================
+2. REQUIRED SECRETS / CONFIG
+====================================================
+
+Add server-side environment configuration for:
+
+LIVEKIT_URL
+LIVEKIT_API_KEY
+LIVEKIT_API_SECRET
+
+Never expose LIVEKIT_API_SECRET to the browser.
+
+If these values are not configured yet, create a clear admin/developer empty state explaining which secrets need to be added.
+
+Do not hard-code credentials.
+
+====================================================
+3. SERVER-SIDE TOKEN ISSUING
+====================================================
+
+Create a secure backend endpoint that issues LiveKit access tokens.
+
+Example responsibility:
+
+POST /api/rooms/:roomId/video/token
+
+Before issuing a token:
+
+Verify:
+
+1. User is authenticated.
+2. Room exists.
+3. User is an active member of that Room.
+4. Room type allows video.
+5. Church video Rooms are enabled.
+6. Participant limit has not been exceeded.
+7. Church permissions allow the requested action.
+
+Never trust client-supplied role claims.
+
+Use server-side user/church/Room role data.
+
+====================================================
+4. VIDEO PERMISSIONS
+====================================================
+
+Use the Room roles already created in Step 1.
+
+MEMBER
+
+Can:
+- Join an authorised active video meeting.
+- Use camera.
+- Use microphone.
+- Leave meeting.
+
+Cannot:
+- Start a Ministry Room video session.
+- End the whole meeting.
+- Generate host-level permissions.
+
+GROUP LEADER
+
+Can:
+- Start video for Ministry Rooms they are authorised to lead.
+- Join.
+- End the Room meeting.
+- Manage basic participant controls where supported.
+
+PASTOR
+
+Can:
+- Start and manage authorised Ministry Room video.
+- Start Leadership Room video when applicable.
+
+CHURCH ADMIN
+
+Can:
+- Start video only if their configured Room permissions allow it.
+- Do not automatically grant pastoral access simply because they are an admin.
+
+====================================================
+5. START VIDEO FLOW
+====================================================
+
+Inside an authorised Ministry Room:
+
+If no video meeting is active and the current user is authorised:
+
+Show:
+
+Start Video
+
+If the current user is NOT authorised:
+
+Do NOT show Start Video.
+
+Instead show a quiet status such as:
+
+"Live video has not started yet."
+
+When the authorised leader taps Start Video:
+
+1. Validate permissions server-side.
+2. Check church usage limits.
+3. Create/activate the LiveKit Room session.
+4. Mark the Emmaus Room video session as active.
+5. Join the leader automatically.
+
+Do not require users to copy meeting IDs or passwords.
+
+====================================================
+6. JOIN VIDEO FLOW
+====================================================
+
+When video is active:
+
+Room members should see:
+
+Join Video
+
+Tapping joins the correct LiveKit Room automatically.
+
+No:
+- meeting IDs
+- passwords
+- external links
+- leaving Emmaus
+
+====================================================
+7. ROOM SCREEN
+====================================================
+
+Embed the video experience directly into the existing Emmaus Room screen.
+
+Do not make the Room look like Zoom.
+
+Use Emmaus visual styling.
+
+Basic layout:
+
+Room Title
+
+Live status
+
+Video area
+
+Participant tiles
+
+Controls
+
+Existing Room content below
+
+The existing Room discipleship content must remain accessible on the same screen.
+
+Do not replace Room content with a full-screen video app.
+
+====================================================
+8. VIDEO CONTROLS
+====================================================
+
+Implement only essential controls:
+
+- Camera on/off
+- Microphone mute/unmute
+- Join
+- Leave
+- Switch camera on supported mobile devices
+- Participant name display
+
+If LiveKit supports straightforward device selection on desktop, include it cleanly.
+
+Do not add unnecessary advanced controls yet.
+
+====================================================
+9. MOBILE FIRST
+====================================================
+
+This must work well on phones.
+
+On mobile:
+
+- Video should not permanently consume the whole screen.
+- User must still be able to scroll to Walk/Devotional/Room content.
+- Controls must remain tappable.
+- Participant tiles must adapt responsively.
+- Bottom Emmaus navigation must not cover essential video controls.
+
+Test portrait layout carefully.
+
+====================================================
+10. MEETING STATE
+====================================================
+
+Persist enough meeting state to know:
+
+- videoActive
+- startedAt
+- startedBy
+- LiveKit room/session identifier
+
+When the leader ends the meeting:
+
+- mark video inactive
+- disconnect participants cleanly
+- preserve the Emmaus Room itself
+
+Ending video must NOT delete the Room.
+
+====================================================
+11. USAGE LIMIT ENFORCEMENT
+====================================================
+
+Use the Step 1 church video settings.
+
+Before starting a video Room enforce:
+
+- video enabled
+- allowed host role
+- maximum concurrent video Rooms
+- maximum participants
+- maximum meeting duration
+
+These must be backend-enforced.
+
+Do not rely on UI-only restrictions.
+
+If a limit is reached, provide a simple user-facing message.
+
+Example:
+
+"This church has reached its current live Room limit."
+
+====================================================
+12. MEETING DURATION
+====================================================
+
+If a maximum meeting duration is configured:
+
+Track meeting start time.
+
+Provide a gentle warning before the limit is reached.
+
+End the video session cleanly when the configured limit is reached.
+
+Do not delete chat, content or the Room.
+
+====================================================
+13. PRIVACY
+====================================================
+
+Only users who belong to the Emmaus Room may obtain a LiveKit token.
+
+Do not expose public join URLs.
+
+Do not expose LiveKit secrets.
+
+Do not allow users to guess a Room ID and join another church's video Room.
+
+Validate church tenancy and Room membership on every token request.
+
+====================================================
+14. FAILURE STATES
+====================================================
+
+Handle:
+
+- Camera permission denied
+- Microphone permission denied
+- LiveKit unavailable
+- Network interruption
+- User disconnected
+- Room ended by leader
+- Participant limit reached
+- Invalid permissions
+
+Use simple, calm messages.
+
+Do not crash the Room page.
+
+====================================================
+15. DO NOT BUILD YET
+====================================================
+
+Explicitly OUT OF SCOPE:
+
+- Shared Scripture synchronization
+- Shared highlighting
+- Shared notes synchronization
+- Leader opens verse for everyone
+- Shared Ask Emmaus responses
+- Polls
+- Attendance
+- Whiteboard
+- Synchronized Bible audio
+- Synchronized sermon clips
+- Emmaus Voice in group calls
+- Recording
+- Streaming
+- Media Studio
+- Church Service Rooms
+
+Do not expand scope.
+
+====================================================
+16. TEST PLAN
+====================================================
+
+Before marking Step 2 complete, test with TWO SEPARATE USERS/DEVICES.
+
+TEST A — AUTHORISED LEADER
+
+1. Login as Group Leader.
+2. Open authorised Ministry Room.
+3. Confirm Start Video appears.
+4. Start Video.
+5. Camera/microphone connect.
+6. Confirm meeting becomes active.
+
+TEST B — MEMBER
+
+1. Login as ordinary Member on a second device.
+2. Open the same Room.
+3. Confirm Start Video does NOT appear.
+4. Confirm Join Video appears once leader starts meeting.
+5. Join.
+6. Confirm both users can see/hear each other.
+
+TEST C — PERMISSIONS
+
+1. Ordinary Member tries to call token/start endpoint directly.
+2. Backend must reject host/start permission.
+
+TEST D — END SESSION
+
+1. Leader ends meeting.
+2. Both participants disconnect.
+3. Emmaus Room remains.
+4. videoActive becomes false.
+
+TEST E — MOBILE
+
+Test on at least one mobile-sized viewport.
+
+Verify:
+- camera
+- microphone
+- join
+- leave
+- scrolling Room content
+- no controls hidden behind bottom navigation
+
+====================================================
+17. COMPLETION REPORT
+====================================================
+
+When complete, report:
+
+- Which LiveKit SDK/packages were added
+- Which backend token endpoint was created
+- Where LiveKit secrets must be configured
+- Which Room roles can start video
+- Confirmation that ordinary Members cannot start video
+- Confirmation that two-user testing works
+- Any known limitations
+
+Do not move to Step 3 automatically.
+
+Stop after Step 2 is working and wait for approval.
