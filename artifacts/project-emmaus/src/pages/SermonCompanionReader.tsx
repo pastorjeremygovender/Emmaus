@@ -17,6 +17,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, Play, Users } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { SermonCompanionReading } from '@/components/SermonCompanionReading';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -411,10 +412,17 @@ export default function SermonCompanionReader() {
           </button>
           <span className="text-muted-foreground/30 mx-1 shrink-0">·</span>
           <span className="text-sm text-muted-foreground truncate flex-1">{companion.title}</span>
+          <FavouriteButton
+            contentType="sermon-companion"
+            contentId={companionId}
+            contentTitle={companion.title}
+            contentRoute={`/sermon-companion/${companionId}/day/1`}
+            className="shrink-0"
+          />
           {user && (
             <button
               onClick={() => setShowStudyTogether(true)}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-1"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0"
               aria-label="Study Together"
               title="Study Together"
             >

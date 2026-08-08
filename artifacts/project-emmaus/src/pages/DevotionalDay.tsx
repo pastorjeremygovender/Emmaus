@@ -21,6 +21,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, Users } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -246,7 +247,14 @@ export default function DevotionalDay() {
         >
           <ChevronLeft size={16} /> {source?.startsWith('nextSteps') ? 'Next Steps' : "Today's Steps"}
         </button>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <FavouriteButton
+            contentType="devotional"
+            contentId={seriesId!}
+            contentTitle={seriesData.title}
+            contentRoute={`/devotional/${seriesId}/day/1`}
+            className="shrink-0"
+          />
           {totalEntries > 1 && (
             <button
               onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
