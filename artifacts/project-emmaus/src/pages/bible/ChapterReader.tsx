@@ -17,6 +17,7 @@ import { BibleBookChapterSheet } from '@/components/BibleBookChapterSheet';
 import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
 import { BottomNav } from '@/components/BottomNav';
+import { FavouriteButton } from '@/components/FavouriteButton';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -445,7 +446,7 @@ export default function ChapterReader() {
             </div>
           </div>
 
-          {/* Notes + Save — moved here from bottom toolbar to avoid FAB overlap */}
+          {/* Notes + Save + Favourite — moved here from bottom toolbar to avoid FAB overlap */}
           <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => setNotesOpen(true)}
@@ -466,6 +467,13 @@ export default function ChapterReader() {
             >
               <Bookmark size={20} className={bookmarked ? 'fill-primary' : ''} />
             </button>
+            <FavouriteButton
+              contentType="bible-chapter"
+              contentId={`${resolvedBookId}-${chapterNum}`}
+              contentTitle={`${book.name} ${chapterNum}${chapterData?.heading ? ` — ${chapterData.heading}` : ''}`}
+              contentRoute={`/bible/read/${resolvedBookId}/${chapterNum}`}
+              size={20}
+            />
           </div>
         </div>
 
