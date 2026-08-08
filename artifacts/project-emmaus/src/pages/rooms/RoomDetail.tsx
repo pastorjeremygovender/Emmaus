@@ -159,6 +159,9 @@ export default function RoomDetail() {
   }
 
   const isAdmin = room.currentUserRole === 'admin';
+  // App-level admins (admin / superAdmin) can host video in any room regardless
+  // of their room member role — mirrors isAuthorizedLeader() on the server.
+  const isAppAdmin = user.role === 'admin' || user.role === 'superAdmin';
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
     j.status === 'Published' &&
@@ -183,9 +186,10 @@ export default function RoomDetail() {
   const leaderMember = room.members.find(m => m.role === 'admin');
   const leaderName = leaderMember?.preferredName ?? 'Your leader';
 
-  // Room admins (leaders) always see VideoRoom so they can start a gathering.
-  // Non-admin members only see it for group rooms (not personal rooms).
-  const videoEligible = isAdmin || room.roomType !== 'personal';
+  // VideoRoom mounts when: the room is not personal, OR the current user is a
+  // room admin, OR they have an app-level admin/superAdmin role (mirrors
+  // isAuthorizedLeader() on the server which uses app role, not room role).
+  const videoEligible = room.roomType !== 'personal' || isAdmin || isAppAdmin;
 
   const handleBack = () => {
     if (window.history.length > 1) window.history.back();
