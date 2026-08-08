@@ -7,7 +7,7 @@ import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, RefreshCw, ChevronRight, Sparkles,
-  Share2, Trash2, LogOut, Pencil,
+  Share2, Trash2, LogOut, Pencil, Settings,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
@@ -695,8 +695,6 @@ export default function RoomDetail() {
     </div>
   );
 }
-
-  const { roomId } = useParams<{ roomId: string }>();
 
                         const pct = journeySteps > 0
                           ? isComplete ? 100 : Math.round((stepNum / journeySteps) * 100)
