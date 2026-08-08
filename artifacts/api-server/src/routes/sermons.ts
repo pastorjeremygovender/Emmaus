@@ -31,7 +31,6 @@ import { deleteSermonCompanionContent } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
-import { upsertKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
 
 export const sermonsRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -223,39 +222,13 @@ sermonsRouter.patch("/admin/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const updated = await store.updateSermon(id, body);
+    // updateSermonLifecycle applies the patch AND syncs the knowledge index in
+    // one atomic DB transaction — no separate index call needed.
+    const updated = await store.updateSermonLifecycle(id, body);
     if (!updated) {
       res.status(404).json({ error: "Sermon not found" });
       return;
     }
-
-    // ── Re-index when the sermon is already Published (propagate title/speaker/scripture) ──
-    // Only re-index Published sermons to keep the index clean. Draft/Review edits
-    // are not indexed — they will be indexed when the sermon is eventually published.
-    if (updated.status === "Published") {
-      upsertKnowledgeIndex({
-        sermonId:           updated.id,
-        companionId:        null,  // companion upsert preserves its own companionId
-        title:              updated.title,
-        speaker:            updated.speaker,
-        sermonDate:         updated.sermonDate,
-        series:             updated.series,
-        scriptureReference: updated.scriptureReference,
-        scriptureBookIds:   updated.scriptureBookIds,
-        scriptureChapters:  updated.scriptureChapters,
-        themes:             updated.themes,
-        keywords:           updated.keywords,
-        mainTheme:          updated.mainTheme,
-        summary:            updated.summary,
-        stepTitles:         [],
-        stepContent:        "",
-        prayerThemes:       "",
-        youtubeUrl:         updated.youtubeUrl,
-        audioPath:          updated.audioPath,
-        publishedAt:        updated.publishedAt,
-      }).catch(err => logger.warn({ err, sermonId: id }, "sermons: knowledge index re-index failed (non-fatal)"));
-    }
-
     res.json(updated);
   } catch (err) {
     logger.error({ err }, "sermons: update failed");
@@ -275,31 +248,9 @@ sermonsRouter.post("/admin/:id/publish", async (req: Request, res: Response) => 
       return;
     }
 
-    // ── Index into Emmaus Knowledge Index (fire-and-forget) ──────────────────
-    // Indexes sermon metadata only; step content is added when the companion publishes.
-    // Non-blocking — failure never prevents the publish from succeeding.
-    upsertKnowledgeIndex({
-      sermonId:           sermon.id,
-      companionId:        null,
-      title:              sermon.title,
-      speaker:            sermon.speaker,
-      sermonDate:         sermon.sermonDate,
-      series:             sermon.series,
-      scriptureReference: sermon.scriptureReference,
-      scriptureBookIds:   sermon.scriptureBookIds,
-      scriptureChapters:  sermon.scriptureChapters,
-      themes:             sermon.themes,
-      keywords:           sermon.keywords,
-      mainTheme:          sermon.mainTheme,
-      summary:            sermon.summary,
-      stepTitles:         [],
-      stepContent:        "",
-      prayerThemes:       "",
-      youtubeUrl:         sermon.youtubeUrl,
-      audioPath:          sermon.audioPath,
-      publishedAt:        sermon.publishedAt,
-    }).catch(err => logger.warn({ err, sermonId: id }, "sermons: knowledge index upsert failed (non-fatal)"));
-
+    // publishSermon now delegates to updateSermonLifecycle which upserts the
+    // knowledge index atomically inside the same DB transaction — no separate
+    // index call needed here.
     res.json(sermon);
   } catch (err) {
     logger.error({ err }, "sermons: publish failed");
@@ -313,11 +264,17 @@ sermonsRouter.post("/admin/:id/unpublish", async (req: Request, res: Response) =
   if (!(await guardAdmin(req, res))) return;
   const id = String(req.params.id);
   try {
+    // unpublishSermon runs a single DB transaction that updates the sermon
+    // status AND removes the knowledge index entry atomically. If the index
+    // removal fails the transaction is rolled back and the caller receives a
+    // 500 they can retry — the sermon is never left unpublished with a stale
+    // index entry.
     const sermon = await store.unpublishSermon(id);
     if (!sermon) {
       res.status(404).json({ error: "Sermon not found" });
       return;
     }
+
     res.json(sermon);
   } catch (err) {
     logger.error({ err }, "sermons: unpublish failed");
@@ -325,11 +282,20 @@ sermonsRouter.post("/admin/:id/unpublish", async (req: Request, res: Response) =
   }
 });
 
-// ─── Admin: delete sermon (cascade companion) ─────────────────────────────────
+// ─── Admin: delete sermon (cascade companion + index) ─────────────────────────
 //
-// Deletes the canonical sermon record. If there is a linked sermon companion
-// (sermon_companion.sermon_uuid = this id), it is also deleted via the companion
-// store cascade. The legacy sermon_id text column is used as a fallback.
+// Uses deleteSermonFully which runs a single DB transaction covering:
+//   • sermon_companion_progress  (cascade)
+//   • sermon_companion_entry     (cascade)
+//   • sermon_companion           (cascade)
+//   • sermons                    (main record)
+//   • emmaus_knowledge_index     (search index)
+//
+// The index row is removed inside the transaction so Ask Emmaus / Preached Here
+// cannot see the sermon after this call returns. If the index DELETE fails the
+// transaction rolls back and the caller receives a 500 they can retry.
+// Legacy-format companion data (stored by legacyJsonId text key) is cleaned up
+// best-effort before the main transaction.
 
 sermonsRouter.delete("/admin/:id", async (req: Request, res: Response) => {
   if (!(await guardAdmin(req, res))) return;
@@ -342,17 +308,21 @@ sermonsRouter.delete("/admin/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    // Delete companion content if linked (uses legacyJsonId as the sermon_id key)
+    // Best-effort cleanup of legacy-format companions (stored by legacyJsonId
+    // text key, predating the UUID-based sermon_companion.sermon_uuid FK).
+    // deleteSermonFully handles the canonical companion via the FK.
     if (sermon.legacyJsonId) {
       await deleteSermonCompanionContent({
         sermonId: sermon.legacyJsonId,
         companionJourneyId: null,
       }).catch(err =>
-        logger.warn({ err, sermonId: id }, "sermons: companion delete failed (continuing)")
+        logger.warn({ err, sermonId: id }, "sermons: legacy companion delete failed (continuing)")
       );
     }
 
-    const deleted = await store.deleteSermon(id);
+    // Atomically delete the sermon, its companion data, and its knowledge-index
+    // entry in one transaction. A 500 here means nothing was removed — retry safe.
+    const { deleted } = await store.deleteSermonFully(id);
     if (!deleted) {
       res.status(404).json({ error: "Sermon not found" });
       return;

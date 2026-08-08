@@ -22,7 +22,7 @@ import {
 import {
   getAllSermons,
   getSermonById,
-  updateSermon as updateCanonicalSermon,
+  updateSermonLifecycle,
   deleteSermonFully as deleteCanonicalSermonFully,
   type CanonicalSermonWithCompanion,
 } from "../lib/canonical-sermon-store.js";
@@ -279,6 +279,10 @@ adminSermonsRouter.delete("/:id", async (req: Request, res: Response) => {
 
 // ─── PATCH /:id ───────────────────────────────────────────────────────────────
 // Updates canonical DB first (new sermons), then falls back to legacy JSON store.
+//
+// All field updates AND knowledge index sync happen in a single DB transaction
+// via updateSermonLifecycle — status changes (publish, unpublish, review),
+// metadata edits, and index consistency are atomic.
 
 adminSermonsRouter.patch("/:id", async (req: Request, res: Response) => {
   if (!(await guardAdmin(req, res))) return;
@@ -295,12 +299,17 @@ adminSermonsRouter.patch("/:id", async (req: Request, res: Response) => {
     // Check canonical DB first — let genuine DB errors propagate (→ 500 below)
     const canonicalExists = await getSermonById(id);
     if (canonicalExists) {
+      // updateSermonLifecycle applies every field in the patch AND syncs the
+      // knowledge index in one atomic DB transaction. Status transitions
+      // (draft → published, published → draft, any → review) are handled
+      // correctly: Published → upsert index; Draft/Review → remove from index.
       const canonicalPatch = adminPatchToCanonical(body);
-      const updated = await updateCanonicalSermon(id, canonicalPatch);
+      const updated = await updateSermonLifecycle(id, canonicalPatch);
       if (!updated) {
         res.status(404).json({ error: "Sermon not found" });
         return;
       }
+
       // Resolve companion so the response carries the correct companionJourneyId
       const companion = await getCompanionBySermonId(id).catch(() => null);
       res.json(canonicalToAdmin({ ...updated, companionId: companion?.id ?? null, isCurrentWeek: false }));

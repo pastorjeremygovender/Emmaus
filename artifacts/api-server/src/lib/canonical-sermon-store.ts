@@ -113,7 +113,7 @@ function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
     detectionConfidence: Number(row.detection_confidence ?? 0),
     detectionMethod:     (row.detection_method as CanonicalSermon["detectionMethod"]) ?? "none",
     status:              (row.status as CanonicalSermon["status"]) ?? "Draft",
-    publishedAt:         row.published_at != null ? String(row.published_at) : null,
+    publishedAt:         row.published_at != null ? new Date(row.published_at).toISOString() : null,
     processingStage:     String(row.processing_stage ?? "idle"),
     processingError:     String(row.processing_error ?? ""),
     createdAt:           String(row.created_at),
@@ -352,30 +352,206 @@ export async function updateSermon(
 }
 
 /**
+ * Atomically update sermon fields and sync the knowledge index in one DB transaction.
+ *
+ * This is the single write path for all PATCH operations (title, speaker, scripture,
+ * status changes, etc.) that must keep the knowledge index consistent.
+ *
+ * Index rules applied within the same transaction:
+ *   - Final status = 'Published'          → UPSERT emmaus_knowledge_index
+ *   - Final status = 'Draft' or 'Review'  → DELETE FROM emmaus_knowledge_index
+ *
+ * Companion-derived index fields (step_titles, step_content, prayer_themes) are
+ * always preserved via CASE/COALESCE — only the companion publish endpoint may
+ * overwrite them.
+ *
+ * If the transaction fails (including the index sync) the whole operation rolls back
+ * so the sermon status and index are never left in an inconsistent state.
+ */
+export async function updateSermonLifecycle(
+  id: string,
+  patch: UpdateSermonData,
+): Promise<CanonicalSermon | null> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // ── Build SET clause dynamically (same column map as updateSermon) ────────
+    const columnMap: Record<string, string> = {
+      title:               "title",
+      speaker:             "speaker",
+      sermonDate:          "sermon_date",
+      series:              "series",
+      scriptureReference:  "scripture_reference",
+      scriptureBookIds:    "scripture_book_ids",
+      scriptureChapters:   "scripture_chapters",
+      youtubeUrl:          "youtube_url",
+      youtubeVideoId:      "youtube_video_id",
+      audioPath:           "audio_path",
+      notes:               "notes",
+      transcript:          "transcript",
+      fullTranscript:      "full_transcript",
+      transcriptStatus:    "transcript_status",
+      summary:             "summary",
+      themes:              "themes",
+      sections:            "sections",
+      keywords:            "keywords",
+      mainTheme:           "main_theme",
+      sermonStartTime:     "sermon_start_time",
+      sermonEndTime:       "sermon_end_time",
+      detectionConfidence: "detection_confidence",
+      detectionMethod:     "detection_method",
+      status:              "status",
+      publishedAt:         "published_at",
+      processingStage:     "processing_stage",
+      processingError:     "processing_error",
+    };
+
+    const jsonbCols = new Set([
+      "scripture_book_ids", "scripture_chapters", "themes", "sections", "keywords",
+    ]);
+
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+
+    for (const [jsKey, colName] of Object.entries(columnMap)) {
+      if (jsKey in patch) {
+        const val = (patch as Record<string, unknown>)[jsKey];
+        setClauses.push(`${colName} = $${idx}`);
+        values.push(jsonbCols.has(colName) ? JSON.stringify(val) : val);
+        idx++;
+      }
+    }
+
+    if (setClauses.length === 0) {
+      await client.query("ROLLBACK");
+      return getSermonById(id);
+    }
+
+    setClauses.push(`updated_at = $${idx}`);
+    values.push(new Date().toISOString());
+    idx++;
+    values.push(id);
+
+    const updateResult = await client.query(
+      `UPDATE sermons SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`,
+      values,
+    );
+
+    if (!updateResult.rows[0]) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    const sermon = rowToSermon(updateResult.rows[0]);
+
+    // ── Sync knowledge index within the same transaction ─────────────────────
+    if (sermon.status === "Published") {
+      // Sermon is Published in this transaction — upsert directly, no conditional
+      // check needed. Companion-derived fields preserved via CASE/COALESCE.
+      await client.query(
+        `INSERT INTO emmaus_knowledge_index (
+           sermon_id, companion_id, title, speaker, sermon_date, series,
+           scripture_reference, scripture_book_ids, scripture_chapters,
+           themes, keywords, main_theme, summary,
+           step_titles, step_content, prayer_themes,
+           youtube_url, audio_path, published_at,
+           indexed_at, updated_at
+         ) VALUES (
+           $1, NULL, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb,
+           $9::jsonb, $10::jsonb, $11, $12,
+           '[]'::jsonb, '', '',
+           $13, $14, $15,
+           NOW(), NOW()
+         )
+         ON CONFLICT (sermon_id) DO UPDATE SET
+           title               = EXCLUDED.title,
+           speaker             = EXCLUDED.speaker,
+           sermon_date         = EXCLUDED.sermon_date,
+           series              = EXCLUDED.series,
+           scripture_reference = EXCLUDED.scripture_reference,
+           scripture_book_ids  = EXCLUDED.scripture_book_ids,
+           scripture_chapters  = EXCLUDED.scripture_chapters,
+           themes              = EXCLUDED.themes,
+           keywords            = EXCLUDED.keywords,
+           main_theme          = EXCLUDED.main_theme,
+           summary             = EXCLUDED.summary,
+           youtube_url         = EXCLUDED.youtube_url,
+           audio_path          = EXCLUDED.audio_path,
+           published_at        = EXCLUDED.published_at,
+           updated_at          = NOW(),
+           companion_id        = COALESCE(emmaus_knowledge_index.companion_id, EXCLUDED.companion_id),
+           step_titles         = CASE WHEN emmaus_knowledge_index.step_titles::text = '[]' OR emmaus_knowledge_index.step_titles IS NULL
+                                      THEN '[]'::jsonb ELSE emmaus_knowledge_index.step_titles END,
+           step_content        = CASE WHEN COALESCE(emmaus_knowledge_index.step_content, '') = ''
+                                      THEN '' ELSE emmaus_knowledge_index.step_content END,
+           prayer_themes       = CASE WHEN COALESCE(emmaus_knowledge_index.prayer_themes, '') = ''
+                                      THEN '' ELSE emmaus_knowledge_index.prayer_themes END`,
+        [
+          sermon.id,
+          sermon.title,
+          sermon.speaker,
+          sermon.sermonDate,
+          sermon.series,
+          sermon.scriptureReference,
+          JSON.stringify(sermon.scriptureBookIds),
+          JSON.stringify(sermon.scriptureChapters),
+          JSON.stringify(sermon.themes),
+          JSON.stringify(sermon.keywords),
+          sermon.mainTheme,
+          sermon.summary,
+          sermon.youtubeUrl,
+          sermon.audioPath,
+          sermon.publishedAt,
+        ],
+      );
+      logger.info({ sermonId: id }, "sermon-lifecycle: knowledge index upserted (Published)");
+    } else {
+      // Draft or Review: not visible to members — remove from index.
+      // DELETE is safe to call even when no row exists (0 rows affected is fine).
+      await client.query(
+        "DELETE FROM emmaus_knowledge_index WHERE sermon_id = $1",
+        [id],
+      );
+      logger.info({ sermonId: id, status: sermon.status }, "sermon-lifecycle: knowledge index cleared (non-Published)");
+    }
+
+    await client.query("COMMIT");
+    return sermon;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Publish a canonical sermon atomically.
- * Sets status = 'Published', records published_at, and links the companion
- * (sermon_companion) if one exists via the sermon_uuid FK.
+ * Delegates to updateSermonLifecycle so the status update and knowledge index
+ * upsert happen in a single DB transaction.
  */
 export async function publishSermon(id: string): Promise<CanonicalSermon | null> {
   const now = new Date().toISOString();
-  const result = await pool.query(
-    `UPDATE sermons SET status = 'Published', published_at = $1, updated_at = $1
-     WHERE id = $2 RETURNING *`,
-    [now, id]
-  );
-  if (!result.rows[0]) return null;
-  const sermon = rowToSermon(result.rows[0]);
-  logger.info({ sermonId: id, title: sermon.title }, "Canonical sermon published");
+  const sermon = await updateSermonLifecycle(id, { status: "Published", publishedAt: now });
+  if (sermon) {
+    logger.info({ sermonId: id, title: sermon.title }, "Canonical sermon published");
+  }
   return sermon;
 }
 
+/**
+ * Unpublish a canonical sermon atomically.
+ *
+ * Delegates to updateSermonLifecycle so the status update (Draft) and
+ * knowledge index removal happen in a single DB transaction. If the index
+ * removal fails the whole transaction rolls back — the caller receives an
+ * error they can retry, and the sermon is never left with status=Draft while
+ * the index entry remains.
+ */
 export async function unpublishSermon(id: string): Promise<CanonicalSermon | null> {
-  const result = await pool.query(
-    `UPDATE sermons SET status = 'Draft', published_at = NULL, updated_at = $1
-     WHERE id = $2 RETURNING *`,
-    [new Date().toISOString(), id]
-  );
-  return result.rows[0] ? rowToSermon(result.rows[0]) : null;
+  return updateSermonLifecycle(id, { status: "Draft", publishedAt: null });
 }
 
 export async function deleteSermon(id: string): Promise<boolean> {
@@ -414,6 +590,13 @@ export async function deleteSermonFully(sermonId: string): Promise<{ deleted: bo
 
     const sermonRes = await client.query(
       "DELETE FROM sermons WHERE id = $1 RETURNING id",
+      [sermonId]
+    );
+
+    // Remove from knowledge index in the same transaction. If this fails the
+    // sermon delete also rolls back, keeping DB and index consistent.
+    await client.query(
+      "DELETE FROM emmaus_knowledge_index WHERE sermon_id = $1",
       [sermonId]
     );
 

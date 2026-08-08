@@ -62,73 +62,108 @@ export interface KnowledgeIndexResult extends KnowledgeIndexEntry {
  * Insert or update the knowledge index entry for the given sermon.
  *
  * Safe to call multiple times — uses ON CONFLICT (sermon_id) DO UPDATE.
- * Non-fatal: logs a warning on failure so publish is never blocked.
+ *
+ * The INSERT is conditional: a CTE verifies the sermon is still 'Published'
+ * in the canonical store before inserting. This prevents a stale post-unpublish
+ * upsert from re-adding a Draft sermon when publish and unpublish run concurrently
+ * (unpublish transaction commits first → status = Draft → CTE returns no rows →
+ * INSERT is a no-op, leaving the index clean).
+ *
+ * This function does NOT catch errors — callers are responsible for deciding
+ * whether an indexing failure should fail the operation or be logged and swallowed.
  */
 export async function upsertKnowledgeIndex(entry: KnowledgeIndexEntry): Promise<void> {
-  try {
-    await pool.query(
-      `INSERT INTO emmaus_knowledge_index (
-         sermon_id, companion_id, title, speaker, sermon_date, series,
-         scripture_reference, scripture_book_ids, scripture_chapters,
-         themes, keywords, main_theme, summary,
-         step_titles, step_content, prayer_themes,
-         youtube_url, audio_path, published_at,
-         indexed_at, updated_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
-       ON CONFLICT (sermon_id) DO UPDATE SET
-         -- Always refresh sermon metadata fields.
-         title               = EXCLUDED.title,
-         speaker             = EXCLUDED.speaker,
-         sermon_date         = EXCLUDED.sermon_date,
-         series              = EXCLUDED.series,
-         scripture_reference = EXCLUDED.scripture_reference,
-         scripture_book_ids  = EXCLUDED.scripture_book_ids,
-         scripture_chapters  = EXCLUDED.scripture_chapters,
-         themes              = EXCLUDED.themes,
-         keywords            = EXCLUDED.keywords,
-         main_theme          = EXCLUDED.main_theme,
-         summary             = EXCLUDED.summary,
-         youtube_url         = EXCLUDED.youtube_url,
-         audio_path          = EXCLUDED.audio_path,
-         published_at        = EXCLUDED.published_at,
-         updated_at          = NOW(),
-         -- Companion-derived fields: only overwrite when the incoming value is non-empty.
-         -- Sermon publish/edit calls pass empty arrays/strings; companion publish passes
-         -- real content. COALESCE/CASE preserves step text when a sermon metadata edit
-         -- runs after the companion has already been indexed.
-         companion_id        = COALESCE(EXCLUDED.companion_id, emmaus_knowledge_index.companion_id),
-         step_titles         = CASE WHEN EXCLUDED.step_titles::text = '[]' THEN emmaus_knowledge_index.step_titles ELSE EXCLUDED.step_titles END,
-         step_content        = CASE WHEN EXCLUDED.step_content = '' THEN emmaus_knowledge_index.step_content ELSE EXCLUDED.step_content END,
-         prayer_themes       = CASE WHEN EXCLUDED.prayer_themes = '' THEN emmaus_knowledge_index.prayer_themes ELSE EXCLUDED.prayer_themes END`,
-      [
-        entry.sermonId,
-        entry.companionId ?? null,
-        entry.title,
-        entry.speaker,
-        entry.sermonDate,
-        entry.series,
-        entry.scriptureReference,
-        JSON.stringify(entry.scriptureBookIds),
-        JSON.stringify(entry.scriptureChapters),
-        JSON.stringify(entry.themes),
-        JSON.stringify(entry.keywords),
-        entry.mainTheme,
-        entry.summary,
-        JSON.stringify(entry.stepTitles),
-        entry.stepContent,
-        entry.prayerThemes,
-        entry.youtubeUrl,
-        entry.audioPath,
-        entry.publishedAt ?? null,
-      ],
-    );
-    logger.info(
-      { sermonId: entry.sermonId, companionId: entry.companionId ?? null },
-      "knowledge-index: upserted",
-    );
-  } catch (err) {
-    logger.warn({ err, sermonId: entry.sermonId }, "knowledge-index: upsert failed (non-fatal)");
-  }
+  await pool.query(
+    `WITH status_check AS (
+       SELECT id FROM sermons WHERE id = $1::uuid AND status = 'Published'
+     )
+     INSERT INTO emmaus_knowledge_index (
+       sermon_id, companion_id, title, speaker, sermon_date, series,
+       scripture_reference, scripture_book_ids, scripture_chapters,
+       themes, keywords, main_theme, summary,
+       step_titles, step_content, prayer_themes,
+       youtube_url, audio_path, published_at,
+       indexed_at, updated_at
+     )
+     SELECT
+       $1::uuid, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
+       $10::jsonb, $11::jsonb, $12, $13,
+       $14::jsonb, $15, $16, $17, $18, $19,
+       NOW(), NOW()
+     FROM status_check
+     ON CONFLICT (sermon_id) DO UPDATE SET
+       -- Always refresh sermon metadata fields.
+       title               = EXCLUDED.title,
+       speaker             = EXCLUDED.speaker,
+       sermon_date         = EXCLUDED.sermon_date,
+       series              = EXCLUDED.series,
+       scripture_reference = EXCLUDED.scripture_reference,
+       scripture_book_ids  = EXCLUDED.scripture_book_ids,
+       scripture_chapters  = EXCLUDED.scripture_chapters,
+       themes              = EXCLUDED.themes,
+       keywords            = EXCLUDED.keywords,
+       main_theme          = EXCLUDED.main_theme,
+       summary             = EXCLUDED.summary,
+       youtube_url         = EXCLUDED.youtube_url,
+       audio_path          = EXCLUDED.audio_path,
+       published_at        = EXCLUDED.published_at,
+       updated_at          = NOW(),
+       -- Companion-derived fields: only overwrite when the incoming value is non-empty.
+       -- Sermon publish/edit calls pass empty arrays/strings; companion publish passes
+       -- real content. COALESCE/CASE preserves step text when a sermon metadata edit
+       -- runs after the companion has already been indexed.
+       companion_id        = COALESCE(EXCLUDED.companion_id, emmaus_knowledge_index.companion_id),
+       step_titles         = CASE WHEN EXCLUDED.step_titles::text = '[]' THEN emmaus_knowledge_index.step_titles ELSE EXCLUDED.step_titles END,
+       step_content        = CASE WHEN EXCLUDED.step_content = '' THEN emmaus_knowledge_index.step_content ELSE EXCLUDED.step_content END,
+       prayer_themes       = CASE WHEN EXCLUDED.prayer_themes = '' THEN emmaus_knowledge_index.prayer_themes ELSE EXCLUDED.prayer_themes END`,
+    [
+      entry.sermonId,
+      entry.companionId ?? null,
+      entry.title,
+      entry.speaker,
+      entry.sermonDate,
+      entry.series,
+      entry.scriptureReference,
+      JSON.stringify(entry.scriptureBookIds),
+      JSON.stringify(entry.scriptureChapters),
+      JSON.stringify(entry.themes),
+      JSON.stringify(entry.keywords),
+      entry.mainTheme,
+      entry.summary,
+      JSON.stringify(entry.stepTitles),
+      entry.stepContent,
+      entry.prayerThemes,
+      entry.youtubeUrl,
+      entry.audioPath,
+      entry.publishedAt ?? null,
+    ],
+  );
+  logger.info(
+    { sermonId: entry.sermonId, companionId: entry.companionId ?? null },
+    "knowledge-index: upserted",
+  );
+}
+
+// ─── Remove ───────────────────────────────────────────────────────────────────
+
+/**
+ * Remove the knowledge index entry for the given sermon.
+ *
+ * Called when a sermon is deleted or unpublished so Ask Emmaus and Preached
+ * Here stop surfacing it immediately.
+ *
+ * This function does NOT catch errors — callers are responsible for deciding
+ * whether a cleanup failure should propagate or be logged and swallowed.
+ * Awaiting this before sending the HTTP response is required so that a
+ * subsequent read cannot retrieve a stale entry.
+ */
+export async function removeFromKnowledgeIndex(sermonId: string): Promise<void> {
+  const result = await pool.query(
+    `DELETE FROM emmaus_knowledge_index WHERE sermon_id = $1 RETURNING sermon_id`,
+    [sermonId],
+  );
+  const removed = (result.rowCount ?? 0) > 0;
+  logger.info({ sermonId, removed }, "knowledge-index: removed");
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
