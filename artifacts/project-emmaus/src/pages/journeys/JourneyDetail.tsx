@@ -20,6 +20,7 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import { getCollection } from '@/lib/collections-api';
 import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2, Users } from 'lucide-react';
+import { FavouriteButton } from '@/components/FavouriteButton';
 import { resolveReturn } from '@/lib/return-context';
 import { apiLinkJourney } from '@/lib/rooms-api';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
@@ -252,9 +253,18 @@ export default function JourneyDetail() {
 
         {/* ── Page heading: collection name as h1, walk title secondary ─ */}
         <div className="space-y-0.5">
-          <h1 className="text-[26px] font-sans font-medium tracking-tight text-foreground leading-snug">
-            {collectionName ?? journey.title}
-          </h1>
+          <div className="flex items-start gap-2">
+            <h1 className="flex-1 text-[26px] font-sans font-medium tracking-tight text-foreground leading-snug">
+              {collectionName ?? journey.title}
+            </h1>
+            <FavouriteButton
+              contentType="journey"
+              contentId={journey.id}
+              contentTitle={journey.title}
+              contentRoute={`/journeys/${journey.id}`}
+              className="mt-1 shrink-0"
+            />
+          </div>
           {/* Walk title shown as compact secondary label when it differs from the collection name */}
           {collectionName && collectionName !== journey.title && (
             <p className="text-[13px] text-muted-foreground">{journey.title}</p>

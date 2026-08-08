@@ -15,7 +15,7 @@ import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
-import { AskEmmausBar } from '@/components/AskEmmausBar';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
@@ -920,8 +920,8 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── Ask Emmaus companion bar ────────────────────────────────────────── */}
-        <AskEmmausBar />
+        {/* ── Unified Ask Emmaus / Search bar ─────────────────────────────────── */}
+        <UnifiedEmmausInput className="mt-1" />
 
         {/* ── 2. This Week's Sermon — permanent card ─────────────────────────── */}
         <motion.section

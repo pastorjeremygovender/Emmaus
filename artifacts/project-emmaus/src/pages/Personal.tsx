@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
-import { AskEmmausBar } from '@/components/AskEmmausBar';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,16 +11,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  LogOut, Users, ChevronRight, Pencil, Check, X, Plus, LogIn,
-  Star, Clock, BookOpen, Headphones, Map, Loader2,
+  LogOut, Users, ChevronRight, Pencil, Check, X,
+  Star, Clock, BookOpen, Headphones, Map,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
-import {
-  fetchNextSteps,
-  type NextStepsItem,
-  type NextStepsData,
-} from '@/lib/next-steps-api';
 import { fetchFavourites, type Favourite } from '@/lib/favourites-api';
 import { fetchHistory, historyTimeLabel, type HistoryEntry } from '@/lib/history-api';
 
@@ -69,39 +64,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// ─── Progress item row ────────────────────────────────────────────────────────
-
-function ProgressRow({
-  item,
-  onOpen,
-}: {
-  item: NextStepsItem;
-  onOpen: () => void;
-}) {
-  const Icon = CONTENT_ICON[item.contentType] ?? BookOpen;
-  const stateLabel =
-    item.memberProgressState === 'completed' ? 'Completed' :
-    item.memberProgressState === 'in-progress' ? 'In Progress' :
-    item.memberProgressState === 'paused' ? 'Paused' : '';
-
-  return (
-    <button
-      onClick={onOpen}
-      className="w-full text-left flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all"
-    >
-      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-        <Icon size={15} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-medium text-foreground leading-snug truncate">{item.title}</p>
-        {stateLabel && (
-          <p className="text-[12px] text-muted-foreground mt-0.5">{stateLabel}</p>
-        )}
-      </div>
-      <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-    </button>
-  );
-}
 
 // ─── Favourite row ────────────────────────────────────────────────────────────
 
@@ -182,10 +144,6 @@ export default function Personal() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
 
-  // ── Next steps data (for Continue / Completed) ─────────────────────────────
-  const [nextStepsData, setNextStepsData] = useState<NextStepsData | null>(null);
-  const [nextStepsLoading, setNextStepsLoading] = useState(true);
-
   // ── Favourites ─────────────────────────────────────────────────────────────
   const [favourites, setFavourites] = useState<Favourite[]>([]);
   const [favsLoading, setFavsLoading] = useState(true);
@@ -195,21 +153,17 @@ export default function Personal() {
   const [histLoading, setHistLoading] = useState(true);
 
   const loadData = useCallback(async () => {
-    setNextStepsLoading(true);
     setFavsLoading(true);
     setHistLoading(true);
     try {
-      const [ns, favs, hist] = await Promise.all([
-        fetchNextSteps(),
+      const [favs, hist] = await Promise.all([
         fetchFavourites(),
         fetchHistory(30),
       ]);
-      setNextStepsData(ns);
       setFavourites(favs);
       setHistory(hist);
     } catch { /* non-fatal */ }
     finally {
-      setNextStepsLoading(false);
       setFavsLoading(false);
       setHistLoading(false);
     }
@@ -234,24 +188,6 @@ export default function Personal() {
     return { title: j ? `${j.title} — Day ${day}` : `Day ${day}`, text };
   });
 
-  // Aggregate all in-progress and completed items from nextSteps API
-  const allItems: NextStepsItem[] = nextStepsData
-    ? [
-        ...nextStepsData.dailyDevotionals,
-        ...nextStepsData.standaloneJourneys,
-        ...(nextStepsData.currentSermonCompanion ? [nextStepsData.currentSermonCompanion] : []),
-        ...nextStepsData.previousSermonCompanions,
-        ...nextStepsData.journeyCollections.flatMap((c) => c.journeys),
-      ]
-    : [];
-
-  const continueItems = allItems.filter(
-    (i) => i.memberProgressState === 'in-progress' || i.memberProgressState === 'paused',
-  );
-  const completedItems = allItems.filter(
-    (i) => i.memberProgressState === 'completed',
-  );
-
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleSignOut = () => { signOut(); setLocation('/'); };
@@ -262,7 +198,7 @@ export default function Personal() {
     existing.push(prayerRequest.trim());
     localStorage.setItem('emmaus_prayers', JSON.stringify(existing));
     setPrayerRequest('');
-    toast({ title: 'Saved', description: 'Your prayer request has been saved.' });
+    toast({ title: 'Prayer sent', description: 'Your prayer request has been sent to the pastoral team.' });
   };
 
   const displayedName = user.preferredName?.trim() || '';
@@ -332,56 +268,8 @@ export default function Personal() {
           </div>
         </header>
 
-        {/* Ask Emmaus bar */}
-        <AskEmmausBar />
-
-        {/* ── Continue ───────────────────────────────────────────────────────── */}
-        <Section title="Continue">
-          {nextStepsLoading ? (
-            <div className="space-y-2">
-              {[1, 2].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
-            </div>
-          ) : continueItems.length === 0 ? (
-            <div className="p-6 border border-dashed border-border rounded-2xl text-center">
-              <p className="text-[14px] text-muted-foreground">
-                Everything you're working through will appear here.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 rounded-xl"
-                onClick={() => setLocation('/journeys')}
-              >
-                Discover something new
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {continueItems.map(item => (
-                <ProgressRow
-                  key={`${item.contentType}-${item.id}`}
-                  item={item}
-                  onOpen={() => setLocation(item.route)}
-                />
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ── Completed ──────────────────────────────────────────────────────── */}
-        {completedItems.length > 0 && (
-          <Section title="Completed">
-            <div className="space-y-2">
-              {completedItems.map(item => (
-                <ProgressRow
-                  key={`${item.contentType}-${item.id}`}
-                  item={item}
-                  onOpen={() => setLocation(item.route)}
-                />
-              ))}
-            </div>
-          </Section>
-        )}
+        {/* Unified Ask Emmaus / Search bar */}
+        <UnifiedEmmausInput className="mt-2" />
 
         {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
         <Section title="⭐ Favourites">
@@ -454,7 +342,7 @@ export default function Personal() {
                 onClick={handleSavePrayer}
                 data-testid="button-save-prayer"
               >
-                Save Prayer Request
+                Send Prayer Request
               </Button>
             </CardContent>
           </Card>
@@ -484,17 +372,9 @@ export default function Personal() {
             )}
           </div>
           {myRooms.length === 0 ? (
-            <div className="space-y-3">
-              <p className="text-[14px] text-muted-foreground">
-                You're not part of any Rooms yet.
-              </p>
-              <Button className="w-full h-11 rounded-xl text-[15px]" onClick={() => setLocation('/rooms/create')}>
-                <Plus size={16} className="mr-2" />Create Room
-              </Button>
-              <Button variant="outline" className="w-full h-11 rounded-xl text-[15px]" onClick={() => setLocation('/rooms/join')}>
-                <LogIn size={16} className="mr-2" />Join Room
-              </Button>
-            </div>
+            <p className="text-[14px] text-muted-foreground">
+              Any Rooms you are part of will appear here.
+            </p>
           ) : (
             <div className="space-y-2">
               {myRooms.slice(0, 3).map(room => (

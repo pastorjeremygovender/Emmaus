@@ -1,0 +1,184 @@
+# EMMAUS USER EXPERIENCE REFINEMENTS
+
+These changes are intended to simplify the member experience.
+
+Do not redesign the app.
+
+Only refine the existing UX.
+
+--------------------------------------------------
+1. REMOVE "CONTINUE" FROM MY JOURNEY
+--------------------------------------------------
+
+Remove the "Continue" section completely.
+
+Reason:
+
+Today's Steps already exists for everything the user is currently doing.
+
+Having another Continue list in My Journey duplicates functionality and creates confusion.
+
+Today's Steps remains the single place for current activity.
+
+--------------------------------------------------
+2. MY JOURNEY STRUCTURE
+--------------------------------------------------
+
+My Journey should now contain:
+
+⭐ Favourites
+
+History
+
+Prayer Requests
+
+Rooms
+
+Settings
+
+No Continue section.
+
+--------------------------------------------------
+3. FAVOURITES
+--------------------------------------------------
+
+The Favourites section exists but users currently have no obvious way to favourite content.
+
+Add a visible ⭐ Favourite icon wherever appropriate.
+
+Supported content:
+
+• Walks
+• Journeys
+• Bible Studies
+• Daily Devotionals
+• Sermon Companions
+• Bible chapters
+• Bible verses
+• Sermons
+
+Tapping the star:
+
+⭐ Saves immediately.
+
+Tap again:
+
+Removes from Favourites.
+
+No confirmation dialog.
+
+The star should always be visible and consistent throughout Emmaus.
+
+--------------------------------------------------
+4. ROOMS
+--------------------------------------------------
+
+Remove:
+
+Create Room
+
+Join Room
+
+from My Journey.
+
+This duplicates Discover.
+
+Instead display:
+
+MY ROOMS
+
+Any Rooms you are part of will appear here.
+
+If the user belongs to no Rooms:
+
+Display the message only.
+
+If they belong to Rooms:
+
+Display each active Room.
+
+--------------------------------------------------
+5. CREATE ROOM FROM EXISTING CONTENT
+--------------------------------------------------
+
+This becomes the preferred Room workflow.
+
+Every Walk
+
+Journey
+
+Daily Devotional
+
+Bible Study
+
+Sermon Companion
+
+should include an option:
+
+Create Room
+
+or
+
+Study Together
+
+Example:
+
+A user is halfway through a Walk.
+
+They decide a friend would benefit.
+
+Tap:
+
+Create Room
+
+Invite friend(s)
+
+The invited people automatically begin from the same Walk.
+
+The creator becomes Room Admin.
+
+This allows Rooms to grow naturally from existing discipleship instead of requiring users to think about Rooms first.
+
+--------------------------------------------------
+6. PRAYER REQUESTS
+--------------------------------------------------
+
+Rename:
+
+Save Prayer Request
+
+to
+
+Send Prayer Request
+
+This better reflects what the user expects.
+
+Sending should:
+
+Store the request
+
+Notify the appropriate pastoral/admin team
+
+Appear in the user's Prayer Requests history
+
+Allow future updates if implemented.
+
+--------------------------------------------------
+7. GENERAL PRINCIPLE
+--------------------------------------------------
+
+Eliminate duplicate functionality wherever possible.
+
+There should only ever be one obvious place to:
+
+Continue today's discipleship
+
+Browse content
+
+Manage Rooms
+
+Review history
+
+Save favourites
+
+Emmaus should feel simple, calm and intentional.

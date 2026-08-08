@@ -28,11 +28,10 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, Pause, MoreHorizontal, Loader2, Search,
+  X, Pause, MoreHorizontal, Loader2,
   BookHeart, Mic2, Map as MapIcon, Users, ChevronRight,
 } from 'lucide-react';
-import { AskEmmausBar } from '@/components/AskEmmausBar';
-import { globalSearch, type SearchResult, CONTENT_TYPE_LABEL } from '@/lib/search-api';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
@@ -704,33 +703,8 @@ export default function Journeys() {
   const [, setLocation] = useLocation();
   const { getState, pauseJourney, canActivateMore } = useEnrollment();
 
-  // ── Search state ──────────────────────────────────────────────────────────
-
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (!q || q.length < 2) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
-    }
-    setSearchLoading(true);
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(async () => {
-      try {
-        const results = await globalSearch(q);
-        setSearchResults(results);
-      } catch { /* non-fatal */ }
-      finally { setSearchLoading(false); }
-    }, 350);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
-  }, [searchQuery]);
-
-  const isSearching = searchQuery.trim().length >= 2;
+  // ── Unified search/question active state ─────────────────────────────────
+  const [discoverActive, setDiscoverActive] = useState(false);
 
   // ── Tab state ─────────────────────────────────────────────────────────────
 
@@ -919,69 +893,14 @@ export default function Journeys() {
           </p>
         </header>
 
-        {/* Ask Emmaus bar */}
-        <AskEmmausBar />
+        {/* Unified Ask Emmaus / Search input */}
+        <UnifiedEmmausInput
+          className="mt-5"
+          onActiveChange={setDiscoverActive}
+        />
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
-          <input
-            type="search"
-            placeholder="Search walks, Bible studies, sermons…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-11 pl-9 pr-4 rounded-xl border border-border bg-muted/30 text-[14px] placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        {/* Search results (shown when query ≥ 2 chars) */}
-        {isSearching && (
-          <div className="space-y-2">
-            {searchLoading ? (
-              <div className="space-y-3 pt-2">
-                {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl bg-muted animate-pulse" />)}
-              </div>
-            ) : searchResults.length === 0 ? (
-              <div className="py-10 text-center">
-                <p className="text-[14px] text-muted-foreground">
-                  No results for <strong>"{searchQuery}"</strong>
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 pt-1">
-                {searchResults.map((r) => (
-                  <button
-                    key={`${r.contentType}-${r.id}`}
-                    onClick={() => setLocation(r.route)}
-                    className="w-full text-left flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/30 transition-all"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-foreground leading-snug truncate">{r.title}</p>
-                      {r.subtitle && (
-                        <p className="text-[12px] text-muted-foreground truncate mt-0.5">{r.subtitle}</p>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-[10px] font-semibold text-primary uppercase tracking-widest">
-                      {CONTENT_TYPE_LABEL[r.contentType] ?? r.contentType}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* My Rooms + tabs — hidden while searching */}
-        {!isSearching && (() => {
+        {/* My Rooms + tabs — hidden while the unified input is active */}
+        {!discoverActive && (() => {
           const myRooms = user ? getMyRooms(user.id) : [];
           return (
             <>
@@ -1009,15 +928,15 @@ export default function Journeys() {
           );
         })()}
 
-        {/* Loading / Error / Tab content — hidden while searching */}
-        {!isSearching && apiLoading && (
+        {/* Loading / Error / Tab content — hidden while unified input is active */}
+        {!discoverActive && apiLoading && (
           <div className="space-y-4 pt-6">
             <SkeletonCard />
             <SkeletonCard />
           </div>
         )}
 
-        {!isSearching && !apiLoading && apiError && (
+        {!discoverActive && !apiLoading && apiError && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-6">
             <p className="text-[14px] text-destructive">{apiError}</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
@@ -1026,7 +945,7 @@ export default function Journeys() {
           </div>
         )}
 
-        {!isSearching && !apiLoading && data && (
+        {!discoverActive && !apiLoading && data && (
           <>
             {activeTab === 'devotionals' && (
               <DevotionalsPanel
