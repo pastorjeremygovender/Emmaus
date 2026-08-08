@@ -52,9 +52,22 @@ import {
   terminatePresenceUserFromRoom,
   registerPresenceConnection,
   unregisterPresenceConnection,
+  startSession,
+  endSession,
+  getActiveSession,
+  updateSessionState,
+  broadcastRoomEvent,
+  subscribeToSessionEvents,
+  recordSessionJoin,
+  recordSessionLeave,
+  getSessionAttendance,
+  terminateAllSessionFromRoom,
   type RoomType,
   type ContentType,
   type VideoSettings,
+  type SessionMode,
+  type ScriptureRef,
+  type SessionEvent,
 } from "../lib/room-store.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 import {
@@ -942,7 +955,7 @@ interface StreamToken {
   userId: string;
   roomId: string;
   expiresAt: number; // Date.now() + TTL
-  kind: "chat" | "presence";
+  kind: "chat" | "presence" | "session";
 }
 
 // In-memory token store — tokens are consumed on first use and expire after
@@ -1176,6 +1189,365 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
   } catch {
     res.status(500).json({ error: "Failed to mark prayer request as answered." });
   }
+});
+
+// ─── Session — leader-guided real-time session ────────────────────────────────
+//
+// Only Authorized Room Leaders (isAuthorizedLeader) can start/end sessions and
+// broadcast leader events. All room members can read session state + subscribe
+// to the SSE event stream.
+//
+//  POST /:roomId/session/start               — leader: start a new session
+//  POST /:roomId/session/end                 — leader: end/complete the session
+//  GET  /:roomId/session                     — any member: get current session state
+//  POST /:roomId/session/navigate            — leader: navigate the group
+//  POST /:roomId/session/mode                — leader: change session mode
+//  POST /:roomId/session/broadcast           — leader: broadcast custom event
+//  POST /:roomId/session/attendance/join     — any member: record join
+//  POST /:roomId/session/attendance/leave    — any member: record leave
+//  GET  /:roomId/session/attendance          — any member: get attendance list
+//  POST /:roomId/session/events/token        — any member: get SSE stream token
+//  GET  /:roomId/session/events              — any member: SSE event stream
+
+/** Ensure the caller is an authorized leader for this room. */
+async function guardLeader(
+  req: Parameters<typeof requireAuth>[0],
+  res: Parameters<typeof requireAuth>[1],
+  roomId: string
+): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  const appRole = await getUserRole(userId);
+  const authorized = await isAuthorizedLeader(userId, appRole);
+  if (!authorized) {
+    res.status(403).json({ error: "Authorized Room Leader access required." });
+    return null;
+  }
+  const role = await getMemberRole(roomId, userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return null;
+  }
+  return userId;
+}
+
+// POST /:roomId/session/start
+router.post("/:roomId/session/start", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  try {
+    const session = await startSession(String(roomId), userId);
+    const event: SessionEvent = {
+      type: "session_started",
+      payload: { sessionId: session.id },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.status(201).json({ session });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to start session." });
+  }
+});
+
+// POST /:roomId/session/end
+router.post("/:roomId/session/end", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { status = "ended" } = req.body as { status?: "completed" | "ended" };
+  try {
+    await endSession(String(roomId), status === "completed" ? "completed" : "ended");
+    const event: SessionEvent = {
+      type: "session_ended",
+      payload: { status },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to end session." });
+  }
+});
+
+// GET /:roomId/session
+router.get("/:roomId/session", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  try {
+    const session = await getActiveSession(String(roomId));
+    res.json({ session });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load session." });
+  }
+});
+
+// POST /:roomId/session/navigate
+// body: { stepId?, scripture?: ScriptureRef, leaderName? }
+router.post("/:roomId/session/navigate", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { stepId, scripture, leaderName } = req.body as {
+    stepId?: string;
+    scripture?: ScriptureRef;
+    leaderName?: string;
+  };
+  try {
+    await updateSessionState(String(roomId), {
+      ...(stepId !== undefined ? { currentStep: stepId } : {}),
+      ...(scripture !== undefined ? { currentScripture: scripture } : {}),
+      ...(stepId !== undefined && scripture === undefined ? { currentMode: "study" as SessionMode } : {}),
+      ...(scripture !== undefined && stepId === undefined ? { currentMode: "scripture" as SessionMode } : {}),
+    });
+    const event: SessionEvent = {
+      type: "navigate",
+      payload: {
+        ...(stepId !== undefined ? { stepId } : {}),
+        ...(scripture !== undefined ? { scripture } : {}),
+        leaderName: leaderName ?? "",
+      },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to navigate." });
+  }
+});
+
+// POST /:roomId/session/mode
+// body: { mode: SessionMode }
+router.post("/:roomId/session/mode", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { mode, leaderName } = req.body as { mode?: SessionMode; leaderName?: string };
+  const validModes: SessionMode[] = ["study", "scripture", "discussion", "prayer", "poll"];
+  if (!mode || !validModes.includes(mode)) {
+    res.status(400).json({ error: "Valid mode is required." });
+    return;
+  }
+  try {
+    await updateSessionState(String(roomId), { currentMode: mode });
+    const event: SessionEvent = {
+      type: "mode_change",
+      payload: { mode, leaderName: leaderName ?? "" },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to change mode." });
+  }
+});
+
+// POST /:roomId/session/broadcast
+// body: { type: SessionEvent["type"], payload: {} }
+router.post("/:roomId/session/broadcast", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { type, payload } = req.body as { type?: string; payload?: Record<string, unknown> };
+  const allowedTypes = ["focus_verse", "poll_started", "poll_result", "session_state"];
+  if (!type || !allowedTypes.includes(type)) {
+    res.status(400).json({ error: `type must be one of: ${allowedTypes.join(", ")}` });
+    return;
+  }
+  // If broadcasting a poll, persist it to session state
+  if (type === "poll_started" && payload?.poll) {
+    await updateSessionState(String(roomId), { poll: payload.poll as unknown });
+  }
+  if (type === "poll_result") {
+    await updateSessionState(String(roomId), { poll: null });
+  }
+  const event: SessionEvent = {
+    type: type as SessionEvent["type"],
+    payload: payload ?? {},
+    sentBy: userId,
+    at: new Date().toISOString(),
+  };
+  broadcastRoomEvent(String(roomId), event);
+  res.json({ ok: true });
+});
+
+// POST /:roomId/session/attendance/join
+router.post("/:roomId/session/attendance/join", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  try {
+    await recordSessionJoin(sessionId, String(roomId), userId);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to record attendance." });
+  }
+});
+
+// POST /:roomId/session/attendance/leave
+router.post("/:roomId/session/attendance/leave", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const { sessionId } = req.body as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  try {
+    await recordSessionLeave(sessionId, userId);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to record attendance leave." });
+  }
+});
+
+// GET /:roomId/session/attendance
+router.get("/:roomId/session/attendance", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.query as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId query param is required." });
+    return;
+  }
+  try {
+    const attendance = await getSessionAttendance(sessionId);
+    res.json({ attendance });
+  } catch {
+    res.status(500).json({ error: "Failed to load attendance." });
+  }
+});
+
+// POST /:roomId/session/events/token
+router.post("/:roomId/session/events/token", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+  pruneExpiredTokens();
+  const token = randomUUID();
+  streamTokens.set(token, {
+    userId,
+    roomId: String(roomId),
+    expiresAt: Date.now() + 30_000,
+    kind: "session",
+  });
+  res.json({ token });
+});
+
+// GET /:roomId/session/events?token=
+router.get("/:roomId/session/events", async (req, res) => {
+  const tokenStr = req.query.token as string | undefined;
+  if (!tokenStr) {
+    res.status(401).json({ error: "A stream token is required." });
+    return;
+  }
+  const tokenData = streamTokens.get(tokenStr);
+  streamTokens.delete(tokenStr);
+  if (
+    !tokenData ||
+    tokenData.expiresAt < Date.now() ||
+    tokenData.roomId !== String(req.params.roomId) ||
+    tokenData.kind !== "session"
+  ) {
+    res.status(401).json({ error: "Invalid or expired stream token." });
+    return;
+  }
+  const { userId, roomId } = tokenData;
+  try {
+    const role = await getMemberRole(roomId, userId);
+    if (!role) {
+      res.status(403).json({ error: "You are no longer a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  // Send the current session state as the first event so the client can sync immediately
+  try {
+    const session = await getActiveSession(roomId);
+    const initEvent: SessionEvent = {
+      type: "session_state",
+      payload: { session },
+      sentBy: "system",
+      at: new Date().toISOString(),
+    };
+    res.write(`data: ${JSON.stringify(initEvent)}\n\n`);
+  } catch { /* ignore — best-effort initial sync */ }
+
+  let unsubscribe: (() => void) | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let terminated = false;
+
+  function terminate() {
+    if (terminated) return;
+    terminated = true;
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    try { res.end(); } catch { /* ignore */ }
+  }
+
+  unsubscribe = subscribeToSessionEvents(
+    roomId,
+    userId,
+    (event) => {
+      try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* ignore */ }
+    },
+    terminate
+  );
+
+  heartbeatTimer = setInterval(async () => {
+    try { res.write(": heartbeat\n\n"); } catch { /* ignore */ }
+    try {
+      const role = await getMemberRole(roomId, userId);
+      if (!role) terminate();
+    } catch { /* ignore */ }
+  }, 25_000);
+
+  req.on("close", terminate);
 });
 
 export default router;

@@ -891,6 +891,272 @@ setInterval(() => {
     pushPresenceToRoom(roomId);
   }
 }, 5_000).unref();
+// ─── Room Session store ───────────────────────────────────────────────────────
+
+export type SessionMode = "study" | "scripture" | "discussion" | "prayer" | "poll";
+
+export interface ScriptureRef {
+  book: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+  displayLabel?: string; // e.g. "John 15" or "John 15:1-17"
+}
+
+export interface RoomSession {
+  id: string;
+  roomId: string;
+  startedBy: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: "active" | "completed" | "ended";
+  currentMode: SessionMode;
+  currentStep: string | null;
+  currentScripture: ScriptureRef | null;
+  sessionPlan: unknown[];
+  poll: unknown | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface SessionEvent {
+  type:
+    | "session_started"
+    | "session_ended"
+    | "navigate"
+    | "mode_change"
+    | "focus_verse"
+    | "poll_started"
+    | "poll_result"
+    | "session_state";
+  payload: Record<string, unknown>;
+  sentBy: string;
+  at: string; // ISO timestamp
+}
+
+function rowToSession(row: Record<string, unknown>): RoomSession {
+  return {
+    id: String(row.id),
+    roomId: String(row.room_id),
+    startedBy: String(row.started_by),
+    startedAt: String(row.started_at),
+    endedAt: row.ended_at ? String(row.ended_at) : null,
+    status: (row.status as RoomSession["status"]) ?? "active",
+    currentMode: (row.current_mode as SessionMode) ?? "study",
+    currentStep: row.current_step ? String(row.current_step) : null,
+    currentScripture: row.current_scripture
+      ? (row.current_scripture as ScriptureRef)
+      : null,
+    sessionPlan: Array.isArray(row.session_plan) ? row.session_plan : [],
+    poll: row.poll ?? null,
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
+  };
+}
+
+/** Start a new guided session for a room. Returns the new session. */
+export async function startSession(
+  roomId: string,
+  startedBy: string
+): Promise<RoomSession> {
+  // End any existing active session first (idempotent — there should be at most one)
+  await pool.query(
+    `UPDATE room_sessions SET status = 'ended', ended_at = NOW()
+     WHERE room_id = $1 AND status = 'active'`,
+    [roomId]
+  );
+  const { rows } = await pool.query(
+    `INSERT INTO room_sessions (room_id, started_by)
+     VALUES ($1, $2)
+     RETURNING *`,
+    [roomId, startedBy]
+  );
+  return rowToSession(rows[0] as Record<string, unknown>);
+}
+
+/** End the active session for a room. */
+export async function endSession(
+  roomId: string,
+  status: "completed" | "ended" = "ended"
+): Promise<void> {
+  await pool.query(
+    `UPDATE room_sessions
+     SET status = $2, ended_at = NOW()
+     WHERE room_id = $1 AND status = 'active'`,
+    [roomId, status]
+  );
+}
+
+/** Get the active session for a room, or null if none. */
+export async function getActiveSession(
+  roomId: string
+): Promise<RoomSession | null> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_sessions
+     WHERE room_id = $1 AND status = 'active'
+     ORDER BY started_at DESC LIMIT 1`,
+    [roomId]
+  );
+  if (!rows[0]) return null;
+  return rowToSession(rows[0] as Record<string, unknown>);
+}
+
+/** Patch mutable fields on the active session. */
+export async function updateSessionState(
+  roomId: string,
+  patch: Partial<Pick<RoomSession, "currentMode" | "currentStep" | "currentScripture" | "poll" | "metadata">>
+): Promise<void> {
+  const sets: string[] = [];
+  const vals: unknown[] = [roomId];
+  let idx = 2;
+
+  if (patch.currentMode !== undefined) {
+    sets.push(`current_mode = $${idx++}`);
+    vals.push(patch.currentMode);
+  }
+  if (patch.currentStep !== undefined) {
+    sets.push(`current_step = $${idx++}`);
+    vals.push(patch.currentStep);
+  }
+  if ("currentScripture" in patch) {
+    sets.push(`current_scripture = $${idx++}`);
+    vals.push(patch.currentScripture ? JSON.stringify(patch.currentScripture) : null);
+  }
+  if ("poll" in patch) {
+    sets.push(`poll = $${idx++}`);
+    vals.push(patch.poll ? JSON.stringify(patch.poll) : null);
+  }
+  if (patch.metadata !== undefined) {
+    sets.push(`metadata = $${idx++}`);
+    vals.push(JSON.stringify(patch.metadata));
+  }
+
+  if (sets.length === 0) return;
+
+  await pool.query(
+    `UPDATE room_sessions SET ${sets.join(", ")}
+     WHERE room_id = $1 AND status = 'active'`,
+    vals
+  );
+}
+
+/** Record a member joining the active session for attendance. */
+export async function recordSessionJoin(
+  sessionId: string,
+  roomId: string,
+  userId: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_session_attendance (session_id, room_id, user_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (session_id, user_id) DO UPDATE SET joined_at = NOW(), left_at = NULL`,
+    [sessionId, roomId, userId]
+  );
+}
+
+/** Record a member leaving the active session. */
+export async function recordSessionLeave(
+  sessionId: string,
+  userId: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE room_session_attendance
+     SET left_at = NOW()
+     WHERE session_id = $1 AND user_id = $2 AND left_at IS NULL`,
+    [sessionId, userId]
+  );
+}
+
+/** Get attendance for a session. */
+export async function getSessionAttendance(
+  sessionId: string
+): Promise<Array<{ userId: string; preferredName: string; joinedAt: string; leftAt: string | null }>> {
+  const { rows } = await pool.query(
+    `SELECT a.user_id, a.joined_at, a.left_at, up.preferred_name
+     FROM room_session_attendance a
+     LEFT JOIN user_profiles up ON up.email = a.user_id
+     WHERE a.session_id = $1
+     ORDER BY a.joined_at ASC`,
+    [sessionId]
+  );
+  return rows.map(r => ({
+    userId: String(r.user_id),
+    preferredName: r.preferred_name && String(r.preferred_name).trim()
+      ? String(r.preferred_name).trim()
+      : "",
+    joinedAt: String(r.joined_at),
+    leftAt: r.left_at ? String(r.left_at) : null,
+  }));
+}
+
+// ─── Session event bus (in-memory SSE) ───────────────────────────────────────
+//
+// Same subscriber-map pattern as chat + presence SSE streams.
+
+interface SessionSubscriber {
+  userId: string;
+  onEvent: (event: SessionEvent) => void;
+  terminate: () => void;
+}
+
+const sessionSubscribers = new Map<string, Set<SessionSubscriber>>();
+
+/**
+ * Broadcast a real-time session event to all connected members of a room.
+ * Events are ephemeral — they are not persisted here (callers may persist
+ * important state via updateSessionState before broadcasting).
+ */
+export function broadcastRoomEvent(roomId: string, event: SessionEvent): void {
+  const subs = sessionSubscribers.get(roomId);
+  if (!subs || subs.size === 0) return;
+  const payload = JSON.stringify(event);
+  for (const sub of subs) {
+    try { sub.onEvent(JSON.parse(payload) as SessionEvent); } catch { /* ignore closed connections */ }
+  }
+}
+
+/** Subscribe to session events for a room. Returns an unsubscribe function. */
+export function subscribeToSessionEvents(
+  roomId: string,
+  userId: string,
+  onEvent: (event: SessionEvent) => void,
+  terminate: () => void
+): () => void {
+  const sub: SessionSubscriber = { userId, onEvent, terminate };
+  if (!sessionSubscribers.has(roomId)) {
+    sessionSubscribers.set(roomId, new Set());
+  }
+  sessionSubscribers.get(roomId)!.add(sub);
+  return () => {
+    const set = sessionSubscribers.get(roomId);
+    if (set) {
+      set.delete(sub);
+      if (set.size === 0) sessionSubscribers.delete(roomId);
+    }
+  };
+}
+
+/** Terminate all session event SSE streams for a specific user. */
+export function terminateSessionUserFromRoom(roomId: string, userId: string): void {
+  const set = sessionSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of [...set]) {
+    if (sub.userId === userId) {
+      try { sub.terminate(); } catch { /* ignore */ }
+      set.delete(sub);
+    }
+  }
+  if (set.size === 0) sessionSubscribers.delete(roomId);
+}
+
+/** Terminate all session event SSE streams for a room. */
+export function terminateAllSessionFromRoom(roomId: string): void {
+  const set = sessionSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of set) {
+    try { sub.terminate(); } catch { /* ignore */ }
+  }
+  sessionSubscribers.delete(roomId);
+}
+
 export interface PrayerRequest {
   id: string;
   roomId: string;

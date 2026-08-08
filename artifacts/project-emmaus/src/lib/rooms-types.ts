@@ -141,3 +141,54 @@ export interface RoomMessage {
   body: string;
   createdAt: string;
 }
+
+// ─── Guided session ───────────────────────────────────────────────────────
+
+export type SessionMode = 'study' | 'scripture' | 'discussion' | 'prayer' | 'poll';
+
+export interface ScriptureRef {
+  book: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+  displayLabel?: string;
+}
+
+export interface RoomSession {
+  id: string;
+  roomId: string;
+  startedBy: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: 'active' | 'completed' | 'ended';
+  currentMode: SessionMode;
+  currentStep: string | null;
+  currentScripture: ScriptureRef | null;
+  sessionPlan: unknown[];
+  poll: unknown | null;
+  metadata: Record<string, unknown>;
+}
+
+export type SessionEventType =
+  | 'session_started'
+  | 'session_ended'
+  | 'navigate'
+  | 'mode_change'
+  | 'focus_verse'
+  | 'poll_started'
+  | 'poll_result'
+  | 'session_state';
+
+export interface SessionEvent {
+  type: SessionEventType;
+  payload: Record<string, unknown>;
+  sentBy: string;
+  at: string;
+}
+
+export interface SessionAttendee {
+  userId: string;
+  preferredName: string;
+  joinedAt: string;
+  leftAt: string | null;
+}

@@ -7,13 +7,15 @@ import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, RefreshCw, ChevronRight, Sparkles,
-  Share2, Trash2, LogOut, Pencil, Settings,
+  Share2, Trash2, LogOut, Pencil, Settings, Users2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
-import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
+import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
-import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl } from '@/lib/rooms-api';
+import { GuideGroupPanel } from '@/components/GuideGroupPanel';
+import { useFollowLeader } from '@/hooks/useFollowLeader';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -38,10 +40,41 @@ export default function RoomDetail() {
   const [renameValue, setRenameValue] = useState('');
   const [renameSaving, setRenameSaving] = useState(false);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [showGuideGroup, setShowGuideGroup] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
   useEffect(() => { roomRef.current = room; }, [room]);
+
+  // ── Follow Leader / Session event bus ──────────────────────────────────────
+  // onNavigate fires when the leader navigates and followLeader is ON.
+  // For Task #435 the navigate event is received; deeper content navigation
+  // (e.g. opening a Bible passage) will be wired in Task #436.
+  const {
+    activeSession,
+    setActiveSession,
+    followLeader,
+    setFollowLeader,
+    lastEvent,
+    sessionMode,
+  } = useFollowLeader({
+    roomId: String(roomId),
+    userId: user?.id ?? '',
+    onNavigate: (payload) => {
+      // Navigate events from the leader: stepId='today'/'previous'/'next'
+      // will be used by Tasks #436+ for full content navigation.
+      // For now, surface a subtle toast via console (visible in dev mode).
+      if (payload.scripture) {
+        console.log('[Emmaus] Leader navigated to scripture:', payload.scripture);
+      }
+      if (payload.stepId) {
+        console.log('[Emmaus] Leader navigated to step:', payload.stepId);
+      }
+    },
+    onModeChange: (mode) => {
+      console.log('[Emmaus] Session mode changed to:', mode);
+    },
+  });
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -162,6 +195,11 @@ export default function RoomDetail() {
   // App-level admins (admin / superAdmin) can host video in any room regardless
   // of their room member role — mirrors isAuthorizedLeader() on the server.
   const isAppAdmin = user.role === 'admin' || user.role === 'superAdmin';
+  // Authorized leaders: room admin OR app-level admin/superAdmin.
+  // The server's guardLeader() also checks the authorized_room_leader flag and
+  // pastoral_role = 'pastor'. For the UI gate we use this client-side proxy;
+  // the server rejects unauthorised calls regardless.
+  const isAuthorizedLeader = isAdmin || isAppAdmin;
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
     j.status === 'Published' &&
@@ -345,11 +383,20 @@ export default function RoomDetail() {
                 className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-2xl shadow-lg overflow-hidden z-30"
                 onClick={e => e.stopPropagation()}
               >
+                {isAuthorizedLeader && (
+                  <button
+                    onClick={() => { setShowOverflow(false); setShowGuideGroup(true); }}
+                    className="w-full text-left px-4 py-3.5 text-[14px] text-primary font-semibold hover:bg-primary/5 transition-colors flex items-center gap-2.5"
+                  >
+                    <Users2 size={15} className="shrink-0" />
+                    Guide Group
+                  </button>
+                )}
                 {isAdmin ? (
                   <>
                     <button
                       onClick={handleStartRename}
-                      className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5"
+                      className={`w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 ${isAuthorizedLeader ? 'border-t border-border/60' : ''}`}
                     >
                       <Pencil size={15} className="text-muted-foreground shrink-0" />
                       Rename Room
@@ -379,7 +426,7 @@ export default function RoomDetail() {
                 ) : (
                   <button
                     onClick={() => { setShowOverflow(false); setConfirmLeave(true); }}
-                    className="w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5"
+                    className={`w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 ${isAuthorizedLeader ? 'border-t border-border/60' : ''}`}
                   >
                     <LogOut size={15} className="shrink-0" />
                     Leave Room
@@ -391,7 +438,74 @@ export default function RoomDetail() {
         </div>
       </header>
 
+      {/* ── Guide Group Panel (leader only bottom sheet) ─────────────────── */}
+      {isAuthorizedLeader && (
+        <GuideGroupPanel
+          roomId={String(roomId)}
+          userId={user.id}
+          leaderName={user.preferredName || 'Leader'}
+          isOpen={showGuideGroup}
+          onClose={() => setShowGuideGroup(false)}
+          activeSession={activeSession}
+          onSessionStarted={(session) => {
+            setActiveSession(session);
+            setShowGuideGroup(false);
+          }}
+          onSessionEnded={() => {
+            setActiveSession(null);
+          }}
+          videoActive={false /* wired to VideoRoom state in Task #437 */}
+          onOpenVideo={() => {/* handled by VideoRoom directly */}}
+          onEndVideo={() => {/* handled by VideoRoom directly */}}
+        />
+      )}
+
       <main className="px-5 pt-5 max-w-[480px] mx-auto space-y-6 pb-6">
+
+        {/* ── Session banner: active session indicator + Follow Leader toggle */}
+        {activeSession && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary/8 border border-primary/20">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">
+                  Guided session active
+                </p>
+                <p className="text-[11px] text-muted-foreground capitalize">
+                  {sessionMode === 'prayer' ? 'Prayer Time' :
+                   sessionMode === 'discussion' ? 'Group Discussion' :
+                   sessionMode === 'scripture' ? 'Reading Scripture' :
+                   sessionMode === 'poll' ? 'Poll' :
+                   "Today's Study"}
+                </p>
+              </div>
+            </div>
+            {!isAuthorizedLeader && (
+              <button
+                onClick={() => setFollowLeader(!followLeader)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
+                  followLeader
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+                }`}
+                title={followLeader ? 'Following leader — tap to browse freely' : 'Tap to follow leader'}
+              >
+                {followLeader ? '● Following' : 'Follow Leader'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Guide Group FAB (leader only, shown when no active session) ── */}
+        {isAuthorizedLeader && !activeSession && (
+          <button
+            onClick={() => setShowGuideGroup(true)}
+            className="w-full py-3.5 rounded-2xl border border-primary/30 bg-primary/5 text-primary font-semibold text-[14px] flex items-center justify-center gap-2 hover:bg-primary/10 transition-all"
+          >
+            <Users2 size={17} />
+            Guide Group
+          </button>
+        )}
 
         {/* ── 1. Gather Together — PRIMARY ACTION ───────────────────────── */}
         {videoEligible && (

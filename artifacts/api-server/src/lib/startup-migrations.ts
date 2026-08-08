@@ -1413,6 +1413,56 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: 'the pastor' replacement in companion entries failed (non-fatal)");
   }
 
+  // ── Room Sessions (Task #435 — Interactive Leader Experience) ───────────────
+  // Persists active guided sessions so reconnecting members can restore state.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_sessions (
+        id                  uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        room_id             text        NOT NULL,
+        started_by          text        NOT NULL,
+        started_at          timestamptz NOT NULL DEFAULT NOW(),
+        ended_at            timestamptz,
+        status              text        NOT NULL DEFAULT 'active'
+                            CHECK (status IN ('active','completed','ended')),
+        current_mode        text        NOT NULL DEFAULT 'study'
+                            CHECK (current_mode IN ('study','scripture','discussion','prayer','poll')),
+        current_step        text,
+        current_scripture   jsonb,
+        session_plan        jsonb       NOT NULL DEFAULT '[]',
+        poll                jsonb,
+        metadata            jsonb       NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX IF NOT EXISTS room_sessions_room_id_idx
+        ON room_sessions (room_id, started_at DESC);
+    `);
+    logger.info("Startup migration: room_sessions table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_sessions table failed (non-fatal)");
+  }
+
+  // ── Room Session Attendance (Task #435) ──────────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_session_attendance (
+        id          uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        session_id  uuid        NOT NULL,
+        room_id     text        NOT NULL,
+        user_id     text        NOT NULL,
+        joined_at   timestamptz NOT NULL DEFAULT NOW(),
+        left_at     timestamptz,
+        UNIQUE (session_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS room_session_attendance_session_idx
+        ON room_session_attendance (session_id, joined_at);
+      CREATE INDEX IF NOT EXISTS room_session_attendance_room_user_idx
+        ON room_session_attendance (room_id, user_id, joined_at DESC);
+    `);
+    logger.info("Startup migration: room_session_attendance table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_session_attendance table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

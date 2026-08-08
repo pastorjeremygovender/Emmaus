@@ -9,6 +9,7 @@ import { getApiUrl } from './api';
 import type {
   RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress,
   VideoSessionStatus, PrayerRequest, ContentType,
+  RoomSession, SessionMode, ScriptureRef, SessionAttendee,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -391,4 +392,134 @@ export async function apiGetPresenceStreamToken(
  */
 export function apiPresenceStreamUrl(roomId: string, token: string): string {
   return getApiUrl(`/api/rooms/${roomId}/presence/stream?token=${encodeURIComponent(token)}`);
+}
+
+// ─── Session API ───────────────────────────────────────────────────────────
+
+/** Start a new guided session. Leader only. */
+export async function apiStartSession(
+  userId: string,
+  roomId: string
+): Promise<RoomSession> {
+  const data = await roomsFetch<{ session: RoomSession }>(
+    `/api/rooms/${roomId}/session/start`, userId, { method: 'POST' }
+  );
+  return data.session;
+}
+
+/** End the active session. Leader only. */
+export async function apiEndSession(
+  userId: string,
+  roomId: string,
+  status: 'completed' | 'ended' = 'ended'
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/end`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+/** Get the current active session, or null if none. */
+export async function apiGetSession(
+  userId: string,
+  roomId: string
+): Promise<RoomSession | null> {
+  const data = await roomsFetch<{ session: RoomSession | null }>(
+    `/api/rooms/${roomId}/session`, userId
+  );
+  return data.session;
+}
+
+/** Navigate the group to a step or scripture. Leader only. */
+export async function apiNavigate(
+  userId: string,
+  roomId: string,
+  payload: { stepId?: string; scripture?: ScriptureRef; leaderName?: string }
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/navigate`, userId, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Change the session mode (study / scripture / discussion / prayer / poll). Leader only. */
+export async function apiChangeMode(
+  userId: string,
+  roomId: string,
+  mode: SessionMode,
+  leaderName?: string
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/mode`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ mode, leaderName }),
+  });
+}
+
+/** Broadcast a custom session event (focus_verse, poll_started, etc.). Leader only. */
+export async function apiBroadcastEvent(
+  userId: string,
+  roomId: string,
+  type: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/broadcast`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ type, payload }),
+  });
+}
+
+/** Record that the current user joined the session (for attendance). */
+export async function apiRecordAttendanceJoin(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/attendance/join`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ sessionId }),
+  });
+}
+
+/** Record that the current user left the session. */
+export async function apiRecordAttendanceLeave(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/attendance/leave`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ sessionId }),
+  });
+}
+
+/** Get attendance list for a session. */
+export async function apiGetSessionAttendance(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<SessionAttendee[]> {
+  const data = await roomsFetch<{ attendance: SessionAttendee[] }>(
+    `/api/rooms/${roomId}/session/attendance?sessionId=${encodeURIComponent(sessionId)}`, userId
+  );
+  return data.attendance;
+}
+
+/**
+ * Exchange credentials for a short-lived SSE session event stream token.
+ */
+export async function apiGetSessionEventsToken(
+  userId: string,
+  roomId: string
+): Promise<string> {
+  const data = await roomsFetch<{ token: string }>(
+    `/api/rooms/${roomId}/session/events/token`, userId, { method: 'POST' }
+  );
+  return data.token;
+}
+
+/**
+ * Build the EventSource URL for the session events SSE stream.
+ */
+export function apiSessionEventsUrl(roomId: string, token: string): string {
+  return getApiUrl(`/api/rooms/${roomId}/session/events?token=${encodeURIComponent(token)}`);
 }
