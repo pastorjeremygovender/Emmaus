@@ -183,7 +183,9 @@ export default function RoomDetail() {
   const leaderMember = room.members.find(m => m.role === 'admin');
   const leaderName = leaderMember?.preferredName ?? 'Your leader';
 
-  const videoEligible = room.roomType !== 'personal';
+  // Room admins (leaders) always see VideoRoom so they can start a gathering.
+  // Non-admin members only see it for group rooms (not personal rooms).
+  const videoEligible = isAdmin || room.roomType !== 'personal';
 
   const handleBack = () => {
     if (window.history.length > 1) window.history.back();
