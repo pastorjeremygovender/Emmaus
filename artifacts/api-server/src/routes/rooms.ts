@@ -247,10 +247,11 @@ router.post("/:roomId/video/token", async (req, res) => {
     const appRole = await getUserRole(userId);
     const isHost = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
 
-    // Resolve display name from user_profiles (never expose raw userId)
+    // Resolve display name from user_profiles (never expose raw userId).
+    // user_profiles uses email as the key — userId in session context is the email/identifier.
     const { rows } = await import("@workspace/db").then(m =>
       m.pool.query(
-        "SELECT preferred_name FROM user_profiles WHERE user_id = $1",
+        "SELECT preferred_name FROM user_profiles WHERE email = $1",
         [userId]
       )
     );

@@ -4,9 +4,14 @@
  * Renders a compact video panel inside RoomDetail. Never replaces the page.
  * Mobile-first: tiles adapt to portrait, controls stay above the bottom nav.
  *
+ * Expand/collapse works by switching the outer container between an inline card
+ * and a fixed overlay via className — LiveKitRoom stays mounted throughout so
+ * the connection is never dropped.
+ *
  * Permission model (enforced server-side; UI mirrors it):
  *  - canHost: room admin with authorised pastoral/app role → sees Start/End buttons
  *  - Any member: sees Join/Leave once a session is active
+ *  - Personal rooms pass videoEligible=false → component renders null
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -22,8 +27,8 @@ import {
 import '@livekit/components-styles';
 import { Track } from 'livekit-client';
 import {
-  Video, VideoOff, Mic, MicOff,
-  PhoneOff, AlertCircle, Loader2, Users, Settings,
+  Video, PhoneOff, AlertCircle, Loader2, Users, Settings,
+  Maximize2, Minimize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VideoSessionStatus } from '@/lib/rooms-types';
@@ -41,11 +46,12 @@ interface VideoRoomProps {
   userId: string;
   /** Display name for this user in the video session */
   displayName: string;
-  /** Whether this Room type supports video (ministry / leadership) */
+  /** Whether this Room type supports video (ministry / leadership / church_service).
+   *  Personal rooms pass false — component renders null immediately. */
   videoEligible: boolean;
 }
 
-// ─── Duration helpers ─────────────────────────────────────────────────────────
+// ─── Duration warning hook ────────────────────────────────────────────────────
 
 function useDurationWarning(
   startedAt: string | null,
@@ -75,7 +81,8 @@ function useDurationWarning(
   return warning;
 }
 
-// ─── Participant grid (rendered inside LiveKitRoom) ───────────────────────────
+// ─── Participant grid ─────────────────────────────────────────────────────────
+// Rendered inside <LiveKitRoom> so it can access LiveKit context hooks.
 
 function ParticipantGrid({ onLeave }: { onLeave: () => void }) {
   const { localParticipant } = useLocalParticipant();
@@ -97,7 +104,7 @@ function ParticipantGrid({ onLeave }: { onLeave: () => void }) {
         </span>
       </div>
 
-      {/* Tiles grid — 1 col on mobile, 2 col when ≥2 participants */}
+      {/* Tiles — 1 col on mobile, 2 col when ≥2 participants */}
       <div className={`grid gap-2 ${allParticipants.length >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {cameraTracks.map(trackRef => (
           <div
@@ -112,21 +119,21 @@ function ParticipantGrid({ onLeave }: { onLeave: () => void }) {
         ))}
       </div>
 
-      {/* Controls */}
+      {/* Media controls (camera + mic only; no screenshare, no chat) */}
       <div className="pt-1">
         <ControlBar
           controls={{
             camera: true,
             microphone: true,
             screenShare: false,
-            leave: false,       // We render our own Leave button below
+            leave: false,   // we render our own Leave button
             chat: false,
           }}
           style={{ background: 'transparent', padding: 0, justifyContent: 'center' }}
         />
       </div>
 
-      {/* Leave */}
+      {/* Leave Video (does NOT leave the Emmaus Room) */}
       <Button
         variant="destructive"
         size="sm"
@@ -142,7 +149,7 @@ function ParticipantGrid({ onLeave }: { onLeave: () => void }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS = 10_000;
+const POLL_INTERVAL_MS = 10_000; // when not in call, poll every 10 s for status changes
 
 export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoRoomProps) {
   const [status, setStatus] = useState<VideoSessionStatus | null>(null);
@@ -154,6 +161,9 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
   const [token, setToken] = useState<string | null>(null);
   const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
   const [isInCall, setIsInCall] = useState(false);
+
+  // Expand/collapse — uses CSS class switching so LiveKitRoom stays mounted
+  const [expanded, setExpanded] = useState(false);
 
   // Duration warning
   const maxDurationRef = useRef<number | undefined>(undefined);
@@ -170,10 +180,11 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
       const s = await apiGetVideoStatus(userId, roomId);
       setStatus(s);
       if (s.livekitUrl) setLivekitUrl(s.livekitUrl);
-      // If video ended while we were in call, clean up
+      // If the session was ended by the leader while we were in call, clean up
       if (!s.videoActive && isInCall) {
         setIsInCall(false);
         setToken(null);
+        setExpanded(false);
       }
     } catch {
       /* non-fatal — keep previous status */
@@ -183,12 +194,12 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
   }, [userId, roomId, isInCall]);
 
   useEffect(() => {
-    fetchStatus(false);
+    fetchStatus(false); // initial load (shows spinner)
   }, [fetchStatus]);
 
-  // Poll while not in call (to detect when leader starts video)
+  // Poll while not in call — catches "leader started video" for waiting members
   useEffect(() => {
-    if (isInCall) return; // LiveKit events handle disconnect — no need to poll
+    if (isInCall) return; // LiveKit events handle disconnect; no polling needed
     const id = setInterval(() => fetchStatus(true), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [isInCall, fetchStatus]);
@@ -200,9 +211,21 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
     setActionError('');
     try {
       await apiStartVideo(userId, roomId);
+      // Immediately join as the leader who started the session
+      const { token: t, livekitUrl: url } = await apiGetVideoToken(userId, roomId);
+      setToken(t);
+      setLivekitUrl(url);
+      setIsInCall(true);
       await fetchStatus(true);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to start video.');
+      const msg = err instanceof Error ? err.message : 'Failed to start video.';
+      setActionError(
+        msg.includes('not configured')
+          ? 'Live video is not available. Contact your church administrator.'
+          : msg.includes('authorised')
+          ? "You don't have permission to start video for this Room."
+          : "We couldn't start the video session. Please try again."
+      );
     } finally {
       setActioning(false);
     }
@@ -217,15 +240,24 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
       setLivekitUrl(url);
       setIsInCall(true);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to join video.');
+      const msg = err instanceof Error ? err.message : 'Failed to join video.';
+      setActionError(
+        msg.includes('No active')
+          ? 'The video session has ended.'
+          : msg.includes('permission')
+          ? "You don't have permission to join this Room's video."
+          : "We couldn't connect your video. Try again."
+      );
     } finally {
       setActioning(false);
     }
   };
 
+  /** Leave video — stays in the Emmaus Room. */
   const handleLeave = () => {
     setIsInCall(false);
     setToken(null);
+    setExpanded(false);
   };
 
   const handleEnd = async () => {
@@ -234,16 +266,21 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
     try {
       setIsInCall(false);
       setToken(null);
+      setExpanded(false);
       await apiEndVideo(userId, roomId);
       await fetchStatus(true);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to end meeting.');
+      const msg = err instanceof Error ? err.message : 'Failed to end the session.';
+      setActionError(msg);
     } finally {
       setActioning(false);
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render guards ───────────────────────────────────────────────────────────
+
+  // Personal rooms are not video-eligible — render nothing
+  if (!videoEligible) return null;
 
   if (loading) {
     return (
@@ -256,53 +293,32 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
 
   if (!status) return null;
 
-  // ── Not configured ──────────────────────────────────────────────────────────
+  // ── LiveKit not configured ──────────────────────────────────────────────────
 
   if (!status.configured) {
+    // Only admins / leaders see the setup card — members see nothing
+    if (!status.canHost) return null;
     return (
       <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-5 space-y-3">
         <div className="flex items-start gap-3">
           <Settings size={16} className="text-amber-600 mt-0.5 shrink-0" />
           <div className="space-y-1.5">
             <p className="text-[14px] font-medium text-amber-900 dark:text-amber-200">
-              LiveKit not yet configured
+              Live video not configured
             </p>
             <p className="text-[13px] text-amber-700 dark:text-amber-300 leading-relaxed">
-              {status.message ?? 'Add LiveKit secrets to enable video.'}
+              {status.message ?? 'Add LiveKit credentials to Replit Secrets to enable video Rooms.'}
             </p>
           </div>
         </div>
-        <div className="rounded-lg bg-amber-100 dark:bg-amber-900/30 px-4 py-3 space-y-1">
-          <p className="text-[12px] font-mono font-semibold text-amber-900 dark:text-amber-200">
-            LIVEKIT_URL
-          </p>
-          <p className="text-[12px] font-mono font-semibold text-amber-900 dark:text-amber-200">
-            LIVEKIT_API_KEY
-          </p>
-          <p className="text-[12px] font-mono font-semibold text-amber-900 dark:text-amber-200">
-            LIVEKIT_API_SECRET
-          </p>
-        </div>
-        <p className="text-[12px] text-amber-600 dark:text-amber-400">
-          Sign in at{' '}
-          <a
-            href="https://cloud.livekit.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:no-underline"
-          >
-            cloud.livekit.io
-          </a>{' '}
-          → your project → Settings → Keys to obtain these values.
-        </p>
       </div>
     );
   }
 
-  // ── Video not enabled for this church ───────────────────────────────────────
+  // ── Video not enabled by the church ────────────────────────────────────────
 
   if (!status.videoEnabled) {
-    if (!status.canHost) return null; // members see nothing
+    if (!status.canHost) return null;
     return (
       <div className="rounded-2xl border border-border bg-muted/30 px-5 py-4">
         <p className="text-[13px] text-muted-foreground">
@@ -313,44 +329,84 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
     );
   }
 
-  // ── Room type not video-eligible ────────────────────────────────────────────
-
-  if (!videoEligible) return null;
-
-  // ── Active call (user is in LiveKit) ────────────────────────────────────────
+  // ── Active call ─────────────────────────────────────────────────────────────
+  //
+  // The outer container switches between an inline card and a fixed overlay via
+  // className — LiveKitRoom stays mounted throughout so the connection is
+  // never dropped when the user expands or collapses.
 
   if (isInCall && token && livekitUrl) {
     return (
-      <div className="rounded-2xl border border-primary/30 bg-card overflow-hidden">
+      <div
+        className={
+          expanded
+            ? 'fixed inset-0 z-50 bg-gray-950 flex flex-col'
+            : 'rounded-2xl border border-primary/30 bg-card overflow-hidden'
+        }
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/60 bg-primary/5">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="text-[14px] font-semibold text-foreground">Live</span>
+        <div
+          className={`flex items-center justify-between px-5 py-3.5 border-b ${
+            expanded
+              ? 'border-white/10'
+              : 'border-border/60 bg-primary/5'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <span className={`text-[14px] font-semibold ${expanded ? 'text-white' : 'text-foreground'}`}>
+              Live
+            </span>
           </div>
-          {status.canHost && (
+
+          <div className="flex items-center gap-2">
+            {/* Expand / Return to Study */}
             <Button
               size="sm"
-              variant="destructive"
-              className="h-8 rounded-lg text-[12px]"
-              onClick={handleEnd}
-              disabled={actioning}
+              variant={expanded ? 'secondary' : 'ghost'}
+              className={`h-8 rounded-lg text-[12px] gap-1.5 ${expanded ? 'bg-white/10 text-white hover:bg-white/20' : ''}`}
+              onClick={() => setExpanded(e => !e)}
             >
-              {actioning ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
-              End Meeting
+              {expanded ? (
+                <>
+                  <Minimize2 size={12} />
+                  Return to Study
+                </>
+              ) : (
+                <>
+                  <Maximize2 size={12} />
+                  Expand
+                </>
+              )}
             </Button>
-          )}
+
+            {/* End Meeting (host only) */}
+            {status.canHost && (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 rounded-lg text-[12px]"
+                onClick={handleEnd}
+                disabled={actioning}
+              >
+                {actioning ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+                End Meeting
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Duration warning */}
         {durationWarning && (
-          <div className="px-5 py-2 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200">
-            <p className="text-[12px] text-amber-700 dark:text-amber-300">{durationWarning}</p>
+          <div className={`px-5 py-2 border-b ${expanded ? 'bg-amber-900/30 border-amber-700' : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200'}`}>
+            <p className={`text-[12px] ${expanded ? 'text-amber-300' : 'text-amber-700 dark:text-amber-300'}`}>
+              {durationWarning}
+            </p>
           </div>
         )}
 
-        {/* LiveKit video area */}
-        <div className="px-4 py-4">
+        {/* LiveKit area — stays mounted regardless of expanded state */}
+        <div className={expanded ? 'flex-1 px-4 py-4 overflow-y-auto' : 'px-4 py-4'}>
           <LiveKitRoom
             serverUrl={livekitUrl}
             token={token}
@@ -359,7 +415,14 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
             video={true}
             onDisconnected={handleLeave}
             onError={(err) => {
-              setActionError(err.message);
+              const msg = err.message?.toLowerCase() ?? '';
+              setActionError(
+                msg.includes('permission') || msg.includes('denied')
+                  ? 'Camera or microphone access was denied. Check your browser permissions.'
+                  : msg.includes('network') || msg.includes('ice')
+                  ? 'Connection lost. Check your internet connection and try rejoining.'
+                  : "We couldn't connect your video. Try again."
+              );
               handleLeave();
             }}
             data-lk-theme="default"
@@ -369,11 +432,21 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
             <ParticipantGrid onLeave={handleLeave} />
           </LiveKitRoom>
         </div>
+
+        {/* Error (shown below video area) */}
+        {actionError && (
+          <div className={`mx-4 mb-4 flex items-start gap-2 rounded-xl px-4 py-3 ${
+            expanded ? 'bg-red-900/40' : 'bg-destructive/10'
+          }`}>
+            <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" />
+            <p className="text-[12px] text-destructive leading-relaxed">{actionError}</p>
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── Not in call — show lobby ────────────────────────────────────────────────
+  // ── Lobby — not yet in call ─────────────────────────────────────────────────
 
   const { videoActive, canHost } = status;
 
@@ -394,18 +467,18 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
             {videoActive && (
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[11px] text-red-600">Live</span>
+                <span className="text-[11px] text-red-600 font-medium">Live now</span>
               </div>
             )}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Not started, host */}
+          {/* No active session — leader can start */}
           {!videoActive && canHost && (
             <Button
               size="sm"
-              className="h-8 rounded-lg text-[13px]"
+              className="h-9 rounded-xl text-[13px] px-4"
               onClick={handleStart}
               disabled={actioning}
             >
@@ -418,11 +491,11 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
             </Button>
           )}
 
-          {/* Active, join */}
+          {/* Active session — member can join */}
           {videoActive && !isInCall && (
             <Button
               size="sm"
-              className="h-8 rounded-lg text-[13px] bg-primary"
+              className="h-9 rounded-xl text-[13px] px-4"
               onClick={handleJoin}
               disabled={actioning}
             >
@@ -435,12 +508,12 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
             </Button>
           )}
 
-          {/* Active, host can end even before joining */}
+          {/* Active session — host can end without joining */}
           {videoActive && canHost && !isInCall && (
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 rounded-lg text-[12px] text-muted-foreground"
+              className="h-9 rounded-xl text-[12px] text-muted-foreground"
               onClick={handleEnd}
               disabled={actioning}
             >
@@ -450,36 +523,34 @@ export function VideoRoom({ roomId, userId, displayName, videoEligible }: VideoR
         </div>
       </div>
 
-      {/* Body */}
-      <div className="px-5 py-4">
-        {/* Not active — member waiting */}
+      {/* Body text */}
+      <div className="px-5 py-4 space-y-3">
         {!videoActive && !canHost && (
           <p className="text-[13px] text-muted-foreground">
-            Live video has not started yet.
+            Video has not started yet.
           </p>
         )}
 
-        {/* Not active — host idle message */}
         {!videoActive && canHost && (
-          <p className="text-[13px] text-muted-foreground">
-            Start a live video session for this Room. Members will be notified and can join.
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
+            Start a live video session for this Room. Members will be able to join with one tap.
           </p>
         )}
 
-        {/* Active — waiting to join */}
         {videoActive && !isInCall && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
             <p className="text-[13px]">
-              A live video session is active. Tap{' '}
-              <span className="font-medium text-foreground">Join Video</span> to connect.
+              A live session is active. Tap{' '}
+              <span className="font-medium text-foreground">Join Video</span>{' '}
+              to connect.
             </p>
           </div>
         )}
 
         {/* Error */}
         {actionError && (
-          <div className="mt-3 flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
+          <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
             <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" />
             <p className="text-[12px] text-destructive leading-relaxed">{actionError}</p>
           </div>

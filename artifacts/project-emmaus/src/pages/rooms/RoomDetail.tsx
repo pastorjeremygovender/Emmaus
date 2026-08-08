@@ -14,6 +14,7 @@ import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } 
 import { getContentTypeShortLabel, getRoomTypeLabel } from '@/lib/rooms-types';
 import { apiGetJourneyProgress, apiLinkJourney } from '@/lib/rooms-api';
 import { PrayerRequests } from '@/components/PrayerRequests';
+import { VideoRoom } from '@/components/VideoRoom';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -168,6 +169,11 @@ export default function RoomDetail() {
   const contentShortLabel = getContentTypeShortLabel(room.contentType);
   const permissionLabel = getRoomTypeLabel(room.roomType);
 
+  // Personal rooms are not video-eligible by default.
+  // Ministry / Leadership / Church Service rooms can host video sessions
+  // (fine-grained permission is enforced server-side via church video settings).
+  const videoEligible = room.roomType !== 'personal';
+
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
 
@@ -267,6 +273,14 @@ export default function RoomDetail() {
             </div>
           </div>
         </section>
+
+        {/* ── Video ─────────────────────────────────────────────────────── */}
+        <VideoRoom
+          roomId={String(roomId)}
+          userId={user.id}
+          displayName={user.preferredName || 'Member'}
+          videoEligible={videoEligible}
+        />
 
         {/* ── Shared Progress ───────────────────────────────────────────── */}
         <section className="space-y-3">
@@ -501,7 +515,6 @@ export default function RoomDetail() {
                 { icon: MessageSquare, label: 'Highlight discussion question' },
                 { icon: Mic,         label: 'Start prayer time' },
                 { icon: BarChart2,   label: 'Launch a poll' },
-                { icon: Video,       label: 'Video call' },
               ].map(({ icon: Icon, label }) => (
                 <div
                   key={label}

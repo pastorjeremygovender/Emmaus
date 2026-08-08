@@ -213,7 +213,7 @@ export async function canCreateRoomType(
 
   // Check pastoral_role for ministry / leadership
   const { rows } = await pool.query(
-    "SELECT pastoral_role FROM user_profiles WHERE user_id = $1",
+    "SELECT pastoral_role FROM user_profiles WHERE email = $1",
     [userId]
   );
   const pastoralRole: string = rows[0]?.pastoral_role ?? "";
@@ -894,7 +894,7 @@ export async function canHostVideo(
 
   // 3. Check pastoral_role
   const { rows: profileRows } = await pool.query(
-    "SELECT pastoral_role FROM user_profiles WHERE user_id = $1",
+    "SELECT pastoral_role FROM user_profiles WHERE email = $1",
     [userId]
   );
   const pastoralRole: string = profileRows[0]?.pastoral_role ?? "";

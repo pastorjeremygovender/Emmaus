@@ -37,8 +37,8 @@ Admin UI: Settings → Rooms & Video Settings section.
 
 ## Build order
 - Step 1: room types, permissions, content linking, video settings schema ✅
-- Step 2 (paused): LiveKit backend endpoints exist; VideoRoom component exists but is NOT rendered in UI — paused per V1 architecture spec until architecture is approved.
 - V1 architecture: dual-dimension rooms (contentType + roomType), prayer requests, content panel, leader controls scaffold ✅
+- Phase 2 (LiveKit video active): VideoRoom rendered in RoomDetail for ministry/leadership/church_service rooms ✅
 
 ## Dual-dimension model (V1)
 - `room_type` = permission level: personal | ministry | leadership | church_service
