@@ -926,8 +926,17 @@ export interface SessionEvent {
     | "mode_change"
     | "focus_verse"
     | "poll_started"
+    | "poll_vote_count"
+    | "poll_revealed"
     | "poll_result"
-    | "session_state";
+    | "emmaus_started"
+    | "emmaus_chunk"
+    | "emmaus_done"
+    | "session_state"
+    | "highlight_added"
+    | "highlight_focus_changed"
+    | "note_added"
+    | "note_pinned";
   payload: Record<string, unknown>;
   sentBy: string;
   at: string; // ISO timestamp
@@ -1715,3 +1724,193 @@ export function recordPresenceHeartbeat(roomId: string, userId: string): void {
 }
 
 const presenceStore = new Map<string, Map<string, number>>();
+
+// ─── Room Polls (Task #437) ────────────────────────────────────────────────────
+
+export interface RoomPoll {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  createdBy: string;
+  question: string;
+  pollType: "yes_no" | "multiple_choice";
+  options: string[];
+  resultsRevealed: boolean;
+  createdAt: string;
+}
+
+export interface RoomPollResults {
+  poll: RoomPoll;
+  voteCounts: number[];
+  totalVotes: number;
+  userVotedIndex: number | null;
+}
+
+// ─── Room Emmaus Answers (Task #437) ──────────────────────────────────────────
+
+export interface RoomEmmausAnswer {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  askedBy: string;
+  question: string;
+  answer: string;
+  createdAt: string;
+}
+
+function rowToPoll(r: Record<string, unknown>): RoomPoll {
+  return {
+    id: String(r.id),
+    sessionId: String(r.session_id),
+    roomId: String(r.room_id),
+    createdBy: String(r.created_by),
+    question: String(r.question),
+    pollType: (r.poll_type as "yes_no" | "multiple_choice") ?? "yes_no",
+    options: Array.isArray(r.options) ? (r.options as string[]) : [],
+    resultsRevealed: Boolean(r.results_revealed),
+    createdAt: String(r.created_at),
+  };
+}
+
+function rowToEmmausAnswer(r: Record<string, unknown>): RoomEmmausAnswer {
+  return {
+    id: String(r.id),
+    sessionId: String(r.session_id),
+    roomId: String(r.room_id),
+    askedBy: String(r.asked_by),
+    question: String(r.question),
+    answer: String(r.answer ?? ""),
+    createdAt: String(r.created_at),
+  };
+}
+
+/** Create a new poll for the active session. Leader only (enforced by route). */
+export async function createPoll(
+  sessionId: string,
+  roomId: string,
+  createdBy: string,
+  question: string,
+  pollType: "yes_no" | "multiple_choice",
+  options: string[]
+): Promise<RoomPoll> {
+  const { rows } = await pool.query(
+    `INSERT INTO room_polls (session_id, room_id, created_by, question, poll_type, options)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+     RETURNING *`,
+    [sessionId, roomId, createdBy, question, pollType, JSON.stringify(options)]
+  );
+  return rowToPoll(rows[0] as Record<string, unknown>);
+}
+
+/** Get the most recent poll for a session (active or revealed). */
+export async function getActivePoll(
+  roomId: string,
+  sessionId: string
+): Promise<RoomPoll | null> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_polls
+     WHERE room_id = $1 AND session_id = $2
+     ORDER BY created_at DESC LIMIT 1`,
+    [roomId, sessionId]
+  );
+  if (!rows[0]) return null;
+  return rowToPoll(rows[0] as Record<string, unknown>);
+}
+
+/**
+ * Get a poll with aggregate vote counts.
+ * Individual votes are never exposed — only per-option totals.
+ */
+export async function getPollWithResults(
+  pollId: string,
+  roomId: string,
+  userId: string
+): Promise<RoomPollResults | null> {
+  const { rows: pollRows } = await pool.query(
+    `SELECT * FROM room_polls WHERE id = $1 AND room_id = $2 LIMIT 1`,
+    [pollId, roomId]
+  );
+  if (!pollRows[0]) return null;
+  const poll = rowToPoll(pollRows[0] as Record<string, unknown>);
+
+  const { rows: voteRows } = await pool.query(
+    `SELECT option_index, COUNT(*)::int AS count
+     FROM room_poll_votes WHERE poll_id = $1
+     GROUP BY option_index`,
+    [pollId]
+  );
+  const voteCounts = poll.options.map((_, i) => {
+    const found = voteRows.find((r) => Number(r.option_index) === i);
+    return found ? Number(found.count) : 0;
+  });
+  const totalVotes = voteCounts.reduce((a, b) => a + b, 0);
+
+  const { rows: myRows } = await pool.query(
+    `SELECT option_index FROM room_poll_votes
+     WHERE poll_id = $1 AND user_id = $2 LIMIT 1`,
+    [pollId, userId]
+  );
+  const userVotedIndex = myRows[0] ? Number(myRows[0].option_index) : null;
+
+  return { poll, voteCounts, totalVotes, userVotedIndex };
+}
+
+/**
+ * Cast a vote. UNIQUE constraint on (poll_id, user_id) silently
+ * discards duplicate votes so the route never needs to handle them specially.
+ */
+export async function castVote(
+  pollId: string,
+  userId: string,
+  optionIndex: number
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_poll_votes (poll_id, user_id, option_index)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (poll_id, user_id) DO NOTHING`,
+    [pollId, userId, optionIndex]
+  );
+}
+
+/** Reveal the poll results to all members. Leader only (enforced by route). */
+export async function revealPollResults(
+  pollId: string,
+  roomId: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE room_polls SET results_revealed = true
+     WHERE id = $1 AND room_id = $2`,
+    [pollId, roomId]
+  );
+}
+
+/** Store a completed shared Ask Emmaus answer for the session. */
+export async function addEmmausAnswer(
+  sessionId: string,
+  roomId: string,
+  askedBy: string,
+  question: string,
+  answer: string
+): Promise<RoomEmmausAnswer> {
+  const { rows } = await pool.query(
+    `INSERT INTO room_emmaus_answers (session_id, room_id, asked_by, question, answer)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [sessionId, roomId, askedBy, question, answer]
+  );
+  return rowToEmmausAnswer(rows[0] as Record<string, unknown>);
+}
+
+/** List all shared Emmaus answers for a session, oldest-first. */
+export async function getSessionEmmausAnswers(
+  roomId: string,
+  sessionId: string
+): Promise<RoomEmmausAnswer[]> {
+  const { rows } = await pool.query(
+    `SELECT * FROM room_emmaus_answers
+     WHERE room_id = $1 AND session_id = $2
+     ORDER BY created_at ASC`,
+    [roomId, sessionId]
+  );
+  return rows.map((r) => rowToEmmausAnswer(r as Record<string, unknown>));
+}

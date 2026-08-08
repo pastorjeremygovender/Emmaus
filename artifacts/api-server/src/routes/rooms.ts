@@ -11,6 +11,9 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { requireAuth } from "../emmaus/auth.js";
 import { isStartSharedReady } from "../lib/feature-flags.js";
+import { createLLMProvider, type LLMMessage } from "../emmaus/llm-provider.js";
+import { buildSystemPrompt } from "../emmaus/system-instructions.js";
+import { checkSafetyKeywordsOnly, checkPastoralHandoff } from "../emmaus/safety-layer.js";
 import {
   createRoom,
   getRoomsForUser,
@@ -69,6 +72,13 @@ import {
   addSharedNote,
   pinNote,
   getSessionByIdForRoom,
+  createPoll,
+  getActivePoll,
+  getPollWithResults,
+  castVote,
+  revealPollResults,
+  addEmmausAnswer,
+  getSessionEmmausAnswers,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -1799,6 +1809,351 @@ router.patch("/:roomId/session/notes/:noteId/pin", async (req, res) => {
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to pin note." });
+  }
+});
+
+// ─── Shared Ask Emmaus (Task #437) ───────────────────────────────────────────
+
+// POST /:roomId/session/ask-emmaus — leader only; HTTP returns immediately,
+// streaming is broadcast to ALL session subscribers via SSE bus.
+router.post("/:roomId/session/ask-emmaus", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+
+  const { sessionId, question, askerName } = req.body as {
+    sessionId?: string;
+    question?: string;
+    askerName?: string;
+  };
+  if (!sessionId || !question?.trim()) {
+    res.status(400).json({ error: "sessionId and question are required." });
+    return;
+  }
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+
+  const trimmedQ = question.trim();
+
+  // ── Safety gate (runs BEFORE anything is broadcast to the room) ──────────
+  // Uses keyword-only detection (no store) — identical signals to private Ask Emmaus.
+  const safetyResult = checkSafetyKeywordsOnly(trimmedQ);
+  if (!safetyResult.isSafe) {
+    // Return an error to the leader. Nothing is broadcast to the room.
+    res.status(422).json({
+      error:
+        "This question contains content that cannot be shared with the group. " +
+        "Please speak with this person privately, or call Samaritans on 116 123 (free, 24/7).",
+      safetyHandover: true,
+      category: safetyResult.triggeredCategory,
+    });
+    return;
+  }
+
+  // Check for pastoral signals — inject a soft note in the context if needed
+  const needsPastoralNote = checkPastoralHandoff(trimmedQ);
+
+  // Signal to all members that streaming is about to begin
+  broadcastRoomEvent(String(roomId), {
+    type: "emmaus_started",
+    payload: { question: trimmedQ, askedBy: userId, askerName: askerName ?? "" },
+    sentBy: userId,
+    at: new Date().toISOString(),
+  });
+
+  // Return immediately — streaming runs in background via SSE bus
+  res.json({ ok: true, question: trimmedQ });
+
+  void (async () => {
+    try {
+      const room = await getRoomById(String(roomId));
+      const scriptureCtx = session.currentScripture
+        ? `The group is currently studying: ${
+            session.currentScripture.displayLabel ??
+            `${session.currentScripture.book} ${session.currentScripture.chapter}`
+          }`
+        : "";
+      const stepCtx = session.currentStep
+        ? `Current session step: ${session.currentStep}`
+        : "";
+
+      const contextBlock = [
+        `This is a SHARED "Ask Emmaus Together" session for a discipleship Room called "${room?.name ?? "this Room"}".`,
+        `Your response will be shown simultaneously to all members of the group.`,
+        `Respond warmly to the group as a whole — pastoral, encouraging, and accessible to everyone present.`,
+        `Do NOT address a single person by name in your response.`,
+        scriptureCtx,
+        stepCtx,
+        needsPastoralNote
+          ? "Note: This question touches on a topic that may benefit from private pastoral follow-up. You may gently encourage the group that their leader is available to speak with anyone personally after the session."
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const systemPrompt = buildSystemPrompt(contextBlock, askerName ?? undefined);
+      const messages: LLMMessage[] = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: trimmedQ },
+      ];
+
+      const provider = createLLMProvider();
+      let fullText = "";
+
+      for await (const chunk of provider.streamCompletion(messages, { maxTokens: 900 })) {
+        if (chunk.done) break;
+        if (!chunk.content) continue;
+        fullText += chunk.content;
+        broadcastRoomEvent(String(roomId), {
+          type: "emmaus_chunk",
+          payload: { text: chunk.content },
+          sentBy: userId,
+          at: new Date().toISOString(),
+        });
+      }
+
+      // Strip <EMMAUS_META> block before storing
+      const metaIdx = fullText.indexOf("<EMMAUS_META>");
+      const cleanText =
+        metaIdx !== -1 ? fullText.slice(0, metaIdx).trim() : fullText.trim();
+
+      const answer = await addEmmausAnswer(
+        session.id, String(roomId), userId, trimmedQ, cleanText
+      );
+
+      broadcastRoomEvent(String(roomId), {
+        type: "emmaus_done",
+        payload: { question: trimmedQ, fullText: cleanText, answerId: answer.id },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+    } catch {
+      broadcastRoomEvent(String(roomId), {
+        type: "emmaus_done",
+        payload: {
+          question: trimmedQ,
+          fullText: "Something went wrong generating the response. Please try again.",
+          answerId: null,
+          error: true,
+        },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+    }
+  })();
+});
+
+// GET /:roomId/session/emmaus-answers?sessionId= — any room member
+router.get("/:roomId/session/emmaus-answers", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.query as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId query param is required." });
+    return;
+  }
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const answers = await getSessionEmmausAnswers(String(roomId), session.id);
+    res.json({ answers });
+  } catch {
+    res.status(500).json({ error: "Failed to load Emmaus answers." });
+  }
+});
+
+// ─── Polls (Task #437) ────────────────────────────────────────────────────────
+
+// POST /:roomId/session/poll — leader creates a new poll
+router.post("/:roomId/session/poll", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+
+  const {
+    sessionId,
+    question,
+    pollType = "yes_no",
+    options,
+  } = req.body as {
+    sessionId?: string;
+    question?: string;
+    pollType?: string;
+    options?: string[];
+  };
+
+  if (!sessionId || !question?.trim()) {
+    res.status(400).json({ error: "sessionId and question are required." });
+    return;
+  }
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+
+  const resolvedType: "yes_no" | "multiple_choice" =
+    pollType === "multiple_choice" ? "multiple_choice" : "yes_no";
+  // Normalize options BEFORE checking length — prevents blank entries slipping through
+  const normalizedOptions: string[] = Array.isArray(options)
+    ? options.slice(0, 5).map((o) => String(o).trim()).filter((s) => s.length > 0)
+    : [];
+  const resolvedOptions: string[] =
+    resolvedType === "yes_no"
+      ? ["Yes", "No"]
+      : normalizedOptions.length >= 2
+      ? normalizedOptions
+      : ["Option A", "Option B"];
+  // Guard question length
+  if (question.trim().length > 500) {
+    res.status(400).json({ error: "Question must be 500 characters or fewer." });
+    return;
+  }
+
+  try {
+    const poll = await createPoll(
+      session.id, String(roomId), userId,
+      question.trim(), resolvedType, resolvedOptions
+    );
+    broadcastRoomEvent(String(roomId), {
+      type: "poll_started",
+      payload: { poll },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.status(201).json({ poll });
+  } catch {
+    res.status(500).json({ error: "Failed to create poll." });
+  }
+});
+
+// GET /:roomId/session/poll?sessionId= — any member: get active poll + results
+router.get("/:roomId/session/poll", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const { sessionId } = req.query as { sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId query param is required." });
+    return;
+  }
+  const session = await getSessionByIdForRoom(sessionId, String(roomId));
+  if (!session) {
+    res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  try {
+    const activePoll = await getActivePoll(String(roomId), session.id);
+    if (!activePoll) {
+      res.json({ poll: null });
+      return;
+    }
+    const results = await getPollWithResults(activePoll.id, String(roomId), userId);
+    res.json({ poll: results });
+  } catch {
+    res.status(500).json({ error: "Failed to load poll." });
+  }
+});
+
+// POST /:roomId/session/poll/:pollId/vote — any member casts a vote
+router.post("/:roomId/session/poll/:pollId/vote", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, pollId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+
+  // Validate optionIndex is a non-negative integer before touching the DB
+  const { optionIndex: rawIdx } = req.body as { optionIndex?: unknown };
+  const idx = Number(rawIdx);
+  if (!Number.isInteger(idx) || idx < 0) {
+    res.status(400).json({ error: "optionIndex must be a non-negative integer." });
+    return;
+  }
+
+  // Scope poll lookup to this room — prevents cross-room vote injection
+  const pollResults = await getPollWithResults(String(pollId), String(roomId), userId);
+  if (!pollResults) {
+    res.status(404).json({ error: "Poll not found for this room." });
+    return;
+  }
+  // Reject votes after the leader has revealed results
+  if (pollResults.poll.resultsRevealed) {
+    res.status(409).json({ error: "This poll has already been revealed. Votes are closed." });
+    return;
+  }
+  // Reject out-of-range option indices
+  if (idx >= pollResults.poll.options.length) {
+    res.status(400).json({
+      error: `optionIndex ${idx} is out of range (valid: 0–${pollResults.poll.options.length - 1}).`,
+    });
+    return;
+  }
+
+  try {
+    await castVote(String(pollId), userId, idx);
+    const results = await getPollWithResults(String(pollId), String(roomId), userId);
+    if (results) {
+      broadcastRoomEvent(String(roomId), {
+        type: "poll_vote_count",
+        payload: {
+          pollId: String(pollId),
+          voteCounts: results.voteCounts,
+          totalVotes: results.totalVotes,
+        },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to cast vote." });
+  }
+});
+
+// POST /:roomId/session/poll/:pollId/reveal — leader reveals results
+router.post("/:roomId/session/poll/:pollId/reveal", async (req, res) => {
+  const { roomId, pollId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  try {
+    await revealPollResults(String(pollId), String(roomId));
+    const results = await getPollWithResults(String(pollId), String(roomId), userId);
+    broadcastRoomEvent(String(roomId), {
+      type: "poll_revealed",
+      payload: {
+        pollId: String(pollId),
+        voteCounts: results?.voteCounts ?? [],
+        totalVotes: results?.totalVotes ?? 0,
+        options: results?.poll.options ?? [],
+        question: results?.poll.question ?? "",
+      },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true, results });
+  } catch {
+    res.status(500).json({ error: "Failed to reveal poll results." });
   }
 });
 

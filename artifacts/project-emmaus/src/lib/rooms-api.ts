@@ -10,7 +10,7 @@ import type {
   RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress,
   VideoSessionStatus, PrayerRequest, ContentType,
   RoomSession, SessionMode, ScriptureRef, SessionAttendee,
-  RoomHighlight, SharedNote,
+  RoomHighlight, SharedNote, RoomPoll, RoomPollResults, RoomEmmausAnswer,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -627,5 +627,100 @@ export async function apiPinNote(
     `/api/rooms/${roomId}/session/notes/${encodeURIComponent(noteId)}/pin`,
     userId,
     { method: 'PATCH', body: JSON.stringify({ pin }) }
+  );
+}
+
+// ─── Shared Ask Emmaus (Task #437) ────────────────────────────────────────────
+
+/**
+ * Ask a question together as a group. The HTTP response returns immediately;
+ * the AI response streams to all members via the session SSE bus as
+ * `emmaus_chunk` / `emmaus_done` events. Leader only.
+ */
+export async function apiSharedAskEmmaus(
+  userId: string,
+  roomId: string,
+  sessionId: string,
+  question: string,
+  askerName?: string
+): Promise<{ ok: boolean; question: string }> {
+  return roomsFetch(
+    `/api/rooms/${roomId}/session/ask-emmaus`,
+    userId,
+    { method: 'POST', body: JSON.stringify({ sessionId, question, askerName }) }
+  );
+}
+
+/** Get all completed shared Emmaus answers for a session. */
+export async function apiGetEmmausAnswers(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<RoomEmmausAnswer[]> {
+  const data = await roomsFetch<{ answers: RoomEmmausAnswer[] }>(
+    `/api/rooms/${roomId}/session/emmaus-answers?sessionId=${encodeURIComponent(sessionId)}`,
+    userId
+  );
+  return data.answers;
+}
+
+// ─── Polls (Task #437) ────────────────────────────────────────────────────────
+
+/** Create a new poll and broadcast it to all session members. Leader only. */
+export async function apiCreatePoll(
+  userId: string,
+  roomId: string,
+  params: {
+    sessionId: string;
+    question: string;
+    pollType?: 'yes_no' | 'multiple_choice';
+    options?: string[];
+  }
+): Promise<RoomPoll> {
+  const data = await roomsFetch<{ poll: RoomPoll }>(
+    `/api/rooms/${roomId}/session/poll`,
+    userId,
+    { method: 'POST', body: JSON.stringify(params) }
+  );
+  return data.poll;
+}
+
+/** Get the active poll + current vote counts for the session. */
+export async function apiGetActivePoll(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<RoomPollResults | null> {
+  const data = await roomsFetch<{ poll: RoomPollResults | null }>(
+    `/api/rooms/${roomId}/session/poll?sessionId=${encodeURIComponent(sessionId)}`,
+    userId
+  );
+  return data.poll;
+}
+
+/** Cast a vote on the active poll. Each member may vote only once. */
+export async function apiCastVote(
+  userId: string,
+  roomId: string,
+  pollId: string,
+  optionIndex: number
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/session/poll/${encodeURIComponent(pollId)}/vote`,
+    userId,
+    { method: 'POST', body: JSON.stringify({ optionIndex }) }
+  );
+}
+
+/** Reveal poll results to all members. Leader only. */
+export async function apiRevealPoll(
+  userId: string,
+  roomId: string,
+  pollId: string
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/session/poll/${encodeURIComponent(pollId)}/reveal`,
+    userId,
+    { method: 'POST' }
   );
 }

@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
-import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote } from '@/lib/rooms-types';
+import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll } from '@/lib/rooms-types';
 
 export interface NavigatePayload {
   stepId?: string;
@@ -59,6 +59,22 @@ interface UseFollowLeaderResult {
   incomingPinChange: { noteId: string; isPinned: boolean } | null;
   /** Latest focus-verse change from SSE. */
   incomingFocusChange: string | null;
+
+  // ── Shared Ask Emmaus (Task #437) ──────────────────────────────────────
+  /** Non-null while the leader's question is being generated. */
+  emmausQuestion: string | null;
+  /** Accumulated text chunks from the current stream. Reset on each new question. */
+  emmausStreamText: string;
+  /** Set when the current stream completes; cleared when a new question starts. */
+  emmausAnswer: { question: string; fullText: string; answerId: string | null } | null;
+
+  // ── Polls (Task #437) ──────────────────────────────────────────────────
+  /** New poll received via SSE (auto-show PollCard when followLeader is ON). */
+  incomingPoll: RoomPoll | null;
+  /** Latest vote-count broadcast from the server. */
+  pollVoteUpdate: { pollId: string; voteCounts: number[]; totalVotes: number } | null;
+  /** Set when the leader reveals poll results. */
+  pollRevealUpdate: { pollId: string; voteCounts: number[]; totalVotes: number; options: string[]; question: string } | null;
 }
 
 export function useFollowLeader({
@@ -77,6 +93,16 @@ export function useFollowLeader({
   const [incomingNotes, setIncomingNotes] = useState<SharedNote[]>([]);
   const [incomingPinChange, setIncomingPinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
   const [incomingFocusChange, setIncomingFocusChange] = useState<string | null>(null);
+
+  // ── Shared Ask Emmaus (Task #437) ────────────────────────────────────────
+  const [emmausQuestion, setEmmausQuestion] = useState<string | null>(null);
+  const [emmausStreamText, setEmmausStreamText] = useState('');
+  const [emmausAnswer, setEmmausAnswer] = useState<{ question: string; fullText: string; answerId: string | null } | null>(null);
+
+  // ── Polls (Task #437) ────────────────────────────────────────────────────
+  const [incomingPoll, setIncomingPoll] = useState<RoomPoll | null>(null);
+  const [pollVoteUpdate, setPollVoteUpdate] = useState<{ pollId: string; voteCounts: number[]; totalVotes: number } | null>(null);
+  const [pollRevealUpdate, setPollRevealUpdate] = useState<{ pollId: string; voteCounts: number[]; totalVotes: number; options: string[]; question: string } | null>(null);
 
   // Refs for stable callbacks in the SSE loop
   const followLeaderRef = useRef(followLeader);
@@ -180,7 +206,56 @@ export function useFollowLeader({
         break;
       }
 
-      // focus_verse, poll_started, poll_result available via lastEvent
+      // ── Shared Ask Emmaus ───────────────────────────────────────────────
+      case 'emmaus_started': {
+        const question = event.payload.question as string;
+        setEmmausQuestion(question ?? null);
+        setEmmausStreamText('');
+        setEmmausAnswer(null);
+        break;
+      }
+
+      case 'emmaus_chunk': {
+        const text = event.payload.text as string;
+        if (text) setEmmausStreamText(prev => prev + text);
+        break;
+      }
+
+      case 'emmaus_done': {
+        const q = event.payload.question as string;
+        const fullText = event.payload.fullText as string;
+        const answerId = (event.payload.answerId as string | null) ?? null;
+        setEmmausAnswer({ question: q, fullText, answerId });
+        setEmmausQuestion(null);
+        break;
+      }
+
+      // ── Polls ────────────────────────────────────────────────────────────
+      case 'poll_started': {
+        const poll = event.payload.poll as RoomPoll;
+        if (poll) setIncomingPoll(poll);
+        break;
+      }
+
+      case 'poll_vote_count': {
+        const pollId = event.payload.pollId as string;
+        const voteCounts = event.payload.voteCounts as number[];
+        const totalVotes = event.payload.totalVotes as number;
+        setPollVoteUpdate({ pollId, voteCounts, totalVotes });
+        break;
+      }
+
+      case 'poll_revealed': {
+        const pollId = event.payload.pollId as string;
+        const voteCounts = event.payload.voteCounts as number[];
+        const totalVotes = event.payload.totalVotes as number;
+        const options = (event.payload.options as string[]) ?? [];
+        const question = (event.payload.question as string) ?? '';
+        setPollRevealUpdate({ pollId, voteCounts, totalVotes, options, question });
+        break;
+      }
+
+      // focus_verse, poll_result available via lastEvent
       default:
         break;
     }
@@ -253,5 +328,12 @@ export function useFollowLeader({
     incomingNotes,
     incomingPinChange,
     incomingFocusChange,
+    // Task #437
+    emmausQuestion,
+    emmausStreamText,
+    emmausAnswer,
+    incomingPoll,
+    pollVoteUpdate,
+    pollRevealUpdate,
   };
 }

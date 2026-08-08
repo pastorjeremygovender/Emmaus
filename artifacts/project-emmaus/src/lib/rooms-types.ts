@@ -204,7 +204,12 @@ export type SessionEventType =
   | 'mode_change'
   | 'focus_verse'
   | 'poll_started'
+  | 'poll_vote_count'
+  | 'poll_revealed'
   | 'poll_result'
+  | 'emmaus_started'
+  | 'emmaus_chunk'
+  | 'emmaus_done'
   | 'session_state'
   | 'highlight_added'
   | 'highlight_focus_changed'
@@ -223,4 +228,35 @@ export interface SessionAttendee {
   preferredName: string;
   joinedAt: string;
   leftAt: string | null;
+}
+
+// ─── Polls & Shared Ask Emmaus (Task #437) ────────────────────────────────────
+
+export interface RoomPoll {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  createdBy: string;
+  question: string;
+  pollType: 'yes_no' | 'multiple_choice';
+  options: string[];
+  resultsRevealed: boolean;
+  createdAt: string;
+}
+
+export interface RoomPollResults {
+  poll: RoomPoll;
+  voteCounts: number[];
+  totalVotes: number;
+  userVotedIndex: number | null;
+}
+
+export interface RoomEmmausAnswer {
+  id: string;
+  sessionId: string;
+  roomId: string;
+  askedBy: string;
+  question: string;
+  answer: string;
+  createdAt: string;
 }

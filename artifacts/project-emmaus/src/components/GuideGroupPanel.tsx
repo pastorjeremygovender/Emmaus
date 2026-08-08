@@ -26,7 +26,7 @@ import {
   apiEndSession,
   apiChangeMode,
   apiNavigate,
-  apiBroadcastEvent,
+  apiCreatePoll,
 } from '@/lib/rooms-api';
 import type { RoomSession, ScriptureRef } from '@/lib/rooms-types';
 
@@ -52,6 +52,8 @@ interface GuideGroupPanelProps {
   onOpenVideo?: () => void;
   onEndVideo?: () => void;
   videoActive?: boolean;
+  /** Called when leader taps "Ask Emmaus Together" — opens SharedAskEmmausPanel. */
+  onOpenAskEmmaus?: () => void;
 }
 
 type PanelView =
@@ -78,6 +80,7 @@ export function GuideGroupPanel({
   onOpenVideo,
   onEndVideo,
   videoActive = false,
+  onOpenAskEmmaus,
 }: GuideGroupPanelProps) {
   const [view, setView] = useState<PanelView>('main');
   const [busy, setBusy] = useState<string | null>(null); // which action is loading
@@ -153,12 +156,10 @@ export function GuideGroupPanel({
     await apiChangeMode(userId, roomId, 'prayer', leaderName);
   });
 
-  const handleAskEmmausTogether = () => run('ask-emmaus', async () => {
-    await apiBroadcastEvent(userId, roomId, 'mode_change', {
-      mode: 'ask_emmaus',
-      leaderName,
-    });
-  });
+  const handleAskEmmausTogether = () => {
+    onClose();
+    onOpenAskEmmaus?.();
+  };
 
   // ── Scripture picker ───────────────────────────────────────────────────────
 
@@ -179,16 +180,18 @@ export function GuideGroupPanel({
   // ── Poll ───────────────────────────────────────────────────────────────────
 
   const handleLaunchPoll = () => run('poll', async () => {
-    const activePoll = {
-      ...poll,
-      id: Date.now().toString(),
-      launchedAt: new Date().toISOString(),
-      leaderName,
-      votes: {},
-      revealed: false,
-    };
-    await apiBroadcastEvent(userId, roomId, 'poll_started', { poll: activePoll });
+    if (!activeSession) {
+      alert('Start a session first before launching a poll.');
+      return;
+    }
+    await apiCreatePoll(userId, roomId, {
+      sessionId: activeSession.id,
+      question: poll.question.trim() || 'What do you think?',
+      pollType: poll.type,
+      options: poll.type === 'yes_no' ? ['Yes', 'No'] : poll.options.filter(o => o.trim()),
+    });
     setView('main');
+    onClose();
   });
 
   // ── Video ──────────────────────────────────────────────────────────────────

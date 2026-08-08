@@ -11,14 +11,16 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
-import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode, ScriptureRef, RoomHighlight, SharedNote } from '@/lib/rooms-types';
+import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
 import { SharedNotesPanel } from '@/components/SharedNotesPanel';
+import { SharedAskEmmausPanel } from '@/components/SharedAskEmmausPanel';
+import { PollCard } from '@/components/PollCard';
 import { useFollowLeader } from '@/hooks/useFollowLeader';
-import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave } from '@/lib/rooms-api';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave, apiGetActivePoll } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -57,6 +59,15 @@ export default function RoomDetail() {
   const [ssePinChange, setSsePinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
   const [sseFocusChange, setSseFocusChange] = useState<string | null>(null);
 
+  // ── Task #437 — Shared Ask Emmaus + Polls panel state ─────────────────────
+  const [showSharedAskEmmaus, setShowSharedAskEmmaus] = useState(false);
+  const [activePoll, setActivePoll] = useState<RoomPoll | null>(null);
+  const [hydratedPollResults, setHydratedPollResults] = useState<{
+    voteCounts: number[];
+    totalVotes: number;
+    userVotedIndex: number | null;
+  } | null>(null);
+
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
@@ -75,6 +86,13 @@ export default function RoomDetail() {
     incomingNotes,
     incomingPinChange,
     incomingFocusChange,
+    // Task #437
+    emmausQuestion,
+    emmausStreamText,
+    emmausAnswer,
+    incomingPoll,
+    pollVoteUpdate,
+    pollRevealUpdate,
   } = useFollowLeader({
     roomId: String(roomId),
     userId: user?.id ?? '',
@@ -111,6 +129,41 @@ export default function RoomDetail() {
   useEffect(() => {
     if (incomingFocusChange !== undefined) setSseFocusChange(incomingFocusChange);
   }, [incomingFocusChange]);
+
+  // ── Task #437: hydrate active poll from DB when session is (re)established ──
+  // This restores poll state for members who join/reconnect after a poll starts.
+  useEffect(() => {
+    if (!activeSession || !user || !roomId) return;
+    apiGetActivePoll(user.id, String(roomId), activeSession.id)
+      .then(result => {
+        if (result) {
+          setActivePoll(result.poll);
+          setHydratedPollResults({
+            voteCounts: result.voteCounts,
+            totalVotes: result.totalVotes,
+            userVotedIndex: result.userVotedIndex,
+          });
+        }
+      })
+      .catch(() => { /* silent — poll may not exist yet */ });
+  // Only re-run when the session ID changes (new session or reconnect)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
+
+  // ── Task #437: auto-open new panels from SSE events ───────────────────────
+  useEffect(() => {
+    if (incomingPoll) {
+      setActivePoll(incomingPoll);
+      setHydratedPollResults(null); // fresh SSE poll has no prior results
+    }
+  }, [incomingPoll]);
+
+  // Open Ask Emmaus panel for all members when the leader starts streaming
+  useEffect(() => {
+    if (emmausQuestion && !showSharedAskEmmaus) {
+      setShowSharedAskEmmaus(true);
+    }
+  }, [emmausQuestion, showSharedAskEmmaus]);
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -490,9 +543,42 @@ export default function RoomDetail() {
           onSessionEnded={() => {
             setActiveSession(null);
           }}
-          videoActive={false /* wired to VideoRoom state in Task #437 */}
-          onOpenVideo={() => {/* handled by VideoRoom directly */}}
-          onEndVideo={() => {/* handled by VideoRoom directly */}}
+          videoActive={false}
+          onOpenVideo={() => {}}
+          onEndVideo={() => {}}
+          onOpenAskEmmaus={() => {
+            setShowGuideGroup(false);
+            setShowSharedAskEmmaus(true);
+          }}
+        />
+      )}
+
+      {/* ── Shared Ask Emmaus Panel (Task #437) ──────────────────────────── */}
+      {showSharedAskEmmaus && activeSession && (
+        <SharedAskEmmausPanel
+          roomId={String(roomId)}
+          userId={user.id}
+          sessionId={activeSession.id}
+          isLeader={isAuthorizedLeader}
+          userName={user.preferredName || 'Member'}
+          activeQuestion={emmausQuestion}
+          streamText={emmausStreamText}
+          latestAnswer={emmausAnswer}
+          onClose={() => setShowSharedAskEmmaus(false)}
+        />
+      )}
+
+      {/* ── Poll Card (Task #437) — auto-shown on poll_started / session hydrate */}
+      {activePoll && (
+        <PollCard
+          roomId={String(roomId)}
+          userId={user.id}
+          poll={activePoll}
+          isLeader={isAuthorizedLeader}
+          pollVoteUpdate={pollVoteUpdate}
+          pollRevealUpdate={pollRevealUpdate}
+          initialResults={hydratedPollResults ?? undefined}
+          onClose={() => setActivePoll(null)}
         />
       )}
 

@@ -1526,6 +1526,50 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_highlights/room_shared_notes failed (non-fatal)");
   }
 
+  // ── Room Polls + Emmaus Answers (Task #437) ──────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_emmaus_answers (
+        id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+        room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        asked_by   TEXT NOT NULL,
+        question   TEXT NOT NULL,
+        answer     TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_emmaus_answers_session_idx
+        ON room_emmaus_answers(room_id, session_id);
+
+      CREATE TABLE IF NOT EXISTS room_polls (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id       UUID NOT NULL REFERENCES room_sessions(id) ON DELETE CASCADE,
+        room_id          UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        created_by       TEXT NOT NULL,
+        question         TEXT NOT NULL,
+        poll_type        TEXT NOT NULL DEFAULT 'yes_no'
+          CHECK (poll_type IN ('yes_no','multiple_choice')),
+        options          JSONB NOT NULL DEFAULT '[]',
+        results_revealed BOOLEAN NOT NULL DEFAULT false,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_polls_room_session_idx
+        ON room_polls(room_id, session_id);
+
+      CREATE TABLE IF NOT EXISTS room_poll_votes (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        poll_id      UUID NOT NULL REFERENCES room_polls(id) ON DELETE CASCADE,
+        user_id      TEXT NOT NULL,
+        option_index INTEGER NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (poll_id, user_id)
+      );
+    `);
+    logger.info("Startup migration: room_polls + room_poll_votes + room_emmaus_answers tables ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_polls/room_emmaus_answers failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").
