@@ -18,7 +18,159 @@ import {
   clearDevAuditLog,
   type DevAuditEntry,
 } from '@/lib/dev-mode';
-import { FlaskConical, ChevronDown } from 'lucide-react';
+import { FlaskConical, ChevronDown, Video } from 'lucide-react';
+import { apiGetVideoSettings, apiUpdateVideoSettings } from '@/lib/rooms-api';
+
+// ─── Rooms & Video settings section ──────────────────────────────────────────
+
+const ROLE_LABELS: Record<string, string> = {
+  group_leader: 'Group Leader',
+  pastor:       'Pastor',
+  admin:        'Admin',
+  superAdmin:   'Super Admin',
+};
+
+type VidSettings = {
+  videoEnabled: boolean;
+  maxConcurrentRooms: number;
+  maxParticipantsPerRoom: number;
+  maxDurationMinutes: number;
+  allowedRoles: string[];
+};
+
+function VideoSettingsSection() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<VidSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    apiGetVideoSettings(user.id).then(setSettings).catch(() => {});
+  }, [user]);
+
+  async function patch<K extends keyof VidSettings>(key: K, value: VidSettings[K]) {
+    if (!settings || !user) return;
+    const next: VidSettings = { ...settings, [key]: value };
+    setSettings(next);
+    setSaving(true);
+    try {
+      const updated = await apiUpdateVideoSettings(user.id, { [key]: value });
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { /* non-fatal */ }
+    finally { setSaving(false); }
+  }
+
+  if (!settings) return null;
+
+  const ALL_ROLES = ['group_leader', 'pastor', 'admin', 'superAdmin'];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Video size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Rooms &amp; Video Settings</h2>
+        </div>
+        {saving && <span className="text-xs text-gray-400">Saving…</span>}
+        {saved  && <span className="text-xs text-green-600">Saved</span>}
+      </div>
+
+      <p className="text-xs text-gray-400 leading-relaxed">
+        Video Rooms require LiveKit integration (Step 2 — not yet active). These settings
+        will enforce cost limits and permission controls when video is enabled.
+      </p>
+
+      {/* Enable / disable video */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={settings.videoEnabled}
+          onChange={e => patch('videoEnabled', e.target.checked)}
+          className="w-4 h-4 rounded"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-700">Video Rooms enabled</div>
+          <div className="text-xs text-gray-400">
+            When off, no user can start or join a LiveKit video session.
+          </div>
+        </div>
+      </label>
+
+      {/* Limits */}
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Max concurrent rooms">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={settings.maxConcurrentRooms}
+            onChange={e => patch('maxConcurrentRooms', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+        <Field label="Max participants / room">
+          <input
+            type="number"
+            min={2}
+            max={500}
+            value={settings.maxParticipantsPerRoom}
+            onChange={e => patch('maxParticipantsPerRoom', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+        <Field label="Max duration (min)">
+          <input
+            type="number"
+            min={15}
+            max={480}
+            value={settings.maxDurationMinutes}
+            onChange={e => patch('maxDurationMinutes', Number(e.target.value))}
+            className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </Field>
+      </div>
+
+      {/* Allowed roles */}
+      <Field label="Who can start video">
+        <div className="flex flex-wrap gap-3 pt-1">
+          {ALL_ROLES.map(role => (
+            <label key={role} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.allowedRoles.includes(role)}
+                onChange={e => {
+                  const next = e.target.checked
+                    ? [...settings.allowedRoles, role]
+                    : settings.allowedRoles.filter(r => r !== role);
+                  patch('allowedRoles', next);
+                }}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-sm text-gray-700">{ROLE_LABELS[role] ?? role}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          Members can always join authorised meetings but cannot start video unless granted a role above.
+        </p>
+      </Field>
+
+      {/* Room type legend */}
+      <div className="pt-2 border-t border-gray-100 space-y-2">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Room Types</p>
+        <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+          <div><span className="font-medium text-gray-700">Personal</span> — any member, no video</div>
+          <div><span className="font-medium text-gray-700">Ministry</span> — Group Leader+, video allowed</div>
+          <div><span className="font-medium text-gray-700">Leadership</span> — Pastor+, private</div>
+          <div><span className="font-medium text-gray-700">Church Service</span> — future: reserved</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Church settings section ──────────────────────────────────────────────────
 
@@ -128,6 +280,9 @@ export default function AdminSettings() {
 
         {/* Development section — visible only to authorised admin/superAdmin accounts */}
         <DevSection />
+
+        {/* Rooms & Video Settings section */}
+        <VideoSettingsSection />
       </div>
     </div>
   );

@@ -475,6 +475,8 @@ export default function JourneyDetail() {
         <StudyTogetherSheet
           defaultName={journey.title}
           userId={user.id}
+          contentId={journey.id}
+          contentType="journey"
           onClose={() => setShowStudyTogether(false)}
         />
       )}

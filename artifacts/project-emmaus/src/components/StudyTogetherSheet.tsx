@@ -1,26 +1,38 @@
 /**
- * StudyTogetherSheet — bottom sheet for creating a Room from any content page.
+ * StudyTogetherSheet — bottom sheet for creating a Personal Room from any content page.
  *
- * Shown when a member taps "Study Together" on a Walk detail, Devotional day,
- * or Sermon Companion page. Collects a room name (pre-filled with the content
- * title), calls POST /api/rooms, then shows the invite code so they can share
- * it immediately.
+ * Shown when a member taps "Study Together" / "Walk Together" on a Walk, Devotional,
+ * or Sermon Companion page.  Collects a room name (pre-filled with the content title),
+ * calls POST /api/rooms (room_type = 'personal', with linked content), and then shows
+ * the invite code so they can share it immediately.
+ *
+ * The creator's existing personal progress is never affected — the Room tracks
+ * shared progress separately via room_journeys / room_members.
  */
 
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { Users, X, Loader2, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { apiCreateRoom } from '@/lib/rooms-api';
+import { apiCreateRoom, apiLinkJourney } from '@/lib/rooms-api';
 
 interface Props {
-  /** Pre-fills the room name field — typically the content title. */
+  /** Pre-fills the room name — typically the content title. */
   defaultName: string;
   userId: string;
+  /** The content driving this Room (walk, devotional, sermon-companion, etc.) */
+  contentId?: string;
+  contentType?: 'journey' | 'devotional' | 'sermon-companion' | 'bible-study';
   onClose: () => void;
 }
 
-export function StudyTogetherSheet({ defaultName, userId, onClose }: Props) {
+export function StudyTogetherSheet({
+  defaultName,
+  userId,
+  contentId,
+  contentType,
+  onClose,
+}: Props) {
   const [, setLocation] = useLocation();
   const [name, setName]         = useState(defaultName);
   const [creating, setCreating] = useState(false);
@@ -34,7 +46,21 @@ export function StudyTogetherSheet({ defaultName, userId, onClose }: Props) {
     setCreating(true);
     setError('');
     try {
-      const res = await apiCreateRoom(userId, trimmed);
+      const res = await apiCreateRoom(
+        userId,
+        trimmed,
+        '',
+        'personal',
+        contentId,
+        contentType
+      );
+      // If this is a journey, also link it via room_journeys so shared
+      // progress tracking works in RoomDetail.
+      if (contentType === 'journey' && contentId) {
+        try {
+          await apiLinkJourney(userId, res.roomId, contentId);
+        } catch { /* non-fatal — room was created, just linking failed */ }
+      }
       setCreated({ roomId: res.roomId, inviteCode: res.inviteCode });
     } catch (e: unknown) {
       setError((e instanceof Error ? e.message : null) ?? 'Could not create room. Please try again.');
@@ -82,6 +108,7 @@ export function StudyTogetherSheet({ defaultName, userId, onClose }: Props) {
           <>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
               Create a Room and share the invite code with friends or small-group members to study this content together.
+              Your own progress is kept separate — you won't lose where you're up to.
             </p>
 
             <div className="space-y-1.5">

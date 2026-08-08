@@ -301,6 +301,8 @@ export default function DevotionalDay() {
         <StudyTogetherSheet
           defaultName={seriesData.title}
           userId={user.id}
+          contentId={seriesId}
+          contentType="devotional"
           onClose={() => setShowStudyTogether(false)}
         />
       )}

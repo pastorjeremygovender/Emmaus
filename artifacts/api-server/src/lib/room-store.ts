@@ -11,6 +11,8 @@ import { randomUUID } from "node:crypto";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type RoomType = "personal" | "ministry" | "leadership" | "church_service";
+
 export interface RoomMember {
   userId: string;
   preferredName: string;
@@ -22,6 +24,9 @@ export interface RoomSummary {
   id: string;
   name: string;
   description: string;
+  roomType: RoomType;
+  linkedContentId: string | null;
+  linkedContentType: string | null;
   inviteCode: string;
   inviteToken: string;
   createdBy: string;
@@ -103,6 +108,9 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
     id: String(row.id),
     name: String(row.name ?? ""),
     description: String(row.description ?? ""),
+    roomType: (String(row.room_type ?? "personal")) as RoomType,
+    linkedContentId: row.linked_content_id ? String(row.linked_content_id) : null,
+    linkedContentType: row.linked_content_type ? String(row.linked_content_type) : null,
     inviteCode: String(row.invite_code ?? ""),
     inviteToken: String(row.invite_token ?? ""),
     createdBy: String(row.created_by ?? ""),
@@ -137,7 +145,10 @@ function rowToMessage(row: Record<string, unknown>): RoomMessage {
 export async function createRoom(
   name: string,
   createdBy: string,
-  description = ""
+  description = "",
+  roomType: RoomType = "personal",
+  linkedContentId?: string,
+  linkedContentType?: string
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   const inviteCode = await generateInviteCode();
   const inviteToken = randomUUID();
@@ -147,10 +158,11 @@ export async function createRoom(
     await client.query("BEGIN");
 
     const res = await client.query(
-      `INSERT INTO rooms (name, description, invite_code, invite_token, created_by)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO rooms (name, description, invite_code, invite_token, created_by, room_type, linked_content_id, linked_content_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, invite_code, invite_token`,
-      [name, description.trim(), inviteCode, inviteToken, createdBy]
+      [name, description.trim(), inviteCode, inviteToken, createdBy, roomType,
+       linkedContentId ?? null, linkedContentType ?? null]
     );
     const { id: roomId } = res.rows[0];
 
@@ -169,6 +181,41 @@ export async function createRoom(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Check whether a user is permitted to create a given room type.
+ * personal  — any authenticated user
+ * ministry  — group_leader, pastor, admin, superAdmin
+ * leadership — pastor, admin, superAdmin
+ * church_service — admin, superAdmin only (no pastoral_role override)
+ *
+ * appRole should come from getUserRole() (user-role-store) to avoid
+ * header spoofing.
+ */
+export async function canCreateRoomType(
+  userId: string,
+  roomType: RoomType,
+  appRole: string
+): Promise<boolean> {
+  if (roomType === "personal") return true;
+  if (appRole === "admin" || appRole === "superAdmin") return true;
+  if (roomType === "church_service") return false; // admin/superAdmin only (caught above)
+
+  // Check pastoral_role for ministry / leadership
+  const { rows } = await pool.query(
+    "SELECT pastoral_role FROM user_profiles WHERE user_id = $1",
+    [userId]
+  );
+  const pastoralRole: string = rows[0]?.pastoral_role ?? "";
+
+  if (roomType === "ministry") {
+    return ["group_leader", "pastor"].includes(pastoralRole);
+  }
+  if (roomType === "leadership") {
+    return pastoralRole === "pastor";
+  }
+  return false;
 }
 
 /**
@@ -660,4 +707,68 @@ export function terminateAllFromRoom(roomId: string): void {
     try { sub.terminate(); } catch { /* ignore */ }
   }
   roomSubscribers.delete(roomId);
+}
+
+// ─── Church video settings ────────────────────────────────────────────────────
+
+export interface VideoSettings {
+  videoEnabled: boolean;
+  maxConcurrentRooms: number;
+  maxParticipantsPerRoom: number;
+  maxDurationMinutes: number;
+  allowedRoles: string[];
+}
+
+export async function getVideoSettings(): Promise<VideoSettings> {
+  const { rows } = await pool.query(
+    `SELECT video_enabled, max_concurrent_rooms, max_participants_per_room,
+            max_duration_minutes, allowed_roles
+     FROM church_video_settings WHERE id = 1`
+  );
+  const row = rows[0] ?? {};
+  return {
+    videoEnabled: Boolean(row.video_enabled),
+    maxConcurrentRooms: Number(row.max_concurrent_rooms ?? 5),
+    maxParticipantsPerRoom: Number(row.max_participants_per_room ?? 20),
+    maxDurationMinutes: Number(row.max_duration_minutes ?? 120),
+    allowedRoles: Array.isArray(row.allowed_roles)
+      ? (row.allowed_roles as string[])
+      : ["group_leader", "pastor", "admin", "superAdmin"],
+  };
+}
+
+export async function updateVideoSettings(
+  patch: Partial<VideoSettings>
+): Promise<VideoSettings> {
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  let idx = 1;
+  if (patch.videoEnabled !== undefined) {
+    sets.push(`video_enabled = $${idx++}`);
+    vals.push(patch.videoEnabled);
+  }
+  if (patch.maxConcurrentRooms !== undefined) {
+    sets.push(`max_concurrent_rooms = $${idx++}`);
+    vals.push(patch.maxConcurrentRooms);
+  }
+  if (patch.maxParticipantsPerRoom !== undefined) {
+    sets.push(`max_participants_per_room = $${idx++}`);
+    vals.push(patch.maxParticipantsPerRoom);
+  }
+  if (patch.maxDurationMinutes !== undefined) {
+    sets.push(`max_duration_minutes = $${idx++}`);
+    vals.push(patch.maxDurationMinutes);
+  }
+  if (patch.allowedRoles !== undefined) {
+    sets.push(`allowed_roles = $${idx++}`);
+    vals.push(patch.allowedRoles);
+  }
+  if (sets.length > 0) {
+    sets.push(`updated_at = NOW()`);
+    await pool.query(
+      `UPDATE church_video_settings SET ${sets.join(", ")} WHERE id = 1`,
+      vals
+    );
+  }
+  return getVideoSettings();
 }

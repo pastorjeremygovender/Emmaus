@@ -3,10 +3,16 @@
 
 export type RoomRole = 'admin' | 'member';
 
+/** Personal = any member; Ministry/Leadership = church-authorised; ChurchService = future. */
+export type RoomType = 'personal' | 'ministry' | 'leadership' | 'church_service';
+
 export interface RoomSummary {
   id: string;
   name: string;
   description: string;
+  roomType: RoomType;
+  linkedContentId?: string | null;
+  linkedContentType?: string | null;
   inviteCode: string;
   inviteToken: string;
   createdBy: string;

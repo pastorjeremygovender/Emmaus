@@ -42,12 +42,55 @@ async function roomsFetch<T>(
 export async function apiCreateRoom(
   userId: string,
   name: string,
-  description = ""
+  description = "",
+  roomType: 'personal' | 'ministry' | 'leadership' | 'church_service' = 'personal',
+  linkedContentId?: string,
+  linkedContentType?: string
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   return roomsFetch('/api/rooms', userId, {
     method: 'POST',
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify({ name, description, roomType, linkedContentId, linkedContentType }),
   });
+}
+
+export async function apiGetVideoSettings(userId: string): Promise<{
+  videoEnabled: boolean;
+  maxConcurrentRooms: number;
+  maxParticipantsPerRoom: number;
+  maxDurationMinutes: number;
+  allowedRoles: string[];
+}> {
+  const data = await roomsFetch<{ settings: {
+    videoEnabled: boolean;
+    maxConcurrentRooms: number;
+    maxParticipantsPerRoom: number;
+    maxDurationMinutes: number;
+    allowedRoles: string[];
+  } }>('/api/rooms/admin/video-settings', userId);
+  return data.settings;
+}
+
+export async function apiUpdateVideoSettings(
+  userId: string,
+  patch: Partial<{
+    videoEnabled: boolean;
+    maxConcurrentRooms: number;
+    maxParticipantsPerRoom: number;
+    maxDurationMinutes: number;
+    allowedRoles: string[];
+  }>
+): Promise<{ videoEnabled: boolean; maxConcurrentRooms: number; maxParticipantsPerRoom: number; maxDurationMinutes: number; allowedRoles: string[] }> {
+  const data = await roomsFetch<{ settings: {
+    videoEnabled: boolean;
+    maxConcurrentRooms: number;
+    maxParticipantsPerRoom: number;
+    maxDurationMinutes: number;
+    allowedRoles: string[];
+  } }>('/api/rooms/admin/video-settings', userId, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return data.settings;
 }
 
 export async function apiGetRooms(userId: string): Promise<RoomSummary[]> {

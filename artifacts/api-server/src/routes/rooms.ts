@@ -30,8 +30,13 @@ import {
   getMemberJourneyProgress,
   isJourneyLinkedToRoom,
   subscribeToRoom,
+  canCreateRoomType,
+  getVideoSettings,
+  updateVideoSettings,
+  type RoomType,
+  type VideoSettings,
 } from "../lib/room-store.js";
-import { isAdmin } from "../lib/user-role-store.js";
+import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 
 const router = Router();
 
@@ -80,20 +85,63 @@ router.get("/admin/:roomId", async (req, res) => {
   }
 });
 
+// ─── Admin: video settings ────────────────────────────────────────────────────
+
+router.get("/admin/video-settings", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const settings = await getVideoSettings();
+    res.json({ settings });
+  } catch {
+    res.status(500).json({ error: "Failed to load video settings." });
+  }
+});
+
+router.patch("/admin/video-settings", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const settings = await updateVideoSettings(req.body as Partial<VideoSettings>);
+    res.json({ settings });
+  } catch {
+    res.status(500).json({ error: "Failed to update video settings." });
+  }
+});
+
 // ─── Create room ──────────────────────────────────────────────────────────────
 
 router.post("/", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { name, description } = req.body as { name?: string; description?: string };
+  const { name, description, roomType, linkedContentId, linkedContentType } = req.body as {
+    name?: string;
+    description?: string;
+    roomType?: string;
+    linkedContentId?: string;
+    linkedContentType?: string;
+  };
   if (!name || !name.trim()) {
     res.status(400).json({ error: "Room name is required." });
     return;
   }
 
+  // Normalise and validate room type
+  const validTypes: RoomType[] = ["personal", "ministry", "leadership", "church_service"];
+  const type: RoomType = validTypes.includes(roomType as RoomType)
+    ? (roomType as RoomType)
+    : "personal";
+
+  // Permission check — personal rooms are open to all; others require church role
+  const appRole = await getUserRole(userId);
+  if (!(await canCreateRoomType(userId, type, appRole))) {
+    res.status(403).json({ error: "You are not authorised to create this type of Room." });
+    return;
+  }
+
   try {
-    const result = await createRoom(name.trim(), userId, description ?? "");
+    const result = await createRoom(
+      name.trim(), userId, description ?? "", type, linkedContentId, linkedContentType
+    );
     res.status(201).json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to create room." });

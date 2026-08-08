@@ -287,6 +287,38 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms.description column failed (non-fatal)");
   }
 
+  // ── Rooms four-level architecture columns (2026-08) ─────────────────────────
+  try {
+    await pool.query(`
+      ALTER TABLE rooms
+        ADD COLUMN IF NOT EXISTS room_type TEXT NOT NULL DEFAULT 'personal',
+        ADD COLUMN IF NOT EXISTS linked_content_id   TEXT,
+        ADD COLUMN IF NOT EXISTS linked_content_type TEXT;
+    `);
+    logger.info("Startup migration: rooms architecture columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms architecture columns failed (non-fatal)");
+  }
+
+  // ── Church video settings (2026-08) ─────────────────────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS church_video_settings (
+        id                       SERIAL PRIMARY KEY,
+        video_enabled            BOOLEAN NOT NULL DEFAULT false,
+        max_concurrent_rooms     INTEGER NOT NULL DEFAULT 5,
+        max_participants_per_room INTEGER NOT NULL DEFAULT 20,
+        max_duration_minutes     INTEGER NOT NULL DEFAULT 120,
+        allowed_roles            TEXT[]  NOT NULL DEFAULT ARRAY['group_leader','pastor','admin','superAdmin'],
+        updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      INSERT INTO church_video_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+    `);
+    logger.info("Startup migration: church_video_settings table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: church_video_settings table failed (non-fatal)");
+  }
+
   // ── Walk theme_color and version columns (2026-07) ───────────────────────────
   try {
     await pool.query(`

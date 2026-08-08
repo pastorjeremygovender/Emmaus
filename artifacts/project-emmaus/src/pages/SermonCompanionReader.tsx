@@ -521,6 +521,8 @@ export default function SermonCompanionReader() {
         <StudyTogetherSheet
           defaultName={companion.title}
           userId={user.id}
+          contentId={companionId}
+          contentType="sermon-companion"
           onClose={() => setShowStudyTogether(false)}
         />
       )}

@@ -44,3 +44,4 @@
 - [Sermon Companion Single Source of Truth](sermon-companion-single-source.md) — root cause: journey-type companion merge in next-steps.ts; fix: remove merge; permanent Walk card; 5-day prompt; speaker attribution.
 - [Navigation Redesign](nav-redesign.md) — new bottom nav order; Discover page; My Journey expansion; AskEmmausBar; Favourites+History+Search backend+frontend; DB import is @workspace/db not ../lib/db.js.
 - [Unified Emmaus Input](unified-emmaus-input.md) — UnifiedEmmausInput replaces AskEmmausBar+search on Walk/Discover/Personal; intent detection routes to Ask Emmaus or grouped search; discoverActive hides Discover tabs.
+- [Rooms Four-Level Architecture](rooms-four-level-architecture.md) — Step 1: room_type + linked_content + church_video_settings; canCreateRoomType checks pastoral_role; content linked on creation; LiveKit = Step 2.
