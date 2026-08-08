@@ -6,7 +6,10 @@
  */
 
 import { getApiUrl } from './api';
-import type { RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress, VideoSessionStatus } from './rooms-types';
+import type {
+  RoomSummary, RoomDetail, RoomMessage, MemberJourneyProgress,
+  VideoSessionStatus, PrayerRequest, ContentType,
+} from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
 
@@ -45,11 +48,47 @@ export async function apiCreateRoom(
   description = "",
   roomType: 'personal' | 'ministry' | 'leadership' | 'church_service' = 'personal',
   linkedContentId?: string,
-  linkedContentType?: string
+  linkedContentType?: string,
+  contentType?: ContentType
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   return roomsFetch('/api/rooms', userId, {
     method: 'POST',
-    body: JSON.stringify({ name, description, roomType, linkedContentId, linkedContentType }),
+    body: JSON.stringify({ name, description, roomType, linkedContentId, linkedContentType, contentType }),
+  });
+}
+
+// ─── Prayer requests ───────────────────────────────────────────────────────
+
+export async function apiGetPrayerRequests(
+  userId: string,
+  roomId: string
+): Promise<PrayerRequest[]> {
+  const data = await roomsFetch<{ requests: PrayerRequest[] }>(
+    `/api/rooms/${roomId}/prayer`, userId
+  );
+  return data.requests;
+}
+
+export async function apiAddPrayerRequest(
+  userId: string,
+  roomId: string,
+  authorName: string,
+  request: string
+): Promise<PrayerRequest> {
+  const data = await roomsFetch<{ request: PrayerRequest }>(
+    `/api/rooms/${roomId}/prayer`, userId,
+    { method: 'POST', body: JSON.stringify({ request, authorName }) }
+  );
+  return data.request;
+}
+
+export async function apiMarkPrayerAnswered(
+  userId: string,
+  roomId: string,
+  prayerId: string
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/prayer/${prayerId}/answered`, userId, {
+    method: 'PATCH',
   });
 }
 

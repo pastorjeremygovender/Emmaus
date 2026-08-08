@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, Share2, Settings, LogOut, Trash2,
-  MessageSquare, Crown, Loader2, BookOpen, RefreshCw
+  MessageSquare, Crown, Loader2, BookOpen, RefreshCw,
+  BookMarked, Users, Navigation, Video, Mic, BarChart2,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
+import { getContentTypeShortLabel, getRoomTypeLabel } from '@/lib/rooms-types';
 import { apiGetJourneyProgress, apiLinkJourney } from '@/lib/rooms-api';
-import { VideoRoom } from '@/components/VideoRoom';
+import { PrayerRequests } from '@/components/PrayerRequests';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -32,7 +34,6 @@ export default function RoomDetail() {
   const [showLinkWalk, setShowLinkWalk] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
 
-  // Keep a stable ref to the latest room so the interval callback can read it
   const roomRef = useRef<RoomDetailType | null>(null);
   useEffect(() => { roomRef.current = room; }, [room]);
 
@@ -44,7 +45,7 @@ export default function RoomDetail() {
         roomRef.current.linkedJourneys.map(lj =>
           apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
             .then(progress => setProgressMap(prev => ({ ...prev, [lj.journeyId]: progress })))
-            .catch(() => { /* silently ignore */ })
+            .catch(() => {})
         )
       );
     } finally {
@@ -57,16 +58,14 @@ export default function RoomDetail() {
     loadRoomDetail(String(roomId)).then(detail => {
       if (!detail) { setLoadError('Room not found or you are not a member.'); return; }
       setRoom(detail);
-      // Initial fetch
       detail.linkedJourneys.forEach(lj => {
         apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
           .then(progress => setProgressMap(prev => ({ ...prev, [lj.journeyId]: progress })))
-          .catch(() => { /* silently ignore — progress section stays hidden */ });
+          .catch(() => {});
       });
     });
   }, [roomId, user, loadRoomDetail]);
 
-  // Periodic refresh every 60 seconds
   useEffect(() => {
     if (!room) return;
     const timer = setInterval(() => { refreshProgress(true); }, PROGRESS_REFRESH_INTERVAL_MS);
@@ -93,15 +92,18 @@ export default function RoomDetail() {
   }
 
   const isAdmin = room.currentUserRole === 'admin';
-
-  // Walks the member has started that aren't already linked to this room —
-  // shown in the "Add a Walk" picker.
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
     j.status === 'Published' &&
     myProgress[j.id] != null &&
     !linkedJourneyIds.has(j.id)
   );
+
+  // Resolve content title from JourneyContext when the room is linked to a walk/journey
+  const primaryLinkedJourney = room.linkedContentId
+    ? getJourney(room.linkedContentId)
+    : null;
+  const contentTitle = primaryLinkedJourney?.title ?? null;
 
   const handleLeave = async () => {
     setActioning(true);
@@ -146,7 +148,6 @@ export default function RoomDetail() {
       const detail = await loadRoomDetail(String(roomId));
       if (detail) {
         setRoom(detail);
-        // Pre-fetch progress so the card renders immediately
         apiGetJourneyProgress(user.id, String(roomId), journeyId)
           .then(progress => setProgressMap(prev => ({ ...prev, [journeyId]: progress })))
           .catch(() => {});
@@ -160,14 +161,17 @@ export default function RoomDetail() {
   };
 
   const openChat = () => {
-    // P2-1: pass room name in history state so RoomChat can display it in the header
     history.replaceState({ ...history.state, roomName: room?.name ?? '' }, '');
     setLocation(`/rooms/${roomId}/chat`);
   };
 
+  const contentShortLabel = getContentTypeShortLabel(room.contentType);
+  const permissionLabel = getRoomTypeLabel(room.roomType);
+
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Header */}
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto gap-3">
           <button
@@ -179,7 +183,18 @@ export default function RoomDetail() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="font-sans font-semibold text-[17px] truncate">{room.name}</div>
-            <div className="text-[12px] text-muted-foreground capitalize">{room.currentUserRole}</div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {/* Content type badge */}
+              {room.contentType && (
+                <span className="text-[11px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                  {contentShortLabel}
+                </span>
+              )}
+              {/* Permission level badge */}
+              <span className="text-[11px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-full capitalize">
+                {permissionLabel}
+              </span>
+            </div>
           </div>
           {isAdmin && (
             <button
@@ -193,42 +208,71 @@ export default function RoomDetail() {
         </div>
       </header>
 
-      <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-10">
+      <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-8">
 
-        {/* Video Room — ministry and leadership rooms only */}
-        {(room.roomType === 'ministry' || room.roomType === 'leadership') && (
-          <section>
-            <VideoRoom
-              roomId={String(roomId)}
-              userId={user.id}
-              displayName={user.preferredName || 'Member'}
-              videoEligible={true}
-            />
-          </section>
-        )}
-
-        {/* Chat */}
+        {/* ── Content Panel ─────────────────────────────────────────────── */}
         <section>
-          <button
-            onClick={openChat}
-            className="w-full text-left p-5 rounded-2xl border border-primary/25 bg-primary/5 hover:border-primary/40 transition-all flex items-center gap-4"
-          >
-            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-              <MessageSquare size={20} className="text-primary" />
+          <div className="p-5 rounded-2xl border border-border bg-card space-y-3">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <BookMarked size={18} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                  {room.contentType ? `${contentShortLabel} Room` : 'Study Room'}
+                </div>
+                {contentTitle ? (
+                  <div className="text-[16px] font-semibold text-foreground leading-snug">
+                    {contentTitle}
+                  </div>
+                ) : (
+                  <div className="text-[15px] text-foreground">
+                    {room.description || room.name}
+                  </div>
+                )}
+                {room.description && contentTitle && (
+                  <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
+                    {room.description}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[16px] font-semibold text-foreground">Room Chat</div>
-              <div className="text-[13px] text-muted-foreground">Talk with your Room members</div>
+
+            {/* Members online strip */}
+            <div className="flex items-center gap-2 pt-1 border-t border-border/60">
+              <Users size={13} className="text-muted-foreground" />
+              <span className="text-[12px] text-muted-foreground">
+                {room.memberCount} member{room.memberCount !== 1 ? 's' : ''}
+              </span>
+              <div className="flex -space-x-1.5 ml-auto">
+                {room.members.slice(0, 5).map(m => {
+                  const initials = (m.preferredName || 'M')
+                    .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+                  return (
+                    <div
+                      key={m.userId}
+                      className="w-6 h-6 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center border-2 border-background"
+                      title={m.preferredName || 'Member'}
+                    >
+                      {initials}
+                    </div>
+                  );
+                })}
+                {room.members.length > 5 && (
+                  <div className="w-6 h-6 rounded-full bg-muted text-muted-foreground text-[9px] font-semibold flex items-center justify-center border-2 border-background">
+                    +{room.members.length - 5}
+                  </div>
+                )}
+              </div>
             </div>
-            <ArrowLeft size={16} className="text-muted-foreground rotate-180 shrink-0" />
-          </button>
+          </div>
         </section>
 
-        {/* ── Journeys Walking Together ─────────────────────────────────── */}
+        {/* ── Shared Progress ───────────────────────────────────────────── */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Journeys Walking Together
+              Shared Progress
             </h2>
             <div className="flex items-center gap-3">
               {room.linkedJourneys.length > 0 && (
@@ -256,7 +300,7 @@ export default function RoomDetail() {
           {room.linkedJourneys.length === 0 && !showLinkWalk && (
             <div className="p-6 rounded-2xl border border-dashed border-border text-center space-y-2">
               <BookOpen size={22} className="text-muted-foreground mx-auto opacity-40 mb-1" />
-              <p className="text-[14px] text-muted-foreground">No walks linked to this Room yet.</p>
+              <p className="text-[14px] text-muted-foreground">No Walks linked to this Room yet.</p>
               {availableWalks.length > 0 ? (
                 <button
                   onClick={() => setShowLinkWalk(true)}
@@ -266,13 +310,13 @@ export default function RoomDetail() {
                 </button>
               ) : (
                 <p className="text-[13px] text-muted-foreground">
-                  Start a Walk on your Today page, then link it here to track each other's progress.
+                  Start a Walk, then link it here to track everyone's progress together.
                 </p>
               )}
             </div>
           )}
 
-          {/* Walk picker — inline list */}
+          {/* Walk picker */}
           {showLinkWalk && (
             <div className="rounded-2xl border border-border bg-card overflow-hidden">
               <div className="px-5 py-3.5 border-b border-border/60">
@@ -310,7 +354,6 @@ export default function RoomDetail() {
                 const memberProgress = progressMap[lj.journeyId];
                 return (
                   <div key={lj.journeyId} className="rounded-2xl border border-border overflow-hidden bg-card">
-                    {/* Journey header */}
                     <div className="flex items-center gap-3.5 px-5 py-4 border-b border-border/60">
                       <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
                         <BookOpen size={16} className="text-muted-foreground" />
@@ -322,7 +365,6 @@ export default function RoomDetail() {
                         </div>
                       </div>
                     </div>
-                    {/* Per-member progress */}
                     {memberProgress && memberProgress.length > 0 && (
                       <div className="divide-y divide-border/50">
                         {memberProgress.map(mp => {
@@ -363,7 +405,32 @@ export default function RoomDetail() {
           )}
         </section>
 
-        {/* Members */}
+        {/* ── Prayer Requests ───────────────────────────────────────────── */}
+        <PrayerRequests
+          roomId={String(roomId)}
+          userId={user.id}
+          displayName={user.preferredName || 'Member'}
+          isAdmin={isAdmin}
+        />
+
+        {/* ── Room Chat ─────────────────────────────────────────────────── */}
+        <section>
+          <button
+            onClick={openChat}
+            className="w-full text-left p-5 rounded-2xl border border-primary/25 bg-primary/5 hover:border-primary/40 transition-all flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+              <MessageSquare size={20} className="text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[16px] font-semibold text-foreground">Discussion &amp; Chat</div>
+              <div className="text-[13px] text-muted-foreground">Talk with your Room members</div>
+            </div>
+            <ArrowLeft size={16} className="text-muted-foreground rotate-180 shrink-0" />
+          </button>
+        </section>
+
+        {/* ── Members ───────────────────────────────────────────────────── */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
@@ -416,7 +483,42 @@ export default function RoomDetail() {
           </div>
         </section>
 
-        {/* Room actions */}
+        {/* ── Leader Controls scaffold (admin only) ─────────────────────── */}
+        {isAdmin && (
+          <section className="space-y-3">
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Leader Controls
+            </h2>
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border/60">
+                <p className="text-[12px] text-muted-foreground/70 font-medium italic">
+                  Guide your group together — coming soon
+                </p>
+              </div>
+              {[
+                { icon: BookOpen,    label: 'Open Scripture for everyone' },
+                { icon: Navigation,  label: "Navigate to today's step" },
+                { icon: MessageSquare, label: 'Highlight discussion question' },
+                { icon: Mic,         label: 'Start prayer time' },
+                { icon: BarChart2,   label: 'Launch a poll' },
+                { icon: Video,       label: 'Video call' },
+              ].map(({ icon: Icon, label }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-3 px-5 py-3.5 border-b border-border/40 last:border-0 opacity-40"
+                >
+                  <Icon size={16} className="text-muted-foreground shrink-0" />
+                  <span className="text-[14px] text-muted-foreground flex-1">{label}</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
+                    Soon
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Room Actions ──────────────────────────────────────────────── */}
         <section className="space-y-3 pt-2 pb-4">
           {isAdmin && (
             <>
@@ -457,21 +559,10 @@ export default function RoomDetail() {
                 You'll lose access to Room chat. Your personal journey progress is preserved.
               </p>
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="flex-1 rounded-xl"
-                  onClick={handleLeave}
-                  disabled={actioning}
-                >
+                <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleLeave} disabled={actioning}>
                   {actioning ? 'Leaving…' : 'Leave Room'}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1 rounded-xl"
-                  onClick={() => setConfirmLeave(false)}
-                >
+                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmLeave(false)}>
                   Cancel
                 </Button>
               </div>
@@ -496,21 +587,10 @@ export default function RoomDetail() {
                 This removes the Room and all its chat messages. Member journey progress is preserved.
               </p>
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="flex-1 rounded-xl"
-                  onClick={handleDelete}
-                  disabled={actioning}
-                >
+                <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleDelete} disabled={actioning}>
                   {actioning ? 'Deleting…' : 'Delete Room'}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1 rounded-xl"
-                  onClick={() => setConfirmDelete(false)}
-                >
+                <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmDelete(false)}>
                   Cancel
                 </Button>
               </div>

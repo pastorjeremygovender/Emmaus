@@ -37,7 +37,26 @@ Admin UI: Settings → Rooms & Video Settings section.
 
 ## Build order
 - Step 1: room types, permissions, content linking, video settings schema ✅
-- Step 2: LiveKit video integration — packages installed, all endpoints live, VideoRoom component embedded ✅
+- Step 2 (paused): LiveKit backend endpoints exist; VideoRoom component exists but is NOT rendered in UI — paused per V1 architecture spec until architecture is approved.
+- V1 architecture: dual-dimension rooms (contentType + roomType), prayer requests, content panel, leader controls scaffold ✅
+
+## Dual-dimension model (V1)
+- `room_type` = permission level: personal | ministry | leadership | church_service
+- `content_type` = content category: walk | journey | devotional | bible-study | sermon-companion
+- These are independent — any combination is valid (e.g. Walk + Ministry, Bible Study + Leadership)
+- `getContentTypeShortLabel()` + `getRoomTypeLabel()` in rooms-types.ts are the canonical helpers
+
+## Room detail layout (V1 order)
+Header → Content Panel → Shared Progress → Prayer Requests → Discussion/Chat → Members → Leader Controls scaffold (admin) → Room Actions
+
+## Prayer requests
+- Table: room_prayer_requests (id, room_id, user_id, author_name, request, is_answered, created_at)
+- Routes: GET/POST /:roomId/prayer, PATCH /:roomId/prayer/:prayerId/answered
+- PrayerRequests.tsx component — self-contained with own state; admins can mark as answered
+
+## Leader controls
+- Scaffolded (disabled) in UI for admins: Open Scripture, Navigate to today's step, Highlight discussion, Poll, Prayer time, Video
+- NOT implemented — architecture placeholder only
 - Step 3 (future): Shared Scripture, highlighting, leader controls
 - Step 4 (future): Polls, attendance, moderation
 - Church Service Rooms: architecture only, no UI

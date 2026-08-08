@@ -1,16 +1,70 @@
 // ─── Emmaus Rooms — shared type definitions ───────────────────────────────
-// Simplified to match the live API (Admin + Member roles only).
+//
+// Every Room has two independent dimensions:
+//   1. Content Type  — what discipleship content the Room is built around
+//   2. Permission Level (RoomType) — who can create and access the Room
+//
+// A Walk can be Personal or Ministry. A Bible Study can be Leadership or
+// Ministry. The architecture supports any combination.
 
 export type RoomRole = 'admin' | 'member';
 
-/** Personal = any member; Ministry/Leadership = church-authorised; ChurchService = future. */
+// ─── Dimension 1: Permission Level ────────────────────────────────────────
+/** Personal = any member; Ministry/Leadership = church-authorised; ChurchService = service-level. */
 export type RoomType = 'personal' | 'ministry' | 'leadership' | 'church_service';
+
+export function getRoomTypeLabel(roomType: RoomType): string {
+  switch (roomType) {
+    case 'personal':       return 'Personal';
+    case 'ministry':       return 'Ministry';
+    case 'leadership':     return 'Leadership';
+    case 'church_service': return 'Church Service';
+    default:               return 'Room';
+  }
+}
+
+// ─── Dimension 2: Content Type ────────────────────────────────────────────
+/** What kind of discipleship content the Room is built around. */
+export type ContentType =
+  | 'walk'
+  | 'journey'
+  | 'devotional'
+  | 'bible-study'
+  | 'sermon-companion';
+
+export function getContentTypeLabel(contentType: ContentType | null | undefined): string {
+  switch (contentType) {
+    case 'walk':             return 'Walk Room';
+    case 'journey':          return 'Journey Room';
+    case 'devotional':       return 'Daily Devotional Room';
+    case 'bible-study':      return 'Bible Study Room';
+    case 'sermon-companion': return 'Sermon Companion Room';
+    default:                 return 'Study Room';
+  }
+}
+
+/** Short label for badges and headers. */
+export function getContentTypeShortLabel(contentType: ContentType | null | undefined): string {
+  switch (contentType) {
+    case 'walk':             return 'Walk';
+    case 'journey':          return 'Journey';
+    case 'devotional':       return 'Devotional';
+    case 'bible-study':      return 'Bible Study';
+    case 'sermon-companion': return 'Sermon Companion';
+    default:                 return 'Study';
+  }
+}
+
+// ─── Room interfaces ──────────────────────────────────────────────────────
 
 export interface RoomSummary {
   id: string;
   name: string;
   description: string;
+  /** Dimension 1: permission level. */
   roomType: RoomType;
+  /** Dimension 2: content category. */
+  contentType: ContentType | null;
   linkedContentId?: string | null;
   linkedContentType?: string | null;
   inviteCode: string;
@@ -47,6 +101,20 @@ export interface MemberJourneyProgress {
   status: string | null; // 'active' | 'paused' | 'completed' | 'dropped' | null (not started)
 }
 
+// ─── Prayer requests ──────────────────────────────────────────────────────
+
+export interface PrayerRequest {
+  id: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  request: string;
+  isAnswered: boolean;
+  createdAt: string;
+}
+
+// ─── Video session (Step 2 — paused pending V1 architecture approval) ─────
+
 export interface VideoSessionStatus {
   /** false when LiveKit secrets are not yet configured */
   configured: boolean;
@@ -62,6 +130,8 @@ export interface VideoSessionStatus {
   /** Whether the current user can start / end video */
   canHost?: boolean;
 }
+
+// ─── Chat ─────────────────────────────────────────────────────────────────
 
 export interface RoomMessage {
   id: string;

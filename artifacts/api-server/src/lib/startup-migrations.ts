@@ -333,6 +333,36 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms video session columns failed (non-fatal)");
   }
 
+  // ── Room prayer requests (2026-08 V1 architecture) ───────────────────────────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_prayer_requests (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        user_id     TEXT NOT NULL,
+        author_name TEXT NOT NULL DEFAULT '',
+        request     TEXT NOT NULL,
+        is_answered BOOLEAN NOT NULL DEFAULT false,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_prayer_requests_room_idx
+        ON room_prayer_requests(room_id);
+    `);
+    logger.info("Startup migration: room_prayer_requests table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_prayer_requests failed (non-fatal)");
+  }
+
+  // ── rooms.content_type column (2026-08 dual-dimension architecture) ─────────
+  try {
+    await pool.query(`
+      ALTER TABLE rooms ADD COLUMN IF NOT EXISTS content_type TEXT;
+    `);
+    logger.info("Startup migration: rooms.content_type column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms.content_type failed (non-fatal)");
+  }
+
   // ── Walk theme_color and version columns (2026-07) ───────────────────────────
   try {
     await pool.query(`

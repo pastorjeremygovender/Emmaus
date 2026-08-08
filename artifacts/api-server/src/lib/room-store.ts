@@ -13,6 +13,9 @@ import { randomUUID } from "node:crypto";
 
 export type RoomType = "personal" | "ministry" | "leadership" | "church_service";
 
+/** Content dimension: what kind of content the Room is built around. */
+export type ContentType = "walk" | "journey" | "devotional" | "bible-study" | "sermon-companion";
+
 export interface RoomMember {
   userId: string;
   preferredName: string;
@@ -24,7 +27,10 @@ export interface RoomSummary {
   id: string;
   name: string;
   description: string;
+  /** Permission dimension — who can create / access this Room. */
   roomType: RoomType;
+  /** Content dimension — what discipleship content this Room is built around. */
+  contentType: ContentType | null;
   linkedContentId: string | null;
   linkedContentType: string | null;
   inviteCode: string;
@@ -109,6 +115,7 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
     name: String(row.name ?? ""),
     description: String(row.description ?? ""),
     roomType: (String(row.room_type ?? "personal")) as RoomType,
+    contentType: row.content_type ? (String(row.content_type) as ContentType) : null,
     linkedContentId: row.linked_content_id ? String(row.linked_content_id) : null,
     linkedContentType: row.linked_content_type ? String(row.linked_content_type) : null,
     inviteCode: String(row.invite_code ?? ""),
@@ -148,7 +155,8 @@ export async function createRoom(
   description = "",
   roomType: RoomType = "personal",
   linkedContentId?: string,
-  linkedContentType?: string
+  linkedContentType?: string,
+  contentType?: ContentType
 ): Promise<{ roomId: string; inviteCode: string; inviteToken: string }> {
   const inviteCode = await generateInviteCode();
   const inviteToken = randomUUID();
@@ -158,11 +166,12 @@ export async function createRoom(
     await client.query("BEGIN");
 
     const res = await client.query(
-      `INSERT INTO rooms (name, description, invite_code, invite_token, created_by, room_type, linked_content_id, linked_content_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO rooms (name, description, invite_code, invite_token, created_by, room_type,
+                          linked_content_id, linked_content_type, content_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, invite_code, invite_token`,
       [name, description.trim(), inviteCode, inviteToken, createdBy, roomType,
-       linkedContentId ?? null, linkedContentType ?? null]
+       linkedContentId ?? null, linkedContentType ?? null, contentType ?? null]
     );
     const { id: roomId } = res.rows[0];
 
@@ -707,6 +716,72 @@ export function terminateAllFromRoom(roomId: string): void {
     try { sub.terminate(); } catch { /* ignore */ }
   }
   roomSubscribers.delete(roomId);
+}
+
+// ─── Prayer requests ──────────────────────────────────────────────────────────
+
+export interface PrayerRequest {
+  id: string;
+  roomId: string;
+  userId: string;
+  authorName: string;
+  request: string;
+  isAnswered: boolean;
+  createdAt: string;
+}
+
+export async function getPrayerRequests(roomId: string): Promise<PrayerRequest[]> {
+  const { rows } = await pool.query(
+    `SELECT id, room_id, user_id, author_name, request, is_answered, created_at
+     FROM room_prayer_requests
+     WHERE room_id = $1
+     ORDER BY created_at DESC`,
+    [roomId]
+  );
+  return rows.map(r => ({
+    id: String(r.id),
+    roomId: String(r.room_id),
+    userId: String(r.user_id),
+    authorName: String(r.author_name),
+    request: String(r.request),
+    isAnswered: Boolean(r.is_answered),
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function addPrayerRequest(
+  roomId: string,
+  userId: string,
+  authorName: string,
+  request: string
+): Promise<PrayerRequest> {
+  const { rows } = await pool.query(
+    `INSERT INTO room_prayer_requests (room_id, user_id, author_name, request)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, room_id, user_id, author_name, request, is_answered, created_at`,
+    [roomId, userId, authorName.trim() || "Member", request.trim()]
+  );
+  const r = rows[0];
+  return {
+    id: String(r.id),
+    roomId: String(r.room_id),
+    userId: String(r.user_id),
+    authorName: String(r.author_name),
+    request: String(r.request),
+    isAnswered: Boolean(r.is_answered),
+    createdAt: String(r.created_at),
+  };
+}
+
+export async function markPrayerAnswered(
+  prayerId: string,
+  roomId: string
+): Promise<void> {
+  await pool.query(
+    `UPDATE room_prayer_requests SET is_answered = true
+     WHERE id = $1 AND room_id = $2`,
+    [prayerId, roomId]
+  );
 }
 
 // ─── Video session store ──────────────────────────────────────────────────────

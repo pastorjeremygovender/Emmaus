@@ -39,7 +39,11 @@ import {
   getActiveVideoRoomCount,
   getRoomMemberCount,
   canHostVideo,
+  getPrayerRequests,
+  addPrayerRequest,
+  markPrayerAnswered,
   type RoomType,
+  type ContentType,
   type VideoSettings,
 } from "../lib/room-store.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
@@ -329,12 +333,13 @@ router.post("/", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { name, description, roomType, linkedContentId, linkedContentType } = req.body as {
+  const { name, description, roomType, linkedContentId, linkedContentType, contentType } = req.body as {
     name?: string;
     description?: string;
     roomType?: string;
     linkedContentId?: string;
     linkedContentType?: string;
+    contentType?: string;
   };
   if (!name || !name.trim()) {
     res.status(400).json({ error: "Room name is required." });
@@ -354,9 +359,17 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  const validContentTypes: ContentType[] = [
+    "walk", "journey", "devotional", "bible-study", "sermon-companion",
+  ];
+  const resolvedContentType = validContentTypes.includes(contentType as ContentType)
+    ? (contentType as ContentType)
+    : undefined;
+
   try {
     const result = await createRoom(
-      name.trim(), userId, description ?? "", type, linkedContentId, linkedContentType
+      name.trim(), userId, description ?? "", type,
+      linkedContentId, linkedContentType, resolvedContentType
     );
     res.status(201).json(result);
   } catch (err) {
@@ -854,6 +867,70 @@ router.post("/:roomId/messages", async (req, res) => {
     res.status(201).json({ message });
   } catch (err) {
     res.status(500).json({ error: "Failed to post message." });
+  }
+});
+
+// ─── Prayer requests ──────────────────────────────────────────────────────────
+//
+//  GET   /:roomId/prayer                        — any member; list all requests
+//  POST  /:roomId/prayer                        — any member; add a request
+//  PATCH /:roomId/prayer/:prayerId/answered     — admin only; mark as answered
+
+router.get("/:roomId/prayer", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this Room." });
+    return;
+  }
+  try {
+    const requests = await getPrayerRequests(String(roomId));
+    res.json({ requests });
+  } catch {
+    res.status(500).json({ error: "Failed to load prayer requests." });
+  }
+});
+
+router.post("/:roomId/prayer", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this Room." });
+    return;
+  }
+  const { request, authorName } = req.body as { request?: string; authorName?: string };
+  if (!request?.trim()) {
+    res.status(400).json({ error: "Prayer request text is required." });
+    return;
+  }
+  try {
+    const prayerRequest = await addPrayerRequest(
+      String(roomId), userId, authorName?.trim() || "Member", request.trim()
+    );
+    res.status(201).json({ request: prayerRequest });
+  } catch {
+    res.status(500).json({ error: "Failed to add prayer request." });
+  }
+});
+
+router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, prayerId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (role !== "admin") {
+    res.status(403).json({ error: "Only room admins can mark requests as answered." });
+    return;
+  }
+  try {
+    await markPrayerAnswered(String(prayerId), String(roomId));
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to mark prayer request as answered." });
   }
 });
 
