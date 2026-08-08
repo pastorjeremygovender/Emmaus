@@ -1,14 +1,19 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Search, Heart, Bookmark, FileText, HandIcon, Highlighter,
   ChevronRight, Trash2, Pencil, Check, X, BookOpen,
 } from 'lucide-react';
 import { useBible } from '@/contexts/BibleContext';
+import {
+  fetchFavourites,
+  removeFavourite as removeFavouriteServer,
+  type Favourite,
+} from '@/lib/favourites-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterTab = 'all' | 'notes' | 'prayers' | 'favourites' | 'bookmarks' | 'highlights';
+type FilterTab = 'all' | 'bible' | 'notes' | 'prayers' | 'favourites' | 'bookmarks' | 'highlights';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,9 +116,30 @@ export default function MyLibrary() {
   const [editingPrayerId, setEditingPrayerId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // ── Bible chapter favourites (server-side) ─────────────────────────────────
+  const [bibleChapters, setBibleChapters] = useState<Favourite[]>([]);
+  const [bibleChaptersLoading, setBibleChaptersLoading] = useState(true);
+
+  const loadBibleChapters = () => {
+    fetchFavourites()
+      .then(all => setBibleChapters(all.filter(f => f.content_type === 'bible-chapter')))
+      .catch(() => setBibleChapters([]))
+      .finally(() => setBibleChaptersLoading(false));
+  };
+
+  useEffect(() => { loadBibleChapters(); }, []);
+
   const q = query.trim();
 
   // ── Filtered collections ────────────────────────────────────────────────────
+
+  const filteredBibleChapters = useMemo(() => {
+    if (activeTab !== 'all' && activeTab !== 'bible') return [];
+    if (!q) return bibleChapters;
+    return bibleChapters.filter(f =>
+      matches(f.content_title, q) || matches(f.content_subtitle ?? '', q),
+    );
+  }, [bibleChapters, activeTab, q]);
 
   const filteredNotes = useMemo(() => {
     if (activeTab !== 'all' && activeTab !== 'notes') return [];
@@ -154,14 +180,15 @@ export default function MyLibrary() {
     );
   }, [highlights, activeTab, q]);
 
-  const totalCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
-  const filteredCount = filteredNotes.length + filteredPrayers.length + filteredFavourites.length + filteredBookmarks.length + filteredHighlights.length;
+  const totalCount = bibleChapters.length + notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
+  const filteredCount = filteredBibleChapters.length + filteredNotes.length + filteredPrayers.length + filteredFavourites.length + filteredBookmarks.length + filteredHighlights.length;
   const hasResults = filteredCount > 0;
 
   // ── Tab config ──────────────────────────────────────────────────────────────
 
   const tabs: { id: FilterTab; label: string; count: number }[] = [
     { id: 'all', label: 'All', count: totalCount },
+    { id: 'bible', label: 'Bible', count: bibleChapters.length },
     { id: 'notes', label: 'Notes', count: notes.length },
     { id: 'prayers', label: 'Prayers', count: prayers.length },
     { id: 'favourites', label: 'Favourites', count: favourites.length },
@@ -262,6 +289,55 @@ export default function MyLibrary() {
           <p className="text-[15px] text-muted-foreground">No results for "{q}"</p>
           <p className="text-[13px] text-muted-foreground">Try different words.</p>
         </div>
+      )}
+
+      {/* ── Bible Chapters ───────────────────────────────────────────────────── */}
+      {!bibleChaptersLoading && filteredBibleChapters.length > 0 && (
+        <section className="space-y-2.5">
+          {(activeTab === 'all') && <LibrarySection icon={<BookOpen size={13} className="text-primary" />} label="Bible Chapters" />}
+          {filteredBibleChapters.map(fav => (
+            <div
+              key={fav.id}
+              className="p-4 rounded-xl border border-border bg-card space-y-1.5"
+            >
+              <ItemHeader
+                icon={<BookOpen size={12} className="text-primary shrink-0" />}
+                refText={fav.content_title}
+                label="Bible Chapter"
+              />
+              {fav.content_subtitle && (
+                <p className="text-[13px] text-muted-foreground leading-relaxed">
+                  {highlightText(fav.content_subtitle)}
+                </p>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => setLocation(fav.content_route)}
+                  className="flex items-center gap-1 text-[12px] text-primary hover:underline"
+                >
+                  Open chapter <ChevronRight size={12} />
+                </button>
+                <button
+                  onClick={() => handleDeleteConfirm(fav.id, () => {
+                    removeFavouriteServer('bible-chapter', fav.content_id)
+                      .then(loadBibleChapters)
+                      .catch(() => {});
+                  })}
+                  className={[
+                    'ml-auto flex items-center gap-1 p-1.5 rounded-lg transition-colors text-[12px]',
+                    confirmDeleteId === fav.id
+                      ? 'bg-destructive/10 text-destructive font-medium px-2'
+                      : 'text-muted-foreground hover:text-destructive hover:bg-destructive/10',
+                  ].join(' ')}
+                  aria-label="Remove from favourites"
+                >
+                  <Trash2 size={14} />
+                  {confirmDeleteId === fav.id && 'Remove?'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
       )}
 
       {/* ── Notes ─────────────────────────────────────────────────────────────── */}
