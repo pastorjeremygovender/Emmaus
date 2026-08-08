@@ -27,8 +27,19 @@ import {
   apiChangeMode,
   apiNavigate,
   apiCreatePoll,
+  apiCompleteSession,
 } from '@/lib/rooms-api';
-import type { RoomSession, ScriptureRef } from '@/lib/rooms-types';
+import type { RoomSession, ScriptureRef, SessionCompleteSummary } from '@/lib/rooms-types';
+
+// ─── Session stage plan ──────────────────────────────────────────────────────
+
+const SESSION_STAGES: { id: string; label: string; mode: 'study' | 'discussion' | 'prayer' | null }[] = [
+  { id: 'study',      label: 'Study',      mode: 'study' },
+  { id: 'scripture',  label: 'Scripture',  mode: null },
+  { id: 'discussion', label: 'Discussion', mode: 'discussion' },
+  { id: 'prayer',     label: 'Prayer',     mode: 'prayer' },
+  { id: 'complete',   label: 'Complete',   mode: null },
+];
 
 // ─── Common Books picker ──────────────────────────────────────────────────────
 
@@ -49,6 +60,13 @@ interface GuideGroupPanelProps {
   activeSession: RoomSession | null;
   onSessionStarted: (session: RoomSession) => void;
   onSessionEnded: () => void;
+  /**
+   * Called immediately after `apiCompleteSession` resolves, with the
+   * authoritative summary returned by the server.  The leader's completion
+   * card is shown from this callback rather than waiting for the SSE event,
+   * which may be briefly delayed or absent on poor connections.
+   */
+  onSessionComplete: (summary: SessionCompleteSummary) => void;
   onOpenVideo?: () => void;
   onEndVideo?: () => void;
   videoActive?: boolean;
@@ -77,6 +95,7 @@ export function GuideGroupPanel({
   activeSession,
   onSessionStarted,
   onSessionEnded,
+  onSessionComplete,
   onOpenVideo,
   onEndVideo,
   videoActive = false,
@@ -121,8 +140,12 @@ export function GuideGroupPanel({
   });
 
   const handleCompleteSession = () => run('complete-session', async () => {
-    await apiEndSession(userId, roomId, 'completed');
-    onSessionEnded();
+    // apiCompleteSession tallies summary, marks attendance, and broadcasts
+    // the session_complete SSE event to all members.  We set the leader's
+    // completion card immediately from the API response rather than waiting
+    // for the SSE event, so the leader never misses it due to delivery timing.
+    const response = await apiCompleteSession(userId, roomId);
+    onSessionComplete(response.summary);
     setView('main');
   });
 
@@ -229,6 +252,46 @@ export function GuideGroupPanel({
           {/* ── Main view ──────────────────────────────────────────────── */}
           {view === 'main' && (
             <div className="pb-safe-or-6 pb-6">
+
+              {/* Session stage plan strip */}
+              {sessionActive && (
+                <div className="px-4 pb-2 overflow-x-auto">
+                  <div className="flex items-center gap-1 min-w-max">
+                    {SESSION_STAGES.map((stage, i) => {
+                      const isCurrent = activeSession?.currentMode === stage.mode && stage.mode !== null;
+                      return (
+                        <div key={stage.id} className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              if (stage.mode) {
+                                void run(stage.id, () => apiChangeMode(userId, roomId, stage.mode!, leaderName));
+                              } else if (stage.id === 'scripture') {
+                                setView('scripture');
+                              } else if (stage.id === 'complete') {
+                                setView('complete-confirm');
+                              }
+                            }}
+                            disabled={busy === stage.id}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap disabled:opacity-50 ${
+                              isCurrent
+                                ? 'bg-primary text-primary-foreground'
+                                : stage.id === 'complete'
+                                ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                            }`}
+                          >
+                            {stage.label}
+                          </button>
+                          {i < SESSION_STAGES.length - 1 && (
+                            <span className="text-muted-foreground/30 text-[11px] select-none">›</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="px-5 pb-3 flex items-center justify-between">
                 <div>
                   <p className="text-[17px] font-bold text-foreground">Guide Group</p>

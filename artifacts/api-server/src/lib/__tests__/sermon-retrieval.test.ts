@@ -51,6 +51,22 @@ let testSermonId = "";
 // ─── Setup / teardown ─────────────────────────────────────────────────────────
 
 before(async () => {
+  // 0. Clean up any stale test fixture sermons left by previously crashed runs.
+  //    Match both by youtube_video_id prefix AND by title prefix to catch fixtures
+  //    from older test runs that may have used a different video ID format.
+  //    Stale fixtures compete with the current fixture and cause ordering failures.
+  try {
+    const stale = await pool.query(
+      `SELECT id FROM sermons
+       WHERE youtube_video_id LIKE 'test-int-john3-%'
+          OR (title LIKE 'Test:%' AND scripture_book_ids @> '["john"]'::jsonb
+              AND scripture_chapters @> '[3]'::jsonb)`
+    );
+    for (const row of stale.rows) {
+      await deleteSermon(String(row.id)).catch(() => {});
+    }
+  } catch { /* non-fatal — proceed with test even if cleanup fails */ }
+
   // 1. Create and publish the canonical fixture sermon
   const sermon = await createSermon({
     legacyJsonId: null,

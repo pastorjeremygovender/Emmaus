@@ -200,6 +200,7 @@ export interface SharedNote {
 export type SessionEventType =
   | 'session_started'
   | 'session_ended'
+  | 'session_complete'
   | 'navigate'
   | 'mode_change'
   | 'focus_verse'
@@ -215,6 +216,13 @@ export type SessionEventType =
   | 'highlight_focus_changed'
   | 'note_added'
   | 'note_pinned';
+
+export interface SessionCompleteSummary {
+  modesEntered: string[];
+  memberCount: number;
+  prayerRequestCount: number;
+  sharedNoteCount: number;
+}
 
 export interface SessionEvent {
   type: SessionEventType;

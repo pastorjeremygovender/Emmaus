@@ -79,6 +79,9 @@ import {
   revealPollResults,
   addEmmausAnswer,
   getSessionEmmausAnswers,
+  trackModeEntered,
+  completeSession,
+  getRecentlyCompletedSession,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -1176,15 +1179,25 @@ router.post("/:roomId/prayer", async (req, res) => {
     res.status(403).json({ error: "You are not a member of this Room." });
     return;
   }
-  const { request, authorName } = req.body as { request?: string; authorName?: string };
+  const { request, authorName, sessionId } = req.body as {
+    request?: string;
+    authorName?: string;
+    sessionId?: string; // optional: scopes the prayer to a session for atomic completion counting
+  };
   if (!request?.trim()) {
     res.status(400).json({ error: "Prayer request text is required." });
     return;
   }
   try {
     const prayerRequest = await addPrayerRequest(
-      String(roomId), userId, authorName?.trim() || "Member", request.trim()
+      String(roomId), userId, authorName?.trim() || "Member", request.trim(),
+      sessionId || undefined
     );
+    // Null means the session was completed between the client's status check and this insert.
+    if (!prayerRequest) {
+      res.status(409).json({ error: "Session has ended. Prayer requests can no longer be added." });
+      return;
+    }
     res.status(201).json({ request: prayerRequest });
   } catch {
     res.status(500).json({ error: "Failed to add prayer request." });
@@ -1264,6 +1277,12 @@ router.post("/:roomId/session/start", async (req, res) => {
     broadcastRoomEvent(String(roomId), event);
     res.status(201).json({ session });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (msg === "SESSION_ALREADY_ACTIVE") {
+      // Leader must explicitly end or complete the current session first.
+      res.status(409).json({ error: "A session is already active. End or complete it before starting a new one." });
+      return;
+    }
     res.status(500).json({ error: "Failed to start session." });
   }
 });
@@ -1274,11 +1293,35 @@ router.post("/:roomId/session/end", async (req, res) => {
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
   const { status = "ended" } = req.body as { status?: "completed" | "ended" };
+
+  // If the caller requested completion (status="completed"), route through the
+  // full completion path so session summary, attendance closure, and the
+  // session_complete SSE broadcast are all applied correctly.
+  // Bypassing this with a raw endSession("completed") would skip all of that work.
+  if (status === "completed") {
+    try {
+      const summary = await completeSession(String(roomId));
+      const event: SessionEvent = {
+        type: "session_complete",
+        payload: summary as unknown as Record<string, unknown>,
+        sentBy: userId,
+        at: new Date().toISOString(),
+      };
+      broadcastRoomEvent(String(roomId), event);
+      res.json({ ok: true, summary });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to complete session.";
+      const code = msg.toLowerCase().includes("already completed") ? 409 : 500;
+      res.status(code).json({ error: msg });
+    }
+    return;
+  }
+
   try {
-    await endSession(String(roomId), status === "completed" ? "completed" : "ended");
+    await endSession(String(roomId), "ended");
     const event: SessionEvent = {
       type: "session_ended",
-      payload: { status },
+      payload: { status: "ended" },
       sentBy: userId,
       at: new Date().toISOString(),
     };
@@ -1356,6 +1399,12 @@ router.post("/:roomId/session/mode", async (req, res) => {
   }
   try {
     await updateSessionState(String(roomId), { currentMode: mode });
+    // Durably record which modes were entered — awaited so completeSession()
+    // can rely on metadata.modesEntered being current before the leader
+    // taps Complete Session.
+    if (mode === "discussion" || mode === "prayer") {
+      await trackModeEntered(String(roomId), mode);
+    }
     const event: SessionEvent = {
       type: "mode_change",
       payload: { mode, leaderName: leaderName ?? "" },
@@ -1366,6 +1415,29 @@ router.post("/:roomId/session/mode", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to change mode." });
+  }
+});
+
+// POST /:roomId/session/complete — leader formally completes the session
+// Tallies summary data, marks all active attendees as left, broadcasts session_complete.
+router.post("/:roomId/session/complete", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  try {
+    const summary = await completeSession(String(roomId));
+    broadcastRoomEvent(String(roomId), {
+      type: "session_complete",
+      payload: { ...summary },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true, summary });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to complete session.";
+    // 409 for "already completed" (harmless double-tap); 500 for unexpected errors
+    const status = msg.toLowerCase().includes("already completed") ? 409 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
@@ -1432,7 +1504,9 @@ router.post("/:roomId/session/attendance/leave", async (req, res) => {
     return;
   }
   try {
-    await recordSessionLeave(sessionId, userId);
+    // roomId passed so the store can gate on active-session status —
+    // post-completion leaves are no-ops (preserves authoritative timestamps).
+    await recordSessionLeave(sessionId, String(roomId), userId);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to record attendance leave." });
@@ -1440,13 +1514,17 @@ router.post("/:roomId/session/attendance/leave", async (req, res) => {
 });
 
 // GET /:roomId/session/attendance
+// Restricted to room admins (the room leader). The store JOIN validates
+// that sessionId belongs to roomId, preventing cross-room attendance disclosure.
 router.get("/:roomId/session/attendance", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   const { roomId } = req.params;
   const role = await getMemberRole(String(roomId), userId);
-  if (!role) {
-    res.status(403).json({ error: "You are not a member of this room." });
+  if (role !== "admin") {
+    // 403 for non-members (role === null) and non-admin members alike;
+    // the frontend silently ignores this to avoid exposing role info.
+    res.status(403).json({ error: "Only the room leader can view attendance." });
     return;
   }
   const { sessionId } = req.query as { sessionId?: string };
@@ -1455,7 +1533,8 @@ router.get("/:roomId/session/attendance", async (req, res) => {
     return;
   }
   try {
-    const attendance = await getSessionAttendance(sessionId);
+    // roomId is passed so the store validates session ownership (cross-room protection)
+    const attendance = await getSessionAttendance(sessionId, String(roomId));
     res.json({ attendance });
   } catch {
     res.status(500).json({ error: "Failed to load attendance." });
@@ -1523,17 +1602,37 @@ router.get("/:roomId/session/events", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
-  // Send the current session state as the first event so the client can sync immediately
+  // 1. Send current session state so the client can sync immediately on connect/reconnect.
+  let activeSessionOnConnect: Awaited<ReturnType<typeof getActiveSession>> | null = null;
   try {
-    const session = await getActiveSession(roomId);
+    activeSessionOnConnect = await getActiveSession(roomId);
     const initEvent: SessionEvent = {
       type: "session_state",
-      payload: { session },
+      payload: { session: activeSessionOnConnect },
       sentBy: "system",
       at: new Date().toISOString(),
     };
     res.write(`data: ${JSON.stringify(initEvent)}\n\n`);
   } catch { /* ignore — best-effort initial sync */ }
+
+  // 2. If no active session, replay a recent completion event (within 10 min) so
+  //    members who reconnect or join after the broadcast window still see the
+  //    completion card.  Late joiners and reconnectors are the primary failure mode
+  //    for ephemeral SSE-only delivery.
+  if (!activeSessionOnConnect) {
+    try {
+      const recentSummary = await getRecentlyCompletedSession(roomId, 10);
+      if (recentSummary) {
+        const completeEvent: SessionEvent = {
+          type: "session_complete",
+          payload: recentSummary as unknown as Record<string, unknown>,
+          sentBy: "system",
+          at: new Date().toISOString(),
+        };
+        res.write(`data: ${JSON.stringify(completeEvent)}\n\n`);
+      }
+    } catch { /* ignore — best-effort replay */ }
+  }
 
   let unsubscribe: (() => void) | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -1761,16 +1860,28 @@ router.post("/:roomId/session/notes", async (req, res) => {
     res.status(400).json({ error: "sessionId and text are required." });
     return;
   }
-  // Validate that the session belongs to this room
+  // Validate that the session belongs to this room AND is still active;
+  // post-completion inserts are rejected so the stored sharedNoteCount remains
+  // an accurate reflection of what was contributed during the session.
   const session = await getSessionByIdForRoom(sessionId, String(roomId));
   if (!session) {
     res.status(404).json({ error: "Session not found for this room." });
+    return;
+  }
+  if (session.status !== "active") {
+    res.status(409).json({ error: "Session has ended. Notes can no longer be added." });
     return;
   }
   try {
     const note = await addSharedNote(
       session.id, String(roomId), userId, authorName ?? "", text.trim()
     );
+    // Null means the session status changed between the pre-check and the
+    // atomic INSERT — the session was completed in the narrow window.
+    if (!note) {
+      res.status(409).json({ error: "Session has ended. Notes can no longer be added." });
+      return;
+    }
     const event: SessionEvent = {
       type: "note_added" as SessionEvent["type"],
       payload: { note },

@@ -1570,6 +1570,57 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_polls/room_emmaus_answers failed (non-fatal)");
   }
 
+  // ── Room Sessions completion columns (Task #438) ─────────────────────────────
+  // Stores session summary data written atomically when leader taps "Complete Session".
+  try {
+    await pool.query(`
+      ALTER TABLE room_sessions
+        ADD COLUMN IF NOT EXISTS completed_modes    JSONB NOT NULL DEFAULT '[]',
+        ADD COLUMN IF NOT EXISTS member_count        INTEGER,
+        ADD COLUMN IF NOT EXISTS prayer_request_count INTEGER,
+        ADD COLUMN IF NOT EXISTS shared_note_count   INTEGER,
+        ADD COLUMN IF NOT EXISTS group_position_step TEXT;
+    `);
+    logger.info("Startup migration: room_sessions completion columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_sessions completion columns failed (non-fatal)");
+  }
+
+  // ── room_sessions: one-active-per-room partial unique index (Task #438) ─────
+  // Prevents two concurrent startSession() calls from both creating an active
+  // session for the same room (check-then-insert race).  The partial unique index
+  // is the only DB-level guard; the application catches error code 23505 and
+  // maps it to SESSION_ALREADY_ACTIVE → HTTP 409.
+  try {
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS room_sessions_one_active_per_room
+        ON room_sessions(room_id)
+        WHERE status = 'active';
+    `);
+    logger.info("Startup migration: room_sessions_one_active_per_room unique index ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_sessions_one_active_per_room unique index failed (non-fatal)");
+  }
+
+  // ── room_prayer_requests session_id column (Task #438) ─────────────────────
+  // Allows prayer requests to be scoped to a session so completeSession()
+  // can count them by FK rather than relying on a time-window query, and so
+  // addPrayerRequest() can gate inserts atomically on the session's active status.
+  try {
+    await pool.query(`
+      ALTER TABLE room_prayer_requests
+        ADD COLUMN IF NOT EXISTS session_id UUID REFERENCES room_sessions(id) ON DELETE SET NULL;
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS room_prayer_requests_session_idx
+        ON room_prayer_requests(session_id)
+        WHERE session_id IS NOT NULL;
+    `);
+    logger.info("Startup migration: room_prayer_requests.session_id column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_prayer_requests.session_id column failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

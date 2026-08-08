@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
-import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll } from '@/lib/rooms-types';
+import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary } from '@/lib/rooms-types';
 
 export interface NavigatePayload {
   stepId?: string;
@@ -60,6 +60,12 @@ interface UseFollowLeaderResult {
   /** Latest focus-verse change from SSE. */
   incomingFocusChange: string | null;
 
+  // ── Session completion (Task #438) ─────────────────────────────────────
+  /** Non-null when the leader has formally completed the session. Cleared on dismiss. */
+  sessionComplete: SessionCompleteSummary | null;
+  /** Clear the session-complete summary (called when the member dismisses the card). */
+  clearSessionComplete: () => void;
+
   // ── Shared Ask Emmaus (Task #437) ──────────────────────────────────────
   /** Non-null while the leader's question is being generated. */
   emmausQuestion: string | null;
@@ -93,6 +99,9 @@ export function useFollowLeader({
   const [incomingNotes, setIncomingNotes] = useState<SharedNote[]>([]);
   const [incomingPinChange, setIncomingPinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
   const [incomingFocusChange, setIncomingFocusChange] = useState<string | null>(null);
+
+  // ── Session completion (Task #438) ──────────────────────────────────────
+  const [sessionComplete, setSessionComplete] = useState<SessionCompleteSummary | null>(null);
 
   // ── Shared Ask Emmaus (Task #437) ────────────────────────────────────────
   const [emmausQuestion, setEmmausQuestion] = useState<string | null>(null);
@@ -142,6 +151,18 @@ export function useFollowLeader({
       }
 
       case 'session_ended': {
+        setActiveSession(null);
+        setSessionMode('study');
+        setActiveScripture(null);
+        break;
+      }
+
+      case 'session_complete': {
+        const modesEntered = (event.payload.modesEntered as string[]) ?? [];
+        const memberCount = Number(event.payload.memberCount ?? 0);
+        const prayerRequestCount = Number(event.payload.prayerRequestCount ?? 0);
+        const sharedNoteCount = Number(event.payload.sharedNoteCount ?? 0);
+        setSessionComplete({ modesEntered, memberCount, prayerRequestCount, sharedNoteCount });
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
@@ -328,6 +349,9 @@ export function useFollowLeader({
     incomingNotes,
     incomingPinChange,
     incomingFocusChange,
+    // Task #438
+    sessionComplete,
+    clearSessionComplete: () => setSessionComplete(null),
     // Task #437
     emmausQuestion,
     emmausStreamText,

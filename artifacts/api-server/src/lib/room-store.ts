@@ -916,12 +916,25 @@ export interface RoomSession {
   sessionPlan: unknown[];
   poll: unknown | null;
   metadata: Record<string, unknown>;
+  completedModes: string[];
+  memberCount: number | null;
+  prayerRequestCount: number | null;
+  sharedNoteCount: number | null;
+  groupPositionStep: string | null;
+}
+
+export interface SessionCompleteSummary {
+  modesEntered: string[];
+  memberCount: number;
+  prayerRequestCount: number;
+  sharedNoteCount: number;
 }
 
 export interface SessionEvent {
   type:
     | "session_started"
     | "session_ended"
+    | "session_complete"
     | "navigate"
     | "mode_change"
     | "focus_verse"
@@ -958,6 +971,11 @@ function rowToSession(row: Record<string, unknown>): RoomSession {
     sessionPlan: Array.isArray(row.session_plan) ? row.session_plan : [],
     poll: row.poll ?? null,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
+    completedModes: Array.isArray(row.completed_modes) ? (row.completed_modes as string[]) : [],
+    memberCount: row.member_count != null ? Number(row.member_count) : null,
+    prayerRequestCount: row.prayer_request_count != null ? Number(row.prayer_request_count) : null,
+    sharedNoteCount: row.shared_note_count != null ? Number(row.shared_note_count) : null,
+    groupPositionStep: row.group_position_step ? String(row.group_position_step) : null,
   };
 }
 
@@ -966,19 +984,30 @@ export async function startSession(
   roomId: string,
   startedBy: string
 ): Promise<RoomSession> {
-  // End any existing active session first (idempotent — there should be at most one)
-  await pool.query(
-    `UPDATE room_sessions SET status = 'ended', ended_at = NOW()
-     WHERE room_id = $1 AND status = 'active'`,
-    [roomId]
-  );
-  const { rows } = await pool.query(
-    `INSERT INTO room_sessions (room_id, started_by)
-     VALUES ($1, $2)
-     RETURNING *`,
-    [roomId, startedBy]
-  );
-  return rowToSession(rows[0] as Record<string, unknown>);
+  // Enforce at-most-one active session per room via the partial unique index
+  // room_sessions_one_active_per_room (room_id WHERE status='active').
+  // The index catches concurrent starts at the DB level (no TOCTOU gap);
+  // the application-level check below provides a friendly error message.
+  // The leader must explicitly end or complete the current session before
+  // starting a new one so that completion logic is never bypassed.
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO room_sessions (room_id, started_by)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [roomId, startedBy]
+    );
+    return rowToSession(rows[0] as Record<string, unknown>);
+  } catch (err) {
+    // PostgreSQL unique violation: error code 23505
+    if (
+      typeof err === "object" && err !== null &&
+      (err as Record<string, unknown>).code === "23505"
+    ) {
+      throw new Error("SESSION_ALREADY_ACTIVE");
+    }
+    throw err;
+  }
 }
 
 /** End the active session for a room. */
@@ -1065,44 +1094,256 @@ export async function updateSessionState(
   );
 }
 
-/** Record a member joining the active session for attendance. */
+/** Record a member joining the active session for attendance.
+ *  Validates the session is still active before inserting — rejects post-completion
+ *  joins so they cannot inflate the attendance count or re-open left_at.
+ *  Preserves the original joined_at on reconnect; only clears left_at. */
 export async function recordSessionJoin(
   sessionId: string,
   roomId: string,
   userId: string
 ): Promise<void> {
+  // INSERT ... SELECT ensures no row is inserted (and no conflict fires)
+  // when the session is completed or ended — the status guard lives in SQL,
+  // not in application code, so no TOCTOU window exists.
+  // FOR KEY SHARE conflicts with the FOR UPDATE lock held by completeSession(),
+  // forcing this INSERT to wait and re-evaluate the status predicate after the
+  // completion transaction commits — at which point status='completed' and
+  // no rows are returned, so no attendance row is inserted.
   await pool.query(
     `INSERT INTO room_session_attendance (session_id, room_id, user_id)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (session_id, user_id) DO UPDATE SET joined_at = NOW(), left_at = NULL`,
+     SELECT $1::uuid, $2, $3
+     FROM room_sessions
+     WHERE id = $1::uuid AND room_id = $2 AND status = 'active'
+     FOR KEY SHARE
+     ON CONFLICT (session_id, user_id) DO UPDATE SET left_at = NULL`,
     [sessionId, roomId, userId]
   );
 }
 
-/** Record a member leaving the active session. */
+/** Record a member leaving the active session.
+ *  No-op if the session is already completed/ended — completeSession() has
+ *  already set authoritative left_at timestamps and they must not be overwritten. */
 export async function recordSessionLeave(
   sessionId: string,
+  roomId: string,
   userId: string
 ): Promise<void> {
+  // JOIN against room_sessions WHERE status = 'active' ensures this is a
+  // no-op once the session is completed, preventing React cleanup effects
+  // from clobbering the completion timestamps set inside the transaction.
   await pool.query(
-    `UPDATE room_session_attendance
+    `UPDATE room_session_attendance rsa
      SET left_at = NOW()
-     WHERE session_id = $1 AND user_id = $2 AND left_at IS NULL`,
-    [sessionId, userId]
+     FROM room_sessions rs
+     WHERE rsa.session_id = rs.id
+       AND rsa.session_id = $1::uuid
+       AND rsa.user_id    = $3
+       AND rsa.left_at    IS NULL
+       AND rs.room_id     = $2
+       AND rs.status      = 'active'`,
+    [sessionId, roomId, userId]
   );
 }
 
-/** Get attendance for a session. */
+/**
+ * Track that a mode was entered during the session.
+ * Appends to metadata.modesEntered (idempotent — no duplicate modes stored).
+ */
+export async function trackModeEntered(roomId: string, mode: string): Promise<void> {
+  await pool.query(
+    `UPDATE room_sessions
+     SET metadata = jsonb_set(
+       COALESCE(metadata, '{}'),
+       '{modesEntered}',
+       CASE
+         WHEN metadata->'modesEntered' IS NULL
+           THEN jsonb_build_array($2::text)
+         WHEN metadata->'modesEntered' @> jsonb_build_array($2::text)
+           THEN metadata->'modesEntered'
+         ELSE metadata->'modesEntered' || jsonb_build_array($2::text)
+       END
+     )
+     WHERE room_id = $1 AND status = 'active'`,
+    [roomId, mode]
+  );
+}
+
+/**
+ * Formally complete a session inside a single serializable transaction:
+ *  1. Atomically transitions status 'active' → 'completed' (prevents double-complete).
+ *  2. Reads modesEntered from the locked row's metadata.
+ *  3. Tallies session-scoped counts (prayer requests bounded by started_at, not room-wide).
+ *  4. Writes all summary columns in one UPDATE.
+ *  5. Marks all still-active attendees as left.
+ * Returns the summary broadcast to all members.
+ */
+export async function completeSession(roomId: string): Promise<SessionCompleteSummary> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Step 1a — acquire an exclusive row-level lock on the active session BEFORE
+    // changing its status.  Any concurrent INSERT…SELECT FROM room_sessions WHERE
+    // status='active' (e.g. addSharedNote, addPrayerRequest) will block here until
+    // we COMMIT, at which point status='completed' and those inserts see 0 rows and
+    // abort.  This gives us a true serialization barrier without requiring SERIALIZABLE
+    // isolation across the entire database.
+    const lockRes = await client.query<{
+      id: string;
+      started_at: string;
+      metadata: Record<string, unknown>;
+    }>(
+      `SELECT id, started_at, metadata
+       FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       FOR UPDATE`,
+      [roomId]
+    );
+
+    if (lockRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      throw new Error("No active session to complete, or session was already completed.");
+    }
+
+    // Step 1b — transition status now that the row is locked.
+    // Concurrent writers are blocked by the FOR UPDATE lock until COMMIT.
+    await client.query(
+      `UPDATE room_sessions SET status = 'completed', ended_at = NOW() WHERE id = $1`,
+      [lockRes.rows[0].id]
+    );
+
+    const { id: sessionId, started_at: startedAt, metadata } = lockRes.rows[0];
+
+    // Step 2 — modes entered (study is always included; session always starts there)
+    const rawModes = (metadata?.modesEntered as string[] | undefined) ?? [];
+    const modesEntered = rawModes.includes("study") ? rawModes : ["study", ...rawModes];
+
+    // Step 3 — session-scoped counts.
+    //
+    // Prayer requests: bounded to [started_at, ended_at].  ended_at was set in
+    // Step 1 inside this same transaction; any prayer inserted after that
+    // timestamp has created_at > ended_at and is therefore excluded, closing
+    // the window that would otherwise allow a post-completion prayer request
+    // to be counted (or not) depending on timing.
+    //
+    // Shared notes: session_id FK already scopes them to this session.
+    //
+    // Attendance: same session_id FK scoping.
+    //
+    // We use the `ended_at` returned by Step 1 as the stable cutoff.
+    const [attendanceRes, prayerRes, notesRes] = await Promise.all([
+      client.query<{ cnt: number }>(
+        `SELECT COUNT(*)::int AS cnt FROM room_session_attendance WHERE session_id = $1`,
+        [sessionId]
+      ),
+      client.query<{ cnt: number }>(
+        // Count prayer requests scoped to this session via the session_id FK.
+        // Requests with session_id = sessionId were atomically gated on
+        // status='active' at insert time, so none can land after completion.
+        // Requests without a session_id (room-level, no-session submissions)
+        // are correctly excluded — they are not session contributions.
+        `SELECT COUNT(*)::int AS cnt FROM room_prayer_requests
+         WHERE session_id = $1`,
+        [sessionId]
+      ),
+      client.query<{ cnt: number }>(
+        `SELECT COUNT(*)::int AS cnt FROM room_shared_notes WHERE session_id = $1`,
+        [sessionId]
+      ),
+    ]);
+
+    const memberCount = Number(attendanceRes.rows[0].cnt);
+    const prayerRequestCount = Number(prayerRes.rows[0].cnt);
+    const sharedNoteCount = Number(notesRes.rows[0].cnt);
+
+    // Step 4 — write summary columns (session already locked/completed above)
+    await client.query(
+      `UPDATE room_sessions
+       SET completed_modes      = $2::jsonb,
+           member_count         = $3,
+           prayer_request_count = $4,
+           shared_note_count    = $5,
+           group_position_step  = current_step
+       WHERE id = $1`,
+      [sessionId, JSON.stringify(modesEntered), memberCount, prayerRequestCount, sharedNoteCount]
+    );
+
+    // Step 5 — close out all active attendees
+    await client.query(
+      `UPDATE room_session_attendance SET left_at = NOW()
+       WHERE session_id = $1 AND left_at IS NULL`,
+      [sessionId]
+    );
+
+    await client.query("COMMIT");
+    return { modesEntered, memberCount, prayerRequestCount, sharedNoteCount };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Return the summary of the most recently completed session for a room,
+ * if it was completed within the last `withinMinutes` minutes.
+ * Used by the SSE handler to replay a completion card for members who
+ * reconnect or join after the ephemeral broadcast.
+ */
+export async function getRecentlyCompletedSession(
+  roomId: string,
+  withinMinutes = 10
+): Promise<SessionCompleteSummary | null> {
+  const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
+  const { rows } = await pool.query<{
+    completed_modes: unknown;
+    member_count: string | number | null;
+    prayer_request_count: string | number | null;
+    shared_note_count: string | number | null;
+  }>(
+    `SELECT completed_modes, member_count, prayer_request_count, shared_note_count
+     FROM room_sessions
+     WHERE room_id = $1
+       AND status = 'completed'
+       AND ended_at >= $2
+     ORDER BY ended_at DESC
+     LIMIT 1`,
+    [roomId, cutoff]
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  const rawModes = Array.isArray(row.completed_modes) ? row.completed_modes as string[] : [];
+  return {
+    modesEntered: rawModes,
+    memberCount: Number(row.member_count ?? 0),
+    prayerRequestCount: Number(row.prayer_request_count ?? 0),
+    sharedNoteCount: Number(row.shared_note_count ?? 0),
+  };
+}
+
+/** Get attendance for a session.
+ *  @param sessionId  The session to query.
+ *  @param roomId     The room the caller believes the session belongs to.
+ *                    The JOIN against room_sessions enforces this ownership —
+ *                    a session UUID from another room returns 0 rows,
+ *                    preventing cross-room attendance disclosure.
+ */
 export async function getSessionAttendance(
-  sessionId: string
+  sessionId: string,
+  roomId: string
 ): Promise<Array<{ userId: string; preferredName: string; joinedAt: string; leftAt: string | null }>> {
   const { rows } = await pool.query(
     `SELECT a.user_id, a.joined_at, a.left_at, up.preferred_name
      FROM room_session_attendance a
+     -- Ownership validation: session must belong to this room;
+     -- cross-room session UUIDs produce 0 rows.
+     JOIN room_sessions rs ON rs.id = a.session_id AND rs.room_id = $2
      LEFT JOIN user_profiles up ON up.email = a.user_id
      WHERE a.session_id = $1
      ORDER BY a.joined_at ASC`,
-    [sessionId]
+    [sessionId, roomId]
   );
   return rows.map(r => ({
     userId: String(r.user_id),
@@ -1325,19 +1566,34 @@ export async function getSharedNotes(
 }
 
 /** Add a shared note to the session. */
+/**
+ * Add a shared note to an active session.
+ * The INSERT is conditional on room_sessions.status = 'active' so the
+ * active-status predicate and the insert are atomic — no TOCTOU gap exists
+ * between a pre-check and the write.
+ * Returns null when the session is no longer active (caller sends 409).
+ */
 export async function addSharedNote(
   sessionId: string,
   roomId: string,
   userId: string,
   authorName: string,
   text: string
-): Promise<SharedNote> {
+): Promise<SharedNote | null> {
+  // FOR KEY SHARE conflicts with the FOR UPDATE lock held by completeSession(),
+  // forcing this INSERT to wait and re-evaluate the status predicate after the
+  // completion transaction commits — at which point status='completed' and
+  // no rows are returned, so no note is inserted post-completion.
   const { rows } = await pool.query(
     `INSERT INTO room_shared_notes (session_id, room_id, user_id, author_name, text)
-     VALUES ($1, $2, $3, $4, $5)
+     SELECT $1::uuid, $2, $3, $4, $5
+     FROM room_sessions
+     WHERE id = $1::uuid AND room_id = $2 AND status = 'active'
+     FOR KEY SHARE
      RETURNING *`,
     [sessionId, roomId, userId, authorName.trim() || "Member", text.trim()]
   );
+  if (rows.length === 0) return null; // session completed between route check and insert
   return rowToNote(rows[0] as Record<string, unknown>);
 }
 
@@ -1389,18 +1645,60 @@ export async function getPrayerRequests(roomId: string): Promise<PrayerRequest[]
   }));
 }
 
+/**
+ * Add a prayer request.
+ *
+ * When `sessionId` is provided (session-mode contribution):
+ *   The INSERT is conditional on room_sessions.status = 'active' via a
+ *   correlated SELECT — the active-status predicate and the INSERT are part
+ *   of the same SQL statement, eliminating the TOCTOU window that exists when
+ *   a separate EXISTS check precedes the insert.  Returns null when the session
+ *   is no longer active (caller sends 409).
+ *
+ * When `sessionId` is omitted (general room use outside a session):
+ *   The insert is unconditional — prayer requests are a room-level feature
+ *   that exists independently of sessions.
+ */
 export async function addPrayerRequest(
   roomId: string,
   userId: string,
   authorName: string,
-  request: string
-): Promise<PrayerRequest> {
-  const { rows } = await pool.query(
-    `INSERT INTO room_prayer_requests (room_id, user_id, author_name, request)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, room_id, user_id, author_name, request, is_answered, created_at`,
-    [roomId, userId, authorName.trim() || "Member", request.trim()]
-  );
+  request: string,
+  sessionId?: string
+): Promise<PrayerRequest | null> {
+  const name = authorName.trim() || "Member";
+  const text = request.trim();
+
+  let rows: Array<Record<string, unknown>>;
+
+  if (sessionId) {
+    // Session-scoped: gate on active session via INSERT…SELECT.
+    // FOR KEY SHARE conflicts with the FOR UPDATE lock held by completeSession(),
+    // forcing this INSERT to wait and re-evaluate the status predicate after
+    // the completion transaction commits — at which point status='completed'
+    // and no rows are returned, so no prayer is inserted post-completion.
+    const result = await pool.query(
+      `INSERT INTO room_prayer_requests (room_id, session_id, user_id, author_name, request)
+       SELECT $1, $2::uuid, $3, $4, $5
+       FROM room_sessions
+       WHERE id = $2::uuid AND room_id = $1 AND status = 'active'
+       FOR KEY SHARE
+       RETURNING id, room_id, user_id, author_name, request, is_answered, created_at`,
+      [roomId, sessionId, userId, name, text]
+    );
+    rows = result.rows as Array<Record<string, unknown>>;
+    if (rows.length === 0) return null; // session completed — reject post-session submission
+  } else {
+    // Room-level (no session): always allow.
+    const result = await pool.query(
+      `INSERT INTO room_prayer_requests (room_id, user_id, author_name, request)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, room_id, user_id, author_name, request, is_answered, created_at`,
+      [roomId, userId, name, text]
+    );
+    rows = result.rows as Array<Record<string, unknown>>;
+  }
+
   const r = rows[0];
   return {
     id: String(r.id),

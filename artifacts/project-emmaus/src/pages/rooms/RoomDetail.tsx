@@ -8,7 +8,7 @@ import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, RefreshCw, ChevronRight, Sparkles,
   Share2, Trash2, LogOut, Pencil, Settings, Users2,
-  StickyNote,
+  StickyNote, HandHeart, CheckCircle2, Clock,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress, RoomSession, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll } from '@/lib/rooms-types';
@@ -19,8 +19,9 @@ import { SharedScripturePanel } from '@/components/SharedScripturePanel';
 import { SharedNotesPanel } from '@/components/SharedNotesPanel';
 import { SharedAskEmmausPanel } from '@/components/SharedAskEmmausPanel';
 import { PollCard } from '@/components/PollCard';
+import { SessionCompleteCard } from '@/components/SessionCompleteCard';
 import { useFollowLeader } from '@/hooks/useFollowLeader';
-import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave, apiGetActivePoll } from '@/lib/rooms-api';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl, apiRecordAttendanceJoin, apiRecordAttendanceLeave, apiGetActivePoll, apiGetSessionAttendance, apiChangeMode } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -68,6 +69,18 @@ export default function RoomDetail() {
     userVotedIndex: number | null;
   } | null>(null);
 
+  // ── Task #438 — Attendance section state ───────────────────────────────────
+  const [attendanceData, setAttendanceData] = useState<Array<{
+    userId: string; joinedAt: string; leftAt: string | null;
+  }>>([]);
+
+  // ── Task #438 — Leader's optimistic completion summary ─────────────────────
+  // Set immediately from the apiCompleteSession response so the leader sees the
+  // completion card without depending on SSE delivery.  Non-leaders rely on the
+  // SSE-driven sessionComplete from useFollowLeader (which also replays on
+  // reconnect via the server's recently-completed-session check).
+  const [leaderSessionComplete, setLeaderSessionComplete] = useState<import('@/lib/rooms-types').SessionCompleteSummary | null>(null);
+
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const roomRef = useRef<RoomDetailType | null>(null);
@@ -86,6 +99,9 @@ export default function RoomDetail() {
     incomingNotes,
     incomingPinChange,
     incomingFocusChange,
+    // Task #438 — SSE-driven completion (members + late joiners via replay-on-connect)
+    sessionComplete: sseSessionComplete,
+    clearSessionComplete: clearSseSessionComplete,
     // Task #437
     emmausQuestion,
     emmausStreamText,
@@ -112,6 +128,14 @@ export default function RoomDetail() {
     },
   });
 
+  // Merged session completion: leader's optimistic value takes precedence,
+  // SSE value is used for all other members (and as leader fallback).
+  const sessionComplete = leaderSessionComplete ?? sseSessionComplete;
+  const clearSessionComplete = () => {
+    setLeaderSessionComplete(null);
+    clearSseSessionComplete();
+  };
+
   // Sync SSE payload refs into local state so panels receive them
   useEffect(() => {
     if (incomingHighlights.length > 0) {
@@ -129,6 +153,42 @@ export default function RoomDetail() {
   useEffect(() => {
     if (incomingFocusChange !== undefined) setSseFocusChange(incomingFocusChange);
   }, [incomingFocusChange]);
+
+  // ── Task #438: auto-record attendance join/leave ───────────────────────────
+  // When a session becomes active, record that this member joined.
+  // On unmount or when the session ends, record that they left.
+  useEffect(() => {
+    if (!activeSession || !user || !roomId) return;
+    const sessionId = activeSession.id;
+    const uid = user.id;
+    const rid = String(roomId);
+    // Fire-and-forget — server handles duplicate joins gracefully
+    apiRecordAttendanceJoin(uid, rid, sessionId).catch(() => {});
+    return () => {
+      apiRecordAttendanceLeave(uid, rid, sessionId).catch(() => {});
+    };
+  // Only re-run when the session ID changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
+
+  // ── Task #438: fetch attendance data (room admin/leader only) ────────────
+  // Server enforces admin-only access — non-admins receive 403 which is silently
+  // ignored here. Polls every 30 s while the session is active so the panel
+  // reflects joins and leaves that occur after the initial load.
+  useEffect(() => {
+    if (!activeSession || !user || !roomId || !room) return;
+
+    const fetchAttendance = () => {
+      apiGetSessionAttendance(user.id, String(roomId), activeSession.id)
+        .then(data => setAttendanceData(data))
+        .catch(() => {}); // 403 for non-admins — silently ignored
+    };
+
+    fetchAttendance(); // immediate first fetch
+    const interval = setInterval(fetchAttendance, 30_000); // refresh every 30 s
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id, !!room]);
 
   // ── Task #437: hydrate active poll from DB when session is (re)established ──
   // This restores poll state for members who join/reconnect after a poll starts.
@@ -543,6 +603,11 @@ export default function RoomDetail() {
           onSessionEnded={() => {
             setActiveSession(null);
           }}
+          onSessionComplete={(summary) => {
+            // Set summary immediately from API response — leader doesn't rely on SSE.
+            setLeaderSessionComplete(summary);
+            setActiveSession(null);
+          }}
           videoActive={false}
           onOpenVideo={() => {}}
           onEndVideo={() => {}}
@@ -698,6 +763,46 @@ export default function RoomDetail() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Prayer Mode Banner (Task #438) ───────────────────────────── */}
+        {sessionMode === 'prayer' && activeSession && (
+          <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/40">
+            <HandHeart size={22} className="text-violet-600 dark:text-violet-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-violet-800 dark:text-violet-300">Prayer Time</p>
+              <p className="text-[12px] text-violet-600 dark:text-violet-400 mt-0.5">
+                Share and pray together — see Prayer Requests below
+              </p>
+            </div>
+            {isAuthorizedLeader && (
+              <button
+                onClick={() => void apiChangeMode(user.id, String(roomId), 'study', user.preferredName || 'Leader').catch(() => {})}
+                className="shrink-0 text-[11px] text-violet-600 dark:text-violet-400 font-semibold whitespace-nowrap"
+              >
+                End Prayer →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Discussion Mode Banner (Task #438) ───────────────────────── */}
+        {sessionMode === 'discussion' && activeSession && (
+          <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40">
+            <MessageSquare size={22} className="text-sky-600 dark:text-sky-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-sky-800 dark:text-sky-300">Group Discussion</p>
+              <p className="text-[12px] text-sky-600 dark:text-sky-400 mt-0.5">
+                Share your thoughts — use the chat below
+              </p>
+            </div>
+            <button
+              onClick={openChat}
+              className="shrink-0 text-[12px] text-sky-600 dark:text-sky-400 font-semibold whitespace-nowrap"
+            >
+              Open Chat →
+            </button>
           </div>
         )}
 
@@ -866,6 +971,62 @@ export default function RoomDetail() {
           </div>
         </section>
 
+        {/* ── 3b. Session Attendance (leader/admin only when session is active) ── */}
+        {isAuthorizedLeader && activeSession && attendanceData.length > 0 && (
+          <section>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+              Session Attendance
+            </p>
+            <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+              {room.members.map(m => {
+                const record = attendanceData.find(a => a.userId === m.userId);
+                const sessionStart = new Date(activeSession.startedAt).getTime();
+                const joinedAt = record ? new Date(record.joinedAt).getTime() : null;
+                const lateThresholdMs = 5 * 60 * 1000; // 5 min
+                const isLate = joinedAt != null && (joinedAt - sessionStart) > lateThresholdMs;
+                const hasLeft = record?.leftAt != null;
+
+                let statusIcon: React.ReactNode;
+                let statusLabel: string;
+                let statusColor: string;
+
+                if (!record) {
+                  statusIcon = <span className="text-[14px] text-muted-foreground/40">—</span>;
+                  statusLabel = 'Not joined';
+                  statusColor = 'text-muted-foreground/50';
+                } else if (hasLeft) {
+                  statusIcon = <Clock size={14} className="text-amber-500" />;
+                  statusLabel = 'Left early';
+                  statusColor = 'text-amber-600 dark:text-amber-400';
+                } else if (isLate) {
+                  statusIcon = <Clock size={14} className="text-sky-500" />;
+                  statusLabel = 'Joined late';
+                  statusColor = 'text-sky-600 dark:text-sky-400';
+                } else {
+                  statusIcon = <CheckCircle2 size={14} className="text-emerald-500" />;
+                  statusLabel = 'Present';
+                  statusColor = 'text-emerald-600 dark:text-emerald-400';
+                }
+
+                return (
+                  <div key={m.userId} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-medium text-foreground truncate">
+                        {m.preferredName || 'Member'}
+                        {m.userId === user.id ? ' (you)' : ''}
+                      </p>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${statusColor} shrink-0`}>
+                      {statusIcon}
+                      <span className="text-[12px] font-medium">{statusLabel}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* ── 4. Group Discussion ───────────────────────────────────────── */}
         <section>
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
@@ -894,6 +1055,7 @@ export default function RoomDetail() {
           userId={user.id}
           displayName={user.preferredName || 'Member'}
           isAdmin={isAdmin}
+          sessionId={activeSession?.id}
         />
 
         {/* ── 6. Shared Progress ────────────────────────────────────────── */}
@@ -1061,6 +1223,14 @@ export default function RoomDetail() {
 
       </main>
       <BottomNav />
+
+      {/* ── Session Complete Card (Task #438) — shown to all members ──────── */}
+      {sessionComplete && (
+        <SessionCompleteCard
+          summary={sessionComplete}
+          onDismiss={clearSessionComplete}
+        />
+      )}
     </div>
   );
 }

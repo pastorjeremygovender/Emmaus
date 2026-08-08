@@ -9,9 +9,11 @@ interface PrayerRequestsProps {
   userId: string;
   displayName: string;
   isAdmin: boolean;
+  /** When provided, each prayer request is scoped to the session for atomic completion counting. */
+  sessionId?: string;
 }
 
-export function PrayerRequests({ roomId, userId, displayName, isAdmin }: PrayerRequestsProps) {
+export function PrayerRequests({ roomId, userId, displayName, isAdmin, sessionId }: PrayerRequestsProps) {
   const [requests, setRequests] = useState<PrayerRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +32,7 @@ export function PrayerRequests({ roomId, userId, displayName, isAdmin }: PrayerR
     if (!newRequest.trim()) return;
     setSubmitting(true);
     try {
-      const req = await apiAddPrayerRequest(userId, roomId, displayName, newRequest.trim());
+      const req = await apiAddPrayerRequest(userId, roomId, displayName, newRequest.trim(), sessionId);
       setRequests(prev => [req, ...prev]);
       setNewRequest('');
       setShowForm(false);

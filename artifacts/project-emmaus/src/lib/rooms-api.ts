@@ -75,11 +75,13 @@ export async function apiAddPrayerRequest(
   userId: string,
   roomId: string,
   authorName: string,
-  request: string
+  request: string,
+  /** Optional: scope the prayer to a session for atomic completion counting. */
+  sessionId?: string
 ): Promise<PrayerRequest> {
   const data = await roomsFetch<{ request: PrayerRequest }>(
     `/api/rooms/${roomId}/prayer`, userId,
-    { method: 'POST', body: JSON.stringify({ request, authorName }) }
+    { method: 'POST', body: JSON.stringify({ request, authorName, sessionId }) }
   );
   return data.request;
 }
@@ -723,4 +725,18 @@ export async function apiRevealPoll(
     userId,
     { method: 'POST' }
   );
+}
+
+/**
+ * Formally complete the session: tallies summary data, marks all active attendees
+ * as left, broadcasts session_complete to all members. Leader only.
+ */
+export async function apiCompleteSession(
+  userId: string,
+  roomId: string
+): Promise<{
+  ok: boolean;
+  summary: { modesEntered: string[]; memberCount: number; prayerRequestCount: number; sharedNoteCount: number };
+}> {
+  return roomsFetch(`/api/rooms/${roomId}/session/complete`, userId, { method: 'POST' });
 }
