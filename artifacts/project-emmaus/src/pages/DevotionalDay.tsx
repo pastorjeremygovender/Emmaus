@@ -18,7 +18,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft } from 'lucide-react';
+import { Loader2, ChevronLeft, Users } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
@@ -35,6 +35,7 @@ import {
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
 import { dismissBadge } from '@/lib/badge-api';
+import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
 
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
@@ -71,7 +72,8 @@ export default function DevotionalDay() {
   const [saveError, setSaveError] = useState(false);
   // In-page completion state — shown after a successful save, before the member
   // taps the return button. Prevents immediate auto-navigation.
-  const [justCompleted, setJustCompleted] = useState(false);
+  const [justCompleted, setJustCompleted]         = useState(false);
+  const [showStudyTogether, setShowStudyTogether] = useState(false);
 
   const load = useCallback(async () => {
     if (!seriesId) return;
@@ -244,14 +246,27 @@ export default function DevotionalDay() {
         >
           <ChevronLeft size={16} /> {source?.startsWith('nextSteps') ? 'Next Steps' : "Today's Steps"}
         </button>
-        {totalEntries > 1 && (
-          <button
-            onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Previous days
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {totalEntries > 1 && (
+            <button
+              onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Previous days
+            </button>
+          )}
+          {user && (
+            <button
+              onClick={() => setShowStudyTogether(true)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Study Together"
+              title="Study Together"
+            >
+              <Users size={16} />
+              <span className="hidden sm:inline">Study Together</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Reading */}
@@ -281,6 +296,14 @@ export default function DevotionalDay() {
       />
 
       <BottomNav />
+
+      {showStudyTogether && user && (
+        <StudyTogetherSheet
+          defaultName={seriesData.title}
+          userId={user.id}
+          onClose={() => setShowStudyTogether(false)}
+        />
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import { FavouriteButton } from '@/components/FavouriteButton';
 import { resolveReturn } from '@/lib/return-context';
 import { apiLinkJourney } from '@/lib/rooms-api';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
+import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
 import type { Journey } from '@/contexts/JourneyContext';
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -50,10 +51,11 @@ export default function JourneyDetail() {
     ? `&backSource=${encodeURIComponent(source)}&backSourceId=${encodeURIComponent(sourceId ?? '')}`
     : '';
 
-  const [pendingStart, setPendingStart]     = useState(false);
-  const [showLimitMsg, setShowLimitMsg]     = useState(false);
-  const [collectionName, setCollectionName] = useState<string | null>(null);
-  const [showRoomPicker, setShowRoomPicker] = useState(false);
+  const [pendingStart, setPendingStart]       = useState(false);
+  const [showLimitMsg, setShowLimitMsg]       = useState(false);
+  const [collectionName, setCollectionName]   = useState<string | null>(null);
+  const [showRoomPicker, setShowRoomPicker]   = useState(false);
+  const [showStudyTogether, setShowStudyTogether] = useState(false);
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journey ? progress[journey.id] : undefined;
@@ -362,7 +364,18 @@ export default function JourneyDetail() {
           </div>
         )}
 
-        {/* ── Add to Room — retroactive linking ────────────────────── */}
+        {/* ── Room / Study Together — shown when walking ───────────── */}
+        {/* Already linked to a room → Open Room shortcut */}
+        {matchingRoomId && (
+          <button
+            onClick={() => setLocation(`/rooms/${matchingRoomId}`)}
+            className="flex items-center gap-2 text-[13px] text-primary font-medium hover:text-primary/80 transition-colors"
+          >
+            <Users size={13} />
+            Open Room →
+          </button>
+        )}
+        {/* Has other rooms but this walk isn't linked → retroactive link */}
         {(isStarted || isCompleted) && !matchingRoomId && userRooms.length > 0 && (
           <div className="flex items-center justify-between py-1">
             <span className="text-[13px] text-muted-foreground flex items-center gap-1.5">
@@ -377,14 +390,20 @@ export default function JourneyDetail() {
             </button>
           </div>
         )}
-        {matchingRoomId && (
-          <button
-            onClick={() => setLocation(`/rooms/${matchingRoomId}`)}
-            className="flex items-center gap-2 text-[13px] text-primary font-medium hover:text-primary/80 transition-colors"
-          >
-            <Users size={13} />
-            Open Room →
-          </button>
+        {/* No rooms at all → offer to create one (Study Together) */}
+        {(isStarted || isCompleted) && !matchingRoomId && userRooms.length === 0 && (
+          <div className="flex items-center justify-between py-1">
+            <span className="text-[13px] text-muted-foreground flex items-center gap-1.5">
+              <Users size={13} />
+              Studying with others?
+            </span>
+            <button
+              onClick={() => setShowStudyTogether(true)}
+              className="text-[13px] font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Study Together →
+            </button>
+          </div>
         )}
 
         {/* ── Steps ────────────────────────────────────────────────── */}
@@ -449,6 +468,14 @@ export default function JourneyDetail() {
           onSelect={handleLinkToRoom}
           onClose={() => setShowRoomPicker(false)}
           title="Add Walk to a Room"
+        />
+      )}
+
+      {showStudyTogether && user && (
+        <StudyTogetherSheet
+          defaultName={journey.title}
+          userId={user.id}
+          onClose={() => setShowStudyTogether(false)}
         />
       )}
     </div>

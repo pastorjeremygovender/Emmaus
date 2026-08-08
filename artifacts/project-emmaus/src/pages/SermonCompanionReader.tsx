@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft, Play } from 'lucide-react';
+import { Loader2, ChevronLeft, Play, Users } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { SermonCompanionReading } from '@/components/SermonCompanionReading';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
@@ -24,6 +24,7 @@ import { resolveNextEntry } from '@/lib/resolve-next-entry';
 import { dismissBadge } from '@/lib/badge-api';
 import { setActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
 import { recordView } from '@/lib/history-api';
+import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -172,7 +173,8 @@ export default function SermonCompanionReader() {
   const [loadError, setLoadError]       = useState(false);
   const [completing, setCompleting]     = useState(false);
   const [saveError, setSaveError]       = useState(false);
-  const [justCompleted, setJustCompleted] = useState(false);
+  const [justCompleted, setJustCompleted]         = useState(false);
+  const [showStudyTogether, setShowStudyTogether] = useState(false);
 
   // Inline audio player for audio-first companions (no YouTube URL)
   const audioRef                          = useRef<HTMLAudioElement>(null);
@@ -402,13 +404,23 @@ export default function SermonCompanionReader() {
         <div className="max-w-[480px] mx-auto px-4 h-12 flex items-center gap-2">
           <button
             onClick={() => setLocation(returnDest)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 shrink-0"
           >
             <ChevronLeft size={16} />
             {source === 'today' || source === 'walk' ? "Today's Steps" : 'Next Steps'}
           </button>
-          <span className="text-muted-foreground/30 mx-1">·</span>
-          <span className="text-sm text-muted-foreground truncate">{companion.title}</span>
+          <span className="text-muted-foreground/30 mx-1 shrink-0">·</span>
+          <span className="text-sm text-muted-foreground truncate flex-1">{companion.title}</span>
+          {user && (
+            <button
+              onClick={() => setShowStudyTogether(true)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-1"
+              aria-label="Study Together"
+              title="Study Together"
+            >
+              <Users size={16} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -504,6 +516,14 @@ export default function SermonCompanionReader() {
       )}
 
       <BottomNav />
+
+      {showStudyTogether && user && (
+        <StudyTogetherSheet
+          defaultName={companion.title}
+          userId={user.id}
+          onClose={() => setShowStudyTogether(false)}
+        />
+      )}
     </div>
   );
 }
