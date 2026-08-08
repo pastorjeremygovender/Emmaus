@@ -48,6 +48,10 @@ import {
   markPrayerAnswered,
   recordPresenceHeartbeat,
   getOnlineUserIds,
+  subscribeToPresence,
+  terminatePresenceUserFromRoom,
+  registerPresenceConnection,
+  unregisterPresenceConnection,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -801,6 +805,124 @@ router.get("/:roomId/presence", async (req, res) => {
   res.json({ onlineUserIds });
 });
 
+// ─── Presence — SSE stream (pushed when online list changes) ─────────────────
+//
+// Uses the same two-step token handshake as the chat SSE stream because
+// EventSource cannot send custom request headers.
+//
+//   1. POST /:roomId/presence/stream/token  — authenticated; returns one-time token
+//   2. GET  /:roomId/presence/stream?token= — consumes token; opens SSE stream
+
+router.post("/:roomId/presence/stream/token", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+
+  pruneExpiredTokens();
+  const token = randomUUID();
+  streamTokens.set(token, {
+    userId,
+    roomId: String(roomId),
+    expiresAt: Date.now() + 30_000,
+    kind: "presence",
+  });
+  res.json({ token });
+});
+
+router.get("/:roomId/presence/stream", async (req, res) => {
+  const tokenStr = req.query.token as string | undefined;
+  if (!tokenStr) {
+    res.status(401).json({ error: "A stream token is required." });
+    return;
+  }
+
+  const tokenData = streamTokens.get(tokenStr);
+  // Consume immediately — one-time use
+  streamTokens.delete(tokenStr);
+
+  if (
+    !tokenData ||
+    tokenData.expiresAt < Date.now() ||
+    tokenData.roomId !== String(req.params.roomId) ||
+    tokenData.kind !== "presence"
+  ) {
+    res.status(401).json({ error: "Invalid or expired stream token." });
+    return;
+  }
+
+  const { userId, roomId } = tokenData;
+
+  try {
+    const role = await getMemberRole(roomId, userId);
+    if (!role) {
+      res.status(403).json({ error: "You are no longer a member of this room." });
+      return;
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to verify room membership." });
+    return;
+  }
+
+  // Register the SSE connection as a presence signal BEFORE writing headers so
+  // the user is online by the time any existing subscriber receives the push.
+  registerPresenceConnection(roomId, userId);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  // Push the current presence list (which now includes this user) immediately.
+  const initialIds = getOnlineUserIds(roomId);
+  try { res.write(`data: ${JSON.stringify({ onlineUserIds: initialIds })}\n\n`); } catch { /* ignore */ }
+
+  let unsubscribe: (() => void) | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let terminated = false;
+
+  function terminate() {
+    if (terminated) return;
+    terminated = true;
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    // Unsubscribe FIRST so this stream is removed from the subscriber set before
+    // unregisterPresenceConnection calls pushPresenceToRoom — otherwise the
+    // departing user would receive their own eviction event.
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    unregisterPresenceConnection(roomId, userId);
+    try { res.end(); } catch { /* ignore */ }
+  }
+
+  unsubscribe = subscribeToPresence(
+    roomId,
+    userId,
+    (ids) => {
+      try { res.write(`data: ${JSON.stringify({ onlineUserIds: ids })}\n\n`); } catch { /* ignore */ }
+    },
+    terminate
+  );
+
+  // Keep-alive comment every 25 s; also revalidate membership as a safety net
+  heartbeatTimer = setInterval(async () => {
+    try { res.write(": heartbeat\n\n"); } catch { /* ignore */ }
+    try {
+      const role = await getMemberRole(roomId, userId);
+      if (!role) terminate();
+    } catch { /* ignore — best-effort check */ }
+  }, 25_000);
+
+  req.on("close", terminate);
+});
+
 // ─── Chat — SSE stream (new messages pushed in real-time) ────────────────────
 //
 // EventSource cannot send custom request headers (e.g. X-User-Id), so we use
@@ -820,6 +942,7 @@ interface StreamToken {
   userId: string;
   roomId: string;
   expiresAt: number; // Date.now() + TTL
+  kind: "chat" | "presence";
 }
 
 // In-memory token store — tokens are consumed on first use and expire after
@@ -857,6 +980,7 @@ router.post("/:roomId/messages/stream/token", async (req, res) => {
     userId,
     roomId: String(roomId),
     expiresAt: Date.now() + 30_000, // valid for 30 s
+    kind: "chat",
   });
 
   res.json({ token });
@@ -876,7 +1000,8 @@ router.get("/:roomId/messages/stream", async (req, res) => {
   if (
     !tokenData ||
     tokenData.expiresAt < Date.now() ||
-    tokenData.roomId !== String(req.params.roomId)
+    tokenData.roomId !== String(req.params.roomId) ||
+    tokenData.kind !== "chat"
   ) {
     res.status(401).json({ error: "Invalid or expired stream token." });
     return;

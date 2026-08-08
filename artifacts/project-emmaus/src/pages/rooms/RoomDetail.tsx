@@ -13,7 +13,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import type { RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { VideoRoom } from '@/components/VideoRoom';
-import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresence } from '@/lib/rooms-api';
+import { apiGetJourneyProgress, apiLinkJourney, apiRenameRoom, apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -78,21 +78,65 @@ export default function RoomDetail() {
     return () => clearInterval(timer);
   }, [room, refreshProgress]);
 
-  // ── Presence: send heartbeat + fetch who's online ──────────────────────────
+  // ── Presence: heartbeat keep-alive + SSE-pushed online list ───────────────
   useEffect(() => {
     if (!roomId || !user) return;
+
     const HEARTBEAT_MS = 30_000;
-    const sendHeartbeat = () => { apiSendPresenceHeartbeat(user.id, String(roomId)).catch(() => {}); };
-    const fetchPresence = () => {
-      apiGetPresence(user.id, String(roomId))
-        .then(ids => setOnlineUserIds(new Set(ids)))
-        .catch(() => {});
+    let destroyed = false;
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectDelay = 2_000;
+
+    const sendHeartbeat = () => {
+      apiSendPresenceHeartbeat(user.id, String(roomId)).catch(() => {});
     };
+
+    const openStream = async () => {
+      if (destroyed) return;
+      try {
+        const token = await apiGetPresenceStreamToken(user.id, String(roomId));
+        if (destroyed) return;
+        const url = apiPresenceStreamUrl(String(roomId), token);
+        es = new EventSource(url);
+        es.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data) as { onlineUserIds: string[] };
+            setOnlineUserIds(new Set(data.onlineUserIds));
+            reconnectDelay = 2_000; // reset backoff on a successful message
+          } catch { /* ignore malformed events */ }
+        };
+        es.onerror = () => {
+          es?.close();
+          es = null;
+          if (!destroyed) {
+            reconnectTimer = setTimeout(() => {
+              reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+              openStream();
+            }, reconnectDelay);
+          }
+        };
+      } catch {
+        // Token fetch failed — retry with backoff
+        if (!destroyed) {
+          reconnectTimer = setTimeout(() => {
+            reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+            openStream();
+          }, reconnectDelay);
+        }
+      }
+    };
+
     sendHeartbeat();
-    fetchPresence();
+    openStream();
     const hb = setInterval(sendHeartbeat, HEARTBEAT_MS);
-    const pr = setInterval(fetchPresence, HEARTBEAT_MS);
-    return () => { clearInterval(hb); clearInterval(pr); };
+
+    return () => {
+      destroyed = true;
+      clearInterval(hb);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
+    };
   }, [roomId, user]);
 
   if (!user || !roomId) return null;

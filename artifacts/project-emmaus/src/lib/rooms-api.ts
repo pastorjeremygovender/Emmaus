@@ -356,7 +356,7 @@ export async function apiSendPresenceHeartbeat(
   await roomsFetch(`/api/rooms/${roomId}/presence`, userId, { method: 'POST' });
 }
 
-/** Fetch the list of userIds currently online in this room. */
+/** Fetch the list of userIds currently online in this room (one-shot poll). */
 export async function apiGetPresence(
   userId: string,
   roomId: string
@@ -366,4 +366,29 @@ export async function apiGetPresence(
     userId
   );
   return data.onlineUserIds;
+}
+
+/**
+ * Exchange authenticated credentials for a short-lived one-time presence SSE
+ * stream token.  The token is valid for 30 s and must be passed as ?token= in
+ * the EventSource URL — EventSource cannot send custom headers.
+ */
+export async function apiGetPresenceStreamToken(
+  userId: string,
+  roomId: string
+): Promise<string> {
+  const data = await roomsFetch<{ token: string }>(
+    `/api/rooms/${roomId}/presence/stream/token`,
+    userId,
+    { method: 'POST' }
+  );
+  return data.token;
+}
+
+/**
+ * Build the EventSource URL for the presence SSE stream.
+ * Call apiGetPresenceStreamToken first to obtain the token.
+ */
+export function apiPresenceStreamUrl(roomId: string, token: string): string {
+  return getApiUrl(`/api/rooms/${roomId}/presence/stream?token=${encodeURIComponent(token)}`);
 }

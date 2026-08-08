@@ -361,8 +361,13 @@ export async function leaveRoom(roomId: string, userId: string): Promise<void> {
     `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, userId]
   );
-  // Close any open SSE stream for the departed member immediately
+  // Close any open chat + presence SSE streams for the departed member immediately
   terminateUserFromRoom(roomId, userId);
+  terminatePresenceUserFromRoom(roomId, userId);
+  // Remove both heartbeat and connection-count entries so other members see them offline right away
+  presenceStore.get(roomId)?.delete(userId);
+  clearUserPresenceConnections(roomId, userId);
+  pushPresenceToRoom(roomId);
 }
 
 export async function updateRoomName(roomId: string, name: string): Promise<void> {
@@ -372,10 +377,12 @@ export async function updateRoomName(roomId: string, name: string): Promise<void
   );
 }
 export async function deleteRoom(roomId: string): Promise<void> {
-  // Close all open SSE streams before deleting so no subscriber receives
-  // post-deletion events.
+  // Close all open chat + presence SSE streams before deleting so no subscriber
+  // receives post-deletion events.
   terminateAllFromRoom(roomId);
-  // Clear in-memory presence for this room
+  terminateAllPresenceFromRoom(roomId);
+  // Clear in-memory presence (heartbeats + connection counts) for this room
+  clearRoomPresenceConnections(roomId);
   clearRoomPresence(roomId);
   // FK CASCADE handles room_members, room_messages, room_journeys
   await pool.query(`DELETE FROM rooms WHERE id = $1`, [roomId]);
@@ -414,8 +421,13 @@ export async function removeMember(
     `DELETE FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, targetUserId]
   );
-  // Close any open SSE stream for the removed member immediately
+  // Close any open chat + presence SSE streams for the removed member immediately
   terminateUserFromRoom(roomId, targetUserId);
+  terminatePresenceUserFromRoom(roomId, targetUserId);
+  // Remove both heartbeat and connection-count entries so other members see them offline right away
+  presenceStore.get(roomId)?.delete(targetUserId);
+  clearUserPresenceConnections(roomId, targetUserId);
+  pushPresenceToRoom(roomId);
 }
 
 interface Subscriber {
@@ -716,6 +728,169 @@ export function terminateAllFromRoom(roomId: string): void {
 }
 
 const PRESENCE_STALE_MS = 90_000; // prune entries older than 90 s
+
+// ─── Presence SSE connection count ───────────────────────────────────────────
+//
+// Tracks how many open presence SSE connections each user has per room.
+// A user is considered online as soon as they open a stream; offline the moment
+// their last connection closes.  Multi-tab: each tab increments; only when the
+// count reaches 0 are they evicted from the online list.
+
+const presenceConnectionCounts = new Map<string, Map<string, number>>();
+
+/**
+ * Called when a presence SSE stream is successfully opened.
+ * Immediately marks the user as online (via a synthetic heartbeat) and pushes
+ * an updated list to any other subscribers for this room.
+ */
+export function registerPresenceConnection(roomId: string, userId: string): void {
+  if (!presenceConnectionCounts.has(roomId)) {
+    presenceConnectionCounts.set(roomId, new Map());
+  }
+  const counts = presenceConnectionCounts.get(roomId)!;
+  counts.set(userId, (counts.get(userId) ?? 0) + 1);
+  // Record a heartbeat so the fallback cutoff doesn't immediately evict them.
+  // (Does not push — caller will push after registering as a subscriber.)
+  if (!presenceStore.has(roomId)) presenceStore.set(roomId, new Map());
+  presenceStore.get(roomId)!.set(userId, Date.now());
+}
+
+/**
+ * Called when a presence SSE stream closes (normally or on error).
+ * If this was the user's last open connection, removes them from the online
+ * list immediately and pushes the updated list to remaining subscribers.
+ *
+ * IMPORTANT: call unsubscribe() (to remove this stream from the subscriber set)
+ * BEFORE calling this, so the departing user doesn't receive their own eviction.
+ */
+export function unregisterPresenceConnection(roomId: string, userId: string): void {
+  const counts = presenceConnectionCounts.get(roomId);
+  const current = counts?.get(userId) ?? 0;
+  if (current <= 1) {
+    // Last (or only) connection — evict immediately
+    counts?.delete(userId);
+    if (counts?.size === 0) presenceConnectionCounts.delete(roomId);
+    presenceStore.get(roomId)?.delete(userId);
+    pushPresenceToRoom(roomId);
+  } else {
+    counts!.set(userId, current - 1);
+  }
+}
+
+/**
+ * Clear all presence connection counts for a specific user in a room (e.g.
+ * after leaveRoom / removeMember).  Does NOT push — caller is responsible.
+ */
+function clearUserPresenceConnections(roomId: string, userId: string): void {
+  const counts = presenceConnectionCounts.get(roomId);
+  if (!counts) return;
+  counts.delete(userId);
+  if (counts.size === 0) presenceConnectionCounts.delete(roomId);
+}
+
+/**
+ * Clear all presence connection counts for a room (e.g. after deleteRoom).
+ */
+function clearRoomPresenceConnections(roomId: string): void {
+  presenceConnectionCounts.delete(roomId);
+}
+
+// ─── Presence SSE subscribers ────────────────────────────────────────────────
+
+interface PresenceSubscriber {
+  userId: string;
+  onPresence: (onlineUserIds: string[]) => void;
+  terminate: () => void;
+}
+
+const presenceSubscribers = new Map<string, Set<PresenceSubscriber>>();
+
+/** Last pushed payload per room (sorted JSON) — avoids redundant writes. */
+const lastPresencePushed = new Map<string, string>();
+
+/**
+ * Compute current online list and push to all presence subscribers for a room.
+ * Skips the write when the list hasn't changed since the last push.
+ */
+function pushPresenceToRoom(roomId: string): void {
+  const subs = presenceSubscribers.get(roomId);
+  if (!subs || subs.size === 0) return;
+  const ids = getOnlineUserIds(roomId);
+  const key = JSON.stringify(ids.slice().sort());
+  if (lastPresencePushed.get(roomId) === key) return; // no change
+  lastPresencePushed.set(roomId, key);
+  for (const sub of subs) {
+    try { sub.onPresence(ids); } catch { /* ignore closed connections */ }
+  }
+}
+
+/**
+ * Subscribe to presence updates for a room.
+ * Returns an unsubscribe function — call it when the SSE connection closes.
+ */
+export function subscribeToPresence(
+  roomId: string,
+  userId: string,
+  onPresence: (onlineUserIds: string[]) => void,
+  terminate: () => void
+): () => void {
+  const sub: PresenceSubscriber = { userId, onPresence, terminate };
+  if (!presenceSubscribers.has(roomId)) {
+    presenceSubscribers.set(roomId, new Set());
+  }
+  presenceSubscribers.get(roomId)!.add(sub);
+  return () => {
+    const set = presenceSubscribers.get(roomId);
+    if (set) {
+      set.delete(sub);
+      if (set.size === 0) {
+        presenceSubscribers.delete(roomId);
+        lastPresencePushed.delete(roomId);
+      }
+    }
+  };
+}
+
+/**
+ * Immediately terminate all presence SSE streams for a specific user in a room.
+ * Call after leaveRoom() or removeMember().
+ */
+export function terminatePresenceUserFromRoom(roomId: string, userId: string): void {
+  const set = presenceSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of [...set]) {
+    if (sub.userId === userId) {
+      try { sub.terminate(); } catch { /* ignore */ }
+      set.delete(sub);
+    }
+  }
+  if (set.size === 0) {
+    presenceSubscribers.delete(roomId);
+    lastPresencePushed.delete(roomId);
+  }
+}
+
+/**
+ * Immediately terminate all presence SSE streams for a room.
+ * Call after deleteRoom().
+ */
+export function terminateAllPresenceFromRoom(roomId: string): void {
+  const set = presenceSubscribers.get(roomId);
+  if (!set) return;
+  for (const sub of set) {
+    try { sub.terminate(); } catch { /* ignore */ }
+  }
+  presenceSubscribers.delete(roomId);
+  lastPresencePushed.delete(roomId);
+}
+
+// Sweep every 5 s — detect heartbeat timeouts and push updated presence to
+// any subscriber that is watching a room with stale members.
+setInterval(() => {
+  for (const [roomId] of presenceSubscribers) {
+    pushPresenceToRoom(roomId);
+  }
+}, 5_000).unref();
 export interface PrayerRequest {
   id: string;
   roomId: string;
@@ -1018,17 +1193,34 @@ export async function updateVideoSettings(
 }
 
 /**
- * Returns the set of userIds whose last heartbeat was within the past 60 s.
+ * Returns the set of userIds currently considered online in a room.
+ *
+ * A user is online if EITHER:
+ *   (a) They have at least one active presence SSE connection, OR
+ *   (b) Their last heartbeat was within the past 60 s (fallback for network
+ *       partitions where the SSE close event never fires).
  */
 export function getOnlineUserIds(roomId: string): string[] {
-  const roomMap = presenceStore.get(roomId);
-  if (!roomMap) return [];
-  const cutoff = Date.now() - 60_000;
-  const online: string[] = [];
-  for (const [uid, ts] of roomMap) {
-    if (ts >= cutoff) online.push(uid);
+  const onlineSet = new Set<string>();
+
+  // (a) Active SSE connections — immediate signal
+  const counts = presenceConnectionCounts.get(roomId);
+  if (counts) {
+    for (const [uid, count] of counts) {
+      if (count > 0) onlineSet.add(uid);
+    }
   }
-  return online;
+
+  // (b) Recent heartbeat — fallback for clients without an open SSE stream
+  const cutoff = Date.now() - 60_000;
+  const roomMap = presenceStore.get(roomId);
+  if (roomMap) {
+    for (const [uid, ts] of roomMap) {
+      if (ts >= cutoff) onlineSet.add(uid);
+    }
+  }
+
+  return [...onlineSet];
 }
 
 /**
@@ -1036,11 +1228,14 @@ export function getOnlineUserIds(roomId: string): string[] {
  */
 export function clearRoomPresence(roomId: string): void {
   presenceStore.delete(roomId);
+  // Push empty list to any open presence SSE streams before they are terminated
+  pushPresenceToRoom(roomId);
 }
 
 /**
  * Record a heartbeat for a user in a room.
  * Prunes stale entries for this room on each call to keep the map tidy.
+ * Pushes an updated presence list to any SSE subscribers for this room.
  */
 export function recordPresenceHeartbeat(roomId: string, userId: string): void {
   if (!presenceStore.has(roomId)) {
@@ -1054,6 +1249,9 @@ export function recordPresenceHeartbeat(roomId: string, userId: string): void {
   for (const [uid, ts] of roomMap) {
     if (ts < cutoff) roomMap.delete(uid);
   }
+
+  // Push updated list to any open presence SSE streams for this room
+  pushPresenceToRoom(roomId);
 }
 
 const presenceStore = new Map<string, Map<string, number>>();
