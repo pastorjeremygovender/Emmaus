@@ -1378,6 +1378,21 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: orphan sermon companion cleanup failed (non-fatal)");
   }
 
+  // ── authorized_room_leader permission column (2026-08) ───────────────────────
+  // Explicit per-user flag that unlocks leader-only Room tools (Gather Together,
+  // Guide Group, etc.). Pastors and app admins are implicitly authorized by role;
+  // this column covers all other cases (e.g. an authorised youth leader who is
+  // not a registered pastor).
+  try {
+    await pool.query(`
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS authorized_room_leader BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    logger.info("Startup migration: user_profiles.authorized_room_leader column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: authorized_room_leader column failed (non-fatal)");
+  }
+
   // ── Replace 'the pastor' in companion entries (2026-08) ──────────────────────
   // Generated companion entries may refer to the speaker as "the pastor" or
   // "The pastor". Replace with "Pastor Jeremy" for existing ICC content generated

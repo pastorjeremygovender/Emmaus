@@ -39,6 +39,9 @@ import {
   getActiveVideoRoomCount,
   getRoomMemberCount,
   canHostVideo,
+  isAuthorizedLeader,
+  getLeaderAccess,
+  setLeaderAccess,
   getPrayerRequests,
   addPrayerRequest,
   markPrayerAnswered,
@@ -137,10 +140,12 @@ router.get("/:roomId/video/status", async (req, res) => {
       return;
     }
 
-    const status = await getVideoStatus(String(roomId));
-    const settings = await getVideoSettings();
-    const appRole = await getUserRole(userId);
-    const canHost = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    const [status, settings, appRole] = await Promise.all([
+      getVideoStatus(String(roomId)),
+      getVideoSettings(),
+      getUserRole(userId),
+    ]);
+    const canHost = await canHostVideo(userId, String(roomId), appRole);
 
     res.json({
       configured: true,
@@ -172,7 +177,7 @@ router.post("/:roomId/video/start", async (req, res) => {
     }
 
     const appRole = await getUserRole(userId);
-    const allowed = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    const allowed = await canHostVideo(userId, String(roomId), appRole);
     if (!allowed) {
       res.status(403).json({ error: "You are not authorised to start video for this Room." });
       return;
@@ -245,7 +250,7 @@ router.post("/:roomId/video/token", async (req, res) => {
     }
 
     const appRole = await getUserRole(userId);
-    const isHost = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    const isHost = await canHostVideo(userId, String(roomId), appRole);
 
     // Resolve display name from user_profiles (never expose raw userId).
     // user_profiles uses email as the key — userId in session context is the email/identifier.
@@ -285,9 +290,8 @@ router.post("/:roomId/video/end", async (req, res) => {
   }
 
   try {
-    const settings = await getVideoSettings();
     const appRole = await getUserRole(userId);
-    const allowed = await canHostVideo(userId, String(roomId), appRole, settings.allowedRoles);
+    const allowed = await canHostVideo(userId, String(roomId), appRole);
     if (!allowed) {
       res.status(403).json({ error: "Only the room host can end the meeting." });
       return;
@@ -303,6 +307,50 @@ router.post("/:roomId/video/end", async (req, res) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to end video session.";
     res.status(500).json({ error: msg });
+  }
+});
+
+// ─── Admin: leader authorization ─────────────────────────────────────────────
+
+/**
+ * GET /admin/persons/:userId/leader-access
+ * Returns the current leader-access state for an Emmaus user.
+ * source: "admin_role" | "pastoral_role" | "explicit" | "none"
+ */
+router.get("/admin/persons/:userId/leader-access", async (req, res) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const targetId = String(req.params.userId);
+    const appRole = await getUserRole(targetId);
+    const result = await getLeaderAccess(targetId, appRole);
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Failed to load leader access." });
+  }
+});
+
+/**
+ * PATCH /admin/persons/:userId/leader-access
+ * Body: { authorized: boolean }
+ * Sets the explicit authorized_room_leader flag. Does not affect role-based grants.
+ */
+router.patch("/admin/persons/:userId/leader-access", async (req, res) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const { authorized } = req.body as { authorized?: boolean };
+  if (typeof authorized !== "boolean") {
+    res.status(400).json({ error: "authorized must be a boolean." });
+    return;
+  }
+  try {
+    const targetId = String(req.params.userId);
+    await setLeaderAccess(targetId, authorized);
+    const appRole = await getUserRole(targetId);
+    const result = await getLeaderAccess(targetId, appRole);
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Failed to update leader access." });
   }
 });
 

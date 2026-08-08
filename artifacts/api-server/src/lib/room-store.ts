@@ -194,37 +194,26 @@ export async function createRoom(
 
 /**
  * Check whether a user is permitted to create a given room type.
- * personal  — any authenticated user
- * ministry  — group_leader, pastor, admin, superAdmin
- * leadership — pastor, admin, superAdmin
- * church_service — admin, superAdmin only (no pastoral_role override)
  *
- * appRole should come from getUserRole() (user-role-store) to avoid
- * header spoofing.
+ * Per the Emmaus Rooms permission model (2026-08):
+ *   personal / ministry / leadership — any authenticated user
+ *   church_service                   — admin / superAdmin only
+ *
+ * Creating a Room does NOT require leader authorization.
+ * Leader-only tools (Gather Together, Guide Group, etc.) are gated separately
+ * by isAuthorizedLeader() at point of use — not at room creation time.
  */
 export async function canCreateRoomType(
   userId: string,
   roomType: RoomType,
   appRole: string
 ): Promise<boolean> {
-  if (roomType === "personal") return true;
-  if (appRole === "admin" || appRole === "superAdmin") return true;
-  if (roomType === "church_service") return false; // admin/superAdmin only (caught above)
-
-  // Check pastoral_role for ministry / leadership
-  const { rows } = await pool.query(
-    "SELECT pastoral_role FROM user_profiles WHERE email = $1",
-    [userId]
-  );
-  const pastoralRole: string = rows[0]?.pastoral_role ?? "";
-
-  if (roomType === "ministry") {
-    return ["group_leader", "pastor"].includes(pastoralRole);
+  // Church service rooms are admin-only (whole-church broadcast context)
+  if (roomType === "church_service") {
+    return appRole === "admin" || appRole === "superAdmin";
   }
-  if (roomType === "leadership") {
-    return pastoralRole === "pastor";
-  }
-  return false;
+  // All other room types: any authenticated user may create
+  return true;
 }
 
 /**
@@ -863,19 +852,88 @@ export async function getRoomMemberCount(roomId: string): Promise<number> {
 }
 
 /**
- * Check whether a user is authorised to host (start/end) video for this room.
+ * Check whether a user is an Authorized Room Leader.
+ *
+ * Three paths to authorization (any one is sufficient):
+ *   1. explicit:       authorized_room_leader = TRUE in user_profiles
+ *   2. pastoral_role:  pastoral_role = 'pastor' in user_profiles
+ *   3. admin_role:     appRole is 'admin' or 'superAdmin'
+ *
+ * This does NOT check room membership — use canHostVideo() for that.
+ * Never trust a client-supplied appRole; call getUserRole() before passing it.
+ */
+export async function isAuthorizedLeader(
+  userId: string,
+  appRole: string
+): Promise<boolean> {
+  if (appRole === "admin" || appRole === "superAdmin") return true;
+  const { rows } = await pool.query(
+    `SELECT authorized_room_leader, pastoral_role
+       FROM user_profiles WHERE email = $1`,
+    [userId]
+  );
+  if (!rows[0]) return false;
+  if (rows[0].authorized_room_leader === true) return true;
+  if (rows[0].pastoral_role === "pastor") return true;
+  return false;
+}
+
+/**
+ * Get the current leader-access state for a user, including the authorization
+ * source so the admin UI can render read-only notices for role-based grants.
+ */
+export async function getLeaderAccess(
+  userId: string,
+  appRole: string
+): Promise<{ authorized: boolean; source: "admin_role" | "pastoral_role" | "explicit" | "none" }> {
+  if (appRole === "admin" || appRole === "superAdmin") {
+    return { authorized: true, source: "admin_role" };
+  }
+  const { rows } = await pool.query(
+    `SELECT authorized_room_leader, pastoral_role
+       FROM user_profiles WHERE email = $1`,
+    [userId]
+  );
+  if (!rows[0]) return { authorized: false, source: "none" };
+  if (rows[0].pastoral_role === "pastor") {
+    return { authorized: true, source: "pastoral_role" };
+  }
+  if (rows[0].authorized_room_leader === true) {
+    return { authorized: true, source: "explicit" };
+  }
+  return { authorized: false, source: "none" };
+}
+
+/**
+ * Set or clear the explicit authorized_room_leader flag for a user.
+ * Role-based grants (admin, pastor) are unaffected — they remain authoritative
+ * even if this flag is false.
+ */
+export async function setLeaderAccess(
+  userId: string,
+  authorized: boolean
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO user_profiles (email, authorized_room_leader)
+     VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET authorized_room_leader = EXCLUDED.authorized_room_leader`,
+    [userId, authorized]
+  );
+}
+
+/**
+ * Check whether a user is authorised to HOST (start/end) video for a room.
  *
  * Conditions (ALL must be true):
  *  1. User must be the room admin (room_members.role = 'admin').
- *  2. User's role (app role OR pastoral role) must be in church allowedRoles.
+ *  2. User must be an Authorized Room Leader (isAuthorizedLeader).
  *
- * Never trust a client-supplied role — call getUserRole() before passing appRole.
+ * Never trust a client-supplied appRole — call getUserRole() before passing it.
  */
 export async function canHostVideo(
   userId: string,
   roomId: string,
-  appRole: string,
-  allowedRoles: string[]
+  appRole: string
 ): Promise<boolean> {
   // 1. Must be the room admin
   const { rows: memberRows } = await pool.query(
@@ -884,21 +942,8 @@ export async function canHostVideo(
   );
   if (memberRows[0]?.role !== "admin") return false;
 
-  // 2. App admin always allowed if in allowedRoles
-  if (
-    (appRole === "admin" || appRole === "superAdmin") &&
-    allowedRoles.some(r => r === appRole)
-  ) {
-    return true;
-  }
-
-  // 3. Check pastoral_role
-  const { rows: profileRows } = await pool.query(
-    "SELECT pastoral_role FROM user_profiles WHERE email = $1",
-    [userId]
-  );
-  const pastoralRole: string = profileRows[0]?.pastoral_role ?? "";
-  return pastoralRole !== "" && allowedRoles.includes(pastoralRole);
+  // 2. Must be an Authorized Room Leader
+  return isAuthorizedLeader(userId, appRole);
 }
 
 // ─── Church video settings ────────────────────────────────────────────────────

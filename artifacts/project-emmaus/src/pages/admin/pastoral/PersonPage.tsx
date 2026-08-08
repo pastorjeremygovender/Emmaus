@@ -20,7 +20,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Bell, Calendar, X, AlertCircle, Loader2,
   MapPin, Clock, Activity, Star, BookOpen, CalendarDays,
-  Shield, CheckCircle2, ClipboardCheck,
+  Shield, CheckCircle2, ClipboardCheck, ShieldCheck,
 } from 'lucide-react';
 import * as api from '@/lib/pastoral-api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -104,6 +104,12 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
   const [isLinked, setLinked]   = useState(person.isLinked);
   const [linkedId, setLinkedId] = useState(person.linkedUserId);
 
+  // ── Leader access state ────────────────────────────────────────────────────
+  type LeaderSource = 'admin_role' | 'pastoral_role' | 'explicit' | 'none';
+  const [leaderAuthorized, setLeaderAuthorized] = useState<boolean | null>(null);
+  const [leaderSource,     setLeaderSource]     = useState<LeaderSource>('none');
+  const [leaderSaving,     setLeaderSaving]     = useState(false);
+
   // ── Pastoral care modal state (inline) ────────────────────────────────────
   const [scheduleSignalId, setScheduleSignalId] = useState<string | null>(null);
   const [scheduleDate,     setScheduleDate]     = useState('');
@@ -184,6 +190,59 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
     loadCore(); loadSnapshot(); loadDiscipleship();
     loadTimeline(); loadRhythm(); loadAttRhythm(); loadMilestones();
   }, [loadCore, loadSnapshot, loadDiscipleship, loadTimeline, loadRhythm, loadAttRhythm, loadMilestones]);
+
+  // The effective Emmaus userId for leader-access API calls:
+  //   emmaus_user → person.id IS the userId
+  //   attendance_only linked → linkedId
+  //   unlinked → null (toggle not shown)
+  const leaderTargetId =
+    person.personType === 'emmaus_user'
+      ? person.id
+      : isLinked && linkedId
+      ? linkedId
+      : null;
+
+  useEffect(() => {
+    if (!leaderTargetId) return;
+    fetch(`/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`, {
+      headers: { 'x-user-id': user?.id ?? '', 'x-user-role': user?.role ?? 'admin' },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { authorized: boolean; source: LeaderSource } | null) => {
+        if (!d) return;
+        setLeaderAuthorized(d.authorized);
+        setLeaderSource(d.source);
+      })
+      .catch(() => {});
+  }, [leaderTargetId, user?.id]);
+
+  const handleLeaderAccessToggle = async () => {
+    if (!leaderTargetId || leaderSaving) return;
+    const next = !leaderAuthorized;
+    setLeaderSaving(true);
+    try {
+      const r = await fetch(
+        `/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': user?.id ?? '',
+            'x-user-role': user?.role ?? 'admin',
+          },
+          body: JSON.stringify({ authorized: next }),
+        }
+      );
+      const d: { authorized: boolean; source: LeaderSource } = await r.json();
+      setLeaderAuthorized(d.authorized);
+      setLeaderSource(d.source);
+      flash(next ? 'Leader access granted' : 'Leader access removed');
+    } catch {
+      flash('Save failed');
+    } finally {
+      setLeaderSaving(false);
+    }
+  };
 
   // Scroll to Care Signals section when opened from a flagged person row
   useEffect(() => {
@@ -532,7 +591,72 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
           </div>
         </Section>
 
-        {/* 9. Administrative Details (collapsed by default) */}
+        {/* 9. Leadership Access */}
+        {leaderTargetId && (
+          <Section title="Leadership Access" icon={ShieldCheck} iconColor="text-teal-600">
+            <div className="bg-white border border-gray-200 rounded-xl px-4 py-4 space-y-3">
+              {leaderAuthorized === null ? (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 size={13} className="animate-spin" />
+                  <span className="text-[13px]">Loading…</span>
+                </div>
+              ) : (
+                <>
+                  {/* Auto-qualified notice */}
+                  {(leaderSource === 'admin_role' || leaderSource === 'pastoral_role') && (
+                    <div className="flex items-start gap-2 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2.5">
+                      <ShieldCheck size={13} className="text-teal-600 mt-0.5 shrink-0" />
+                      <p className="text-[12px] text-teal-700 leading-relaxed">
+                        {leaderSource === 'admin_role'
+                          ? 'Authorized automatically as a Church Admin.'
+                          : 'Authorized automatically as a Pastor.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Toggle row */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-gray-900">Authorized Group Leader</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5 leading-relaxed">
+                        {leaderAuthorized
+                          ? 'Can start live gatherings and use leader tools in their Rooms.'
+                          : 'Rooms work for discussion, prayer and shared progress only.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleLeaderAccessToggle}
+                      disabled={
+                        leaderSaving ||
+                        leaderSource === 'admin_role' ||
+                        leaderSource === 'pastoral_role'
+                      }
+                      aria-pressed={leaderAuthorized}
+                      className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-teal-500/40 ${
+                        leaderAuthorized
+                          ? 'bg-teal-600'
+                          : 'bg-gray-200'
+                      } disabled:opacity-50 disabled:cursor-default`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                          leaderAuthorized ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                      {leaderSaving && (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 size={11} className="text-white animate-spin" />
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* 10. Administrative Details (collapsed by default) */}
         <AdminDetails
           person={person}
           expectations={expectations}
