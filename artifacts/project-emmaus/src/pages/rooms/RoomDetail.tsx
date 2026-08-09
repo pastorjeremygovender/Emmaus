@@ -34,6 +34,8 @@ import {
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
+import { PresentationPanel } from '@/components/PresentationPanel';
+import { apiGetActivePresentation } from '@/lib/rooms-api-media';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -188,6 +190,8 @@ export default function RoomDetail() {
     incomingPoll,
     pollVoteUpdate,
     pollRevealUpdate,
+    activePresentation,
+    setActivePresentation,
   } = useFollowLeader({
     roomId: String(roomId),
     userId: user?.id ?? '',
@@ -239,8 +243,18 @@ export default function RoomDetail() {
       setSseNotes([]);
       setSsePinChange(null);
       setSseFocusChange(null);
+      setActivePresentation(null);
     }
   }, [activeSession]);
+
+  // Fetch active presentation when joining/reconnecting to a session that's already in progress.
+  useEffect(() => {
+    if (!activeSession?.id || !user?.id) return;
+    apiGetActivePresentation(user.id, String(roomId))
+      .then(pres => { if (pres) setActivePresentation(pres); })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]);
 
   // Live Video status polling — kept here (before the early returns) so the
   // hook call count never changes between renders. Runs for ALL room types:
@@ -569,7 +583,13 @@ export default function RoomDetail() {
   };
 
   const openChat = () => {
-    history.replaceState({ ...history.state, roomName: room?.name ?? '' }, '');
+    history.replaceState({
+      ...history.state,
+      roomName: room?.name ?? '',
+      isLeader: isAuthorizedLeader,
+      allowMemberPresent: room?.allowMemberPresent ?? false,
+      sessionId: activeSession?.id ?? null,
+    }, '');
     setLocation(`/rooms/${roomId}/chat`);
   };
 
@@ -1172,13 +1192,6 @@ export default function RoomDetail() {
             </section>
 
 
-            {/* Prayer Requests */}
-            <PrayerRequests
-              roomId={String(roomId)} userId={user.id}
-              displayName={user.preferredName || 'Member'}
-              isAdmin={isAdmin} sessionId={undefined}
-            />
-
             {/* START MEETING — primary action, leaders only */}
             {isAuthorizedLeader && (
               <button
@@ -1312,6 +1325,17 @@ export default function RoomDetail() {
               />
             )}
 
+            {/* Active presentation — shown to all members during a meeting */}
+            {activePresentation && (
+              <PresentationPanel
+                presentation={activePresentation}
+                isLeader={isAuthorizedLeader}
+                userId={user.id}
+                roomId={String(roomId)}
+                onStop={() => setActivePresentation(null)}
+              />
+            )}
+
             {/* Today's Study */}
             <section>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Today&apos;s Study</p>
@@ -1396,13 +1420,6 @@ export default function RoomDetail() {
             </section>
 
 
-            {/* Prayer Requests */}
-            <PrayerRequests
-              roomId={String(roomId)} userId={user.id}
-              displayName={user.preferredName || 'Member'}
-              isAdmin={isAdmin} sessionId={activeSession.id}
-            />
-
           </div>
         )}
 
@@ -1476,14 +1493,6 @@ export default function RoomDetail() {
                 <ChevronRight size={16} className="text-muted-foreground shrink-0" />
               </button>
             </section>
-
-            {/* Prayer Requests */}
-            <PrayerRequests
-              roomId={String(roomId)} userId={user.id}
-              displayName={user.preferredName || 'Member'}
-              isAdmin={isAdmin} sessionId={undefined}
-            />
-
 
             {/* Next Meeting */}
             {isAuthorizedLeader && (

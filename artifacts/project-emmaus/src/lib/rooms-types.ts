@@ -120,6 +120,8 @@ export interface RoomDetail extends RoomSummary {
    *  on initial load so members see the Meeting phase immediately without
    *  waiting for the SSE session_state event. */
   activeSession?: RoomSession | null;
+  /** When true, members may present their own shared media (default false). */
+  allowMemberPresent?: boolean;
 }
 
 export interface MemberJourneyProgress {
@@ -159,6 +161,44 @@ export interface VideoSessionStatus {
   canHost?: boolean;
 }
 
+// ─── Media attachments ────────────────────────────────────────────────────────
+
+export type MediaAttachmentType = 'image' | 'pdf' | 'video' | 'voice' | 'document' | 'link';
+
+export interface MediaAttachment {
+  type: MediaAttachmentType;
+  filename: string;
+  /** Normalised object path, e.g. /objects/uploads/<uuid>.  Empty for link type. */
+  objectPath: string;
+  mimeType: string;
+  size: number;
+  caption?: string;
+  /** Duration in seconds — voice/video only. */
+  duration?: number;
+  /** Page count — PDF only. */
+  pageCount?: number;
+  /** URL — link type only. */
+  url?: string;
+}
+
+export interface PresentationState {
+  messageId: string | null;
+  filename: string;
+  mediaType: MediaAttachmentType;
+  objectPath: string;
+  presentedBy: string;
+  presentedByName: string;
+  currentPage: number;
+}
+
+export interface RoomMediaItem {
+  messageId: string;
+  userId: string;
+  senderName: string;
+  attachment: MediaAttachment;
+  createdAt: string;
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────
 
 export interface RoomMessage {
@@ -168,6 +208,7 @@ export interface RoomMessage {
   senderName: string;
   body: string;
   createdAt: string;
+  attachment?: MediaAttachment | null;
 }
 
 // ─── Guided session ───────────────────────────────────────────────────────
@@ -243,7 +284,10 @@ export type SessionEventType =
   | 'highlight_added'
   | 'highlight_focus_changed'
   | 'note_added'
-  | 'note_pinned';
+  | 'note_pinned'
+  | 'media_presented'
+  | 'presentation_page'
+  | 'presentation_stopped';
 
 export interface SessionCompleteSummary {
   sessionId: string;

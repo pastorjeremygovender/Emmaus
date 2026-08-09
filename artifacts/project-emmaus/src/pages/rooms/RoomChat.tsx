@@ -3,8 +3,11 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGetMessages, apiGetStreamToken, apiSendMessage } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
-import { ArrowLeft, Send } from 'lucide-react';
-import type { RoomMessage } from '@/lib/rooms-types';
+import { apiStartPresentation } from '@/lib/rooms-api-media';
+import { ArrowLeft, Send, Paperclip, X } from 'lucide-react';
+import type { RoomMessage, MediaAttachment } from '@/lib/rooms-types';
+import { MediaMessageBubble } from '@/components/MediaMessageBubble';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
 
 const MAX_RECONNECT_ATTEMPTS = 6;
 const BASE_BACKOFF_MS = 1_000;
@@ -78,12 +81,30 @@ export default function RoomChat() {
   const [loadError, setLoadError] = useState('');
   const [roomName, setRoomName] = useState('');
 
+  // Attachment state
+  const [pendingAttachment, setPendingAttachment] = useState<MediaAttachment | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // Presentation permission — passed via navigation state from RoomDetail
+  const [isLeader, setIsLeader] = useState(false);
+  const [allowMemberPresent, setAllowMemberPresent] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [presentingMessageId, setPresentingMessageId] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load room name from history state
+  // Load room name and context from history state
   useEffect(() => {
-    const state = history.state as { roomName?: string } | null;
+    const state = history.state as {
+      roomName?: string;
+      isLeader?: boolean;
+      allowMemberPresent?: boolean;
+      sessionId?: string | null;
+    } | null;
     if (state?.roomName) setRoomName(state.roomName);
+    if (state?.isLeader !== undefined) setIsLeader(Boolean(state.isLeader));
+    if (state?.allowMemberPresent !== undefined) setAllowMemberPresent(Boolean(state.allowMemberPresent));
+    if (state?.sessionId !== undefined) setSessionId(state.sessionId ?? null);
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -91,28 +112,6 @@ export default function RoomChat() {
   }, []);
 
   // SSE connection with manual reconnect
-  //
-  // Authentication: EventSource cannot send custom request headers (e.g. X-User-Id),
-  // so we use a two-step handshake:
-  //   1. POST .../stream/token  — authenticated via requireAuth (cookie or header);
-  //      returns a 30 s one-time UUID.
-  //   2. GET  .../stream?token=<uuid>  — server re-validates membership after consuming
-  //      the token, then opens the SSE stream.
-  //
-  // Race-free load sequence (per connection):
-  //   Each connect() call owns its own `connectionHistoryLoaded` flag and
-  //   `connectionBuffer` array so reconnections never share stale state.
-  //   A. Open EventSource.  Buffer any SSE events (connectionBuffer).
-  //   B. On onopen, fetch history — stream is already open, so no gap exists.
-  //   C. Merge history + connectionBuffer, deduplicate by id.  Set loaded = true.
-  //   D. Subsequent SSE events for this connection flow directly into state and
-  //      are merged with current state (never replace it wholesale).
-  //
-  // Reconnect (onerror or history-fetch failure):
-  //   Close the stale EventSource (prevents its built-in retry using the
-  //   consumed token), schedule a new connect() with capped exponential backoff.
-  //   History is re-fetched on every reconnect to fill any gap.
-  //   Token-fetch failures use the same backoff path.
   useEffect(() => {
     if (!user || !roomId) return;
 
@@ -129,124 +128,62 @@ export default function RoomChat() {
     }
 
     function closeCurrentEs() {
-      currentEs?.close();
-      currentEs = null;
+      if (currentEs) {
+        currentEs.onerror = null;
+        currentEs.onmessage = null;
+        currentEs.close();
+        currentEs = null;
+      }
     }
 
     async function connect() {
       if (cancelled) return;
-
-      // ── Step 1: get a fresh one-time stream token ──────────────────────
-      // Failure uses the same capped backoff so transient errors self-heal.
-      let token: string;
-      try {
-        token = await apiGetStreamToken(user!.id, String(roomId));
-      } catch (err) {
-        if (!cancelled) {
-          if (attempt === 1) {
-            // First attempt failed — show an error to the user
-            setLoadError(err instanceof Error ? err.message : 'Failed to connect to chat.');
-          }
-          scheduleReconnect();
-        }
-        return;
-      }
-      if (cancelled) return;
-
-      // ── Step 2: open EventSource — do NOT rely on its built-in retry ──
-      // Per-connection state: each connect() call has its own buffer and
-      // loaded flag so reconnections start completely clean.
       let connectionHistoryLoaded = false;
       const connectionBuffer: RoomMessage[] = [];
 
-      const url = getApiUrl(
-        `/api/rooms/${String(roomId)}/messages/stream?token=${encodeURIComponent(token)}`
-      );
-      const es = new EventSource(url);
+      let token: string;
+      try {
+        token = await apiGetStreamToken(user!.id, String(roomId));
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+
+      if (cancelled) return;
+      const es = new EventSource(getApiUrl(`/api/rooms/${String(roomId)}/messages/stream?token=${encodeURIComponent(token)}`));
       currentEs = es;
 
-      es.onmessage = (event: MessageEvent) => {
-        if (cancelled || es !== currentEs) return;
+      es.onmessage = (e) => {
         try {
-          const msg = JSON.parse(event.data as string) as RoomMessage;
-
+          const msg = JSON.parse(e.data) as RoomMessage;
           if (!connectionHistoryLoaded) {
-            // ── Phase A: buffer until this connection's history is merged ──
-            if (!connectionBuffer.some(m => m.id === msg.id)) {
-              connectionBuffer.unshift(msg);
-            }
-            return;
+            connectionBuffer.push(msg);
+          } else {
+            setMessages(prev => mergeMessages(prev, [msg]));
+            scrollToBottom();
           }
-
-          // ── Phase D: history loaded — merge directly into current state ──
-          setMessages(prev => {
-            // Replace a matching optimistic placeholder (same userId + body)
-            const optIdx = prev.findIndex(
-              m => m.id.startsWith('opt-') && m.userId === msg.userId && m.body === msg.body
-            );
-            if (optIdx !== -1) {
-              const next = [...prev];
-              next[optIdx] = msg;
-              return next;
-            }
-            if (prev.some(m => m.id === msg.id)) return prev;
-            return [msg, ...prev];
-          });
-          scrollToBottom();
         } catch {
-          // Malformed SSE event — ignore
+          // ignore malformed event
         }
       };
 
-      // ── Step 3: fetch history now that the stream is open (Phase B) ───
-      es.onopen = async () => {
-        if (cancelled || es !== currentEs) return;
-        attempt = 0; // successful connection — reset backoff counter
-
-        try {
-          const msgs = await apiGetMessages(user!.id, String(roomId));
-          if (cancelled || es !== currentEs) return;
-
-          // ── Phase C: merge history + buffer, deduplicate ──────────────
-          // Use mergeMessages against current state too so pre-existing
-          // optimistic messages are preserved rather than wiped.
-          setMessages(prev => mergeMessages(mergeMessages(msgs, connectionBuffer), prev));
-          connectionBuffer.length = 0;
-          connectionHistoryLoaded = true;
-          setLoadError('');
-          scrollToBottom();
-        } catch (err) {
-          if (cancelled || es !== currentEs) return;
-          // History fetch failed — close this connection and retry.
-          // The buffer is local to this connection so a new connect()
-          // starts with a fresh empty buffer and loaded = false.
-          closeCurrentEs();
-          if (attempt === 0) {
-            setLoadError(err instanceof Error ? err.message : 'Failed to load messages.');
-          }
-          scheduleReconnect();
-        }
-      };
-
-      // Manual reconnect on error — close stale ES immediately so EventSource
-      // cannot fire its own retry (which would reuse the consumed token).
       es.onerror = () => {
-        if (cancelled || es !== currentEs) return;
         closeCurrentEs();
-
-        // Re-fetch history to fill any gap that occurred while disconnected.
-        // Merge with current state so live messages sent during the gap are
-        // not lost if they already arrived in state via a previous SSE event.
-        if (connectionHistoryLoaded) {
-          apiGetMessages(user!.id, String(roomId))
-            .then(msgs => {
-              if (!cancelled) setMessages(prev => mergeMessages(msgs, prev));
-            })
-            .catch(() => { /* best-effort gap fill */ });
-        }
-
         scheduleReconnect();
       };
+
+      try {
+        const history = await apiGetMessages(user!.id, String(roomId));
+        if (cancelled) { closeCurrentEs(); return; }
+        connectionHistoryLoaded = true;
+        const merged = mergeMessages(history, connectionBuffer);
+        setMessages(merged);
+        scrollToBottom();
+        attempt = 0;
+      } catch {
+        closeCurrentEs();
+        scheduleReconnect();
+      }
     }
 
     connect();
@@ -254,17 +191,23 @@ export default function RoomChat() {
     return () => {
       cancelled = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-      closeCurrentEs();
+      if (currentEs) {
+        currentEs.onerror = null;
+        currentEs.onmessage = null;
+        currentEs.close();
+      }
     };
   }, [user, roomId, scrollToBottom]);
 
   const handleSend = async () => {
-    if (!body.trim() || !user || !roomId || sending) return;
+    if ((!body.trim() && !pendingAttachment) || !user || !roomId || sending) return;
     const text = body.trim();
+    const attachment = pendingAttachment;
     setBody('');
+    setPendingAttachment(null);
     setSending(true);
 
-    // Optimistic message — SSE will replace it with the canonical version
+    // Optimistic message
     const optimistic: RoomMessage = {
       id: `opt-${Date.now()}`,
       roomId: String(roomId),
@@ -272,19 +215,37 @@ export default function RoomChat() {
       senderName: user.preferredName || 'You',
       body: text,
       createdAt: new Date().toISOString(),
+      attachment,
     };
     setMessages(prev => [optimistic, ...prev]);
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), text);
-      // SSE delivers the canonical message and replaces the optimistic entry
+      await apiSendMessage(user.id, String(roomId), text, attachment ?? undefined);
     } catch {
-      // Remove optimistic message on failure and restore the draft
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setBody(text);
+      if (attachment) setPendingAttachment(attachment);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handlePresent = async (msg: RoomMessage) => {
+    if (!user || !roomId || !msg.attachment) return;
+    setPresentingMessageId(msg.id);
+    try {
+      await apiStartPresentation(user.id, String(roomId), {
+        messageId: msg.id,
+        filename: msg.attachment.filename,
+        mediaType: msg.attachment.type,
+        objectPath: msg.attachment.objectPath,
+        sessionId,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not start presentation.');
+    } finally {
+      setPresentingMessageId(null);
     }
   };
 
@@ -339,6 +300,9 @@ export default function RoomChat() {
 
               {group.items.map(msg => {
                 const isMe = msg.userId === user.id;
+                // A member can present their own content if allowMemberPresent is on
+                const canPresent = isLeader || (allowMemberPresent && isMe);
+
                 return (
                   <div
                     key={msg.id}
@@ -359,16 +323,47 @@ export default function RoomChat() {
                         </span>
                       )}
 
-                      {/* Bubble */}
-                      <div
-                        className={`px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed break-words ${
-                          isMe
-                            ? 'bg-primary text-primary-foreground rounded-br-md'
-                            : 'bg-muted text-foreground rounded-bl-md'
-                        }`}
-                      >
-                        {msg.body}
-                      </div>
+                      {/* Media attachment */}
+                      {msg.attachment ? (
+                        <div className={`max-w-[240px] ${isMe ? 'self-end' : 'self-start'}`}>
+                          <MediaMessageBubble
+                            attachment={msg.attachment}
+                            isMe={isMe}
+                            canPresent={canPresent && !msg.id.startsWith('opt-')}
+                            onPresent={
+                              canPresent && !msg.id.startsWith('opt-')
+                                ? () => handlePresent(msg)
+                                : undefined
+                            }
+                          />
+                          {presentingMessageId === msg.id && (
+                            <p className="text-[11px] text-primary mt-1">Starting presentation…</p>
+                          )}
+                          {/* Text body below attachment */}
+                          {msg.body && (
+                            <div
+                              className={`mt-1.5 px-3 py-2 rounded-2xl text-[14px] leading-relaxed break-words ${
+                                isMe
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : 'bg-muted text-foreground rounded-bl-md'
+                              }`}
+                            >
+                              {msg.body}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* Text-only bubble */
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed break-words ${
+                            isMe
+                              ? 'bg-primary text-primary-foreground rounded-br-md'
+                              : 'bg-muted text-foreground rounded-bl-md'
+                          }`}
+                        >
+                          {msg.body}
+                        </div>
+                      )}
 
                       {/* Time */}
                       <span className="text-[11px] text-muted-foreground px-1">
@@ -385,9 +380,43 @@ export default function RoomChat() {
         <div ref={bottomRef} className="h-1" />
       </main>
 
+      {/* Pending attachment preview */}
+      {pendingAttachment && (
+        <div className="shrink-0 border-t border-border/30 bg-muted/30 px-4 py-2 max-w-[480px] mx-auto w-full">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 text-[13px] text-foreground truncate">
+              📎 {pendingAttachment.filename}
+            </div>
+            <button
+              onClick={() => setPendingAttachment(null)}
+              className="text-muted-foreground hover:text-foreground p-1"
+              aria-label="Remove attachment"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <input
+            type="text"
+            value={pendingAttachment.caption ?? ''}
+            onChange={e => setPendingAttachment(prev => prev ? { ...prev, caption: e.target.value } : prev)}
+            placeholder="Add a caption (optional)…"
+            className="w-full mt-1.5 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground outline-none"
+          />
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 max-w-[480px] mx-auto w-full">
         <div className="flex items-end gap-2">
+          {/* Attachment button */}
+          <button
+            onClick={() => setShowPicker(true)}
+            className="w-10 h-10 rounded-full border border-border bg-muted text-muted-foreground flex items-center justify-center shrink-0 hover:text-foreground transition-colors"
+            aria-label="Add attachment"
+          >
+            <Paperclip size={18} />
+          </button>
+
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
@@ -404,7 +433,7 @@ export default function RoomChat() {
           />
           <button
             onClick={handleSend}
-            disabled={!body.trim() || sending}
+            disabled={(!body.trim() && !pendingAttachment) || sending}
             className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 transition-opacity"
             aria-label="Send"
           >
@@ -412,6 +441,19 @@ export default function RoomChat() {
           </button>
         </div>
       </div>
+
+      {/* Attachment picker */}
+      {showPicker && (
+        <AttachmentPicker
+          userId={user.id}
+          roomId={String(roomId)}
+          onAttachment={attachment => {
+            setPendingAttachment(attachment);
+            setShowPicker(false);
+          }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }

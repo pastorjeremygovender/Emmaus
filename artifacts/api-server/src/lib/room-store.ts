@@ -45,6 +45,8 @@ export interface RoomSummary {
   nextMeeting: string | null;
   /** Groups V2: when true, hide Today's Study until a meeting session is started. */
   revealOnMeeting: boolean;
+  /** When true, members may present their own shared media (default false). */
+  allowMemberPresent: boolean;
 }
 
 export interface RoomDetail extends RoomSummary {
@@ -58,6 +60,22 @@ export interface LinkedJourney {
   startedAt: string;
 }
 
+export interface MediaAttachment {
+  type: 'image' | 'pdf' | 'video' | 'voice' | 'document' | 'link';
+  filename: string;
+  /** Normalised object path e.g. /objects/uploads/<uuid>. Empty for link type. */
+  objectPath: string;
+  mimeType: string;
+  size: number;
+  caption?: string;
+  /** Duration in seconds — voice/video only. */
+  duration?: number;
+  /** Page count — PDF only. */
+  pageCount?: number;
+  /** URL — link type only. */
+  url?: string;
+}
+
 export interface RoomMessage {
   id: string;
   roomId: string;
@@ -65,6 +83,29 @@ export interface RoomMessage {
   senderName: string;
   body: string;
   createdAt: string;
+  attachment?: MediaAttachment | null;
+}
+
+export interface RoomMediaItem {
+  messageId: string;
+  userId: string;
+  senderName: string;
+  attachment: MediaAttachment;
+  createdAt: string;
+}
+
+export interface MediaPresentation {
+  id: string;
+  roomId: string;
+  sessionId: string | null;
+  messageId: string | null;
+  filename: string;
+  mediaType: string;
+  objectPath: string;
+  presentedBy: string;
+  presentedByName: string;
+  currentPage: number;
+  startedAt: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,6 +179,23 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
     leaderNote: row.leader_note ? String(row.leader_note) : null,
     nextMeeting: row.next_meeting ? String(row.next_meeting) : null,
     revealOnMeeting: Boolean(row.reveal_on_meeting ?? false),
+    allowMemberPresent: Boolean(row.allow_member_present ?? false),
+  };
+}
+
+function rowToPresentation(row: Record<string, unknown>): MediaPresentation {
+  return {
+    id: String(row.id),
+    roomId: String(row.room_id),
+    sessionId: row.session_id ? String(row.session_id) : null,
+    messageId: row.message_id ? String(row.message_id) : null,
+    filename: String(row.filename ?? ""),
+    mediaType: String(row.media_type ?? ""),
+    objectPath: String(row.object_path ?? ""),
+    presentedBy: String(row.presented_by ?? ""),
+    presentedByName: String(row.presented_by_name ?? ""),
+    currentPage: Number(row.current_page ?? 1),
+    startedAt: String(row.started_at ?? ""),
   };
 }
 
@@ -154,6 +212,7 @@ function rowToMessage(row: Record<string, unknown>): RoomMessage {
     senderName: rawName || "Member",
     body: String(row.body ?? ""),
     createdAt: String(row.created_at ?? ""),
+    attachment: row.attachment ? (row.attachment as MediaAttachment) : null,
   };
 }
 
@@ -533,13 +592,14 @@ export async function getMessages(
 export async function addMessage(
   roomId: string,
   userId: string,
-  body: string
+  body: string,
+  attachment?: MediaAttachment,
 ): Promise<RoomMessage> {
   const res = await pool.query(
-    `INSERT INTO room_messages (room_id, user_id, body)
-     VALUES ($1, $2, $3)
+    `INSERT INTO room_messages (room_id, user_id, body, attachment)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [roomId, userId, body]
+    [roomId, userId, body, attachment ? JSON.stringify(attachment) : null]
   );
   const row = res.rows[0] as Record<string, unknown>;
   // Fetch sender name separately to include in response
@@ -554,6 +614,84 @@ export async function addMessage(
   notifySubscribers(roomId, msg);
 
   return msg;
+}
+
+// ─── Room Media helpers ───────────────────────────────────────────────────────
+
+/** Return all messages that have attachments, newest first. */
+export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMediaItem[]> {
+  const res = await pool.query(
+    `SELECT rm.id, rm.user_id, rm.attachment, rm.created_at, up.preferred_name
+     FROM   room_messages rm
+     LEFT JOIN user_profiles up ON up.email = rm.user_id
+     WHERE  rm.room_id = $1 AND rm.attachment IS NOT NULL
+     ORDER  BY rm.created_at DESC
+     LIMIT  $2`,
+    [roomId, limit]
+  );
+  return res.rows.map(row => ({
+    messageId: String(row.id),
+    userId: String(row.user_id),
+    senderName:
+      row.preferred_name && String(row.preferred_name).trim()
+        ? String(row.preferred_name).trim()
+        : "Member",
+    attachment: row.attachment as MediaAttachment,
+    createdAt: String(row.created_at),
+  }));
+}
+
+/** Start a new presentation, stopping any existing one for this room. */
+export async function startPresentation(
+  roomId: string,
+  sessionId: string | null,
+  messageId: string | null,
+  filename: string,
+  mediaType: string,
+  objectPath: string,
+  presentedBy: string,
+  presentedByName: string,
+): Promise<MediaPresentation> {
+  await pool.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+  const res = await pool.query(
+    `INSERT INTO room_media_presentations
+       (room_id, session_id, message_id, filename, media_type, object_path,
+        presented_by, presented_by_name, current_page)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)
+     RETURNING *`,
+    [roomId, sessionId, messageId, filename, mediaType, objectPath, presentedBy, presentedByName]
+  );
+  return rowToPresentation(res.rows[0] as Record<string, unknown>);
+}
+
+export async function getActivePresentation(roomId: string): Promise<MediaPresentation | null> {
+  const res = await pool.query(
+    `SELECT * FROM room_media_presentations WHERE room_id = $1 ORDER BY started_at DESC LIMIT 1`,
+    [roomId]
+  );
+  return res.rows.length > 0 ? rowToPresentation(res.rows[0] as Record<string, unknown>) : null;
+}
+
+export async function updatePresentationPage(roomId: string, page: number): Promise<void> {
+  await pool.query(
+    `UPDATE room_media_presentations SET current_page = $1 WHERE room_id = $2`,
+    [page, roomId]
+  );
+}
+
+export async function stopPresentation(roomId: string): Promise<void> {
+  await pool.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+}
+
+export async function setAllowMemberPresent(roomId: string, allow: boolean): Promise<void> {
+  await pool.query(`UPDATE rooms SET allow_member_present = $1 WHERE id = $2`, [allow, roomId]);
+}
+
+export async function getAllowMemberPresent(roomId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT allow_member_present FROM rooms WHERE id = $1`, [roomId]
+  );
+  return Boolean(rows[0]?.allow_member_present ?? false);
 }
 
 // ─── Linked journeys ──────────────────────────────────────────────────────────
@@ -1043,7 +1181,10 @@ export interface SessionEvent {
     | "highlight_added"
     | "highlight_focus_changed"
     | "note_added"
-    | "note_pinned";
+    | "note_pinned"
+    | "media_presented"
+    | "presentation_page"
+    | "presentation_stopped";
   payload: Record<string, unknown>;
   sentBy: string;
   at: string; // ISO timestamp

@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
-import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary } from '@/lib/rooms-types';
+import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary, PresentationState } from '@/lib/rooms-types';
 
 export interface NavigatePayload {
   stepId?: string;
@@ -81,6 +81,9 @@ interface UseFollowLeaderResult {
   pollVoteUpdate: { pollId: string; voteCounts: number[]; totalVotes: number } | null;
   /** Set when the leader reveals poll results. */
   pollRevealUpdate: { pollId: string; voteCounts: number[]; totalVotes: number; options: string[]; question: string } | null;
+  /** Active media presentation (null when none in progress). */
+  activePresentation: PresentationState | null;
+  setActivePresentation: (p: PresentationState | null) => void;
 }
 
 export function useFollowLeader({
@@ -112,6 +115,9 @@ export function useFollowLeader({
   const [incomingPoll, setIncomingPoll] = useState<RoomPoll | null>(null);
   const [pollVoteUpdate, setPollVoteUpdate] = useState<{ pollId: string; voteCounts: number[]; totalVotes: number } | null>(null);
   const [pollRevealUpdate, setPollRevealUpdate] = useState<{ pollId: string; voteCounts: number[]; totalVotes: number; options: string[]; question: string } | null>(null);
+
+  // ── Group Media Presentation ──────────────────────────────────────────────
+  const [activePresentation, setActivePresentation] = useState<PresentationState | null>(null);
 
   // Refs for stable callbacks in the SSE loop
   const followLeaderRef = useRef(followLeader);
@@ -212,6 +218,7 @@ export function useFollowLeader({
         setIncomingNotes([]);
         setIncomingPinChange(null);
         setIncomingFocusChange(null);
+        setActivePresentation(null);
         break;
       }
 
@@ -238,6 +245,38 @@ export function useFollowLeader({
         setIncomingNotes([]);
         setIncomingPinChange(null);
         setIncomingFocusChange(null);
+        setActivePresentation(null);
+        break;
+      }
+
+      case 'media_presented': {
+        const p = event.payload as {
+          messageId: string | null; filename: string; mediaType: string;
+          objectPath: string; presentedBy: string; presentedByName: string;
+          currentPage: number; sessionId: string | null;
+        };
+        setActivePresentation({
+          messageId: p.messageId,
+          filename: p.filename,
+          mediaType: p.mediaType as import('@/lib/rooms-types').MediaAttachmentType,
+          objectPath: p.objectPath,
+          presentedBy: p.presentedBy,
+          presentedByName: p.presentedByName,
+          currentPage: p.currentPage,
+        });
+        break;
+      }
+
+      case 'presentation_page': {
+        const { currentPage } = event.payload as { currentPage: number };
+        setActivePresentation(prev =>
+          prev ? { ...prev, currentPage } : prev
+        );
+        break;
+      }
+
+      case 'presentation_stopped': {
+        setActivePresentation(null);
         break;
       }
 
@@ -436,5 +475,7 @@ export function useFollowLeader({
     incomingPoll,
     pollVoteUpdate,
     pollRevealUpdate,
+    activePresentation,
+    setActivePresentation,
   };
 }

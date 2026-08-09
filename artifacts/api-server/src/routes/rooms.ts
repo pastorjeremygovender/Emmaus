@@ -84,13 +84,50 @@ import {
   completeSession,
   getRecentlyCompletedSession,
   acknowledgeSessionCompletion,
+  getRoomMedia,
+  startPresentation,
+  getActivePresentation,
+  updatePresentationPage,
+  stopPresentation,
+  setAllowMemberPresent,
+  getAllowMemberPresent,
   type RoomType,
   type ContentType,
   type VideoSettings,
   type SessionMode,
   type ScriptureRef,
   type SessionEvent,
+  type MediaAttachment,
 } from "../lib/room-store.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
+import { pool } from "@workspace/db";
+
+const objectStorage = new ObjectStorageService();
+
+// Allowed MIME types and size limits for room media uploads.
+const ALLOWED_MEDIA: Record<string, { maxBytes: number; attachmentType: string }> = {
+  "image/jpeg":   { maxBytes: 20 * 1024 * 1024, attachmentType: "image" },
+  "image/png":    { maxBytes: 20 * 1024 * 1024, attachmentType: "image" },
+  "image/gif":    { maxBytes: 20 * 1024 * 1024, attachmentType: "image" },
+  "image/webp":   { maxBytes: 20 * 1024 * 1024, attachmentType: "image" },
+  "application/pdf":      { maxBytes: 50 * 1024 * 1024, attachmentType: "pdf" },
+  "video/mp4":            { maxBytes: 200 * 1024 * 1024, attachmentType: "video" },
+  "video/quicktime":      { maxBytes: 200 * 1024 * 1024, attachmentType: "video" },
+  "video/webm":           { maxBytes: 200 * 1024 * 1024, attachmentType: "video" },
+  "video/x-msvideo":      { maxBytes: 200 * 1024 * 1024, attachmentType: "video" },
+  "audio/mpeg":    { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/mp4":     { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/webm":    { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/ogg":     { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/wav":     { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/aac":     { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "audio/x-m4a":   { maxBytes: 25 * 1024 * 1024, attachmentType: "voice" },
+  "application/msword": { maxBytes: 50 * 1024 * 1024, attachmentType: "document" },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { maxBytes: 50 * 1024 * 1024, attachmentType: "document" },
+  "application/vnd.ms-powerpoint": { maxBytes: 50 * 1024 * 1024, attachmentType: "document" },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": { maxBytes: 50 * 1024 * 1024, attachmentType: "document" },
+  "text/plain":    { maxBytes: 10 * 1024 * 1024, attachmentType: "document" },
+};
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 import { logAuditEvent } from "../lib/audit-log.js";
 import {
@@ -1208,9 +1245,10 @@ router.post("/:roomId/messages", async (req, res) => {
   if (!userId) return;
 
   const { roomId } = req.params;
-  const { body } = req.body as { body?: string };
-  if (!body || !body.trim()) {
-    res.status(400).json({ error: "Message body is required." });
+  const { body, attachment } = req.body as { body?: string; attachment?: MediaAttachment };
+  const trimmedBody = (body ?? "").trim();
+  if (!trimmedBody && !attachment) {
+    res.status(400).json({ error: "Message body or attachment is required." });
     return;
   }
 
@@ -1220,11 +1258,67 @@ router.post("/:roomId/messages", async (req, res) => {
       res.status(403).json({ error: "You are not a member of this room." });
       return;
     }
-
-    const message = await addMessage(String(roomId), userId, body.trim());
+    const message = await addMessage(String(roomId), userId, trimmedBody, attachment ?? undefined);
     res.status(201).json({ message });
   } catch (err) {
     res.status(500).json({ error: "Failed to post message." });
+  }
+});
+
+// ─── Chat — request presigned upload URL (any member) ─────────────────────────
+
+router.post("/:roomId/messages/upload-url", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { roomId } = req.params;
+  const { filename, contentType, size } = req.body as {
+    filename?: string; contentType?: string; size?: number;
+  };
+
+  if (!filename || !contentType || size === undefined) {
+    res.status(400).json({ error: "filename, contentType and size are required." });
+    return;
+  }
+
+  const allowed = ALLOWED_MEDIA[contentType];
+  if (!allowed) {
+    res.status(400).json({ error: `File type "${contentType}" is not supported.` });
+    return;
+  }
+  if (size > allowed.maxBytes) {
+    const mb = Math.round(allowed.maxBytes / 1024 / 1024);
+    res.status(400).json({ error: `File too large. Maximum ${mb} MB allowed for this type.` });
+    return;
+  }
+
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+    const uploadUrl = await objectStorage.getObjectEntityUploadURL();
+    const objectPath = objectStorage.normalizeObjectEntityPath(uploadUrl);
+    res.json({ uploadUrl, objectPath, attachmentType: allowed.attachmentType });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to generate upload URL." });
+  }
+});
+
+// ─── Chat — list media shared in Group Discussion ─────────────────────────────
+
+router.get("/:roomId/media", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) { res.status(403).json({ error: "Not a member." }); return; }
+    const media = await getRoomMedia(String(roomId));
+    res.json({ media });
+  } catch {
+    res.status(500).json({ error: "Failed to load media." });
   }
 });
 
@@ -2398,6 +2492,193 @@ router.post("/:roomId/session/poll/:pollId/reveal", async (req, res) => {
     res.json({ ok: true, results });
   } catch {
     res.status(500).json({ error: "Failed to reveal poll results." });
+  }
+});
+
+// ─── Presentation — get / start / page / stop ─────────────────────────────────
+
+router.get("/:roomId/session/presentation", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) { res.status(403).json({ error: "Not a member." }); return; }
+    const presentation = await getActivePresentation(String(roomId));
+    res.json({ presentation });
+  } catch {
+    res.status(500).json({ error: "Failed to load presentation." });
+  }
+});
+
+router.post("/:roomId/session/presentation", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const { messageId, filename, mediaType, objectPath, sessionId } = req.body as {
+    messageId?: string | null;
+    filename?: string;
+    mediaType?: string;
+    objectPath?: string;
+    sessionId?: string | null;
+  };
+
+  if (!filename || !mediaType) {
+    res.status(400).json({ error: "filename and mediaType are required." });
+    return;
+  }
+
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) { res.status(403).json({ error: "Not a member." }); return; }
+
+    // Determine whether this user may present:
+    // - Authorized leaders always may
+    // - If allow_member_present is true, member may present their own message
+    const appRole = await getUserRole(userId);
+    const leaderAccess = await getLeaderAccess(userId, appRole);
+    const canPresent = leaderAccess.authorized;
+
+    if (!canPresent) {
+      // Check member-present setting and whether this is their own message
+      const allowMemberPresent = await getAllowMemberPresent(String(roomId));
+      if (!allowMemberPresent) {
+        res.status(403).json({ error: "Only authorized group leaders may present." });
+        return;
+      }
+      // Verify the message belongs to this user
+      if (messageId) {
+        const { rows: msgRows } = await pool.query(
+          `SELECT user_id FROM room_messages WHERE id = $1 AND room_id = $2`,
+          [messageId, String(roomId)]
+        );
+        if (!msgRows.length || msgRows[0].user_id !== userId) {
+          res.status(403).json({ error: "You may only present your own shared content." });
+          return;
+        }
+      } else {
+        res.status(403).json({ error: "Only authorized group leaders may present." });
+        return;
+      }
+    }
+
+    // Resolve presenter name
+    const { rows: nameRows } = await pool.query(
+      `SELECT preferred_name FROM user_profiles WHERE email = $1`, [userId]
+    );
+    const presenterName = String(nameRows[0]?.preferred_name ?? "").trim() || "Member";
+
+    const presentation = await startPresentation(
+      String(roomId),
+      sessionId ?? null,
+      messageId ?? null,
+      filename,
+      mediaType,
+      objectPath ?? "",
+      userId,
+      presenterName,
+    );
+
+    broadcastRoomEvent(String(roomId), {
+      type: "media_presented",
+      payload: {
+        messageId: presentation.messageId,
+        filename: presentation.filename,
+        mediaType: presentation.mediaType,
+        objectPath: presentation.objectPath,
+        presentedBy: presentation.presentedBy,
+        presentedByName: presentation.presentedByName,
+        currentPage: presentation.currentPage,
+        sessionId: presentation.sessionId,
+      },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+
+    res.json({ presentation });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to start presentation." });
+  }
+});
+
+router.patch("/:roomId/session/presentation/page", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const { page } = req.body as { page?: number };
+  if (typeof page !== "number" || page < 1) {
+    res.status(400).json({ error: "page must be a positive integer." });
+    return;
+  }
+  try {
+    const appRolePg = await getUserRole(userId);
+    const leaderAccessPg = await getLeaderAccess(userId, appRolePg);
+    if (!leaderAccessPg.authorized) {
+      res.status(403).json({ error: "Only authorized group leaders may change presentation pages." });
+      return;
+    }
+    await updatePresentationPage(String(roomId), page);
+    broadcastRoomEvent(String(roomId), {
+      type: "presentation_page",
+      payload: { currentPage: page },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update page." });
+  }
+});
+
+router.delete("/:roomId/session/presentation", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  try {
+    const appRoleDel = await getUserRole(userId);
+    const leaderAccessDel = await getLeaderAccess(userId, appRoleDel);
+    if (!leaderAccessDel.authorized) {
+      // Also allow the presenter themselves to stop
+      const pres = await getActivePresentation(String(roomId));
+      if (!pres || pres.presentedBy !== userId) {
+        res.status(403).json({ error: "Only the presenter or an authorized leader may stop the presentation." });
+        return;
+      }
+    }
+    await stopPresentation(String(roomId));
+    broadcastRoomEvent(String(roomId), {
+      type: "presentation_stopped",
+      payload: {},
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to stop presentation." });
+  }
+});
+
+// ─── Room settings — allow member present ─────────────────────────────────────
+
+router.patch("/:roomId/allow-member-present", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const { allow } = req.body as { allow?: boolean };
+  if (typeof allow !== "boolean") {
+    res.status(400).json({ error: "allow must be a boolean." });
+    return;
+  }
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (role !== "admin") {
+      res.status(403).json({ error: "Only the group admin may change this setting." });
+      return;
+    }
+    await setAllowMemberPresent(String(roomId), allow);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update setting." });
   }
 });
 

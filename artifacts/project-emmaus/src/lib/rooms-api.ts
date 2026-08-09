@@ -15,7 +15,7 @@ import type {
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
 
-async function roomsFetch<T>(
+export async function roomsFetch<T>(
   path: string,
   userId: string,
   options: RequestInit = {}
@@ -250,12 +250,13 @@ export async function apiGetMessages(
 export async function apiSendMessage(
   userId: string,
   roomId: string,
-  body: string
+  body: string,
+  attachment?: import('@/lib/rooms-types').MediaAttachment,
 ): Promise<RoomMessage> {
   const data = await roomsFetch<{ message: RoomMessage }>(
     `/api/rooms/${roomId}/messages`,
     userId,
-    { method: 'POST', body: JSON.stringify({ body }) }
+    { method: 'POST', body: JSON.stringify({ body, ...(attachment ? { attachment } : {}) }) }
   );
   return data.message;
 }

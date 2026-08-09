@@ -1701,6 +1701,34 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_session_acknowledgements table failed (non-fatal)");
   }
 
+  // ── Room media attachments + presentation (2026-08) ──────────────────────
+  // attachment JSONB on messages; allow_member_present on rooms; active-
+  // presentation table for the "Present to Group" feature.
+  try {
+    await pool.query(`
+      ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS attachment JSONB;
+      ALTER TABLE rooms ADD COLUMN IF NOT EXISTS allow_member_present BOOLEAN NOT NULL DEFAULT FALSE;
+      CREATE TABLE IF NOT EXISTS room_media_presentations (
+        id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        room_id           UUID        NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        session_id        UUID        REFERENCES room_sessions(id) ON DELETE SET NULL,
+        message_id        UUID,
+        filename          TEXT        NOT NULL,
+        media_type        TEXT        NOT NULL,
+        object_path       TEXT        NOT NULL DEFAULT '',
+        presented_by      TEXT        NOT NULL,
+        presented_by_name TEXT        NOT NULL DEFAULT '',
+        current_page      INTEGER     NOT NULL DEFAULT 1,
+        started_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS room_media_presentations_room_id_idx
+        ON room_media_presentations(room_id);
+    `);
+    logger.info("Startup migration: room media tables ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room media tables failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

@@ -14,19 +14,41 @@
  *   onSessionComplete — called when a session is properly completed
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  ArrowLeft, MessageSquare,
+  ArrowLeft, BookOpen, MessageSquare,
   BarChart2, Sparkles,
-  X, Loader2, ChevronRight, Video, VideoOff,
+  X, Loader2, ChevronRight, Video, VideoOff, Presentation,
+  Image, FileText, Film, Mic, Link as LinkIcon,
 } from 'lucide-react';
 import {
   apiEndSession,
   apiChangeMode,
+  apiNavigate,
   apiCreatePoll,
   apiCompleteSession,
 } from '@/lib/rooms-api';
-import type { RoomSession, SessionCompleteSummary } from '@/lib/rooms-types';
+import { apiGetRoomMedia, apiStartPresentation } from '@/lib/rooms-api-media';
+import type { RoomSession, ScriptureRef, SessionCompleteSummary, RoomMediaItem, MediaAttachmentType } from '@/lib/rooms-types';
+
+const MEDIA_TYPE_ICON: Record<MediaAttachmentType, React.ReactNode> = {
+  image:    <Image size={18} />,
+  pdf:      <FileText size={18} />,
+  video:    <Film size={18} />,
+  voice:    <Mic size={18} />,
+  document: <FileText size={18} />,
+  link:     <LinkIcon size={18} />,
+};
+
+// ─── Common Books picker ──────────────────────────────────────────────────────
+
+const COMMON_BOOKS = [
+  'Genesis', 'Exodus', 'Psalms', 'Proverbs', 'Isaiah',
+  'Matthew', 'Mark', 'Luke', 'John', 'Acts',
+  'Romans', '1 Corinthians', '2 Corinthians', 'Galatians',
+  'Ephesians', 'Philippians', 'Colossians',
+  '1 Thessalonians', 'Hebrews', 'James', '1 Peter', 'Revelation',
+];
 
 interface GuideGroupPanelProps {
   roomId: string;
@@ -61,7 +83,9 @@ interface GuideGroupPanelProps {
 
 type PanelView =
   | 'main'
-  | 'poll-setup';
+  | 'scripture'
+  | 'poll-setup'
+  | 'media-picker';
 
 interface PollSetup {
   question: string;
@@ -87,6 +111,14 @@ export function GuideGroupPanel({
 }: GuideGroupPanelProps) {
   const [view, setView] = useState<PanelView>('main');
   const [busy, setBusy] = useState<string | null>(null);
+  const [mediaItems, setMediaItems] = useState<RoomMediaItem[]>([]);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+
+  // Scripture picker state
+  const [book, setBook] = useState('John');
+  const [chapter, setChapter] = useState(1);
+  const [verseStart, setVerseStart] = useState('');
+  const [verseEnd, setVerseEnd] = useState('');
 
   // Poll setup state
   const [poll, setPoll] = useState<PollSetup>({
@@ -124,6 +156,22 @@ export function GuideGroupPanel({
     onSessionEnded();
     setView('main');
     onClose();
+  });
+
+  // ── Scripture picker (Present Bible) ──────────────────────────────────────
+
+  const handleOpenScripture = () => run('scripture', async () => {
+    const ref: ScriptureRef = {
+      book,
+      chapter,
+      ...(verseStart ? { verseStart: parseInt(verseStart, 10) } : {}),
+      ...(verseEnd ? { verseEnd: parseInt(verseEnd, 10) } : {}),
+      displayLabel: verseStart
+        ? `${book} ${chapter}:${verseStart}${verseEnd ? `–${verseEnd}` : ''}`
+        : `${book} ${chapter}`,
+    };
+    await apiNavigate(userId, roomId, { scripture: ref, leaderName });
+    setView('main');
   });
 
   // ── Discussion ─────────────────────────────────────────────────────────────
@@ -175,27 +223,24 @@ export function GuideGroupPanel({
 
         <h1 className="text-[18px] font-bold text-foreground">
           {view === 'main' && 'Meeting Tools'}
+          {view === 'scripture' && 'Present Bible'}
           {view === 'poll-setup' && 'Launch Poll'}
+          {view === 'media-picker' && 'Present Shared Media'}
         </h1>
 
-        <button
-          onClick={onClose}
-          className="p-2 -mr-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
-          aria-label="Close Meeting Tools"
-        >
-          <X size={22} />
-        </button>
+        {/* Spacer to balance the back button and keep the title centred */}
+        <div className="w-[44px]" />
       </div>
 
       {/* ── Main view ──────────────────────────────────────────────────────── */}
       {view === 'main' && (
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          <div className="px-5 pt-6 pb-10 space-y-6">
+          <div className="px-5 pt-6 pb-24 space-y-6">
 
             {/* ── MEETING ─────────────────────────────────────────────────── */}
             <div>
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Meeting</p>
-              <div className="rounded-2xl border border-border overflow-hidden">
+              <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
                 {!videoActive ? (
                   <ToolRow
                     icon={<Video size={18} />}
@@ -215,6 +260,14 @@ export function GuideGroupPanel({
                     onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
                   />
                 )}
+                <ToolRow
+                  icon={<BookOpen size={18} />}
+                  label="Present Bible"
+                  description="Open a specific passage for everyone"
+                  loading={busy === 'scripture'}
+                  disabled={!sessionActive}
+                  onClick={() => setView('scripture')}
+                />
               </div>
             </div>
 
@@ -253,6 +306,25 @@ export function GuideGroupPanel({
                   disabled={!sessionActive}
                   onClick={handleAskEmmausTogether}
                 />
+                <ToolRow
+                  icon={<Presentation size={18} />}
+                  label="Present Shared Media"
+                  description="Show an image, video, or document from Group Discussion"
+                  loading={loadingMedia}
+                  disabled={!sessionActive}
+                  onClick={async () => {
+                    setLoadingMedia(true);
+                    try {
+                      const items = await apiGetRoomMedia(userId, roomId);
+                      setMediaItems(items);
+                      setView('media-picker');
+                    } catch {
+                      alert('Could not load shared media. Please try again.');
+                    } finally {
+                      setLoadingMedia(false);
+                    }
+                  }}
+                />
               </div>
             </div>
 
@@ -272,6 +344,130 @@ export function GuideGroupPanel({
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* ── Media picker ──────────────────────────────────────────────────── */}
+      {view === 'media-picker' && (
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-10 pt-4">
+          {mediaItems.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Presentation size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-[15px] font-medium">No media shared yet</p>
+              <p className="text-[13px] mt-1">Members can share photos, PDFs, and more in Group Discussion.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {mediaItems.map(item => (
+                <button
+                  key={item.messageId}
+                  disabled={busy === `present-${item.messageId}`}
+                  onClick={() => run(`present-${item.messageId}`, async () => {
+                    await apiStartPresentation(userId, roomId, {
+                      messageId: item.messageId,
+                      filename: item.attachment.filename,
+                      mediaType: item.attachment.type,
+                      objectPath: item.attachment.objectPath,
+                      sessionId: activeSession?.id ?? null,
+                    });
+                    setView('main');
+                    onClose();
+                  })}
+                  className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl border border-border bg-card hover:bg-muted/50 transition-all text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    {MEDIA_TYPE_ICON[item.attachment.type]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-foreground truncate">{item.attachment.filename}</p>
+                    <p className="text-[12px] text-muted-foreground">Shared by {item.senderName}</p>
+                  </div>
+                  {busy === `present-${item.messageId}` ? (
+                    <Loader2 size={16} className="animate-spin text-primary shrink-0" />
+                  ) : (
+                    <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Scripture picker ───────────────────────────────────────────────── */}
+      {view === 'scripture' && (
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-10 pt-5 space-y-5">
+          <div>
+            <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Book</label>
+            <div className="flex flex-wrap gap-2">
+              {COMMON_BOOKS.map(b => (
+                <button
+                  key={b}
+                  onClick={() => setBook(b)}
+                  className={`px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all ${
+                    book === b
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Chapter</label>
+              <input
+                type="number"
+                min={1}
+                value={chapter}
+                onChange={e => setChapter(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Verse (optional)</label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="from"
+                  value={verseStart}
+                  onChange={e => setVerseStart(e.target.value)}
+                  className="w-full px-3 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+                />
+                <span className="text-muted-foreground shrink-0 text-[13px]">–</span>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="to"
+                  value={verseEnd}
+                  onChange={e => setVerseEnd(e.target.value)}
+                  className="w-full px-3 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-muted/40 border border-border/60">
+            <p className="text-[13px] text-muted-foreground">Will open for everyone:</p>
+            <p className="text-[15px] font-semibold text-foreground mt-1">
+              {verseStart
+                ? `${book} ${chapter}:${verseStart}${verseEnd ? `–${verseEnd}` : ''}`
+                : `${book} ${chapter}`}
+            </p>
+          </div>
+
+          <button
+            onClick={handleOpenScripture}
+            disabled={busy === 'scripture'}
+            className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {busy === 'scripture' ? <Loader2 size={17} className="animate-spin" /> : <BookOpen size={17} />}
+            Open for Everyone
+          </button>
         </div>
       )}
 
