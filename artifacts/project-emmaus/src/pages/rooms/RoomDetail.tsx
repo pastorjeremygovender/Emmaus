@@ -231,6 +231,26 @@ export default function RoomDetail() {
     }
   }, [activeSession]);
 
+  // videoEligible must be computed before any early return so the polling
+  // useEffect below always runs the same number of hooks (Rules of Hooks).
+  const videoEligible = !!room && LIVE_MEETING_TYPES.includes(room.roomType);
+
+  // Live Video status polling — kept here (before the early returns) so the
+  // hook call count never changes between renders.
+  useEffect(() => {
+    if (!activeSession || !videoEligible || !user?.id || !roomId) return;
+    let destroyed = false;
+    const poll = async () => {
+      try {
+        const s = await apiGetVideoStatus(user.id, String(roomId));
+        if (!destroyed) setVideoActive(s.videoActive);
+      } catch { /* non-fatal */ }
+    };
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => { destroyed = true; clearInterval(id); };
+  }, [activeSession, videoEligible, user?.id, roomId]);
+
   // Attendance auto-record
   useEffect(() => {
     if (!activeSession || !user || !roomId) return;
@@ -448,8 +468,7 @@ export default function RoomDetail() {
   const groupPhase: 'preparation' | 'meeting' | 'followup' =
     activeSession ? 'meeting' : meetingJustEnded ? 'followup' : 'preparation';
 
-  // Video eligibility: leadership and church room types only (matches server gate)
-  const videoEligible = LIVE_MEETING_TYPES.includes(room.roomType);
+  // videoEligible is derived before the early returns (see top of component).
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -568,23 +587,6 @@ export default function RoomDetail() {
       setScheduleSaving(false);
     }
   };
-
-  // ── Live Video status polling (during active meeting only) ────────────────
-  // Runs independently of VideoRoom's own polling so GuideGroupPanel always
-  // knows the current videoActive state to show Start vs End.
-  useEffect(() => {
-    if (!activeSession || !videoEligible || !user?.id || !roomId) return;
-    let destroyed = false;
-    const poll = async () => {
-      try {
-        const s = await apiGetVideoStatus(user.id, String(roomId));
-        if (!destroyed) setVideoActive(s.videoActive);
-      } catch { /* non-fatal */ }
-    };
-    poll(); // immediate on session start
-    const id = setInterval(poll, 10_000);
-    return () => { destroyed = true; clearInterval(id); };
-  }, [activeSession, videoEligible, user?.id, roomId]);
 
   // ── Live Video handlers ────────────────────────────────────────────────────
 
