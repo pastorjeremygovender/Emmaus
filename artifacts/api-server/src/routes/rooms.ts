@@ -45,9 +45,6 @@ import {
   getActiveVideoRoomCount,
   getRoomMemberCount,
   canHostVideo,
-  isAuthorizedLeader,
-  getRoomType,
-  LIVE_MEETING_TYPES_SERVER,
   getLeaderAccess,
   setLeaderAccess,
   getPrayerRequests,
@@ -95,6 +92,7 @@ import {
   type SessionEvent,
 } from "../lib/room-store.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
+import { logAuditEvent } from "../lib/audit-log.js";
 import {
   isLiveKitConfigured,
   getLiveKitUrl,
@@ -215,13 +213,6 @@ router.post("/:roomId/video/start", async (req, res) => {
   }
 
   try {
-    // Gate: only leadership and church room types support live video.
-    const roomType = await getRoomType(String(roomId));
-    if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
-      res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
-      return;
-    }
-
     const settings = await getVideoSettings();
     if (!settings.videoEnabled) {
       res.status(403).json({ error: "Video Rooms are not enabled for this church." });
@@ -276,13 +267,6 @@ router.post("/:roomId/video/token", async (req, res) => {
   const memberRole = await getMemberRole(String(roomId), userId);
   if (!memberRole) {
     res.status(403).json({ error: "You are not a member of this Room." });
-    return;
-  }
-
-  // Gate: only leadership and church room types support live video.
-  const roomType = await getRoomType(String(roomId));
-  if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
-    res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
     return;
   }
 
@@ -348,13 +332,6 @@ router.post("/:roomId/video/end", async (req, res) => {
     return;
   }
 
-  // Gate: only leadership and church room types support live video.
-  const roomType = await getRoomType(String(roomId));
-  if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
-    res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
-    return;
-  }
-
   try {
     const appRole = await getUserRole(userId);
     const allowed = await canHostVideo(userId, String(roomId), appRole);
@@ -411,9 +388,21 @@ router.patch("/admin/persons/:userId/leader-access", async (req, res) => {
   }
   try {
     const targetId = String(req.params.userId);
+    // Capture old state for the audit trail.
+    const appRoleBefore = await getUserRole(targetId);
+    const before = await getLeaderAccess(targetId, appRoleBefore);
     await setLeaderAccess(targetId, authorized);
     const appRole = await getUserRole(targetId);
     const result = await getLeaderAccess(targetId, appRole);
+    // Write audit record — non-fatal.
+    void logAuditEvent({
+      contentType: "user_permission",
+      contentId: targetId,
+      action: authorized ? "edit" : "edit",
+      performedBy: adminId,
+      previousState: { authorized: before.authorized, source: before.source },
+      newState: { authorized: result.authorized, source: result.source },
+    });
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to update leader access." });

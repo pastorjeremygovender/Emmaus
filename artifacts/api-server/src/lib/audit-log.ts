@@ -27,7 +27,9 @@ export type AuditContentType =
   | "devotional_entry"
   | "sermon_companion"
   | "sermon_companion_entry"
-  | "room";
+  | "room"
+  /** Changes to user-level permissions (e.g. Authorized Group Leader toggle) */
+  | "user_permission";
 
 export interface AuditEventParams {
   contentType: AuditContentType;

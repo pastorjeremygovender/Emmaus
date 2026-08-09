@@ -591,9 +591,9 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
           </div>
         </Section>
 
-        {/* 9. Leadership Access */}
+        {/* 9. Group Leadership */}
         {leaderTargetId && (
-          <Section title="Leadership Access" icon={ShieldCheck} iconColor="text-teal-600">
+          <Section title="Group Leadership" icon={ShieldCheck} iconColor="text-teal-600">
             <div className="bg-white border border-gray-200 rounded-xl px-4 py-4 space-y-3">
               {leaderAuthorized === null ? (
                 <div className="flex items-center gap-2 text-gray-400">

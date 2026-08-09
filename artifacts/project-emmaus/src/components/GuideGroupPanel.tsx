@@ -57,6 +57,8 @@ interface GuideGroupPanelProps {
   onSessionComplete: (summary: SessionCompleteSummary) => void;
   /** Called when leader taps "Ask Emmaus Together" — opens SharedAskEmmausPanel. */
   onOpenAskEmmaus?: () => void;
+  /** Called when leader taps "Open Discussion" — navigates directly to group chat. */
+  onOpenDiscussion?: () => void;
   /** Whether this room type supports Live Video (retained for API compat; no longer gates the UI). */
   videoEligible?: boolean;
   /** Whether a Live Video session is currently active. */
@@ -90,6 +92,7 @@ export function GuideGroupPanel({
   onSessionEnded,
   onSessionComplete,
   onOpenAskEmmaus,
+  onOpenDiscussion,
   videoActive = false,
   onStartVideo,
   onEndVideo,
@@ -161,6 +164,7 @@ export function GuideGroupPanel({
   const handleStartDiscussion = () => run('discussion', async () => {
     await apiChangeMode(userId, roomId, 'discussion', leaderName);
     onClose();
+    onOpenDiscussion?.();
   });
 
   const handlePrayerTime = () => run('prayer', async () => {

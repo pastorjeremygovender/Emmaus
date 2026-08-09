@@ -17,7 +17,6 @@ import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
   RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll,
 } from '@/lib/rooms-types';
-import { LIVE_MEETING_TYPES } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
@@ -154,6 +153,8 @@ export default function RoomDetail() {
 
   // ── Live Video state ────────────────────────────────────────────────────────
   const [videoActive, setVideoActive] = useState(false);
+  /** Whether the current user is authorized to start/end video (server-verified). */
+  const [videoCanHost, setVideoCanHost] = useState(false);
   const [confirmEndMeeting, setConfirmEndMeeting] = useState(false);
 
   // ── Follow-up phase state ───────────────────────────────────────────────────
@@ -241,25 +242,26 @@ export default function RoomDetail() {
     }
   }, [activeSession]);
 
-  // videoEligible must be computed before any early return so the polling
-  // useEffect below always runs the same number of hooks (Rules of Hooks).
-  const videoEligible = !!room && LIVE_MEETING_TYPES.includes(room.roomType);
-
   // Live Video status polling — kept here (before the early returns) so the
-  // hook call count never changes between renders.
+  // hook call count never changes between renders. Runs for ALL room types:
+  // videoActive lets any member join when a leader has started video;
+  // videoCanHost reflects the server-verified authorization to start/end it.
   useEffect(() => {
-    if (!activeSession || !videoEligible || !user?.id || !roomId) return;
+    if (!activeSession || !user?.id || !roomId) return;
     let destroyed = false;
     const poll = async () => {
       try {
         const s = await apiGetVideoStatus(user.id, String(roomId));
-        if (!destroyed) setVideoActive(s.videoActive);
+        if (!destroyed) {
+          setVideoActive(s.videoActive);
+          setVideoCanHost(s.canHost ?? false);
+        }
       } catch { /* non-fatal */ }
     };
     poll();
     const id = setInterval(poll, 10_000);
     return () => { destroyed = true; clearInterval(id); };
-  }, [activeSession, videoEligible, user?.id, roomId]);
+  }, [activeSession, user?.id, roomId]);
 
   // Attendance auto-record
   useEffect(() => {
@@ -478,7 +480,7 @@ export default function RoomDetail() {
   const groupPhase: 'preparation' | 'meeting' | 'followup' =
     activeSession ? 'meeting' : meetingJustEnded ? 'followup' : 'preparation';
 
-  // videoEligible is derived before the early returns (see top of component).
+  // videoCanHost and videoActive are set by the polling effect above (before early returns).
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -788,7 +790,11 @@ export default function RoomDetail() {
             setShowGuideGroup(false);
             setShowSharedAskEmmaus(true);
           }}
-          videoEligible={videoEligible}
+          onOpenDiscussion={() => {
+            setShowGuideGroup(false);
+            openChat();
+          }}
+          videoEligible={videoCanHost}
           videoActive={videoActive}
           onStartVideo={handleStartVideo}
           onEndVideo={handleEndVideo}
@@ -1165,14 +1171,6 @@ export default function RoomDetail() {
               </div>
             </section>
 
-            {/* Discussion — locked */}
-            <section>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Discussion</p>
-              <div className="p-4 rounded-2xl border border-border/50 bg-card/40 flex items-center gap-3">
-                <MessageSquare size={16} className="text-muted-foreground/40 shrink-0" />
-                <p className="text-[14px] text-muted-foreground">Discussion opens when the meeting starts.</p>
-              </div>
-            </section>
 
             {/* Prayer Requests */}
             <PrayerRequests
@@ -1300,20 +1298,10 @@ export default function RoomDetail() {
                   )}
                 </div>
               )}
-              {sessionMode === 'discussion' && (
-                <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40">
-                  <MessageSquare size={18} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-sky-800 dark:text-sky-300">Group Discussion</p>
-                    <p className="text-[11px] text-sky-600 dark:text-sky-400">Share your thoughts</p>
-                  </div>
-                  <button onClick={openChat} className="shrink-0 text-[12px] text-sky-600 dark:text-sky-400 font-semibold">Open →</button>
-                </div>
-              )}
             </div>
 
             {/* Live Video — renders join card (when active) or connected panel */}
-            {videoEligible && (
+            {videoActive && (
               <VideoRoom
                 roomId={String(roomId)}
                 userId={user.id}
@@ -1407,24 +1395,6 @@ export default function RoomDetail() {
               </div>
             </section>
 
-            {/* Discussion — open */}
-            <section>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Discussion</p>
-              <button onClick={openChat}
-                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-sky-300 transition-all flex items-center gap-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-sky-50 dark:bg-sky-950/40 flex items-center justify-center shrink-0">
-                  <MessageSquare size={17} className="text-sky-600 dark:text-sky-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">Open Discussion</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Talk together about today&apos;s study</p>
-                </div>
-                <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
-                  Open<ChevronRight size={14} />
-                </div>
-              </button>
-            </section>
 
             {/* Prayer Requests */}
             <PrayerRequests
@@ -1432,23 +1402,6 @@ export default function RoomDetail() {
               displayName={user.preferredName || 'Member'}
               isAdmin={isAdmin} sessionId={activeSession.id}
             />
-
-            {/* Group Notes */}
-            <section>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Notes</p>
-              <button onClick={() => setShowSharedNotes(true)}
-                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <StickyNote size={17} className="text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Shared notes from this session</p>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-              </button>
-            </section>
 
           </div>
         )}
@@ -1531,22 +1484,6 @@ export default function RoomDetail() {
               isAdmin={isAdmin} sessionId={undefined}
             />
 
-            {/* Group Notes */}
-            <section>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Notes</p>
-              <button onClick={() => setShowSharedNotes(true)}
-                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <StickyNote size={17} className="text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">From this session</p>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-              </button>
-            </section>
 
             {/* Next Meeting */}
             {isAuthorizedLeader && (
