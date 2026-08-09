@@ -116,6 +116,10 @@ export interface RoomDetail extends RoomSummary {
    *  all leader controls (session start, leader note, schedule, study link).
    *  Video hosting uses a separate, stricter check (canHostVideo). */
   isLeader: boolean;
+  /** The currently active session for this room, if one is running. Included
+   *  on initial load so members see the Meeting phase immediately without
+   *  waiting for the SSE session_state event. */
+  activeSession?: RoomSession | null;
 }
 
 export interface MemberJourneyProgress {

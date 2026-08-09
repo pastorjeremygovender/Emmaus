@@ -169,7 +169,7 @@ export async function apiGetRooms(userId: string): Promise<RoomSummary[]> {
 export async function apiGetRoomById(
   userId: string,
   roomId: string
-): Promise<{ room: RoomDetail; currentUserRole: 'admin' | 'member'; isLeader: boolean } | null> {
+): Promise<{ room: RoomDetail; currentUserRole: 'admin' | 'member'; isLeader: boolean; activeSession: import('./rooms-types').RoomSession | null } | null> {
   try {
     return await roomsFetch(`/api/rooms/${roomId}`, userId);
   } catch (err) {

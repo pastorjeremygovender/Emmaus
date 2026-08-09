@@ -296,6 +296,11 @@ export default function RoomDetail() {
       setLeaderNote(detail.leaderNote ?? null);
       setNextMeeting(detail.nextMeeting ?? null);
       setRevealOnMeeting(detail.revealOnMeeting ?? false);
+      // Seed activeSession immediately so members see Meeting phase on first
+      // render, before the SSE session_state event arrives.
+      if (detail.activeSession) {
+        setActiveSession(detail.activeSession);
+      }
       detail.linkedJourneys.forEach(lj => {
         apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
           .then(p => setProgressMap(prev => ({ ...prev, [lj.journeyId]: p })))

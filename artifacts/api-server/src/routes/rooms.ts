@@ -635,10 +635,13 @@ router.get("/:roomId", async (req, res) => {
     // isLeader: room admin OR app-level admin/superAdmin.
     // App admins need full leader visibility in any group they view so they
     // can provide support and test group flows without being the room admin.
-    const appRole = await getUserRole(userId);
+    const [appRole, activeSession] = await Promise.all([
+      getUserRole(userId),
+      getActiveSession(String(roomId)),
+    ]);
     const isLeader = role === "admin" || appRole === "admin" || appRole === "superAdmin";
 
-    res.json({ room: sanitisedRoom, currentUserRole: role, isLeader });
+    res.json({ room: sanitisedRoom, currentUserRole: role, isLeader, activeSession: activeSession ?? null });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
   }
