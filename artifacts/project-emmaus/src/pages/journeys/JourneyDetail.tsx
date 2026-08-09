@@ -150,8 +150,10 @@ export default function JourneyDetail() {
     );
   }
 
-  // Daily gate — applies to non-exempt, non-override growth journeys
-  const isGated = !gateClear && isGatedByDailyGate(journey ?? { journeyType: '' } as any);
+  // Daily gate — applies to non-exempt, non-override growth journeys.
+  // Never gated when the content was opened from a Group — group study is
+  // independent of personal Daily Rhythm progression.
+  const isGated = !gateClear && source !== 'room' && isGatedByDailyGate(journey ?? { journeyType: '' } as any);
 
   function openCore() {
     if (!coreJ) { setLocation('/walk'); return; }
@@ -365,14 +367,14 @@ export default function JourneyDetail() {
         )}
 
         {/* ── Room / Study Together — shown when walking ───────────── */}
-        {/* Already linked to a room → Open Room shortcut */}
+        {/* Already linked to a group → Open Group shortcut */}
         {matchingRoomId && (
           <button
             onClick={() => setLocation(`/rooms/${matchingRoomId}`)}
             className="flex items-center gap-2 text-[13px] text-primary font-medium hover:text-primary/80 transition-colors"
           >
             <Users size={13} />
-            Open Room →
+            Open Group →
           </button>
         )}
         {/* Has other rooms but this walk isn't linked → retroactive link */}
@@ -386,7 +388,7 @@ export default function JourneyDetail() {
               onClick={() => setShowRoomPicker(true)}
               className="text-[13px] font-medium text-primary hover:text-primary/80 transition-colors"
             >
-              Add to a Room →
+              Add to a Group →
             </button>
           </div>
         )}
@@ -467,7 +469,7 @@ export default function JourneyDetail() {
           rooms={userRooms}
           onSelect={handleLinkToRoom}
           onClose={() => setShowRoomPicker(false)}
-          title="Add Walk to a Room"
+          title="Add Walk to a Group"
         />
       )}
 

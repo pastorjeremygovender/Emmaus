@@ -31,7 +31,7 @@ import {
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
   apiRecordAttendanceJoin, apiRecordAttendanceLeave,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
-  apiStartSession, apiEndSession, apiUpdateLeaderNote, apiUpdateSchedule,
+  apiStartSession, apiEndSession, apiCompleteSession, apiUpdateLeaderNote, apiUpdateSchedule,
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
@@ -154,6 +154,7 @@ export default function RoomDetail() {
 
   // ── Live Video state ────────────────────────────────────────────────────────
   const [videoActive, setVideoActive] = useState(false);
+  const [confirmEndMeeting, setConfirmEndMeeting] = useState(false);
 
   // ── Follow-up phase state ───────────────────────────────────────────────────
   const [meetingJustEnded, setMeetingJustEnded] = useState(false);
@@ -202,6 +203,11 @@ export default function RoomDetail() {
 
   const sessionComplete = leaderSessionComplete ?? sseSessionComplete;
   const clearSessionComplete = () => {
+    // Persist acknowledgement so the modal never re-appears for this session,
+    // even if the SSE connection replays the session_complete event on reconnect.
+    if (sessionComplete?.sessionId) {
+      localStorage.setItem(`emmaus_ack_session_${sessionComplete.sessionId}`, '1');
+    }
     setLeaderSessionComplete(null);
     clearSseSessionComplete();
   };
@@ -612,15 +618,19 @@ export default function RoomDetail() {
     }
   };
 
-  const handleEndMeetingDirect = async () => {
+  // End Meeting — runs the same completion logic as "Complete Session" so
+  // attendance, notes, and prayer requests are all preserved.
+  const handleEndMeeting = async () => {
     if (!activeSession) return;
     setEndingMeeting(true);
     try {
       const snapshot = { startedAt: activeSession.startedAt, attendance: attendanceData };
-      await apiEndSession(user.id, String(roomId), 'ended');
+      const response = await apiCompleteSession(user.id, String(roomId));
+      setLeaderSessionComplete(response.summary);
       setEndedSessionSnapshot(snapshot);
       setMeetingJustEnded(true);
       setActiveSession(null);
+      setConfirmEndMeeting(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to end meeting');
     } finally {
@@ -701,20 +711,11 @@ export default function RoomDetail() {
                 className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-2xl shadow-lg overflow-hidden z-30"
                 onClick={e => e.stopPropagation()}
               >
-                {isAuthorizedLeader && (
-                  <button
-                    onClick={() => { setShowOverflow(false); setShowGuideGroup(true); }}
-                    className="w-full text-left px-4 py-3.5 text-[14px] text-primary font-semibold hover:bg-primary/5 transition-colors flex items-center gap-2.5"
-                  >
-                    <Users2 size={15} className="shrink-0" />
-                    Meeting Tools
-                  </button>
-                )}
                 {isAdmin ? (
                   <>
                     <button
                       onClick={handleStartRename}
-                      className={`w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 ${isAuthorizedLeader ? 'border-t border-border/60' : ''}`}
+                      className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5"
                     >
                       <Pencil size={15} className="text-muted-foreground shrink-0" />
                       Rename Group
@@ -788,6 +789,34 @@ export default function RoomDetail() {
           onStartVideo={handleStartVideo}
           onEndVideo={handleEndVideo}
         />
+      )}
+
+      {/* End Meeting confirmation */}
+      {confirmEndMeeting && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4" onClick={() => setConfirmEndMeeting(false)}>
+          <div className="bg-card rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4 mb-4" onClick={e => e.stopPropagation()}>
+            <h2 className="text-[18px] font-bold text-foreground">End this meeting?</h2>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              Attendance, notes, and prayer requests will all be saved. Members will see a Meeting Complete summary.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmEndMeeting(false)}
+                className="flex-1 py-3.5 rounded-2xl border border-border text-[15px] font-medium text-foreground hover:bg-muted/50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEndMeeting}
+                disabled={endingMeeting}
+                className="flex-1 py-3.5 rounded-2xl bg-destructive text-destructive-foreground text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-destructive/90 transition-colors"
+              >
+                {endingMeeting ? <Loader2 size={16} className="animate-spin" /> : null}
+                End Meeting
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showSharedAskEmmaus && activeSession && (
@@ -877,7 +906,7 @@ export default function RoomDetail() {
                 <>
                   <button
                     onClick={() => room.linkedContentId
-                      ? setLocation(`/journeys/${room.linkedContentId}`)
+                      ? setLocation(`/journeys/${room.linkedContentId}?source=room&sourceId=${room.id}`)
                       : setLocation('/walk')
                     }
                     className="w-full text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all"
@@ -1194,6 +1223,27 @@ export default function RoomDetail() {
                 )}
               </div>
 
+              {/* Leader action buttons — ONE set, here in the banner */}
+              {isAuthorizedLeader && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowGuideGroup(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[13px] font-semibold transition-colors"
+                  >
+                    <Users2 size={15} />
+                    Meeting Tools
+                  </button>
+                  <button
+                    onClick={() => setConfirmEndMeeting(true)}
+                    disabled={endingMeeting}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-400 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-[13px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
+                  >
+                    {endingMeeting ? <Loader2 size={14} className="animate-spin" /> : <StopCircle size={14} />}
+                    End Meeting
+                  </button>
+                </div>
+              )}
+
               {/* Quick-access: open scripture or group notes */}
               {(activeScripture || true) && (
                 <div className="flex gap-2">
@@ -1274,7 +1324,7 @@ export default function RoomDetail() {
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Today&apos;s Study</p>
               {contentTitle ? (
                 <button
-                  onClick={() => room.linkedContentId ? setLocation(`/journeys/${room.linkedContentId}`) : setLocation('/walk')}
+                  onClick={() => room.linkedContentId ? setLocation(`/journeys/${room.linkedContentId}?source=room&sourceId=${room.id}`) : setLocation('/walk')}
                   className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all flex items-center gap-3.5"
                 >
                   <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -1395,34 +1445,6 @@ export default function RoomDetail() {
               </button>
             </section>
 
-            {/* Meeting Tools (leaders only) */}
-            {isAuthorizedLeader && (
-              <section>
-                <button onClick={() => setShowGuideGroup(true)}
-                  className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-                >
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <Users2 size={17} className="text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-foreground">Meeting Tools</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Guide today&apos;s meeting</p>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                </button>
-              </section>
-            )}
-
-            {/* Meeting Tools — opens full-screen panel which includes Complete/End controls */}
-            {isAuthorizedLeader && (
-              <button
-                onClick={() => setShowGuideGroup(true)}
-                className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-semibold text-[15px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all"
-              >
-                <Users2 size={17} />
-                Meeting Tools
-              </button>
-            )}
           </div>
         )}
 

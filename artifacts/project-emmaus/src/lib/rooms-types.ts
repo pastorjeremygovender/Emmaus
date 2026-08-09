@@ -246,6 +246,7 @@ export type SessionEventType =
   | 'note_pinned';
 
 export interface SessionCompleteSummary {
+  sessionId: string;
   modesEntered: string[];
   memberCount: number;
   prayerRequestCount: number;

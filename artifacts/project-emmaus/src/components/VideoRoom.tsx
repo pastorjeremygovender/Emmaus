@@ -456,9 +456,14 @@ export function VideoRoom({
         <div className="p-5">
           <div className="flex items-center gap-3 mb-4">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <p className="text-[15px] font-semibold text-emerald-900 dark:text-emerald-200">
-              {gathererName} has started the live meeting
-            </p>
+            <div>
+              <p className="text-[15px] font-semibold text-emerald-900 dark:text-emerald-200">
+                Live Video is active
+              </p>
+              <p className="text-[12px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                {gathererName} has started a live video session
+              </p>
+            </div>
           </div>
           <Button
             className="w-full h-12 rounded-xl text-[16px] bg-emerald-600 hover:bg-emerald-700"

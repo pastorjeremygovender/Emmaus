@@ -48,7 +48,7 @@ const CONTENT_LABEL: Record<string, string> = {
   'bible-verse':      'Bible Verse',
   'bible-chapter':    'Bible Chapter',
   'ask-emmaus':       'Ask Emmaus',
-  room:               'Room',
+  room:               'Group',
 };
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -365,7 +365,7 @@ export default function Personal() {
         )}
 
         {/* ── My Rooms ───────────────────────────────────────────────────────── */}
-        <Section title="My Rooms">
+        <Section title="My Groups">
           <div className="flex items-center justify-between -mt-1 mb-1">
             {roomUnread > 0 && (
               <span className="text-[11px] font-semibold text-primary">{roomUnread} new</span>
@@ -373,7 +373,7 @@ export default function Personal() {
           </div>
           {myRooms.length === 0 ? (
             <p className="text-[14px] text-muted-foreground">
-              Any Rooms you are part of will appear here.
+              Any Groups you are part of will appear here.
             </p>
           ) : (
             <div className="space-y-2">
@@ -398,7 +398,7 @@ export default function Personal() {
                   onClick={() => setLocation('/rooms')}
                   className="w-full text-center text-[13px] text-primary font-medium py-2 hover:underline"
                 >
-                  View all {myRooms.length} Rooms
+                  View all {myRooms.length} Groups
                 </button>
               )}
             </div>

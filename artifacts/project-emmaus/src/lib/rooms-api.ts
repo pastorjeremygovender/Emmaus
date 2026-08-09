@@ -761,7 +761,7 @@ export async function apiCompleteSession(
   roomId: string
 ): Promise<{
   ok: boolean;
-  summary: { modesEntered: string[]; memberCount: number; prayerRequestCount: number; sharedNoteCount: number };
+  summary: { sessionId: string; modesEntered: string[]; memberCount: number; prayerRequestCount: number; sharedNoteCount: number };
 }> {
   return roomsFetch(`/api/rooms/${roomId}/session/complete`, userId, { method: 'POST' });
 }

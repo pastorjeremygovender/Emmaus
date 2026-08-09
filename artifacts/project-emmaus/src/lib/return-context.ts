@@ -38,7 +38,8 @@ export type SourceKey =
   | 'nextStepsSermons'
   | 'journeyDetail'
   | 'collectionDetail'
-  | 'myJourney';
+  | 'myJourney'
+  | 'room';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   walk:                 { path: '/walk',                     label: "Today's Steps"  },
@@ -92,6 +93,13 @@ export function resolveReturn(
   if (source === 'collectionDetail') {
     if (sourceId) return { path: `/journeys/collections/${sourceId}`, label: 'Collection' };
     return { path: '/journeys?tab=journeys', label: 'Next Steps' };
+  }
+
+  // Group context — content opened via a Group's "Today's Study" card.
+  // Back returns to that specific Group, never to personal Next Steps.
+  if (source === 'room') {
+    if (sourceId) return { path: `/rooms/${sourceId}`, label: 'Group' };
+    return { path: '/rooms', label: 'My Groups' };
   }
 
   const mapped = SOURCE_MAP[source];

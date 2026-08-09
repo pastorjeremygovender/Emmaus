@@ -912,10 +912,10 @@ export default function Journeys() {
                   <Users size={17} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">My Rooms</p>
+                  <p className="text-[15px] font-semibold text-foreground">My Groups</p>
                   <p className="text-[12px] text-muted-foreground">
                     {myRooms.length > 0
-                      ? `${myRooms.length} ${myRooms.length === 1 ? 'Room' : 'Rooms'}`
+                      ? `${myRooms.length} ${myRooms.length === 1 ? 'Group' : 'Groups'}`
                       : 'Walk journeys together with others'}
                   </p>
                 </div>

@@ -18,8 +18,8 @@
 import { useState } from 'react';
 import {
   BookOpen, ArrowLeft, MessageSquare,
-  HandHeart, BarChart2, Sparkles, StopCircle,
-  CheckCircle2, X, Loader2, ChevronRight, Video, VideoOff,
+  HandHeart, BarChart2, Sparkles,
+  X, Loader2, ChevronRight, Video, VideoOff,
 } from 'lucide-react';
 import {
   apiEndSession,
@@ -70,8 +70,7 @@ interface GuideGroupPanelProps {
 type PanelView =
   | 'main'
   | 'scripture'
-  | 'poll-setup'
-  | 'complete-confirm';
+  | 'poll-setup';
 
 interface PollSetup {
   question: string;
@@ -214,23 +213,19 @@ export function GuideGroupPanel({
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="shrink-0 flex items-center justify-between px-5 pt-safe-or-5 pt-5 pb-4 border-b border-border/60">
-        {view !== 'main' ? (
-          <button
-            onClick={() => setView('main')}
-            className="p-2 -ml-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Back"
-          >
-            <ArrowLeft size={22} />
-          </button>
-        ) : (
-          <div className="w-10" />
-        )}
+        {/* Back → main view, or Close → group page */}
+        <button
+          onClick={view !== 'main' ? () => setView('main') : onClose}
+          className="p-2 -ml-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label={view !== 'main' ? 'Back' : 'Close Meeting Tools'}
+        >
+          <ArrowLeft size={22} />
+        </button>
 
         <h1 className="text-[18px] font-bold text-foreground">
           {view === 'main' && 'Meeting Tools'}
           {view === 'scripture' && 'Present Bible'}
           {view === 'poll-setup' && 'Launch Poll'}
-          {view === 'complete-confirm' && 'Complete Session'}
         </h1>
 
         <button
@@ -245,6 +240,34 @@ export function GuideGroupPanel({
       {/* ── Main view ──────────────────────────────────────────────────────── */}
       {view === 'main' && (
         <div className="flex-1 overflow-y-auto pb-safe-or-8 pb-8">
+
+          {/* ── LIVE VIDEO section — appears first when room is video-eligible ── */}
+          {videoEligible && (
+            <div className="px-5 pt-6">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Live Video</p>
+              <div className="rounded-2xl border border-border overflow-hidden">
+                {!videoActive ? (
+                  <ToolRow
+                    icon={<Video size={18} />}
+                    label="Start Live Video"
+                    description="Start a video session for the group"
+                    loading={busy === 'start-video'}
+                    disabled={!sessionActive}
+                    onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
+                  />
+                ) : (
+                  <ToolRow
+                    icon={<VideoOff size={18} />}
+                    label="End Live Video"
+                    description="End the video session for everyone"
+                    loading={busy === 'end-video'}
+                    disabled={false}
+                    onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── CONTENT section ─────────────────────────────────────────── */}
           <div className="px-5 pt-6">
@@ -321,61 +344,6 @@ export function GuideGroupPanel({
                 disabled={!sessionActive}
                 onClick={handleAskEmmausTogether}
               />
-            </div>
-          </div>
-
-          {/* ── LIVE VIDEO section ─────────────────────────────────────── */}
-          {videoEligible && (
-            <div className="px-5 pt-6">
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Live Video</p>
-              <div className="rounded-2xl border border-border overflow-hidden">
-                {!videoActive ? (
-                  <ToolRow
-                    icon={<Video size={18} />}
-                    label="Start Live Video"
-                    description="Start a video session for the group"
-                    loading={busy === 'start-video'}
-                    disabled={!sessionActive}
-                    onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
-                  />
-                ) : (
-                  <ToolRow
-                    icon={<VideoOff size={18} />}
-                    label="End Live Video"
-                    description="End the video session for everyone"
-                    loading={busy === 'end-video'}
-                    disabled={false}
-                    onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── SESSION CONCLUSION section ──────────────────────────────── */}
-          <div className="px-5 pt-6">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">End Meeting</p>
-            <div className="space-y-2">
-              <button
-                onClick={() => setView('complete-confirm')}
-                disabled={!sessionActive || busy === 'complete-session'}
-                className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-emerald-700 transition-colors"
-              >
-                {busy === 'complete-session'
-                  ? <Loader2 size={18} className="animate-spin" />
-                  : <CheckCircle2 size={18} />}
-                Complete Meeting
-              </button>
-              <button
-                onClick={handleEndSession}
-                disabled={!sessionActive || busy === 'end-session'}
-                className="w-full py-3 rounded-xl text-[13px] text-muted-foreground hover:text-destructive transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
-              >
-                {busy === 'end-session'
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <StopCircle size={14} />}
-                End Without Completing
-              </button>
             </div>
           </div>
         </div>
@@ -530,43 +498,6 @@ export function GuideGroupPanel({
         </div>
       )}
 
-      {/* ── Session complete confirm ─────────────────────────────────────── */}
-      {view === 'complete-confirm' && (
-        <div className="flex-1 overflow-y-auto px-5 pb-safe-or-8 pb-8 space-y-5 pt-5">
-          <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 space-y-3">
-            <p className="text-[16px] font-bold text-emerald-800 dark:text-emerald-300">Session Complete</p>
-            <div className="space-y-1.5">
-              {['Studied together', 'Discussed the Word', 'Prayed together'].map(item => (
-                <div key={item} className="flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <p className="text-[14px] text-emerald-700 dark:text-emerald-300">{item}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            This will record the session, preserve all notes and prayer requests, and let members know the session is complete.
-          </p>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleCompleteSession}
-              disabled={busy === 'complete-session'}
-              className="flex-1 py-4 rounded-2xl bg-emerald-600 text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-emerald-700 transition-colors"
-            >
-              {busy === 'complete-session' ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
-              Complete Session
-            </button>
-            <button
-              onClick={() => setView('main')}
-              className="flex-1 py-4 rounded-2xl border border-border text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

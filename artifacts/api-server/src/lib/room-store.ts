@@ -1017,6 +1017,7 @@ export interface RoomSession {
 }
 
 export interface SessionCompleteSummary {
+  sessionId: string;
   modesEntered: string[];
   memberCount: number;
   prayerRequestCount: number;
@@ -1370,7 +1371,7 @@ export async function completeSession(roomId: string): Promise<SessionCompleteSu
     );
 
     await client.query("COMMIT");
-    return { modesEntered, memberCount, prayerRequestCount, sharedNoteCount };
+    return { sessionId, modesEntered, memberCount, prayerRequestCount, sharedNoteCount };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
@@ -1391,12 +1392,13 @@ export async function getRecentlyCompletedSession(
 ): Promise<SessionCompleteSummary | null> {
   const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
   const { rows } = await pool.query<{
+    id: string;
     completed_modes: unknown;
     member_count: string | number | null;
     prayer_request_count: string | number | null;
     shared_note_count: string | number | null;
   }>(
-    `SELECT completed_modes, member_count, prayer_request_count, shared_note_count
+    `SELECT id, completed_modes, member_count, prayer_request_count, shared_note_count
      FROM room_sessions
      WHERE room_id = $1
        AND status = 'completed'
@@ -1409,6 +1411,7 @@ export async function getRecentlyCompletedSession(
   const row = rows[0];
   const rawModes = Array.isArray(row.completed_modes) ? row.completed_modes as string[] : [];
   return {
+    sessionId: row.id,
     modesEntered: rawModes,
     memberCount: Number(row.member_count ?? 0),
     prayerRequestCount: Number(row.prayer_request_count ?? 0),

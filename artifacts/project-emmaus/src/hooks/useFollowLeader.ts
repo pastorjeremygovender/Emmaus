@@ -216,12 +216,20 @@ export function useFollowLeader({
       }
 
       case 'session_complete': {
+        const sessionId = String(event.payload.sessionId ?? '');
+        // If this specific session's completion has already been acknowledged
+        // (user pressed Done or X), do not re-show the modal on reconnect.
+        if (sessionId && localStorage.getItem(`emmaus_ack_session_${sessionId}`)) {
+          sessionExplicitlyEndedRef.current = true;
+          setActiveSession(null);
+          break;
+        }
         const modesEntered = (event.payload.modesEntered as string[]) ?? [];
         const memberCount = Number(event.payload.memberCount ?? 0);
         const prayerRequestCount = Number(event.payload.prayerRequestCount ?? 0);
         const sharedNoteCount = Number(event.payload.sharedNoteCount ?? 0);
         sessionExplicitlyEndedRef.current = true;
-        setSessionComplete({ modesEntered, memberCount, prayerRequestCount, sharedNoteCount });
+        setSessionComplete({ sessionId, modesEntered, memberCount, prayerRequestCount, sharedNoteCount });
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);

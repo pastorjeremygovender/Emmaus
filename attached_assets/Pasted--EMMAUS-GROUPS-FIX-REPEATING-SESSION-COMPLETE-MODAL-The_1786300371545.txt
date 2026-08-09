@@ -1,0 +1,173 @@
+# EMMAUS GROUPS — FIX REPEATING SESSION COMPLETE MODAL
+
+There is a bug in the Group meeting completion flow.
+
+CURRENT PROBLEM:
+
+After I complete a meeting, the "Session Complete" modal appears correctly.
+
+However:
+
+- I press Done
+- leave the Group
+- return to My Groups
+- open the Group again
+
+and the same Session Complete modal appears again.
+
+It keeps reappearing repeatedly.
+
+This is incorrect.
+
+====================================================
+EXPECTED BEHAVIOUR
+====================================================
+
+The Session Complete modal should appear ONLY ONCE:
+
+Immediately after the Group Leader ends/completes that specific meeting.
+
+After the user:
+
+- presses Done
+OR
+- closes the modal
+
+the modal must be acknowledged and must not automatically appear again.
+
+Returning to the Group later should show the normal post-meeting / preparation view.
+
+====================================================
+IMPLEMENT A PROPER ACKNOWLEDGEMENT STATE
+====================================================
+
+Do not simply hide the modal with local component state.
+
+Persist enough state to know that this specific meeting completion has already been shown/acknowledged.
+
+Use the existing meeting/session ID.
+
+For example:
+
+meeting.completedAt
+meeting.completionAcknowledgedAt
+
+or an equivalent durable approach.
+
+The important rule is:
+
+A completed meeting is persistent.
+
+The completion MODAL is not persistent.
+
+====================================================
+FLOW
+====================================================
+
+Leader presses:
+
+End Meeting
+
+↓
+
+Meeting is completed and attendance/notes/etc are saved.
+
+↓
+
+Show Session Complete modal ONCE.
+
+↓
+
+Leader presses Done.
+
+↓
+
+Close modal.
+
+↓
+
+Return to normal Group follow-up/preparation screen.
+
+↓
+
+If user leaves Group and returns later:
+
+DO NOT show Session Complete again.
+
+====================================================
+BACK NAVIGATION
+====================================================
+
+If the user presses Back after completing the meeting:
+
+Do not reopen the completion modal when they later re-enter the Group.
+
+The modal acknowledgement must already have been saved.
+
+====================================================
+CLOSE BUTTON
+====================================================
+
+The X close button and the Done button must behave the same way:
+
+- acknowledge completion modal
+- close it
+- prevent it from automatically reopening
+
+Do not create two different states.
+
+====================================================
+MULTIPLE MEETINGS
+====================================================
+
+This must work per meeting/session.
+
+Example:
+
+Meeting 1 completes
+→ modal shown once
+→ acknowledged
+
+Meeting 2 happens next week
+→ new completion modal shown once
+
+Acknowledging Meeting 1 must not suppress Meeting 2.
+
+====================================================
+DO NOT CHANGE
+====================================================
+
+Do not change:
+
+- attendance
+- discussion history
+- prayer requests
+- group notes
+- assigned study
+- meeting history
+- LiveKit
+- permissions
+
+This task only fixes the repeating completion-modal lifecycle.
+
+====================================================
+QA
+====================================================
+
+Test this exact sequence:
+
+1. Start a Group meeting.
+2. End Meeting.
+3. Session Complete modal appears.
+4. Press Done.
+5. Leave the Group.
+6. Return to My Groups.
+7. Reopen the same Group.
+8. Confirm Session Complete modal does NOT appear.
+9. Refresh the page.
+10. Confirm it still does NOT appear.
+11. Start a NEW meeting.
+12. End the new meeting.
+13. Confirm a NEW Session Complete modal appears once.
+
+Report the root cause and confirm the fix in the published app before marking complete.
