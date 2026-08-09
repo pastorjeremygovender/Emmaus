@@ -86,6 +86,7 @@ import {
   trackModeEntered,
   completeSession,
   getRecentlyCompletedSession,
+  acknowledgeSessionCompletion,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -1544,6 +1545,26 @@ router.post("/:roomId/session/complete", async (req, res) => {
   }
 });
 
+// POST /:roomId/session/:sessionId/acknowledge
+// Any room member can acknowledge the Session Complete modal to prevent it
+// from re-appearing on reconnect or on a different device.
+router.post("/:roomId/session/:sessionId/acknowledge", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, sessionId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  try {
+    await acknowledgeSessionCompletion(String(sessionId), userId);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to record acknowledgement." });
+  }
+});
+
 // POST /:roomId/session/broadcast
 // body: { type: SessionEvent["type"], payload: {} }
 router.post("/:roomId/session/broadcast", async (req, res) => {
@@ -1740,9 +1761,11 @@ router.get("/:roomId/session/events", async (req, res) => {
   //    members who reconnect or join after the broadcast window still see the
   //    completion card.  Late joiners and reconnectors are the primary failure mode
   //    for ephemeral SSE-only delivery.
+  //    Pass userId so the store skips replay when the user has already acknowledged
+  //    the modal — preventing it from re-appearing on a second device.
   if (!activeSessionOnConnect) {
     try {
-      const recentSummary = await getRecentlyCompletedSession(roomId, 10);
+      const recentSummary = await getRecentlyCompletedSession(roomId, 10, userId);
       if (recentSummary) {
         const completeEvent: SessionEvent = {
           type: "session_complete",

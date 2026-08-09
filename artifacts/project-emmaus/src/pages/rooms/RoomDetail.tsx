@@ -31,7 +31,7 @@ import {
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
   apiRecordAttendanceJoin, apiRecordAttendanceLeave,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
-  apiStartSession, apiEndSession, apiCompleteSession, apiUpdateLeaderNote, apiUpdateSchedule,
+  apiStartSession, apiEndSession, apiCompleteSession, apiAcknowledgeSessionCompletion, apiUpdateLeaderNote, apiUpdateSchedule,
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
@@ -203,10 +203,14 @@ export default function RoomDetail() {
 
   const sessionComplete = leaderSessionComplete ?? sseSessionComplete;
   const clearSessionComplete = () => {
-    // Persist acknowledgement so the modal never re-appears for this session,
-    // even if the SSE connection replays the session_complete event on reconnect.
-    if (sessionComplete?.sessionId) {
-      localStorage.setItem(`emmaus_ack_session_${sessionComplete.sessionId}`, '1');
+    const sid = sessionComplete?.sessionId;
+    if (sid) {
+      // Fast-path: localStorage prevents a flash before the server responds.
+      localStorage.setItem(`emmaus_ack_session_${sid}`, '1');
+      // Authoritative: server-side record prevents re-appearance on any device.
+      apiAcknowledgeSessionCompletion(user?.id ?? '', String(roomId), sid).catch(() => {
+        // Non-fatal — localStorage is the fallback for the current device.
+      });
     }
     setLeaderSessionComplete(null);
     clearSseSessionComplete();

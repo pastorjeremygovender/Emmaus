@@ -1683,6 +1683,24 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms V2 columns failed (non-fatal)");
   }
 
+  // ── Room session acknowledgements (2026-08) ───────────────────────────────
+  // Per-user, per-session acknowledgement of the Session Complete modal.
+  // Prevents the modal from re-appearing when a member opens the Group on a
+  // different device or after clearing localStorage.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_session_acknowledgements (
+        session_id  uuid        NOT NULL,
+        user_id     text        NOT NULL,
+        acknowledged_at timestamptz NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (session_id, user_id)
+      );
+    `);
+    logger.info("Startup migration: room_session_acknowledgements table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_session_acknowledgements table failed (non-fatal)");
+  }
+
   // ── ffmpeg health check ───────────────────────────────────────────────────
   // Uses the FFMPEG_BIN resolved by audio-transcription.ts (which tries
   // ffmpeg-static first, then PATH, then falls back to bare "ffmpeg").

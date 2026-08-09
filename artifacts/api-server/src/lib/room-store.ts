@@ -1385,10 +1385,15 @@ export async function completeSession(roomId: string): Promise<SessionCompleteSu
  * if it was completed within the last `withinMinutes` minutes.
  * Used by the SSE handler to replay a completion card for members who
  * reconnect or join after the ephemeral broadcast.
+ *
+ * If `userId` is provided the function checks `room_session_acknowledgements`
+ * and returns null when the user has already acknowledged — so the modal is
+ * never re-shown on a second device or after a reconnect.
  */
 export async function getRecentlyCompletedSession(
   roomId: string,
-  withinMinutes = 10
+  withinMinutes = 10,
+  userId?: string
 ): Promise<SessionCompleteSummary | null> {
   const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
   const { rows } = await pool.query<{
@@ -1409,6 +1414,17 @@ export async function getRecentlyCompletedSession(
   );
   if (rows.length === 0) return null;
   const row = rows[0];
+
+  // If we have a userId, skip replay when the user has already acknowledged.
+  if (userId) {
+    const ackRes = await pool.query(
+      `SELECT 1 FROM room_session_acknowledgements
+       WHERE session_id = $1 AND user_id = $2 LIMIT 1`,
+      [row.id, userId]
+    );
+    if ((ackRes.rowCount ?? 0) > 0) return null;
+  }
+
   const rawModes = Array.isArray(row.completed_modes) ? row.completed_modes as string[] : [];
   return {
     sessionId: row.id,
@@ -1419,6 +1435,21 @@ export async function getRecentlyCompletedSession(
   };
 }
 
+/**
+ * Record that a user has acknowledged the Session Complete modal for a
+ * specific session.  Idempotent — safe to call multiple times.
+ */
+export async function acknowledgeSessionCompletion(
+  sessionId: string,
+  userId: string
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO room_session_acknowledgements (session_id, user_id)
+     VALUES ($1, $2)
+     ON CONFLICT (session_id, user_id) DO NOTHING`,
+    [sessionId, userId]
+  );
+}
 /** Get attendance for a session.
  *  @param sessionId  The session to query.
  *  @param roomId     The room the caller believes the session belongs to.

@@ -765,3 +765,15 @@ export async function apiCompleteSession(
 }> {
   return roomsFetch(`/api/rooms/${roomId}/session/complete`, userId, { method: 'POST' });
 }
+
+/**
+ * Acknowledge the Session Complete modal for a specific session so it is
+ * never replayed on reconnect or on a different device.
+ */
+export async function apiAcknowledgeSessionCompletion(
+  userId: string,
+  roomId: string,
+  sessionId: string
+): Promise<{ ok: boolean }> {
+  return roomsFetch(`/api/rooms/${roomId}/session/${sessionId}/acknowledge`, userId, { method: 'POST' });
+}
