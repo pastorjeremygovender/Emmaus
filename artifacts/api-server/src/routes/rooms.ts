@@ -1706,12 +1706,30 @@ router.get("/:roomId/session/events", async (req, res) => {
   res.flushHeaders();
 
   // 1. Send current session state so the client can sync immediately on connect/reconnect.
+  //    Includes existing highlights, shared notes, and active poll so a rejoining
+  //    member gets the full discussion state in a single event — not just the phase.
   let activeSessionOnConnect: Awaited<ReturnType<typeof getActiveSession>> | null = null;
   try {
     activeSessionOnConnect = await getActiveSession(roomId);
+    // Fetch discussion artefacts in parallel — only when a session is active.
+    let sessionHighlights: Awaited<ReturnType<typeof getHighlights>> = [];
+    let sessionNotes: Awaited<ReturnType<typeof getSharedNotes>> = [];
+    let sessionActivePoll: Awaited<ReturnType<typeof getActivePoll>> = null;
+    if (activeSessionOnConnect) {
+      [sessionHighlights, sessionNotes, sessionActivePoll] = await Promise.all([
+        getHighlights(roomId, activeSessionOnConnect.id),
+        getSharedNotes(roomId, activeSessionOnConnect.id),
+        getActivePoll(roomId, activeSessionOnConnect.id),
+      ]);
+    }
     const initEvent: SessionEvent = {
       type: "session_state",
-      payload: { session: activeSessionOnConnect },
+      payload: {
+        session: activeSessionOnConnect,
+        highlights: sessionHighlights,
+        notes: sessionNotes,
+        activePoll: sessionActivePoll,
+      },
       sentBy: "system",
       at: new Date().toISOString(),
     };

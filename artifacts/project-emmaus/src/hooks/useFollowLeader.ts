@@ -118,6 +118,10 @@ export function useFollowLeader({
   const onNavigateRef = useRef(onNavigate);
   const onModeChangeRef = useRef(onModeChange);
   const onScriptureOpenRef = useRef(onScriptureOpen);
+  // Tracks whether a definitive session-end event (session_ended / session_complete)
+  // has been received.  Used to guard against session_state:null racing with the
+  // HTTP seed and briefly flipping the UI back to Preparation phase.
+  const sessionExplicitlyEndedRef = useRef(false);
 
   useEffect(() => { followLeaderRef.current = followLeader; }, [followLeader]);
   useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
@@ -130,27 +134,76 @@ export function useFollowLeader({
     switch (event.type) {
       case 'session_state': {
         const session = event.payload.session as RoomSession | null;
-        setActiveSession(session);
-        if (session?.currentMode) {
-          setSessionMode(session.currentMode as SessionMode);
+
+        if (session !== null) {
+          // Active session received — always apply it.
+          sessionExplicitlyEndedRef.current = false;
+          setActiveSession(session);
+          if (session.currentMode) {
+            setSessionMode(session.currentMode as SessionMode);
+          }
+          if (session.currentScripture) {
+            setActiveScripture(session.currentScripture);
+          }
+          // Auto-enable follow leader when reconnecting to an active session.
+          if (session.status === 'active') {
+            setFollowLeader(true);
+          }
+        } else {
+          // Null session: only apply if we've seen an explicit end event,
+          // or if we never had a session.  This prevents a brief race between
+          // the HTTP seed (which sets activeSession) and the first SSE
+          // session_state arriving with null from clobbering the HTTP state.
+          if (sessionExplicitlyEndedRef.current) {
+            setActiveSession(null);
+            setSessionMode('study');
+            setActiveScripture(null);
+          } else {
+            // Use functional update: only clear if we don't already have a session.
+            setActiveSession(prev => {
+              if (prev !== null) return prev; // preserve HTTP-seeded session
+              return null;
+            });
+          }
         }
-        if (session?.currentScripture) {
-          setActiveScripture(session.currentScripture);
+
+        // Seed historical highlights and notes so panels see them even if
+        // the corresponding SSE events were missed before this member joined.
+        const seedHighlights = (event.payload.highlights as RoomHighlight[] | undefined) ?? [];
+        const seedNotes = (event.payload.notes as SharedNote[] | undefined) ?? [];
+        const seedPoll = (event.payload.activePoll as RoomPoll | undefined) ?? null;
+
+        if (seedHighlights.length > 0) {
+          setIncomingHighlights(prev => {
+            const existingIds = new Set(prev.map(h => h.id));
+            const fresh = seedHighlights.filter(h => !existingIds.has(h.id));
+            return fresh.length ? [...prev, ...fresh] : prev;
+          });
         }
-        // Auto-enable follow leader when reconnecting to an active session
-        if (session && session.status === 'active') {
-          setFollowLeader(true);
+        if (seedNotes.length > 0) {
+          setIncomingNotes(prev => {
+            const existingIds = new Set(prev.map(n => n.id));
+            const fresh = seedNotes.filter(n => !existingIds.has(n.id));
+            return fresh.length ? [...prev, ...fresh] : prev;
+          });
         }
+        if (seedPoll && session !== null) {
+          // Only seed the poll if there's still an active session.
+          setIncomingPoll(seedPoll);
+        }
+
         break;
       }
 
       case 'session_started': {
         // Will be followed by a full session_state, but enable following immediately
+        sessionExplicitlyEndedRef.current = false;
         setFollowLeader(true);
         break;
       }
 
       case 'session_ended': {
+        sessionExplicitlyEndedRef.current = true;
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
@@ -162,6 +215,7 @@ export function useFollowLeader({
         const memberCount = Number(event.payload.memberCount ?? 0);
         const prayerRequestCount = Number(event.payload.prayerRequestCount ?? 0);
         const sharedNoteCount = Number(event.payload.sharedNoteCount ?? 0);
+        sessionExplicitlyEndedRef.current = true;
         setSessionComplete({ modesEntered, memberCount, prayerRequestCount, sharedNoteCount });
         setActiveSession(null);
         setSessionMode('study');
