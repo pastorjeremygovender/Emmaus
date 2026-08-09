@@ -47,8 +47,13 @@ interface VideoRoomProps {
   displayName: string;
   /** Personal rooms pass false → component renders null. */
   videoEligible: boolean;
-  /** Name of the room leader, shown when a gathering is active. */
+  /** Name of the room leader, shown when video is active. */
   leaderName?: string;
+  /**
+   * When true, the "Start Live Video" leader CTA is suppressed.
+   * Meeting Tools handles start; this component only shows Join + Connected.
+   */
+  hideStart?: boolean;
 }
 
 // ─── Duration warning hook ────────────────────────────────────────────────────
@@ -159,7 +164,7 @@ function ParticipantGrid({ onLeave, canHost, onEnd, ending }: {
 const POLL_INTERVAL_MS = 10_000;
 
 export function VideoRoom({
-  roomId, userId, displayName, videoEligible, leaderName,
+  roomId, userId, displayName, videoEligible, leaderName, hideStart = false,
 }: VideoRoomProps) {
   const [status, setStatus] = useState<VideoSessionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -334,7 +339,7 @@ export function VideoRoom({
           <div className="flex items-center gap-2.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className={`text-[14px] font-semibold ${expanded ? 'text-white' : 'text-foreground'}`}>
-              Gathering in Progress
+              Live Video
             </span>
           </div>
           <Button
@@ -408,14 +413,10 @@ export function VideoRoom({
   const { videoActive, canHost } = status;
   const gathererName = leaderName || 'Your leader';
 
-  // No gathering active
+  // No video active — Meeting Tools handles Start when hideStart is true
   if (!videoActive) {
-    if (!canHost) {
-      // Non-leader with no active gathering: render nothing.
-      // When a gathering starts, the polling will pick it up and show the join card.
-      return null;
-    }
-    // Leader: primary "Gather Together" CTA
+    if (!canHost || hideStart) return null;
+    // Fallback: leader CTA when VideoRoom is used standalone (not from Meeting Tools)
     return (
       <div className="space-y-2">
         <button
@@ -431,9 +432,9 @@ export function VideoRoom({
               }
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[17px] font-semibold text-white">Gather Together</div>
+              <div className="text-[17px] font-semibold text-white">Start Live Video</div>
               <div className="text-[13px] text-white/80 mt-0.5">
-                Start a live gathering with your group.
+                Start a live video session with your group.
               </div>
             </div>
           </div>
@@ -448,7 +449,7 @@ export function VideoRoom({
     );
   }
 
-  // Gathering active — not yet joined
+  // Video active — lobby card (not yet joined)
   return (
     <div className="space-y-2">
       <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 overflow-hidden">
@@ -456,7 +457,7 @@ export function VideoRoom({
           <div className="flex items-center gap-3 mb-4">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <p className="text-[15px] font-semibold text-emerald-900 dark:text-emerald-200">
-              {gathererName} is gathering now
+              {gathererName} has started the live meeting
             </p>
           </div>
           <Button
@@ -465,20 +466,9 @@ export function VideoRoom({
             disabled={actioning}
           >
             {actioning ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-            Join Gathering
+            Join Live Video
           </Button>
         </div>
-        {canHost && (
-          <div className="px-5 pb-4">
-            <button
-              onClick={handleEnd}
-              disabled={actioning}
-              className="w-full py-2 text-[13px] text-muted-foreground hover:text-destructive transition-colors text-center"
-            >
-              End Gathering
-            </button>
-          </div>
-        )}
       </div>
       {actionError && (
         <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">

@@ -143,7 +143,7 @@ export default function JourneyDetail() {
       <div className="min-h-[100dvh] bg-background pb-page-safe flex items-center justify-center">
         <div className="text-center space-y-3 px-5">
           <p className="text-[16px] text-foreground font-medium">This Journey isn't available yet.</p>
-          <Button variant="outline" onClick={() => setLocation('/journeys')}>Back to Next Steps</Button>
+          <Button variant="outline" onClick={() => window.history.length > 1 ? window.history.back() : setLocation('/journeys')}>Back</Button>
         </div>
         <BottomNav />
       </div>

@@ -17,6 +17,7 @@ import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
   RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll,
 } from '@/lib/rooms-types';
+import { LIVE_MEETING_TYPES } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
@@ -31,7 +32,9 @@ import {
   apiRecordAttendanceJoin, apiRecordAttendanceLeave,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
   apiStartSession, apiEndSession, apiUpdateLeaderNote, apiUpdateSchedule,
+  apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
+import { VideoRoom } from '@/components/VideoRoom';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -148,6 +151,9 @@ export default function RoomDetail() {
 
   // ── Leader's completion summary ─────────────────────────────────────────────
   const [leaderSessionComplete, setLeaderSessionComplete] = useState<import('@/lib/rooms-types').SessionCompleteSummary | null>(null);
+
+  // ── Live Video state ────────────────────────────────────────────────────────
+  const [videoActive, setVideoActive] = useState(false);
 
   // ── Follow-up phase state ───────────────────────────────────────────────────
   const [meetingJustEnded, setMeetingJustEnded] = useState(false);
@@ -404,7 +410,6 @@ export default function RoomDetail() {
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
     j.status === 'Published' &&
-    myProgress[j.id] != null &&
     !linkedJourneyIds.has(j.id)
   );
 
@@ -431,6 +436,9 @@ export default function RoomDetail() {
   // Three-phase lifecycle: preparation → meeting → followup
   const groupPhase: 'preparation' | 'meeting' | 'followup' =
     activeSession ? 'meeting' : meetingJustEnded ? 'followup' : 'preparation';
+
+  // Video eligibility: leadership and church room types only (matches server gate)
+  const videoEligible = LIVE_MEETING_TYPES.includes(room.roomType);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -548,6 +556,35 @@ export default function RoomDetail() {
     } finally {
       setScheduleSaving(false);
     }
+  };
+
+  // ── Live Video status polling (during active meeting only) ────────────────
+  // Runs independently of VideoRoom's own polling so GuideGroupPanel always
+  // knows the current videoActive state to show Start vs End.
+  useEffect(() => {
+    if (!activeSession || !videoEligible || !user?.id || !roomId) return;
+    let destroyed = false;
+    const poll = async () => {
+      try {
+        const s = await apiGetVideoStatus(user.id, String(roomId));
+        if (!destroyed) setVideoActive(s.videoActive);
+      } catch { /* non-fatal */ }
+    };
+    poll(); // immediate on session start
+    const id = setInterval(poll, 10_000);
+    return () => { destroyed = true; clearInterval(id); };
+  }, [activeSession, videoEligible, user?.id, roomId]);
+
+  // ── Live Video handlers ────────────────────────────────────────────────────
+
+  const handleStartVideo = async () => {
+    await apiStartVideo(user.id, String(roomId));
+    setVideoActive(true);
+  };
+
+  const handleEndVideo = async () => {
+    await apiEndVideo(user.id, String(roomId));
+    setVideoActive(false);
   };
 
   const handleStartMeetingDirect = async () => {
@@ -716,19 +753,27 @@ export default function RoomDetail() {
           isOpen={showGuideGroup}
           onClose={() => setShowGuideGroup(false)}
           activeSession={activeSession}
-          onSessionStarted={(session) => {
-            setActiveSession(session);
-            setShowGuideGroup(false);
+          onSessionEnded={() => {
+            const snapshot = { startedAt: activeSession?.startedAt ?? '', attendance: attendanceData };
+            setEndedSessionSnapshot(snapshot);
+            setMeetingJustEnded(true);
+            setActiveSession(null);
           }}
-          onSessionEnded={() => setActiveSession(null)}
           onSessionComplete={(summary) => {
             setLeaderSessionComplete(summary);
+            const snapshot = { startedAt: activeSession?.startedAt ?? '', attendance: attendanceData };
+            setEndedSessionSnapshot(snapshot);
+            setMeetingJustEnded(true);
             setActiveSession(null);
           }}
           onOpenAskEmmaus={() => {
             setShowGuideGroup(false);
             setShowSharedAskEmmaus(true);
           }}
+          videoEligible={videoEligible}
+          videoActive={videoActive}
+          onStartVideo={handleStartVideo}
+          onEndVideo={handleEndVideo}
         />
       )}
 
@@ -1199,6 +1244,18 @@ export default function RoomDetail() {
               )}
             </div>
 
+            {/* Live Video — renders join card (when active) or connected panel */}
+            {videoEligible && (
+              <VideoRoom
+                roomId={String(roomId)}
+                userId={user.id}
+                displayName={user.preferredName || 'Member'}
+                videoEligible={true}
+                leaderName={leaderName}
+                hideStart={true}
+              />
+            )}
+
             {/* Today's Study */}
             <section>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Today&apos;s Study</p>
@@ -1343,15 +1400,14 @@ export default function RoomDetail() {
               </section>
             )}
 
-            {/* END MEETING */}
+            {/* Meeting Tools — opens full-screen panel which includes Complete/End controls */}
             {isAuthorizedLeader && (
               <button
-                onClick={handleEndMeetingDirect}
-                disabled={endingMeeting}
-                className="w-full py-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-destructive/20 transition-all"
+                onClick={() => setShowGuideGroup(true)}
+                className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-semibold text-[15px] flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all"
               >
-                {endingMeeting ? <Loader2 size={17} className="animate-spin" /> : <StopCircle size={17} />}
-                End Meeting
+                <Users2 size={17} />
+                Meeting Tools
               </button>
             )}
           </div>
