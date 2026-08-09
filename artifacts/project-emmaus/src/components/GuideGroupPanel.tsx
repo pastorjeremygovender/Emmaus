@@ -17,8 +17,8 @@
 
 import { useState } from 'react';
 import {
-  BookOpen, ArrowLeft, ArrowRight, MessageSquare,
-  HandHeart, BarChart2, Sparkles, Video, StopCircle,
+  BookOpen, ArrowLeft, MessageSquare,
+  HandHeart, BarChart2, Sparkles, StopCircle,
   CheckCircle2, X, Loader2, ChevronRight, MapPin,
 } from 'lucide-react';
 import {
@@ -32,14 +32,6 @@ import {
 import type { RoomSession, ScriptureRef, SessionCompleteSummary } from '@/lib/rooms-types';
 
 // ─── Session stage plan ──────────────────────────────────────────────────────
-
-const SESSION_STAGES: { id: string; label: string; mode: 'study' | 'discussion' | 'prayer' | null }[] = [
-  { id: 'study',      label: 'Study',      mode: 'study' },
-  { id: 'scripture',  label: 'Scripture',  mode: null },
-  { id: 'discussion', label: 'Discussion', mode: 'discussion' },
-  { id: 'prayer',     label: 'Prayer',     mode: 'prayer' },
-  { id: 'complete',   label: 'Complete',   mode: null },
-];
 
 // ─── Common Books picker ──────────────────────────────────────────────────────
 
@@ -243,182 +235,154 @@ export function GuideGroupPanel({
 
       {/* Bottom sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-50 max-w-[480px] mx-auto">
-        <div className="bg-card rounded-t-3xl border border-border/60 shadow-2xl">
-          {/* Handle + header */}
-          <div className="pt-3 pb-1 flex flex-col items-center">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/30 mb-4" />
+        {/* Bottom sheet — max-height + internal scroll so it never clips off-screen */}
+        <div className="bg-card rounded-t-3xl border border-border/60 shadow-2xl flex flex-col max-h-[85dvh]">
+
+          {/* ── Sticky handle + header (never scrolls away) ──────────────── */}
+          <div className="shrink-0">
+            {/* Drag handle */}
+            <div className="pt-3 pb-2 flex justify-center">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            {/* Title + close */}
+            <div className="flex items-center justify-between px-5 pb-3">
+              <div>
+                <p className="text-[17px] font-bold text-foreground">Leader Controls</p>
+                {sessionActive && (
+                  <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                    ● Meeting in Progress
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 text-muted-foreground hover:text-foreground rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Close Leader Controls"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
-          {/* ── Main view ──────────────────────────────────────────────── */}
+          {/* ── Main view (scrollable) ───────────────────────────────────── */}
           {view === 'main' && (
-            <div className="pb-safe-or-6 pb-6">
+            <div className="overflow-y-auto flex-1 pb-safe-or-6 pb-6">
 
-              {/* Session stage plan strip */}
-              {sessionActive && (
-                <div className="px-4 pb-2 overflow-x-auto">
-                  <div className="flex items-center gap-1 min-w-max">
-                    {SESSION_STAGES.map((stage, i) => {
-                      const isCurrent = activeSession?.currentMode === stage.mode && stage.mode !== null;
-                      return (
-                        <div key={stage.id} className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              if (stage.mode) {
-                                void run(stage.id, () => apiChangeMode(userId, roomId, stage.mode!, leaderName));
-                              } else if (stage.id === 'scripture') {
-                                setView('scripture');
-                              } else if (stage.id === 'complete') {
-                                setView('complete-confirm');
-                              }
-                            }}
-                            disabled={busy === stage.id}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap disabled:opacity-50 ${
-                              isCurrent
-                                ? 'bg-primary text-primary-foreground'
-                                : stage.id === 'complete'
-                                ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                            }`}
-                          >
-                            {stage.label}
-                          </button>
-                          {i < SESSION_STAGES.length - 1 && (
-                            <span className="text-muted-foreground/30 text-[11px] select-none">›</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="px-5 pb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-[17px] font-bold text-foreground">Guide Group</p>
-                  {sessionActive ? (
-                    <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-                      ● Meeting active
-                    </p>
+              {/* ── MEETING section ────────────────────────────────────────── */}
+              <div className="border-t border-border/40">
+                <p className="px-5 pt-4 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Meeting
+                </p>
+                <div className="px-5 pb-4 space-y-2">
+                  {!sessionActive ? (
+                    <button
+                      onClick={handleStartSession}
+                      disabled={busy === 'start-session'}
+                      className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {busy === 'start-session'
+                        ? <Loader2 size={17} className="animate-spin" />
+                        : <MapPin size={17} />}
+                      Start Meeting
+                    </button>
                   ) : (
-                    <p className="text-[12px] text-muted-foreground mt-0.5">
-                      No active session
-                    </p>
+                    <>
+                      <button
+                        onClick={() => setView('complete-confirm')}
+                        disabled={busy === 'complete-session'}
+                        className="w-full py-3.5 rounded-2xl bg-emerald-600 text-white font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-emerald-700 transition-colors"
+                      >
+                        {busy === 'complete-session'
+                          ? <Loader2 size={17} className="animate-spin" />
+                          : <CheckCircle2 size={17} />}
+                        Complete Meeting
+                      </button>
+                      <button
+                        onClick={handleEndSession}
+                        disabled={busy === 'end-session'}
+                        className="w-full py-2.5 rounded-xl text-[13px] text-muted-foreground hover:text-destructive transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        {busy === 'end-session'
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <StopCircle size={14} />}
+                        End Without Completing
+                      </button>
+                    </>
                   )}
                 </div>
-                <button
-                  onClick={onClose}
-                  className="p-2 text-muted-foreground hover:text-foreground rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
               </div>
 
-              {/* Start session CTA */}
-              {!sessionActive && (
-                <div className="px-5 pb-3">
-                  <button
-                    onClick={handleStartSession}
-                    disabled={busy === 'start-session'}
-                    className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
-                  >
-                    {busy === 'start-session'
-                      ? <Loader2 size={17} className="animate-spin" />
-                      : <MapPin size={17} />}
-                    Start Meeting
-                  </button>
+              {/* ── CONTENT section ────────────────────────────────────────── */}
+              <div className="border-t border-border/40">
+                <p className="px-5 pt-4 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Content
+                </p>
+                <div className="pb-2">
+                  <ControlRow
+                    label="Open Today's Study"
+                    loading={busy === 'open-step'}
+                    disabled={!sessionActive}
+                    onClick={handleOpenTodaysStep}
+                  />
+                  <ControlRow
+                    label="Previous Step"
+                    loading={busy === 'prev-step'}
+                    disabled={!sessionActive}
+                    onClick={handlePreviousStep}
+                  />
+                  <ControlRow
+                    label="Next Step"
+                    loading={busy === 'next-step'}
+                    disabled={!sessionActive}
+                    onClick={handleNextStep}
+                  />
+                  <ControlRow
+                    label="Present Bible"
+                    loading={busy === 'scripture'}
+                    disabled={!sessionActive}
+                    onClick={() => setView('scripture')}
+                  />
                 </div>
-              )}
-
-              {/* Actions grid */}
-              <div className="px-4 grid grid-cols-2 gap-2.5 pb-3">
-                <LeaderAction
-                  icon={<BookOpen size={19} />}
-                  label="Open Today's Step"
-                  loading={busy === 'open-step'}
-                  disabled={!sessionActive}
-                  onClick={handleOpenTodaysStep}
-                />
-                <LeaderAction
-                  icon={<ChevronRight size={19} className="-rotate-180" />}
-                  label="Present Bible"
-                  loading={false}
-                  disabled={!sessionActive}
-                  onClick={() => setView('scripture')}
-                />
-                <LeaderAction
-                  icon={<ArrowLeft size={19} />}
-                  label="Previous Step"
-                  loading={busy === 'prev-step'}
-                  disabled={!sessionActive}
-                  onClick={handlePreviousStep}
-                />
-                <LeaderAction
-                  icon={<ArrowRight size={19} />}
-                  label="Next Step"
-                  loading={busy === 'next-step'}
-                  disabled={!sessionActive}
-                  onClick={handleNextStep}
-                />
-                <LeaderAction
-                  icon={<MessageSquare size={19} />}
-                  label="Start Discussion"
-                  loading={busy === 'discussion'}
-                  disabled={!sessionActive}
-                  onClick={handleStartDiscussion}
-                />
-                <LeaderAction
-                  icon={<HandHeart size={19} />}
-                  label="Prayer Time"
-                  loading={busy === 'prayer'}
-                  disabled={!sessionActive}
-                  onClick={handlePrayerTime}
-                />
-                <LeaderAction
-                  icon={<BarChart2 size={19} />}
-                  label="Launch Poll"
-                  loading={false}
-                  disabled={!sessionActive}
-                  onClick={() => setView('poll-setup')}
-                />
-                <LeaderAction
-                  icon={<Sparkles size={19} />}
-                  label="Ask Emmaus Together"
-                  loading={busy === 'ask-emmaus'}
-                  disabled={!sessionActive}
-                  onClick={handleAskEmmausTogether}
-                />
-                <LeaderAction
-                  icon={<CheckCircle2 size={19} />}
-                  label="Complete Meeting"
-                  loading={busy === 'complete-session'}
-                  disabled={!sessionActive}
-                  onClick={() => setView('complete-confirm')}
-                  variant="success"
-                />
               </div>
 
-              {/* End session (subtle) */}
-              {sessionActive && (
-                <div className="px-5 pb-2">
-                  <button
-                    onClick={handleEndSession}
-                    disabled={busy === 'end-session'}
-                    className="w-full py-2.5 rounded-xl text-[13px] text-muted-foreground hover:text-destructive transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    {busy === 'end-session'
-                      ? <Loader2 size={14} className="animate-spin" />
-                      : <StopCircle size={14} />}
-                    End Without Completing
-                  </button>
+              {/* ── DISCUSSION section ──────────────────────────────────────── */}
+              <div className="border-t border-border/40">
+                <p className="px-5 pt-4 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  Discussion
+                </p>
+                <div className="pb-4">
+                  <ControlRow
+                    label="Open Discussion"
+                    loading={false}
+                    disabled={false}
+                    onClick={() => { onClose(); }}
+                  />
+                  <ControlRow
+                    label="Prayer Time"
+                    loading={busy === 'prayer'}
+                    disabled={!sessionActive}
+                    onClick={handlePrayerTime}
+                  />
+                  <ControlRow
+                    label="Launch Poll"
+                    loading={false}
+                    disabled={!sessionActive}
+                    onClick={() => setView('poll-setup')}
+                  />
+                  <ControlRow
+                    label="Ask Emmaus Together"
+                    loading={busy === 'ask-emmaus'}
+                    disabled={!sessionActive}
+                    onClick={handleAskEmmausTogether}
+                  />
                 </div>
-              )}
+              </div>
             </div>
           )}
 
           {/* ── Scripture picker ────────────────────────────────────────── */}
           {view === 'scripture' && (
-            <div className="px-5 pb-safe-or-6 pb-8 space-y-4">
+            <div className="overflow-y-auto flex-1 px-5 pb-safe-or-6 pb-8 space-y-4">
               <div className="flex items-center gap-2 pb-1">
                 <button
                   onClick={() => setView('main')}
@@ -508,7 +472,7 @@ export function GuideGroupPanel({
 
           {/* ── Poll setup ──────────────────────────────────────────────── */}
           {view === 'poll-setup' && (
-            <div className="px-5 pb-safe-or-6 pb-8 space-y-4">
+            <div className="overflow-y-auto flex-1 px-5 pb-safe-or-6 pb-8 space-y-4">
               <div className="flex items-center gap-2 pb-1">
                 <button
                   onClick={() => setView('main')}
@@ -587,7 +551,7 @@ export function GuideGroupPanel({
 
           {/* ── Session complete confirm ─────────────────────────────────── */}
           {view === 'complete-confirm' && (
-            <div className="px-5 pb-safe-or-6 pb-8 space-y-5">
+            <div className="overflow-y-auto flex-1 px-5 pb-safe-or-6 pb-8 space-y-5">
               <div className="flex items-center gap-2 pb-1">
                 <button
                   onClick={() => setView('main')}
@@ -640,33 +604,26 @@ export function GuideGroupPanel({
   );
 }
 
-// ─── LeaderAction tile ────────────────────────────────────────────────────────
+// ─── ControlRow — simple horizontal list action ───────────────────────────────
 
-interface LeaderActionProps {
-  icon: React.ReactNode;
+interface ControlRowProps {
   label: string;
   loading: boolean;
   disabled: boolean;
   onClick: () => void;
-  variant?: 'default' | 'destructive' | 'success';
 }
 
-function LeaderAction({ icon, label, loading, disabled, onClick, variant = 'default' }: LeaderActionProps) {
-  const colorCls =
-    variant === 'destructive'
-      ? 'text-destructive border-destructive/30 hover:bg-destructive/5'
-      : variant === 'success'
-      ? 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-      : 'text-foreground border-border hover:bg-muted/50';
-
+function ControlRow({ label, loading, disabled, onClick }: ControlRowProps) {
   return (
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border min-h-[88px] transition-all disabled:opacity-40 disabled:pointer-events-none ${colorCls}`}
+      className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/50 transition-all disabled:opacity-40 disabled:pointer-events-none"
     >
-      {loading ? <Loader2 size={19} className="animate-spin" /> : icon}
-      <span className="text-[12px] font-medium text-center leading-tight">{label}</span>
+      <span className="text-[14px] font-medium text-foreground">{label}</span>
+      {loading
+        ? <Loader2 size={15} className="animate-spin text-muted-foreground shrink-0" />
+        : <ChevronRight size={15} className="text-muted-foreground shrink-0" />}
     </button>
   );
 }

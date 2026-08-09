@@ -8,8 +8,8 @@ import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
   BookOpen, ChevronRight, Sparkles,
   Share2, Trash2, LogOut, Pencil, Settings, Users2,
-  StickyNote, HandHeart, CheckCircle2, Clock, MapPin,
-  Crown, Calendar, ChevronDown, ChevronUp, RefreshCw,
+  StickyNote, HandHeart, CheckCircle2, Clock, MapPin, StopCircle,
+  Crown, Calendar, RefreshCw,
   FileText, X, Edit2, Check,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -32,7 +32,7 @@ import {
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
   apiRecordAttendanceJoin, apiRecordAttendanceLeave,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
-  apiStartSession, apiUpdateLeaderNote, apiUpdateSchedule,
+  apiStartSession, apiEndSession, apiUpdateLeaderNote, apiUpdateSchedule,
 } from '@/lib/rooms-api';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
@@ -119,7 +119,8 @@ export default function RoomDetail() {
   const [scheduleValue, setScheduleValue] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [startingMeeting, setStartingMeeting] = useState(false);
-  const [showDiscussion, setShowDiscussion] = useState(false);
+  const [endingMeeting, setEndingMeeting] = useState(false);
+  // (showDiscussion removed — Discussion is now a plain card, not an accordion)
   const [refreshing, setRefreshing] = useState(false);
 
   // ── Shared Scripture & Notes state ─────────────────────────────────────────
@@ -385,10 +386,10 @@ export default function RoomDetail() {
   // ── Derived state ───────────────────────────────────────────────────────────
   const isAdmin = room.currentUserRole === 'admin';
   const isAppAdmin = user.role === 'admin' || user.role === 'superAdmin';
-  // isLeader is server-computed and equals (room_members.role === 'admin').
-  // The group creator is automatically the room admin, so any creator can use
-  // all leader controls. Video hosting is gated separately by canHostVideo().
-  const isAuthorizedLeader = room.isLeader ?? isAdmin;
+  // isLeader is server-computed: true for room admin OR app admin/superAdmin.
+  // The fallback (isAdmin || isAppAdmin) ensures the client never silently
+  // strips UI from a super admin when the server flag is missing/stale.
+  const isAuthorizedLeader = room.isLeader || isAdmin || isAppAdmin;
 
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
@@ -548,6 +549,19 @@ export default function RoomDetail() {
       alert(err instanceof Error ? err.message : 'Failed to start meeting');
     } finally {
       setStartingMeeting(false);
+    }
+  };
+
+  const handleEndMeetingDirect = async () => {
+    if (!activeSession) return;
+    setEndingMeeting(true);
+    try {
+      await apiEndSession(user.id, String(roomId), 'ended');
+      setActiveSession(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to end meeting');
+    } finally {
+      setEndingMeeting(false);
     }
   };
 
@@ -777,7 +791,7 @@ export default function RoomDetail() {
               <div className="flex items-center gap-2.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div>
-                  <p className="text-[13px] font-semibold text-foreground">Meeting active</p>
+                  <p className="text-[13px] font-semibold text-foreground">Meeting in Progress</p>
                   <p className="text-[11px] text-muted-foreground capitalize">
                     {sessionMode === 'prayer' ? 'Prayer Time' :
                      sessionMode === 'discussion' ? 'Group Discussion' :
@@ -947,32 +961,13 @@ export default function RoomDetail() {
                 </button>
               )}
 
-              {/* Additional linked walks (non-primary) */}
-              {room.linkedJourneys
-                .filter(lj => lj.journeyId !== room.linkedContentId)
-                .map(lj => {
-                  const j = getJourney(lj.journeyId);
-                  if (!j) return null;
-                  return (
-                    <button
-                      key={lj.journeyId}
-                      onClick={() => setLocation(`/journeys/${lj.journeyId}`)}
-                      className="mt-2 w-full text-left px-4 py-3.5 rounded-2xl border border-border/60 bg-card hover:border-primary/30 transition-all flex items-center justify-between gap-3"
-                    >
-                      <span className="text-[14px] font-medium text-foreground truncate">{j.title}</span>
-                      <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-                    </button>
-                  );
-                })
-              }
-
-              {/* Leader: add another walk when available */}
+              {/* Leader: change the assigned study */}
               {isAuthorizedLeader && availableWalks.length > 0 && !showLinkWalk && (
                 <button
                   onClick={() => setShowLinkWalk(true)}
                   className="mt-2 text-[13px] text-primary font-medium hover:underline pl-1"
                 >
-                  + Add another Walk
+                  Change Study →
                 </button>
               )}
             </>
@@ -1372,7 +1367,46 @@ export default function RoomDetail() {
           )}
         </section>
 
-        {/* ── 6. Video Room (leadership/church types only) ─────────────────── */}
+        {/* ── 6. Meeting Action — always visible to the group leader ──────────── */}
+        {/* This is the canonical place to start or end the meeting.              */}
+        {/* Leaders must never have to hunt for this in a menu or settings panel. */}
+        {isAuthorizedLeader && (
+          <section>
+            {!activeSession ? (
+              <button
+                onClick={handleStartMeetingDirect}
+                disabled={startingMeeting}
+                className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2.5 disabled:opacity-60 hover:opacity-90 transition-opacity shadow-sm"
+              >
+                {startingMeeting
+                  ? <Loader2 size={18} className="animate-spin" />
+                  : <MapPin size={18} />}
+                Start Meeting
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2 py-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <p className="text-[15px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Meeting in Progress
+                  </p>
+                </div>
+                <button
+                  onClick={handleEndMeetingDirect}
+                  disabled={endingMeeting}
+                  className="w-full py-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-destructive/20 transition-all"
+                >
+                  {endingMeeting
+                    ? <Loader2 size={17} className="animate-spin" />
+                    : <StopCircle size={17} />}
+                  End Meeting
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── 7. Video Room (leadership/church types only) ─────────────────── */}
         {videoEligible && (
           <VideoRoom
             roomId={String(roomId)}
@@ -1383,79 +1417,76 @@ export default function RoomDetail() {
           />
         )}
 
-        {/* ── 7. Discussion (collapsible section) ──────────────────────────── */}
+        {/* ── 7. Group Discussion ───────────────────────────────────────────── */}
+        {/* Plain card — not an accordion. Opening does not change meeting state. */}
+        <section>
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Group Discussion
+          </p>
+          <button
+            onClick={openChat}
+            className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
+          >
+            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+              <MessageSquare size={17} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-foreground">Group Discussion</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5">Talk together about today&apos;s study</p>
+            </div>
+            <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
+              Open
+              <ChevronRight size={14} />
+            </div>
+          </button>
+        </section>
+
+        {/* ── 8. Prayer Requests ───────────────────────────────────────────── */}
+        <PrayerRequests
+          roomId={String(roomId)}
+          userId={user.id}
+          displayName={user.preferredName || 'Member'}
+          isAdmin={isAdmin}
+          sessionId={activeSession?.id}
+        />
+
+        {/* ── 9. Group Notes (available during a meeting) ───────────────────── */}
+        {activeSession && (
+          <section>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+              Group Notes
+            </p>
+            <button
+              onClick={() => setShowSharedNotes(true)}
+              className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
+            >
+              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                <StickyNote size={17} className="text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Shared notes from this session</p>
+              </div>
+              <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+            </button>
+          </section>
+        )}
+
+        {/* ── 10. Ask Emmaus ───────────────────────────────────────────────── */}
         <section>
           <button
-            onClick={() => setShowDiscussion(v => !v)}
-            className="w-full flex items-center justify-between py-2 mb-1"
+            onClick={() => setLocation('/personal')}
+            className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
           >
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Discussion
-            </p>
-            {showDiscussion
-              ? <ChevronUp size={16} className="text-muted-foreground" />
-              : <ChevronDown size={16} className="text-muted-foreground" />}
-          </button>
-
-          {showDiscussion && (
-            <div className="space-y-3">
-              {/* Chat */}
-              <button
-                onClick={openChat}
-                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <MessageSquare size={17} className="text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">Group Chat</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Talk together about today&apos;s study</p>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-              </button>
-
-              {/* Prayer Requests */}
-              <PrayerRequests
-                roomId={String(roomId)}
-                userId={user.id}
-                displayName={user.preferredName || 'Member'}
-                isAdmin={isAdmin}
-                sessionId={activeSession?.id}
-              />
-
-              {/* Group Notes (active session only) */}
-              {activeSession && (
-                <button
-                  onClick={() => setShowSharedNotes(true)}
-                  className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-                >
-                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <StickyNote size={17} className="text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Shared notes from this session</p>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                </button>
-              )}
-
-              {/* Ask Emmaus */}
-              <button
-                onClick={() => setLocation('/personal')}
-                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-              >
-                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Sparkles size={17} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">Ask Emmaus</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Ask about today&apos;s study or Scripture</p>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-              </button>
+            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Sparkles size={17} className="text-primary" />
             </div>
-          )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] font-semibold text-foreground">Ask Emmaus</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5">Ask about today&apos;s study or Scripture</p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+          </button>
         </section>
 
         {/* ── Confirm Leave / Delete ──────────────────────────────────────── */}

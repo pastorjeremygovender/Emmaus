@@ -1642,6 +1642,28 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_prayer_requests.session_id column failed (non-fatal)");
   }
 
+  // ── Groups V2: clean up accidentally-linked 15-minutes-with-jesus ───────────
+  // When groups were created via the "Study Together" shortcut on the Daily
+  // Rhythm Walk, startShared linked '15-minutes-with-jesus' into room_journeys
+  // even if the leader never intended that as the group study.  Remove those
+  // incidental room_journeys rows for rooms whose primary study (linked_content_id)
+  // is now something else.  Does NOT touch user_journey_progress — personal walk
+  // progress is unaffected.
+  try {
+    await pool.query(`
+      DELETE FROM room_journeys rj
+      WHERE rj.journey_id = '15-minutes-with-jesus'
+        AND rj.room_id IN (
+          SELECT id FROM rooms
+          WHERE linked_content_id IS NOT NULL
+            AND linked_content_id <> '15-minutes-with-jesus'
+        )
+    `);
+    logger.info("Startup migration: incidental room_journeys '15-minutes-with-jesus' rows cleaned up (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room_journeys cleanup failed (non-fatal)");
+  }
+
   // ── Groups V2: leader_note, next_meeting, reveal_on_meeting on rooms ─────
   // Three nullable columns that power the new Group Home redesign (V2).
   // leader_note      — short message the group leader can write for members to read

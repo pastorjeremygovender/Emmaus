@@ -575,14 +575,14 @@ export async function linkJourney(
       [roomId, journeyId, startedBy]
     );
 
-    // If the room has no primary linked content yet, make this the primary study.
-    // This ensures the first walk a leader links appears in Today's Study immediately.
+    // Always update the primary study to the newly linked journey.
+    // Groups have ONE primary study at a time; adding a new walk replaces the
+    // current one rather than accumulating extras silently.
     await client.query(
       `UPDATE rooms
        SET linked_content_id   = $2,
            linked_content_type = 'journey'
-       WHERE id = $1
-         AND linked_content_id IS NULL`,
+       WHERE id = $1`,
       [roomId, journeyId]
     );
 

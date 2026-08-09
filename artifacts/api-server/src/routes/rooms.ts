@@ -632,10 +632,11 @@ router.get("/:roomId", async (req, res) => {
       ? room
       : { ...room, inviteCode: "", inviteToken: "" };
 
-    // isLeader: the room admin is the group leader.
-    // Room creators are automatically the room admin, so any creator can use
-    // all leader controls immediately. Video hosting uses the stricter canHostVideo().
-    const isLeader = role === "admin";
+    // isLeader: room admin OR app-level admin/superAdmin.
+    // App admins need full leader visibility in any group they view so they
+    // can provide support and test group flows without being the room admin.
+    const appRole = await getUserRole(userId);
+    const isLeader = role === "admin" || appRole === "admin" || appRole === "superAdmin";
 
     res.json({ room: sanitisedRoom, currentUserRole: role, isLeader });
   } catch (err) {
@@ -1344,11 +1345,15 @@ async function guardLeader(
   const userId = requireAuth(req, res);
   if (!userId) return null;
 
-  // Must be the room admin (room_members.role = 'admin').
-  // This scopes control to THIS room's leader only — a pastor/admin who is only
-  // a regular member of another group cannot control that group's sessions.
-  const role = await getMemberRole(roomId, userId);
-  if (role !== "admin") {
+  // Allow:  (a) the room admin, OR (b) an app-level admin/superAdmin.
+  // App admins need to be able to manage any group for support and testing
+  // without having to be made the room admin first.
+  const [role, appRole] = await Promise.all([
+    getMemberRole(roomId, userId),
+    getUserRole(userId),
+  ]);
+  const isAppAdmin = appRole === "admin" || appRole === "superAdmin";
+  if (role !== "admin" && !isAppAdmin) {
     res.status(403).json({ error: "Only the group leader can perform this action." });
     return null;
   }
