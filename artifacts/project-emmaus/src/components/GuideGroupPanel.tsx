@@ -2,7 +2,6 @@
  * GuideGroupPanel.tsx — Leader-only full-screen Meeting Tools overlay.
  *
  * Opened by the "Meeting Tools" card in Phase 2 (Meeting in Progress).
- * Provides content navigation, discussion controls, and session conclusion.
  *
  * Props:
  *   roomId      — current room
@@ -17,28 +16,17 @@
 
 import { useState } from 'react';
 import {
-  BookOpen, ArrowLeft, MessageSquare,
-  HandHeart, BarChart2, Sparkles,
+  ArrowLeft, MessageSquare,
+  BarChart2, Sparkles,
   X, Loader2, ChevronRight, Video, VideoOff,
 } from 'lucide-react';
 import {
   apiEndSession,
   apiChangeMode,
-  apiNavigate,
   apiCreatePoll,
   apiCompleteSession,
 } from '@/lib/rooms-api';
-import type { RoomSession, ScriptureRef, SessionCompleteSummary } from '@/lib/rooms-types';
-
-// ─── Common Books picker ──────────────────────────────────────────────────────
-
-const COMMON_BOOKS = [
-  'Genesis', 'Exodus', 'Psalms', 'Proverbs', 'Isaiah',
-  'Matthew', 'Mark', 'Luke', 'John', 'Acts',
-  'Romans', '1 Corinthians', '2 Corinthians', 'Galatians',
-  'Ephesians', 'Philippians', 'Colossians',
-  '1 Thessalonians', 'Hebrews', 'James', '1 Peter', 'Revelation',
-];
+import type { RoomSession, SessionCompleteSummary } from '@/lib/rooms-types';
 
 interface GuideGroupPanelProps {
   roomId: string;
@@ -73,7 +61,6 @@ interface GuideGroupPanelProps {
 
 type PanelView =
   | 'main'
-  | 'scripture'
   | 'poll-setup';
 
 interface PollSetup {
@@ -100,12 +87,6 @@ export function GuideGroupPanel({
 }: GuideGroupPanelProps) {
   const [view, setView] = useState<PanelView>('main');
   const [busy, setBusy] = useState<string | null>(null);
-
-  // Scripture picker state
-  const [book, setBook] = useState('John');
-  const [chapter, setChapter] = useState(1);
-  const [verseStart, setVerseStart] = useState('');
-  const [verseEnd, setVerseEnd] = useState('');
 
   // Poll setup state
   const [poll, setPoll] = useState<PollSetup>({
@@ -145,21 +126,7 @@ export function GuideGroupPanel({
     onClose();
   });
 
-  // ── Navigation ─────────────────────────────────────────────────────────────
-
-  const handleOpenTodaysStep = () => run('open-step', async () => {
-    await apiNavigate(userId, roomId, { stepId: 'today', leaderName });
-  });
-
-  const handlePreviousStep = () => run('prev-step', async () => {
-    await apiNavigate(userId, roomId, { stepId: 'previous', leaderName });
-  });
-
-  const handleNextStep = () => run('next-step', async () => {
-    await apiNavigate(userId, roomId, { stepId: 'next', leaderName });
-  });
-
-  // ── Modes ──────────────────────────────────────────────────────────────────
+  // ── Discussion ─────────────────────────────────────────────────────────────
 
   const handleStartDiscussion = () => run('discussion', async () => {
     await apiChangeMode(userId, roomId, 'discussion', leaderName);
@@ -167,31 +134,10 @@ export function GuideGroupPanel({
     onOpenDiscussion?.();
   });
 
-  const handlePrayerTime = () => run('prayer', async () => {
-    await apiChangeMode(userId, roomId, 'prayer', leaderName);
-    onClose();
-  });
-
   const handleAskEmmausTogether = () => {
     onClose();
     onOpenAskEmmaus?.();
   };
-
-  // ── Scripture picker (Present Bible) ─────────────────────────────────────
-
-  const handleOpenScripture = () => run('scripture', async () => {
-    const ref: ScriptureRef = {
-      book,
-      chapter,
-      ...(verseStart ? { verseStart: parseInt(verseStart, 10) } : {}),
-      ...(verseEnd ? { verseEnd: parseInt(verseEnd, 10) } : {}),
-      displayLabel: verseStart
-        ? `${book} ${chapter}:${verseStart}${verseEnd ? `–${verseEnd}` : ''}`
-        : `${book} ${chapter}`,
-    };
-    await apiNavigate(userId, roomId, { scripture: ref, leaderName });
-    setView('main');
-  });
 
   // ── Poll ───────────────────────────────────────────────────────────────────
 
@@ -215,11 +161,10 @@ export function GuideGroupPanel({
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col max-w-[480px] mx-auto">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden max-w-[480px] mx-auto">
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="shrink-0 flex items-center justify-between px-5 pt-safe-or-5 pt-5 pb-4 border-b border-border/60">
-        {/* Back → main view, or Close → group page */}
         <button
           onClick={view !== 'main' ? () => setView('main') : onClose}
           className="p-2 -ml-2 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -230,7 +175,6 @@ export function GuideGroupPanel({
 
         <h1 className="text-[18px] font-bold text-foreground">
           {view === 'main' && 'Meeting Tools'}
-          {view === 'scripture' && 'Present Bible'}
           {view === 'poll-setup' && 'Launch Poll'}
         </h1>
 
@@ -245,206 +189,95 @@ export function GuideGroupPanel({
 
       {/* ── Main view ──────────────────────────────────────────────────────── */}
       {view === 'main' && (
-        <div className="flex-1 overflow-y-auto pb-safe-or-8 pb-8">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-5 pt-6 pb-10 space-y-6">
 
-          {/* ── CONTENT ─────────────────────────────────────────────────── */}
-          <div className="px-5 pt-6">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Content</p>
-            <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
-              <ToolRow
-                icon={<BookOpen size={18} />}
-                label="Open Today's Study"
-                description="Navigate everyone to the current step"
-                loading={busy === 'open-step'}
-                disabled={!sessionActive}
-                onClick={handleOpenTodaysStep}
-              />
-              <ToolRow
-                icon={<ArrowLeft size={18} />}
-                label="Previous Step"
-                description="Go back one step for the group"
-                loading={busy === 'prev-step'}
-                disabled={!sessionActive}
-                onClick={handlePreviousStep}
-              />
-              <ToolRow
-                icon={<ChevronRight size={18} />}
-                label="Next Step"
-                description="Advance the group to the next step"
-                loading={busy === 'next-step'}
-                disabled={!sessionActive}
-                onClick={handleNextStep}
-              />
-              <ToolRow
-                icon={<BookOpen size={18} />}
-                label="Present Bible"
-                description="Open a specific passage for everyone"
-                loading={busy === 'scripture'}
-                disabled={!sessionActive}
-                onClick={() => setView('scripture')}
-              />
+            {/* ── MEETING ─────────────────────────────────────────────────── */}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Meeting</p>
+              <div className="rounded-2xl border border-border overflow-hidden">
+                {!videoActive ? (
+                  <ToolRow
+                    icon={<Video size={18} />}
+                    label="Start Live Video"
+                    description="Start a live video meeting for everyone in this Group"
+                    loading={busy === 'start-video'}
+                    disabled={!sessionActive}
+                    onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
+                  />
+                ) : (
+                  <ToolRow
+                    icon={<VideoOff size={18} />}
+                    label="End Live Video"
+                    description="End the video session for everyone"
+                    loading={busy === 'end-video'}
+                    disabled={false}
+                    onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
+                  />
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* ── MEETING ─────────────────────────────────────────────────── */}
-          <div className="px-5 pt-6">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Meeting</p>
-            <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
-              {!videoActive ? (
+            {/* ── DISCUSSION ──────────────────────────────────────────────── */}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Discussion</p>
+              <div className="rounded-2xl border border-border overflow-hidden">
                 <ToolRow
-                  icon={<Video size={18} />}
-                  label="Start Live Video"
-                  description="Start a live video meeting for everyone in this Group"
-                  loading={busy === 'start-video'}
+                  icon={<MessageSquare size={18} />}
+                  label="Open Discussion"
+                  description="Open the group chat for everyone"
+                  loading={busy === 'discussion'}
                   disabled={!sessionActive}
-                  onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
-                />
-              ) : (
-                <ToolRow
-                  icon={<VideoOff size={18} />}
-                  label="End Live Video"
-                  description="End the video session for everyone"
-                  loading={busy === 'end-video'}
-                  disabled={false}
-                  onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
-                />
-              )}
-              <ToolRow
-                icon={<MessageSquare size={18} />}
-                label="Open Discussion"
-                description="Switch group to discussion mode"
-                loading={busy === 'discussion'}
-                disabled={!sessionActive}
-                onClick={handleStartDiscussion}
-              />
-              <ToolRow
-                icon={<HandHeart size={18} />}
-                label="Prayer Time"
-                description="Switch group to prayer mode"
-                loading={busy === 'prayer'}
-                disabled={!sessionActive}
-                onClick={handlePrayerTime}
-              />
-              <ToolRow
-                icon={<BarChart2 size={18} />}
-                label="Launch Poll"
-                description="Ask the group a question"
-                loading={false}
-                disabled={!sessionActive}
-                onClick={() => setView('poll-setup')}
-              />
-              <ToolRow
-                icon={<Sparkles size={18} />}
-                label="Ask Emmaus Together"
-                description="Open a shared Emmaus session"
-                loading={busy === 'ask-emmaus'}
-                disabled={!sessionActive}
-                onClick={handleAskEmmausTogether}
-              />
-            </div>
-          </div>
-
-          {/* ── SESSION ─────────────────────────────────────────────────── */}
-          <div className="px-5 pt-6">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Session</p>
-            <div className="rounded-2xl border border-border overflow-hidden">
-              <ToolRow
-                icon={<X size={18} />}
-                label="End Meeting"
-                description="Complete and close this meeting"
-                loading={false}
-                disabled={!sessionActive}
-                onClick={() => { onClose(); onEndMeeting?.(); }}
-              />
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* ── Scripture picker ───────────────────────────────────────────────── */}
-      {view === 'scripture' && (
-        <div className="flex-1 overflow-y-auto px-5 pb-safe-or-8 pb-8 space-y-5 pt-5">
-          {/* Book picker */}
-          <div>
-            <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Book</label>
-            <div className="flex flex-wrap gap-2">
-              {COMMON_BOOKS.map(b => (
-                <button
-                  key={b}
-                  onClick={() => setBook(b)}
-                  className={`px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all ${
-                    book === b
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:border-primary/50'
-                  }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Chapter + verse inputs */}
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Chapter</label>
-              <input
-                type="number"
-                min={1}
-                value={chapter}
-                onChange={e => setChapter(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Verse (optional)</label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="from"
-                  value={verseStart}
-                  onChange={e => setVerseStart(e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
-                />
-                <span className="text-muted-foreground shrink-0 text-[13px]">–</span>
-                <input
-                  type="number"
-                  min={1}
-                  placeholder="to"
-                  value={verseEnd}
-                  onChange={e => setVerseEnd(e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+                  onClick={handleStartDiscussion}
                 />
               </div>
             </div>
-          </div>
 
-          {/* Preview */}
-          <div className="p-4 rounded-2xl bg-muted/40 border border-border/60">
-            <p className="text-[13px] text-muted-foreground">Will open for everyone:</p>
-            <p className="text-[15px] font-semibold text-foreground mt-1">
-              {verseStart
-                ? `${book} ${chapter}:${verseStart}${verseEnd ? `–${verseEnd}` : ''}`
-                : `${book} ${chapter}`}
-            </p>
-          </div>
+            {/* ── INTERACTION ─────────────────────────────────────────────── */}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Interaction</p>
+              <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
+                <ToolRow
+                  icon={<BarChart2 size={18} />}
+                  label="Launch Poll"
+                  description="Ask the group a question"
+                  loading={false}
+                  disabled={!sessionActive}
+                  onClick={() => setView('poll-setup')}
+                />
+                <ToolRow
+                  icon={<Sparkles size={18} />}
+                  label="Ask Emmaus Together"
+                  description="Open a shared Emmaus session"
+                  loading={busy === 'ask-emmaus'}
+                  disabled={!sessionActive}
+                  onClick={handleAskEmmausTogether}
+                />
+              </div>
+            </div>
 
-          <button
-            onClick={handleOpenScripture}
-            disabled={busy === 'scripture'}
-            className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            {busy === 'scripture' ? <Loader2 size={17} className="animate-spin" /> : <BookOpen size={17} />}
-            Open for Everyone
-          </button>
+            {/* ── SESSION ─────────────────────────────────────────────────── */}
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Session</p>
+              <div className="rounded-2xl border border-border overflow-hidden">
+                <ToolRow
+                  icon={<X size={18} />}
+                  label="End Meeting"
+                  description="Complete and close this meeting"
+                  loading={false}
+                  disabled={!sessionActive}
+                  onClick={() => { onClose(); onEndMeeting?.(); }}
+                />
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
       {/* ── Poll setup ─────────────────────────────────────────────────────── */}
       {view === 'poll-setup' && (
-        <div className="flex-1 overflow-y-auto px-5 pb-safe-or-8 pb-8 space-y-5 pt-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-10 pt-5 space-y-5">
           <div>
             <label className="text-[12px] font-semibold text-muted-foreground uppercase tracking-widest block mb-2">Question</label>
             <textarea

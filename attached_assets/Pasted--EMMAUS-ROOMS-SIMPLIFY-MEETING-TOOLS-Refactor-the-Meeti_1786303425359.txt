@@ -1,0 +1,146 @@
+# EMMAUS ROOMS — SIMPLIFY MEETING TOOLS
+
+Refactor the Meeting Tools bottom sheet. It currently duplicates functionality already available on the active meeting screen and has become unnecessarily long.
+
+DO NOT add new features.
+REMOVE duplicated functionality.
+Ensure the sheet scrolls correctly to the bottom on desktop and mobile.
+
+====================================================
+REMOVE THESE ITEMS COMPLETELY
+====================================================
+
+Remove the following from Meeting Tools:
+
+• Open Today's Study
+• Previous Step
+• Next Step
+• Prayer Time (Switch group to prayer mode)
+
+Reason:
+
+These functions are already available directly from the main Meeting screen.
+
+Meeting Tools should not duplicate existing navigation.
+
+====================================================
+REMOVE PRAYER REQUESTS
+====================================================
+
+Remove the Prayer Requests section from Meeting Tools.
+
+Prayer Requests should only exist on the Meeting screen.
+
+Meeting Tools should not contain prayer requests or prayer request management.
+
+====================================================
+KEEP ONLY THESE TOOLS
+====================================================
+
+Meeting
+
+• Start Live Video
+
+Discussion
+
+• Open Discussion
+
+Interaction
+
+• Launch Poll
+• Ask Emmaus Together
+
+Session
+
+• End Meeting
+
+Nothing else.
+
+====================================================
+OPEN DISCUSSION
+====================================================
+
+Open Discussion should immediately open the discussion interface.
+
+It must NOT return to the meeting page.
+
+====================================================
+START LIVE VIDEO
+====================================================
+
+Leave Start Live Video as the first Meeting action.
+
+====================================================
+END MEETING
+====================================================
+
+Leave End Meeting at the bottom.
+
+It should always be reachable.
+
+====================================================
+FIX SCROLLING
+====================================================
+
+The Meeting Tools bottom sheet currently cannot scroll fully to the bottom.
+
+Fix the container.
+
+Requirements:
+
+• Entire sheet scrolls smoothly
+• End Meeting is always reachable
+• No content is clipped
+• Desktop browser works
+• Mobile browser works
+• Tablet works
+
+Use proper overflow handling.
+
+Do NOT use nested scrolling containers.
+
+The sheet itself should own the scroll.
+
+====================================================
+FINAL LAYOUT
+====================================================
+
+Meeting
+
+• Start Live Video
+
+Discussion
+
+• Open Discussion
+
+Interaction
+
+• Launch Poll
+• Ask Emmaus Together
+
+Session
+
+• End Meeting
+
+No duplicated navigation.
+No duplicated prayer controls.
+No duplicated content controls.
+
+====================================================
+QA
+====================================================
+
+Verify in the published app:
+
+1. Open Meeting Tools.
+2. Confirm Open Today's Study is gone.
+3. Confirm Previous Step is gone.
+4. Confirm Next Step is gone.
+5. Confirm Prayer Time is gone.
+6. Confirm Prayer Requests are not shown.
+7. Confirm only the six actions above remain.
+8. Scroll to the bottom.
+9. Confirm End Meeting is fully visible and accessible.
+10. Confirm the sheet scrolls correctly on desktop and mobile.
+
+Do not mark complete until the published app matches this simplified Meeting Tools design exactly.
