@@ -220,6 +220,17 @@ export default function RoomDetail() {
     if (incomingFocusChange !== undefined) setSseFocusChange(incomingFocusChange);
   }, [incomingFocusChange]);
 
+  // Clear accumulated session data when a session ends so stale highlights
+  // and notes don't bleed into the next meeting.
+  useEffect(() => {
+    if (activeSession === null) {
+      setSseHighlights([]);
+      setSseNotes([]);
+      setSsePinChange(null);
+      setSseFocusChange(null);
+    }
+  }, [activeSession]);
+
   // Attendance auto-record
   useEffect(() => {
     if (!activeSession || !user || !roomId) return;

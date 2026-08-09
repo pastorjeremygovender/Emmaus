@@ -207,6 +207,11 @@ export function useFollowLeader({
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
+        // Clear accumulated session data so it doesn't bleed into the next meeting.
+        setIncomingHighlights([]);
+        setIncomingNotes([]);
+        setIncomingPinChange(null);
+        setIncomingFocusChange(null);
         break;
       }
 
@@ -220,6 +225,11 @@ export function useFollowLeader({
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
+        // Clear accumulated session data so it doesn't bleed into the next meeting.
+        setIncomingHighlights([]);
+        setIncomingNotes([]);
+        setIncomingPinChange(null);
+        setIncomingFocusChange(null);
         break;
       }
 
@@ -253,6 +263,8 @@ export function useFollowLeader({
       }
 
       case 'highlight_added': {
+        // Discard late-arriving events after the session has explicitly ended.
+        if (sessionExplicitlyEndedRef.current) break;
         const highlight = event.payload.highlight as RoomHighlight;
         if (highlight) {
           setIncomingHighlights(prev => [...prev, highlight]);
@@ -261,12 +273,14 @@ export function useFollowLeader({
       }
 
       case 'highlight_focus_changed': {
+        if (sessionExplicitlyEndedRef.current) break;
         const highlightId = event.payload.highlightId as string | null;
         setIncomingFocusChange(highlightId ?? null);
         break;
       }
 
       case 'note_added': {
+        if (sessionExplicitlyEndedRef.current) break;
         const note = event.payload.note as SharedNote;
         if (note) {
           setIncomingNotes(prev => [...prev, note]);
@@ -275,6 +289,7 @@ export function useFollowLeader({
       }
 
       case 'note_pinned': {
+        if (sessionExplicitlyEndedRef.current) break;
         const noteId = event.payload.noteId as string;
         const pin = event.payload.pin as boolean;
         setIncomingPinChange({ noteId, isPinned: pin });
