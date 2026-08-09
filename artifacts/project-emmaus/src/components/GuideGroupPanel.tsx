@@ -247,7 +247,7 @@ export function GuideGroupPanel({
             {/* Title + close */}
             <div className="flex items-center justify-between px-5 pb-3">
               <div>
-                <p className="text-[17px] font-bold text-foreground">Leader Controls</p>
+                <p className="text-[17px] font-bold text-foreground">Meeting Tools</p>
                 {sessionActive && (
                   <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
                     ● Meeting in Progress
@@ -257,7 +257,7 @@ export function GuideGroupPanel({
               <button
                 onClick={onClose}
                 className="p-2 text-muted-foreground hover:text-foreground rounded-xl min-h-[44px] min-w-[44px] flex items-center justify-center"
-                aria-label="Close Leader Controls"
+                aria-label="Close Meeting Tools"
               >
                 <X size={20} />
               </button>

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/BottomNav';
 import {
   ArrowLeft, MoreHorizontal, MessageSquare, Loader2,
-  BookOpen, ChevronRight, Sparkles,
+  BookOpen, ChevronRight,
   Share2, Trash2, LogOut, Pencil, Settings, Users2,
   StickyNote, HandHeart, CheckCircle2, Clock, MapPin, StopCircle,
   Crown, Calendar, RefreshCw,
@@ -17,9 +17,7 @@ import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
   RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll,
 } from '@/lib/rooms-types';
-import { LIVE_MEETING_TYPES } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
-import { VideoRoom } from '@/components/VideoRoom';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
 import { SharedNotesPanel } from '@/components/SharedNotesPanel';
@@ -150,6 +148,13 @@ export default function RoomDetail() {
 
   // ── Leader's completion summary ─────────────────────────────────────────────
   const [leaderSessionComplete, setLeaderSessionComplete] = useState<import('@/lib/rooms-types').SessionCompleteSummary | null>(null);
+
+  // ── Follow-up phase state ───────────────────────────────────────────────────
+  const [meetingJustEnded, setMeetingJustEnded] = useState(false);
+  const [endedSessionSnapshot, setEndedSessionSnapshot] = useState<{
+    startedAt: string;
+    attendance: Array<{ userId: string; joinedAt: string; leftAt: string | null }>;
+  } | null>(null);
 
   const renameInputRef = useRef<HTMLInputElement>(null);
   const roomRef = useRef<RoomDetailType | null>(null);
@@ -409,10 +414,6 @@ export default function RoomDetail() {
   const leaderMember = room.members.find(m => m.role === 'admin');
   const leaderName = leaderMember?.preferredName ?? 'Your leader';
 
-  // Video eligibility: only leadership and church types.
-  // App admins do NOT bypass this — the API enforces the same gate.
-  const videoEligible = LIVE_MEETING_TYPES.includes(room.roomType);
-
   // Whether today's study is hidden by reveal-on-meeting gate
   const studyHidden = revealOnMeeting && !activeSession;
 
@@ -421,6 +422,10 @@ export default function RoomDetail() {
 
   // Next meeting display
   const meetingCountdown = nextMeeting ? formatMeetingCountdown(nextMeeting) : null;
+
+  // Three-phase lifecycle: preparation → meeting → followup
+  const groupPhase: 'preparation' | 'meeting' | 'followup' =
+    activeSession ? 'meeting' : meetingJustEnded ? 'followup' : 'preparation';
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -556,7 +561,10 @@ export default function RoomDetail() {
     if (!activeSession) return;
     setEndingMeeting(true);
     try {
+      const snapshot = { startedAt: activeSession.startedAt, attendance: attendanceData };
       await apiEndSession(user.id, String(roomId), 'ended');
+      setEndedSessionSnapshot(snapshot);
+      setMeetingJustEnded(true);
       setActiveSession(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to end meeting');
@@ -644,7 +652,7 @@ export default function RoomDetail() {
                     className="w-full text-left px-4 py-3.5 text-[14px] text-primary font-semibold hover:bg-primary/5 transition-colors flex items-center gap-2.5"
                   >
                     <Users2 size={15} className="shrink-0" />
-                    Meeting Controls
+                    Meeting Tools
                   </button>
                 )}
                 {isAdmin ? (
@@ -782,716 +790,726 @@ export default function RoomDetail() {
       )}
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
-      <main className="px-5 pt-5 max-w-[480px] mx-auto space-y-4 pb-6">
+      <main className="px-5 pt-5 max-w-[480px] mx-auto pb-6">
 
-        {/* ── 1. Active Meeting banner ────────────────────────────────────── */}
-        {activeSession && (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary/8 border border-primary/20">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">Meeting in Progress</p>
-                  <p className="text-[11px] text-muted-foreground capitalize">
-                    {sessionMode === 'prayer' ? 'Prayer Time' :
-                     sessionMode === 'discussion' ? 'Group Discussion' :
-                     sessionMode === 'scripture' ? 'Reading Scripture' :
-                     sessionMode === 'poll' ? 'Poll' : "Today's Study"}
-                  </p>
+        {/* ════════════════════════════════════════════════════════════════
+            PHASE 1 — PREPARATION
+            Default state. Calm, focused. No meeting controls.
+            Leader sees a single Start Meeting button at the bottom.
+        ════════════════════════════════════════════════════════════════ */}
+        {groupPhase === 'preparation' && (
+          <div className="space-y-4">
+
+            {/* Today's Study */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                Today&apos;s Study
+              </p>
+              {studyHidden ? (
+                <div className="p-5 rounded-2xl border border-border/50 bg-card/50 text-center space-y-1.5">
+                  <BookOpen size={20} className="mx-auto text-muted-foreground opacity-30" />
+                  <p className="text-[14px] text-muted-foreground">Study revealed when meeting starts.</p>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {isAuthorizedLeader && (
+              ) : contentTitle ? (
+                <>
                   <button
-                    onClick={() => setShowGuideGroup(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 transition-all"
+                    onClick={() => room.linkedContentId
+                      ? setLocation(`/journeys/${room.linkedContentId}`)
+                      : setLocation('/walk')
+                    }
+                    className="w-full text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all"
                   >
-                    <Users2 size={12} />
-                    Controls
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <BookOpen size={18} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[16px] font-semibold text-foreground truncate leading-snug">{contentTitle}</p>
+                        {currentStep != null && (
+                          <p className="text-[13px] text-muted-foreground mt-0.5">
+                            Step {currentStep}{totalSteps > 0 ? ` of ${totalSteps}` : ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
+                        Open
+                        <ChevronRight size={15} />
+                      </div>
+                    </div>
+                  </button>
+                  {isAuthorizedLeader && (
+                    <button onClick={handleToggleRevealOnMeeting} className="mt-2 flex items-center gap-2 px-1 py-1">
+                      <div
+                        className={`rounded-full transition-colors flex items-center px-0.5 ${revealOnMeeting ? 'bg-primary' : 'bg-muted'}`}
+                        style={{ width: 32, height: 18 }}
+                      >
+                        <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${revealOnMeeting ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                      </div>
+                      <span className="text-[12px] text-muted-foreground">
+                        {revealOnMeeting ? 'Hidden until meeting' : 'Visible to members'}
+                      </span>
+                    </button>
+                  )}
+                  {isAuthorizedLeader && availableWalks.length > 0 && !showLinkWalk && (
+                    <button onClick={() => setShowLinkWalk(true)} className="mt-2 text-[13px] text-primary font-medium hover:underline pl-1">
+                      Change Study →
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="p-5 rounded-2xl border border-dashed border-border bg-card/50 text-center space-y-3">
+                  <BookOpen size={22} className="mx-auto text-muted-foreground opacity-40" />
+                  <p className="text-[14px] text-muted-foreground">Choose something to study together.</p>
+                  {isAuthorizedLeader && availableWalks.length > 0 && (
+                    <button onClick={() => setShowLinkWalk(true)} className="text-[14px] text-primary font-medium hover:underline">
+                      Add a Walk →
+                    </button>
+                  )}
+                </div>
+              )}
+              {showLinkWalk && (
+                <div className="mt-3 rounded-2xl border border-border bg-card overflow-hidden">
+                  <div className="px-5 py-3.5 border-b border-border/60">
+                    <p className="text-[13px] text-muted-foreground font-medium">Choose a Walk to add:</p>
+                  </div>
+                  {availableWalks.map(w => (
+                    <button key={w.id} onClick={() => handleLinkWalk(w.id)} disabled={!!linkingId}
+                      className="w-full text-left px-5 py-4 border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors flex items-center justify-between"
+                    >
+                      <span className="text-[15px] font-medium text-foreground">{w.title}</span>
+                      {linkingId === w.id
+                        ? <Loader2 size={16} className="animate-spin text-muted-foreground shrink-0" />
+                        : <span className="text-[13px] text-primary font-medium shrink-0">Add</span>}
+                    </button>
+                  ))}
+                  <button onClick={() => setShowLinkWalk(false)} className="w-full px-5 py-3 text-[13px] text-muted-foreground hover:text-foreground transition-colors text-center">
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* Leader's Note */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                  Leader&apos;s Note
+                </p>
+                {isAuthorizedLeader && !leaderNoteEditing && (
+                  <button onClick={() => { setLeaderNoteValue(leaderNote ?? ''); setLeaderNoteEditing(true); }}
+                    className="flex items-center gap-1 text-[12px] text-primary font-medium"
+                  >
+                    <Edit2 size={12} />
+                    {leaderNote ? 'Edit' : 'Add note'}
                   </button>
                 )}
+              </div>
+              {leaderNoteEditing ? (
+                <div className="p-4 rounded-2xl border border-primary/30 bg-card space-y-3">
+                  <textarea value={leaderNoteValue} onChange={e => setLeaderNoteValue(e.target.value)}
+                    placeholder="Write a note for your group — reflection questions, what to focus on, or an encouragement…"
+                    rows={4} maxLength={1000} autoFocus
+                    className="w-full text-[14px] text-foreground bg-transparent outline-none resize-none placeholder:text-muted-foreground/50 leading-relaxed"
+                  />
+                  <div className="flex items-center gap-2 justify-end">
+                    <button onClick={() => setLeaderNoteEditing(false)} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                    <button onClick={handleSaveLeaderNote} disabled={leaderNoteSaving}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-60"
+                    >
+                      {leaderNoteSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : leaderNote ? (
+                <div className="p-4 rounded-2xl border border-border bg-card">
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <FileText size={13} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400 mb-1">From {leaderName}</p>
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap">{leaderNote}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl border border-dashed border-border bg-card/40 text-center">
+                  <p className="text-[13px] text-muted-foreground">
+                    {isAuthorizedLeader ? 'Add a note for your group — questions, focus points, or an encouragement.' : 'No note from your leader yet.'}
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* Meeting */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Meeting</p>
+                {isAuthorizedLeader && !editingSchedule && (
+                  <button onClick={() => { setScheduleValue(nextMeeting ? isoToLocalDateTime(nextMeeting) : ''); setEditingSchedule(true); }}
+                    className="text-[12px] text-primary font-medium flex items-center gap-1"
+                  >
+                    <Calendar size={12} />
+                    {nextMeeting ? 'Edit' : 'Schedule'}
+                  </button>
+                )}
+              </div>
+              {editingSchedule ? (
+                <div className="p-4 rounded-2xl border border-primary/30 bg-card space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest block">Date &amp; Time</label>
+                    <input type="datetime-local" value={scheduleValue} onChange={e => setScheduleValue(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    {nextMeeting && (
+                      <button
+                        onClick={async () => {
+                          setScheduleSaving(true);
+                          try { await apiUpdateSchedule(user.id, String(roomId), null, revealOnMeeting); setNextMeeting(null); setEditingSchedule(false); }
+                          catch { /* ignore */ } finally { setScheduleSaving(false); }
+                        }}
+                        disabled={scheduleSaving} className="text-[13px] text-destructive hover:opacity-80 transition-opacity"
+                      >Clear</button>
+                    )}
+                    <button onClick={() => setEditingSchedule(false)} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                    <button onClick={handleSaveSchedule} disabled={scheduleSaving || !scheduleValue}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-60"
+                    >
+                      {scheduleSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : nextMeeting && meetingCountdown ? (
+                <div className="p-4 rounded-2xl border border-border bg-card flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${meetingCountdown.isPast ? 'bg-muted' : 'bg-primary/10'}`}>
+                    <Calendar size={17} className={meetingCountdown.isPast ? 'text-muted-foreground' : 'text-primary'} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[15px] font-semibold ${meetingCountdown.isPast ? 'text-muted-foreground' : 'text-foreground'}`}>
+                      {meetingCountdown.label}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground mt-0.5">
+                      {new Date(nextMeeting).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}{' · '}
+                      {new Date(nextMeeting).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl border border-dashed border-border bg-card/40 text-center space-y-2">
+                  <p className="text-[13px] text-muted-foreground">No meeting scheduled.</p>
+                  {isAuthorizedLeader && (
+                    <button onClick={() => { setScheduleValue(''); setEditingSchedule(true); }} className="text-[13px] text-primary font-medium">
+                      Schedule a meeting →
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* Members */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Members</p>
+                <div className="flex items-center gap-3">
+                  {room.linkedJourneys.length > 0 && (
+                    <button onClick={() => refreshProgress(false)} disabled={refreshing}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-1 disabled:opacity-40" aria-label="Refresh progress"
+                    >
+                      <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => setLocation(`/rooms/${roomId}/invite`)} className="text-[13px] text-primary font-medium hover:underline">
+                      Invite
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+                {[...room.members].sort((a, b) => {
+                  if (a.role === 'admin') return -1;
+                  if (b.role === 'admin') return 1;
+                  const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
+                  const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
+                  return aOnline - bOnline;
+                }).map(m => {
+                  const isMe = m.userId === user.id;
+                  const displayName = isMe ? `${m.preferredName || 'You'} (you)` : m.preferredName || 'Member';
+                  const initials = (m.preferredName || 'M').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                  const isOnline = onlineUserIds.has(m.userId);
+                  const prepStatus = getPrepStatus(primaryProgress, m.userId);
+                  return (
+                    <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3.5">
+                      <div className="relative shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[13px] font-semibold flex items-center justify-center">{initials}</div>
+                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background ${isOnline ? 'bg-emerald-400' : 'bg-muted-foreground/30'}`} title={isOnline ? 'Online' : 'Offline'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[14px] font-medium text-foreground truncate">{displayName}</p>
+                          {m.role === 'admin' && <Crown size={12} className="text-amber-500 shrink-0" />}
+                        </div>
+                        {primaryProgress && (
+                          <p className={`text-[11px] font-medium mt-0.5 ${prepStatus.color}`}>{prepStatus.label}</p>
+                        )}
+                      </div>
+                      {isAdmin && !isMe && (
+                        <button onClick={() => handleRemoveMember(m)} className="text-[12px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1 shrink-0">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Discussion — locked */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Discussion</p>
+              <div className="p-4 rounded-2xl border border-border/50 bg-card/40 flex items-center gap-3">
+                <MessageSquare size={16} className="text-muted-foreground/40 shrink-0" />
+                <p className="text-[14px] text-muted-foreground">Discussion opens when the meeting starts.</p>
+              </div>
+            </section>
+
+            {/* Prayer Requests */}
+            <PrayerRequests
+              roomId={String(roomId)} userId={user.id}
+              displayName={user.preferredName || 'Member'}
+              isAdmin={isAdmin} sessionId={undefined}
+            />
+
+            {/* START MEETING — primary action, leaders only */}
+            {isAuthorizedLeader && (
+              <button
+                onClick={handleStartMeetingDirect}
+                disabled={startingMeeting}
+                className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2.5 disabled:opacity-60 hover:opacity-90 transition-opacity"
+              >
+                {startingMeeting ? <Loader2 size={18} className="animate-spin" /> : <MapPin size={18} />}
+                Start Meeting
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            PHASE 2 — MEETING IN PROGRESS
+            Active meeting. Energised. Leader controls visible.
+        ════════════════════════════════════════════════════════════════ */}
+        {groupPhase === 'meeting' && activeSession && (
+          <div className="space-y-4">
+
+            {/* Meeting in Progress header */}
+            <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <div>
+                    <p className="text-[16px] font-bold text-emerald-800 dark:text-emerald-200">Meeting in Progress</p>
+                    <p className="text-[12px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      Started {new Date(activeSession.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
                 {!isAuthorizedLeader && (
                   <button
                     onClick={() => setFollowLeader(!followLeader)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
                       followLeader
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-transparent text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:border-emerald-500'
                     }`}
                   >
                     {followLeader ? '● Following' : 'Follow Leader'}
                   </button>
                 )}
               </div>
-            </div>
 
-            {/* Quick-access: Open Scripture + Group Notes */}
-            <div className="flex gap-2">
-              {activeScripture && (
-                <button
-                  onClick={() => setShowSharedScripture(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[13px] font-semibold hover:bg-primary/10 transition-all"
-                >
-                  <BookOpen size={14} />
-                  {activeScripture.displayLabel || `${activeScripture.book} ${activeScripture.chapter}`}
-                </button>
-              )}
-              <button
-                onClick={() => setShowSharedNotes(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border bg-card text-muted-foreground text-[13px] font-medium hover:text-foreground hover:border-primary/30 transition-all"
-              >
-                <StickyNote size={14} />
-                Group Notes
-              </button>
-            </div>
-
-            {/* Scripture notice for non-followers */}
-            {scripturePendingNotice && !showSharedScripture && (
-              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
-                <div className="flex items-center gap-2">
-                  <BookOpen size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                  <p className="text-[12px] text-amber-700 dark:text-amber-300">
-                    <span className="font-semibold">{scripturePendingNotice.leaderName}</span> opened{' '}
-                    {scripturePendingNotice.scripture.displayLabel ||
-                      `${scripturePendingNotice.scripture.book} ${scripturePendingNotice.scripture.chapter}`}
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setShowSharedScripture(true); setScripturePendingNotice(null); }}
-                  className="text-[12px] text-amber-700 dark:text-amber-300 font-semibold shrink-0 ml-2"
-                >
-                  Open →
-                </button>
-              </div>
-            )}
-
-            {/* Prayer mode banner */}
-            {sessionMode === 'prayer' && (
-              <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/40">
-                <HandHeart size={20} className="text-violet-600 dark:text-violet-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-violet-800 dark:text-violet-300">Prayer Time</p>
-                  <p className="text-[12px] text-violet-600 dark:text-violet-400 mt-0.5">Share requests below</p>
-                </div>
-                {isAuthorizedLeader && (
-                  <button
-                    onClick={() => void apiChangeMode(user.id, String(roomId), 'study', user.preferredName || 'Leader').catch(() => {})}
-                    className="shrink-0 text-[11px] text-violet-600 dark:text-violet-400 font-semibold"
-                  >
-                    End →
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Discussion mode banner */}
-            {sessionMode === 'discussion' && (
-              <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40">
-                <MessageSquare size={20} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-sky-800 dark:text-sky-300">Group Discussion</p>
-                  <p className="text-[12px] text-sky-600 dark:text-sky-400 mt-0.5">Share your thoughts</p>
-                </div>
-                <button
-                  onClick={openChat}
-                  className="shrink-0 text-[12px] text-sky-600 dark:text-sky-400 font-semibold"
-                >
-                  Open →
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── 2. Today's Study ────────────────────────────────────────────── */}
-        <section>
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            Today&apos;s Study
-          </p>
-
-          {studyHidden ? (
-            <div className="p-5 rounded-2xl border border-border/50 bg-card/50 text-center space-y-2">
-              <BookOpen size={20} className="mx-auto text-muted-foreground opacity-30" />
-              <p className="text-[14px] text-muted-foreground">Study revealed when meeting starts.</p>
-            </div>
-          ) : contentTitle ? (
-            <>
-              <button
-                onClick={() => room.linkedContentId
-                  ? setLocation(`/journeys/${room.linkedContentId}`)
-                  : setLocation('/walk')
-                }
-                className="w-full text-left p-5 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <BookOpen size={18} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[16px] font-semibold text-foreground truncate leading-snug">
-                      {contentTitle}
-                    </p>
-                    {currentStep != null && (
-                      <p className="text-[13px] text-muted-foreground mt-0.5">
-                        Step {currentStep}{totalSteps > 0 ? ` of ${totalSteps}` : ''}
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[14px]">
-                    Continue
-                    <ChevronRight size={16} />
-                  </div>
-                </div>
-              </button>
-
-              {/* Reveal-on-meeting toggle for leaders */}
-              {isAuthorizedLeader && (
-                <button
-                  onClick={handleToggleRevealOnMeeting}
-                  className="mt-2 flex items-center gap-2 px-1 py-1"
-                >
-                  <div className={`w-8 h-4.5 rounded-full transition-colors flex items-center px-0.5 ${revealOnMeeting ? 'bg-primary' : 'bg-muted'}`}
-                    style={{ height: '18px' }}
-                  >
-                    <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${revealOnMeeting ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                  </div>
-                  <span className="text-[12px] text-muted-foreground">
-                    {revealOnMeeting ? 'Reveals when meeting starts' : 'Visible now'}
-                  </span>
-                </button>
-              )}
-
-              {/* Leader: change the assigned study */}
-              {isAuthorizedLeader && availableWalks.length > 0 && !showLinkWalk && (
-                <button
-                  onClick={() => setShowLinkWalk(true)}
-                  className="mt-2 text-[13px] text-primary font-medium hover:underline pl-1"
-                >
-                  Change Study →
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="p-5 rounded-2xl border border-dashed border-border bg-card/50 text-center space-y-3">
-              <BookOpen size={22} className="mx-auto text-muted-foreground opacity-40" />
-              <p className="text-[14px] text-muted-foreground">Choose something to study together.</p>
-              {isAuthorizedLeader && availableWalks.length > 0 && (
-                <button
-                  onClick={() => setShowLinkWalk(true)}
-                  className="text-[14px] text-primary font-medium hover:underline"
-                >
-                  Add a Walk →
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Walk picker (shown for both empty state and when adding another) */}
-          {showLinkWalk && (
-            <div className="mt-3 rounded-2xl border border-border bg-card overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-border/60">
-                <p className="text-[13px] text-muted-foreground font-medium">Choose a Walk to add:</p>
-              </div>
-              {availableWalks.map(w => (
-                <button
-                  key={w.id}
-                  onClick={() => handleLinkWalk(w.id)}
-                  disabled={!!linkingId}
-                  className="w-full text-left px-5 py-4 border-b border-border/50 last:border-0 hover:bg-muted/40 transition-colors flex items-center justify-between"
-                >
-                  <span className="text-[15px] font-medium text-foreground">{w.title}</span>
-                  {linkingId === w.id
-                    ? <Loader2 size={16} className="animate-spin text-muted-foreground shrink-0" />
-                    : <span className="text-[13px] text-primary font-medium shrink-0">Add</span>
-                  }
-                </button>
-              ))}
-              <button
-                onClick={() => setShowLinkWalk(false)}
-                className="w-full px-5 py-3 text-[13px] text-muted-foreground hover:text-foreground transition-colors text-center"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </section>
-
-        {/* ── 3. Leader's Note ─────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Leader&apos;s Note
-            </p>
-            {isAuthorizedLeader && !leaderNoteEditing && (
-              <button
-                onClick={() => {
-                  setLeaderNoteValue(leaderNote ?? '');
-                  setLeaderNoteEditing(true);
-                }}
-                className="flex items-center gap-1 text-[12px] text-primary font-medium"
-              >
-                <Edit2 size={12} />
-                {leaderNote ? 'Edit' : 'Add note'}
-              </button>
-            )}
-          </div>
-
-          {leaderNoteEditing ? (
-            <div className="p-4 rounded-2xl border border-primary/30 bg-card space-y-3">
-              <textarea
-                value={leaderNoteValue}
-                onChange={e => setLeaderNoteValue(e.target.value)}
-                placeholder="Write a note for your group — reflection questions, what to focus on, or an encouragement…"
-                rows={4}
-                maxLength={1000}
-                autoFocus
-                className="w-full text-[14px] text-foreground bg-transparent outline-none resize-none placeholder:text-muted-foreground/50 leading-relaxed"
-              />
-              <div className="flex items-center gap-2 justify-end">
-                <button
-                  onClick={() => setLeaderNoteEditing(false)}
-                  className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveLeaderNote}
-                  disabled={leaderNoteSaving}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-60"
-                >
-                  {leaderNoteSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : leaderNote ? (
-            <div className="p-4 rounded-2xl border border-border bg-card">
-              <div className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0 mt-0.5">
-                  <FileText size={13} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                    From {leaderName}
-                  </p>
-                  <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap">{leaderNote}</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 rounded-2xl border border-dashed border-border bg-card/40 text-center">
-              <p className="text-[13px] text-muted-foreground">
-                {isAuthorizedLeader
-                  ? 'Add a note for your group — questions, focus points, or an encouragement.'
-                  : 'No note from your leader yet.'}
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* ── 4. Group Members ──────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Group Members
-            </p>
-            <div className="flex items-center gap-3">
-              {room.linkedJourneys.length > 0 && (
-                <button
-                  onClick={() => refreshProgress(false)}
-                  disabled={refreshing}
-                  className="text-muted-foreground hover:text-foreground transition-colors p-1 disabled:opacity-40"
-                  aria-label="Refresh progress"
-                >
-                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={() => setLocation(`/rooms/${roomId}/invite`)}
-                  className="text-[13px] text-primary font-medium hover:underline"
-                >
-                  Invite
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
-            {[...room.members].sort((a, b) => {
-              // Leader first, then online, then alphabetical
-              if (a.role === 'admin') return -1;
-              if (b.role === 'admin') return 1;
-              const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
-              const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
-              return aOnline - bOnline;
-            }).map(m => {
-              const isMe = m.userId === user.id;
-              const displayName = isMe
-                ? `${m.preferredName || 'You'} (you)`
-                : m.preferredName || 'Member';
-              const initials = (m.preferredName || 'M')
-                .split(' ')
-                .map((w: string) => w[0])
-                .slice(0, 2)
-                .join('')
-                .toUpperCase();
-              const isOnline = onlineUserIds.has(m.userId);
-              const prepStatus = getPrepStatus(primaryProgress, m.userId);
-
-              return (
-                <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3.5">
-                  {/* Avatar with presence dot */}
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[13px] font-semibold flex items-center justify-center">
-                      {initials}
-                    </div>
-                    <span
-                      className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background transition-colors ${
-                        isOnline ? 'bg-emerald-400' : 'bg-muted-foreground/30'
-                      }`}
-                      title={isOnline ? 'Online' : 'Offline'}
-                    />
-                  </div>
-
-                  {/* Name + leader badge */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[14px] font-medium text-foreground truncate">{displayName}</p>
-                      {m.role === 'admin' && (
-                        <Crown size={12} className="text-amber-500 shrink-0" />
-                      )}
-                    </div>
-                    {/* Prep status (only show when there's a linked journey) */}
-                    {primaryProgress && (
-                      <p className={`text-[11px] font-medium mt-0.5 ${prepStatus.color}`}>
-                        {prepStatus.label}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Admin remove button */}
-                  {isAdmin && !isMe && (
-                    <button
-                      onClick={() => handleRemoveMember(m)}
-                      className="text-[12px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1 shrink-0"
+              {/* Quick-access: open scripture or group notes */}
+              {(activeScripture || true) && (
+                <div className="flex gap-2">
+                  {activeScripture && (
+                    <button onClick={() => setShowSharedScripture(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all"
                     >
-                      Remove
+                      <BookOpen size={13} />
+                      {activeScripture.displayLabel || `${activeScripture.book} ${activeScripture.chapter}`}
                     </button>
                   )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Session Attendance (leader-only during active session) */}
-          {isAuthorizedLeader && activeSession && attendanceData.length > 0 && (
-            <div className="mt-3 divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
-              <div className="px-4 py-2.5 bg-muted/30">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  Today&apos;s Attendance
-                </p>
-              </div>
-              {room.members.map(m => {
-                const record = attendanceData.find(a => a.userId === m.userId);
-                const sessionStart = new Date(activeSession.startedAt).getTime();
-                const joinedAt = record ? new Date(record.joinedAt).getTime() : null;
-                const isLate = joinedAt != null && (joinedAt - sessionStart) > 5 * 60_000;
-                const hasLeft = record?.leftAt != null;
-
-                let statusLabel: string;
-                let statusEl: React.ReactNode;
-
-                if (!record) {
-                  statusLabel = 'Not joined';
-                  statusEl = <span className="text-[12px] text-muted-foreground/50">—</span>;
-                } else if (hasLeft) {
-                  statusLabel = 'Left early';
-                  statusEl = <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400"><Clock size={12} /><span className="text-[12px]">{statusLabel}</span></div>;
-                } else if (isLate) {
-                  statusLabel = 'Joined late';
-                  statusEl = <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400"><Clock size={12} /><span className="text-[12px]">{statusLabel}</span></div>;
-                } else {
-                  statusLabel = 'Present';
-                  statusEl = <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /><span className="text-[12px]">{statusLabel}</span></div>;
-                }
-
-                return (
-                  <div key={m.userId} className="flex items-center justify-between px-4 py-3">
-                    <p className="text-[13px] font-medium text-foreground truncate">
-                      {m.preferredName || 'Member'}{m.userId === user.id ? ' (you)' : ''}
-                    </p>
-                    {statusEl}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* ── 5. Next Meeting ──────────────────────────────────────────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-              Next Meeting
-            </p>
-            {isAuthorizedLeader && !editingSchedule && (
-              <button
-                onClick={() => {
-                  setScheduleValue(nextMeeting ? isoToLocalDateTime(nextMeeting) : '');
-                  setEditingSchedule(true);
-                }}
-                className="text-[12px] text-primary font-medium flex items-center gap-1"
-              >
-                <Calendar size={12} />
-                {nextMeeting ? 'Edit' : 'Schedule'}
-              </button>
-            )}
-          </div>
-
-          {editingSchedule ? (
-            <div className="p-4 rounded-2xl border border-primary/30 bg-card space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest block">
-                  Meeting date & time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={scheduleValue}
-                  onChange={e => setScheduleValue(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
-                />
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                {nextMeeting && (
-                  <button
-                    onClick={async () => {
-                      setScheduleSaving(true);
-                      try {
-                        await apiUpdateSchedule(user.id, String(roomId), null, revealOnMeeting);
-                        setNextMeeting(null);
-                        setEditingSchedule(false);
-                      } catch { /* ignore */ } finally { setScheduleSaving(false); }
-                    }}
-                    disabled={scheduleSaving}
-                    className="text-[13px] text-destructive hover:opacity-80 transition-opacity"
+                  <button onClick={() => setShowSharedNotes(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all"
                   >
-                    Clear
+                    <StickyNote size={13} />
+                    Group Notes
                   </button>
-                )}
-                <button
-                  onClick={() => setEditingSchedule(false)}
-                  className="text-[13px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveSchedule}
-                  disabled={scheduleSaving || !scheduleValue}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-60"
-                >
-                  {scheduleSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  Save
-                </button>
-              </div>
+                </div>
+              )}
+
+              {/* Scripture pending notice */}
+              {scripturePendingNotice && !showSharedScripture && (
+                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <p className="text-[12px] text-amber-700 dark:text-amber-300">
+                      <span className="font-semibold">{scripturePendingNotice.leaderName}</span> opened{' '}
+                      {scripturePendingNotice.scripture.displayLabel || `${scripturePendingNotice.scripture.book} ${scripturePendingNotice.scripture.chapter}`}
+                    </p>
+                  </div>
+                  <button onClick={() => { setShowSharedScripture(true); setScripturePendingNotice(null); }}
+                    className="text-[12px] text-amber-700 dark:text-amber-300 font-semibold shrink-0 ml-2"
+                  >Open →</button>
+                </div>
+              )}
+
+              {/* Mode banners */}
+              {sessionMode === 'prayer' && (
+                <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/40">
+                  <HandHeart size={18} className="text-violet-600 dark:text-violet-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-violet-800 dark:text-violet-300">Prayer Time</p>
+                    <p className="text-[11px] text-violet-600 dark:text-violet-400">Share requests below</p>
+                  </div>
+                  {isAuthorizedLeader && (
+                    <button onClick={() => void apiChangeMode(user.id, String(roomId), 'study', user.preferredName || 'Leader').catch(() => {})}
+                      className="shrink-0 text-[11px] text-violet-600 dark:text-violet-400 font-semibold"
+                    >End →</button>
+                  )}
+                </div>
+              )}
+              {sessionMode === 'discussion' && (
+                <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40">
+                  <MessageSquare size={18} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-sky-800 dark:text-sky-300">Group Discussion</p>
+                    <p className="text-[11px] text-sky-600 dark:text-sky-400">Share your thoughts</p>
+                  </div>
+                  <button onClick={openChat} className="shrink-0 text-[12px] text-sky-600 dark:text-sky-400 font-semibold">Open →</button>
+                </div>
+              )}
             </div>
-          ) : nextMeeting && meetingCountdown ? (
-            <div className="p-4 rounded-2xl border border-border bg-card">
-              <div className="flex items-start gap-3 mb-4">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                  meetingCountdown.isPast ? 'bg-muted' : 'bg-primary/10'
-                }`}>
-                  <Calendar size={17} className={meetingCountdown.isPast ? 'text-muted-foreground' : 'text-primary'} />
+
+            {/* Today's Study */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Today&apos;s Study</p>
+              {contentTitle ? (
+                <button
+                  onClick={() => room.linkedContentId ? setLocation(`/journeys/${room.linkedContentId}`) : setLocation('/walk')}
+                  className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/40 transition-all flex items-center gap-3.5"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <BookOpen size={17} className="text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-semibold text-foreground truncate">{contentTitle}</p>
+                    {currentStep != null && <p className="text-[12px] text-muted-foreground mt-0.5">Step {currentStep}{totalSteps > 0 ? ` of ${totalSteps}` : ''}</p>}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
+                    {isAuthorizedLeader ? 'Present' : 'Open'}
+                    <ChevronRight size={14} />
+                  </div>
+                </button>
+              ) : (
+                <div className="p-4 rounded-2xl border border-border/50 bg-card/40">
+                  <p className="text-[13px] text-muted-foreground text-center">No study assigned.</p>
+                </div>
+              )}
+            </section>
+
+            {/* Leader's Note */}
+            {leaderNote && (
+              <section>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Leader&apos;s Note</p>
+                <div className="p-4 rounded-2xl border border-border bg-card">
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0 mt-0.5">
+                      <FileText size={13} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400 mb-1">From {leaderName}</p>
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap">{leaderNote}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Members Present */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Members Present</p>
+              <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+                {[...room.members].sort((a, b) => {
+                  if (a.role === 'admin') return -1;
+                  if (b.role === 'admin') return 1;
+                  const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
+                  const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
+                  return aOnline - bOnline;
+                }).map(m => {
+                  const isMe = m.userId === user.id;
+                  const displayName = isMe ? `${m.preferredName || 'You'} (you)` : m.preferredName || 'Member';
+                  const initials = (m.preferredName || 'M').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+                  const isOnline = onlineUserIds.has(m.userId);
+                  const record = attendanceData.find(a => a.userId === m.userId);
+                  const hasJoined = !!record;
+                  return (
+                    <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3.5">
+                      <div className="relative shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[13px] font-semibold flex items-center justify-center">{initials}</div>
+                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-background ${isOnline ? 'bg-emerald-400' : 'bg-muted-foreground/30'}`} title={isOnline ? 'Online' : 'Offline'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-[14px] font-medium text-foreground truncate">{displayName}</p>
+                          {m.role === 'admin' && <Crown size={12} className="text-amber-500 shrink-0" />}
+                        </div>
+                        <p className={`text-[11px] font-medium mt-0.5 ${hasJoined ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground/60'}`}>
+                          {hasJoined ? 'In meeting' : 'Not yet joined'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Discussion — open */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Discussion</p>
+              <button onClick={openChat}
+                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-sky-300 transition-all flex items-center gap-3.5"
+              >
+                <div className="w-9 h-9 rounded-full bg-sky-50 dark:bg-sky-950/40 flex items-center justify-center shrink-0">
+                  <MessageSquare size={17} className="text-sky-600 dark:text-sky-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[16px] font-semibold ${meetingCountdown.isPast ? 'text-muted-foreground' : 'text-foreground'}`}>
-                    {meetingCountdown.label}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">
-                    {new Date(nextMeeting).toLocaleDateString([], {
-                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                    })}
-                  </p>
+                  <p className="text-[15px] font-semibold text-foreground">Open Discussion</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Talk together about today&apos;s study</p>
                 </div>
-              </div>
-
-              {/* Start Meeting button: primary action for leaders */}
-              {isAuthorizedLeader && !activeSession && (
-                <button
-                  onClick={handleStartMeetingDirect}
-                  disabled={startingMeeting}
-                  className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:opacity-90 transition-opacity"
-                >
-                  {startingMeeting
-                    ? <Loader2 size={17} className="animate-spin" />
-                    : <MapPin size={17} />}
-                  Start Meeting
-                </button>
-              )}
-              {activeSession && (
-                <div className="flex items-center justify-center gap-2 py-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[14px] font-semibold text-emerald-600 dark:text-emerald-400">Meeting in progress</p>
+                <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
+                  Open<ChevronRight size={14} />
                 </div>
-              )}
-            </div>
-          ) : isAuthorizedLeader ? (
-            <div className="p-4 rounded-2xl border border-dashed border-border bg-card/40 text-center space-y-2">
-              <p className="text-[13px] text-muted-foreground">No meeting scheduled yet.</p>
-              <button
-                onClick={() => {
-                  setScheduleValue('');
-                  setEditingSchedule(true);
-                }}
-                className="text-[13px] text-primary font-medium"
-              >
-                Schedule a meeting →
               </button>
-            </div>
-          ) : (
-            <div className="p-4 rounded-2xl border border-border bg-card/40">
-              <p className="text-[13px] text-muted-foreground text-center">No meeting scheduled yet.</p>
-            </div>
-          )}
+            </section>
 
-          {/* Start Meeting button even when no schedule set (leader-only fallback) */}
-          {isAuthorizedLeader && !activeSession && !nextMeeting && !editingSchedule && (
-            <button
-              onClick={handleStartMeetingDirect}
-              disabled={startingMeeting}
-              className="mt-3 w-full py-3 rounded-2xl border border-primary/30 bg-primary/5 text-primary font-semibold text-[14px] flex items-center justify-center gap-2 hover:bg-primary/10 transition-all disabled:opacity-60"
-            >
-              {startingMeeting ? <Loader2 size={16} className="animate-spin" /> : <MapPin size={16} />}
-              Start Meeting Now
-            </button>
-          )}
-        </section>
+            {/* Prayer Requests */}
+            <PrayerRequests
+              roomId={String(roomId)} userId={user.id}
+              displayName={user.preferredName || 'Member'}
+              isAdmin={isAdmin} sessionId={activeSession.id}
+            />
 
-        {/* ── 6. Meeting Action — always visible to the group leader ──────────── */}
-        {/* This is the canonical place to start or end the meeting.              */}
-        {/* Leaders must never have to hunt for this in a menu or settings panel. */}
-        {isAuthorizedLeader && (
-          <section>
-            {!activeSession ? (
-              <button
-                onClick={handleStartMeetingDirect}
-                disabled={startingMeeting}
-                className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2.5 disabled:opacity-60 hover:opacity-90 transition-opacity shadow-sm"
+            {/* Group Notes */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Notes</p>
+              <button onClick={() => setShowSharedNotes(true)}
+                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
               >
-                {startingMeeting
-                  ? <Loader2 size={18} className="animate-spin" />
-                  : <MapPin size={18} />}
-                Start Meeting
-              </button>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-center gap-2 py-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <p className="text-[15px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    Meeting in Progress
-                  </p>
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <StickyNote size={17} className="text-muted-foreground" />
                 </div>
-                <button
-                  onClick={handleEndMeetingDirect}
-                  disabled={endingMeeting}
-                  className="w-full py-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-destructive/20 transition-all"
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Shared notes from this session</p>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+              </button>
+            </section>
+
+            {/* Meeting Tools (leaders only) */}
+            {isAuthorizedLeader && (
+              <section>
+                <button onClick={() => setShowGuideGroup(true)}
+                  className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
                 >
-                  {endingMeeting
-                    ? <Loader2 size={17} className="animate-spin" />
-                    : <StopCircle size={17} />}
-                  End Meeting
+                  <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <Users2 size={17} className="text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-semibold text-foreground">Meeting Tools</p>
+                    <p className="text-[12px] text-muted-foreground mt-0.5">Guide today&apos;s meeting</p>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground shrink-0" />
                 </button>
-              </div>
+              </section>
             )}
-          </section>
+
+            {/* END MEETING */}
+            {isAuthorizedLeader && (
+              <button
+                onClick={handleEndMeetingDirect}
+                disabled={endingMeeting}
+                className="w-full py-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive font-semibold text-[15px] flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-destructive/20 transition-all"
+              >
+                {endingMeeting ? <Loader2 size={17} className="animate-spin" /> : <StopCircle size={17} />}
+                End Meeting
+              </button>
+            )}
+          </div>
         )}
 
-        {/* ── 7. Video Room (leadership/church types only) ─────────────────── */}
-        {videoEligible && (
-          <VideoRoom
-            roomId={String(roomId)}
-            userId={user.id}
-            displayName={user.preferredName || 'Member'}
-            videoEligible={videoEligible}
-            leaderName={leaderName}
-          />
-        )}
+        {/* ════════════════════════════════════════════════════════════════
+            PHASE 3 — FOLLOW-UP
+            After End Meeting. Reflective, complete.
+        ════════════════════════════════════════════════════════════════ */}
+        {groupPhase === 'followup' && (
+          <div className="space-y-4">
 
-        {/* ── 7. Group Discussion ───────────────────────────────────────────── */}
-        {/* Plain card — not an accordion. Opening does not change meeting state. */}
-        <section>
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            Group Discussion
-          </p>
-          <button
-            onClick={openChat}
-            className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-          >
-            <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <MessageSquare size={17} className="text-muted-foreground" />
+            {/* Meeting Complete banner */}
+            <div className="p-5 rounded-2xl bg-muted/40 border border-border text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center mx-auto mb-2">
+                <CheckCircle2 size={24} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="text-[18px] font-bold text-foreground">Meeting Complete</p>
+              {endedSessionSnapshot && (
+                <p className="text-[13px] text-muted-foreground">
+                  Started at {new Date(endedSessionSnapshot.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-foreground">Group Discussion</p>
-              <p className="text-[12px] text-muted-foreground mt-0.5">Talk together about today&apos;s study</p>
-            </div>
-            <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
-              Open
-              <ChevronRight size={14} />
-            </div>
-          </button>
-        </section>
 
-        {/* ── 8. Prayer Requests ───────────────────────────────────────────── */}
-        <PrayerRequests
-          roomId={String(roomId)}
-          userId={user.id}
-          displayName={user.preferredName || 'Member'}
-          isAdmin={isAdmin}
-          sessionId={activeSession?.id}
-        />
+            {/* Attendance */}
+            {endedSessionSnapshot && endedSessionSnapshot.attendance.length > 0 && (
+              <section>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Attendance</p>
+                <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
+                  {room.members.map(m => {
+                    const record = endedSessionSnapshot.attendance.find(a => a.userId === m.userId);
+                    const sessionStart = new Date(endedSessionSnapshot.startedAt).getTime();
+                    const joinedAt = record ? new Date(record.joinedAt).getTime() : null;
+                    const isLate = joinedAt != null && (joinedAt - sessionStart) > 5 * 60_000;
+                    const hasLeft = record?.leftAt != null;
+                    let statusEl: React.ReactNode;
+                    if (!record) {
+                      statusEl = <span className="text-[12px] text-muted-foreground/50">Absent</span>;
+                    } else if (hasLeft) {
+                      statusEl = <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400"><Clock size={12} /><span className="text-[12px]">Left early</span></div>;
+                    } else if (isLate) {
+                      statusEl = <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400"><Clock size={12} /><span className="text-[12px]">Joined late</span></div>;
+                    } else {
+                      statusEl = <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 size={12} /><span className="text-[12px]">Present</span></div>;
+                    }
+                    return (
+                      <div key={m.userId} className="flex items-center justify-between px-4 py-3">
+                        <p className="text-[14px] font-medium text-foreground truncate">
+                          {m.preferredName || 'Member'}{m.userId === user.id ? ' (you)' : ''}
+                        </p>
+                        {statusEl}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-        {/* ── 9. Group Notes (available during a meeting) ───────────────────── */}
-        {activeSession && (
-          <section>
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-              Group Notes
-            </p>
+            {/* Discussion Archive */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Discussion Archive</p>
+              <button onClick={openChat}
+                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
+              >
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <MessageSquare size={17} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-foreground">View Chat</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Review today&apos;s discussion</p>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+              </button>
+            </section>
+
+            {/* Prayer Requests */}
+            <PrayerRequests
+              roomId={String(roomId)} userId={user.id}
+              displayName={user.preferredName || 'Member'}
+              isAdmin={isAdmin} sessionId={undefined}
+            />
+
+            {/* Group Notes */}
+            <section>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Group Notes</p>
+              <button onClick={() => setShowSharedNotes(true)}
+                className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
+              >
+                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <StickyNote size={17} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">From this session</p>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+              </button>
+            </section>
+
+            {/* Next Meeting */}
+            {isAuthorizedLeader && (
+              <section>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Next Meeting</p>
+                {editingSchedule ? (
+                  <div className="p-4 rounded-2xl border border-primary/30 bg-card space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest block">Date &amp; Time</label>
+                      <input type="datetime-local" value={scheduleValue} onChange={e => setScheduleValue(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-border bg-background text-[15px] text-foreground outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 justify-end">
+                      <button onClick={() => setEditingSchedule(false)} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+                      <button onClick={handleSaveSchedule} disabled={scheduleSaving || !scheduleValue}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-60"
+                      >
+                        {scheduleSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : nextMeeting ? (
+                  <div className="p-4 rounded-2xl border border-border bg-card flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Calendar size={17} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-foreground">{meetingCountdown?.label ?? 'Scheduled'}</p>
+                      <p className="text-[12px] text-muted-foreground mt-0.5">
+                        {new Date(nextMeeting).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}{' · '}
+                        {new Date(nextMeeting).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <button onClick={() => { setScheduleValue(isoToLocalDateTime(nextMeeting)); setEditingSchedule(true); }}
+                      className="text-[12px] text-primary font-medium shrink-0"
+                    >Edit</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setScheduleValue(''); setEditingSchedule(true); }}
+                    className="w-full py-3.5 rounded-2xl border border-dashed border-primary/40 bg-primary/5 text-primary font-semibold text-[14px] flex items-center justify-center gap-2 hover:bg-primary/10 transition-all"
+                  >
+                    <Calendar size={16} />
+                    Schedule Next Meeting
+                  </button>
+                )}
+              </section>
+            )}
+
+            {/* Prepare for next meeting */}
             <button
-              onClick={() => setShowSharedNotes(true)}
-              className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
+              onClick={() => { setMeetingJustEnded(false); setEndedSessionSnapshot(null); }}
+              className="w-full py-3.5 rounded-2xl border border-border text-foreground font-semibold text-[14px] flex items-center justify-center gap-2 hover:bg-muted/40 transition-all"
             >
-              <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <StickyNote size={17} className="text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[15px] font-semibold text-foreground">Group Notes</p>
-                <p className="text-[12px] text-muted-foreground mt-0.5">Shared notes from this session</p>
-              </div>
-              <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+              Return to Preparation
             </button>
-          </section>
+          </div>
         )}
 
-        {/* ── 10. Ask Emmaus ───────────────────────────────────────────────── */}
-        <section>
-          <button
-            onClick={() => setLocation('/personal')}
-            className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
-          >
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <Sparkles size={17} className="text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-foreground">Ask Emmaus</p>
-              <p className="text-[12px] text-muted-foreground mt-0.5">Ask about today&apos;s study or Scripture</p>
-            </div>
-            <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-          </button>
-        </section>
-
-        {/* ── Confirm Leave / Delete ──────────────────────────────────────── */}
+        {/* ── Confirm Leave / Delete (always visible) ─────────────────── */}
         {confirmLeave && (
-          <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
+          <div className="mt-4 p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
             <p className="text-[15px] font-medium text-foreground">Leave this Group?</p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
               You&apos;ll lose access to Group discussion. Your personal journey progress is preserved.
@@ -1508,7 +1526,7 @@ export default function RoomDetail() {
         )}
 
         {confirmDelete && (
-          <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
+          <div className="mt-4 p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
             <p className="text-[15px] font-medium text-foreground">Delete this Group permanently?</p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
               This removes the Group and all its discussion. Member journey progress is preserved.
