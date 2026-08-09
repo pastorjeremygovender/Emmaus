@@ -300,6 +300,27 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms architecture columns failed (non-fatal)");
   }
 
+  // ── Groups V2: migrate legacy room_type values (must run after room_type column exists) ──
+  // The RoomType enum changed from (personal/ministry/leadership/church_service)
+  // to (personal/family/friends/marriage/discipleship/leadership/church).
+  // Remap the two removed values to the closest V2 equivalent so existing
+  // rooms still load correctly and are not left in an undefined type state.
+  // Placed immediately after ADD COLUMN room_type to guarantee the column exists.
+  try {
+    await pool.query(`
+      UPDATE rooms
+      SET room_type = CASE
+        WHEN room_type = 'ministry'       THEN 'discipleship'
+        WHEN room_type = 'church_service' THEN 'church'
+        ELSE room_type
+      END
+      WHERE room_type IN ('ministry', 'church_service');
+    `);
+    logger.info("Startup migration: legacy room_type values migrated to V2 equivalents (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: legacy room_type migration failed (non-fatal)");
+  }
+
   // ── Church video settings (2026-08) ─────────────────────────────────────────
   try {
     await pool.query(`
@@ -1619,6 +1640,25 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: room_prayer_requests.session_id column ensured (idempotent)");
   } catch (err) {
     logger.warn({ err }, "Startup migration: room_prayer_requests.session_id column failed (non-fatal)");
+  }
+
+  // ── Groups V2: leader_note, next_meeting, reveal_on_meeting on rooms ─────
+  // Three nullable columns that power the new Group Home redesign (V2).
+  // leader_note      — short message the group leader can write for members to read
+  //                    before they meet.
+  // next_meeting     — datetime of the next scheduled meeting (TIMESTAMPTZ).
+  // reveal_on_meeting — when TRUE the Today's Study card is hidden until the
+  //                    leader starts a session.
+  try {
+    await pool.query(`
+      ALTER TABLE rooms
+        ADD COLUMN IF NOT EXISTS leader_note       TEXT,
+        ADD COLUMN IF NOT EXISTS next_meeting      TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS reveal_on_meeting BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+    logger.info("Startup migration: rooms leader_note/next_meeting/reveal_on_meeting columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: rooms V2 columns failed (non-fatal)");
   }
 
   // ── ffmpeg health check ───────────────────────────────────────────────────

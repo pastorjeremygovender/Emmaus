@@ -5,8 +5,19 @@ import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Loader2, Share2 } from 'lucide-react';
+import type { RoomType } from '@/lib/rooms-types';
 
 type Phase = 'form' | 'creating' | 'success';
+
+const GROUP_TYPES: { value: RoomType; label: string; emoji: string }[] = [
+  { value: 'personal',     label: 'Personal',     emoji: '🙏' },
+  { value: 'family',       label: 'Family',        emoji: '🏠' },
+  { value: 'friends',      label: 'Friends',       emoji: '👥' },
+  { value: 'marriage',     label: 'Marriage',      emoji: '💍' },
+  { value: 'discipleship', label: 'Discipleship',  emoji: '📖' },
+  { value: 'leadership',   label: 'Leadership',    emoji: '⚡' },
+  { value: 'church',       label: 'Church',        emoji: '⛪' },
+];
 
 interface CreatedRoom {
   roomId: string;
@@ -23,6 +34,7 @@ export default function CreateRoom() {
   const [phase, setPhase] = useState<Phase>('form');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [roomType, setRoomType] = useState<RoomType>('personal');
   const [error, setError] = useState('');
   const [created, setCreated] = useState<CreatedRoom | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -35,7 +47,7 @@ export default function CreateRoom() {
     setError('');
     setPhase('creating');
     try {
-      const result = await createRoom(user.id, name.trim(), description.trim());
+      const result = await createRoom(user.id, name.trim(), description.trim(), roomType);
       setCreated({ ...result, name: name.trim() });
       setPhase('success');
     } catch (err) {
@@ -192,6 +204,30 @@ export default function CreateRoom() {
             autoFocus
           />
           {error && <p className="text-[13px] text-destructive">{error}</p>}
+        </div>
+
+        {/* Group Type */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Group Type
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {GROUP_TYPES.map(t => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setRoomType(t.value)}
+                className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-center transition-all ${
+                  roomType === t.value
+                    ? 'border-primary bg-primary/8 text-primary'
+                    : 'border-border text-muted-foreground hover:border-primary/40'
+                }`}
+              >
+                <span className="text-[18px] leading-none">{t.emoji}</span>
+                <span className="text-[11px] font-medium leading-tight">{t.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Description (optional) */}

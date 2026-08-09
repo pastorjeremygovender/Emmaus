@@ -48,7 +48,7 @@ export async function apiCreateRoom(
   userId: string,
   name: string,
   description = "",
-  roomType: 'personal' | 'ministry' | 'leadership' | 'church_service' = 'personal',
+  roomType: 'personal' | 'family' | 'friends' | 'marriage' | 'discipleship' | 'leadership' | 'church' = 'personal',
   linkedContentId?: string,
   linkedContentType?: string,
   contentType?: ContentType
@@ -56,6 +56,31 @@ export async function apiCreateRoom(
   return roomsFetch('/api/rooms', userId, {
     method: 'POST',
     body: JSON.stringify({ name, description, roomType, linkedContentId, linkedContentType, contentType }),
+  });
+}
+
+// ─── Groups V2 — Leader note + schedule ───────────────────────────────────
+
+export async function apiUpdateLeaderNote(
+  userId: string,
+  roomId: string,
+  note: string | null
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/leader-note`, userId, {
+    method: 'PATCH',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function apiUpdateSchedule(
+  userId: string,
+  roomId: string,
+  nextMeeting: string | null,
+  revealOnMeeting?: boolean
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/schedule`, userId, {
+    method: 'PATCH',
+    body: JSON.stringify({ nextMeeting, revealOnMeeting }),
   });
 }
 
@@ -144,7 +169,7 @@ export async function apiGetRooms(userId: string): Promise<RoomSummary[]> {
 export async function apiGetRoomById(
   userId: string,
   roomId: string
-): Promise<{ room: RoomDetail; currentUserRole: 'admin' | 'member' } | null> {
+): Promise<{ room: RoomDetail; currentUserRole: 'admin' | 'member'; isLeader: boolean } | null> {
   try {
     return await roomsFetch(`/api/rooms/${roomId}`, userId);
   } catch (err) {

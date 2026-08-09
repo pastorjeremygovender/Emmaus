@@ -46,7 +46,7 @@ interface RoomsContextType {
   getMyMembership: (roomId: string, userId: string) => { role: RoomRole } | undefined;
 
   // Mutations
-  createRoom: (userId: string, name: string, description?: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
+  createRoom: (userId: string, name: string, description?: string, roomType?: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
   joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
   joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
   leaveRoom: (roomId: string, userId: string) => Promise<void>;
@@ -120,7 +120,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await apiGetRoomById(user.id, roomId);
       if (!res) return null;
-      const detail: RoomDetail = { ...res.room, currentUserRole: res.currentUserRole };
+      const detail: RoomDetail = { ...res.room, currentUserRole: res.currentUserRole, isLeader: res.isLeader ?? false };
       setDetailCache(prev => ({ ...prev, [roomId]: detail }));
       return detail;
     } catch {
@@ -168,8 +168,12 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Mutations ────────────────────────────────────────────────────────────
-  const createRoom = useCallback(async (userId: string, name: string, description = "") => {
-    const result = await apiCreateRoom(userId, name, description);
+  const createRoom = useCallback(async (userId: string, name: string, description = "", roomType?: string) => {
+    const result = await apiCreateRoom(
+      userId, name, description,
+      // Pass through the roomType if valid; apiCreateRoom validates on the server
+      (roomType as Parameters<typeof apiCreateRoom>[3]) ?? 'personal'
+    );
     await loadRooms();
     return result;
   }, [loadRooms]);

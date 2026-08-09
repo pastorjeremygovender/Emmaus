@@ -24,6 +24,8 @@ import {
   leaveRoom,
   deleteRoom,
   updateRoomName,
+  updateLeaderNote,
+  updateRoomSchedule,
   transferAdmin,
   removeMember,
   getMessages,
@@ -44,6 +46,8 @@ import {
   getRoomMemberCount,
   canHostVideo,
   isAuthorizedLeader,
+  getRoomType,
+  LIVE_MEETING_TYPES_SERVER,
   getLeaderAccess,
   setLeaderAccess,
   getPrayerRequests,
@@ -210,6 +214,13 @@ router.post("/:roomId/video/start", async (req, res) => {
   }
 
   try {
+    // Gate: only leadership and church room types support live video.
+    const roomType = await getRoomType(String(roomId));
+    if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
+      res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
+      return;
+    }
+
     const settings = await getVideoSettings();
     if (!settings.videoEnabled) {
       res.status(403).json({ error: "Video Rooms are not enabled for this church." });
@@ -264,6 +275,13 @@ router.post("/:roomId/video/token", async (req, res) => {
   const memberRole = await getMemberRole(String(roomId), userId);
   if (!memberRole) {
     res.status(403).json({ error: "You are not a member of this Room." });
+    return;
+  }
+
+  // Gate: only leadership and church room types support live video.
+  const roomType = await getRoomType(String(roomId));
+  if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
+    res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
     return;
   }
 
@@ -326,6 +344,13 @@ router.post("/:roomId/video/end", async (req, res) => {
 
   if (!isLiveKitConfigured()) {
     res.status(503).json({ error: "Live video is not configured on this server." });
+    return;
+  }
+
+  // Gate: only leadership and church room types support live video.
+  const roomType = await getRoomType(String(roomId));
+  if (!roomType || !LIVE_MEETING_TYPES_SERVER.includes(roomType)) {
+    res.status(403).json({ error: "Live video is only available for Leadership and Church groups." });
     return;
   }
 
@@ -436,7 +461,10 @@ router.post("/", async (req, res) => {
   }
 
   // Normalise and validate room type
-  const validTypes: RoomType[] = ["personal", "ministry", "leadership", "church_service"];
+  const validTypes: RoomType[] = [
+    "personal", "family", "friends", "marriage",
+    "discipleship", "leadership", "church",
+  ];
   const type: RoomType = validTypes.includes(roomType as RoomType)
     ? (roomType as RoomType)
     : "personal";
@@ -603,7 +631,13 @@ router.get("/:roomId", async (req, res) => {
     const sanitisedRoom = role === "admin"
       ? room
       : { ...room, inviteCode: "", inviteToken: "" };
-    res.json({ room: sanitisedRoom, currentUserRole: role });
+
+    // isLeader: the room admin is the group leader.
+    // Room creators are automatically the room admin, so any creator can use
+    // all leader controls immediately. Video hosting uses the stricter canHostVideo().
+    const isLeader = role === "admin";
+
+    res.json({ room: sanitisedRoom, currentUserRole: role, isLeader });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
   }
@@ -638,6 +672,60 @@ router.patch("/:roomId", async (req, res) => {
     res.json({ ok: true, name: name.trim() });
   } catch (err) {
     res.status(500).json({ error: "Failed to rename room." });
+  }
+});
+
+// ─── Groups V2: Update leader note (room admin only) ─────────────────────────
+
+router.patch("/:roomId/leader-note", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+
+  const { note } = req.body as { note?: string | null };
+  try {
+    const trimmed = typeof note === "string" ? note.trim().slice(0, 1000) : null;
+    await updateLeaderNote(String(roomId), trimmed || null);
+    res.json({ ok: true, note: trimmed || null });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update leader note." });
+  }
+});
+
+// ─── Groups V2: Update meeting schedule (room admin only) ────────────────────
+
+router.patch("/:roomId/schedule", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+
+  // Explicitly check which keys were sent so we can distinguish
+  //   omitted (undefined = no change) from explicit null (= clear).
+  const body = req.body as Record<string, unknown>;
+  const nextMeetingProvided = "nextMeeting" in body;
+  const rawNextMeeting = body.nextMeeting as string | null | undefined;
+  const revealOnMeeting = body.revealOnMeeting as boolean | undefined;
+
+  try {
+    // Resolve nextMeeting: undefined (omitted) → no change; null → clear; string → validate + set.
+    let resolvedNextMeeting: string | null | undefined;
+    if (!nextMeetingProvided) {
+      resolvedNextMeeting = undefined; // preserve existing value in DB
+    } else if (rawNextMeeting == null) {
+      resolvedNextMeeting = null; // explicit clear
+    } else {
+      const parsed = new Date(rawNextMeeting);
+      if (isNaN(parsed.getTime())) {
+        res.status(400).json({ error: "Invalid nextMeeting datetime." });
+        return;
+      }
+      resolvedNextMeeting = parsed.toISOString();
+    }
+
+    await updateRoomSchedule(String(roomId), resolvedNextMeeting, revealOnMeeting);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update meeting schedule." });
   }
 });
 
@@ -748,11 +836,16 @@ router.post("/:roomId/leave", async (req, res) => {
 
 // ─── Link a journey to the room ───────────────────────────────────────────────
 
+// POST /:roomId/journeys — link a journey to the room (room admin only)
+// Linking a walk determines the shared study plan for the whole group, so it
+// must be gated the same way as other leader-owned mutations (session start,
+// leader note, schedule). guardLeader enforces room_members.role='admin'.
+// The creator of a group is the room admin and can immediately link a study.
 router.post("/:roomId/journeys", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
 
-  const { roomId } = req.params;
   const { journeyId } = req.body as { journeyId?: string };
   if (!journeyId) {
     res.status(400).json({ error: "journeyId is required." });
@@ -760,12 +853,6 @@ router.post("/:roomId/journeys", async (req, res) => {
   }
 
   try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) {
-      res.status(403).json({ error: "You are not a member of this room." });
-      return;
-    }
-
     await linkJourney(String(roomId), journeyId, userId);
     res.json({ ok: true });
   } catch (err) {
@@ -1223,7 +1310,7 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
 
 // ─── Session — leader-guided real-time session ────────────────────────────────
 //
-// Only Authorized Room Leaders (isAuthorizedLeader) can start/end sessions and
+// Only the room admin (group leader = group creator) can start/end sessions and
 // broadcast leader events. All room members can read session state + subscribe
 // to the SSE event stream.
 //
@@ -1240,6 +1327,15 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
 //  GET  /:roomId/session/events              — any member: SSE event stream
 
 /** Ensure the caller is an authorized leader for this room. */
+// guardLeader: authorize group-management actions (sessions, leader note, schedule, study link).
+//
+// Authorization policy: room admin is the group leader.
+// The creator of a group is automatically the room admin, so any member who
+// creates a group can immediately use all leader controls.
+//
+// Video hosting uses the stricter canHostVideo() (room-admin + isAuthorizedLeader)
+// because it involves external real-time infrastructure. All other leader controls
+// only need room-admin status.
 async function guardLeader(
   req: Parameters<typeof requireAuth>[0],
   res: Parameters<typeof requireAuth>[1],
@@ -1247,17 +1343,16 @@ async function guardLeader(
 ): Promise<string | null> {
   const userId = requireAuth(req, res);
   if (!userId) return null;
-  const appRole = await getUserRole(userId);
-  const authorized = await isAuthorizedLeader(userId, appRole);
-  if (!authorized) {
-    res.status(403).json({ error: "Authorized Room Leader access required." });
-    return null;
-  }
+
+  // Must be the room admin (room_members.role = 'admin').
+  // This scopes control to THIS room's leader only — a pastor/admin who is only
+  // a regular member of another group cannot control that group's sessions.
   const role = await getMemberRole(roomId, userId);
-  if (!role) {
-    res.status(403).json({ error: "You are not a member of this room." });
+  if (role !== "admin") {
+    res.status(403).json({ error: "Only the group leader can perform this action." });
     return null;
   }
+
   return userId;
 }
 

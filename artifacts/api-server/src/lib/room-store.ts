@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type RoomType = "personal" | "ministry" | "leadership" | "church_service";
+export type RoomType = "personal" | "family" | "friends" | "marriage" | "discipleship" | "leadership" | "church";
 
 /** Content dimension: what kind of content the Room is built around. */
 export type ContentType = "walk" | "journey" | "devotional" | "bible-study" | "sermon-companion";
@@ -39,6 +39,12 @@ export interface RoomSummary {
   createdAt: string;
   memberCount: number;
   adminName: string;
+  /** Groups V2: short message from the leader, visible to all members. */
+  leaderNote: string | null;
+  /** Groups V2: timestamp of the next scheduled meeting. */
+  nextMeeting: string | null;
+  /** Groups V2: when true, hide Today's Study until a meeting session is started. */
+  revealOnMeeting: boolean;
 }
 
 export interface RoomDetail extends RoomSummary {
@@ -128,6 +134,10 @@ function rowToSummary(row: Record<string, unknown>): RoomSummary {
       row.admin_preferred_name && String(row.admin_preferred_name).trim()
         ? String(row.admin_preferred_name).trim()
         : "",
+    // Groups V2 fields (nullable — added by startup migration)
+    leaderNote: row.leader_note ? String(row.leader_note) : null,
+    nextMeeting: row.next_meeting ? String(row.next_meeting) : null,
+    revealOnMeeting: Boolean(row.reveal_on_meeting ?? false),
   };
 }
 
@@ -208,8 +218,8 @@ export async function canCreateRoomType(
   roomType: RoomType,
   appRole: string
 ): Promise<boolean> {
-  // Church service rooms are admin-only (whole-church broadcast context)
-  if (roomType === "church_service") {
+  // Church rooms are admin-only (whole-church broadcast context)
+  if (roomType === "church") {
     return appRole === "admin" || appRole === "superAdmin";
   }
   // All other room types: any authenticated user may create
@@ -304,6 +314,18 @@ export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
 
 // ─── Membership ───────────────────────────────────────────────────────────────
 
+/** Fetch only the room_type for a room — used for server-side video eligibility gate. */
+export async function getRoomType(roomId: string): Promise<RoomType | null> {
+  const { rows } = await pool.query(
+    `SELECT room_type FROM rooms WHERE id = $1`,
+    [roomId]
+  );
+  return (rows[0]?.room_type as RoomType) ?? null;
+}
+
+/** The room types that are eligible for live video meetings. */
+export const LIVE_MEETING_TYPES_SERVER: RoomType[] = ["leadership", "church"];
+
 export async function getMemberRole(
   roomId: string,
   userId: string
@@ -376,6 +398,53 @@ export async function updateRoomName(roomId: string, name: string): Promise<void
     [name.trim(), roomId]
   );
 }
+
+/** Groups V2: persist the leader's note for all members to read. */
+export async function updateLeaderNote(
+  roomId: string,
+  note: string | null
+): Promise<void> {
+  await pool.query(
+    `UPDATE rooms SET leader_note = $1 WHERE id = $2`,
+    [note ?? null, roomId]
+  );
+}
+
+/** Groups V2: set or clear the next meeting datetime and the reveal-on-meeting gate.
+ *
+ * Pass `nextMeeting` as:
+ *   - a datetime string → sets the column
+ *   - `null`           → clears the column
+ *   - `undefined`      → leaves the column unchanged (partial-update safe)
+ *
+ * `revealOnMeeting` follows the same convention; `undefined` preserves the
+ * existing value via SQL COALESCE.
+ */
+export async function updateRoomSchedule(
+  roomId: string,
+  nextMeeting: string | null | undefined,
+  revealOnMeeting?: boolean
+): Promise<void> {
+  if (nextMeeting !== undefined) {
+    // Both fields explicitly provided — update together.
+    await pool.query(
+      `UPDATE rooms
+       SET next_meeting      = $1,
+           reveal_on_meeting = COALESCE($2, reveal_on_meeting)
+       WHERE id = $3`,
+      [nextMeeting, revealOnMeeting ?? null, roomId]
+    );
+  } else {
+    // nextMeeting omitted — only update revealOnMeeting if provided.
+    await pool.query(
+      `UPDATE rooms
+       SET reveal_on_meeting = COALESCE($1, reveal_on_meeting)
+       WHERE id = $2`,
+      [revealOnMeeting ?? null, roomId]
+    );
+  }
+}
+
 export async function deleteRoom(roomId: string): Promise<void> {
   // Close all open chat + presence SSE streams before deleting so no subscriber
   // receives post-deletion events.
@@ -494,12 +563,36 @@ export async function linkJourney(
   journeyId: string,
   startedBy: string
 ): Promise<void> {
-  await pool.query(
-    `INSERT INTO room_journeys (room_id, journey_id, started_by)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (room_id, journey_id) DO NOTHING`,
-    [roomId, journeyId, startedBy]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Insert the journey link (idempotent).
+    await client.query(
+      `INSERT INTO room_journeys (room_id, journey_id, started_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (room_id, journey_id) DO NOTHING`,
+      [roomId, journeyId, startedBy]
+    );
+
+    // If the room has no primary linked content yet, make this the primary study.
+    // This ensures the first walk a leader links appears in Today's Study immediately.
+    await client.query(
+      `UPDATE rooms
+       SET linked_content_id   = $2,
+           linked_content_type = 'journey'
+       WHERE id = $1
+         AND linked_content_id IS NULL`,
+      [roomId, journeyId]
+    );
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ─── Atomic shared-start ─────────────────────────────────────────────────────

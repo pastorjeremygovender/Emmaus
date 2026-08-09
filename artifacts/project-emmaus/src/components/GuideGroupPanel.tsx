@@ -184,7 +184,7 @@ export function GuideGroupPanel({
     onOpenAskEmmaus?.();
   };
 
-  // ── Scripture picker ───────────────────────────────────────────────────────
+  // ── Scripture picker (Present Bible) ─────────────────────────────────────
 
   const handleOpenScripture = () => run('scripture', async () => {
     const ref: ScriptureRef = {
@@ -341,7 +341,7 @@ export function GuideGroupPanel({
                 />
                 <LeaderAction
                   icon={<ChevronRight size={19} className="-rotate-180" />}
-                  label="Open Scripture"
+                  label="Present Bible"
                   loading={false}
                   disabled={!sessionActive}
                   onClick={() => setView('scripture')}
@@ -389,14 +389,6 @@ export function GuideGroupPanel({
                   onClick={handleAskEmmausTogether}
                 />
                 <LeaderAction
-                  icon={<Video size={19} />}
-                  label={videoActive ? 'End Gathering' : 'Gather Together'}
-                  loading={false}
-                  disabled={false}
-                  onClick={videoActive ? handleEndGathering : handleGatherTogether}
-                  variant={videoActive ? 'destructive' : 'default'}
-                />
-                <LeaderAction
                   icon={<CheckCircle2 size={19} />}
                   label="Complete Meeting"
                   loading={busy === 'complete-session'}
@@ -434,7 +426,7 @@ export function GuideGroupPanel({
                 >
                   <ArrowLeft size={20} />
                 </button>
-                <p className="text-[17px] font-bold text-foreground">Open Scripture</p>
+                <p className="text-[17px] font-bold text-foreground">Present Bible</p>
               </div>
 
               {/* Book picker */}

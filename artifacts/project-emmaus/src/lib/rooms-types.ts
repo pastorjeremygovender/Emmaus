@@ -10,18 +10,31 @@
 export type RoomRole = 'admin' | 'member';
 
 // ─── Dimension 1: Permission Level ────────────────────────────────────────
-/** Personal = any member; Ministry/Leadership = church-authorised; ChurchService = service-level. */
-export type RoomType = 'personal' | 'ministry' | 'leadership' | 'church_service';
+/** The seven group types available in Groups V2. */
+export type RoomType =
+  | 'personal'
+  | 'family'
+  | 'friends'
+  | 'marriage'
+  | 'discipleship'
+  | 'leadership'
+  | 'church';
 
 export function getRoomTypeLabel(roomType: RoomType): string {
   switch (roomType) {
-    case 'personal':       return 'Personal';
-    case 'ministry':       return 'Ministry';
-    case 'leadership':     return 'Leadership';
-    case 'church_service': return 'Church Service';
-    default:               return 'Room';
+    case 'personal':     return 'Personal';
+    case 'family':       return 'Family';
+    case 'friends':      return 'Friends';
+    case 'marriage':     return 'Marriage';
+    case 'discipleship': return 'Discipleship';
+    case 'leadership':   return 'Leadership';
+    case 'church':       return 'Church';
+    default:             return 'Group';
   }
 }
+
+/** Types that are eligible for video meeting controls. */
+export const LIVE_MEETING_TYPES: RoomType[] = ['leadership', 'church'];
 
 // ─── Dimension 2: Content Type ────────────────────────────────────────────
 /** What kind of discipleship content the Room is built around. */
@@ -73,6 +86,12 @@ export interface RoomSummary {
   createdAt: string;
   memberCount: number;
   adminName: string;
+  /** Groups V2: short message from the leader for all members. */
+  leaderNote?: string | null;
+  /** Groups V2: ISO timestamp of the next scheduled meeting. */
+  nextMeeting?: string | null;
+  /** Groups V2: when true Today's Study is hidden until a session starts. */
+  revealOnMeeting?: boolean;
 }
 
 export interface RoomMember {
@@ -92,6 +111,11 @@ export interface RoomDetail extends RoomSummary {
   members: RoomMember[];
   linkedJourneys: LinkedJourney[];
   currentUserRole: RoomRole;
+  /** Server-computed: true when the requesting user is the room admin.
+   *  The room creator is automatically the room admin, so any creator can use
+   *  all leader controls (session start, leader note, schedule, study link).
+   *  Video hosting uses a separate, stricter check (canHostVideo). */
+  isLeader: boolean;
 }
 
 export interface MemberJourneyProgress {
