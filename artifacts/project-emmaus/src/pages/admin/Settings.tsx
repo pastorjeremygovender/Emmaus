@@ -72,7 +72,7 @@ function VideoSettingsSection() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Video size={16} className="text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-700">Rooms &amp; Video Settings</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Groups &amp; Video Settings</h2>
         </div>
         {saving && <span className="text-xs text-gray-400">Saving…</span>}
         {saved  && <span className="text-xs text-green-600">Saved</span>}
@@ -160,7 +160,7 @@ function VideoSettingsSection() {
 
       {/* Room type legend */}
       <div className="pt-2 border-t border-gray-100 space-y-2">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Room Types</p>
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Group Types</p>
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
           <div><span className="font-medium text-gray-700">Personal</span> — any member, no video</div>
           <div><span className="font-medium text-gray-700">Ministry</span> — Group Leader+, video allowed</div>

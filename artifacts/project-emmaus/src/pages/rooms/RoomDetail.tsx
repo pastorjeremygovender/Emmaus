@@ -244,7 +244,7 @@ export default function RoomDetail() {
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
-      if (!detail) { setLoadError('Room not found or you are not a member.'); return; }
+      if (!detail) { setLoadError('Group not found or you are not a member.'); return; }
       setRoom(detail);
       detail.linkedJourneys.forEach(lj => {
         apiGetJourneyProgress(user.id, String(roomId), lj.journeyId)
@@ -327,7 +327,7 @@ export default function RoomDetail() {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
         <p className="text-muted-foreground">{loadError}</p>
-        <Button onClick={() => setLocation('/rooms')}>Back to Rooms</Button>
+        <Button onClick={() => setLocation('/rooms')}>Back to Groups</Button>
       </div>
     );
   }
@@ -390,7 +390,7 @@ export default function RoomDetail() {
       setLocation('/rooms');
     } catch (err) {
       setActioning(false);
-      alert(err instanceof Error ? err.message : 'Failed to leave room');
+      alert(err instanceof Error ? err.message : 'Failed to leave group');
     }
   };
 
@@ -401,12 +401,12 @@ export default function RoomDetail() {
       setLocation('/rooms');
     } catch (err) {
       setActioning(false);
-      alert(err instanceof Error ? err.message : 'Failed to delete room');
+      alert(err instanceof Error ? err.message : 'Failed to delete group');
     }
   };
 
   const handleRemoveMember = async (member: RoomMember) => {
-    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Room?`)) return;
+    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Group?`)) return;
     try {
       await removeMember(String(roomId), member.userId, user.id);
       setRoom(prev => prev ? {
@@ -456,7 +456,7 @@ export default function RoomDetail() {
       setRoom(prev => prev ? { ...prev, name: trimmed } : prev);
       setRenaming(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to rename room');
+      alert(err instanceof Error ? err.message : 'Failed to rename group');
     } finally {
       setRenameSaving(false);
     }
@@ -495,7 +495,7 @@ export default function RoomDetail() {
                 }}
                 maxLength={80}
                 className="flex-1 min-w-0 bg-transparent border-b border-primary text-[17px] font-semibold text-foreground outline-none py-0.5"
-                aria-label="Room name"
+                aria-label="Group name"
               />
               <button
                 onClick={handleRenameSubmit}
@@ -522,7 +522,7 @@ export default function RoomDetail() {
             <button
               onClick={e => { e.stopPropagation(); setShowOverflow(v => !v); }}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Room options"
+              aria-label="Group options"
             >
               <MoreHorizontal size={22} />
             </button>
@@ -548,7 +548,7 @@ export default function RoomDetail() {
                       className={`w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 ${isAuthorizedLeader ? 'border-t border-border/60' : ''}`}
                     >
                       <Pencil size={15} className="text-muted-foreground shrink-0" />
-                      Rename Room
+                      Rename Group
                     </button>
                     <button
                       onClick={() => { setShowOverflow(false); setLocation(`/rooms/${roomId}/invite`); }}
@@ -562,14 +562,14 @@ export default function RoomDetail() {
                       className="w-full text-left px-4 py-3.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2.5 border-t border-border/60"
                     >
                       <Settings size={15} className="text-muted-foreground shrink-0" />
-                      Room Settings
+                      Group Settings
                     </button>
                     <button
                       onClick={() => { setShowOverflow(false); setConfirmDelete(true); }}
                       className="w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 border-t border-border/60"
                     >
                       <Trash2 size={15} className="shrink-0" />
-                      Delete Room
+                      Delete Group
                     </button>
                   </>
                 ) : (
@@ -578,7 +578,7 @@ export default function RoomDetail() {
                     className={`w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 ${isAuthorizedLeader ? 'border-t border-border/60' : ''}`}
                   >
                     <LogOut size={15} className="shrink-0" />
-                    Leave Room
+                    Leave Group
                   </button>
                 )}
               </div>
@@ -794,14 +794,14 @@ export default function RoomDetail() {
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-sky-800 dark:text-sky-300">Group Discussion</p>
               <p className="text-[12px] text-sky-600 dark:text-sky-400 mt-0.5">
-                Share your thoughts — use the chat below
+                Share your thoughts — use the discussion below
               </p>
             </div>
             <button
               onClick={openChat}
               className="shrink-0 text-[12px] text-sky-600 dark:text-sky-400 font-semibold whitespace-nowrap"
             >
-              Open Chat →
+              Open Discussion →
             </button>
           </div>
         )}
@@ -1189,13 +1189,13 @@ export default function RoomDetail() {
         {/* ── Confirm Leave / Delete ────────────────────────────────────── */}
         {confirmLeave && (
           <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
-            <p className="text-[15px] font-medium text-foreground">Leave this Room?</p>
+            <p className="text-[15px] font-medium text-foreground">Leave this Group?</p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              You&apos;ll lose access to Room discussion. Your personal journey progress is preserved.
+              You&apos;ll lose access to Group discussion. Your personal journey progress is preserved.
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleLeave} disabled={actioning}>
-                {actioning ? 'Leaving…' : 'Leave Room'}
+                {actioning ? 'Leaving…' : 'Leave Group'}
               </Button>
               <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmLeave(false)}>
                 Cancel
@@ -1206,13 +1206,13 @@ export default function RoomDetail() {
 
         {confirmDelete && (
           <div className="p-5 rounded-2xl border border-destructive/30 bg-destructive/5 space-y-4">
-            <p className="text-[15px] font-medium text-foreground">Delete this Room permanently?</p>
+            <p className="text-[15px] font-medium text-foreground">Delete this Group permanently?</p>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              This removes the Room and all its discussion. Member journey progress is preserved.
+              This removes the Group and all its discussion. Member journey progress is preserved.
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="destructive" className="flex-1 rounded-xl" onClick={handleDelete} disabled={actioning}>
-                {actioning ? 'Deleting…' : 'Delete Room'}
+                {actioning ? 'Deleting…' : 'Delete Group'}
               </Button>
               <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => setConfirmDelete(false)}>
                 Cancel

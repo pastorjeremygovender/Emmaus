@@ -144,7 +144,7 @@ export default function HeroSummaryCard({ person, snapshot, discipleship, careSi
 
         <div className="px-4 py-3">
           <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1">
-            <Users size={9} /> Rooms
+            <Users size={9} /> Groups
           </p>
           {loading ? (
             <p className="text-[13px] font-semibold text-gray-900 mt-0.5">…</p>
@@ -158,7 +158,7 @@ export default function HeroSummaryCard({ person, snapshot, discipleship, careSi
               )}
             </>
           ) : (
-            <p className="text-[13px] text-gray-400 mt-0.5">No rooms</p>
+            <p className="text-[13px] text-gray-400 mt-0.5">No groups</p>
           )}
         </div>
       </div>

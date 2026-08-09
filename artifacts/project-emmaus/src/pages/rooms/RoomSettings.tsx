@@ -21,8 +21,8 @@ export default function RoomSettings() {
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
-      if (!detail) { setLoadError('Room not found.'); return; }
-      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Room admin can access Settings.'); return; }
+      if (!detail) { setLoadError('Group not found.'); return; }
+      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Group leader can access Settings.'); return; }
       setRoom(detail);
     });
   }, [roomId, user, loadRoomDetail]);
@@ -49,7 +49,7 @@ export default function RoomSettings() {
   const otherMembers = room.members.filter(m => m.userId !== user.id);
 
   const handleRemove = async (member: RoomMember) => {
-    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Room?`)) return;
+    if (!window.confirm(`Remove ${member.preferredName || 'this member'} from this Group?`)) return;
     setActioning(member.userId);
     try {
       await removeMember(String(roomId), member.userId, user.id);
@@ -87,7 +87,7 @@ export default function RoomSettings() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 text-center font-medium text-sm">Room Settings</div>
+          <div className="flex-1 text-center font-medium text-sm">Group Settings</div>
           <div className="w-10" />
         </div>
       </header>
@@ -157,7 +157,7 @@ export default function RoomSettings() {
                 Transfer admin to {confirmTransfer.preferredName || 'this member'}?
               </p>
               <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed">
-                They will become the Room admin. You will become a regular member.
+                They will become the Group leader. You will become a regular member.
               </p>
             </div>
             <div className="flex gap-2">

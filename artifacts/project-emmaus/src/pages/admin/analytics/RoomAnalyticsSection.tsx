@@ -13,15 +13,15 @@ export function RoomAnalyticsSection({ data, loading, error }: Props) {
     <section className="mb-10">
       <SectionHeader
         icon={Home}
-        title="Room Analytics"
-        subtitle="Activity, participation, and growth across all Rooms"
+        title="Group Analytics"
+        subtitle="Activity, participation, and growth across all Groups"
         iconColor="text-amber-500"
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Total Rooms",     value: data.totalRooms },
-          { label: "Active Rooms",    value: data.activeRooms },
+          { label: "Total Groups",     value: data.totalRooms },
+          { label: "Active Groups",   value: data.activeRooms },
           { label: "Avg Members",     value: data.avgMembersPerRoom },
           { label: "Total Messages",  value: data.totalMessages },
         ].map((s) => (

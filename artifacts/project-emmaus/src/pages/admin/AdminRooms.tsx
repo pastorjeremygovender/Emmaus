@@ -60,22 +60,22 @@ export default function AdminRooms() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Rooms</h1>
-        <p className="text-sm text-gray-500 mt-1">Support and moderation for Emmaus Rooms.</p>
+        <h1 className="text-xl font-semibold text-gray-900">Groups</h1>
+        <p className="text-sm text-gray-500 mt-1">Support and moderation for Emmaus Groups.</p>
       </div>
 
       {/* Room Table */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">All Rooms</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">All Groups</span>
         </div>
 
         {loadingRooms ? (
-          <div className="px-5 py-10 text-center text-gray-400 text-sm">Loading rooms…</div>
+          <div className="px-5 py-10 text-center text-gray-400 text-sm">Loading groups…</div>
         ) : roomsError ? (
           <div className="px-5 py-10 text-center text-red-500 text-sm">{roomsError}</div>
         ) : rooms.length === 0 ? (
-          <div className="px-5 py-10 text-center text-gray-400 text-sm">No Rooms created yet.</div>
+          <div className="px-5 py-10 text-center text-gray-400 text-sm">No Groups created yet.</div>
         ) : (
           <div className="divide-y divide-gray-100">
             {rooms.map(room => (
@@ -117,7 +117,7 @@ export default function AdminRooms() {
           </div>
 
           {loadingDetail ? (
-            <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading room detail…</div>
+            <div className="px-5 py-8 text-center text-gray-400 text-sm">Loading group detail…</div>
           ) : detailError ? (
             <div className="px-5 py-8 text-center text-red-500 text-sm">{detailError}</div>
           ) : selectedDetail ? (

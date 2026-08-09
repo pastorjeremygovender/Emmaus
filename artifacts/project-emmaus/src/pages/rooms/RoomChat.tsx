@@ -306,9 +306,9 @@ export default function RoomChat() {
           </button>
           <div className="flex-1 min-w-0">
             <div className="font-sans font-semibold text-[17px] truncate">
-              {roomName || 'Room Chat'}
+              {roomName || 'Group Discussion'}
             </div>
-            <div className="text-[12px] text-muted-foreground">Group chat</div>
+            <div className="text-[12px] text-muted-foreground">Group Discussion</div>
           </div>
         </div>
       </header>

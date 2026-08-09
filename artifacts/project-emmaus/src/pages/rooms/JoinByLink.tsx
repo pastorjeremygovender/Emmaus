@@ -77,7 +77,7 @@ export default function JoinByLink() {
           <div className="space-y-1.5">
             <h1 className="text-[24px] font-sans font-semibold">You've been invited</h1>
             <p className="text-[15px] text-muted-foreground leading-relaxed">
-              Sign in to Emmaus to accept this Room invitation. Your invite will be waiting after you sign in.
+              Sign in to Emmaus to accept this Group invitation. Your invite will be waiting after you sign in.
             </p>
           </div>
           <Button
@@ -102,13 +102,13 @@ export default function JoinByLink() {
           <div className="space-y-1.5">
             <h1 className="text-[24px] font-sans font-semibold">You've been invited</h1>
             <p className="text-[15px] text-muted-foreground leading-relaxed">
-              Someone has invited you to join a Room on Emmaus. Rooms let you walk journeys
+              Someone has invited you to join a Group on Emmaus. Groups let you walk journeys
               together with family or friends.
             </p>
           </div>
           <div className="space-y-3">
             <Button className="w-full h-12 rounded-2xl text-[16px]" onClick={handleJoin}>
-              Join Room
+              Join Group
             </Button>
             <Button
               variant="outline"
@@ -129,7 +129,7 @@ export default function JoinByLink() {
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 size={32} className="text-muted-foreground animate-spin mx-auto" />
-          <p className="text-[15px] text-muted-foreground">Joining Room…</p>
+          <p className="text-[15px] text-muted-foreground">Joining Group…</p>
         </div>
       </div>
     );
@@ -146,7 +146,7 @@ export default function JoinByLink() {
           <h1 className="text-[22px] font-sans font-semibold">Invalid Invitation</h1>
           <p className="text-[15px] text-muted-foreground">{error}</p>
           <Button className="w-full rounded-2xl" onClick={() => setLocation('/rooms')}>
-            Back to Rooms
+            Back to Groups
           </Button>
         </div>
       </div>
@@ -161,12 +161,12 @@ export default function JoinByLink() {
           <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
             <Users size={26} className="text-primary" />
           </div>
-          <h1 className="text-[22px] font-sans font-semibold">You're already in this Room</h1>
+          <h1 className="text-[22px] font-sans font-semibold">You're already in this Group</h1>
           <Button
             className="w-full rounded-2xl"
             onClick={() => setLocation(joinedRoomId ? `/rooms/${joinedRoomId}` : '/rooms')}
           >
-            Open Room
+            Open Group
           </Button>
         </div>
       </div>
@@ -182,20 +182,20 @@ export default function JoinByLink() {
         </div>
         <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
         <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Welcome to the Room. Your personal journey progress and private content remain yours alone.
+          Welcome to the Group. Your personal journey progress and private content remain yours alone.
         </p>
         <Button
           className="w-full rounded-2xl h-12"
           onClick={() => setLocation(`/rooms/${joinedRoomId}`)}
         >
-          Open Room
+          Open Group
         </Button>
         <Button
           variant="outline"
           className="w-full rounded-2xl h-11"
           onClick={() => setLocation('/rooms')}
         >
-          Back to Rooms
+          Back to Groups
         </Button>
       </div>
     </div>

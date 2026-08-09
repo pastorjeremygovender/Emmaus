@@ -21,8 +21,8 @@ export default function InviteMembers() {
   useEffect(() => {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
-      if (!detail) { setLoadError('Room not found.'); return; }
-      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Room admin can invite members.'); return; }
+      if (!detail) { setLoadError('Group not found.'); return; }
+      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Group leader can invite members.'); return; }
       setRoom(detail);
     });
   }, [roomId, user, loadRoomDetail]);
@@ -116,7 +116,7 @@ export default function InviteMembers() {
               </button>
             </div>
             <p className="text-[12px] text-muted-foreground">
-              Anyone with this code can join your Room.
+              Anyone with this code can join your Group.
             </p>
           </div>
 

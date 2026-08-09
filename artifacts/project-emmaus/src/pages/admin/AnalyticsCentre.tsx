@@ -30,7 +30,7 @@ const SECTIONS = [
   { id: "discipleship",label: "Discipleship" },
   { id: "retention",   label: "Retention" },
   { id: "growth",      label: "Spiritual Growth" },
-  { id: "rooms",       label: "Rooms" },
+  { id: "rooms",       label: "Groups" },
   { id: "sermons",     label: "Sermons" },
   { id: "bible",       label: "Bible" },
   { id: "care",        label: "Pastoral Care" },

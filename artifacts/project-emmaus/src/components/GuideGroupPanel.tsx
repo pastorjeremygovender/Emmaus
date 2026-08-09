@@ -297,7 +297,7 @@ export function GuideGroupPanel({
                   <p className="text-[17px] font-bold text-foreground">Guide Group</p>
                   {sessionActive ? (
                     <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-                      ● Session active
+                      ● Meeting active
                     </p>
                   ) : (
                     <p className="text-[12px] text-muted-foreground mt-0.5">
@@ -325,7 +325,7 @@ export function GuideGroupPanel({
                     {busy === 'start-session'
                       ? <Loader2 size={17} className="animate-spin" />
                       : <MapPin size={17} />}
-                    Start Session
+                    Start Meeting
                   </button>
                 </div>
               )}
@@ -398,7 +398,7 @@ export function GuideGroupPanel({
                 />
                 <LeaderAction
                   icon={<CheckCircle2 size={19} />}
-                  label="Complete Session"
+                  label="Complete Meeting"
                   loading={busy === 'complete-session'}
                   disabled={!sessionActive}
                   onClick={() => setView('complete-confirm')}
@@ -417,7 +417,7 @@ export function GuideGroupPanel({
                     {busy === 'end-session'
                       ? <Loader2 size={14} className="animate-spin" />
                       : <StopCircle size={14} />}
-                    End Session Without Completing
+                    End Without Completing
                   </button>
                 </div>
               )}

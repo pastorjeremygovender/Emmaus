@@ -103,7 +103,7 @@ export default function JourneyStartSheet({
 
   async function doCreateAndStart() {
     const name = roomName.trim();
-    if (!name) { setError('Enter a name for your Room.'); return; }
+    if (!name) { setError('Enter a name for your Group.'); return; }
     setError('');
     setBusy(true);
     try {
@@ -119,8 +119,8 @@ export default function JourneyStartSheet({
 
   const stepTitles: Record<Step, string> = {
     'main': 'How would you like to do this?',
-    'room-list': 'Choose a Room',
-    'create-room': 'Create a Room',
+    'room-list': 'Choose a Group',
+    'create-room': 'Create a Group',
   };
 
   function goBack() {
@@ -205,22 +205,22 @@ export default function JourneyStartSheet({
                 loading={busy}
               />
 
-              {/* Use an existing Room — hidden if user has no rooms */}
+              {/* Use an existing Group — hidden if user has no rooms */}
               {userRooms.length > 0 && (
                 <OptionCard
                   icon={<Users size={20} />}
-                  title="Use an existing Room"
-                  description={`Walk this together with ${userRooms.length === 1 ? 'your Room' : 'one of your Rooms'}.`}
+                  title="Use an existing Group"
+                  description={`Walk this together with ${userRooms.length === 1 ? 'your Group' : 'one of your Groups'}.`}
                   disabled={busy}
                   onClick={() => setStep('room-list')}
                   chevron
                 />
               )}
 
-              {/* Create a Room */}
+              {/* Create a Group */}
               <OptionCard
                 icon={<Plus size={20} />}
-                title="Create a Room"
+                title="Create a Group"
                 description="Walk through this together with family or friends."
                 disabled={busy}
                 onClick={() => setStep('create-room')}
@@ -230,7 +230,7 @@ export default function JourneyStartSheet({
               {error && <ErrorMsg text={error} />}
 
               <p className="text-center text-[12px] text-muted-foreground pt-1">
-                You can always invite others later from Rooms.
+                You can always invite others later from Groups.
               </p>
             </div>
           )}
@@ -245,12 +245,12 @@ export default function JourneyStartSheet({
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-primary/8 border border-primary/20">
                   <Users size={14} className="text-primary shrink-0 mt-0.5" />
                   <p className="text-[13px] text-primary leading-snug">
-                    Your Room is already walking this journey
+                    Your Group is already walking this journey
                   </p>
                 </div>
               ) : (
                 <p className="text-[13px] text-muted-foreground">
-                  Select the Room you'd like to walk this journey with.
+                  Select the Group you'd like to walk this journey with.
                 </p>
               )}
 
@@ -299,7 +299,7 @@ export default function JourneyStartSheet({
               >
                 {busy
                   ? <><Loader2 size={16} className="animate-spin mr-2" />Starting…</>
-                  : 'Start with this Room'
+                  : 'Start with this Group'
                 }
               </Button>
             </div>
@@ -312,7 +312,7 @@ export default function JourneyStartSheet({
               style={{ paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
             >
               <p className="text-[13px] text-muted-foreground">
-                Give your Room a name — you can always change it later.
+                Give your Group a name — you can always change it later.
               </p>
 
               <div className="space-y-1.5">
@@ -320,7 +320,7 @@ export default function JourneyStartSheet({
                   htmlFor="room-name-input"
                   className="text-[12px] font-medium text-muted-foreground uppercase tracking-widest"
                 >
-                  Room name
+                  Group name
                 </label>
                 <input
                   id="room-name-input"
@@ -345,8 +345,8 @@ export default function JourneyStartSheet({
                 disabled={!roomName.trim() || busy}
               >
                 {busy
-                  ? <><Loader2 size={16} className="animate-spin mr-2" />Creating Room…</>
-                  : 'Create Room & Start'
+                  ? <><Loader2 size={16} className="animate-spin mr-2" />Creating Group…</>
+                  : 'Create Group & Start'
                 }
               </Button>
             </div>

@@ -88,7 +88,7 @@ export default function JoinRoom() {
           </div>
           <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Welcome to the Room. See who else is in it and which journeys you're walking together.
+            Welcome to the Group. See who else is in it and which journeys you're walking together.
           </p>
           <Button
             className="w-full rounded-2xl h-12"
@@ -101,7 +101,7 @@ export default function JoinRoom() {
             className="w-full rounded-2xl h-11"
             onClick={() => setLocation('/rooms')}
           >
-            Back to Rooms
+            Back to Groups
           </Button>
         </div>
       </div>
@@ -120,14 +120,14 @@ export default function JoinRoom() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 text-center font-medium text-sm">Join a Room</div>
+          <div className="flex-1 text-center font-medium text-sm">Join a Group</div>
           <div className="w-10" />
         </div>
       </header>
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-7 pb-8">
         <div className="space-y-1.5">
-          <h1 className="text-[26px] font-sans font-semibold">Join a Room</h1>
+          <h1 className="text-[26px] font-sans font-semibold">Join a Group</h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">
             Use an access code or paste an invite link.
           </p>
@@ -183,7 +183,7 @@ export default function JoinRoom() {
             >
               {phase === 'joining'
                 ? <><Loader2 size={17} className="mr-2 animate-spin" /> Joining…</>
-                : 'Join Room'}
+                : 'Join Group'}
             </Button>
           </div>
         )}
@@ -212,7 +212,7 @@ export default function JoinRoom() {
             >
               {phase === 'joining'
                 ? <><Loader2 size={17} className="mr-2 animate-spin" /> Joining…</>
-                : 'Join Room'}
+                : 'Join Group'}
             </Button>
           </div>
         )}

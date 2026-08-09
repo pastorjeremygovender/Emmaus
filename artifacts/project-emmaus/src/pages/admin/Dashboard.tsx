@@ -543,7 +543,7 @@ const MILESTONE_META: Record<string, { emoji: string; label: string }> = {
 
 const BELIEVER_TAGS = [
   { key: 'hasBaptism',  pass: '✓ Baptised',    fail: '⚠ Needs baptism',    passColor: 'text-green-600', failColor: 'text-amber-600' },
-  { key: 'hasRoom',     pass: '✓ In a Room',   fail: '⚠ Needs a Room',     passColor: 'text-green-600', failColor: 'text-amber-600' },
+  { key: 'hasRoom',     pass: '✓ In a Group',  fail: '⚠ Needs a Group',    passColor: 'text-green-600', failColor: 'text-amber-600' },
 ];
 
 function CelebrationsSection({ pAuth }: { pAuth: PAuth }) {

@@ -165,7 +165,7 @@ export function SharedAskEmmausPanel({
                   Ask Emmaus Together
                 </p>
                 <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wide">
-                  Room
+                  Group
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground">

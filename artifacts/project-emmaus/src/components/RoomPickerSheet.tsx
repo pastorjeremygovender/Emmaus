@@ -25,7 +25,7 @@ export function RoomPickerSheet({
   rooms,
   onSelect,
   onClose,
-  title = 'Add to a Room',
+  title = 'Add to a Group',
 }: RoomPickerSheetProps) {
   const [linking, setLinking] = useState<string | null>(null);
   const [error, setError] = useState('');

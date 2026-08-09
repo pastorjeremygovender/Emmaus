@@ -27,7 +27,7 @@ export type PeopleTab = 'members' | 'rooms' | 'prayer' | 'attendance' | 'care' |
 
 const TABS: { id: PeopleTab; label: string; Icon: React.ElementType }[] = [
   { id: 'members',         label: 'Members',    Icon: Users },
-  { id: 'rooms',           label: 'Rooms',      Icon: DoorOpen },
+  { id: 'rooms',           label: 'Groups',     Icon: DoorOpen },
   { id: 'prayer',          label: 'Prayer',     Icon: HeartHandshake },
   { id: 'attendance',      label: 'Attendance', Icon: ClipboardList },
   { id: 'care',            label: 'Care',       Icon: Heart },

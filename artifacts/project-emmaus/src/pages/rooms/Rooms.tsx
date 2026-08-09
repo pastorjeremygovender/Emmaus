@@ -34,7 +34,7 @@ export default function Rooms() {
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Rooms</h1>
+          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Groups</h1>
           <p className="text-[15px] text-muted-foreground mt-1">
             Walk journeys together with family or friends.
           </p>
@@ -43,7 +43,7 @@ export default function Rooms() {
         {/* Room list */}
         <section className="space-y-3">
           <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Your Rooms
+            Your Groups
           </h2>
 
           {loading && (
@@ -62,10 +62,10 @@ export default function Rooms() {
             <div className="p-8 border border-dashed border-border rounded-2xl text-center space-y-3">
               <Users size={32} className="text-muted-foreground mx-auto mb-3 opacity-40" />
               <p className="text-[15px] font-medium text-foreground leading-snug">
-                You haven't joined any Rooms yet.
+                You haven't joined any Groups yet.
               </p>
               <p className="text-[13px] text-muted-foreground leading-relaxed">
-                Create a Room to walk through a Bible Study, Walk, Journey or Daily Devotional together.
+                Create a Group to walk through a Bible Study, Walk, Journey or Daily Devotional together.
               </p>
               <div className="flex flex-col gap-2 pt-2">
                 <Button
@@ -73,7 +73,7 @@ export default function Rooms() {
                   onClick={() => setLocation('/rooms/create')}
                 >
                   <Plus size={17} className="mr-2" />
-                  Create a Room
+                  Create a Group
                 </Button>
                 <Button
                   variant="outline"
@@ -81,7 +81,7 @@ export default function Rooms() {
                   onClick={() => setLocation('/rooms/join')}
                 >
                   <LogIn size={17} className="mr-2" />
-                  Join a Room
+                  Join a Group
                 </Button>
               </div>
             </div>
@@ -109,7 +109,7 @@ export default function Rooms() {
               onClick={() => setLocation('/rooms/create')}
             >
               <Plus size={18} className="mr-2" />
-              Create a Room
+              Create a Group
             </Button>
             <Button
               variant="outline"
@@ -117,7 +117,7 @@ export default function Rooms() {
               onClick={() => setLocation('/rooms/join')}
             >
               <LogIn size={18} className="mr-2" />
-              Join a Room
+              Join a Group
             </Button>
           </section>
         )}

@@ -43,20 +43,20 @@ export default function JoinByCode() {
           </div>
           <h1 className="text-[24px] font-sans font-semibold">You've joined!</h1>
           <p className="text-[14px] text-muted-foreground leading-relaxed">
-            Welcome to the Room. Your personal journey progress remains yours alone.
+            Welcome to the Group. Your personal journey progress remains yours alone.
           </p>
           <Button
             className="w-full rounded-2xl h-12"
             onClick={() => setLocation(`/rooms/${joinedRoomId}`)}
           >
-            Open Room
+            Open Group
           </Button>
           <Button
             variant="outline"
             className="w-full rounded-2xl h-11"
             onClick={() => setLocation('/rooms')}
           >
-            Back to Rooms
+            Back to Groups
           </Button>
         </div>
       </div>
@@ -73,22 +73,22 @@ export default function JoinByCode() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 text-center font-medium text-sm">Join a Room</div>
+          <div className="flex-1 text-center font-medium text-sm">Join a Group</div>
           <div className="w-10" />
         </div>
       </header>
 
       <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-7">
         <div className="space-y-1.5">
-          <h1 className="text-[26px] font-sans font-semibold">Join a Room</h1>
+          <h1 className="text-[26px] font-sans font-semibold">Join a Group</h1>
           <p className="text-[15px] text-muted-foreground leading-relaxed">
-            Enter the 7-letter access code shared by a Room admin.
+            Enter the 7-letter access code shared by a Group leader.
           </p>
         </div>
 
         <div className="space-y-2">
           <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Room Access Code
+            Group Access Code
           </label>
           <input
             type="text"
@@ -110,11 +110,11 @@ export default function JoinByCode() {
         >
           {phase === 'joining'
             ? <><Loader2 size={17} className="mr-2 animate-spin" /> Joining…</>
-            : 'Join Room'}
+            : 'Join Group'}
         </Button>
 
         <p className="text-center text-[13px] text-muted-foreground">
-          Have a link instead? Ask the Room admin to send it again.
+          Have a link instead? Ask the Group leader to send it again.
         </p>
       </main>
       <BottomNav />

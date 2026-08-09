@@ -550,9 +550,9 @@ function NewBelieversSection({
                       <span className="text-[10px] text-amber-600 font-medium">⚠ Needs baptism</span>
                     )}
                     {b.hasRoom ? (
-                      <span className="text-[10px] text-green-600 font-medium">✓ In a Room</span>
+                      <span className="text-[10px] text-green-600 font-medium">✓ In a Group</span>
                     ) : (
-                      <span className="text-[10px] text-amber-600 font-medium">⚠ Needs a Room</span>
+                      <span className="text-[10px] text-amber-600 font-medium">⚠ Needs a Group</span>
                     )}
                   </div>
                 </div>
@@ -779,7 +779,7 @@ function SearchSection({
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search people, walks, rooms…"
+          placeholder="Search people, walks, groups…"
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
         />
         {loading && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}

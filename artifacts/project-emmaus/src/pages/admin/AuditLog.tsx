@@ -25,7 +25,7 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
   devotional_entry: 'Devotional Entry',
   sermon_companion: 'Sermon Companion',
   sermon_companion_entry: 'Companion Entry',
-  room: 'Room',
+  room: 'Group',
 };
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
@@ -47,7 +47,7 @@ const ALL_TYPES = [
   { value: 'devotional_entry', label: 'Devotional Entries' },
   { value: 'sermon_companion', label: 'Sermon Companions' },
   { value: 'sermon_companion_entry', label: 'Companion Entries' },
-  { value: 'room', label: 'Rooms' },
+  { value: 'room', label: 'Groups' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

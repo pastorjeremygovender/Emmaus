@@ -31,7 +31,7 @@ export default function CreateRoom() {
   if (!user) return null;
 
   const handleCreate = async () => {
-    if (!name.trim()) { setError('Please enter a Room name.'); return; }
+    if (!name.trim()) { setError('Please enter a Group name.'); return; }
     setError('');
     setPhase('creating');
     try {
@@ -39,7 +39,7 @@ export default function CreateRoom() {
       setCreated({ ...result, name: name.trim() });
       setPhase('success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create room');
+      setError(err instanceof Error ? err.message : 'Failed to create group');
       setPhase('form');
     }
   };
@@ -83,7 +83,7 @@ export default function CreateRoom() {
       <div className="min-h-[100dvh] bg-background pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
           <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
-            <div className="flex-1 text-center font-medium text-sm">Room Created</div>
+            <div className="flex-1 text-center font-medium text-sm">Group Created</div>
           </div>
         </header>
         <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
@@ -92,7 +92,7 @@ export default function CreateRoom() {
               <Check size={30} className="text-primary" strokeWidth={2.5} />
             </div>
             <h1 className="text-[26px] font-sans font-semibold">{created.name}</h1>
-            <p className="text-[15px] text-muted-foreground">Your Room is ready</p>
+            <p className="text-[15px] text-muted-foreground">Your Group is ready</p>
           </div>
 
           <p className="text-center text-[15px] text-muted-foreground leading-relaxed">
@@ -143,7 +143,7 @@ export default function CreateRoom() {
             className="w-full h-12 rounded-2xl"
             onClick={() => setLocation(`/rooms/${created.roomId}`)}
           >
-            Open Room
+            Open Group
           </Button>
         </main>
         <BottomNav />
@@ -163,23 +163,23 @@ export default function CreateRoom() {
           >
             <ArrowLeft size={22} />
           </button>
-          <div className="flex-1 text-center font-medium text-sm">Create a Room</div>
+          <div className="flex-1 text-center font-medium text-sm">Create a Group</div>
           <div className="w-10" />
         </div>
       </header>
 
       <main className="px-5 pt-8 max-w-[480px] mx-auto space-y-6 pb-8">
         <div className="space-y-1">
-          <h1 className="text-[26px] font-sans font-semibold">Create a Room</h1>
+          <h1 className="text-[26px] font-sans font-semibold">Create a Group</h1>
           <p className="text-[15px] text-muted-foreground">
-            Rooms let you walk journeys with family, friends, or a group.
+            Groups let you walk journeys with family, friends, or a small group.
           </p>
         </div>
 
         {/* Room Name */}
         <div className="space-y-2">
           <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            Room Name
+            Group Name
           </label>
           <input
             type="text"
@@ -202,7 +202,7 @@ export default function CreateRoom() {
           <textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="What is this Room for?"
+            placeholder="What is this Group for?"
             className="w-full px-4 py-3 rounded-xl border border-border bg-card text-[15px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
             rows={3}
             maxLength={200}
@@ -217,7 +217,7 @@ export default function CreateRoom() {
           {phase === 'creating' ? (
             <><Loader2 size={17} className="mr-2 animate-spin" /> Creating…</>
           ) : (
-            'Create Room'
+            'Create Group'
           )}
         </Button>
       </main>

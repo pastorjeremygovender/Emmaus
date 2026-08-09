@@ -153,7 +153,7 @@ export default function CurrentDiscipleship({ discipleship, loading }: Props) {
       {/* Rooms */}
       {discipleship.rooms.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <SectionHeader icon={Users} iconColor="text-purple-600" label="Rooms" />
+          <SectionHeader icon={Users} iconColor="text-purple-600" label="Groups" />
           <div className="divide-y divide-gray-100">
             {discipleship.rooms.map(r => (
               <div key={r.roomId} className="flex items-center gap-3 px-4 py-3">

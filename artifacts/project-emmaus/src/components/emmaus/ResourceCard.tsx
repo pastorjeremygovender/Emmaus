@@ -40,7 +40,7 @@ const TYPE_CONFIG: Record<
     color: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
   },
   room: {
-    label: 'Room',
+    label: 'Group',
     icon: <Users size={15} />,
     color: 'bg-green-500/10 text-green-600 dark:text-green-400',
   },

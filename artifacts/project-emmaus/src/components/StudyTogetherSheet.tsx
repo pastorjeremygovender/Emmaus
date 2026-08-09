@@ -107,7 +107,7 @@ export function StudyTogetherSheet({
           /* ── Create form ───────────────────────────────────────────── */
           <>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
-              Create a Room and share the invite code with friends or small-group members to study this content together.
+              Create a Group and share the invite code with friends or small-group members to study this content together.
               Your own progress is kept separate — you won't lose where you're up to.
             </p>
 
@@ -116,7 +116,7 @@ export function StudyTogetherSheet({
                 htmlFor="study-room-name"
                 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wide"
               >
-                Room name
+                Group name
               </label>
               <input
                 id="study-room-name"
@@ -125,7 +125,7 @@ export function StudyTogetherSheet({
                 onChange={e => setName(e.target.value)}
                 maxLength={60}
                 className="w-full h-11 rounded-xl border border-border bg-muted/30 px-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
-                placeholder="Give your room a name"
+                placeholder="Give your group a name"
                 autoFocus
               />
             </div>
@@ -140,14 +140,14 @@ export function StudyTogetherSheet({
               disabled={creating || !name.trim()}
             >
               {creating && <Loader2 size={16} className="animate-spin mr-2" />}
-              {creating ? 'Creating…' : 'Create Room'}
+              {creating ? 'Creating…' : 'Create Group'}
             </Button>
           </>
         ) : (
           /* ── Success: show invite code ─────────────────────────────── */
           <>
             <p className="text-[14px] text-muted-foreground leading-relaxed">
-              Your room is ready. Share the code below so others can join.
+              Your Group is ready. Share the code below so others can join.
             </p>
 
             <div className="p-4 rounded-xl bg-primary/5 border border-primary/15 space-y-1 text-center">
@@ -173,7 +173,7 @@ export function StudyTogetherSheet({
               className="w-full h-12 rounded-xl font-medium"
               onClick={() => setLocation(`/rooms/${created.roomId}`)}
             >
-              Open Room
+              Open Group
             </Button>
           </>
         )}
