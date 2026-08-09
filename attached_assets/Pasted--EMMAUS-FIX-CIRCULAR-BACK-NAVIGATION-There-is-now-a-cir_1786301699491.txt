@@ -1,0 +1,198 @@
+# EMMAUS — FIX CIRCULAR BACK NAVIGATION
+
+There is now a circular navigation bug between Groups and Group-assigned content.
+
+CURRENT BEHAVIOUR:
+
+Prayer Walk Group
+→ Open The Road to Emmaus
+→ Back
+→ Prayer Walk
+→ Back
+→ The Road to Emmaus
+→ Back
+→ Prayer Walk
+
+This creates an infinite navigation loop.
+
+This is incorrect.
+
+====================================================
+ROOT PRINCIPLE
+====================================================
+
+Back navigation must UNWIND navigation history.
+
+Back must NEVER create a new forward navigation event.
+
+Do not implement Back using:
+
+router.push(...)
+navigate(...)
+location.href
+manual redirects to the previous screen
+
+when the user is simply going Back.
+
+Use actual history/back navigation wherever possible.
+
+====================================================
+EXPECTED FLOW
+====================================================
+
+Example:
+
+My Groups
+→ Prayer Walk
+→ The Road to Emmaus
+
+Press Back:
+
+The Road to Emmaus
+→ Prayer Walk
+
+Press Back again:
+
+Prayer Walk
+→ My Groups
+
+Press Back again:
+
+My Groups
+→ the page the user originally came from
+(e.g. Discover)
+
+There must be no circular loop.
+
+====================================================
+GROUP CONTENT CONTEXT
+====================================================
+
+When opening Group-assigned content, preserve context such as:
+
+source=group
+sourceId=<groupId>
+
+This context may be used for:
+
+- removing personal Daily Rhythm gating
+- showing correct labels
+- returning to the Group if direct history is unavailable
+
+But it must NOT cause the Group page itself to navigate back into the content.
+
+====================================================
+IMPORTANT DISTINCTION
+====================================================
+
+The Group page's Back button must return to the page BEFORE the Group.
+
+For example:
+
+Discover
+→ My Groups
+→ Prayer Walk
+→ Study
+
+Back from Study:
+Prayer Walk
+
+Back from Prayer Walk:
+My Groups
+
+Back from My Groups:
+Discover
+
+The Prayer Walk Back button must NOT inspect the Study's source context and send the user back into The Road to Emmaus.
+
+====================================================
+DO NOT PUSH THE GROUP ON BACK
+====================================================
+
+On the Study page:
+
+If the user arrived from a Group and browser/router history is valid:
+
+use history.back / router.back.
+
+Only use the stored groupId as a fallback when there is no usable history (for example a direct/deep link).
+
+Do NOT call router.push('/groups/...') for normal Back navigation because this adds another entry to the history stack.
+
+====================================================
+FALLBACK RULES
+====================================================
+
+If there is no usable navigation history:
+
+Study opened with source=group
+→ fallback to the specified Group
+
+Group opened directly
+→ fallback to My Groups
+
+My Groups opened directly
+→ fallback to Discover
+
+Fallback navigation should only be used when genuine history is unavailable.
+
+====================================================
+BACK LABEL
+====================================================
+
+Do not show misleading hardcoded labels.
+
+When opened from a Group, the Study page may show:
+
+← Prayer Walk
+
+or simply:
+
+← Back
+
+But the actual action should unwind history.
+
+The Group page should simply show a back arrow.
+
+It should not claim that the previous page is the Study.
+
+====================================================
+AUDIT NAVIGATION STACK
+====================================================
+
+Search these Group-related flows for router.push/navigation used as Back:
+
+- My Groups
+- Group Detail
+- Walk/Journey detail
+- Step pages
+- Study pages
+- Open Group links
+- Open Today's Study
+- Group content source handling
+
+Remove any logic that adds a new history entry during Back navigation.
+
+====================================================
+EXACT QA TEST
+====================================================
+
+Test this exact sequence in the published app:
+
+1. Open Discover.
+2. Open My Groups.
+3. Open Prayer Walk.
+4. Open The Road to Emmaus.
+5. Press Back.
+   EXPECT: Prayer Walk.
+6. Press Back.
+   EXPECT: My Groups.
+7. Press Back.
+   EXPECT: Discover.
+8. Confirm The Road to Emmaus does NOT reopen.
+9. Repeat steps 1–7 several times.
+10. Confirm no circular navigation occurs.
+11. Use browser Back and confirm the same logical sequence.
+12. Open The Road to Emmaus via a direct deep link with source=group and confirm fallback returns to Prayer Walk without creating a loop.
+
+Do not mark complete until the circular navigation is gone in the PUBLISHED app.

@@ -12,6 +12,10 @@
  *   <EmmausBackButton source={source} sourceId={sourceId} fallback="/journeys?tab=journeys" />
  *
  * The back destination is resolved via resolveReturn() from lib/return-context.ts.
+ *
+ * NAVIGATION PRINCIPLE: Back must unwind the history stack, never push a new
+ * forward entry. window.history.back() is always the primary action. The resolved
+ * path is only used as a true fallback for direct/deep-link arrivals (no history).
  */
 
 import React, { useRef } from 'react';
@@ -51,12 +55,23 @@ export function EmmausBackButton({
   // Prevent double-activation on rapid taps.
   const firedRef = useRef(false);
 
+  // Resolve label + fallback path from source context.
+  // The path is only used when there is genuinely no browser history to go back to.
   const { path, label: resolvedLabel } = resolveReturn(source, sourceId, fallback);
 
   const handleClick = () => {
     if (firedRef.current) return;
     firedRef.current = true;
-    setLocation(path);
+
+    // PRIMARY: unwind the history stack — never push a new forward entry.
+    // FALLBACK: only navigate to the resolved path when this page was opened
+    //           directly (no in-app history to go back to).
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      setLocation(path);
+    }
+
     // Reset so the button works again if SPA navigation doesn't unmount it.
     setTimeout(() => { firedRef.current = false; }, 500);
   };

@@ -89,7 +89,7 @@ export default function SermonCompanionPreviousDays() {
       contentTitle={companion?.title ?? 'Sermon Companion'}
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
+      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
       onReviewDay={(day) =>
         setLocation(`/sermon-companion/${companionId}/day/${day}${sourceParam}`)
       }

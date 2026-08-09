@@ -465,7 +465,7 @@ export default function SermonCompanionOverview() {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setLocation(backPath)} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
+          <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
             <ArrowLeft size={18} />
           </button>
           <p className="text-[11px] font-semibold tracking-widest text-primary uppercase">
@@ -486,7 +486,7 @@ export default function SermonCompanionOverview() {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setLocation(backPath)} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
+          <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
             <ArrowLeft size={18} />
           </button>
           <p className="text-[11px] font-semibold tracking-widest text-primary uppercase">
@@ -498,7 +498,7 @@ export default function SermonCompanionOverview() {
             <AlertCircle size={28} className="text-muted-foreground/30" />
             <p className="text-[15px] font-medium text-foreground">{error || 'Companion not found.'}</p>
             <div className="flex gap-3">
-              <button onClick={() => setLocation(backPath)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-[13px] text-muted-foreground hover:bg-muted/60">
+              <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-[13px] text-muted-foreground hover:bg-muted/60">
                 <ArrowLeft size={13} /> {backLabel}
               </button>
               <button onClick={load} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] hover:bg-primary/90">
@@ -525,7 +525,7 @@ export default function SermonCompanionOverview() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
         <button
-          onClick={() => setLocation(backPath)}
+          onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
           className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground"
           aria-label={`Back to ${backLabel}`}
         >

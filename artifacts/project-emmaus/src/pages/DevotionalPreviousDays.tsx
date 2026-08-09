@@ -84,7 +84,7 @@ export default function DevotionalPreviousDays() {
       contentTitle={seriesData?.title ?? 'Daily Devotional'}
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
+      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
       onReviewDay={(day) =>
         setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`)
       }

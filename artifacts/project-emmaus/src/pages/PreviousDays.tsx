@@ -53,7 +53,7 @@ export default function PreviousDays() {
       contentTitle="10 Minutes with Jesus"
       entries={entries}
       loading={loading}
-      onBack={() => setLocation(backPath)}
+      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
       onReviewDay={(day) => setLocation(`/daily-rhythm/day/${day}`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."

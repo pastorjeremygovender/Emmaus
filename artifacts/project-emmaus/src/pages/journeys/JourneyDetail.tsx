@@ -245,9 +245,12 @@ export default function JourneyDetail() {
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-6 max-w-[480px] mx-auto space-y-6">
 
-        {/* ── Back button ───────────────────────────────────────────── */}
+        {/* ── Back button — always unwinds history; resolved path is fallback only */}
         <button
-          onClick={() => setLocation(backDest.path)}
+          onClick={() => {
+            if (window.history.length > 1) window.history.back();
+            else setLocation(backDest.path);
+          }}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
           aria-label="Back"
         >

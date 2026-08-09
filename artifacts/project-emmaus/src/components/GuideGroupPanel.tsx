@@ -57,7 +57,7 @@ interface GuideGroupPanelProps {
   onSessionComplete: (summary: SessionCompleteSummary) => void;
   /** Called when leader taps "Ask Emmaus Together" — opens SharedAskEmmausPanel. */
   onOpenAskEmmaus?: () => void;
-  /** Whether this room type supports Live Video. */
+  /** Whether this room type supports Live Video (retained for API compat; no longer gates the UI). */
   videoEligible?: boolean;
   /** Whether a Live Video session is currently active. */
   videoActive?: boolean;
@@ -65,6 +65,8 @@ interface GuideGroupPanelProps {
   onStartVideo?: () => Promise<void>;
   /** Called when leader taps "End Live Video". */
   onEndVideo?: () => Promise<void>;
+  /** Called when leader taps "End Meeting" inside the tools panel (before confirmation). */
+  onEndMeeting?: () => void;
 }
 
 type PanelView =
@@ -88,10 +90,10 @@ export function GuideGroupPanel({
   onSessionEnded,
   onSessionComplete,
   onOpenAskEmmaus,
-  videoEligible = false,
   videoActive = false,
   onStartVideo,
   onEndVideo,
+  onEndMeeting,
 }: GuideGroupPanelProps) {
   const [view, setView] = useState<PanelView>('main');
   const [busy, setBusy] = useState<string | null>(null);
@@ -241,35 +243,7 @@ export function GuideGroupPanel({
       {view === 'main' && (
         <div className="flex-1 overflow-y-auto pb-safe-or-8 pb-8">
 
-          {/* ── LIVE VIDEO section — appears first when room is video-eligible ── */}
-          {videoEligible && (
-            <div className="px-5 pt-6">
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Live Video</p>
-              <div className="rounded-2xl border border-border overflow-hidden">
-                {!videoActive ? (
-                  <ToolRow
-                    icon={<Video size={18} />}
-                    label="Start Live Video"
-                    description="Start a video session for the group"
-                    loading={busy === 'start-video'}
-                    disabled={!sessionActive}
-                    onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
-                  />
-                ) : (
-                  <ToolRow
-                    icon={<VideoOff size={18} />}
-                    label="End Live Video"
-                    description="End the video session for everyone"
-                    loading={busy === 'end-video'}
-                    disabled={false}
-                    onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── CONTENT section ─────────────────────────────────────────── */}
+          {/* ── CONTENT ─────────────────────────────────────────────────── */}
           <div className="px-5 pt-6">
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Content</p>
             <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
@@ -308,10 +282,29 @@ export function GuideGroupPanel({
             </div>
           </div>
 
-          {/* ── DISCUSSION section ──────────────────────────────────────── */}
+          {/* ── MEETING ─────────────────────────────────────────────────── */}
           <div className="px-5 pt-6">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Discussion</p>
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Meeting</p>
             <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
+              {!videoActive ? (
+                <ToolRow
+                  icon={<Video size={18} />}
+                  label="Start Live Video"
+                  description="Start a live video meeting for everyone in this Group"
+                  loading={busy === 'start-video'}
+                  disabled={!sessionActive}
+                  onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
+                />
+              ) : (
+                <ToolRow
+                  icon={<VideoOff size={18} />}
+                  label="End Live Video"
+                  description="End the video session for everyone"
+                  loading={busy === 'end-video'}
+                  disabled={false}
+                  onClick={() => run('end-video', async () => { await onEndVideo?.(); })}
+                />
+              )}
               <ToolRow
                 icon={<MessageSquare size={18} />}
                 label="Open Discussion"
@@ -346,6 +339,22 @@ export function GuideGroupPanel({
               />
             </div>
           </div>
+
+          {/* ── SESSION ─────────────────────────────────────────────────── */}
+          <div className="px-5 pt-6">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Session</p>
+            <div className="rounded-2xl border border-border overflow-hidden">
+              <ToolRow
+                icon={<X size={18} />}
+                label="End Meeting"
+                description="Complete and close this meeting"
+                loading={false}
+                disabled={!sessionActive}
+                onClick={() => { onClose(); onEndMeeting?.(); }}
+              />
+            </div>
+          </div>
+
         </div>
       )}
 

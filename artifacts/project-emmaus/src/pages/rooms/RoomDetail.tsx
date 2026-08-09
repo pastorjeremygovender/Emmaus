@@ -792,6 +792,7 @@ export default function RoomDetail() {
           videoActive={videoActive}
           onStartVideo={handleStartVideo}
           onEndVideo={handleEndVideo}
+          onEndMeeting={() => setConfirmEndMeeting(true)}
         />
       )}
 
