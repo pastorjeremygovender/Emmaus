@@ -1488,7 +1488,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
             {/* Journey section */}
             <div className="flex-shrink-0 px-2 pb-2">
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1 mb-1">Journey</div>
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1 mb-1">Walk</div>
               <button
                 onClick={() => setSelectedView('overview')}
                 className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors ${
@@ -1505,7 +1505,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                 className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 <FileText size={13} className="text-gray-400" />
-                <span className="text-[13px] font-medium truncate">Journey Settings</span>
+                <span className="text-[13px] font-medium truncate">Walk Settings</span>
               </button>
             </div>
 
