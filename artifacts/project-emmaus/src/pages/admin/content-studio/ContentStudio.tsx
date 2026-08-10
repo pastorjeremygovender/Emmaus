@@ -22,7 +22,7 @@ import React, { useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2,
   FolderOpen, BookOpen,
-  ChevronRight,
+  ChevronRight, X,
 } from 'lucide-react';
 
 import DailyRhythmStudio from './DailyRhythmStudio';
@@ -142,6 +142,9 @@ interface Props {
 }
 
 export default function ContentStudio({ initialSubView, initialJourneyId }: Props) {
+  // Side panel — shows journey detail (walks list) without leaving the Journeys tab
+  const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
+
   const [view, setView] = useState<StudioView>(() => {
     if (initialSubView === 'studio-editor' && initialJourneyId) {
       return { id: 'journey-editor', journeyId: initialJourneyId };
@@ -399,7 +402,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         return (
           <CollectionsList
             onNew={() => navigate({ id: 'collection-editor' })}
-            onEdit={(id) => navigate({ id: 'collection-editor', collectionId: id })}
+            onEdit={(id) => setPanelCollectionId(id)}
             onViewJourneys={(id, title) => navigate({ id: 'collection-detail', collectionId: id, collectionTitle: title })}
           />
         );
@@ -647,6 +650,51 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       <div className="flex-1 overflow-y-auto" role="tabpanel">
         {renderView()}
       </div>
+
+      {/* ── Journey detail side panel ─────────────────────────────────────── */}
+      {panelCollectionId && (
+        <div className="fixed inset-0 z-40 flex pointer-events-none">
+          {/* Backdrop — closes panel on click */}
+          <div
+            className="flex-1 pointer-events-auto"
+            onClick={() => setPanelCollectionId(null)}
+          />
+          {/* Drawer */}
+          <div className="w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
+            {/* Panel chrome header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
+              <span className="text-[13px] font-semibold text-gray-600 uppercase tracking-wide">Journey Details</span>
+              <button
+                onClick={() => setPanelCollectionId(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+                aria-label="Close panel"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            {/* Reuse CollectionDetailView — walks list + metadata header */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <CollectionDetailView
+                key={panelCollectionId}
+                collectionId={panelCollectionId}
+                onBack={() => setPanelCollectionId(null)}
+                onNewJourney={(collId) => {
+                  setPanelCollectionId(null);
+                  navigate({ id: 'journeys-standalone', openNew: true, collectionId: collId });
+                }}
+                onOpenJourney={(journeyId, _journeyTitle, _collectionTitle) => {
+                  setPanelCollectionId(null);
+                  navigate({ id: 'journey-editor', journeyId, collectionId: panelCollectionId });
+                }}
+                onEditCollection={(collId) => {
+                  setPanelCollectionId(null);
+                  navigate({ id: 'collection-editor', collectionId: collId });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
