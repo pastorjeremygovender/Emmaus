@@ -941,9 +941,18 @@ export default function RoomDetail() {
                 Today&apos;s Study
               </p>
               {studyHidden ? (
-                <div className="p-5 rounded-2xl border border-border/50 bg-card/50 text-center space-y-1.5">
+                /* Hidden state — leader sees placeholder + always-visible Reveal Now escape hatch */
+                <div className="p-5 rounded-2xl border border-border/50 bg-card/50 text-center space-y-3">
                   <BookOpen size={20} className="mx-auto text-muted-foreground opacity-30" />
-                  <p className="text-[14px] text-muted-foreground">Study revealed when meeting starts.</p>
+                  <p className="text-[14px] text-muted-foreground">Study will be revealed when the meeting starts.</p>
+                  {isAuthorizedLeader && (
+                    <button
+                      onClick={handleToggleRevealOnMeeting}
+                      className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:underline"
+                    >
+                      Reveal Now
+                    </button>
+                  )}
                 </div>
               ) : contentTitle ? (
                 <>
@@ -972,19 +981,6 @@ export default function RoomDetail() {
                       </div>
                     </div>
                   </button>
-                  {isAuthorizedLeader && (
-                    <button onClick={handleToggleRevealOnMeeting} className="mt-2 flex items-center gap-2 px-1 py-1">
-                      <div
-                        className={`rounded-full transition-colors flex items-center px-0.5 ${revealOnMeeting ? 'bg-primary' : 'bg-muted'}`}
-                        style={{ width: 32, height: 18 }}
-                      >
-                        <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${revealOnMeeting ? 'translate-x-3.5' : 'translate-x-0'}`} />
-                      </div>
-                      <span className="text-[12px] text-muted-foreground">
-                        {revealOnMeeting ? 'Hidden until meeting' : 'Visible to members'}
-                      </span>
-                    </button>
-                  )}
                   {isAuthorizedLeader && availableWalks.length > 0 && !showLinkWalk && (
                     <button onClick={() => setShowLinkWalk(true)} className="mt-2 text-[13px] text-primary font-medium hover:underline pl-1">
                       Change Study →
@@ -1002,6 +998,22 @@ export default function RoomDetail() {
                   )}
                 </div>
               )}
+
+              {/* Visibility toggle — always visible for leader, disappears once meeting starts */}
+              {isAuthorizedLeader && contentTitle && (
+                <button onClick={handleToggleRevealOnMeeting} className="mt-2 flex items-center gap-2 px-1 py-1">
+                  <div
+                    className={`rounded-full transition-colors flex items-center px-0.5 ${revealOnMeeting ? 'bg-primary' : 'bg-muted'}`}
+                    style={{ width: 32, height: 18 }}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${revealOnMeeting ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                  </div>
+                  <span className="text-[12px] text-muted-foreground">
+                    {revealOnMeeting ? 'Reveal when meeting starts' : 'Visible to members'}
+                  </span>
+                </button>
+              )}
+
               {showLinkWalk && (
                 <div className="mt-3 rounded-2xl border border-border bg-card overflow-hidden">
                   <div className="px-5 py-3.5 border-b border-border/60">
