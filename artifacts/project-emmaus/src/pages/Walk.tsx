@@ -397,6 +397,7 @@ function FifteenMinutesCard({
       onAction={done ? undefined : onContinue}
       disabled={done ? undefined : cfg[state].disabled}
       variant={done ? 'default' : 'featured'}
+      pulsePrimary={!done}
       headerTrailing={
         done
           ? <CheckCircle2 size={20} className="text-primary shrink-0" />
@@ -880,10 +881,7 @@ export default function Walk() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.05 }}
           >
-            {/* Heartbeat wrapper — animates as a single unit when actionable.
-                Separate from motion.section so scale never conflicts with the
-                entrance translateY. Suppressed once the member has read today. */}
-            <div className={coreDone ? undefined : 'emmaus-heartbeat'}>
+            <div>
             <FifteenMinutesCard
               journey={coreJourney}
               prog={coreProg}
