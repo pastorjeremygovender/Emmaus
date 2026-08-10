@@ -11,6 +11,7 @@ import type { Journey, Step } from '@/lib/journeys-api';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioListPage';
+import NewDayModal from './NewDayModal';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -21,7 +22,8 @@ interface Props {
 
 export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
   const { journeys, steps, loading } = useJourney();
-  const [statusTab, setStatusTab] = useState<string>('All');
+  const [statusTab,     setStatusTab]     = useState<string>('All');
+  const [showNewModal,  setShowNewModal]  = useState(false);
 
   const journey = useMemo(
     () => (journeys as Journey[]).find(j => j.journeyType === 'daily-rhythm') ?? null,
@@ -46,12 +48,13 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
     : 'A daily walk with Jesus for every member.';
 
   return (
+    <>
     <ContentStudioListPage
       title="Daily Rhythm"
       description={description}
       newButton={
         <button
-          onClick={() => journey && onNewDay(journey.id)}
+          onClick={() => journey && setShowNewModal(true)}
           disabled={!journey || loading}
           className={newBtnCls}
         >
@@ -91,7 +94,7 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
               <>
                 <p className="text-xs text-gray-400 mt-1">Click "New Day" to write Day 1.</p>
                 <button
-                  onClick={() => onNewDay(journey!.id)}
+                  onClick={() => setShowNewModal(true)}
                   className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
                 >
                   + New Day
@@ -135,5 +138,15 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
         />
       ))}
     </ContentStudioListPage>
+
+    {showNewModal && journey && (
+      <NewDayModal
+        journeyId={journey.id}
+        onClose={() => setShowNewModal(false)}
+        onScratch={() => { setShowNewModal(false); onNewDay(journey.id); }}
+        onCreated={(day) => { setShowNewModal(false); onEditDay(journey.id, day); }}
+      />
+    )}
+  </>
   );
 }
