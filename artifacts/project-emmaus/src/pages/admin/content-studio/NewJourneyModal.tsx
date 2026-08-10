@@ -44,10 +44,10 @@ type CreationMethod  = 'ai' | 'scratch';
 const CONTENT_TYPES = [
   { id: 'daily-devotional', label: 'Daily Devotional', Icon: BookOpen,   desc: 'Scripture, reflection, and prayer — one step per day' },
   { id: 'bible-study',      label: 'Bible Study',       Icon: Layers,     desc: 'Observation, interpretation, and application' },
-  { id: 'prayer-journey',   label: 'Prayer Journey',    Icon: Heart,      desc: 'Guided prayer practices and contemplative steps' },
+  { id: 'prayer-journey',   label: 'Prayer Walk',       Icon: Heart,      desc: 'Guided prayer practices and contemplative steps' },
   { id: 'sermon-companion', label: 'Sermon Companion',  Icon: Headphones, desc: 'Deepens a specific message or series' },
   { id: 'small-group',      label: 'Small Group',       Icon: Users,      desc: 'Discussion questions and group activities' },
-  { id: 'core',             label: 'Core Journey',      Icon: PenLine,    desc: 'Foundational faith formation curriculum' },
+  { id: 'core',             label: 'Core Walk',         Icon: PenLine,    desc: 'Foundational faith formation curriculum' },
 ] as const;
 
 /** Map content type → sensible default journeyType for the Journey model */
@@ -129,7 +129,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
       });
       onCreated(created.id);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create journey');
+      setError(e instanceof Error ? e.message : 'Failed to create walk');
       setSaving(false);
     }
   };
@@ -155,9 +155,9 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
   // ── Derived values ──────────────────────────────────────────────────────────
 
   const STEP_TITLES: Record<WizardStep, string> = {
-    1: 'Create a Journey',
+    1: 'Create a Walk',
     2: 'Choose Content Type',
-    3: 'Journey Details',
+    3: 'Walk Details',
   };
 
   const primaryDisabled =
@@ -168,7 +168,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
     if (step < 3)             return <><span>Continue</span><ArrowRight size={15} /></>;
     if (saving)               return <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>;
     if (method === 'ai')      return <><span>Build with Emmaus AI</span><Sparkles size={15} /></>;
-    return <span>Create Journey</span>;
+    return <span>Create Walk</span>;
   };
 
   // Footer button colour: teal for AI / steps 1-2, dark for Scratch Step 3
@@ -233,7 +233,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
           {step === 1 && (
             <div className="space-y-3">
               <p className="text-[13px] text-gray-500 leading-relaxed mb-2">
-                How would you like to create this journey?
+                How would you like to create this walk?
               </p>
 
               {/* Build with AI */}
@@ -266,7 +266,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Answer a few questions and Emmaus creates a complete journey — real Scripture, real sermon sources, structured steps. Always saved as Draft for you to review.
+                  Answer a few questions and Emmaus creates a complete walk — real Scripture, real sermon sources, structured steps. Always saved as Draft for you to review.
                 </p>
               </button>
 
@@ -300,7 +300,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Create an empty journey and build your steps using the block editor. Full creative control from the very first word.
+                  Create an empty walk and build your steps using the block editor. Full creative control from the very first word.
                 </p>
               </button>
             </div>
@@ -312,7 +312,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
           {step === 2 && (
             <div>
               <p className="text-[13px] text-gray-500 leading-relaxed mb-4">
-                What kind of journey is this?
+                What kind of walk is this?
               </p>
               <div className="grid grid-cols-2 gap-3">
                 {CONTENT_TYPES.map(({ id, label, Icon, desc }) => {
@@ -377,7 +377,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 <textarea
                   value={form.description}
                   onChange={e => patchForm('description', e.target.value)}
-                  placeholder="A short description for this journey…"
+                  placeholder="A short description for this walk…"
                   rows={2}
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
                 />
@@ -388,7 +388,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 {collections.length > 0 && (
                   <div>
                     <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                      Journey
+                      Walk
                     </label>
                     <select
                       value={form.collectionId}
@@ -404,7 +404,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 )}
                 <div className={collections.length === 0 ? 'col-span-2' : ''}>
                   <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Journey Type
+                    Walk Type
                   </label>
                   <select
                     value={form.journeyType}
