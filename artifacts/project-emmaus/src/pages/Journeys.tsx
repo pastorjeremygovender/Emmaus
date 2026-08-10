@@ -414,7 +414,7 @@ function DiscoveryCard({
       }
       gatedMessage={
         isGated
-          ? "Complete today's 10 Minutes with Jesus"
+          ? "Complete 10 minutes with Jesus to proceed"
           : undefined
       }
       onGate={onGate}
@@ -462,7 +462,7 @@ function DevotionalCard({
           ? <WalkProgress item={item} currentDay={currentDay ?? 1} />
           : undefined
       }
-      gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+      gatedMessage={isGated ? "Complete 10 minutes with Jesus to proceed" : undefined}
       onGate={onGate}
       secondaryAction={
         onViewPreviousDays
@@ -612,7 +612,7 @@ function JourneysPanel({
             primaryActionLabel={isGated ? undefined : actionLabel}
             onAction={() => onOpenJourney(col)}
             progressNode={progressNode}
-            gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+            gatedMessage={isGated ? "Complete 10 minutes with Jesus to proceed" : undefined}
             onGate={onGate}
           />
         );
@@ -697,7 +697,7 @@ function SermonCompanionsPanel({
             ? <WalkProgress item={item} currentDay={currentDay} />
             : undefined
         }
-        gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+        gatedMessage={isGated ? "Complete 10 minutes with Jesus to proceed" : undefined}
         onGate={onGate}
         onCardPress={isGated ? undefined : () => setLocation(destination)}
       />

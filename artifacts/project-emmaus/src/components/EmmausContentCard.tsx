@@ -30,7 +30,7 @@ const T = {
   title:       'text-[17px] font-semibold text-foreground leading-snug line-clamp-2',
   description: 'text-[13px] text-muted-foreground leading-relaxed',
   metadata:    'text-[12px] text-muted-foreground font-medium',
-  button:      'w-full h-11 rounded-xl text-[15px] font-medium',
+  button:      'w-full min-h-[44px] h-auto py-2.5 rounded-xl text-[15px] font-medium whitespace-normal leading-snug',
 } as const;
 
 // ─── Props ────────────────────────────────────────────────────────────────────

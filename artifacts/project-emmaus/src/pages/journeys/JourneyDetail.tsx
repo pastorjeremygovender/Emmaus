@@ -236,7 +236,7 @@ export default function JourneyDetail() {
   // All self-paced journeys use "Continue" regardless of started/paused/completed state.
   // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core').
   const primaryLabel =
-    (isGated && !isCompleted) ? 'Complete today\'s 10 Minutes with Jesus' :
+    (isGated && !isCompleted) ? 'Complete 10 minutes with Jesus to proceed' :
                                  'Continue';
 
   const backDest = resolveReturn(source, sourceId, '/journeys?tab=journeys');
