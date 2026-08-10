@@ -36,6 +36,12 @@ const T = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface EmmausContentCardProps {
+  /**
+   * When true, applies the continuous `btn-daily-pulse` animation to the
+   * primary action button. Use for the Daily Rhythm card when today's time
+   * is still actionable — keeps the pulse universal and effortless to add.
+   */
+  pulsePrimary?: boolean;
   /** Uppercase category label — "DAILY RHYTHM", "JOURNEY", "SERMON COMPANION" etc. */
   label: string;
   /** Main content title — max 2 lines, never an AI-generated subtitle. */
@@ -117,6 +123,7 @@ export function EmmausContentCard({
   variant = 'default',
   badge,
   onCardPress,
+  pulsePrimary = false,
 }: EmmausContentCardProps) {
   const cardClass = (variant === 'featured'
     ? 'relative rounded-2xl border p-5 bg-primary/5 border-primary/20'
@@ -188,12 +195,13 @@ export function EmmausContentCard({
 
       {/* ── 5. Primary button (omitted when neither primaryActionLabel nor gatedMessage) */}
       {gatedMessage ? (
-        <Button className={T.button} onClick={onGate}>
+        // Gated button always pulses — it is always the "10 Minutes with Jesus" CTA.
+        <Button className={`${T.button} btn-daily-pulse`} onClick={onGate}>
           {gatedMessage}
         </Button>
       ) : primaryActionLabel ? (
         <Button
-          className={T.button}
+          className={`${T.button}${pulsePrimary ? ' btn-daily-pulse' : ''}`}
           onClick={(e) => { e.stopPropagation(); onAction?.(); }}
           disabled={disabled || loading}
         >

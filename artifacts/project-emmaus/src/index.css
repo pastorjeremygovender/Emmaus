@@ -37,6 +37,27 @@
   border-radius: 1rem; /* matches rounded-2xl so the glow follows card corners */
 }
 
+/* ── "10 Minutes with Jesus" button pulse ────────────────────────────────────
+   Applied to every CTA that asks the member to complete their daily time.
+   2 s gentle scale + outward ring — noticeable but never jarring.
+   Use .btn-daily-pulse on any <button> or <a> that surfaces this action. */
+@keyframes btn-daily-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0px hsl(var(--primary) / 0.45);
+  }
+  50% {
+    transform: scale(1.022);
+    box-shadow: 0 0 0 6px hsl(var(--primary) / 0);
+  }
+}
+
+.btn-daily-pulse {
+  animation: btn-daily-pulse 2s ease-in-out infinite;
+  /* Prevent the button from clipping its own ring on rounded corners */
+  overflow: visible !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Global page-bottom clearance ───────────────────────────────────────────
