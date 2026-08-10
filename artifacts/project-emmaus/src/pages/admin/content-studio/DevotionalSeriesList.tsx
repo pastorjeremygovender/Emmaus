@@ -111,18 +111,23 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
         loadingText="Loading devotionals…"
         isEmpty={!loading && filtered.length === 0}
         emptyState={
-          <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
-            <BookHeart size={28} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mb-4">
+              <BookHeart size={22} className="text-teal-300" />
+            </div>
+            <p className="text-sm font-medium text-gray-700">
               {statusTab === 'All' ? 'No devotional series yet.' : `No ${statusTab} series.`}
             </p>
             {statusTab === 'All' && (
-              <button
-                onClick={() => setShowNew(true)}
-                className="mt-3 text-sm text-teal-600 hover:text-teal-700 font-medium"
-              >
-                Create your first series
-              </button>
+              <>
+                <p className="text-xs text-gray-400 mt-1">Create your first series to get started.</p>
+                <button
+                  onClick={() => setShowNew(true)}
+                  className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
+                >
+                  Create a Series
+                </button>
+              </>
             )}
           </div>
         }
