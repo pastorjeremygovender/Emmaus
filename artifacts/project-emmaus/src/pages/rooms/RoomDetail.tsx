@@ -35,7 +35,7 @@ import {
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
 import { PresentationPanel } from '@/components/PresentationPanel';
-import { apiGetActivePresentation } from '@/lib/rooms-api-media';
+import { apiGetActivePresentation, apiSetAllowMemberPresent } from '@/lib/rooms-api-media';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -117,6 +117,7 @@ export default function RoomDetail() {
   const [leaderNoteSaving, setLeaderNoteSaving] = useState(false);
   const [nextMeeting, setNextMeeting] = useState<string | null>(null);
   const [revealOnMeeting, setRevealOnMeeting] = useState(false);
+  const [allowMemberPresent, setAllowMemberPresent] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleValue, setScheduleValue] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
@@ -359,6 +360,7 @@ export default function RoomDetail() {
       setLeaderNote(detail.leaderNote ?? null);
       setNextMeeting(detail.nextMeeting ?? null);
       setRevealOnMeeting(detail.revealOnMeeting ?? false);
+      setAllowMemberPresent(detail.allowMemberPresent ?? false);
       // Seed activeSession immediately so members see Meeting phase on first
       // render, before the SSE session_state event arrives.
       if (detail.activeSession) {
@@ -587,7 +589,7 @@ export default function RoomDetail() {
       ...history.state,
       roomName: room?.name ?? '',
       isLeader: isAuthorizedLeader,
-      allowMemberPresent: room?.allowMemberPresent ?? false,
+      allowMemberPresent: allowMemberPresent,
       sessionId: activeSession?.id ?? null,
     }, '');
     setLocation(`/rooms/${roomId}/chat`);
@@ -671,6 +673,16 @@ export default function RoomDetail() {
       await apiUpdateSchedule(user.id, String(roomId), nextMeeting, newVal);
     } catch {
       setRevealOnMeeting(!newVal); // revert on error
+    }
+  };
+
+  const handleToggleAllowMemberPresent = async () => {
+    const newVal = !allowMemberPresent;
+    setAllowMemberPresent(newVal);
+    try {
+      await apiSetAllowMemberPresent(user.id, String(roomId), newVal);
+    } catch {
+      setAllowMemberPresent(!newVal); // revert on error
     }
   };
 
@@ -1191,6 +1203,36 @@ export default function RoomDetail() {
               </div>
             </section>
 
+
+            {/* Group Settings — room admin only */}
+            {isAdmin && (
+              <section>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+                  Group Settings
+                </p>
+                <div className="p-4 rounded-2xl border border-border bg-card space-y-3">
+                  <button
+                    onClick={handleToggleAllowMemberPresent}
+                    className="w-full flex items-center justify-between gap-3"
+                  >
+                    <div className="flex-1 text-left">
+                      <p className="text-[14px] font-medium text-foreground">Members can present</p>
+                      <p className="text-[12px] text-muted-foreground mt-0.5">
+                        {allowMemberPresent
+                          ? 'Members may share their own media during a meeting'
+                          : 'Only the leader can share media during a meeting'}
+                      </p>
+                    </div>
+                    <div
+                      className={`rounded-full transition-colors flex items-center px-0.5 shrink-0 ${allowMemberPresent ? 'bg-primary' : 'bg-muted'}`}
+                      style={{ width: 36, height: 20 }}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${allowMemberPresent ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </div>
+                  </button>
+                </div>
+              </section>
+            )}
 
             {/* START MEETING — primary action, leaders only */}
             {isAuthorizedLeader && (
