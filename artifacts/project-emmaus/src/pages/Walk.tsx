@@ -397,7 +397,6 @@ function FifteenMinutesCard({
       onAction={done ? undefined : onContinue}
       disabled={done ? undefined : cfg[state].disabled}
       variant={done ? 'default' : 'featured'}
-      pulsePrimary={!done}
       headerTrailing={
         done
           ? <CheckCircle2 size={20} className="text-primary shrink-0" />
