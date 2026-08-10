@@ -23,7 +23,7 @@ import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-// daily-gate import removed — all non-Daily-Rhythm content is now self-paced.
+import { useDailyGate } from '@/lib/daily-gate';
 import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
@@ -413,8 +413,8 @@ function DiscoveryCard({
           : undefined
       }
       gatedMessage={
-        isGated && item.memberProgressState === 'in-progress'
-          ? "Complete today's 10 Minutes with Jesus first"
+        isGated
+          ? "Complete today's 10 Minutes with Jesus"
           : undefined
       }
       onGate={onGate}
@@ -432,26 +432,38 @@ function DevotionalCard({
   onAction,
   starting,
   onViewPreviousDays,
+  currentDay,
+  isGated,
+  onGate,
 }: {
   item: NextStepsItem;
   onAction: () => void;
   starting: boolean;
   onViewPreviousDays?: () => void;
+  currentDay?: number;
+  isGated?: boolean;
+  onGate?: () => void;
 }) {
   const isPaused = item.memberProgressState === 'paused';
-  // description is already progress-aware ("Day N of M · Title", "N of N completed",
-  // "Day 1 of M") — computed server-side to match Today's Steps exactly.
-  // No separate metadata label is needed; the day count lives in description.
+  const dur = item.metadata.durationDays;
+
   return (
     <EmmausContentCard
       label="DAILY DEVOTIONAL"
       title={item.title}
       description={item.description}
-      primaryActionLabel={item.primaryActionLabel ?? undefined}
+      primaryActionLabel={isGated ? undefined : (item.primaryActionLabel ?? undefined)}
       onAction={onAction}
       loading={starting}
       badge={item.badge ?? null}
       headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
+      progressNode={
+        dur
+          ? <WalkProgress item={item} currentDay={currentDay ?? 1} />
+          : undefined
+      }
+      gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+      onGate={onGate}
       secondaryAction={
         onViewPreviousDays
           ? { label: 'View Previous Entries →', onPress: onViewPreviousDays }
@@ -466,12 +478,15 @@ function DevotionalCard({
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
 function DevotionalsPanel({
-  items, onAction, startingId, onViewPreviousDays,
+  items, onAction, startingId, onViewPreviousDays, isGated, onGate, getProgressDay,
 }: {
   items: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
   startingId: string | null;
   onViewPreviousDays: (seriesId: string) => void;
+  isGated: boolean;
+  onGate: () => void;
+  getProgressDay: (id: string) => number;
 }) {
   if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
@@ -482,6 +497,9 @@ function DevotionalsPanel({
           item={item}
           onAction={() => onAction(item)}
           starting={startingId === item.id}
+          currentDay={item.metadata.currentDay ?? getProgressDay(item.id)}
+          isGated={isGated}
+          onGate={onGate}
           onViewPreviousDays={
             item.memberProgressState !== 'not-started'
               ? () => onViewPreviousDays(item.id)
@@ -532,20 +550,57 @@ function journeyItemCards(
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
 function JourneysPanel({
-  collections, onOpenJourney,
+  collections, onOpenJourney, isGated, onGate,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
+  isGated: boolean;
+  onGate: () => void;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
   return (
     <div className="space-y-3 pt-6">
       {collections.map(col => {
-        const walkCount = col.journeys.length;
+        const walkCount  = col.journeys.length;
+        const completed  = col.journeys.filter(j => j.memberProgressState === 'completed').length;
         const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
-        // "Continue" when a Walk is in-progress, "Open" otherwise (not-started or all complete).
-        const actionLabel = hasInProgress ? 'Continue' : 'Open';
+        const hasProgress   = completed > 0 || hasInProgress;
+        const actionLabel   = hasInProgress ? 'Continue' : 'Open';
+
+        // Progress node — dots for ≤ 10 walks, bar for longer collections.
+        const progressNode = hasProgress ? (
+          <div className="space-y-1.5">
+            {walkCount <= 10 ? (
+              <div className="flex gap-1" aria-label={`${completed} of ${walkCount} walks completed`}>
+                {col.journeys.map((j, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      j.memberProgressState === 'completed'
+                        ? 'bg-primary'
+                        : j.memberProgressState === 'in-progress'
+                          ? 'bg-primary/40'
+                          : 'bg-primary/20'
+                    }`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="h-1 rounded-full bg-primary/20 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.round((completed / walkCount) * 100)}%` }}
+                />
+              </div>
+            )}
+            <span className="text-[11px] text-muted-foreground">
+              {completed === walkCount
+                ? 'All walks completed'
+                : `${completed} of ${walkCount} walk${walkCount !== 1 ? 's' : ''} completed`}
+            </span>
+          </div>
+        ) : undefined;
 
         return (
           <EmmausContentCard
@@ -554,8 +609,11 @@ function JourneysPanel({
             title={col.title}
             description={col.description}
             metadata={`${walkCount} ${walkCount === 1 ? 'Walk' : 'Walks'}`}
-            primaryActionLabel={actionLabel}
+            primaryActionLabel={isGated ? undefined : actionLabel}
             onAction={() => onOpenJourney(col)}
+            progressNode={progressNode}
+            gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+            onGate={onGate}
           />
         );
       })}
@@ -588,11 +646,14 @@ function WalksPanel({
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction: _onAction,
+  current, previous, onAction: _onAction, isGated, onGate, getProgressDay,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
+  isGated: boolean;
+  onGate: () => void;
+  getProgressDay: (id: string) => number;
 }) {
   const [, setLocation] = useLocation();
 
@@ -616,12 +677,11 @@ function SermonCompanionsPanel({
   }
 
   function companionCard(item: NextStepsItem, isCurrent: boolean) {
-    const isPaused      = item.memberProgressState === 'paused';
-    // Subtitle from metadata ("5 Days of Intentional Living") used as discovery description.
-    // Fall back to progress-based description for companions that predate subtitle extraction.
-    const displayDesc   = item.metadata.subtitle ?? item.description;
-    const actionLabel   = discoveryActionLabel(item.memberProgressState, item.primaryActionLabel);
-    const destination   = overviewRoute(item);
+    const isPaused    = item.memberProgressState === 'paused';
+    const displayDesc = item.metadata.subtitle ?? item.description;
+    const actionLabel = discoveryActionLabel(item.memberProgressState, item.primaryActionLabel);
+    const destination = overviewRoute(item);
+    const currentDay  = getProgressDay(item.id);
 
     return (
       <EmmausContentCard
@@ -629,10 +689,17 @@ function SermonCompanionsPanel({
         title={item.title}
         description={displayDesc}
         metadata={item.metadata.durationDays ? `${item.metadata.durationDays} Steps` : undefined}
-        primaryActionLabel={actionLabel}
+        primaryActionLabel={isGated ? undefined : actionLabel}
         onAction={() => setLocation(destination)}
         headerTrailing={isPaused ? <StatePill state="paused" /> : undefined}
-        onCardPress={() => setLocation(destination)}
+        progressNode={
+          item.metadata.durationDays
+            ? <WalkProgress item={item} currentDay={currentDay} />
+            : undefined
+        }
+        gatedMessage={isGated ? "Complete today's 10 Minutes with Jesus" : undefined}
+        onGate={onGate}
+        onCardPress={isGated ? undefined : () => setLocation(destination)}
       />
     );
   }
@@ -867,14 +934,14 @@ export default function Journeys() {
     }
   }
 
-  // ── Pacing: all content (except Daily Rhythm) is self-paced ──────────────
-  // The daily gate (requiring 10 Minutes with Jesus before other journeys)
-  // has been removed per the permanent self-paced progression rule.
-  // Daily Rhythm remains calendar-paced in its own card; Growth Journeys,
-  // Devotionals, and Sermon Companions are never gated here.
+  // ── Daily gate — all non-Daily-Rhythm content requires 10 Minutes with Jesus ─
+  const { gateClear } = useDailyGate();
+
+  // Gate applies to every item in the Discover library. The daily rhythm itself
+  // is never shown here, so a simple !gateClear covers all cases.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function isItemGated(_item: NextStepsItem): boolean {
-    return false;
+    return !gateClear;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -953,6 +1020,9 @@ export default function Journeys() {
                 onAction={handleDevotionalAction}
                 startingId={startingDevId}
                 onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
+                isGated={!gateClear}
+                onGate={() => setLocation('/walk')}
+                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
               />
             )}
 
@@ -964,6 +1034,8 @@ export default function Journeys() {
                   // directly to a Walk or lesson. The member chooses their Walk there.
                   setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
                 }}
+                isGated={!gateClear}
+                onGate={() => setLocation('/walk')}
               />
             )}
 
@@ -986,6 +1058,9 @@ export default function Journeys() {
                 current={data.currentSermonCompanion}
                 previous={data.previousSermonCompanions}
                 onAction={handleSermonCompanionAction}
+                isGated={!gateClear}
+                onGate={() => setLocation('/walk')}
+                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
               />
             )}
           </>

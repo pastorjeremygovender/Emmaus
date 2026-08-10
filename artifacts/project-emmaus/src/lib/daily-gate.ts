@@ -26,14 +26,14 @@ import type { Journey } from '@/contexts/JourneyContext';
  * Admin can also disable the gate per journey via requiresDailyGate = false.
  */
 export function isGatedByDailyGate(j: Journey): boolean {
-  // The 10-min daily rhythm, sermon companion, and daily devotional are never gated —
-  // they ARE the core rhythm content.
-  if (['daily-rhythm', 'core', 'companion', 'devotional'].includes(j.journeyType)) return false;
+  // Only the 10-min daily rhythm itself is never gated — it IS the gate content.
+  if (['daily-rhythm', 'core'].includes(j.journeyType)) return false;
   // Admin-marked overload-exempt journeys bypass the gate too.
   if (j.overloadExempt === true) return false;
   // Admin can explicitly disable the gate for pastoral/crisis journeys.
   if (j.requiresDailyGate === false) return false;
-  // All other growth journeys are gated by default.
+  // All other content — companions, devotionals, growth journeys — requires
+  // completing today's 10 Minutes with Jesus first.
   return true;
 }
 
