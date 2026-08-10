@@ -166,7 +166,7 @@ function JourneyHeader({
         onChange={e => onPatch('title', e.target.value)}
         onBlur={onBlur}
         className="w-full text-3xl font-bold text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-300 leading-tight"
-        placeholder="Journey title…"
+        placeholder="Walk title…"
         style={{ fontFamily: '"Crimson Pro", Georgia, serif' }}
       />
 
@@ -187,7 +187,7 @@ function JourneyHeader({
         onBlur={onBlur}
         rows={4}
         className="w-full mt-6 text-base text-gray-700 bg-transparent border-none outline-none resize-none placeholder:text-gray-300 leading-relaxed"
-        placeholder="Describe this journey — who is it for, and what will they discover?"
+        placeholder="Describe this walk — who is it for, and what will they discover?"
       />
 
       {/* Tags */}
@@ -476,7 +476,7 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
       )}
 
       <div>
-        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Journey Type</label>
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Walk Type</label>
         <select
           value={(form as any).journeyType ?? journey.journeyType}
           onChange={e => { onPatch('journeyType' as keyof Journey, e.target.value); onBlur(); }}
@@ -738,7 +738,7 @@ function JourneyIntroEditor({
   return (
     <div className="max-w-2xl mx-auto px-8 py-10">
       <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest mb-6">
-        Journey Introduction
+        Walk Introduction
       </div>
 
       <textarea
@@ -746,7 +746,7 @@ function JourneyIntroEditor({
         onChange={e => onChange(e.target.value)}
         rows={20}
         autoFocus
-        placeholder="Begin the journey here. Welcome the reader, set the scene, and invite them to open their heart to what lies ahead…"
+        placeholder="Begin the walk here. Welcome the reader, set the scene, and invite them to open their heart to what lies ahead…"
         className="w-full border border-gray-200 rounded-xl px-5 py-4 text-base text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-colors bg-white resize-y leading-relaxed"
       />
 
@@ -817,7 +817,7 @@ function JourneyCompleteEditor({
   return (
     <div className="max-w-2xl mx-auto px-8 py-10 space-y-6">
       <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest">
-        Journey Complete
+        Walk Complete
       </div>
 
       <FieldBlock label="Title">
@@ -825,7 +825,7 @@ function JourneyCompleteEditor({
           type="text"
           value={step.title}
           onChange={e => onStepChange({ title: e.target.value })}
-          placeholder="Journey Complete"
+          placeholder="Walk Complete"
           className={inputCls}
           autoComplete="off"
         />
@@ -837,12 +837,12 @@ function JourneyCompleteEditor({
           onChange={e => onStepChange({ devotional: e.target.value })}
           rows={8}
           autoFocus
-          placeholder="Congratulate the reader on completing this journey…"
+          placeholder="Congratulate the reader on completing this walk…"
           className={textareaCls}
         />
       </FieldBlock>
 
-      <FieldBlock label="Closing Prayer" hint="Thank God for what He has done during the journey and ask Him to continue His work.">
+      <FieldBlock label="Closing Prayer" hint="Thank God for what He has done during the walk and ask Him to continue His work.">
         <textarea
           value={step.prayerPrompt ?? ''}
           onChange={e => onStepChange({ prayerPrompt: e.target.value })}
@@ -852,7 +852,7 @@ function JourneyCompleteEditor({
         />
       </FieldBlock>
 
-      <FieldBlock label="Recommended Next Journey" hint="Displayed in the app as: Continue to [Journey Name] →">
+      <FieldBlock label="Recommended Next Walk" hint="Displayed in the app as: Continue to [Walk Name] →">
         <select
           value={nextJourneyId}
           onChange={e => onNextJourneyIdChange(e.target.value)}
@@ -909,7 +909,7 @@ function AIReviewBanner({ journey, onDismiss }: { journey: Journey; onDismiss: (
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-teal-900">AI-generated draft — please review</p>
           <p className="text-xs text-teal-700 mt-0.5 leading-relaxed">
-            This Journey was created by Emmaus AI. Review each step for accuracy, pastoral tone, and doctrinal soundness before publishing.
+            This Walk was created by Emmaus AI. Review each step for accuracy, pastoral tone, and doctrinal soundness before publishing.
             Scripture text was verified at generation time — check any quoted verses match your preferred translation.
           </p>
           {sources && (
@@ -1046,7 +1046,7 @@ function GuidedProgressPanel({
           className="flex items-center gap-2 px-6 py-3 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 active:scale-[0.98] transition-all shadow-sm"
         >
           <ChevronRight size={15} />
-          {completedCount === 0 ? 'Start Journey Introduction' : `Write ${nextSection.label}`}
+          {completedCount === 0 ? 'Start Walk Introduction' : `Write ${nextSection.label}`}
         </button>
       )}
       {allComplete && (
@@ -1353,7 +1353,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     try {
       await updateJourney({ ...journey, ...journeyForm, status: 'Published', notifyMembers } as unknown as Journey);
       setJourneySaving(null);
-      toast.success('Journey published successfully.');
+      toast.success('Walk published successfully.');
       onBack();
     } catch {
       setJourneyErrorMsg('Failed to publish.');
