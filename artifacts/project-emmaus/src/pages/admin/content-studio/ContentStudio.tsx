@@ -29,6 +29,7 @@ import DailyRhythmStudio from './DailyRhythmStudio';
 import BibleContentStudio from './BibleContentStudio';
 import DevotionalSeriesList from './DevotionalSeriesList';
 import DevotionalSeriesEditor from './DevotionalSeriesEditor';
+import DevotionalSeriesDetailView from './DevotionalSeriesDetailView';
 import DevotionalEntryEditor from './DevotionalEntryEditor';
 import CollectionsList from './CollectionsList';
 import CollectionEditor from './CollectionEditor';
@@ -142,8 +143,9 @@ interface Props {
 }
 
 export default function ContentStudio({ initialSubView, initialJourneyId }: Props) {
-  // Side panel — shows journey detail (walks list) without leaving the Journeys tab
+  // Side panels — show detail without leaving the list
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
+  const [panelSeriesId, setPanelSeriesId] = useState<string | null>(null);
 
   const [view, setView] = useState<StudioView>(() => {
     if (initialSubView === 'studio-editor' && initialJourneyId) {
@@ -366,7 +368,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       case 'devotionals':
         return (
           <DevotionalSeriesList
-            onEdit={(seriesId) => navigate({ id: 'devotional-editor', seriesId })}
+            onEdit={(seriesId) => setPanelSeriesId(seriesId)}
           />
         );
       case 'devotional-editor':
@@ -650,6 +652,50 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       <div className="flex-1 overflow-y-auto" role="tabpanel">
         {renderView()}
       </div>
+
+      {/* ── Devotional series side panel ─────────────────────────────────── */}
+      {panelSeriesId && (
+        <div className="fixed inset-0 z-40 flex pointer-events-none">
+          {/* Backdrop */}
+          <div
+            className="flex-1 pointer-events-auto"
+            onClick={() => setPanelSeriesId(null)}
+          />
+          {/* Drawer */}
+          <div className="w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
+            {/* Panel chrome header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
+              <span className="text-[13px] font-semibold text-gray-600 uppercase tracking-wide">Series Details</span>
+              <button
+                onClick={() => setPanelSeriesId(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+                aria-label="Close panel"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <DevotionalSeriesDetailView
+                key={panelSeriesId}
+                seriesId={panelSeriesId}
+                onBack={() => setPanelSeriesId(null)}
+                onEditSeries={(id) => {
+                  setPanelSeriesId(null);
+                  navigate({ id: 'devotional-editor', seriesId: id });
+                }}
+                onNewEntry={(id) => {
+                  setPanelSeriesId(null);
+                  navigate({ id: 'devotional-editor', seriesId: id });
+                }}
+                onEditEntry={(id, day) => {
+                  setPanelSeriesId(null);
+                  navigate({ id: 'devotional-entry-editor', seriesId: id, day });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Journey detail side panel ─────────────────────────────────────── */}
       {panelCollectionId && (
