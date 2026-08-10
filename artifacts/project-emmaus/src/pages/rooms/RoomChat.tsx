@@ -4,10 +4,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiGetMessages, apiGetStreamToken, apiSendMessage } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
-import { ArrowLeft, Send, Paperclip, X } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Mic } from 'lucide-react';
 import type { RoomMessage, MediaAttachment } from '@/lib/rooms-types';
 import { MediaMessageBubble } from '@/components/MediaMessageBubble';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
+import { VoiceNoteRecorder, supportsMediaRecorder } from '@/components/VoiceNoteRecorder';
 
 const MAX_RECONNECT_ATTEMPTS = 6;
 const BASE_BACKOFF_MS = 1_000;
@@ -84,6 +85,10 @@ export default function RoomChat() {
   // Attachment state
   const [pendingAttachment, setPendingAttachment] = useState<MediaAttachment | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const voiceFallbackRef = useRef<HTMLInputElement>(null);
 
   // Presentation permission — passed via navigation state from RoomDetail
   const [isLeader, setIsLeader] = useState(false);
@@ -228,6 +233,73 @@ export default function RoomChat() {
       if (attachment) setPendingAttachment(attachment);
     } finally {
       setSending(false);
+    }
+  };
+
+  /**
+   * Send a message with an attachment immediately, without going through state.
+   * Used by the voice recorder so the note is sent as soon as upload completes,
+   * matching the spec's "stop → upload → send" flow.
+   */
+  const sendAttachmentDirectly = async (attachment: MediaAttachment) => {
+    if (!user || !roomId || sending) return;
+    setSending(true);
+
+    const optimistic: RoomMessage = {
+      id: `opt-${Date.now()}`,
+      roomId: String(roomId),
+      userId: user.id,
+      senderName: user.preferredName || 'You',
+      body: '',
+      createdAt: new Date().toISOString(),
+      attachment,
+    };
+    setMessages(prev => [optimistic, ...prev]);
+    scrollToBottom();
+
+    try {
+      await apiSendMessage(user.id, String(roomId), '', attachment);
+    } catch {
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** Handle mic button tap — start in-app recording or fall back to file picker. */
+  const handleMicClick = () => {
+    if (supportsMediaRecorder()) {
+      setIsRecording(true);
+    } else {
+      // Fallback: open a file picker limited to audio files
+      voiceFallbackRef.current?.click();
+    }
+  };
+
+  /** Fallback: user picked an audio file from disk — upload it as a voice attachment. */
+  const handleVoiceFallbackChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !roomId) return;
+    e.target.value = '';
+    // Reuse the AttachmentPicker's upload path via the existing apiRequestRoomUploadUrl
+    // We import from rooms-api-media inside a dynamic fashion here to keep the
+    // import light — we just call the helpers directly.
+    const { apiRequestRoomUploadUrl, uploadFileToStorage } = await import('@/lib/rooms-api-media');
+    try {
+      const { uploadUrl, objectPath, attachmentType } = await apiRequestRoomUploadUrl(
+        user.id, String(roomId), file.name, file.type, file.size,
+      );
+      await uploadFileToStorage(uploadUrl, file);
+      const attachment: MediaAttachment = {
+        type: (attachmentType as MediaAttachment['type']) || 'voice',
+        filename: file.name,
+        objectPath,
+        mimeType: file.type,
+        size: file.size,
+      };
+      setPendingAttachment(attachment);
+    } catch (err) {
+      console.error('Voice fallback upload failed', err);
     }
   };
 
@@ -405,41 +477,76 @@ export default function RoomChat() {
         </div>
       )}
 
+      {/* Hidden fallback audio file input (for browsers without MediaRecorder) */}
+      <input
+        ref={voiceFallbackRef}
+        type="file"
+        accept="audio/mpeg,audio/mp4,audio/webm,audio/ogg,audio/wav,audio/aac,audio/x-m4a"
+        className="hidden"
+        onChange={handleVoiceFallbackChange}
+      />
+
       {/* Input bar */}
       <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 max-w-[480px] mx-auto w-full">
-        <div className="flex items-end gap-2">
-          {/* Attachment button */}
-          <button
-            onClick={() => setShowPicker(true)}
-            className="w-10 h-10 rounded-full border border-border bg-muted text-muted-foreground flex items-center justify-center shrink-0 hover:text-foreground transition-colors"
-            aria-label="Add attachment"
-          >
-            <Paperclip size={18} />
-          </button>
-
-          <textarea
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
+        {isRecording ? (
+          /* ── Voice recording mode ── */
+          <VoiceNoteRecorder
+            userId={user.id}
+            roomId={String(roomId)}
+            onAttachment={attachment => {
+              setIsRecording(false);
+              sendAttachmentDirectly(attachment);
             }}
-            placeholder="Message…"
-            rows={1}
-            className="flex-1 resize-none bg-muted rounded-2xl px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-[120px] overflow-y-auto"
-            style={{ lineHeight: '1.5' }}
+            onCancel={() => setIsRecording(false)}
           />
-          <button
-            onClick={handleSend}
-            disabled={(!body.trim() && !pendingAttachment) || sending}
-            className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 transition-opacity"
-            aria-label="Send"
-          >
-            <Send size={18} />
-          </button>
-        </div>
+        ) : (
+          /* ── Normal compose mode ── */
+          <div className="flex items-end gap-2">
+            {/* Attachment button */}
+            <button
+              onClick={() => setShowPicker(true)}
+              className="w-10 h-10 rounded-full border border-border bg-muted text-muted-foreground flex items-center justify-center shrink-0 hover:text-foreground transition-colors"
+              aria-label="Add attachment"
+            >
+              <Paperclip size={18} />
+            </button>
+
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Message…"
+              rows={1}
+              className="flex-1 resize-none bg-muted rounded-2xl px-4 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 max-h-[120px] overflow-y-auto"
+              style={{ lineHeight: '1.5' }}
+            />
+
+            {/* Mic button — shown instead of Send when no text/attachment is pending */}
+            {!body.trim() && !pendingAttachment ? (
+              <button
+                onClick={handleMicClick}
+                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+                aria-label="Record voice note"
+              >
+                <Mic size={18} />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={sending}
+                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0 disabled:opacity-40 transition-opacity"
+                aria-label="Send"
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Attachment picker */}
