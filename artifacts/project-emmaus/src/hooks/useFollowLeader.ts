@@ -173,11 +173,13 @@ export function useFollowLeader({
           }
         }
 
-        // Seed historical highlights and notes so panels see them even if
-        // the corresponding SSE events were missed before this member joined.
+        // Seed historical highlights, notes, and active presentation so panels
+        // see them even if the corresponding SSE events were missed before this
+        // member joined (late-join or reconnect).
         const seedHighlights = (event.payload.highlights as RoomHighlight[] | undefined) ?? [];
         const seedNotes = (event.payload.notes as SharedNote[] | undefined) ?? [];
         const seedPoll = (event.payload.activePoll as RoomPoll | undefined) ?? null;
+        const seedPresentation = (event.payload.activePresentation as PresentationState | undefined) ?? null;
 
         if (seedHighlights.length > 0) {
           setIncomingHighlights(prev => {
@@ -196,6 +198,12 @@ export function useFollowLeader({
         if (seedPoll && session !== null) {
           // Only seed the poll if there's still an active session.
           setIncomingPoll(seedPoll);
+        }
+        if (seedPresentation && session !== null) {
+          // Seed the active presentation for late-joining members or reconnectors.
+          // Only apply when there is still an active session; if the session is
+          // null the presentation row has already been cleaned up by session end.
+          setActivePresentation(prev => prev ?? seedPresentation);
         }
 
         break;

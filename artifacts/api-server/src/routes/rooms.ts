@@ -1488,6 +1488,8 @@ router.post("/:roomId/session/end", async (req, res) => {
   if (status === "completed") {
     try {
       const summary = await completeSession(String(roomId));
+      // Clear any active presentation so the DB table is empty after session end.
+      await stopPresentation(String(roomId));
       const event: SessionEvent = {
         type: "session_complete",
         payload: summary as unknown as Record<string, unknown>,
@@ -1506,6 +1508,8 @@ router.post("/:roomId/session/end", async (req, res) => {
 
   try {
     await endSession(String(roomId), "ended");
+    // Clear any active presentation so the DB table is empty after session end.
+    await stopPresentation(String(roomId));
     const event: SessionEvent = {
       type: "session_ended",
       payload: { status: "ended" },
@@ -1613,6 +1617,9 @@ router.post("/:roomId/session/complete", async (req, res) => {
   if (!userId) return;
   try {
     const summary = await completeSession(String(roomId));
+    // Clear any active presentation so the DB table is empty after session end.
+    // Non-fatal — run best-effort after session completion has already been committed.
+    await stopPresentation(String(roomId)).catch(() => {});
     broadcastRoomEvent(String(roomId), {
       type: "session_complete",
       payload: { ...summary },
@@ -1819,11 +1826,13 @@ router.get("/:roomId/session/events", async (req, res) => {
     let sessionHighlights: Awaited<ReturnType<typeof getHighlights>> = [];
     let sessionNotes: Awaited<ReturnType<typeof getSharedNotes>> = [];
     let sessionActivePoll: Awaited<ReturnType<typeof getActivePoll>> = null;
+    let sessionActivePresentation: Awaited<ReturnType<typeof getActivePresentation>> = null;
     if (activeSessionOnConnect) {
-      [sessionHighlights, sessionNotes, sessionActivePoll] = await Promise.all([
+      [sessionHighlights, sessionNotes, sessionActivePoll, sessionActivePresentation] = await Promise.all([
         getHighlights(roomId, activeSessionOnConnect.id),
         getSharedNotes(roomId, activeSessionOnConnect.id),
         getActivePoll(roomId, activeSessionOnConnect.id),
+        getActivePresentation(roomId),
       ]);
     }
     const initEvent: SessionEvent = {
@@ -1833,6 +1842,7 @@ router.get("/:roomId/session/events", async (req, res) => {
         highlights: sessionHighlights,
         notes: sessionNotes,
         activePoll: sessionActivePoll,
+        activePresentation: sessionActivePresentation,
       },
       sentBy: "system",
       at: new Date().toISOString(),
