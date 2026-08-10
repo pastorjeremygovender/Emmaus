@@ -24,7 +24,6 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
-import { WritingAssistantPanel, type PreviousDayInfo } from '@/components/WritingAssistantPanel';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
 import EmmausContentEditor from './EmmausContentEditor';
@@ -371,8 +370,6 @@ export default function DailyRhythmDayEditor({
   const [errorMsg, setErrorMsg] = useState('');
   const [showDelete, setShowDelete] = useState(false);
   const [currentDay, setCurrentDay] = useState<number | null>(day);
-  const [showAssistant, setShowAssistant] = useState(false);
-
   useEffect(() => {
     if (day !== null) {
       const existing = getStep(journeyId, day) as (Step & { closingText?: string }) | undefined;
@@ -464,21 +461,6 @@ export default function DailyRhythmDayEditor({
     onDeleted();
   };
 
-  const previousDays = useMemo<PreviousDayInfo[]>(() =>
-    (steps as Step[])
-      .filter(s => s.journeyId === journeyId && s.day < form.day)
-      .sort((a, b) => b.day - a.day)
-      .slice(0, 3)
-      .map(s => ({
-        day: s.day,
-        title: (s as Step & { title?: string }).title ?? '',
-        scripture: (s as Step & { scripture?: string }).scripture ?? '',
-        devotional: (s as Step & { devotional?: string }).devotional ?? '',
-        actionStep: (s as Step & { actionStep?: string }).actionStep ?? '',
-      })),
-    [steps, journeyId, form.day]
-  );
-
   const handleApplyField = useCallback((field: DraftField, value: string, mode: 'replace' | 'append') => {
     const existing = form[field as keyof DayForm] as string;
     patch(
@@ -497,27 +479,6 @@ export default function DailyRhythmDayEditor({
 
   return (
     <>
-      {/* Writing Assistant panel — full-screen overlay, rendered outside layout flow */}
-      {showAssistant && user && (
-        <WritingAssistantPanel
-          journeyId={journeyId}
-          dayNumber={form.day}
-          dayTitle={form.title}
-          scriptureRef={form.scripture}
-          existingContent={{
-            mentorIntro:  form.mentorIntro,
-            devotional:   form.devotional,
-            prayerPrompt: form.prayerPrompt,
-            actionStep:   form.actionStep,
-            closingText:  form.closingText,
-          }}
-          previousDays={previousDays}
-          user={user}
-          onApplyField={handleApplyField}
-          onClose={() => setShowAssistant(false)}
-        />
-      )}
-
       <EmmausContentEditor
         toolbar={
           <ContentStudioToolbar
@@ -535,19 +496,6 @@ export default function DailyRhythmDayEditor({
             onDelete={() => setShowDelete(true)}
             extraActions={
               <div className="flex items-center gap-1.5">
-                {isEditor && (
-                  <button
-                    onClick={() => setShowAssistant(v => !v)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] transition-colors ${
-                      showAssistant
-                        ? 'border-teal-400 bg-teal-600 text-white hover:bg-teal-700'
-                        : 'border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100'
-                    }`}
-                  >
-                    <Wand2 size={12} />
-                    Help Me Write
-                  </button>
-                )}
                 <button
                   onClick={handleDuplicate}
                   disabled={saving}

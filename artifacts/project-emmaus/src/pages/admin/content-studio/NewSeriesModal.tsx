@@ -1,18 +1,26 @@
 /**
- * NewCollectionModal — AI-guided or from-scratch Journey creation.
+ * NewSeriesModal — AI-guided or from-scratch Daily Devotional series creation.
  *
  * Step 1  Choose method: Build with Emmaus AI | Start from Scratch
- * AI path   → Step 2: What's this journey about? (theme, goal, audience)
- *           → Step 3: Journey details (title, description, tags) → create → onCreated
- * Scratch   → Step 2: Title + description + tags → create → onCreated
+ * AI path   → Step 2: What's this series about? (theme, scripture, audience)
+ *           → Step 3: Series details (title, type, length) → create → onCreated
+ * Scratch   → Step 2: Title + type → create → onCreated
  */
 
 import React, { useState } from 'react';
 import {
-  X, ArrowLeft, ArrowRight, Sparkles, PenLine, FolderOpen, Loader2,
+  X, ArrowLeft, ArrowRight, Sparkles, PenLine, BookHeart, Loader2,
 } from 'lucide-react';
-import { createCollection } from '@/lib/collections-api';
+import { createSeries } from '@/lib/devotionals-api';
 import { useAuth } from '@/contexts/AuthContext';
+
+const TYPE_OPTIONS: Record<string, string> = {
+  general:           'General',
+  psalms:            'Psalms',
+  proverbs:          'Proverbs',
+  seasonal:          'Seasonal',
+  'church-specific': 'Church Series',
+};
 
 const AUDIENCE_OPTIONS = [
   'Whole congregation',
@@ -24,43 +32,33 @@ const AUDIENCE_OPTIONS = [
   'Youth',
 ];
 
-const FOCUS_OPTIONS = [
-  'Faith foundations',
-  'Prayer and devotion',
-  'Scripture study',
-  'Evangelism',
-  'Discipleship',
-  'Seasonal / Liturgical',
-  'Pastoral care',
-  'Leadership development',
-];
-
 type Method = 'ai' | 'scratch';
 type WizardStep = 1 | 2 | 3;
 
 interface Props {
   onClose: () => void;
-  onCreated: (collectionId: string) => void;
+  onCreated: (seriesId: string) => void;
 }
 
-export default function NewCollectionModal({ onClose, onCreated }: Props) {
+export default function NewSeriesModal({ onClose, onCreated }: Props) {
   const { user } = useAuth();
+  const auth = user ? { userId: user.id, userRole: user.role } : undefined;
 
   const [step, setStep]     = useState<WizardStep>(1);
   const [method, setMethod] = useState<Method | null>(null);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  // AI-specific fields
-  const [theme,    setTheme]    = useState('');
-  const [goal,     setGoal]     = useState('');
-  const [audience, setAudience] = useState('');
-  const [focus,    setFocus]    = useState('');
+  // AI path fields
+  const [theme,      setTheme]      = useState('');
+  const [scripture,  setScripture]  = useState('');
+  const [audience,   setAudience]   = useState('');
+  const [aiLength,   setAiLength]   = useState('');
 
   // Shared / Scratch fields
-  const [title,       setTitle]       = useState('');
-  const [description, setDescription] = useState('');
-  const [tags,        setTags]        = useState('');
+  const [title,      setTitle]      = useState('');
+  const [seriesType, setSeriesType] = useState('general');
+  const [length,     setLength]     = useState('');
 
   // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -83,14 +81,15 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
   const handleContinue = async () => {
     setError('');
     if (step < maxStep) {
-      // Pre-fill title from theme when advancing to AI step 3
+      // Pre-fill title from theme on AI step 2→3
       if (step === 2 && method === 'ai' && !title && theme.trim()) {
         setTitle(theme.trim().charAt(0).toUpperCase() + theme.trim().slice(1));
-        if (goal.trim() && !description) setDescription(goal.trim());
+        if (aiLength) setLength(aiLength);
       }
       setStep(s => (s + 1) as WizardStep);
       return;
     }
+    // Final create
     await handleCreate();
   };
 
@@ -98,39 +97,42 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
     if (!title.trim()) { setError('Title is required.'); return; }
     setSaving(true);
     try {
-      const desc = method === 'ai'
-        ? description.trim() || [
+      const description = method === 'ai'
+        ? [
             theme.trim() ? `Theme: ${theme.trim()}.` : '',
-            goal.trim()  ? `Goal: ${goal.trim()}.`   : '',
+            scripture.trim() ? `Scripture: ${scripture.trim()}.` : '',
             audience.trim() ? `For: ${audience.trim()}.` : '',
           ].filter(Boolean).join(' ')
-        : description.trim();
+        : undefined;
 
-      const parsedTags = tags.split(',').map(t => t.trim()).filter(Boolean);
-      const created = await createCollection(
-        { title: title.trim(), description: desc || undefined, status: 'Draft', tags: parsedTags.length ? parsedTags : undefined },
-        user?.id,
+      const created = await createSeries(
+        { title: title.trim(), seriesType, description: description || undefined },
+        auth,
       );
-      onCreated((created as { id: string }).id);
+      onCreated(created.id);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create journey. Please try again.');
+      setError(e instanceof Error ? e.message : 'Failed to create series. Please try again.');
       setSaving(false);
     }
   };
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
+  // ── Step titles ──────────────────────────────────────────────────────────────
 
   const STEP_TITLES: Record<WizardStep, string> = {
-    1: 'Create a Journey',
-    2: method === 'scratch' ? 'Journey Details' : "What\u2019s This About?",
-    3: 'Journey Details',
+    1: 'Create a Series',
+    2: method === 'scratch' ? 'Series Details' : "What\u2019s This About?",
+    3: 'Series Details',
   };
+
+  const totalSteps = maxStep;
+
+  // ── Footer label ─────────────────────────────────────────────────────────────
 
   const footerLabel = (): React.ReactNode => {
     if (saving)       return <><Loader2 size={15} className="animate-spin" /><span>Creating…</span></>;
     if (step < maxStep) return <><span>Continue</span><ArrowRight size={15} /></>;
-    if (method === 'ai') return <><span>Create Journey</span><Sparkles size={15} /></>;
-    return <span>Create Journey</span>;
+    if (method === 'ai') return <><span>Create Series</span><Sparkles size={15} /></>;
+    return <span>Create Series</span>;
   };
 
   const footerBg =
@@ -166,7 +168,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
 
         {/* Progress pills */}
         <div className="flex-shrink-0 flex items-center gap-1.5 px-5 pt-3.5 pb-1">
-          {Array.from({ length: maxStep }, (_, i) => (
+          {Array.from({ length: totalSteps }, (_, i) => (
             <div
               key={i}
               className={`h-[3px] rounded-full flex-1 transition-all duration-300 ${i < step ? 'bg-teal-500' : 'bg-gray-200'}`}
@@ -177,11 +179,11 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
         {/* Content */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
 
-          {/* ── Step 1: Method ─────────────────────────────────────────────── */}
+          {/* ── Step 1: Method selection ────────────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-3">
               <p className="text-[13px] text-gray-500 leading-relaxed mb-2">
-                How would you like to create this journey?
+                How would you like to create this series?
               </p>
 
               {/* AI card */}
@@ -197,7 +199,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-semibold text-gray-900 leading-tight">Build with Emmaus AI</p>
-                    <p className="text-[12px] text-gray-500 mt-0.5">Emmaus helps you design the journey</p>
+                    <p className="text-[12px] text-gray-500 mt-0.5">Emmaus shapes the series around your theme</p>
                   </div>
                   {method === 'ai' && (
                     <div className="w-5 h-5 rounded-full bg-teal-500 flex items-center justify-center flex-shrink-0">
@@ -206,7 +208,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Answer a few questions and Emmaus structures the journey — theme, goal, audience, and description — ready for you to add walks.
+                  Answer a few questions and Emmaus structures the series — theme, scripture focus, audience, and type — ready for you to write each day.
                 </p>
               </button>
 
@@ -223,7 +225,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-semibold text-gray-900 leading-tight">Start from Scratch</p>
-                    <p className="text-[12px] text-gray-500 mt-0.5">Blank canvas, you decide everything</p>
+                    <p className="text-[12px] text-gray-500 mt-0.5">Blank canvas, you write everything</p>
                   </div>
                   {method === 'scratch' && (
                     <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0">
@@ -232,7 +234,7 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   )}
                 </div>
                 <p className="text-[13px] text-gray-600 leading-relaxed">
-                  Create an empty journey and add related walks to it. Full creative control from the very first step.
+                  Create an empty series and write each devotional entry yourself. Full creative control from day one.
                 </p>
               </button>
             </div>
@@ -243,54 +245,39 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
             <div className="space-y-4">
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center flex-shrink-0">
-                  <FolderOpen size={17} className="text-teal-600" />
+                  <BookHeart size={17} className="text-teal-600" />
                 </div>
                 <p className="text-[13px] text-gray-500 leading-relaxed">
-                  Help Emmaus design this journey by answering a few questions.
+                  Help Emmaus shape this series by answering a few questions.
                 </p>
               </div>
 
               <div>
                 <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  What's the theme or focus? <span className="text-red-500">*</span>
+                  What's the theme or topic? <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   autoFocus
                   value={theme}
                   onChange={e => setTheme(e.target.value)}
                   rows={3}
-                  placeholder="e.g. A 40-day journey through the Sermon on the Mount for new believers"
+                  placeholder="e.g. Finding rest in God's presence during difficult seasons"
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
                 />
               </div>
 
               <div>
                 <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  What's the goal for members?
+                  Scripture focus
                   <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
                 </label>
                 <input
                   type="text"
-                  value={goal}
-                  onChange={e => setGoal(e.target.value)}
-                  placeholder="e.g. Develop a daily prayer habit rooted in Scripture"
+                  value={scripture}
+                  onChange={e => setScripture(e.target.value)}
+                  placeholder="e.g. Psalm 23, Matthew 11:28–30"
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
                 />
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Discipleship focus
-                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
-                </label>
-                <select
-                  value={focus}
-                  onChange={e => setFocus(e.target.value)}
-                  className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-                >
-                  <option value="">— Select a focus —</option>
-                  {FOCUS_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
               </div>
 
               <div>
@@ -307,21 +294,28 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   {AUDIENCE_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
+                  Estimated number of days
+                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={aiLength}
+                  onChange={e => setAiLength(e.target.value)}
+                  placeholder="e.g. 7"
+                  className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+                />
+              </div>
             </div>
           )}
 
           {/* ── Step 2 (Scratch): Quick details ───────────────────────────── */}
           {step === 2 && method === 'scratch' && (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
-                  <FolderOpen size={17} className="text-purple-600" />
-                </div>
-                <p className="text-[13px] text-gray-500 leading-relaxed">
-                  Group related walks together. You can add walks after creating the journey.
-                </p>
-              </div>
-
               <div>
                 <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
                   Title <span className="text-red-500">*</span>
@@ -332,35 +326,19 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && title.trim() && !saving) handleCreate(); }}
-                  placeholder="e.g. Lent 2025 Series"
+                  placeholder="e.g. Psalms Daily Devotional"
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Description
-                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
-                </label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="A short description visible to users…"
-                  rows={2}
-                  className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Tags
-                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional · comma-separated</span>
-                </label>
-                <input
-                  type="text"
-                  value={tags}
-                  onChange={e => setTags(e.target.value)}
-                  placeholder="e.g. Lent, Prayer, Series"
-                  className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
-                />
+                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">Series Type</label>
+                <select
+                  value={seriesType}
+                  onChange={e => setSeriesType(e.target.value)}
+                  className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                >
+                  {Object.entries(TYPE_OPTIONS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
               </div>
             </div>
           )}
@@ -377,42 +355,27 @@ export default function NewCollectionModal({ onClose, onCreated }: Props) {
 
               <div>
                 <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Journey Title <span className="text-red-500">*</span>
+                  Series Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   autoFocus
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. Sermon on the Mount"
+                  placeholder="e.g. Finding Rest in God"
                   className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
                 />
               </div>
+
               <div>
-                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Description
-                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional</span>
-                </label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  rows={3}
-                  placeholder="A short description visible to members…"
-                  className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                  Tags
-                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">optional · comma-separated</span>
-                </label>
-                <input
-                  type="text"
-                  value={tags}
-                  onChange={e => setTags(e.target.value)}
-                  placeholder={[audience, focus].filter(Boolean).join(', ') || 'e.g. Discipleship, Prayer'}
-                  className="w-full px-3.5 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
-                />
+                <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">Series Type</label>
+                <select
+                  value={seriesType}
+                  onChange={e => setSeriesType(e.target.value)}
+                  className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
+                >
+                  {Object.entries(TYPE_OPTIONS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
               </div>
 
               {error && <p className="text-[13px] text-red-600 font-medium">{error}</p>}
