@@ -145,15 +145,12 @@ export default function AskEmmausHome() {
   }
 
   function handleBack() {
-    const dest = getReturnDestination();
-    clearReturnDestination();
-    const target = dest?.pathname ?? '/walk';
-    setLocation(target);
-    // Attempt scroll restoration after the new route mounts.
-    if (dest?.scrollY) {
-      requestAnimationFrame(() => {
-        setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
-      });
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      const dest = getReturnDestination();
+      clearReturnDestination();
+      setLocation(dest?.pathname ?? '/walk');
     }
   }
 

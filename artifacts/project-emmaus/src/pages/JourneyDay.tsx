@@ -319,7 +319,7 @@ export default function JourneyDay() {
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           {/* Back button — returns to the source context (Next Steps, Walk overview, etc.) */}
           <button
-            onClick={() => setLocation(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path)}
+            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path); }}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >

@@ -44,7 +44,7 @@ export default function BookDetail() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
-            onClick={() => setLocation('/bible/books')}
+            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/bible/books'); }}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />

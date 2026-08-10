@@ -204,7 +204,7 @@ export default function Admin() {
           </div>
         )}
         <button
-          onClick={() => setLocation('/walk')}
+          onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/walk'); }}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft size={16} className="text-gray-400" />

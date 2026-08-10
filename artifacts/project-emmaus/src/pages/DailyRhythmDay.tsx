@@ -130,7 +130,7 @@ export default function DailyRhythmDay() {
     sessionStorage.removeItem(key);
   }, [day]);
 
-  const goBack = () => setLocation('/walk');
+  const goBack = () => { if (window.history.length > 1) window.history.back(); else setLocation('/walk'); };
   const goToPreviousDays = () => setLocation('/daily-rhythm/previous?from=walk');
 
   const hasPreviousDays =
