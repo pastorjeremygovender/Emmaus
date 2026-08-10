@@ -261,7 +261,7 @@ export function useFollowLeader({
         const p = event.payload as {
           messageId: string | null; filename: string; mediaType: string;
           objectPath: string; presentedBy: string; presentedByName: string;
-          currentPage: number; sessionId: string | null;
+          currentPage: number; pageCount?: number | null; sessionId: string | null;
         };
         setActivePresentation({
           messageId: p.messageId,
@@ -271,6 +271,7 @@ export function useFollowLeader({
           presentedBy: p.presentedBy,
           presentedByName: p.presentedByName,
           currentPage: p.currentPage,
+          pageCount: p.pageCount ?? undefined,
         });
         break;
       }

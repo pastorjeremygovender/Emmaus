@@ -105,6 +105,8 @@ export interface MediaPresentation {
   presentedBy: string;
   presentedByName: string;
   currentPage: number;
+  /** Total page count — PDF only. Null when not set. */
+  pageCount: number | null;
   startedAt: string;
 }
 
@@ -195,6 +197,7 @@ function rowToPresentation(row: Record<string, unknown>): MediaPresentation {
     presentedBy: String(row.presented_by ?? ""),
     presentedByName: String(row.presented_by_name ?? ""),
     currentPage: Number(row.current_page ?? 1),
+    pageCount: row.page_count != null ? Number(row.page_count) : null,
     startedAt: String(row.started_at ?? ""),
   };
 }
@@ -651,15 +654,16 @@ export async function startPresentation(
   objectPath: string,
   presentedBy: string,
   presentedByName: string,
+  pageCount?: number | null,
 ): Promise<MediaPresentation> {
   await pool.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
   const res = await pool.query(
     `INSERT INTO room_media_presentations
        (room_id, session_id, message_id, filename, media_type, object_path,
-        presented_by, presented_by_name, current_page)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1)
+        presented_by, presented_by_name, current_page, page_count)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9)
      RETURNING *`,
-    [roomId, sessionId, messageId, filename, mediaType, objectPath, presentedBy, presentedByName]
+    [roomId, sessionId, messageId, filename, mediaType, objectPath, presentedBy, presentedByName, pageCount ?? null]
   );
   return rowToPresentation(res.rows[0] as Record<string, unknown>);
 }

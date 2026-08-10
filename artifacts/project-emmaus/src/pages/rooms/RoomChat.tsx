@@ -313,6 +313,7 @@ export default function RoomChat() {
         mediaType: msg.attachment.type,
         objectPath: msg.attachment.objectPath,
         sessionId,
+        pageCount: msg.attachment.pageCount ?? null,
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not start presentation.');

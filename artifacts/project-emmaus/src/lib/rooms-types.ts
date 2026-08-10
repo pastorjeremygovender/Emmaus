@@ -189,6 +189,8 @@ export interface PresentationState {
   presentedBy: string;
   presentedByName: string;
   currentPage: number;
+  /** Total page count — PDF only. Undefined when unknown. */
+  pageCount?: number;
 }
 
 export interface RoomMediaItem {

@@ -369,6 +369,7 @@ export function GuideGroupPanel({
                       mediaType: item.attachment.type,
                       objectPath: item.attachment.objectPath,
                       sessionId: activeSession?.id ?? null,
+                      pageCount: item.attachment.pageCount ?? null,
                     });
                     setView('main');
                     onClose();

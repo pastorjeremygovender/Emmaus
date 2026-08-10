@@ -45,8 +45,10 @@ export function PresentationPanel({
     }
   };
 
+  const isLastPage = presentation.pageCount != null && presentation.currentPage >= presentation.pageCount;
+
   const handleNextPage = async () => {
-    if (busy) return;
+    if (busy || isLastPage) return;
     setBusy(true);
     try {
       await apiChangePresentationPage(userId, roomId, presentation.currentPage + 1);
@@ -100,7 +102,7 @@ export function PresentationPanel({
               />
             </div>
             <p className="text-center text-[13px] text-muted-foreground">
-              Page {presentation.currentPage}
+              Page {presentation.currentPage}{presentation.pageCount ? ` of ${presentation.pageCount}` : ''}
             </p>
           </div>
         )}
@@ -152,7 +154,7 @@ export function PresentationPanel({
             </button>
             <button
               onClick={handleNextPage}
-              disabled={busy}
+              disabled={busy || isLastPage}
               className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-[13px] font-medium text-foreground hover:bg-muted/50 disabled:opacity-40 transition-all"
             >
               Next <ChevronRight size={16} />

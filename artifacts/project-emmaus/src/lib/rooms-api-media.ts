@@ -102,6 +102,7 @@ export async function apiStartPresentation(
     mediaType: string;
     objectPath: string;
     sessionId?: string | null;
+    pageCount?: number | null;
   },
 ): Promise<PresentationState> {
   const data = await roomsFetch<{ presentation: PresentationState }>(

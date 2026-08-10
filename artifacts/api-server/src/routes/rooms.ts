@@ -2525,12 +2525,13 @@ router.post("/:roomId/session/presentation", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   const { roomId } = req.params;
-  const { messageId, filename, mediaType, objectPath, sessionId } = req.body as {
+  const { messageId, filename, mediaType, objectPath, sessionId, pageCount } = req.body as {
     messageId?: string | null;
     filename?: string;
     mediaType?: string;
     objectPath?: string;
     sessionId?: string | null;
+    pageCount?: number | null;
   };
 
   if (!filename || !mediaType) {
@@ -2587,6 +2588,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
       objectPath ?? "",
       userId,
       presenterName,
+      typeof pageCount === "number" ? pageCount : null,
     );
 
     broadcastRoomEvent(String(roomId), {
@@ -2599,6 +2601,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
         presentedBy: presentation.presentedBy,
         presentedByName: presentation.presentedByName,
         currentPage: presentation.currentPage,
+        pageCount: presentation.pageCount,
         sessionId: presentation.sessionId,
       },
       sentBy: userId,

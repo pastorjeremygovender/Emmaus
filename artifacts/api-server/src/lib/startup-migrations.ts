@@ -1723,6 +1723,7 @@ export async function runStartupMigrations(): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS room_media_presentations_room_id_idx
         ON room_media_presentations(room_id);
+      ALTER TABLE room_media_presentations ADD COLUMN IF NOT EXISTS page_count INTEGER;
     `);
     logger.info("Startup migration: room media tables ensured (idempotent)");
   } catch (err) {
