@@ -213,7 +213,7 @@ export default function DevotionalDay() {
         continueLabel={hasNextEntry ? 'Continue to Next Devotional' : undefined}
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnPath)}
-        previousDaysLabel="View All Entries →"
+        previousDaysLabel="View Devotional Contents"
         onPreviousDays={justCompleted ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
