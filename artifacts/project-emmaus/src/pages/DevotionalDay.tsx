@@ -19,6 +19,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, Users } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
 import { getDevotionalLabel } from '@/lib/step-label';
@@ -258,6 +259,14 @@ export default function DevotionalDay() {
             contentRoute={`/devotional/${seriesId}/day/1`}
             className="shrink-0"
           />
+          {user && (
+            <HearEmmausButton
+              text={[entry.greeting, entry.considerThis, entry.prayer, entry.closing]
+                .filter(Boolean).join('\n\n')}
+              userId={user.id}
+              label="Hear this devotional"
+            />
+          )}
           {totalEntries > 1 && (
             <button
               onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}

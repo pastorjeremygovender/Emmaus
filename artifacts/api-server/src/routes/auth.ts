@@ -64,6 +64,10 @@ authRouter.post("/users/profile", async (req: Request, res: Response) => {
 // ── Session endpoint ──────────────────────────────────────────────────────────
 
 authRouter.post("/auth/session", async (req: Request, res: Response) => {
+  // This demo-mode endpoint accepts a bare userId from the request body.
+  // Production upgrade path: replace body-userId acceptance with verified
+  // credentials (Firebase ID token, password hash, OAuth, etc.) before going live.
+  // See emmaus/auth.ts for the verified-cookie extraction path.
   const { userId } = req.body as { userId?: string };
 
   if (!userId || typeof userId !== "string" || !userId.trim()) {

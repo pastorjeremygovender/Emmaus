@@ -14,6 +14,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { MessageCircle, Mic, X, Loader2, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useBible } from '@/contexts/BibleContext';
 import { cn } from '@/lib/utils';
@@ -150,6 +151,7 @@ interface UnifiedEmmausInputProps {
 export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausInputProps) {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
+  const voiceEnabled = useVoiceEnabled(user?.id);
   const { journeys, progress, getStep } = useJourney();
   const { lastRead } = useBible();
 
@@ -228,7 +230,7 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
     });
     const ctx = buildContext(location, lastRead, journeys, progress, getStep);
     setPendingContext(ctx);
-    navigate('/personal/ask-emmaus');
+    navigate('/personal/ask-emmaus/voice');
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -303,15 +305,17 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
           </button>
         ) : null}
 
-        {/* Mic */}
-        <button
-          onClick={handleMic}
-          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary/10 transition-colors focus-visible:outline-none"
-          aria-label="Voice input"
-          tabIndex={-1}
-        >
-          <Mic size={15} className="text-muted-foreground/60" strokeWidth={1.8} />
-        </button>
+        {/* Mic — shown only when voice settings are confirmed enabled */}
+        {voiceEnabled === true && (
+          <button
+            onClick={handleMic}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary/10 transition-colors focus-visible:outline-none"
+            aria-label="Voice input"
+            tabIndex={-1}
+          >
+            <Mic size={15} className="text-muted-foreground/60" strokeWidth={1.8} />
+          </button>
+        )}
       </div>
 
       {/* ── Results / question CTA panel ──────────────────────────────────── */}

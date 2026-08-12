@@ -27,6 +27,7 @@ import { workflowsRouter } from "./workflows";
 import { favouritesRouter } from "./favourites";
 import { historyRouter } from "./history";
 import { searchRouter } from "./search";
+import voiceRouter from "./voice";
 
 const router: IRouter = Router();
 
@@ -58,5 +59,6 @@ router.use("/workflows", workflowsRouter);
 router.use(favouritesRouter);
 router.use(historyRouter);
 router.use(searchRouter);
+router.use(voiceRouter);
 
 export default router;

@@ -11,16 +11,18 @@
  *   - Safe fallback when no destination is stored: /walk (Today's Steps).
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, MessageCircle, ChevronRight, Volume2, Square } from 'lucide-react';
+import { ArrowLeft, Clock, MessageCircle, ChevronRight, Mic } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { BottomNav } from '@/components/BottomNav';
 import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
 import {
   setPendingMessage,
+  setPendingContext,
   takePendingContext,
   getReturnDestination,
   clearReturnDestination,
@@ -66,35 +68,15 @@ function buildContextLabel(ctx: FlatContext): string | null {
   return null;
 }
 
-// ─── Voice test helpers ────────────────────────────────────────────────────────
-
-const VOICE_TEST_TEXT =
-  "Hello, Pastor Jeremy. I'm Emmaus. I'm here to help you walk with Jesus through Scripture, prayer, sermons, and the life of your church.";
-
-/** Pick the best available English voice: en-ZA > en-GB > any en-* > null (browser default). */
-function selectEnglishVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis?.getVoices() ?? [];
-  return (
-    voices.find((v) => v.lang === 'en-ZA') ??
-    voices.find((v) => v.lang === 'en-GB') ??
-    voices.find((v) => v.lang.startsWith('en')) ??
-    null
-  );
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AskEmmausHome() {
   const { user } = useAuth();
+  const voiceEnabled = useVoiceEnabled(user?.id);
   const [, setLocation] = useLocation();
   const [message, setMessage] = useState('');
   const [conversations, setConversations] = useState<ConversationStub[]>([]);
   const [fabContext, setFabContext] = useState<FlatContext | null>(null);
-
-  // Voice test state
-  const [isSpeaking, setIsSpeaking]         = useState(false);
-  const utteranceRef                         = useRef<SpeechSynthesisUtterance | null>(null);
-  const speechSupported                      = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -104,45 +86,6 @@ export default function AskEmmausHome() {
     if (!user) return;
     listConversations(user.id).then(setConversations);
   }, [user]);
-
-  // Stop any in-progress speech when the component unmounts
-  useEffect(() => {
-    return () => { window.speechSynthesis?.cancel(); };
-  }, []);
-
-  function handleHearEmmaus() {
-    if (!speechSupported) return;
-
-    if (isSpeaking) {
-      // User tapped "Stop Emmaus"
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    // Cancel any leftover speech before starting fresh
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(VOICE_TEST_TEXT);
-    utterance.rate   = 0.92;
-    utterance.pitch  = 1;
-    utterance.volume = 1;
-
-    // Voice selection is deferred to click-time so voices are loaded by then.
-    // Some browsers (notably Chrome on Android) load voices asynchronously;
-    // we try immediately and fall back to the browser default if still empty.
-    const voice = selectEnglishVoice();
-    if (voice) utterance.voice = voice;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend   = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-    // Optimistically set state for browsers that don't fire onstart promptly
-    setIsSpeaking(true);
-  }
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -254,31 +197,29 @@ export default function AskEmmausHome() {
           Emmaus offers pastoral reflection, not counseling or professional advice.
         </p>
 
-        {/* ── Voice test ── temporary: confirms Web Speech API works on device ── */}
-        <div className="flex flex-col items-center gap-2">
-          {speechSupported ? (
+        {/* Voice mode entry — shown only when voice settings are confirmed enabled */}
+        {voiceEnabled === true && (
+          <div className="flex flex-col items-center gap-2">
             <button
-              onClick={handleHearEmmaus}
-              className={[
-                'flex items-center gap-2 px-5 py-2.5 rounded-full text-[14px] font-medium transition-all border',
-                isSpeaking
-                  ? 'bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/15'
-                  : 'bg-primary/8 border-primary/20 text-primary hover:bg-primary/12',
-              ].join(' ')}
-              aria-label={isSpeaking ? 'Stop Emmaus speaking' : 'Hear Emmaus introduction'}
+              onClick={() => {
+                if (!user) return;
+                const context = fabContext
+                  ? { ...fabContext, userName: user.preferredName }
+                  : { entryPoint: 'personal' as const, userName: user.preferredName };
+                setPendingContext(context);
+                setLocation('/personal/ask-emmaus/voice');
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[14px] font-medium bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-all"
+              aria-label="Open voice mode"
             >
-              {isSpeaking ? (
-                <><Square size={13} className="fill-destructive" /> Stop Emmaus</>
-              ) : (
-                <><Volume2 size={14} /> Hear Emmaus</>
-              )}
+              <Mic size={14} />
+              Talk to Emmaus
             </button>
-          ) : (
             <p className="text-[12px] text-muted-foreground text-center">
-              Voice playback is not supported on this device yet.
+              Speak your question and hear Emmaus respond.
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Previous conversations */}
         {conversations.length > 0 && (

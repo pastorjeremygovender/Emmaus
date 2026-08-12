@@ -15,6 +15,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, Play, Users } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { BottomNav } from '@/components/BottomNav';
 import { SermonCompanionReading } from '@/components/SermonCompanionReading';
 import { FavouriteButton } from '@/components/FavouriteButton';
@@ -419,6 +420,15 @@ export default function SermonCompanionReader() {
             contentRoute={`/sermon-companion/${companionId}/day/1`}
             className="shrink-0"
           />
+          {user && entry && (
+            <HearEmmausButton
+              text={[entry.greeting, entry.reflection, entry.prayer, entry.closing]
+                .filter(Boolean).join('\n\n')}
+              userId={user.id}
+              label="Hear this entry"
+              className="shrink-0"
+            />
+          )}
           {user && (
             <button
               onClick={() => setShowStudyTogether(true)}

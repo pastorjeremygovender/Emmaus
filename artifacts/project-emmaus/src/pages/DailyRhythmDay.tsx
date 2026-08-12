@@ -33,6 +33,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { getStepLabel } from '@/lib/step-label';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
@@ -245,7 +246,14 @@ export default function DailyRhythmDay() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex-1" />
-          <div className="min-w-[44px]" />
+          {user && (
+            <HearEmmausButton
+              text={[step.mentorIntro, step.devotional, step.prayerPrompt, step.actionStep]
+                .filter(Boolean).join('\n\n')}
+              userId={user.id}
+              label="Hear this reading"
+            />
+          )}
         </div>
       </header>
 

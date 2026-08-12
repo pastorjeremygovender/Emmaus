@@ -18,7 +18,8 @@ import {
   clearDevAuditLog,
   type DevAuditEntry,
 } from '@/lib/dev-mode';
-import { FlaskConical, ChevronDown, Video } from 'lucide-react';
+import { FlaskConical, ChevronDown, Video, Mic } from 'lucide-react';
+import { getVoiceSettings, updateVoiceSettings, type VoiceSettings } from '@/lib/voice-client';
 import { apiGetVideoSettings, apiUpdateVideoSettings } from '@/lib/rooms-api';
 
 // ─── Rooms & Video settings section ──────────────────────────────────────────
@@ -172,6 +173,125 @@ function VideoSettingsSection() {
   );
 }
 
+// ─── Emmaus Voice settings section ───────────────────────────────────────────
+
+const VOICE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'nova',    label: 'Nova (warm, calm)' },
+  { value: 'shimmer', label: 'Shimmer (gentle, bright)' },
+  { value: 'alloy',   label: 'Alloy (neutral)' },
+  { value: 'echo',    label: 'Echo (clear, confident)' },
+  { value: 'fable',   label: 'Fable (expressive)' },
+  { value: 'onyx',    label: 'Onyx (deep, authoritative)' },
+];
+
+function VoiceSettingsSection() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<VoiceSettings | null>(null);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getVoiceSettings(user.id).then(setSettings).catch(() => {});
+  }, [user]);
+
+  async function patch<K extends keyof VoiceSettings>(key: K, value: VoiceSettings[K]) {
+    if (!settings || !user) return;
+    const next: VoiceSettings = { ...settings, [key]: value };
+    setSettings(next);
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateVoiceSettings(user.id, { [key]: value });
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!settings) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Mic size={16} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">Emmaus Voice Settings</h2>
+        </div>
+        {saving && <span className="text-xs text-gray-400">Saving…</span>}
+        {saved  && <span className="text-xs text-green-600">Saved</span>}
+      </div>
+
+      <p className="text-xs text-gray-400 leading-relaxed">
+        Voice mode lets members speak their questions and hear Emmaus respond in a natural voice.
+        Uses OpenAI Whisper for transcription and TTS for spoken responses.
+      </p>
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+
+      {/* Enable / disable */}
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={e => patch('enabled', e.target.checked)}
+          className="w-4 h-4 rounded"
+        />
+        <div>
+          <div className="text-sm font-medium text-gray-700">Voice mode enabled</div>
+          <div className="text-xs text-gray-400">
+            When off, the mic button and "Hear Emmaus" feature are disabled for all members.
+          </div>
+        </div>
+      </label>
+
+      {/* Voice selection */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Voice
+        </label>
+        <select
+          value={settings.voice}
+          onChange={e => patch('voice', e.target.value as VoiceSettings['voice'])}
+          className="w-full h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+        >
+          {VOICE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400">Nova and Shimmer are recommended for a warm, pastoral feel.</p>
+      </div>
+
+      {/* Speed */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Speed: {settings.speed.toFixed(1)}×
+        </label>
+        <input
+          type="range"
+          min={0.5}
+          max={2.0}
+          step={0.1}
+          value={settings.speed}
+          onChange={e => patch('speed', Number(e.target.value))}
+          className="w-full"
+        />
+        <div className="flex justify-between text-xs text-gray-400">
+          <span>0.5× (slower)</span>
+          <span>2.0× (faster)</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Church settings section ──────────────────────────────────────────────────
 
 export default function AdminSettings() {
@@ -283,6 +403,9 @@ export default function AdminSettings() {
 
         {/* Rooms & Video Settings section */}
         <VideoSettingsSection />
+
+        {/* Emmaus Voice Settings section */}
+        <VoiceSettingsSection />
       </div>
     </div>
   );

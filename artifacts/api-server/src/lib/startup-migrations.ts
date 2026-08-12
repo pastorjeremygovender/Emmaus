@@ -1806,4 +1806,34 @@ export async function runStartupMigrations(): Promise<void> {
       logger.warn({ err }, "Startup migration: Psalms display_label back-fill failed (non-fatal)");
     }
   }
+
+  // voice_settings — single-row table for Emmaus Voice configuration.
+  // Persists admin changes (enabled, voice, speed) across server restarts.
+  {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS voice_settings (
+        id       INTEGER PRIMARY KEY DEFAULT 1,
+        enabled  BOOLEAN        NOT NULL DEFAULT false,
+        voice    TEXT           NOT NULL DEFAULT 'nova',
+        speed    NUMERIC(5, 2)  NOT NULL DEFAULT 1.0,
+        CONSTRAINT voice_settings_single_row CHECK (id = 1)
+      )
+    `);
+    // Widen speed precision on existing installations: NUMERIC(3,1) cannot store
+    // 0.25 (rounds to 0.3), breaking round-trip for fine-grained speed values.
+    // NUMERIC(5,2) supports the full 0.25–4.0 range exactly.
+    try {
+      await pool.query(`ALTER TABLE voice_settings ALTER COLUMN speed TYPE NUMERIC(5,2)`);
+    } catch {
+      // Silently ignore — already the correct type or column doesn't exist yet
+    }
+    // Default seed row is disabled — an admin must explicitly turn voice on.
+    // ON CONFLICT DO NOTHING preserves any admin changes on subsequent restarts.
+    await pool.query(`
+      INSERT INTO voice_settings (id, enabled, voice, speed)
+      VALUES (1, false, 'nova', 1.0)
+      ON CONFLICT (id) DO NOTHING
+    `);
+    logger.info("Startup migration: voice_settings table ensured (idempotent)");
+  }
 }

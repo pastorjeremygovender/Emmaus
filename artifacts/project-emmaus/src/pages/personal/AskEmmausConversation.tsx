@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useCallback, memo, type RefObject } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
+import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { ShareButton } from '@/components/ShareButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { BottomNav } from '@/components/BottomNav';
@@ -473,6 +474,15 @@ export default function AskEmmausConversation() {
                     ? <ThinkingBubble slow={thinkingPhase === 'slow'} />
                     : msg.content ? renderProse(msg.content) : null}
                 </div>
+
+                {/* Hear Emmaus — read completed response aloud */}
+                {!msg.isStreaming && msg.content && user && (
+                  <HearEmmausButton
+                    text={msg.content}
+                    userId={user.id}
+                    label="Hear Emmaus read this response"
+                  />
+                )}
 
                 {/* Response cards — only after streaming completes */}
                 {!msg.isStreaming && msg.metadata && (
