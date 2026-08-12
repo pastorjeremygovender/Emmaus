@@ -77,10 +77,10 @@ export default function DevotionalPreviousDays() {
   return (
     <PreviousDaysScreen
       contentTitle={seriesData?.title ?? 'Daily Devotional'}
-      screenTitle="All Entries"
+      screenTitle="All Devotionals"
       entries={entries}
       loading={loading}
-      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+      onBack={() => setLocation(backPath)}
       onReviewDay={openEntry}
       onContinueDay={openEntry}
       backLabel={backLabel}
