@@ -5,13 +5,16 @@
  * Displays every day using the shared ContentStudioListItem row.
  */
 import React, { useMemo, useState } from 'react';
-import { Sun, Plus, Clock, FileText, AlertTriangle } from 'lucide-react';
+import { Sun, Plus, Clock, FileText, AlertTriangle, Tag } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
+import { bulkGenerateStepLabels } from '@/lib/journeys-api';
+import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioListPage';
 import NewDayModal from './NewDayModal';
+import GenerateLabelsModal from './GenerateLabelsModal';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -21,9 +24,11 @@ interface Props {
 }
 
 export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
-  const { journeys, steps, loading } = useJourney();
-  const [statusTab,     setStatusTab]     = useState<string>('All');
-  const [showNewModal,  setShowNewModal]  = useState(false);
+  const { journeys, steps, loading, refreshSteps } = useJourney();
+  const { user } = useAuth();
+  const [statusTab,          setStatusTab]          = useState<string>('All');
+  const [showNewModal,       setShowNewModal]        = useState(false);
+  const [showLabelsModal,    setShowLabelsModal]     = useState(false);
 
   const journey = useMemo(
     () => (journeys as Journey[]).find(j => j.journeyType === 'daily-rhythm') ?? null,
@@ -53,13 +58,25 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
       title="Daily Rhythm"
       description={description}
       newButton={
-        <button
-          onClick={() => journey && setShowNewModal(true)}
-          disabled={!journey || loading}
-          className={newBtnCls}
-        >
-          <Plus size={14} /> New Day
-        </button>
+        <div className="flex items-center gap-2">
+          {journey && days.length > 0 && (
+            <button
+              onClick={() => setShowLabelsModal(true)}
+              disabled={loading}
+              className={actionBtnCls}
+              title="Bulk-generate display labels"
+            >
+              <Tag size={13} /> Generate Labels
+            </button>
+          )}
+          <button
+            onClick={() => journey && setShowNewModal(true)}
+            disabled={!journey || loading}
+            className={newBtnCls}
+          >
+            <Plus size={14} /> New Day
+          </button>
+        </div>
       }
       filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
       loading={loading}
@@ -145,6 +162,18 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
         onClose={() => setShowNewModal(false)}
         onScratch={() => { setShowNewModal(false); onNewDay(journey.id); }}
         onCreated={(day) => { setShowNewModal(false); onEditDay(journey.id, day); }}
+      />
+    )}
+
+    {showLabelsModal && journey && (
+      <GenerateLabelsModal
+        itemCount={days.filter(s => !(s as any).isCompletionStep).length}
+        onApply={async (opts) => {
+          const result = await bulkGenerateStepLabels(journey.id, opts, user?.id);
+          await refreshSteps(journey.id);
+          return result.updated;
+        }}
+        onClose={() => setShowLabelsModal(false)}
       />
     )}
   </>

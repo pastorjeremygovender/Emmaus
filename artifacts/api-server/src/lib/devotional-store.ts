@@ -187,6 +187,36 @@ export async function upsertEntry(
   return row;
 }
 
+/**
+ * Bulk-set display_label on multiple entries in one series.
+ * Each entry in `labels` is { dayNumber, displayLabel } — pass null to clear.
+ * Returns the number of entries that were actually updated.
+ */
+export async function bulkSetEntryDisplayLabels(
+  seriesId: string,
+  labels: Array<{ dayNumber: number; displayLabel: string | null }>
+): Promise<number> {
+  if (labels.length === 0) return 0;
+  const now = new Date();
+  let count = 0;
+  for (const { dayNumber, displayLabel } of labels) {
+    await db
+      .update(devotionalEntriesTable)
+      .set({ displayLabel: displayLabel ?? null, updatedAt: now })
+      .where(
+        and(
+          eq(devotionalEntriesTable.seriesId, seriesId),
+          eq(devotionalEntriesTable.dayNumber, dayNumber),
+        )
+      );
+    count++;
+  }
+  if (count > 0) {
+    await db.update(devotionalSeriesTable).set({ updatedAt: now }).where(eq(devotionalSeriesTable.id, seriesId));
+  }
+  return count;
+}
+
 export async function deleteEntry(seriesId: string, dayNumber: number): Promise<void> {
   await db
     .delete(devotionalEntriesTable)

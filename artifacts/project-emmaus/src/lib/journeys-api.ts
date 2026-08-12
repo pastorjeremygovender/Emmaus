@@ -352,6 +352,23 @@ export async function deleteStep(
   );
 }
 
+export interface BulkLabelsResult {
+  updated: number;
+  previewFirst: string | null;
+  previewLast: string | null;
+}
+
+export async function bulkGenerateStepLabels(
+  journeyId: string,
+  opts: { startDate: string; format: string; overwriteExisting: boolean },
+  userId?: string
+): Promise<BulkLabelsResult> {
+  return apiFetch<BulkLabelsResult>(
+    `/api/journeys/${encodeURIComponent(journeyId)}/steps/bulk-labels`,
+    { method: 'POST', body: JSON.stringify(opts), userId }
+  );
+}
+
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 export async function searchJourneys(q: string, tags?: string[]): Promise<SearchResult> {

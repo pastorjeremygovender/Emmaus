@@ -292,6 +292,76 @@ devotionalsRouter.delete("/:id/entries/:day", async (req: Request, res: Response
   }
 });
 
+// ─── Admin: bulk-generate display labels for all entries ──────────────────────
+
+devotionalsRouter.post("/:id/entries/bulk-labels", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+
+  const seriesId = String(req.params.id);
+  const { startDate, format, overwriteExisting } = req.body as {
+    startDate: string;
+    format: string;
+    overwriteExisting?: boolean;
+  };
+  if (!startDate || !format) {
+    res.status(400).json({ error: "startDate and format are required" });
+    return;
+  }
+
+  const MONTHS_LONG = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function formatDateLabel(date: Date, fmt: string): string {
+    const d = date.getUTCDate();
+    const m = date.getUTCMonth();
+    const y = date.getUTCFullYear();
+    return fmt
+      .replace("MMMM", MONTHS_LONG[m])
+      .replace("MMM",  MONTHS_SHORT[m])
+      .replace("YYYY", String(y))
+      .replace("DD",   String(d).padStart(2, "0"))
+      .replace("MM",   String(m + 1).padStart(2, "0"))
+      .replace("D",    String(d))
+      .replace("M",    String(m + 1));
+  }
+
+  try {
+    const series = await store.getSeriesById(seriesId);
+    if (!series) { res.status(404).json({ error: "Series not found" }); return; }
+
+    const ordered = [...series.entries].sort((a, b) => a.dayNumber - b.dayNumber);
+    const startTs = new Date(startDate);
+    const labels: Array<{ dayNumber: number; displayLabel: string }> = [];
+
+    ordered.forEach((entry, index) => {
+      if (!overwriteExisting && entry.displayLabel?.trim()) return;
+      const date = new Date(startTs);
+      date.setUTCDate(date.getUTCDate() + index);
+      labels.push({ dayNumber: entry.dayNumber, displayLabel: formatDateLabel(date, format) });
+    });
+
+    const updated = await store.bulkSetEntryDisplayLabels(seriesId, labels);
+
+    await logAuditEvent({
+      contentType: "devotional_series",
+      contentId: seriesId,
+      action: "edit",
+      performedBy: adminId,
+      previousState: null,
+      newState: { action: "bulk-labels", format, startDate, updated },
+    });
+
+    res.json({
+      updated,
+      previewFirst: labels[0]?.displayLabel ?? null,
+      previewLast:  labels[labels.length - 1]?.displayLabel ?? null,
+    });
+  } catch (err) {
+    logger.error({ err }, "POST /devotionals/:id/entries/bulk-labels failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── Member: get progress ────────────────────────────────────────────────────
 
 devotionalsRouter.get("/:id/progress", async (req: Request, res: Response) => {

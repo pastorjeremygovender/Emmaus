@@ -742,6 +742,38 @@ export async function softDeleteJourney(id: string): Promise<void> {
  * invisible to members and admin UI; refreshJourneyDuration is called to ensure
  * durationDays counts only non-deleted Published steps.
  */
+/**
+ * Bulk-set display_label on multiple steps in one journey.
+ * Each entry in `labels` is { day, displayLabel } — pass null to clear a label.
+ * Returns the number of steps that were actually updated.
+ */
+export async function bulkSetStepDisplayLabels(
+  journeyId: string,
+  labels: Array<{ day: number; displayLabel: string | null }>
+): Promise<number> {
+  if (labels.length === 0) return 0;
+  const now = new Date();
+  let count = 0;
+  for (const { day, displayLabel } of labels) {
+    const result = await db
+      .update(journeyStepsTable)
+      .set({ displayLabel: displayLabel ?? null, updatedAt: now })
+      .where(
+        and(
+          eq(journeyStepsTable.journeyId, journeyId),
+          eq(journeyStepsTable.day, day),
+          isNull(journeyStepsTable.deletedAt),
+        )
+      );
+    void result;
+    count++;
+  }
+  if (count > 0) {
+    await db.update(journeysTable).set({ updatedAt: now }).where(eq(journeysTable.id, journeyId));
+  }
+  return count;
+}
+
 export async function softDeleteStep(journeyId: string, day: number): Promise<void> {
   await pool.query(
     `UPDATE journey_steps SET deleted_at = NOW(), updated_at = NOW()

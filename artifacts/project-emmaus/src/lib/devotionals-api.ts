@@ -181,6 +181,25 @@ export function deleteEntry(seriesId: string, dayNumber: number, auth?: AdminAut
   });
 }
 
+export interface BulkLabelsResult {
+  updated: number;
+  previewFirst: string | null;
+  previewLast: string | null;
+}
+
+export function bulkGenerateEntryLabels(
+  seriesId: string,
+  opts: { startDate: string; format: string; overwriteExisting: boolean },
+  auth?: AdminAuth
+): Promise<BulkLabelsResult> {
+  return request<BulkLabelsResult>(apiUrl(`/${seriesId}/entries/bulk-labels`), {
+    method: "POST",
+    body: JSON.stringify(opts),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
 // ─── Member auth bag ──────────────────────────────────────────────────────────
 // Member routes rely on session cookies (set at login). In demo / dev mode,
 // the caller's userId is forwarded as the X-User-Id header so requireAuth()

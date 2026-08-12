@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, Plus, BookHeart, ChevronRight, Loader2, Check,
-  Eye, EyeOff, Pencil, Trash2,
+  Eye, EyeOff, Pencil, Trash2, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -17,11 +17,13 @@ import {
   updateSeries,
   saveEntry,
   deleteEntry,
+  bulkGenerateEntryLabels,
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { StatusBadge, Field } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
+import GenerateLabelsModal from './GenerateLabelsModal';
 
 interface Props {
   seriesId: string;
@@ -45,6 +47,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [showLabelsModal, setShowLabelsModal] = useState(false);
   // Smart Content Indicators: notify members on publish. Defaults ON; admin can uncheck.
   const [notifyMembers, setNotifyMembers] = useState(true);
 
@@ -254,12 +257,23 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
               {data.entries.length} day{data.entries.length !== 1 ? 's' : ''}
             </span>
           </h3>
-          <button
-            onClick={handleAddEntry}
-            className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700"
-          >
-            <Plus size={13} /> Add Day
-          </button>
+          <div className="flex items-center gap-2">
+            {data.entries.length > 0 && (
+              <button
+                onClick={() => setShowLabelsModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                title="Bulk-generate display labels"
+              >
+                <Tag size={13} /> Generate Labels
+              </button>
+            )}
+            <button
+              onClick={handleAddEntry}
+              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700"
+            >
+              <Plus size={13} /> Add Day
+            </button>
+          </div>
         </div>
 
         {data.entries.length === 0 ? (
@@ -304,6 +318,19 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
           </div>
         )}
       </div>
+
+      {/* Generate Labels modal */}
+      {showLabelsModal && (
+        <GenerateLabelsModal
+          itemCount={data.entries.length}
+          onApply={async (opts) => {
+            const result = await bulkGenerateEntryLabels(seriesId, opts, auth);
+            await load();
+            return result.updated;
+          }}
+          onClose={() => setShowLabelsModal(false)}
+        />
+      )}
 
       {/* Delete confirm */}
       {deleteTarget !== null && (
