@@ -22,8 +22,9 @@ import React, { useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2,
   FolderOpen, BookOpen,
-  ChevronRight, X,
+  ChevronRight, X, Upload,
 } from 'lucide-react';
+import BulkImportModal from './BulkImportModal';
 
 import DailyRhythmStudio from './DailyRhythmStudio';
 import BibleContentStudio from './BibleContentStudio';
@@ -146,6 +147,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
   // Side panels — show detail without leaving the list
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
   const [panelSeriesId, setPanelSeriesId] = useState<string | null>(null);
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const [view, setView] = useState<StudioView>(() => {
     if (initialSubView === 'studio-editor' && initialJourneyId) {
@@ -600,31 +602,42 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       {/* ── Top nav + subtabs + breadcrumb ────────────────────────────────── */}
       <div className="flex-shrink-0 bg-white border-b border-gray-200">
 
-        {/* Primary tab bar — 5 tabs */}
+        {/* Primary tab bar — 5 tabs + Bulk Import action */}
         <div
-          className="flex items-center gap-1 px-6 pt-4 pb-0 overflow-x-auto scrollbar-none"
+          className="flex items-center gap-1 px-6 pt-4 pb-0"
           role="tablist"
           aria-label="Content Studio sections"
         >
-          {TOP_NAV.map(({ id, label, Icon }) => {
-            const active = activeTabId === id;
-            return (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={active}
-                onClick={() => navigate(TAB_DEFAULT_VIEW[id] ?? { id: 'daily-rhythm' })}
-                className={`flex items-center gap-2 px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
-                  active
-                    ? 'border-teal-600 text-teal-700'
-                    : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
-                }`}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            );
-          })}
+          <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
+            {TOP_NAV.map(({ id, label, Icon }) => {
+              const active = activeTabId === id;
+              return (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => navigate(TAB_DEFAULT_VIEW[id] ?? { id: 'daily-rhythm' })}
+                  className={`flex items-center gap-2 px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                    active
+                      ? 'border-teal-600 text-teal-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bulk Import — always visible, right-aligned */}
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 ml-3 mb-1 px-3 py-1.5 text-[12px] font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
+          >
+            <Upload size={12} />
+            Bulk Import
+          </button>
         </div>
 
         {/* Breadcrumb */}
@@ -740,6 +753,11 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Bulk Import modal ─────────────────────────────────────────────── */}
+      {showBulkImport && (
+        <BulkImportModal onClose={() => setShowBulkImport(false)} />
       )}
     </div>
   );
