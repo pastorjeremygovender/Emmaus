@@ -6,7 +6,7 @@
  * it is loaded dynamically by the client from the member's chosen translation.
  */
 
-import { eq, and, asc, desc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNotNull } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
   devotionalSeriesTable,
@@ -131,6 +131,56 @@ export async function permanentDeleteSeries(id: string): Promise<void> {
     .where(eq(devotionalSeriesTable.id, id));
 }
 
+// ─── Date-label inference ─────────────────────────────────────────────────────
+
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+/** Parse "D Month" (e.g. "16 January") into a Date. Returns null if unrecognised. */
+function parseDateLabel(label: string): Date | null {
+  const parts = label.trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const day  = parseInt(parts[0], 10);
+  const mIdx = MONTHS.indexOf(parts[1]);
+  if (isNaN(day) || mIdx === -1) return null;
+  // Year doesn't matter for offset arithmetic — use a fixed leap year.
+  return new Date(2000, mIdx, day);
+}
+
+/** Format a Date as "D Month" (e.g. "16 January"). */
+function formatDateLabel(d: Date): string {
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/**
+ * If the series already has entries with date-format display labels, compute
+ * and return the label for `dayNumber` by extrapolating from a reference entry.
+ * Returns null when the series doesn't use date labels or the pattern is unrecognised.
+ */
+async function inferDisplayLabel(seriesId: string, dayNumber: number): Promise<string | null> {
+  const [ref] = await db
+    .select({
+      dayNumber:    devotionalEntriesTable.dayNumber,
+      displayLabel: devotionalEntriesTable.displayLabel,
+    })
+    .from(devotionalEntriesTable)
+    .where(and(
+      eq(devotionalEntriesTable.seriesId, seriesId),
+      isNotNull(devotionalEntriesTable.displayLabel),
+    ))
+    .limit(1);
+
+  if (!ref?.displayLabel) return null;
+  const refDate = parseDateLabel(ref.displayLabel);
+  if (!refDate) return null;
+
+  const newDate = new Date(refDate);
+  newDate.setDate(refDate.getDate() + (dayNumber - ref.dayNumber));
+  return formatDateLabel(newDate);
+}
+
 // ─── Entry CRUD ───────────────────────────────────────────────────────────────
 
 export async function upsertEntry(
@@ -151,6 +201,13 @@ export async function upsertEntry(
     >
   >
 ): Promise<DevotionalEntry> {
+  // Auto-infer a date label when the caller hasn't set one explicitly and the
+  // series already uses date labels on other entries.
+  if (data.displayLabel === undefined) {
+    const inferred = await inferDisplayLabel(seriesId, dayNumber);
+    if (inferred) data = { ...data, displayLabel: inferred };
+  }
+
   const now = new Date();
   const publishedAt =
     data.status === "Published"
