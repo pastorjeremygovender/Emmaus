@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
 import { resolveReturn } from '@/lib/return-context';
+import { getStepLabel } from '@/lib/step-label';
 
 export default function PreviousDays() {
   const [, setLocation] = useLocation();
@@ -43,6 +44,7 @@ export default function PreviousDays() {
         .sort((a, b) => b.day - a.day)
         .map(s => ({
           dayNumber: s.day,
+          label: getStepLabel(s, coreJourney),
           title: s.title,
           status: completedSet.has(s.day) ? 'completed' : 'current',
         }))
