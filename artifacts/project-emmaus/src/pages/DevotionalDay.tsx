@@ -42,8 +42,10 @@ import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
 function resolveReturn(source: string | null): { path: string; label: string } {
-  if (source === 'nextStepsDevotionals' || source === 'nextSteps')
-    return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
+  if (source === 'nextStepsDevotionals')
+    return { path: '/journeys?tab=devotionals', label: 'Discover' };
+  if (source === 'nextSteps')
+    return { path: '/journeys?tab=devotionals', label: 'Discover' };
   if (source === 'nextStepsJourneys')
     return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
   if (source === 'nextStepsSermons')
@@ -246,7 +248,7 @@ export default function DevotionalDay() {
           onClick={() => setLocation(returnPath)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ChevronLeft size={16} /> {source?.startsWith('nextSteps') ? 'Next Steps' : "Today's Steps"}
+          <ChevronLeft size={16} /> {source === 'nextStepsDevotionals' || source === 'nextSteps' ? 'Discover' : "Today's Steps"}
         </button>
         <div className="flex items-center gap-2">
           <FavouriteButton
@@ -261,7 +263,7 @@ export default function DevotionalDay() {
               onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              All entries
+              All Devotionals
             </button>
           )}
           {user && (
