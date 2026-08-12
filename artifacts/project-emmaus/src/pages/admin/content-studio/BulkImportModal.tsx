@@ -12,6 +12,7 @@ import {
   X, ArrowLeft, ArrowRight, Upload, FileSpreadsheet, ClipboardList,
   CheckCircle2, AlertTriangle, ChevronDown, ChevronRight, Loader2,
   Sun, BookHeart, BookOpen, SkipForward, RefreshCw, FilePlus2, Sparkles,
+  AlignLeft,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { listJourneys, createStep, updateStep, listSteps } from '@/lib/journeys-api';
@@ -24,11 +25,12 @@ import {
   type DestType, type ColumnMapping, type ParsedRow,
   type ConflictResolution, type ImportResult, type CanonicalField,
 } from './bulk-import-utils';
+import { parseEmmausText } from './bulk-import-emmaus-parser';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Screen = 'destination' | 'upload' | 'mapping' | 'preview' | 'conflicts' | 'importing' | 'results';
-type UploadMethod = 'csv' | 'xlsx' | 'paste';
+type UploadMethod = 'csv' | 'xlsx' | 'emmaus';
 
 const ALL_CANONICAL_FIELDS: CanonicalField[] = [
   'day', 'title', 'scripture', 'mentorIntro', 'devotional',
@@ -168,18 +170,43 @@ export default function BulkImportModal({ onClose }: Props) {
     }
   };
 
-  const handlePasteParse = () => {
+  // ── Emmaus-format paste parse (skips column mapping; goes straight to preview) ─
+  const handleEmmausParse = async () => {
     if (!pasteText.trim()) { setParseError('Please paste some content first.'); return; }
     setParsing(true); setParseError('');
     try {
-      const result = parseCSVText(pasteText);
-      if (result.error) { setParseError(result.error); return; }
-      if (result.rows.length === 0) { setParseError('No rows detected. Make sure your first row is a header row.'); return; }
-      setHeaders(result.headers);
-      setRawRows(result.rows);
-      setMappings(autoDetectMapping(result.headers, result.rows));
+      const result = parseEmmausText(pasteText, defaultStatus);
+      if (result.error || result.items.length === 0) {
+        setParseError(result.error ?? 'No items detected.');
+        return;
+      }
+
+      // Fetch existing days for conflict detection (same as gotoPreview does for CSV)
+      setLoadingExisting(true);
+      const existing = await fetchExistingDays();
+      setExistingDays(existing);
+      setLoadingExisting(false);
+
+      // Build ParsedRow[] from MappedRow[] + per-item warnings
+      const seenDays = new Map<number, number>();
+      const rows: ParsedRow[] = result.items.map((mapped, i) => {
+        const warnings = [...result.warnings[i]];
+        if (mapped.day > 0 && seenDays.has(mapped.day)) {
+          warnings.push(`Duplicate day ${mapped.day} in this import`);
+        } else if (mapped.day > 0) {
+          seenDays.set(mapped.day, i);
+        }
+        const conflict = mapped.day > 0 && existing.has(mapped.day);
+        return { index: i, raw: {}, mapped, warnings, conflict, conflictResolution: null };
+      });
+
+      // Mark rawRows non-empty so downstream guards pass
+      setRawRows(result.items.map(() => ({})));
+      setParsedRows(rows);
+      setScreen('preview');
     } finally {
       setParsing(false);
+      setLoadingExisting(false);
     }
   };
 
@@ -207,7 +234,8 @@ export default function BulkImportModal({ onClose }: Props) {
     if (screen === 'destination') { onClose(); return; }
     if (screen === 'upload')     { setScreen('destination'); return; }
     if (screen === 'mapping')    { setScreen('upload'); return; }
-    if (screen === 'preview')    { setScreen('mapping'); return; }
+    // Emmaus format skips the mapping screen — back goes directly to upload
+    if (screen === 'preview')    { setScreen(uploadMethod === 'emmaus' ? 'upload' : 'mapping'); return; }
     if (screen === 'conflicts')  { setScreen('preview'); return; }
     if (screen === 'results')    { onClose(); return; }
   };
@@ -372,7 +400,8 @@ export default function BulkImportModal({ onClose }: Props) {
   const primaryLabel = (): React.ReactNode => {
     if (screen === 'destination') return <><span>Continue</span><ArrowRight size={15} /></>;
     if (screen === 'upload') {
-      if (parsing) return <><Loader2 size={14} className="animate-spin" /><span>Parsing…</span></>;
+      if (parsing || loadingExisting) return <><Loader2 size={14} className="animate-spin" /><span>Parsing…</span></>;
+      if (uploadMethod === 'emmaus') return <><span>Parse &amp; Preview</span><ArrowRight size={15} /></>;
       if (rawRows.length > 0) return <><span>Continue to Field Mapping</span><ArrowRight size={15} /></>;
       return <><span>Parse Content</span><ArrowRight size={15} /></>;
     }
@@ -397,8 +426,10 @@ export default function BulkImportModal({ onClose }: Props) {
   const handlePrimary = () => {
     if (screen === 'destination') { gotoUpload(); return; }
     if (screen === 'upload') {
+      // Emmaus format: always re-parse + go directly to preview (no mapping screen)
+      if (uploadMethod === 'emmaus') { void handleEmmausParse(); return; }
       if (rawRows.length > 0) { gotoMapping(); return; }
-      if (uploadMethod === 'paste') { handlePasteParse(); return; }
+      // CSV/XLSX file already uploaded — nothing more to do on this screen
     }
     if (screen === 'mapping')    { gotoPreview(); return; }
     if (screen === 'preview')    { gotoConflictsOrImport(); return; }
@@ -593,13 +624,13 @@ export default function BulkImportModal({ onClose }: Props) {
               {/* Method selector */}
               <div className="grid grid-cols-3 gap-2">
                 {([
-                  { id: 'csv',   label: 'CSV File',   Icon: FileSpreadsheet },
-                  { id: 'xlsx',  label: 'XLSX File',  Icon: FileSpreadsheet },
-                  { id: 'paste', label: 'Paste Text', Icon: ClipboardList   },
+                  { id: 'csv',    label: 'CSV File',       Icon: FileSpreadsheet },
+                  { id: 'xlsx',   label: 'XLSX File',      Icon: FileSpreadsheet },
+                  { id: 'emmaus', label: 'Emmaus Format',  Icon: AlignLeft       },
                 ] as const).map(({ id, label, Icon }) => (
                   <button
                     key={id}
-                    onClick={() => { setUploadMethod(id); setParseError(''); setRawRows([]); }}
+                    onClick={() => { setUploadMethod(id); setParseError(''); setRawRows([]); setParsedRows([]); }}
                     className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1.5 transition-all ${
                       uploadMethod === id
                         ? 'border-teal-500 bg-teal-50/80'
@@ -644,29 +675,55 @@ export default function BulkImportModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Paste textarea */}
-              {uploadMethod === 'paste' && (
-                <div>
-                  <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Paste your CSV or tab-separated content
-                  </label>
-                  <textarea
-                    value={pasteText}
-                    onChange={e => { setPasteText(e.target.value); setRawRows([]); setParseError(''); }}
-                    rows={10}
-                    placeholder={'Day,Title,Scripture,Greeting,Reflection,Prayer,Next Step,Closing\n1,God\'s Love,John 3:16,...'}
-                    className="w-full px-3 py-2.5 text-[12px] font-mono text-gray-800 placeholder:text-gray-300 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 resize-none"
-                  />
+              {/* Emmaus format textarea */}
+              {uploadMethod === 'emmaus' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
+                      Paste your Emmaus content below
+                    </label>
+                    <textarea
+                      value={pasteText}
+                      onChange={e => { setPasteText(e.target.value); setRawRows([]); setParsedRows([]); setParseError(''); }}
+                      rows={12}
+                      placeholder={
+                        'Day: 10\nTitle: Faith That Trusts Jesus\nScripture Reference: John 4:43\u201354\n\nGreeting:\nGood morning. I\u2019m glad you\u2019re here.\n\nReflection:\nA royal official came to Jesus because his son was dying.\n\nPrayer:\nFather, help me to trust You. Amen.\n\nYour Next Step:\nThink of an area where you need to trust God today.\n\nClosing:\nTomorrow we\u2019ll discover what happens when Jesus meets someone who has lost hope.'
+                      }
+                      className="w-full px-3 py-2.5 text-[12px] font-mono text-gray-800 placeholder:text-gray-300 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 resize-y leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Format hint */}
+                  <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl space-y-1">
+                    <p className="text-[11px] font-semibold text-teal-700">Emmaus format — recognised labels</p>
+                    <div className="grid grid-cols-2 gap-x-4 text-[11px] text-teal-600 leading-relaxed">
+                      <div>
+                        <span className="font-medium">Day / Step:</span> day number<br />
+                        <span className="font-medium">Title:</span> step title<br />
+                        <span className="font-medium">Scripture Reference:</span> passage<br />
+                        <span className="font-medium">Greeting / Intro:</span> opening
+                      </div>
+                      <div>
+                        <span className="font-medium">Reflection / Teaching:</span> body<br />
+                        <span className="font-medium">Prayer:</span> prayer text<br />
+                        <span className="font-medium">Your Next Step:</span> action<br />
+                        <span className="font-medium">Closing:</span> send-off
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-teal-500 mt-1">
+                      Paste multiple days together &mdash; a new item begins whenever a new Day: or Step: line appears.
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* Parse success */}
-              {rawRows.length > 0 && !parseError && (
+              {/* Parse success — CSV/XLSX only (emmaus goes straight to preview) */}
+              {uploadMethod !== 'emmaus' && rawRows.length > 0 && !parseError && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
                   <CheckCircle2 size={15} className="text-green-600 flex-shrink-0" />
                   <p className="text-[13px] text-green-800 font-medium">
                     {rawRows.length} row{rawRows.length !== 1 ? 's' : ''} detected across {headers.length} column{headers.length !== 1 ? 's' : ''}.
-                    Click "Continue" to map fields.
+                    Click &ldquo;Continue&rdquo; to map fields.
                   </p>
                 </div>
               )}
@@ -679,14 +736,16 @@ export default function BulkImportModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Template hint */}
-              <div className="p-3 bg-gray-50 rounded-xl">
-                <p className="text-[11px] text-gray-500 font-medium mb-1">Supported column names (auto-detected):</p>
-                <p className="text-[11px] text-gray-400 leading-relaxed">
-                  Day / Step, Title, Scripture / Verse, Greeting / Intro, Reflection / Devotional,
-                  Prayer, Next Step / Action, Closing, Status
-                </p>
-              </div>
+              {/* Column hint — CSV/XLSX only */}
+              {uploadMethod !== 'emmaus' && (
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <p className="text-[11px] text-gray-500 font-medium mb-1">Supported column names (auto-detected):</p>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Day / Step, Title, Scripture / Verse, Greeting / Intro, Reflection / Devotional,
+                    Prayer, Next Step / Action, Closing, Status
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

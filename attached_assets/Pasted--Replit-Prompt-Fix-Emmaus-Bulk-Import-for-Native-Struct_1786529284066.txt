@@ -1,0 +1,397 @@
+# Replit Prompt — Fix Emmaus Bulk Import for Native Structured Content
+
+The Bulk Import UI is working, but the **Paste Text parser is currently treating structured devotional content as CSV/tab-separated data**.
+
+In the test, this content:
+
+`Day: 10`
+`Title: Faith That Trusts Jesus`
+`Scripture Reference: John 4:43–54`
+
+followed by Greeting, Reflection, Prayer, Your Next Step and Closing sections was interpreted as:
+
+* 1 column
+* `Day: 10` as the column header
+* approximately 35 separate rows
+* all rows untitled
+* no valid Day/Step mapping
+
+This is not the intended behaviour.
+
+## Objective
+
+Add a dedicated **Emmaus structured text parser** for Bulk Import.
+
+Do not try to force natural devotional content through the CSV parser.
+
+The importer must support the way Emmaus content is actually written.
+
+## Import Type
+
+Change the current options from:
+
+* CSV File
+* XLSX File
+* Paste Text
+
+to:
+
+* CSV File
+* XLSX File
+* **Emmaus Format**
+
+You may keep the label “Paste Text” if preferred, but internally it must use a dedicated Emmaus parser rather than CSV parsing.
+
+The user should paste normal structured content into a large text box.
+
+## Emmaus Format
+
+The parser must understand this structure:
+
+```text
+Day: 10
+Title: Faith That Trusts Jesus
+Scripture Reference: John 4:43–54
+
+Greeting:
+Good morning.
+
+I'm glad you're here.
+
+Reflection:
+A royal official came to Jesus because his son was dying.
+
+He was desperate.
+
+Prayer:
+Father,
+
+Help me to trust You.
+
+Amen.
+
+Your Next Step:
+Think of an area where you need to trust God today.
+
+Closing:
+Tomorrow we'll discover what happens when Jesus meets someone who has lost hope.
+```
+
+## Supported Field Labels
+
+Recognise these labels case-insensitively.
+
+### Step Number
+
+Accept:
+
+* Day:
+* Step:
+* Day Number:
+* Step Number:
+
+Map all of these to the existing Emmaus Day / Step Number field.
+
+### Title
+
+Accept:
+
+* Title:
+
+### Scripture
+
+Accept:
+
+* Scripture:
+* Scripture Reference:
+* Verse:
+* Verse Reference:
+
+Map these to the existing Scripture Reference field.
+
+### Greeting
+
+Accept:
+
+* Greeting:
+* Intro:
+* Introduction:
+
+### Reflection
+
+Accept:
+
+* Reflection:
+* Devotional:
+* Teaching:
+
+### Prayer
+
+Accept:
+
+* Prayer:
+
+### Your Next Step
+
+Accept:
+
+* Your Next Step:
+* Next Step:
+* Application:
+
+### Closing
+
+Accept:
+
+* Closing:
+
+Do not make alternative labels create separate fields.
+
+They must map to the existing Emmaus content model.
+
+## Multi-Item Import
+
+The parser must support multiple devotionals/steps in one pasted document.
+
+A new item begins whenever the parser encounters a new:
+
+`Day:`
+
+or
+
+`Step:`
+
+field after an existing item has already started.
+
+Example:
+
+```text
+Day: 10
+Title: Faith That Trusts Jesus
+Scripture Reference: John 4:43–54
+
+Greeting:
+...
+
+Reflection:
+...
+
+Prayer:
+...
+
+Your Next Step:
+...
+
+Closing:
+...
+
+
+Day: 11
+Title: Jesus Meets Us in Our Need
+Scripture Reference: John 5:1–9
+
+Greeting:
+...
+
+Reflection:
+...
+
+Prayer:
+...
+
+Your Next Step:
+...
+
+Closing:
+...
+
+
+Day: 12
+Title: ...
+```
+
+This must create three separate Emmaus content items.
+
+Do not require separators between them.
+
+However, also safely ignore optional separators such as:
+
+```text
+---
+```
+
+or
+
+```text
+====================
+```
+
+if present between items.
+
+## Preserve Formatting
+
+This is important.
+
+Within each content section:
+
+* preserve paragraph breaks
+* preserve blank lines
+* preserve apostrophes
+* preserve quotation marks
+* preserve punctuation
+* preserve Unicode characters such as en dashes/em dashes
+* preserve Bible references
+* preserve normal line breaks
+
+Do not collapse an entire Reflection or Prayer into one line.
+
+Do not split paragraphs into separate records.
+
+## Parsing Rules
+
+A field continues until another recognised field label is encountered.
+
+Example:
+
+```text
+Reflection:
+Paragraph one.
+
+Paragraph two.
+
+Paragraph three.
+
+Prayer:
+Father...
+```
+
+All three reflection paragraphs belong to the single Reflection field.
+
+The parser must not treat blank lines as new database rows.
+
+## Preview
+
+After parsing, skip the CSV column mapping screen for Emmaus Format.
+
+There are already explicit field labels, so manual column mapping is unnecessary.
+
+The flow should be:
+
+**Paste Emmaus Format → Parse Content → Preview**
+
+The Preview should show:
+
+* Day/Step Number
+* Title
+* Scripture
+* Status
+* warnings
+
+For example:
+
+**1 item detected**
+
+Day 10
+Faith That Trusts Jesus
+John 4:43–54
+Draft
+
+Or for a batch:
+
+**10 items detected**
+
+Day 10 — Faith That Trusts Jesus
+Day 11 — ...
+Day 12 — ...
+
+etc.
+
+## Validation
+
+Before import, warn about:
+
+* missing Day/Step Number
+* missing title
+* duplicate Day/Step numbers within the paste
+* conflict with existing Day/Step numbers
+* missing required sections
+* malformed content
+
+Do not interpret every paragraph as a separate item.
+
+## Existing Content Conflicts
+
+Retain the existing conflict handling.
+
+If Day 10 already exists, show:
+
+**Day 10 already exists**
+
+Options:
+
+* Skip existing
+* Replace existing
+* Import as new draft
+
+Never replace content automatically.
+
+## Draft Status
+
+Emmaus Format imports must continue to default to:
+
+**Draft**
+
+unless the admin deliberately chooses another status.
+
+## Architecture
+
+Do not create another content database or parallel content model.
+
+The new parser should only transform structured text into the same internal import objects already used by the Bulk Import system.
+
+After parsing, content must use the existing:
+
+* createStep / updateStep logic for Daily Rhythm and Walk steps
+* existing devotional save logic
+* existing content storage
+* existing Content Studio editing workflow
+
+Bulk imported content must be indistinguishable from content created manually after it has been saved.
+
+## Important
+
+Keep the existing CSV and XLSX import functionality.
+
+We are adding a new parsing method, not replacing those importers.
+
+Structure the parser as a separate pure utility/module so that additional Emmaus content formats can later be supported without rewriting the Bulk Import UI.
+
+## Target Workflow
+
+The intended workflow is:
+
+**ChatGPT generates Days 10–19 → admin copies all 10 → Emmaus Format → Paste → Parse → Preview 10 items → Import**
+
+The admin should not have to:
+
+* manually create 10 steps
+* convert the text to CSV
+* map every field
+* remove paragraph breaks
+* edit each imported item simply to restore its formatting
+
+This should make importing a full batch of Emmaus content take approximately one operation instead of manually building every step.
+
+## Do Not Change
+
+Do not redesign the existing Bulk Import modal unnecessarily.
+
+Do not alter existing Daily Rhythm content.
+
+Do not overwrite existing entries during development/testing.
+
+Do not change the wider Content Studio architecture.
+
+Only add/fix the structured Emmaus Format parsing flow and the minimum UI changes necessary to support it.
+
+After implementation, test the parser with one devotional first, then with at least three devotionals pasted together.
