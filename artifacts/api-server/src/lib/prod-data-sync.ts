@@ -55,6 +55,10 @@ export async function runProdDataSync(): Promise<void> {
     let journeys: any[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let steps: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let devSeries: any[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let devEntries: any[] = [];
 
     try {
       overviews = _require(path.join(_dir, "data", "prod-sync-overviews.json"));
@@ -64,6 +68,15 @@ export async function runProdDataSync(): Promise<void> {
     } catch (err) {
       logger.warn({ err }, "prod-data-sync: seed files not found — skipping");
       return;
+    }
+
+    try {
+      const devData = _require(path.join(_dir, "data", "prod-sync-devotionals.json"));
+      devSeries  = devData.series  ?? [];
+      devEntries = devData.entries ?? [];
+    } catch {
+      // File may not exist on first deploy after this change — safe to skip.
+      logger.warn("prod-data-sync: prod-sync-devotionals.json not found — skipping devotionals");
     }
 
     // ── 1. Chapter overviews ─────────────────────────────────────────────
@@ -244,6 +257,71 @@ export async function runProdDataSync(): Promise<void> {
     logger.info(
       { journeys: journeys.length, steps: steps.length, stepsInserted },
       "prod-data-sync: journeys/steps synced",
+    );
+
+    // ── 6. Upsert devotional series ───────────────────────────────────────
+    for (const s of devSeries) {
+      try {
+        await pool.query(
+          `INSERT INTO devotional_series
+             (id, title, description, series_type, status, published_at, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (id) DO UPDATE SET
+             title        = EXCLUDED.title,
+             description  = EXCLUDED.description,
+             series_type  = EXCLUDED.series_type,
+             status       = EXCLUDED.status,
+             published_at = EXCLUDED.published_at`,
+          [
+            s.id, s.title, s.description ?? "",
+            s.series_type ?? "general", s.status ?? "Draft",
+            s.published_at ?? null, s.created_by ?? "seed",
+          ],
+        );
+      } catch (err) {
+        logger.warn({ err, id: s.id }, "prod-data-sync: devotional series upsert failed (non-fatal)");
+      }
+    }
+
+    // ── 7. Upsert devotional entries (including display_label) ────────────
+    let entriesUpserted = 0;
+    for (const e of devEntries) {
+      try {
+        const r = await pool.query(
+          `INSERT INTO devotional_entries
+             (id, series_id, day_number, title, scripture_reference,
+              greeting, consider_this, prayer, next_step, closing,
+              status, published_at, display_label)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           ON CONFLICT (id) DO UPDATE SET
+             title               = EXCLUDED.title,
+             scripture_reference = EXCLUDED.scripture_reference,
+             greeting            = EXCLUDED.greeting,
+             consider_this       = EXCLUDED.consider_this,
+             prayer              = EXCLUDED.prayer,
+             next_step           = EXCLUDED.next_step,
+             closing             = EXCLUDED.closing,
+             status              = EXCLUDED.status,
+             published_at        = EXCLUDED.published_at,
+             display_label       = EXCLUDED.display_label`,
+          [
+            e.id, e.series_id, e.day_number, e.title ?? "",
+            e.scripture_reference ?? "", e.greeting ?? "",
+            e.consider_this ?? "", e.prayer ?? "",
+            e.next_step ?? "", e.closing ?? "",
+            e.status ?? "Draft", e.published_at ?? null,
+            e.display_label ?? null,
+          ],
+        );
+        entriesUpserted += r.rowCount ?? 0;
+      } catch (err) {
+        logger.warn({ err, id: e.id }, "prod-data-sync: devotional entry upsert failed (non-fatal)");
+      }
+    }
+
+    logger.info(
+      { series: devSeries.length, entries: devEntries.length, entriesUpserted },
+      "prod-data-sync: devotionals synced",
     );
   } catch (err) {
     logger.error({ err }, "prod-data-sync: unexpected error (non-fatal)");

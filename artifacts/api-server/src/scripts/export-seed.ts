@@ -82,6 +82,34 @@ async function main() {
     );
     console.log(`[export-seed] ✓ ${journeyResult.rows.length} journeys → prod-sync-journeys.json`);
     console.log(`[export-seed] ✓ ${stepResult.rows.length} steps    → prod-sync-journeys.json`);
+
+    // ── Devotional series ─────────────────────────────────────────────────
+    const seriesResult = await pool.query<Record<string, unknown>>(`
+      SELECT id, title, description, series_type, status, published_at,
+             created_by, notify_published_at
+      FROM devotional_series
+      WHERE deleted_at IS NULL
+      ORDER BY created_at
+    `);
+
+    // ── Devotional entries ────────────────────────────────────────────────
+    const entriesResult = await pool.query<Record<string, unknown>>(`
+      SELECT id, series_id, day_number, title, scripture_reference,
+             greeting, consider_this, prayer, next_step, closing,
+             status, published_at, display_label
+      FROM devotional_entries
+      WHERE deleted_at IS NULL
+      ORDER BY series_id, day_number
+    `);
+
+    const devotionalsPath = resolve(dataDir, "prod-sync-devotionals.json");
+    writeFileSync(
+      devotionalsPath,
+      JSON.stringify({ series: seriesResult.rows, entries: entriesResult.rows }, null, 2),
+      "utf8",
+    );
+    console.log(`[export-seed] ✓ ${seriesResult.rows.length} devotional series  → prod-sync-devotionals.json`);
+    console.log(`[export-seed] ✓ ${entriesResult.rows.length} devotional entries → prod-sync-devotionals.json`);
     console.log("[export-seed] Seed files are up to date.");
   } finally {
     await pool.end();

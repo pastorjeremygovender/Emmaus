@@ -29,6 +29,10 @@ async function buildAll() {
     path.resolve(artifactDir, "src/data/prod-sync-journeys.json"),
     path.resolve(dataDistDir, "prod-sync-journeys.json")
   );
+  await cp(
+    path.resolve(artifactDir, "src/data/prod-sync-devotionals.json"),
+    path.resolve(dataDistDir, "prod-sync-devotionals.json")
+  );
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
