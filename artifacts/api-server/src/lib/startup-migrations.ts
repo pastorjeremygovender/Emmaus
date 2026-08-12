@@ -1780,4 +1780,30 @@ export async function runStartupMigrations(): Promise<void> {
     }
     logger.info("Startup migration: step display label columns ensured (idempotent)");
   }
+
+  // Back-fill display_label for Psalms Daily Devotional entries that were
+  // created in production before the bulk-generate feature existed.
+  // Formula: January 1 2026 + (day_number - 1) days → "D Month" format.
+  // Idempotent: only updates rows where display_label IS NULL.
+  {
+    try {
+      const r = await pool.query(`
+        UPDATE devotional_entries
+        SET display_label = TO_CHAR(
+          DATE '2026-01-01' + (day_number - 1) * INTERVAL '1 day',
+          'FMDD Month'
+        )
+        WHERE series_id = 'd5319697-1a29-43ec-9e08-1c95e4ea7b1d'
+          AND display_label IS NULL
+      `);
+      if ((r.rowCount ?? 0) > 0) {
+        logger.info(
+          { updated: r.rowCount },
+          "Startup migration: Psalms display_label back-fill applied",
+        );
+      }
+    } catch (err) {
+      logger.warn({ err }, "Startup migration: Psalms display_label back-fill failed (non-fatal)");
+    }
+  }
 }
