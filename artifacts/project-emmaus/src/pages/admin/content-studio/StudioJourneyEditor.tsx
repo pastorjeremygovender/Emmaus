@@ -345,11 +345,12 @@ function StepSettings({ step, onChange }: { step: StepWithBlocks; onChange: (s: 
 
 // ─── Journey settings (right panel, overview selected) ───────────────────────
 
-function JourneySettings({ journey, form, onPatch, onBlur }: {
+function JourneySettings({ journey, form, onPatch, onBlur, onSaveNow }: {
   journey: Journey;
   form: Partial<Journey>;
   onPatch: (k: keyof Journey, v: string | boolean) => void;
   onBlur: () => void;
+  onSaveNow: (k: keyof Journey, v: string | boolean | null | undefined) => void;
 }) {
   const { user } = useAuth();
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -484,6 +485,19 @@ function JourneySettings({ journey, form, onPatch, onBlur }: {
         >
           {['core', 'companion', 'series', 'course'].map(t => <option key={t}>{t}</option>)}
         </select>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Step Label</label>
+        <select
+          value={(form as any).stepLabelPrefix ?? (journey as any).stepLabelPrefix ?? ''}
+          onChange={e => onSaveNow('stepLabelPrefix' as keyof Journey, e.target.value || null)}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
+        >
+          <option value="">Auto (Day for Daily Rhythm, Step for Walks)</option>
+          <option value="Day">Day (Day 1, Day 2, …)</option>
+          <option value="Step">Step (Step 1, Step 2, …)</option>
+        </select>
+        <p className="text-[11px] text-gray-400 mt-1">Per-step display labels can be set in the day editor.</p>
       </div>
       <div>
         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Duration (days)</label>
@@ -1232,6 +1246,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     setJourneyForm(f => ({ ...f, [k]: v }));
   }, []);
 
+  // Saves a single field immediately, bypassing the async state cycle.
+  // Use this for select/toggle controls that call both onPatch and onBlur in
+  // the same event handler — the regular pattern races against setState.
+  const saveJourneyNow = useCallback(async (k: keyof Journey, v: string | boolean | null | undefined) => {
+    if (!journey) return;
+    setJourneyForm(f => ({ ...f, [k]: v }));
+    await updateJourney({ ...journey, ...journeyForm, [k]: v } as Journey);
+  }, [journey, journeyForm, updateJourney]);
+
   // ─── Step management ──────────────────────────────────────────────────────
 
   const handleOpenSection = useCallback(async (sectionDay: number) => {
@@ -1786,6 +1809,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                 form={journeyForm}
                 onPatch={patchJourney}
                 onBlur={handleSaveJourney}
+                onSaveNow={saveJourneyNow}
               />
             ) : selectedStep ? (
               <StepSettings

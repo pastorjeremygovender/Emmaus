@@ -23,6 +23,7 @@ import {
   type SeriesWithEntries,
   type DevotionalProgress,
 } from '@/lib/devotionals-api';
+import { getDevotionalLabel } from '@/lib/step-label';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
 
 export default function DevotionalPreviousDays() {
@@ -74,7 +75,8 @@ export default function DevotionalPreviousDays() {
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
-      title: e.title || `Day ${e.dayNumber}`,
+      label: getDevotionalLabel(e),
+      title: e.title || getDevotionalLabel(e),
       subtitle: e.scriptureReference || undefined,
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));

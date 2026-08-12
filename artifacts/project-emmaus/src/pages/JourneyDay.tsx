@@ -11,6 +11,7 @@ import { resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { getStepLabel } from '@/lib/step-label';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
 import { BottomNav } from '@/components/BottomNav';
@@ -302,7 +303,7 @@ export default function JourneyDay() {
     return (
       <EmmausCompletionCard
         fullScreen
-        heading="Day complete."
+        heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
         continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
@@ -330,7 +331,9 @@ export default function JourneyDay() {
               {isDailyRhythmJourney ? '10 Minutes with Jesus' : journey.title}
             </div>
             <div className="text-[12px] text-muted-foreground">
-              {isDailyRhythmJourney ? `Day ${day}` : `Day ${day} of ${journey.durationDays}`}
+              {isDailyRhythmJourney
+              ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
+              : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${journey.durationDays}`}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
@@ -351,6 +354,7 @@ export default function JourneyDay() {
           prayerPrompt={step.prayerPrompt}
           actionStep={step.actionStep}
           closingText={(step as any).closingText}
+          displayLabel={getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
           returnPath={`/journey/${journeyId}/day/${day}`}
           sharePayload={{
             title: journey.title ?? '10 Minutes with Jesus',
@@ -393,7 +397,7 @@ export default function JourneyDay() {
           {/* Day label + title */}
           <section className="mb-12">
             <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              Day {day}
+              {getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </span>
             <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
               {step.title}
@@ -503,7 +507,7 @@ export default function JourneyDay() {
                  with Continue to Next Day (if a next published step exists) or
                  View Walk Summary (if this was the final step). */
               <EmmausCompletionCard
-                heading="Day complete."
+                heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
                 subMessage="Continue when you're ready."
                 onContinue={
                   nextStepUrl

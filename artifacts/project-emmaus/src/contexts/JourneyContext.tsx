@@ -48,6 +48,11 @@ export type Journey = {
   };
   introductionContent?: string; // journey-level intro text (stored in metadata JSONB)
   completionMessage?: string;   // short closing message after journey completion (stored in metadata JSONB)
+  /**
+   * Display label prefix for steps. null / undefined = auto-derive from journeyType:
+   * 'daily-rhythm' → "Day", everything else → "Step".
+   */
+  stepLabelPrefix?: string | null;
 };
 
 export type Step = {
@@ -98,6 +103,8 @@ export type Step = {
   // Walk Completion entry — not a numbered lesson.
   // Excluded from lesson lists, progress counts, and durationDays.
   isCompletionStep?: boolean;
+  /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
+  displayLabel?: string | null;
 };
 
 export type Progress = {

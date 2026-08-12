@@ -72,6 +72,13 @@ export interface DevotionalReadingProps {
    * Share button is rendered above the action button. Omit for admin previews.
    */
   sharePayload?: SharePayload;
+
+  /**
+   * Resolved display label (e.g. "1 January"). When provided and non-empty,
+   * replaces the default "Day N" sub-heading. Pass the output of
+   * `getDevotionalLabel(entry)` from the caller; do not pass the raw DB value.
+   */
+  displayLabel?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -91,6 +98,7 @@ export function DevotionalReading({
   previewMode = false,
   actionButton,
   sharePayload,
+  displayLabel,
 }: DevotionalReadingProps) {
 
   const greetingFull = greeting
@@ -110,7 +118,7 @@ export function DevotionalReading({
           {seriesTitle}
         </p>
         <p className="text-[13px] text-muted-foreground mb-4">
-          Day {dayNumber}
+          {displayLabel || `Day ${dayNumber}`}
         </p>
         <h1 className="text-[26px] font-semibold text-foreground leading-snug">
           {title || (previewMode

@@ -1760,4 +1760,24 @@ export async function runStartupMigrations(): Promise<void> {
       );
     }
   }
+
+  // ── Step display labels (2026-08) ────────────────────────────────────────────
+  // step_label_prefix on journeys:      "Day", "Step", or a custom string (null = auto-derive).
+  // display_label on journey_steps:     per-step override, e.g. "1 January".
+  // display_label on devotional_entries: same per-entry override for devotional series.
+  {
+    const labelAlters = [
+      `ALTER TABLE journeys            ADD COLUMN IF NOT EXISTS step_label_prefix text`,
+      `ALTER TABLE journey_steps       ADD COLUMN IF NOT EXISTS display_label text`,
+      `ALTER TABLE devotional_entries  ADD COLUMN IF NOT EXISTS display_label text`,
+    ];
+    for (const stmt of labelAlters) {
+      try {
+        await pool.query(stmt);
+      } catch (err) {
+        logger.warn({ err, stmt }, "Startup migration: step display label column alter failed (non-fatal)");
+      }
+    }
+    logger.info("Startup migration: step display label columns ensured (idempotent)");
+  }
 }

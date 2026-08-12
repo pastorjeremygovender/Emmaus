@@ -16,6 +16,7 @@ import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
 import { resolveReturn } from '@/lib/return-context';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
+import { getStepLabel } from '@/lib/step-label';
 
 export default function JourneyPreviousDays() {
   const params = useParams<{ journeyId: string }>();
@@ -37,6 +38,7 @@ export default function JourneyPreviousDays() {
         .sort((a, b) => b.day - a.day)
         .map(s => ({
           dayNumber: s.day,
+          label: getStepLabel(s, journey),
           title: s.title,
           subtitle: s.scripture || undefined,
           status: completedSet.has(s.day) ? 'completed' : 'current',

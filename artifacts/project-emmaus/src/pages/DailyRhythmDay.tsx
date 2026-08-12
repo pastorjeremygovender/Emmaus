@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { getStepLabel } from '@/lib/step-label';
 import { buildReturnScrollKey } from '@/components/EmbeddedScripture';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { BottomNav } from '@/components/BottomNav';
@@ -195,7 +196,7 @@ export default function DailyRhythmDay() {
     // Just completed this session — auto-returns in 2 s (see useEffect above)
     actionButton = (
       <EmmausCompletionCard
-        heading={`Day ${day} complete.`}
+        heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="We'll continue walking together tomorrow."
         returnLabel="Back to Today's Steps"
         onReturn={() => setLocation('/walk', { replace: true })}
@@ -207,7 +208,7 @@ export default function DailyRhythmDay() {
     // Review from Previous Days → return to Previous Days.
     actionButton = (
       <EmmausCompletionCard
-        heading={`Day ${day} complete.`}
+        heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="May the Lord continue His work in your heart today."
         returnLabel={fromWalk ? "Back to Today's Steps" : "Back to Previous Days"}
         onReturn={fromWalk ? goBack : goToPreviousDays}
@@ -250,6 +251,7 @@ export default function DailyRhythmDay() {
 
       <DailyRhythmReading
         day={day}
+        displayLabel={getStepLabel(step, journey)}
         title={step.title}
         mentorIntro={step.mentorIntro}
         memberName={resolveDisplayName(user?.preferredName)}

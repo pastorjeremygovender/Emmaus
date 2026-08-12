@@ -91,6 +91,8 @@ export interface FrontendStep {
   // Walk Completion entry — not a numbered lesson.
   // Excluded from lesson lists, progress counts, and durationDays.
   isCompletionStep?: boolean;
+  /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
+  displayLabel?: string | null;
 }
 
 export interface FrontendJourney {
@@ -129,6 +131,8 @@ export interface FrontendJourney {
   requiresDailyGate?: boolean;  // default true — false bypasses the daily 15-min gate
   introductionContent?: string; // journey-level intro text (admin-authored, stored in metadata JSONB)
   completionMessage?: string;   // short closing message shown after journey completion (stored in metadata JSONB)
+  // Step display label prefix — "Day", "Step", or custom. null = auto-derive from journeyType.
+  stepLabelPrefix?: string | null;
   // AI Builder fields (also stored in metadata JSONB)
   aiGenerated?: boolean;
   sourcesSummary?: {
@@ -184,6 +188,7 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     themeColor: row.themeColor ?? undefined,
     version: row.version ?? 1,
     notifyPublishedAt: row.notifyPublishedAt?.toISOString(),
+    stepLabelPrefix: row.stepLabelPrefix ?? null,
     scriptureReference: (meta.scriptureReference as string) || undefined,
     nextJourneyId: (meta.nextJourneyId as string) || undefined,
     requiresDailyGate: meta.requiresDailyGate === false ? false : undefined,
@@ -252,6 +257,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     closingText,
     lookingAhead,
     isCompletionStep: row.isCompletionStep ?? false,
+    displayLabel: row.displayLabel ?? null,
   };
 }
 
@@ -280,6 +286,7 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
   // every PATCH silently drops the status field and steps stay as Draft forever.
   if (data.status !== undefined)             cols.status             = data.status;
   if (data.isCompletionStep !== undefined)   cols.isCompletionStep   = data.isCompletionStep;
+  if (data.displayLabel !== undefined)       cols.displayLabel       = data.displayLabel ?? null;
 
   if (data.title !== undefined)              cols.title              = data.title;
   if (data.mentorIntro !== undefined)        cols.mentorIntro        = data.mentorIntro;
@@ -397,6 +404,7 @@ export async function createJourney(data: Partial<FrontendJourney> & { id: strin
       pastorEdited: data.pastorEdited,
       publishedAt: data.status === "Published" ? now : undefined,
       collectionId: data.collectionId ?? null,
+      stepLabelPrefix: data.stepLabelPrefix ?? null,
       metadata: {
         ...(data.scriptureReference ? { scriptureReference: data.scriptureReference } : {}),
         ...(data.nextJourneyId ? { nextJourneyId: data.nextJourneyId } : {}),
@@ -469,6 +477,7 @@ export async function updateJourney(
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
   if (data.themeColor !== undefined)       updateFields.themeColor       = data.themeColor || null;
+  if (data.stepLabelPrefix !== undefined)  updateFields.stepLabelPrefix  = data.stepLabelPrefix || null;
 
   // notifyMembers is a write-only publish flag:
   //   true  → set notify_published_at = now() (opt-in, members see NEW/UPDATED)

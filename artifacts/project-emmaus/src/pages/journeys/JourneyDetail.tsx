@@ -22,6 +22,7 @@ import { getCollection } from '@/lib/collections-api';
 import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2, Users } from 'lucide-react';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { resolveReturn } from '@/lib/return-context';
+import { getStepLabel, resolveStepPrefix } from '@/lib/step-label';
 import { apiLinkJourney } from '@/lib/rooms-api';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
 import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
@@ -281,9 +282,10 @@ export default function JourneyDetail() {
         {/* ── Progress (if started) ─────────────────────────────────── */}
         {isActive && prog && (() => {
           const nextStep = steps.find(s => s.day === nextUnfinishedDay);
+          const currentStepForLabel = steps.find(s => s.day === prog.currentDay);
           return (
             <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/15">
-              <p className="text-[13px] font-medium text-primary">Step {prog.currentDay} of {journey.durationDays}</p>
+              <p className="text-[13px] font-medium text-primary">{getStepLabel(currentStepForLabel ?? { day: prog.currentDay }, journey)} of {journey.durationDays}</p>
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary transition-all"
@@ -298,7 +300,7 @@ export default function JourneyDetail() {
         })()}
         {isPaused && prog && (
           <div className="p-4 rounded-xl bg-muted/50 border border-border">
-            <p className="text-[13px] text-muted-foreground">Paused at Step {prog.currentDay} of {journey.durationDays}</p>
+            <p className="text-[13px] text-muted-foreground">Paused at {getStepLabel(steps.find(s => s.day === prog.currentDay) ?? { day: prog.currentDay }, journey)} of {journey.durationDays}</p>
           </div>
         )}
         {isCompleted && (() => {
@@ -437,7 +439,7 @@ export default function JourneyDetail() {
                       {s.day}
                     </span>
                     <span className={`text-[14px] leading-snug flex-1 ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
-                      {s.title || `Step ${s.day}`}
+                      {s.title || getStepLabel(s, journey)}
                     </span>
                     <span className={`ml-auto text-[11px] font-medium shrink-0 ${isUpNext ? 'text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>
                       {isUpNext ? 'Up next →' : done ? 'Review →' : '→'}

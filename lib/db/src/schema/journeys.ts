@@ -58,6 +58,11 @@ export const journeysTable = pgTable("journeys", {
   // Content Studio grouping (nullable — uncollected journeys still work)
   collectionId: text("collection_id"),
 
+  // Display label prefix for steps. null = auto-derive from journeyType:
+  //   'daily-rhythm' → "Day"; all other types → "Step".
+  // Admin can override with any string: "Day", "Step", or a custom value.
+  stepLabelPrefix: text("step_label_prefix"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdBy: text("created_by"),
@@ -134,6 +139,10 @@ export const journeyStepsTable = pgTable("journey_steps", {
   // Completion steps are excluded from lesson lists, progress counts, and durationDays.
   // They are displayed only via the dedicated /journey/:id/complete page.
   isCompletionStep: boolean("is_completion_step").notNull().default(false),
+
+  // Optional per-step display label (e.g. "1 January"). Overrides the journey-level
+  // prefix+number formula when non-empty. Used for date-keyed reading plans.
+  displayLabel: text("display_label"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

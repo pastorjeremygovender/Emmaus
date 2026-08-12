@@ -21,6 +21,7 @@ import { useParams, useLocation } from 'wouter';
 import { Loader2, ChevronLeft, Users } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
+import { getDevotionalLabel } from '@/lib/step-label';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { Button } from '@/components/ui/button';
@@ -281,6 +282,7 @@ export default function DevotionalDay() {
       <DevotionalReading
         seriesTitle={seriesData.title}
         dayNumber={day}
+        displayLabel={getDevotionalLabel(entry)}
         title={entry.title}
         greeting={entry.greeting ?? ''}
         scripture={entry.scriptureReference ?? ''}

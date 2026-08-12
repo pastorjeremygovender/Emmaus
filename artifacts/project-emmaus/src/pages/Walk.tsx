@@ -23,6 +23,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
+import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
@@ -190,6 +191,7 @@ function DevotionalCard({
   totalPublished,
   nextDay,
   nextEntryTitle,
+  nextDisplayLabel,
   allComplete,
   badge,
   onOpen,
@@ -206,6 +208,8 @@ function DevotionalCard({
   nextDay: number;
   /** Title of the next entry to read, if available. */
   nextEntryTitle?: string;
+  /** Optional display label of the next entry (e.g. "1 January"). */
+  nextDisplayLabel?: string | null;
   /** True when all published entries have been completed. */
   allComplete: boolean;
   /** Smart Content Indicator — UPDATED only on Today's Steps */
@@ -217,15 +221,16 @@ function DevotionalCard({
   /** Non-destructive hide: removes from Today's Steps, preserves all progress. */
   onHide?: () => void;
 }) {
+  const nextLabel = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextDisplayLabel });
   const description = allComplete
     ? `${totalPublished} of ${totalPublished} completed`
     : completedCount > 0
       ? nextEntryTitle
-        ? `Day ${nextDay} of ${totalPublished} · ${nextEntryTitle}`
-        : `Day ${nextDay} of ${totalPublished}`
+        ? `${nextLabel} of ${totalPublished} · ${nextEntryTitle}`
+        : `${nextLabel} of ${totalPublished}`
       : totalPublished > 0
-        ? `Day 1 of ${totalPublished}`
-        : 'Day 1';
+        ? `${nextLabel} of ${totalPublished}`
+        : nextLabel;
 
   return (
     <EmmausContentCard
@@ -297,7 +302,7 @@ function FifteenMinutesCard({
    * The real published entry the card should reference.
    * Null means all published content is done and the member is waiting for more.
    */
-  currentEntry: { day: number; title: string } | null;
+  currentEntry: { day: number; title: string; displayLabel?: string | null } | null;
   /**
    * True when the member's arithmetic currentDay exceeds the highest published day.
    * Walk.tsx computes this and must clamp all routing before passing it here.
@@ -364,18 +369,18 @@ function FifteenMinutesCard({
     if (state === 'uptodate') {
       // Show the last published entry the member has completed
       return currentEntry
-        ? `Day ${currentEntry.day} — ${currentEntry.title}`
+        ? `${getStepLabel(currentEntry, journey)} — ${currentEntry.title}`
         : "You're up to date.";
     }
     if (done) {
       // Completed state: show the entry the member just read
       return currentEntry
-        ? `Day ${currentEntry.day} — done for today`
+        ? `${getStepLabel(currentEntry, journey)} — done for today`
         : "Today's time with Jesus is complete.";
     }
     // ready — show the entry they are about to open
     return currentEntry
-      ? `Day ${currentEntry.day} — ${currentEntry.title}`
+      ? `${getStepLabel(currentEntry, journey)} — ${currentEntry.title}`
       : "Today's time with Jesus is ready.";
   })();
 
@@ -450,11 +455,13 @@ function YourJourneysSection({
         const description = isCompleted
           ? `${totalPublishedSteps} of ${totalPublishedSteps} completed`
           : completedCount > 0
-            ? currentStep?.title
-              ? `Day ${prog.currentDay} of ${totalPublishedSteps} · ${currentStep.title}`
-              : `Day ${prog.currentDay} of ${totalPublishedSteps}`
+            ? currentStep
+              ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+              : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
             : totalPublishedSteps > 0
-              ? `Day 1 of ${totalPublishedSteps}`
+              ? currentStep
+                ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
               : undefined;
 
         // Today's Steps shows UPDATED only — never NEW.
@@ -1018,6 +1025,7 @@ export default function Walk() {
                     totalPublished={publishedEntries.length}
                     nextDay={nextDay}
                     nextEntryTitle={nextEntry?.title}
+                    nextDisplayLabel={nextEntry?.displayLabel}
                     allComplete={allComplete}
                     badge={computeUpdatedBadge(
                       activeDevotional.series.notifyPublishedAt ?? null,

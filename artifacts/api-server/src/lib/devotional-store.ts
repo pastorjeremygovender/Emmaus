@@ -146,6 +146,7 @@ export async function upsertEntry(
       | "prayer"
       | "nextStep"
       | "closing"
+      | "displayLabel"
       | "status"
     >
   >
@@ -170,6 +171,7 @@ export async function upsertEntry(
       prayer: data.prayer ?? "",
       nextStep: data.nextStep ?? "",
       closing: data.closing ?? "",
+      ...(data.displayLabel !== undefined ? { displayLabel: data.displayLabel || null } : {}),
       status: data.status ?? "Draft",
       ...(publishedAt !== undefined ? { publishedAt } : {}),
     })

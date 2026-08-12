@@ -492,6 +492,7 @@ router.post("/journeys", async (req: Request, res: Response) => {
       overloadExempt: rest.overloadExempt as boolean | undefined,
       pastorEdited: rest.pastorEdited as boolean | undefined,
       collectionId: rest.collectionId as string | undefined,
+      stepLabelPrefix: (rest.stepLabelPrefix as string | null | undefined) ?? undefined,
     });
     await logAuditEvent({
       contentType: "journey",

@@ -48,6 +48,8 @@ export const devotionalEntriesTable = pgTable("devotional_entries", {
   prayer: text("prayer").default(""),
   nextStep: text("next_step").default(""),
   closing: text("closing").default(""),
+  // Optional per-entry display label (e.g. "1 January"). Overrides "Day N" when non-empty.
+  displayLabel: text("display_label"),
   status: text("status").notNull().default("Draft"),
   publishedAt: timestamp("published_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

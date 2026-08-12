@@ -215,6 +215,12 @@ export interface DailyRhythmReadingProps {
    * Share button is rendered above the action button. Omit for admin previews.
    */
   sharePayload?: SharePayload;
+
+  /**
+   * Optional per-step display label (e.g. "1 January").
+   * When provided and non-empty, replaces the default "Day N" sub-heading.
+   */
+  displayLabel?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -233,6 +239,7 @@ export function DailyRhythmReading({
   previewMode = false,
   actionButton,
   sharePayload,
+  displayLabel,
 }: DailyRhythmReadingProps) {
 
   // ── Greeting text ───────────────────────────────────────────────────────────
@@ -255,7 +262,7 @@ export function DailyRhythmReading({
           10 Minutes with Jesus
         </p>
         <p className="text-[13px] text-muted-foreground mb-4">
-          Day {day}
+          {displayLabel?.trim() || `Day ${day}`}
         </p>
         <h1 className="text-[26px] font-semibold text-foreground leading-snug">
           {title || (previewMode

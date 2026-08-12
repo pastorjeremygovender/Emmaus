@@ -53,6 +53,12 @@ export type Journey = {
   completionMessage?: string;
   /** Set when admin publishes with "Notify members" ON — drives NEW/UPDATED badges */
   notifyPublishedAt?: string;
+  /**
+   * Display label prefix for steps. null / undefined = auto-derive from journeyType:
+   * 'daily-rhythm' → "Day", everything else → "Step".
+   * Override with any string, e.g. "Day", "Step", or a custom prefix.
+   */
+  stepLabelPrefix?: string | null;
 };
 
 export type Step = {
@@ -91,6 +97,8 @@ export type Step = {
 
   // Daily Rhythm closing text (stored in content.closingText JSONB)
   closingText?: string;
+  /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
+  displayLabel?: string | null;
 };
 
 export type Progress = {

@@ -18,6 +18,7 @@ import {
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
+import { getDevotionalLabel } from '@/lib/step-label';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
 import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { Field, ContentStudioToolbar, ConfirmDialog } from '../shared';
@@ -49,6 +50,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   const [prayer, setPrayer] = useState('');
   const [nextStep, setNextStep] = useState('');
   const [closing, setClosing] = useState('');
+  const [displayLabel, setDisplayLabel] = useState('');
   const [status, setStatus] = useState('Draft');
 
   // Toolbar state
@@ -71,6 +73,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
         setPrayer(entry.prayer ?? '');
         setNextStep(entry.nextStep ?? '');
         setClosing(entry.closing ?? '');
+        setDisplayLabel(entry.displayLabel ?? '');
         setStatus(entry.status);
       }
     } catch {
@@ -99,7 +102,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
   }, [doSave]);
 
   const currentFields = (): Partial<DevotionalEntry> => ({
-    title, scriptureReference, greeting, considerThis, prayer, nextStep, closing, status,
+    title, scriptureReference, greeting, considerThis, prayer, nextStep, closing, displayLabel: displayLabel || null, status,
   });
 
   function patch<T>(setter: (v: T) => void, key: keyof DevotionalEntry) {
@@ -275,12 +278,24 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
             />
             <p className="mt-1 text-[11px] text-gray-400">Optional send-off at the bottom of the reading.</p>
           </Field>
+
+          <Field label="Display Label">
+            <input
+              type="text"
+              value={displayLabel}
+              onChange={e => patch(setDisplayLabel, 'displayLabel')(e.target.value)}
+              placeholder="e.g. 1 January"
+              className={textareaCls}
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Optional. Members see this instead of "Day N" when set.</p>
+          </Field>
         </div>
       }
       preview={
         <DevotionalReading
           seriesTitle={seriesTitle}
           dayNumber={day}
+          displayLabel={getDevotionalLabel({ dayNumber: day, displayLabel: displayLabel || null })}
           title={title}
           greeting={greeting}
           scripture={scriptureReference}

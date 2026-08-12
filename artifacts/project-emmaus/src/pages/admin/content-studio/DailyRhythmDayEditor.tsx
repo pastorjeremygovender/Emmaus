@@ -23,6 +23,7 @@ import {
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
+import { getStepLabel } from '@/lib/step-label';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
@@ -75,6 +76,8 @@ interface DayForm {
   prayerPrompt: string;
   actionStep: string;
   closingText: string;
+  /** Optional display label (e.g. "1 January"). Overrides the journey-level prefix formula. */
+  displayLabel: string;
 }
 
 const EMPTY_FORM: DayForm = {
@@ -86,6 +89,7 @@ const EMPTY_FORM: DayForm = {
   prayerPrompt: '',
   actionStep: '',
   closingText: '',
+  displayLabel: '',
 };
 
 // ─── Field sub-components ─────────────────────────────────────────────────────
@@ -352,6 +356,7 @@ export default function DailyRhythmDayEditor({
   variant = 'daily-rhythm',
 }: Props) {
   const { getJourney, getStep, steps, addStep, updateStep, deleteStep } = useJourney();
+  const editorJourney = getJourney(journeyId);
   const { user } = useAuth();
   const journey = getJourney(journeyId) as Journey | undefined;
   const isEditor = user?.role === 'admin' || user?.role === 'superAdmin';
@@ -383,6 +388,7 @@ export default function DailyRhythmDayEditor({
           prayerPrompt: existing.prayerPrompt ?? '',
           actionStep: existing.actionStep ?? '',
           closingText: existing.closingText ?? '',
+          displayLabel: (existing as any).displayLabel ?? '',
         });
         setCurrentDay(existing.day);
         setStepStatus(((existing as Step & { status?: string }).status as 'Draft' | 'Published') ?? 'Draft');
@@ -405,8 +411,9 @@ export default function DailyRhythmDayEditor({
     prayerPrompt: form.prayerPrompt,
     actionStep: form.actionStep,
     closingText: form.closingText,
+    displayLabel: form.displayLabel || null,
     status,
-  } as Step & { closingText: string; status: string });
+  } as Step & { closingText: string; displayLabel: string | null; status: string });
 
   const handleSave = async (status: 'Draft' | 'Published' = 'Draft') => {
     if (saving) return;
@@ -648,6 +655,19 @@ export default function DailyRhythmDayEditor({
               )}
             </div>
 
+            {/* Display Label (optional override) */}
+            <div>
+              <FieldLabel hint="Leave blank to use the default label (e.g. Day 1, Step 1)">Display Label</FieldLabel>
+              <input
+                type="text"
+                value={form.displayLabel}
+                onChange={e => patch('displayLabel', e.target.value)}
+                placeholder="e.g. 1 January"
+                className="w-full px-4 py-3 text-[14px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl
+                  focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+              />
+            </div>
+
           </div>
         }
         preview={
@@ -661,6 +681,7 @@ export default function DailyRhythmDayEditor({
             prayerPrompt={form.prayerPrompt}
             actionStep={form.actionStep}
             closingText={form.closingText}
+            displayLabel={getStepLabel({ day: form.day, displayLabel: form.displayLabel || null }, editorJourney ?? undefined)}
             previewMode
             actionButton={<PreviewContinueButton />}
           />
