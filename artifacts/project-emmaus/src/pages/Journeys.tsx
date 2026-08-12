@@ -466,7 +466,7 @@ function DevotionalCard({
       onGate={onGate}
       secondaryAction={
         onViewPreviousDays
-          ? { label: 'View Previous Entries →', onPress: onViewPreviousDays }
+          ? { label: 'View Devotional Contents', onPress: onViewPreviousDays }
           : undefined
       }
     />
