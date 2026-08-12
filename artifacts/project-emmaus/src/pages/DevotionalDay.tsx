@@ -213,8 +213,8 @@ export default function DevotionalDay() {
         continueLabel={hasNextEntry ? 'Continue to Next Devotional' : undefined}
         returnLabel={returnLabel}
         onReturn={() => setLocation(returnPath)}
-        previousDaysLabel="View Previous Entries →"
-        onPreviousDays={justCompleted && day > 1 ? () => setLocation(prevDaysUrl) : undefined}
+        previousDaysLabel="View All Entries →"
+        onPreviousDays={justCompleted ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else {
@@ -261,7 +261,7 @@ export default function DevotionalDay() {
               onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Previous days
+              All entries
             </button>
           )}
           {user && (

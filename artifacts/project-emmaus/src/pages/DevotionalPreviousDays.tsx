@@ -14,8 +14,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { isDevelopmentMode } from '@/lib/dev-mode';
-import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
 import { resolveReturn } from '@/lib/return-context';
 import {
   getSeriesWithEntries,
@@ -58,20 +56,12 @@ export default function DevotionalPreviousDays() {
 
   useEffect(() => { load(); }, [load]);
 
-  const devMode = isDevelopmentMode(user ?? undefined);
-
-  const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
-  const maxPublishedDay  = publishedEntries.length > 0
-    ? Math.max(...publishedEntries.map(e => e.dayNumber))
-    : 1;
-  // Self-paced: show all entries up to and including the member's next available day.
-  const completedDays = progress?.completedDays ?? [];
-  const availableDay = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
-
   const completedSet = new Set(progress?.completedDays ?? []);
 
+  // All published entries are accessible — members can open any entry freely.
+  const publishedEntries = (seriesData?.entries ?? []).filter(e => e.status === 'Published');
+
   const entries: PreviousDayEntry[] = publishedEntries
-    .filter(e => e.dayNumber <= availableDay)
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
@@ -81,17 +71,20 @@ export default function DevotionalPreviousDays() {
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
+  const openEntry = (day: number) =>
+    setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`);
+
   return (
     <PreviousDaysScreen
       contentTitle={seriesData?.title ?? 'Daily Devotional'}
+      screenTitle="All Entries"
       entries={entries}
       loading={loading}
       onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
-      onReviewDay={(day) =>
-        setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`)
-      }
+      onReviewDay={openEntry}
+      onContinueDay={openEntry}
       backLabel={backLabel}
-      emptyMessage="No previous entries are available yet."
+      emptyMessage="No entries are available yet."
     />
   );
 }

@@ -249,7 +249,7 @@ function DevotionalCard({
       }
       secondaryAction={
         onViewPreviousEntries
-          ? { label: 'View Previous →', onPress: onViewPreviousEntries }
+          ? { label: 'View Devotional Contents', onPress: onViewPreviousEntries }
           : undefined
       }
     />
@@ -1010,7 +1010,7 @@ export default function Walk() {
               const completedCount  = completedDays.length;
               const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
               const openDay         = allComplete ? Math.max(...completedDays) : nextDay;
-              const hasPrevEntries  = completedCount > 0;
+              const hasAnyEntries   = publishedEntries.length > 0;
 
               return (
                 <motion.section
@@ -1039,7 +1039,7 @@ export default function Walk() {
                       setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`);
                     }}
                     onViewPreviousEntries={
-                      hasPrevEntries
+                      hasAnyEntries
                         ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
                         : undefined
                     }
