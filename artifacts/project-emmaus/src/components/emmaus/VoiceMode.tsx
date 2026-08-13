@@ -96,6 +96,14 @@ export default function VoiceMode() {
   const cancelledRef        = useRef(false);
   // Phase 2: tracks the 600 ms delay between speaking and re-listening
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // VAD (Voice Activity Detection)
+  const vadAcRef            = useRef<AudioContext | null>(null);
+  const analyserRef         = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const vadSilenceStartRef  = useRef<number | null>(null);
+  // true once the user's voice has crossed the speech threshold
+  const vadSpokenRef        = useRef(false);
+  const recordingStartRef   = useRef<number>(0);
 
   // ─── Mount / unmount ──────────────────────────────────────────────────────
 
@@ -117,6 +125,22 @@ export default function VoiceMode() {
       clearTimeout(autoRestartTimerRef.current);
       autoRestartTimerRef.current = null;
     }
+  }
+
+  /**
+   * clearVAD — stops the polling interval and closes the AudioContext used for
+   * Voice Activity Detection. Safe to call multiple times.
+   */
+  function clearVAD() {
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+    analyserRef.current    = null;
+    vadSilenceStartRef.current = null;
+    vadSpokenRef.current   = false;
+    vadAcRef.current?.close().catch(() => {});
+    vadAcRef.current = null;
   }
 
   function stopAudio() {
@@ -141,9 +165,11 @@ export default function VoiceMode() {
   }
 
   /**
-   * stopRecorder — user-initiated: keeps onstop intact so processAudioBlob fires.
+   * stopRecorder — user-initiated (or VAD-triggered): keeps onstop intact so
+   * processAudioBlob fires.
    */
   function stopRecorder() {
+    clearVAD();
     const rec = recorderRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
     recorderRef.current = null;
@@ -154,6 +180,7 @@ export default function VoiceMode() {
    * pipeline never triggers after navigation or interruption.
    */
   function cancelRecorder() {
+    clearVAD();
     const rec = recorderRef.current;
     if (rec) {
       rec.ondataavailable = null;
@@ -166,6 +193,7 @@ export default function VoiceMode() {
 
   function cleanupAll() {
     cancelAutoRestart();
+    clearVAD();
     stopAudio();
     cancelRecorder();
     abortRef.current?.();
@@ -212,6 +240,57 @@ export default function VoiceMode() {
       };
 
       recorder.start(200); // 200 ms chunks
+      recordingStartRef.current = Date.now();
+
+      // ── Voice Activity Detection ───────────────────────────────────────
+      // Uses an AnalyserNode to measure mic volume every 100 ms. After the
+      // user has clearly spoken (volume > SPEECH_THRESHOLD) and then gone
+      // quiet for SILENCE_MS, recording is automatically stopped — no tap needed.
+      //
+      // Thresholds (out of 255):
+      //   SPEECH_THRESHOLD 18 — minimum average frequency energy to count as speech
+      //   SILENCE_THRESHOLD 12 — below this is considered silence
+      //   MIN_SPEECH_MS 600  — ignore silence in the first 600 ms
+      //   SILENCE_MS 1500    — 1.5 s of continuous quiet triggers auto-stop
+      try {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctx) {
+          const ac = new Ctx();
+          const source = ac.createMediaStreamSource(mediaStream);
+          const analyser = ac.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          vadAcRef.current    = ac;
+          analyserRef.current = analyser;
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+          vadIntervalRef.current = setInterval(() => {
+            const a = analyserRef.current;
+            if (!a) return;
+            a.getByteFrequencyData(dataArray);
+            const avg = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
+            const elapsed = Date.now() - recordingStartRef.current;
+
+            if (avg > 18) {
+              // Active speech — reset silence timer
+              vadSpokenRef.current      = true;
+              vadSilenceStartRef.current = null;
+            } else if (vadSpokenRef.current && elapsed > 600) {
+              // Below silence threshold after user has spoken and min time passed
+              if (vadSilenceStartRef.current === null) {
+                vadSilenceStartRef.current = Date.now();
+              } else if (Date.now() - vadSilenceStartRef.current > 1500) {
+                // 1.5 s of quiet — auto-stop (clearVAD is called inside stopRecorder)
+                stopRecorder();
+                setVoiceState('THINKING');
+              }
+            }
+          }, 100);
+        }
+      } catch { /* VAD not supported — user taps manually */ }
+
       setVoiceState('LISTENING');
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
