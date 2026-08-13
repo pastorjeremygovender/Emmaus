@@ -819,11 +819,26 @@ export default function VoiceMode() {
         </div>
       </main>
 
-      {/* ── Footer — End button ────────────────────────────────────────────── */}
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer
-        className="shrink-0 border-t border-border/30 flex items-center justify-center"
+        className="shrink-0 border-t border-border/30 flex items-center justify-center gap-6"
         style={{ paddingTop: '12px', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
       >
+        {/* Interrupt button — only shown while Emmaus is speaking */}
+        {isSpeaking && (
+          <button
+            onClick={() => {
+              stopAudio();
+              setStreamingResponse('');
+              startListening();
+            }}
+            className="flex items-center gap-2 text-[15px] font-medium text-primary bg-primary/10 hover:bg-primary/20 active:bg-primary/30 min-h-[48px] px-6 rounded-xl transition-colors"
+          >
+            <Mic size={16} />
+            Interrupt
+          </button>
+        )}
+
         <button
           onClick={handleEnd}
           className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[48px] px-10 rounded-xl hover:bg-muted/40 active:bg-muted/60"
