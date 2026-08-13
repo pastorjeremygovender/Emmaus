@@ -96,7 +96,7 @@ export default function VoiceMode() {
   const cancelledRef        = useRef(false);
   // Phase 2: tracks the 600 ms delay between speaking and re-listening
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // VAD (Voice Activity Detection)
+  // VAD (Voice Activity Detection) — auto-stop while recording
   const vadAcRef            = useRef<AudioContext | null>(null);
   const analyserRef         = useRef<AnalyserNode | null>(null);
   const vadIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -104,6 +104,13 @@ export default function VoiceMode() {
   // true once the user's voice has crossed the speech threshold
   const vadSpokenRef        = useRef(false);
   const recordingStartRef   = useRef<number>(0);
+  // Interrupt monitor — mic-only stream that listens for the user's voice
+  // while Emmaus is speaking, so the conversation is fully hands-free
+  const intStreamRef        = useRef<MediaStream | null>(null);
+  const intAcRef            = useRef<AudioContext | null>(null);
+  const intAnalyserRef      = useRef<AnalyserNode | null>(null);
+  const intIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intSpeechStartRef   = useRef<number | null>(null);
 
   // ─── Mount / unmount ──────────────────────────────────────────────────────
 
@@ -128,6 +135,73 @@ export default function VoiceMode() {
   }
 
   /**
+   * startInterruptMonitor — opens a monitoring-only mic stream while Emmaus is
+   * speaking. If the user's voice energy exceeds INTERRUPT_THRESHOLD for
+   * INTERRUPT_HOLD_MS, playback is stopped and a new recording turn begins.
+   *
+   * The threshold (40/255) is intentionally higher than VAD's speech threshold
+   * (18/255) so that speaker bleed and ambient noise don't trigger a false
+   * interrupt — a person speaking directly at the device will always be louder.
+   *
+   * Called just before audio.play() so the monitor is ready the moment sound starts.
+   */
+  async function startInterruptMonitor(onInterrupt: () => void) {
+    // Skip if already monitoring or if mic permission was denied earlier
+    if (intStreamRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (cancelledRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
+
+      intStreamRef.current = stream;
+
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) { stopInterruptMonitor(); return; }
+
+      const ac = new Ctx();
+      const source = ac.createMediaStreamSource(stream);
+      const analyser = ac.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      intAcRef.current      = ac;
+      intAnalyserRef.current = analyser;
+      intSpeechStartRef.current = null;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      intIntervalRef.current = setInterval(() => {
+        const a = intAnalyserRef.current;
+        if (!a) return;
+        a.getByteFrequencyData(data);
+        const avg = data.reduce((s, v) => s + v, 0) / data.length;
+
+        if (avg > 40) {
+          if (intSpeechStartRef.current === null) {
+            intSpeechStartRef.current = Date.now();
+          } else if (Date.now() - intSpeechStartRef.current > 250) {
+            // Sustained speech detected — interrupt
+            stopInterruptMonitor();
+            onInterrupt();
+          }
+        } else {
+          intSpeechStartRef.current = null;
+        }
+      }, 50);
+    } catch { /* mic denied or not available — just skip */ }
+  }
+
+  /** stopInterruptMonitor — tears down the monitoring stream. Safe to call multiple times. */
+  function stopInterruptMonitor() {
+    if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
+    intAnalyserRef.current = null;
+    intSpeechStartRef.current = null;
+    intAcRef.current?.close().catch(() => {});
+    intAcRef.current = null;
+    intStreamRef.current?.getTracks().forEach((t) => t.stop());
+    intStreamRef.current = null;
+  }
+
+  /**
    * clearVAD — stops the polling interval and closes the AudioContext used for
    * Voice Activity Detection. Safe to call multiple times.
    */
@@ -144,6 +218,7 @@ export default function VoiceMode() {
   }
 
   function stopAudio() {
+    stopInterruptMonitor();
     audioElRef.current?.pause();
     audioElRef.current = null;
     if (blobUrlRef.current) {
@@ -428,6 +503,15 @@ export default function VoiceMode() {
             if (!cancelledRef.current) startListening();
           }, 600);
         };
+
+        // Start interrupt monitor before play so the user can speak over Emmaus
+        // and the system auto-interrupts — no button tap required.
+        startInterruptMonitor(() => {
+          // Called from inside the monitor interval when sustained speech detected
+          stopAudio();           // stops playback + tears down monitor
+          setStreamingResponse('');
+          startListening();
+        });
 
         await new Promise<void>((resolve) => {
           audio.onended = () => {
