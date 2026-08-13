@@ -45,7 +45,7 @@ import {
 } from '@/lib/emmaus-client';
 import {
   transcribeAudio,
-  fetchSpeechBlobUrl,
+  streamSpeechToAudio,
   getSupportedMimeType,
 } from '@/lib/voice-client';
 import {
@@ -58,6 +58,14 @@ import { cn } from '@/lib/utils';
 // ─── State machine ─────────────────────────────────────────────────────────────
 
 type VoiceState = 'READY' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'ERROR';
+
+/** Snapshot handed from the interrupt monitor to startListeningFromCapture. */
+interface InterruptCapture {
+  recorder: MediaRecorder | null;
+  chunks:   Blob[];
+  stream:   MediaStream | null;
+  mimeType: string;
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -89,7 +97,8 @@ export default function VoiceMode() {
   const streamRef           = useRef<MediaStream | null>(null);
   const abortRef            = useRef<(() => void) | null>(null);
   const audioElRef          = useRef<HTMLAudioElement | null>(null);
-  const blobUrlRef          = useRef<string | null>(null);
+  // Cleanup fn for the MediaSource / blob URL backing the current audio element
+  const disposeAudioRef     = useRef<(() => void) | null>(null);
   // Pre-resumed during mic gesture to unlock mobile audio autoplay
   const playbackAcRef       = useRef<AudioContext | null>(null);
   // Set true on unmount so the async pipeline short-circuits everywhere
@@ -104,13 +113,18 @@ export default function VoiceMode() {
   // true once the user's voice has crossed the speech threshold
   const vadSpokenRef        = useRef(false);
   const recordingStartRef   = useRef<number>(0);
-  // Interrupt monitor — mic-only stream that listens for the user's voice
-  // while Emmaus is speaking, so the conversation is fully hands-free
+  // Interrupt monitor — mic-only stream + analyser that listens for the user's
+  // voice while Emmaus is speaking so the conversation stays hands-free.
+  // A MediaRecorder starts on the stream the MOMENT energy is first detected so
+  // the interrupted user's words are captured even before the interrupt fires.
   const intStreamRef        = useRef<MediaStream | null>(null);
   const intAcRef            = useRef<AudioContext | null>(null);
   const intAnalyserRef      = useRef<AnalyserNode | null>(null);
   const intIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const intSpeechStartRef   = useRef<number | null>(null);
+  const intRecorderRef      = useRef<MediaRecorder | null>(null);
+  const intChunksRef        = useRef<Blob[]>([]);
+  const intMimeTypeRef      = useRef<string>('');
 
   // ─── Mount / unmount ──────────────────────────────────────────────────────
 
@@ -136,17 +150,19 @@ export default function VoiceMode() {
 
   /**
    * startInterruptMonitor — opens a monitoring-only mic stream while Emmaus is
-   * speaking. If the user's voice energy exceeds INTERRUPT_THRESHOLD for
-   * INTERRUPT_HOLD_MS, playback is stopped and a new recording turn begins.
+   * speaking so the conversation is completely hands-free.
    *
-   * The threshold (40/255) is intentionally higher than VAD's speech threshold
-   * (18/255) so that speaker bleed and ambient noise don't trigger a false
-   * interrupt — a person speaking directly at the device will always be louder.
-   *
-   * Called just before audio.play() so the monitor is ready the moment sound starts.
+   * Design:
+   *   • Energy threshold 40/255 — higher than VAD (18/255) so speaker bleed and
+   *     ambient noise don't trigger a false interrupt.
+   *   • The MOMENT energy first crosses the threshold a MediaRecorder is started
+   *     on the stream, so the user's words are captured from the very beginning.
+   *   • If energy drops before 1 500 ms the partial recording is discarded.
+   *   • If energy is sustained for 1 500 ms the interrupt fires: the monitor
+   *     tears itself down and hands the pre-recorded data to onInterrupt so
+   *     no words are lost.
    */
-  async function startInterruptMonitor(onInterrupt: () => void) {
-    // Skip if already monitoring or if mic permission was denied earlier
+  async function startInterruptMonitor(onInterrupt: (capture: InterruptCapture) => void) {
     if (intStreamRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -168,6 +184,9 @@ export default function VoiceMode() {
       intAnalyserRef.current = analyser;
       intSpeechStartRef.current = null;
 
+      const mimeType = getSupportedMimeType();
+      intMimeTypeRef.current = mimeType;
+
       const data = new Uint8Array(analyser.frequencyBinCount);
       intIntervalRef.current = setInterval(() => {
         const a = intAnalyserRef.current;
@@ -177,26 +196,76 @@ export default function VoiceMode() {
 
         if (avg > 40) {
           if (intSpeechStartRef.current === null) {
+            // ── First energy peak ──────────────────────────────────────────
+            // Start recording immediately so these words are captured even if
+            // the interrupt fires 1.5 s later.
             intSpeechStartRef.current = Date.now();
-          } else if (Date.now() - intSpeechStartRef.current > 250) {
-            // Sustained speech detected — interrupt
-            stopInterruptMonitor();
-            onInterrupt();
+            const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+            try {
+              const rec = new MediaRecorder(intStreamRef.current!, opts);
+              intChunksRef.current = [];
+              rec.ondataavailable = (e) => {
+                if (e.data.size > 0) intChunksRef.current.push(e.data);
+              };
+              rec.start(200);
+              intRecorderRef.current = rec;
+            } catch { /* recorder unavailable — interrupt will still fire by time */ }
+
+          } else if (Date.now() - intSpeechStartRef.current > 1500) {
+            // ── 1.5 s of sustained speech — fire the interrupt ─────────────
+            // Tear down the monitoring layer but hand the recorder + stream to
+            // the interrupt handler so the captured audio can be transcribed.
+            if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
+            intAnalyserRef.current    = null;
+            intSpeechStartRef.current = null;
+            intAcRef.current?.close().catch(() => {}); intAcRef.current = null;
+
+            const capture: InterruptCapture = {
+              recorder: intRecorderRef.current,
+              chunks:   intChunksRef.current,
+              stream:   intStreamRef.current,
+              mimeType: intMimeTypeRef.current,
+            };
+            // Null the refs so stopInterruptMonitor() called from stopAudio() is a no-op
+            intRecorderRef.current = null;
+            intChunksRef.current   = [];
+            intStreamRef.current   = null;
+
+            onInterrupt(capture);
           }
         } else {
-          intSpeechStartRef.current = null;
+          // ── Energy dropped — discard the partial pre-recording ─────────────
+          if (intSpeechStartRef.current !== null) {
+            intSpeechStartRef.current = null;
+            const rec = intRecorderRef.current;
+            if (rec) {
+              rec.ondataavailable = null;
+              rec.onstop = null;
+              if (rec.state !== 'inactive') rec.stop();
+              intRecorderRef.current = null;
+            }
+            intChunksRef.current = [];
+          }
         }
       }, 50);
-    } catch { /* mic denied or not available — just skip */ }
+    } catch { /* mic denied or not available — skip interrupt monitor */ }
   }
 
-  /** stopInterruptMonitor — tears down the monitoring stream. Safe to call multiple times. */
+  /** stopInterruptMonitor — tears down the monitoring stream and any partial
+   *  pre-recording. Safe to call multiple times. */
   function stopInterruptMonitor() {
     if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
-    intAnalyserRef.current = null;
+    intAnalyserRef.current    = null;
     intSpeechStartRef.current = null;
-    intAcRef.current?.close().catch(() => {});
-    intAcRef.current = null;
+    intAcRef.current?.close().catch(() => {}); intAcRef.current = null;
+    const rec = intRecorderRef.current;
+    if (rec) {
+      rec.ondataavailable = null;
+      rec.onstop          = null;
+      if (rec.state !== 'inactive') rec.stop();
+      intRecorderRef.current = null;
+    }
+    intChunksRef.current = [];
     intStreamRef.current?.getTracks().forEach((t) => t.stop());
     intStreamRef.current = null;
   }
@@ -221,10 +290,8 @@ export default function VoiceMode() {
     stopInterruptMonitor();
     audioElRef.current?.pause();
     audioElRef.current = null;
-    if (blobUrlRef.current) {
-      URL.revokeObjectURL(blobUrlRef.current);
-      blobUrlRef.current = null;
-    }
+    disposeAudioRef.current?.();
+    disposeAudioRef.current = null;
     setAutoplayBlocked(false);
     setTtsError(false);
   }
@@ -385,6 +452,95 @@ export default function VoiceMode() {
     setVoiceState('THINKING');
   }
 
+  /**
+   * startListeningFromCapture — starts a real recording turn using audio that
+   * was already captured by the interrupt monitor before the interrupt fired.
+   *
+   * The recorder in `capture` has been running since the first energy peak
+   * (up to 1.5 s before this call), so the user's words from the very start
+   * of their sentence are already in `capture.chunks`.  We re-attach the
+   * pipeline onstop handler, spin up VAD for auto-stop, and set state to
+   * LISTENING — the user is already mid-sentence.
+   */
+  function startListeningFromCapture(capture: InterruptCapture) {
+    const { recorder, chunks, stream, mimeType } = capture;
+
+    setErrorMsg(null);
+    setTranscript('');
+    setTtsError(false);
+    cancelAutoRestart();
+
+    if (!stream) {
+      // Stream was unexpectedly lost — fall back to a fresh getUserMedia call
+      startListening();
+      return;
+    }
+
+    streamRef.current       = stream;
+    chunksRef.current       = chunks;
+    recordingStartRef.current = Date.now();
+
+    // Re-use the pre-started recorder if it's still recording; otherwise start
+    // a fresh one on the existing stream (mic permission is already granted).
+    let rec = recorder;
+    if (!rec || rec.state === 'inactive') {
+      const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      rec = new MediaRecorder(stream, opts);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.start(200);
+    } else {
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    }
+
+    rec.onstop = async () => {
+      stopMicStream();
+      const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
+      chunksRef.current = [];
+      await processAudioBlob(blob, mimeType || 'audio/webm');
+    };
+
+    recorderRef.current = rec;
+    setVoiceState('LISTENING');
+
+    // Attach VAD — vadSpokenRef starts true since the user was already speaking
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) {
+        const ac = new Ctx();
+        const source = ac.createMediaStreamSource(stream);
+        const analyser = ac.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        vadAcRef.current          = ac;
+        analyserRef.current       = analyser;
+        vadSilenceStartRef.current = null;
+        vadSpokenRef.current      = true; // already mid-sentence when interrupt fired
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        vadIntervalRef.current = setInterval(() => {
+          const a = analyserRef.current;
+          if (!a) return;
+          a.getByteFrequencyData(dataArray);
+          const avg = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
+          const elapsed = Date.now() - recordingStartRef.current;
+          if (avg > 18) {
+            vadSilenceStartRef.current = null;
+          } else if (elapsed > 600) {
+            if (vadSilenceStartRef.current === null) {
+              vadSilenceStartRef.current = Date.now();
+            } else if (Date.now() - vadSilenceStartRef.current > 1500) {
+              clearVAD();
+              stopRecorder();
+              setVoiceState('THINKING');
+            }
+          }
+        }, 100);
+      }
+    } catch { /* VAD unavailable — user taps the orb to stop */ }
+  }
+
   // ─── Audio processing pipeline ────────────────────────────────────────────
 
   const processAudioBlob = useCallback(
@@ -472,28 +628,26 @@ export default function VoiceMode() {
         setStreamingResponse('');
         setVoiceState('SPEAKING');
 
-        let url: string;
+        // streamSpeechToAudio pipes OpenAI's streaming response directly into a
+        // MediaSource (Chrome / Firefox / Edge) so audio starts within the first
+        // few hundred ms instead of waiting for the whole file to download.
+        // Falls back to a full blob on Safari where audio/mpeg MediaSource is unsupported.
+        let ttsAudio: HTMLAudioElement;
         try {
-          url = await fetchSpeechBlobUrl(fullResponse, user.id);
+          const result = await streamSpeechToAudio(fullResponse, user.id);
+          if (cancelledRef.current) { result.dispose(); return; }
+          ttsAudio                = result.audio;
+          audioElRef.current      = result.audio;
+          disposeAudioRef.current = result.dispose;
         } catch {
-          // TTS network error — keep the text visible, offer retry
-          if (!cancelledRef.current) {
-            setTtsError(true);
-            setVoiceState('READY');
-          }
+          if (!cancelledRef.current) { setTtsError(true); setVoiceState('READY'); }
           return;
         }
 
-        if (cancelledRef.current) { URL.revokeObjectURL(url); return; }
-
-        blobUrlRef.current = url;
-        const audio = new Audio(url);
-        audioElRef.current = audio;
-
         /**
          * scheduleAutoRestart — called after audio finishes playing.
-         * The 600 ms pause feels natural (like a breath) and also gives the
-         * user time to decide whether to tap End before the mic reopens.
+         * The 600 ms pause gives a natural breath between turns and lets the
+         * user tap End before the mic reopens.
          */
         const scheduleAutoRestart = () => {
           if (cancelledRef.current) return;
@@ -504,35 +658,33 @@ export default function VoiceMode() {
           }, 600);
         };
 
-        // Start interrupt monitor before play so the user can speak over Emmaus
-        // and the system auto-interrupts — no button tap required.
-        startInterruptMonitor(() => {
-          // Called from inside the monitor interval when sustained speech detected
-          stopAudio();           // stops playback + tears down monitor
+        // Start interrupt monitor before play.  When the user speaks for 1.5 s
+        // while Emmaus is talking the monitor fires, hands over the pre-captured
+        // audio, and the system jumps straight into the user's turn — no words lost.
+        startInterruptMonitor((capture) => {
+          stopAudio(); // stops TTS + tears down monitor (intStream refs already cleared)
           setStreamingResponse('');
-          startListening();
+          startListeningFromCapture(capture);
         });
 
         await new Promise<void>((resolve) => {
-          audio.onended = () => {
+          ttsAudio.onended = () => {
             stopAudio();
             scheduleAutoRestart();
             resolve();
           };
-          audio.onerror = () => {
-            // Mid-play error — go to READY without auto-restart (edge case)
+          ttsAudio.onerror = () => {
             stopAudio();
             setVoiceState('READY');
             resolve();
           };
-          audio.play().catch((err: unknown) => {
+          ttsAudio.play().catch((err: unknown) => {
             const blocked =
               err instanceof DOMException &&
               (err.name === 'NotAllowedError' || err.name === 'AbortError');
             if (blocked) {
-              // Mobile autoplay blocked — keep blob URL, show tap-to-play button.
-              // Auto-restart fires after the user taps and playback finishes.
-              audioElRef.current = null;
+              // Mobile autoplay blocked — keep audioElRef alive so handleTapToHear
+              // can resume playback without re-fetching the stream.
               setAutoplayBlocked(true);
               setVoiceState('READY');
             } else {
@@ -575,13 +727,9 @@ export default function VoiceMode() {
     // Always cancel any pending auto-restart; the user is taking over
     cancelAutoRestart();
 
-    // Clear stale autoplay-blocked blob URL
+    // Discard any pending autoplay-blocked audio element
     if (autoplayBlocked) {
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
-      setAutoplayBlocked(false);
+      stopAudio(); // pauses element + disposes MediaSource URL
     }
 
     switch (voiceState) {
@@ -610,17 +758,16 @@ export default function VoiceMode() {
   }
 
   // ─── Tap-to-play fallback (mobile autoplay blocked) ───────────────────────
+  // The audio element is still alive in audioElRef with the stream buffered;
+  // we just call play() again in the context of a user gesture.
 
   function handleTapToHear() {
-    const url = blobUrlRef.current;
-    if (!url) return;
+    const audio = audioElRef.current;
+    if (!audio) return;
     setAutoplayBlocked(false);
     setVoiceState('SPEAKING');
-    const audio = new Audio(url);
-    audioElRef.current = audio;
     audio.onended = () => {
       stopAudio();
-      // Auto-restart after tap-to-play — same loop as normal playback
       autoRestartTimerRef.current = setTimeout(() => {
         autoRestartTimerRef.current = null;
         if (!cancelledRef.current) startListening();
@@ -637,11 +784,10 @@ export default function VoiceMode() {
     setTtsError(false);
     setVoiceState('SPEAKING');
     try {
-      const url = await fetchSpeechBlobUrl(response, user.id);
-      if (cancelledRef.current) { URL.revokeObjectURL(url); return; }
-      blobUrlRef.current = url;
-      const audio = new Audio(url);
-      audioElRef.current = audio;
+      const { audio, dispose } = await streamSpeechToAudio(response, user.id);
+      if (cancelledRef.current) { dispose(); return; }
+      audioElRef.current   = audio;
+      disposeAudioRef.current = dispose;
       audio.onended = () => {
         stopAudio();
         autoRestartTimerRef.current = setTimeout(() => {
@@ -679,7 +825,7 @@ export default function VoiceMode() {
       case 'READY':     return convId ? 'Tap to continue' : 'Tap to begin';
       case 'LISTENING': return 'Listening…';
       case 'THINKING':  return 'Thinking…';
-      case 'SPEAKING':  return 'Emmaus is speaking…';
+      case 'SPEAKING':  return 'Speak to interrupt';
       case 'ERROR':     return 'Tap to try again';
     }
   })();
@@ -877,7 +1023,7 @@ export default function VoiceMode() {
           ) : null}
 
           {/* Tap-to-play fallback (mobile autoplay blocked) */}
-          {autoplayBlocked && blobUrlRef.current && response && (
+          {autoplayBlocked && audioElRef.current && response && (
             <button
               onClick={handleTapToHear}
               className="flex items-center gap-2 text-[14px] text-primary font-medium bg-primary/10 hover:bg-primary/20 active:bg-primary/30 px-4 py-3 rounded-xl transition-colors min-h-[48px] w-full"
@@ -905,24 +1051,9 @@ export default function VoiceMode() {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer
-        className="shrink-0 border-t border-border/30 flex items-center justify-center gap-6"
+        className="shrink-0 border-t border-border/30 flex items-center justify-center"
         style={{ paddingTop: '12px', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
       >
-        {/* Interrupt button — only shown while Emmaus is speaking */}
-        {isSpeaking && (
-          <button
-            onClick={() => {
-              stopAudio();
-              setStreamingResponse('');
-              startListening();
-            }}
-            className="flex items-center gap-2 text-[15px] font-medium text-primary bg-primary/10 hover:bg-primary/20 active:bg-primary/30 min-h-[48px] px-6 rounded-xl transition-colors"
-          >
-            <Mic size={16} />
-            Interrupt
-          </button>
-        )}
-
         <button
           onClick={handleEnd}
           className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[48px] px-10 rounded-xl hover:bg-muted/40 active:bg-muted/60"

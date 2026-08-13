@@ -80,6 +80,8 @@ export async function transcribeAudio(
  * Fetch TTS audio for the given text from the server.
  * Returns a Blob URL that can be set as the src of an Audio element.
  * Caller is responsible for revoking the URL when done.
+ * @deprecated Prefer streamSpeechToAudio which starts playing within the first
+ * few hundred ms instead of buffering the whole file first.
  */
 export async function fetchSpeechBlobUrl(
   text: string,
@@ -99,6 +101,108 @@ export async function fetchSpeechBlobUrl(
 
   const blob = await resp.blob();
   return URL.createObjectURL(blob);
+}
+
+/**
+ * Stream TTS audio directly into an HTMLAudioElement using MediaSource (where
+ * supported) so playback begins within the first few hundred milliseconds
+ * instead of waiting for the full file to download.
+ *
+ * Falls back to a full-blob download on Safari/iOS where MediaSource does not
+ * support audio/mpeg.
+ *
+ * Returns the configured audio element plus a dispose() function the caller
+ * must invoke when playback ends or is interrupted to free the underlying URL.
+ */
+export async function streamSpeechToAudio(
+  text: string,
+  userId: string,
+): Promise<{ audio: HTMLAudioElement; dispose: () => void }> {
+  const supportsStreaming =
+    typeof MediaSource !== 'undefined' &&
+    typeof MediaSource.isTypeSupported === 'function' &&
+    MediaSource.isTypeSupported('audio/mpeg');
+
+  if (!supportsStreaming) {
+    // Safari / older browsers: buffer the whole blob then play
+    const url = await fetchSpeechBlobUrl(text, userId);
+    return { audio: new Audio(url), dispose: () => URL.revokeObjectURL(url) };
+  }
+
+  // Chrome / Firefox / Edge: pipe the server's streaming response into a
+  // SourceBuffer so the audio element can start playing from the first chunk.
+  return new Promise<{ audio: HTMLAudioElement; dispose: () => void }>((resolve, reject) => {
+    const ms     = new MediaSource();
+    const msUrl  = URL.createObjectURL(ms);
+    const audio  = new Audio();
+    const dispose = () => { try { URL.revokeObjectURL(msUrl); } catch { /* ignore */ } };
+
+    ms.addEventListener('sourceopen', async () => {
+      let sb: SourceBuffer;
+      try {
+        sb = ms.addSourceBuffer('audio/mpeg');
+      } catch {
+        dispose();
+        // SourceBuffer creation failed (can happen in some environments)
+        try {
+          const url = await fetchSpeechBlobUrl(text, userId);
+          resolve({ audio: new Audio(url), dispose: () => URL.revokeObjectURL(url) });
+        } catch (e) { reject(e); }
+        return;
+      }
+
+      // ── Chunk queue ─────────────────────────────────────────────────────
+      // SourceBuffer only accepts one appendBuffer at a time.  We queue
+      // incoming chunks and drain the queue in the 'updateend' handler.
+      const queue: Uint8Array[] = [];
+      let fetchDone = false;
+      let appending = false;
+
+      function drainQueue() {
+        if (appending || sb.updating) return;
+        if (queue.length > 0) {
+          appending = true;
+          try { sb.appendBuffer(queue.shift()!); } catch { appending = false; }
+        } else if (fetchDone) {
+          try { if (ms.readyState === 'open') ms.endOfStream(); } catch { /* ignore */ }
+        }
+      }
+
+      sb.addEventListener('updateend', () => { appending = false; drainQueue(); });
+      sb.addEventListener('error',     () => { appending = false; });
+
+      // ── Fetch & stream ──────────────────────────────────────────────────
+      try {
+        const resp = await fetch(`${API_BASE}/api/voice/speak`, {
+          method:  'POST',
+          headers: authHeaders(userId),
+          body:    JSON.stringify({ text }),
+        });
+
+        if (!resp.ok || !resp.body) {
+          throw new Error(`TTS failed (${resp.status})`);
+        }
+
+        // Resolve as soon as the server responds — the audio element is ready
+        // to play even though only a few bytes may have arrived.
+        resolve({ audio, dispose });
+
+        const reader = resp.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) { fetchDone = true; drainQueue(); break; }
+          queue.push(value);
+          drainQueue();
+        }
+      } catch (err) {
+        dispose();
+        reject(err);
+      }
+    }, { once: true });
+
+    // Setting src triggers 'sourceopen'
+    audio.src = msUrl;
+  });
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
