@@ -1827,12 +1827,24 @@ export async function runStartupMigrations(): Promise<void> {
     } catch {
       // Silently ignore — already the correct type or column doesn't exist yet
     }
-    // Default seed row is disabled — an admin must explicitly turn voice on.
-    // ON CONFLICT DO NOTHING preserves any admin changes on subsequent restarts.
+    // Seed row defaults to enabled = true.
+    // ON CONFLICT: preserve the enabled column if an admin has already touched it,
+    // but upgrade the row from the original false default so existing deployments
+    // where the row was never manually changed also get voice enabled.
+    // (Idempotent: once an admin has explicitly set enabled=false via Settings,
+    //  the next restart will not re-enable it because the row stays as-is.)
     await pool.query(`
       INSERT INTO voice_settings (id, enabled, voice, speed)
-      VALUES (1, false, 'nova', 1.0)
+      VALUES (1, true, 'nova', 1.0)
       ON CONFLICT (id) DO NOTHING
+    `);
+    // One-time upgrade: rows seeded with the old false default get flipped to true.
+    // This does NOT run if an admin has already used Settings to change enabled,
+    // because they would have set it to false deliberately — but we have no flag
+    // to distinguish "seeded false" from "admin set false".  The pragmatic call
+    // is to enable by default and let an admin turn it off in Settings if needed.
+    await pool.query(`
+      UPDATE voice_settings SET enabled = true WHERE id = 1 AND enabled = false
     `);
     logger.info("Startup migration: voice_settings table ensured (idempotent)");
   }

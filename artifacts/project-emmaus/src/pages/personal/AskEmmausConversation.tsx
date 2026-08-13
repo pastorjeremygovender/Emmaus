@@ -495,6 +495,7 @@ export default function AskEmmausConversation() {
                     text={msg.content}
                     userId={user.id}
                     label="Hear Emmaus read this response"
+                    variant="pill"
                   />
                 )}
 
