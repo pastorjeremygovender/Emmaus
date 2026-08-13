@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Mic, Square, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mic, Square, Loader2, Volume2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import {
@@ -71,19 +71,24 @@ export default function VoiceMode() {
   const [history, setHistory]       = useState<HistoryItem[]>([]);
   const [initContext, setInitContext] = useState<FlatContext | null>(null);
 
+  // Whether the browser blocked automatic playback (common on mobile)
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+
   // Refs — non-reactive resources
-  const recorderRef   = useRef<MediaRecorder | null>(null);
-  const chunksRef     = useRef<Blob[]>([]);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const acRef         = useRef<AudioContext | null>(null);
-  const analyserRef   = useRef<AnalyserNode | null>(null);
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const rafRef        = useRef<number | null>(null);
-  const abortRef      = useRef<(() => void) | null>(null);
-  const audioElRef    = useRef<HTMLAudioElement | null>(null);
-  const blobUrlRef    = useRef<string | null>(null);
+  const recorderRef    = useRef<MediaRecorder | null>(null);
+  const chunksRef      = useRef<Blob[]>([]);
+  const streamRef      = useRef<MediaStream | null>(null);
+  const acRef          = useRef<AudioContext | null>(null);
+  const analyserRef    = useRef<AnalyserNode | null>(null);
+  const canvasRef      = useRef<HTMLCanvasElement>(null);
+  const rafRef         = useRef<number | null>(null);
+  const abortRef       = useRef<(() => void) | null>(null);
+  const audioElRef     = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef     = useRef<string | null>(null);
+  // AudioContext pre-resumed during mic gesture to unlock mobile audio playback
+  const playbackAcRef  = useRef<AudioContext | null>(null);
   // cancelledRef is set to true on unmount so the async pipeline aborts early.
-  const cancelledRef  = useRef(false);
+  const cancelledRef   = useRef(false);
 
   // ─── Mount / unmount ────────────────────────────────────────────────────────
 
@@ -110,6 +115,7 @@ export default function VoiceMode() {
       URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = null;
     }
+    setAutoplayBlocked(false);
   }
 
   function stopVisualizer() {
@@ -153,6 +159,8 @@ export default function VoiceMode() {
     cancelRecorder(); // not stopRecorder — must not fire onstop after unmount
     abortRef.current?.();
     abortRef.current = null;
+    playbackAcRef.current?.close().catch(() => {});
+    playbackAcRef.current = null;
   }
 
   // ─── Web Audio visualizer ───────────────────────────────────────────────────
@@ -362,10 +370,28 @@ export default function VoiceMode() {
         const audio = new Audio(url);
         audioElRef.current = audio;
 
+        // Attempt automatic playback. On mobile browsers (especially iOS Safari),
+        // play() may be blocked because we are far from the original user gesture.
+        // When blocked (NotAllowedError) we keep the blob URL and show a fallback
+        // "Tap to hear Emmaus" button — the user tap IS a gesture so it always works.
         await new Promise<void>((resolve) => {
           audio.onended = () => { stopAudio(); setVoiceState('READY'); resolve(); };
           audio.onerror = () => { stopAudio(); setVoiceState('READY'); resolve(); };
-          audio.play().catch(() => { stopAudio(); setVoiceState('READY'); resolve(); });
+          audio.play().catch((err: unknown) => {
+            const blocked =
+              err instanceof DOMException &&
+              (err.name === 'NotAllowedError' || err.name === 'AbortError');
+            if (blocked) {
+              // Do NOT revoke blobUrlRef — user needs it to tap-to-play
+              audioElRef.current = null;
+              setAutoplayBlocked(true);
+              setVoiceState('READY');
+            } else {
+              stopAudio();
+              setVoiceState('READY');
+            }
+            resolve();
+          });
         });
       } catch (err) {
         if (cancelledRef.current) return; // suppress errors after unmount
@@ -382,19 +408,61 @@ export default function VoiceMode() {
   // ─── Button handler ──────────────────────────────────────────────────────────
 
   function handleMicButton() {
+    // ── Audio unlock (must be synchronous during user gesture) ────────────────
+    // Resuming an AudioContext during the gesture is the most reliable way to
+    // unlock subsequent audio.play() calls on iOS Safari and Android Chrome.
+    try {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) {
+        if (!playbackAcRef.current || playbackAcRef.current.state === 'closed') {
+          playbackAcRef.current = new Ctx();
+        }
+        playbackAcRef.current.resume().catch(() => {});
+      }
+    } catch {
+      // AudioContext not supported — fall back to tap-to-play if autoplay blocked
+    }
+
+    // Clear any pending autoplay-blocked response so the blob URL is revoked
+    if (autoplayBlocked) {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      setAutoplayBlocked(false);
+    }
+
     if (voiceState === 'READY' || voiceState === 'ERROR') {
       setErrorMsg(null);
       startListening();
     } else if (voiceState === 'LISTENING') {
       stopListening();
     } else if (voiceState === 'SPEAKING') {
-      // Interrupt — stop audio and start a new turn
+      // Interrupt — stop audio immediately and start a new turn
       stopAudio();
       setResponse('');
       setStreamingResponse('');
       startListening();
     }
     // THINKING: button is disabled
+  }
+
+  // ─── Tap-to-play fallback ────────────────────────────────────────────────────
+
+  /**
+   * Called when the user taps "Tap to hear Emmaus" after autoplay was blocked.
+   * This IS a user gesture so audio.play() always succeeds.
+   */
+  function handleTapToHear() {
+    const url = blobUrlRef.current;
+    if (!url) return;
+    setAutoplayBlocked(false);
+    setVoiceState('SPEAKING');
+    const audio = new Audio(url);
+    audioElRef.current = audio;
+    audio.onended = () => { stopAudio(); setVoiceState('READY'); };
+    audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
+    audio.play().catch(() => { stopAudio(); setVoiceState('READY'); });
   }
 
   // ─── Back navigation ────────────────────────────────────────────────────────
@@ -537,7 +605,7 @@ export default function VoiceMode() {
               {isListening ? (
                 <Square size={28} className="fill-white" />
               ) : isThinking ? (
-                <RefreshCw size={28} className="animate-spin" />
+                <Loader2 size={28} className="animate-spin" />
               ) : (
                 <Mic size={28} />
               )}
@@ -558,11 +626,11 @@ export default function VoiceMode() {
         </div>
 
         {/* ── Response (what Emmaus said) ───────────────────────────────── */}
-        <div className="w-full max-w-[480px] min-h-[56px] flex items-end justify-start">
+        <div className="w-full max-w-[480px] min-h-[56px] flex flex-col items-start gap-3">
           {displayedResponse ? (
             <div
               className={cn(
-                'bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 max-w-[90%] overflow-y-auto max-h-[200px]',
+                'bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 w-full overflow-y-auto max-h-[180px]',
                 streamingResponse && !response ? 'border-primary/30' : '',
               )}
             >
@@ -574,6 +642,17 @@ export default function VoiceMode() {
               )}
             </div>
           ) : null}
+
+          {/* Tap-to-play fallback — shown when browser blocked autoplay */}
+          {autoplayBlocked && blobUrlRef.current && response && (
+            <button
+              onClick={handleTapToHear}
+              className="flex items-center gap-2 text-[14px] text-primary font-medium bg-primary/10 hover:bg-primary/20 active:bg-primary/30 px-4 py-3 rounded-xl transition-colors min-h-[48px] w-full"
+            >
+              <Volume2 size={18} className="shrink-0" />
+              Tap to hear Emmaus
+            </button>
+          )}
         </div>
       </main>
     </div>

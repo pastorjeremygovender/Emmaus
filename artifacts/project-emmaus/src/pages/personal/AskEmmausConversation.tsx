@@ -205,6 +205,20 @@ export default function AskEmmausConversation() {
     return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Scroll to bottom when streaming ends ────────────────────────────────────
+  // When a response completes, the HearEmmausButton and response cards appear
+  // below the text. Scroll the main to the bottom so these are visible on mobile
+  // without requiring the user to scroll manually.
+  useEffect(() => {
+    if (isStreaming) return; // only fire when transitioning to not-streaming
+    if (messages.length === 0) return;
+    const timer = setTimeout(() => {
+      if (!mainRef.current) return;
+      mainRef.current.scrollTo({ top: mainRef.current.scrollHeight, behavior: 'smooth' });
+    }, 120); // small delay lets the DOM paint the new elements first
+    return () => clearTimeout(timer);
+  }, [isStreaming, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Stream a response ──────────────────────────────────────────────────────
 
   const streamResponse = useCallback(
@@ -441,7 +455,7 @@ export default function AskEmmausConversation() {
       {/* Conversation */}
       <main
         ref={mainRef}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-4 max-w-[560px] mx-auto w-full space-y-8"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-6 pb-28 max-w-[560px] mx-auto w-full space-y-8"
         aria-live="polite"
         aria-label="Conversation"
       >
