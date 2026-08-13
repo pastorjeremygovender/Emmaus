@@ -7,6 +7,8 @@ import { BibleProvider } from './contexts/BibleContext';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { FloatingEmmausButton } from '@/components/FloatingEmmausButton';
+import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
+import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -201,9 +203,12 @@ function App() {
           <BibleProvider>
             <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-                <ScrollToTop />
-                <Router />
-                <FloatingEmmausButton />
+                <VoiceSessionProvider>
+                  <ScrollToTop />
+                  <Router />
+                  <FloatingEmmausButton />
+                  <GlobalVoiceIndicator />
+                </VoiceSessionProvider>
               </WouterRouter>
               <Toaster />
             </TooltipProvider>
