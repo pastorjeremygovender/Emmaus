@@ -35,7 +35,7 @@ export type VoiceIntent =
   | { type: 'get-steps' }                                       // "what's on today's steps?"
   | { type: 'navigate'; target: NavigateTarget }                // "open my bible"
   | { type: 'reading-command'; command: ReadingCommand }        // "pause", "explain that"
-  | { type: 'read-content'; content: ReadContentType; bibleRef?: BibleRef }
+  | { type: 'read-content'; content: ReadContentType; bibleRef?: BibleRef; titleHint?: string }
   | { type: 'continue-walk'; hint?: string }                    // "continue my walk"
   | { type: 'continue-reading'; direction?: 'next' | 'previous' }; // "next / previous chapter"
 
@@ -314,11 +314,18 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
 
   // ─── Devotional ─────────────────────────────────────────────────────────
   // Only classify when clearly requesting devotional content, not asking a question about it.
-  if (
-    /^(read|open|continue|start)\s+(today'?s?\s+)?(my\s+)?(\w+\s+)?devotional$/.test(t) ||
-    /^(lets do|let'?s do)\s+(my\s+)?(\w+\s+)?devotional$/.test(t)
-  ) {
-    return { type: 'read-content', content: 'devotional' };
+  // Extracts an optional titleHint so "Read my Psalms devotional" can match the
+  // "Psalms Daily Devotional" series by fuzzy comparison — no hardcoded titles.
+  {
+    const FILLER = /^(today'?s?|my|the|a|daily)$/i;
+    const m =
+      t.match(/^(?:read|open|continue|start)\s+((?:[\w]+ )*)devotional$/) ??
+      t.match(/^(?:lets do|let'?s do)\s+((?:[\w]+ )*)devotional$/);
+    if (m) {
+      const words = (m[1] ?? '').trim().split(/\s+/).filter(w => w && !FILLER.test(w));
+      const titleHint = words.length ? words.join(' ') : undefined;
+      return { type: 'read-content', content: 'devotional', titleHint };
+    }
   }
 
   // ─── Sermon Companion ───────────────────────────────────────────────────

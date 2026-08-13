@@ -1,0 +1,337 @@
+PHASE 4 REPAIR — DAILY RHYTHM + DEVOTIONAL CONTENT RESOLUTION
+
+IMPORTANT:
+
+The latest physical-device test confirms:
+
+WORKING:
+- Voice Session persistence
+- lock-screen audio
+- media controls
+- deterministic Voice routing
+- Bible reading
+- "Read Psalm 23" successfully retrieves and reads Scripture
+
+DO NOT modify or refactor those working systems.
+
+CURRENT FAILURE:
+
+Voice still cannot retrieve/read:
+
+- today's 10 Minutes with Jesus / Daily Rhythm
+- today's Daily Devotional / Psalms Daily Devotional
+
+This is now a CONTENT RESOLUTION problem, not a Voice/TTS problem.
+
+==================================================
+1. DIAGNOSE THE REAL DATA FLOW FIRST
+==================================================
+
+Trace these exact requests end-to-end:
+
+"Read today's 10 Minutes with Jesus."
+
+"Read today's Daily Rhythm."
+
+"Read today's devotional."
+
+"Read my Psalms devotional."
+
+For EACH request log:
+
+[VOICE CONTENT DEBUG]
+
+transcript:
+intent:
+contentType:
+requestedTitle:
+userId:
+voiceContextLoaded:
+availableDailyRhythm:
+availableDevotionals:
+matchedContentId:
+matchedSeriesTitle:
+currentEntry:
+currentDay/date:
+sectionsCount:
+contentResolved:
+failureReason:
+
+Do not guess.
+
+Determine precisely whether failure occurs because:
+
+- Voice Context API is not returning the content
+- wrong content type is being searched
+- Daily Rhythm is represented as a Journey/Walk rather than devotional
+- current day/progress is being resolved incorrectly
+- series title differs from expected wording
+- content sections are empty or shaped differently
+- published/unpublished filtering is excluding it
+- user progress lookup is wrong
+- today's date/date-based content is being confused with Day N content
+- Daily Devotional and Daily Rhythm use different database schemas
+- the resolver is matching hard-coded names instead of real IDs/types
+
+==================================================
+2. DO NOT HARDCODE TITLES
+==================================================
+
+Do NOT solve this by hardcoding:
+
+"10 Minutes with Jesus"
+"Psalms Daily Devotional"
+
+Voice must resolve content using the same actual data/services the UI uses.
+
+Natural phrases may refer to the same stored content.
+
+Examples:
+
+"Read today's 10 Minutes with Jesus."
+"Read my Daily Rhythm."
+"Let's do today's time with Jesus."
+
+should resolve to the user's actual current Daily Rhythm item.
+
+Likewise:
+
+"Read today's devotional."
+"Read my Psalms devotional."
+"Continue the Psalms devotional."
+
+should resolve against the user's actual active Daily Devotional data.
+
+==================================================
+3. REUSE THE EXACT UI DATA SOURCE
+==================================================
+
+Audit how Today's Steps currently renders:
+
+- Daily Rhythm / 10 Minutes with Jesus
+- Daily Devotional
+- Sermon Companion
+
+Voice should use the SAME canonical service/query/progress resolution.
+
+If Today's Steps can correctly display today's entry, Voice must not independently reimplement day selection.
+
+Create/reuse a shared resolver if necessary.
+
+Conceptually:
+
+resolveCurrentDailyRhythm(userId)
+
+resolveCurrentDailyDevotional(userId, optionalSeriesId)
+
+The UI and Voice should ultimately rely on the same underlying logic where practical.
+
+==================================================
+4. DAILY RHYTHM RESOLUTION
+==================================================
+
+For:
+
+"Read today's 10 Minutes with Jesus."
+
+Voice must resolve:
+
+- the actual Daily Rhythm series
+- user's actual current/today entry
+- title
+- Scripture reference where stored
+- ordered content sections
+
+Do NOT restart at Day 1.
+
+Do NOT calculate progress differently from the visual app.
+
+Do NOT require the user to have manually opened it first.
+
+If today's entry is Day/date-based, use the same rule as Today's Steps.
+
+==================================================
+5. DAILY DEVOTIONAL RESOLUTION
+==================================================
+
+For:
+
+"Read today's devotional."
+
+If there is exactly one active Daily Devotional:
+read it.
+
+If multiple Daily Devotionals are active:
+ask a short clarification using REAL titles.
+
+Example:
+
+"You have Psalms Daily Devotional and another devotional. Which would you like?"
+
+For:
+
+"Read my Psalms devotional."
+
+resolve Psalms directly if it exists.
+
+Use the user's real current entry/progress.
+
+Do not generate devotional content through Ask Emmaus.
+
+==================================================
+6. DATE-BASED DEVOTIONAL SUPPORT
+==================================================
+
+Emmaus Daily Devotionals may now use calendar labels such as:
+
+1 January
+2 January
+3 January
+
+instead of only:
+
+Day 1
+Day 2
+Day 3
+
+Voice must not assume entries are always named "Day N".
+
+Resolve the current devotional entry from the stored ordering/date/progress model used by Emmaus.
+
+The visible label is presentation, not the primary lookup key.
+
+==================================================
+7. STRUCTURED CONTENT READER
+==================================================
+
+Once content resolves, pass the REAL stored sections to the already-working VoiceContentReader.
+
+Do not concatenate or regenerate the content.
+
+Preserve stored order.
+
+Examples may include:
+
+Greeting
+Scripture Reference
+Reflection
+Prayer
+Closing
+
+or other schemas currently used by Emmaus.
+
+The reader must tolerate different content-section labels.
+
+It should read actual populated section values, not require one fixed schema.
+
+==================================================
+8. DIRECT EXECUTION, NOT ASK EMMAUS
+==================================================
+
+These are deterministic content requests:
+
+"Read today's 10 Minutes with Jesus."
+"Read today's devotional."
+"Continue my Psalms devotional."
+
+They should execute directly.
+
+Do NOT fall through to generic Ask Emmaus unless content is genuinely ambiguous or cannot be resolved.
+
+If resolution fails, Emmaus should say something truthful such as:
+
+"I couldn't find today's devotional."
+
+and log WHY.
+
+Do not let Ask Emmaus invent a substitute devotional.
+
+==================================================
+9. TEST AGAINST REAL PRODUCTION DATA
+==================================================
+
+Do not test with mocked content.
+
+Use the same authenticated test account/data currently showing content correctly in Emmaus.
+
+Required tests:
+
+TEST A
+"Read today's 10 Minutes with Jesus."
+
+PASS =
+real current entry resolves,
+contentResolved=true,
+sectionsCount > 0,
+readingStarted=true,
+actual stored content plays.
+
+TEST B
+"Read today's Daily Rhythm."
+
+PASS =
+same current Daily Rhythm resolves.
+
+TEST C
+"Read today's devotional."
+
+PASS =
+current active Daily Devotional resolves or a real-title clarification is asked.
+
+TEST D
+"Read my Psalms devotional."
+
+PASS =
+Psalms Daily Devotional current entry resolves and reads.
+
+TEST E
+"Continue my devotional."
+
+PASS =
+uses the current active devotional context/progress.
+
+TEST F
+Compare Voice-resolved entry against the entry currently shown on Today's Steps.
+
+PASS =
+they are the SAME entry.
+
+==================================================
+10. DO NOT TOUCH
+==================================================
+
+Do NOT change:
+
+- Bible Voice reading
+- Bible API
+- TTS
+- transcription
+- VAD
+- interruption work
+- lock-screen playback
+- Media Session API
+- Voice persistence
+- Voice UI
+- Ask Emmaus theology/intelligence
+- content itself
+- user progress
+- Today's Steps design
+
+Only repair the Emmaus content-resolution path.
+
+==================================================
+11. REPORT ROOT CAUSE
+
+Before marking complete, tell me:
+
+1. Why Bible content resolved while Daily Rhythm/devotional did not.
+2. Exact schema/service used by Daily Rhythm.
+3. Exact schema/service used by Daily Devotionals.
+4. How current entry is resolved for each.
+5. What mismatch existed in Voice Context/resolver.
+6. What files were changed.
+7. Results of Tests A–F.
+
+Create a checkpoint first.
+
+Then implement the smallest safe fix and STOP for approval.

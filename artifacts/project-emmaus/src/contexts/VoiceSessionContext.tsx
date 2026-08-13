@@ -746,19 +746,60 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     async function loadAndStartReading(
       content: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
       bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number; translationId?: string },
+      titleHint?: string,
     ): Promise<boolean> {
+      // ── Race-condition guard ──────────────────────────────────────────────
+      // fetchVoiceContext is fire-and-forget at session start; if the user
+      // speaks before the API responds, appContextRef is still null.
+      // Await a fresh fetch here so content always resolves correctly.
+      if (!appContextRef.current && content !== 'bible') {
+        const uid = userRef.current?.id;
+        console.log('[VOICE CONTENT DEBUG] appContextRef was null — awaiting fresh context fetch', { uid, content });
+        if (uid) {
+          const fresh = await fetchVoiceContext(uid);
+          if (fresh) appContextRef.current = fresh;
+        }
+      }
+
       const appCtx = appContextRef.current;
       const sections: { label: string; text: string }[] = [];
 
+      // ── Diagnostic log (always emitted, seen in browser console on device) ──
+      if (content !== 'bible') {
+        console.log('[VOICE CONTENT DEBUG]', JSON.stringify({
+          content,
+          titleHint: titleHint ?? null,
+          voiceContextLoaded: !!appCtx,
+          availableDailyRhythm: appCtx?.dailyRhythm
+            ? { journeyTitle: appCtx.dailyRhythm.journeyTitle, currentDay: appCtx.dailyRhythm.currentDay, stepTitle: appCtx.dailyRhythm.stepTitle }
+            : null,
+          availableDevotionals: appCtx?.activeDevotionals?.map(d => ({
+            seriesId: d.seriesId, seriesTitle: d.seriesTitle, currentDay: d.currentDay, entryTitle: d.entryTitle,
+          })) ?? [],
+          availableSermonCompanion: appCtx?.sermonCompanion
+            ? { title: appCtx.sermonCompanion.title, currentDay: appCtx.sermonCompanion.currentDay }
+            : null,
+        }));
+      }
+
       if (content === 'daily-rhythm') {
         const dr = appCtx?.dailyRhythm;
-        if (!dr) return false;
+        if (!dr) {
+          console.log('[VOICE CONTENT DEBUG] daily-rhythm: failureReason=no_daily_rhythm_in_context');
+          return false;
+        }
         const label = `${dr.journeyTitle} — Day ${dr.currentDay}`;
         if (dr.stepTitle)      sections.push({ label: 'Introduction', text: dr.stepTitle });
         if (dr.stepScripture)  sections.push({ label: 'Scripture',    text: `Today's scripture is ${dr.stepScripture}.` });
         if (dr.stepTeaching)   sections.push({ label: 'Teaching',     text: dr.stepTeaching });
         if (dr.stepReflection) sections.push({ label: 'Reflection',   text: dr.stepReflection });
         if (dr.stepPrayer)     sections.push({ label: 'Prayer',       text: dr.stepPrayer });
+        console.log('[VOICE CONTENT DEBUG] daily-rhythm', JSON.stringify({
+          journeyTitle: dr.journeyTitle, currentDay: dr.currentDay,
+          sectionsCount: sections.length,
+          contentResolved: sections.length > 0,
+          failureReason: sections.length === 0 ? 'all_fields_empty' : null,
+        }));
         if (!sections.length) return false;
         readingSectionsRef.current = sections;
         readingIndexRef.current    = 0;
@@ -768,15 +809,47 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }
 
       else if (content === 'devotional') {
-        const devs = appCtx?.activeDevotionals ?? [];
-        if (devs.length === 0) return false;
-        if (devs.length > 1)   return false;
+        const allDevs = appCtx?.activeDevotionals ?? [];
+
+        // Fuzzy match titleHint (e.g. "psalms") against series titles so
+        // "Read my Psalms devotional" finds "Psalms Daily Devotional" without hardcoding.
+        let devs = allDevs;
+        if (titleHint && allDevs.length > 0) {
+          const hint = titleHint.toLowerCase();
+          const matched = allDevs.filter(d => d.seriesTitle.toLowerCase().includes(hint));
+          if (matched.length > 0) devs = matched;
+        }
+
+        console.log('[VOICE CONTENT DEBUG] devotional', JSON.stringify({
+          titleHint: titleHint ?? null,
+          totalActive: allDevs.length,
+          matchedCount: devs.length,
+          matchedTitles: devs.map(d => d.seriesTitle),
+        }));
+
+        if (devs.length === 0) {
+          console.log('[VOICE CONTENT DEBUG] devotional: failureReason=no_active_devotionals');
+          return false;
+        }
+        if (devs.length > 1) {
+          // Speak the real titles so the user can clarify
+          const titles = devs.map(d => d.seriesTitle).join(' and ');
+          await playTTS(`You have ${titles}. Which devotional would you like me to read?`, false);
+          console.log('[VOICE CONTENT DEBUG] devotional: failureReason=multiple_active_asked_clarification titles=' + titles);
+          return false;
+        }
         const dev   = devs[0];
         const label = `${dev.seriesTitle} — Day ${dev.currentDay}`;
         if (dev.entryTitle)     sections.push({ label: 'Today',      text: dev.entryTitle });
         if (dev.entryScripture) sections.push({ label: 'Scripture',  text: `Today's scripture is ${dev.entryScripture}.` });
         if (dev.entryContent)   sections.push({ label: 'Reflection', text: dev.entryContent });
         if (dev.entryPrayer)    sections.push({ label: 'Prayer',     text: dev.entryPrayer });
+        console.log('[VOICE CONTENT DEBUG] devotional', JSON.stringify({
+          seriesTitle: dev.seriesTitle, currentDay: dev.currentDay,
+          entryTitle: dev.entryTitle, sectionsCount: sections.length,
+          contentResolved: sections.length > 0,
+          failureReason: sections.length === 0 ? 'all_fields_empty' : null,
+        }));
         if (!sections.length) return false;
         readingSectionsRef.current = sections;
         readingIndexRef.current    = 0;
@@ -1006,14 +1079,17 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       // ── Read content ─────────────────────────────────────────────────────────
       if (intent.type === 'read-content') {
-        const started = await loadAndStartReading(intent.content, intent.bibleRef);
-        console.log('[VOICE]', JSON.stringify({ contentResolved: started, readingStarted: started, contentType: intent.content }));
+        const started = await loadAndStartReading(intent.content, intent.bibleRef, intent.titleHint);
+        console.log('[VOICE]', JSON.stringify({ contentResolved: started, readingStarted: started, contentType: intent.content, titleHint: intent.titleHint ?? null }));
         if (started) return;
 
         // Do NOT fall through to Ask Emmaus when a deterministic read intent was
         // recognised but content couldn't be loaded.  Speak a specific error so
         // the user understands what happened.  This prevents the AI from saying
         // "I cannot directly read Scripture" (which is both wrong and confusing).
+        // Note: the 'devotional' disambiguation (multiple active) is handled inside
+        // loadAndStartReading via playTTS — so the error below only fires when
+        // content is genuinely absent or empty.
         let errMsg: string;
         if (intent.content === 'bible') {
           const ref = intent.bibleRef;
@@ -1025,10 +1101,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         } else if (intent.content === 'daily-rhythm') {
           errMsg = `I couldn't find your active Daily Rhythm content. Check Today's Steps on your Walk screen to see what's available.`;
         } else if (intent.content === 'devotional') {
-          const devCtx = appContextRef.current?.activeDevotionals ?? [];
-          errMsg = devCtx.length > 1
-            ? `You have ${devCtx.length} devotionals active. Which one would you like me to read?`
-            : `I couldn't find an active devotional to read right now.`;
+          errMsg = `I couldn't find an active devotional to read right now. Check Today's Steps on your Walk screen.`;
         } else if (intent.content === 'sermon-companion') {
           errMsg = `I couldn't find an active Sermon Companion to read. Your companion appears in Today's Steps once it's available.`;
         } else {

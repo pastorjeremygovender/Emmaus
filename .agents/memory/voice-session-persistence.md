@@ -61,6 +61,14 @@ useEffect on `location` change (when session is active) triggers debounced (800m
 ## Media Session API
 Set up in `setupMediaSessionHandlers()` called from `startSession()`. Handlers: play → resumeSession, pause → stop mic, stop → endSession, next/prev track → advance reading section.
 
+## Content Resolution Architecture
+
+Voice content reading uses `appContextRef` (a ref, NOT React context). It is populated by `fetchVoiceContext(uid)` at session start — **fire-and-forget**. This creates a race condition if the user speaks before the fetch resolves (~1-2 s). Fix: `loadAndStartReading` now awaits a fresh fetch inline when `appContextRef.current` is null.
+
+Devotional titleHint: voice-intent.ts extracts a fuzzy title hint ("psalms") from phrases like "Read my Psalms devotional". `loadAndStartReading` filters `activeDevotionals` by `seriesTitle.includes(hint)` before falling back to the full list. No series titles are hardcoded in intent or resolver.
+
+`[VOICE CONTENT DEBUG]` logs are emitted in `loadAndStartReading` before every resolution attempt — always check browser console on device first.
+
 ## Critical VAD / Interrupt Tuning — DO NOT regress these values
 
 | Parameter | Value | Why |
