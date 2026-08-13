@@ -261,7 +261,8 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   if (/^(go back|back|go to previous|previous page|take me back)$/.test(t))
     return { type: 'navigate', target: 'back' };
 
-  if (/open (my\s+)?(bible|scripture)|take me to (my\s+)?bible|go to (my\s+)?bible|show me (my\s+)?bible/.test(t))
+  // "open [my/the/a] bible/scripture" — must NOT require "my"; "the" is equally common
+  if (/open (?:my\s+|the\s+|a\s+)?(?:bible|scripture)|take me to (?:my\s+|the\s+)?bible|go to (?:my\s+|the\s+)?bible|show me (?:my\s+|the\s+)?bible/.test(t))
     return { type: 'navigate', target: 'bible' };
 
   if (/open discover(y)?|go to discover(y)?|take me to discover(y)?|show me discover(y)?/.test(t))
@@ -305,8 +306,8 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
 
   // ─── Daily Rhythm / 10 Minutes with Jesus ───────────────────────────────
   if (
-    /10 minutes with jesus|daily rhythm/.test(t) ||
-    /^(read|open|continue|start|lets do|let'?s do)\s+(today'?s?\s+)?(my\s+)?(daily rhythm|10 minutes with jesus)/.test(t)
+    /10 minutes (?:with|of|for) jesus|daily rhythm/.test(t) ||
+    /^(read|open|continue|start|lets do|let'?s do)\s+(today'?s?\s+)?(my\s+)?(daily rhythm|10 minutes (?:with|of|for) jesus)/.test(t)
   ) {
     return { type: 'read-content', content: 'daily-rhythm' };
   }

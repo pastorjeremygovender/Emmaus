@@ -392,15 +392,29 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       intMimeTypeRef.current = mimeType;
 
       const data = new Uint8Array(analyser.frequencyBinCount);
+
+      // ── Startup delay ──────────────────────────────────────────────────────
+      // Wait 3 s before starting to poll.  TTS audio plays through the device
+      // speaker and immediately bleeds back into the mic — polling too early
+      // captures TTS output and fires a false interrupt.  3 s gives the audio
+      // system time for AEC (echo cancellation) to lock on before we look for
+      // intentional user speech.
+      const monitorStartTime = Date.now();
+      const MONITOR_STARTUP_DELAY_MS = 3000;
+
       intIntervalRef.current = setInterval(() => {
+        // Don't evaluate anything until the startup window has passed
+        if (Date.now() - monitorStartTime < MONITOR_STARTUP_DELAY_MS) return;
+
         const a = intAnalyserRef.current;
         if (!a) return;
         a.getByteFrequencyData(data);
         const avg = data.reduce((s, v) => s + v, 0) / data.length;
 
-        // Threshold lowered 40→25 (catches quieter speech) and
-        // gate lowered 1500→700ms (fires on shorter interruptions).
-        if (avg > 25) {
+        // Threshold 40 and gate 1500 ms were stable before and are intentional.
+        // Lower values (e.g. 25 / 700 ms) caused TTS bleed to trigger the
+        // interrupt within the first second of every response — do NOT lower them.
+        if (avg > 40) {
           if (intSpeechStartRef.current === null) {
             intSpeechStartRef.current = Date.now();
             const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
@@ -411,7 +425,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               rec.start(200);
               intRecorderRef.current = rec;
             } catch { /* recorder unavailable */ }
-          } else if (Date.now() - intSpeechStartRef.current > 700) {
+          } else if (Date.now() - intSpeechStartRef.current > 1500) {
             if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
             intAnalyserRef.current    = null;
             intSpeechStartRef.current = null;
@@ -495,6 +509,19 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           analyserRef.current = analyser;
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
+          // ── VAD tuning notes ────────────────────────────────────────────────
+          // threshold 18 was too low — room HVAC / ambient hum triggers it in
+          // a quiet space, causing the recorder to stop on near-silence and
+          // send garbage audio to Whisper which returns hallucinated text.
+          // 35 requires actual voice-level energy.  Keep it here; do NOT lower
+          // it without testing in a real room environment.
+          const VAD_THRESHOLD     = 35;  // avg freq bin — was 18, too low
+          const VAD_MIN_ELAPSED   = 1500; // ms before silence-gate can fire
+          const VAD_SILENCE_GATE  = 2000; // ms of silence after speech to stop
+
+          // Track how long we've been genuinely above threshold
+          let vadAboveCount = 0;
+
           vadIntervalRef.current = setInterval(() => {
             const a = analyserRef.current;
             if (!a) return;
@@ -502,15 +529,24 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
             const elapsed = Date.now() - recordingStartRef.current;
 
-            if (avg > 18) {
-              vadSpokenRef.current       = true;
-              vadSilenceStartRef.current = null;
-            } else if (vadSpokenRef.current && elapsed > 600) {
-              if (vadSilenceStartRef.current === null) {
-                vadSilenceStartRef.current = Date.now();
-              } else if (Date.now() - vadSilenceStartRef.current > 1500) {
-                stopRecorder();
-                setVoiceState('THINKING');
+            if (avg > VAD_THRESHOLD) {
+              vadAboveCount++;
+              // Require at least 5 consecutive above-threshold ticks (~500 ms)
+              // before marking speech as started — prevents a single loud noise
+              // from locking vadSpokenRef to true.
+              if (vadAboveCount >= 5) {
+                vadSpokenRef.current       = true;
+                vadSilenceStartRef.current = null;
+              }
+            } else {
+              vadAboveCount = 0;
+              if (vadSpokenRef.current && elapsed > VAD_MIN_ELAPSED) {
+                if (vadSilenceStartRef.current === null) {
+                  vadSilenceStartRef.current = Date.now();
+                } else if (Date.now() - vadSilenceStartRef.current > VAD_SILENCE_GATE) {
+                  stopRecorder();
+                  setVoiceState('THINKING');
+                }
               }
             }
           }, 100);
@@ -586,18 +622,21 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         vadSpokenRef.current      = true;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        // startListeningFromCapture — capture continues from barge-in.
+        // vadSpokenRef is already true (user was speaking), so only the
+        // silence gate matters here.  Same thresholds as startListening.
         vadIntervalRef.current = setInterval(() => {
           const a = analyserRef.current;
           if (!a) return;
           a.getByteFrequencyData(dataArray);
           const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
           const elapsed = Date.now() - recordingStartRef.current;
-          if (avg > 18) {
+          if (avg > 35) {
             vadSilenceStartRef.current = null;
-          } else if (elapsed > 600) {
+          } else if (elapsed > 1500) {
             if (vadSilenceStartRef.current === null) {
               vadSilenceStartRef.current = Date.now();
-            } else if (Date.now() - vadSilenceStartRef.current > 1500) {
+            } else if (Date.now() - vadSilenceStartRef.current > 2000) {
               clearVAD();
               stopRecorder();
               setVoiceState('THINKING');
@@ -650,10 +689,16 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           stopAudio();
           if (!cancelledRef.current) {
             setVoiceState('READY');
+            // Delay before reopening the mic:
+            //   • Conversation: 2500 ms — gives room reverb / speaker echo time
+            //     to decay so the VAD doesn't immediately see "speech" from the
+            //     tail of Emmaus's response.
+            //   • Reading section: 1500 ms — shorter pause between sections.
+            // Do NOT reduce these below ~1500 ms without retesting on device.
             autoRestartTimerRef.current = setTimeout(() => {
               autoRestartTimerRef.current = null;
               if (!cancelledRef.current && !pausedRef.current) startListening();
-            }, isReadingSection ? 800 : 600);
+            }, isReadingSection ? 1500 : 2500);
           }
           resolve();
         };
@@ -691,7 +736,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
           if (!cancelledRef.current && !pausedRef.current) startListening();
-        }, 800);
+        }, 1500);
         return;
       }
       readingIndexRef.current = next;
