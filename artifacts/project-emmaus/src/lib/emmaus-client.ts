@@ -33,6 +33,13 @@ export interface FlatContext {
   sermonId?: string;
   sermonTitle?: string;
   scriptureReference?: string;
+  /**
+   * Phase 3: Voice Mode injects a plain-text summary of the user's current
+   * app state (active content, reading context) so Emmaus can answer voice
+   * questions such as "what's on today's steps?" or "explain that scripture"
+   * without the user needing to navigate to the relevant page first.
+   */
+  voiceAppContext?: string;
 }
 
 export interface HistoryItem {

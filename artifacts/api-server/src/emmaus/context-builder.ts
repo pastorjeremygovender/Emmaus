@@ -48,6 +48,14 @@ export interface EmmausContextInput {
   bibleContext?: BibleContext;
   journeyContext?: JourneyContext;
   sermonContext?: SermonContext;
+
+  /**
+   * Phase 3: Voice Mode passes a plain-text block describing the user's
+   * current app state and active reading content.  Injected verbatim into
+   * the system context so Emmaus can answer voice navigation/reading
+   * questions without the user being on the relevant page.
+   */
+  voiceAppContext?: string;
 }
 
 export interface BuiltContext {
@@ -109,6 +117,11 @@ export function buildContext(input: EmmausContextInput): BuiltContext {
     if (sc.scriptureReference) lines.push(`  Scripture: ${sc.scriptureReference}`);
     if (sc.sermonDate) lines.push(`  Preached: ${sc.sermonDate}`);
     lines.push(`\nIf appropriate, recommend engaging further with this sermon or its Scripture passage.`);
+  }
+
+  // Phase 3: Voice Mode app-state context (what the user has active today)
+  if (input.voiceAppContext) {
+    lines.push(`\n[Voice Mode context — user's current Emmaus state]\n${input.voiceAppContext}`);
   }
 
   // User memories (only approved ones are passed in)

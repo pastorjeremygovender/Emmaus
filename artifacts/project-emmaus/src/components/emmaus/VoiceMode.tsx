@@ -54,6 +54,8 @@ import {
   clearReturnDestination,
 } from '@/lib/emmaus-pending';
 import { cn } from '@/lib/utils';
+import { fetchVoiceContext, type VoiceAppContext } from '@/lib/voice-context';
+import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
 
 // ─── State machine ─────────────────────────────────────────────────────────────
 
@@ -90,6 +92,8 @@ export default function VoiceMode() {
   // ── UI ───────────────────────────────────────────────────────────────────
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [showHistory, setShowHistory]         = useState(false);
+  // Phase 3: label shown when Voice is reading content (e.g. "John 3" or "Day 12")
+  const [activeContent, setActiveContent]     = useState<{ label: string } | null>(null);
 
   // ── Refs (stable across renders) ─────────────────────────────────────────
   const recorderRef         = useRef<MediaRecorder | null>(null);
@@ -113,6 +117,15 @@ export default function VoiceMode() {
   // true once the user's voice has crossed the speech threshold
   const vadSpokenRef        = useRef(false);
   const recordingStartRef   = useRef<number>(0);
+  // Phase 3: app context fetched once at session start from /api/voice/context
+  const appContextRef      = useRef<VoiceAppContext | null>(null);
+  // Current Bible reading position — persists across turns so follow-up questions work
+  const bibleContextRef    = useRef<{ bookId: string; chapter: number } | null>(null);
+  // Active reading session (section list + cursor)
+  const readingSectionsRef = useRef<{ label: string; text: string }[]>([]);
+  const readingIndexRef    = useRef(0);
+  const isReadingRef       = useRef(false);
+  const readingPausedRef   = useRef(false);
   // Interrupt monitor — mic-only stream + analyser that listens for the user's
   // voice while Emmaus is speaking so the conversation stays hands-free.
   // A MediaRecorder starts on the stream the MOMENT energy is first detected so
@@ -138,6 +151,15 @@ export default function VoiceMode() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Phase 3: fetch app context (what's active today) once at session start.
+  // Used by the reading engine and Emmaus context enrichment.
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchVoiceContext(user.id).then((ctx) => {
+      if (ctx) appContextRef.current = ctx;
+    });
+  }, [user?.id]);
 
   // ─── Cleanup helpers ──────────────────────────────────────────────────────
 
@@ -546,16 +568,295 @@ export default function VoiceMode() {
   const processAudioBlob = useCallback(
     async (blob: Blob, mimeType: string) => {
       if (!user || cancelledRef.current) return;
+
+      // ─── Phase 3: Inner helpers ──────────────────────────────────────────────
+      // Defined at the top of the callback so they can be called anywhere below.
+      // These close over `user`, `convId`, `history`, `initContext` from the
+      // useCallback deps — they always see the values from the current render.
+
+      /**
+       * playTTS — stream text to speech and wait for it to finish.
+       *
+       * Uses the same MediaSource pipeline as Phase 2.  Starts the interrupt
+       * monitor so the user can speak at any time to take over.
+       *
+       * @param ttsText         Text to synthesise.
+       * @param isReadingSection  When true uses an 800 ms post-playback pause
+       *                          (reading feels more natural than conversation).
+       */
+      async function playTTS(ttsText: string, isReadingSection: boolean): Promise<void> {
+        if (cancelledRef.current) return;
+        setVoiceState('SPEAKING');
+
+        let ttsAudio: HTMLAudioElement;
+        try {
+          const result = await streamSpeechToAudio(ttsText, user.id);
+          if (cancelledRef.current) { result.dispose(); return; }
+          ttsAudio                = result.audio;
+          audioElRef.current      = result.audio;
+          disposeAudioRef.current = result.dispose;
+        } catch {
+          if (!cancelledRef.current) { setTtsError(true); setVoiceState('READY'); }
+          return;
+        }
+
+        startInterruptMonitor((capture) => {
+          stopAudio();
+          setStreamingResponse('');
+          startListeningFromCapture(capture);
+        });
+
+        await new Promise<void>((resolve) => {
+          ttsAudio.onended = () => {
+            // Guard: if audio was already cleaned up (e.g. by interrupt), just resolve
+            if (audioElRef.current !== ttsAudio) { resolve(); return; }
+            stopAudio();
+            if (!cancelledRef.current) {
+              setVoiceState('READY');
+              autoRestartTimerRef.current = setTimeout(() => {
+                autoRestartTimerRef.current = null;
+                if (!cancelledRef.current) startListening();
+              }, isReadingSection ? 800 : 600);
+            }
+            resolve();
+          };
+          ttsAudio.onerror = () => {
+            if (audioElRef.current !== ttsAudio) { resolve(); return; }
+            stopAudio();
+            setVoiceState('READY');
+            resolve();
+          };
+          ttsAudio.play().catch((err: unknown) => {
+            const blocked =
+              err instanceof DOMException &&
+              (err.name === 'NotAllowedError' || err.name === 'AbortError');
+            if (blocked) {
+              setAutoplayBlocked(true);
+              setVoiceState('READY');
+            } else {
+              stopAudio();
+              setVoiceState('READY');
+            }
+            resolve();
+          });
+        });
+      }
+
+      /** Play one reading section and update the active-content label. */
+      async function playReadingSection(
+        section: { label: string; text: string } | undefined,
+      ): Promise<void> {
+        if (!section || cancelledRef.current) return;
+        setActiveContent({ label: section.label });
+        await playTTS(section.text, true);
+      }
+
+      /** Advance the reading cursor to the next section, or end the session. */
+      async function advanceReading(): Promise<void> {
+        const sections = readingSectionsRef.current;
+        const next = readingIndexRef.current + 1;
+        if (!sections.length || next >= sections.length) {
+          isReadingRef.current = false;
+          setActiveContent(null);
+          setVoiceState('READY');
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current) startListening();
+          }, 800);
+          return;
+        }
+        readingIndexRef.current = next;
+        await playReadingSection(sections[next]);
+      }
+
+      /**
+       * loadAndStartReading — fetch content, build sections, begin playback.
+       * Returns true if a session was started, false if content unavailable.
+       */
+      async function loadAndStartReading(
+        content: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
+        bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number },
+      ): Promise<boolean> {
+        const appCtx = appContextRef.current;
+        const sections: { label: string; text: string }[] = [];
+
+        if (content === 'daily-rhythm') {
+          const dr = appCtx?.dailyRhythm;
+          if (!dr) return false;
+          const label = `${dr.journeyTitle} — Day ${dr.currentDay}`;
+          if (dr.stepTitle)      sections.push({ label: 'Introduction', text: dr.stepTitle });
+          if (dr.stepScripture)  sections.push({ label: 'Scripture',    text: `Today's scripture is ${dr.stepScripture}.` });
+          if (dr.stepTeaching)   sections.push({ label: 'Teaching',     text: dr.stepTeaching });
+          if (dr.stepReflection) sections.push({ label: 'Reflection',   text: dr.stepReflection });
+          if (dr.stepPrayer)     sections.push({ label: 'Prayer',       text: dr.stepPrayer });
+          if (!sections.length) return false;
+          readingSectionsRef.current = sections;
+          readingIndexRef.current    = 0;
+          isReadingRef.current       = true;
+          readingPausedRef.current   = false;
+          setActiveContent({ label });
+        }
+
+        else if (content === 'devotional') {
+          const devs = appCtx?.activeDevotionals ?? [];
+          if (devs.length === 0) return false;
+          // Multiple devotionals → let Emmaus disambiguate (falls through to conversation)
+          if (devs.length > 1) return false;
+          const dev = devs[0];
+          const label = `${dev.seriesTitle} — Day ${dev.currentDay}`;
+          if (dev.entryTitle)    sections.push({ label: 'Today',      text: dev.entryTitle });
+          if (dev.entryScripture) sections.push({ label: 'Scripture', text: `Today's scripture is ${dev.entryScripture}.` });
+          if (dev.entryContent)  sections.push({ label: 'Reflection', text: dev.entryContent });
+          if (dev.entryPrayer)   sections.push({ label: 'Prayer',     text: dev.entryPrayer });
+          if (!sections.length) return false;
+          readingSectionsRef.current = sections;
+          readingIndexRef.current    = 0;
+          isReadingRef.current       = true;
+          readingPausedRef.current   = false;
+          setActiveContent({ label });
+        }
+
+        else if (content === 'sermon-companion') {
+          const sc = appCtx?.sermonCompanion;
+          if (!sc) return false;
+          const label = `Sermon Companion — Day ${sc.currentDay}`;
+          if (sc.entryGreeting)   sections.push({ label: 'Opening',    text: sc.entryGreeting });
+          if (sc.entryScripture)  sections.push({ label: 'Scripture',  text: `This week's scripture is ${sc.entryScripture}.` });
+          if (sc.entryReflection) sections.push({ label: 'Reflection', text: sc.entryReflection });
+          if (sc.entryPrayer)     sections.push({ label: 'Prayer',     text: sc.entryPrayer });
+          if (sc.entryClosing)    sections.push({ label: 'Closing',    text: sc.entryClosing });
+          if (!sections.length) return false;
+          readingSectionsRef.current = sections;
+          readingIndexRef.current    = 0;
+          isReadingRef.current       = true;
+          readingPausedRef.current   = false;
+          setActiveContent({ label });
+        }
+
+        else if (content === 'bible' && bibleRef) {
+          try {
+            const res = await fetch(
+              `/api/bible/bsb/${bibleRef.bookId}/${bibleRef.chapter}`,
+              { headers: { 'X-User-Id': user.id } },
+            );
+            if (!res.ok) return false;
+            const data = (await res.json()) as { verses: { verse: number; text: string }[] };
+            if (!data.verses?.length) return false;
+
+            // Track Bible context so follow-up questions ("what does that mean?") work
+            bibleContextRef.current = { bookId: bibleRef.bookId, chapter: bibleRef.chapter };
+
+            if (bibleRef.verse) {
+              const start = Math.max(1, bibleRef.verse - 1);
+              const end   = Math.min(data.verses.length, bibleRef.verse + 4);
+              const chunk = data.verses.filter((v) => v.verse >= start && v.verse <= end);
+              const text  = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
+              sections.push({
+                label: `${bibleRef.bookName} ${bibleRef.chapter}:${bibleRef.verse}`,
+                text,
+              });
+            } else {
+              // Full chapter — chunk into groups of 8 verses for natural pausing
+              const CHUNK = 8;
+              for (let i = 0; i < data.verses.length; i += CHUNK) {
+                const chunk = data.verses.slice(i, i + CHUNK);
+                const startV = chunk[0].verse;
+                const endV   = chunk[chunk.length - 1].verse;
+                const text   = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
+                sections.push({ label: `${bibleRef.bookName} ${bibleRef.chapter}:${startV}–${endV}`, text });
+              }
+            }
+
+            if (!sections.length) return false;
+            readingSectionsRef.current = sections;
+            readingIndexRef.current    = 0;
+            isReadingRef.current       = true;
+            readingPausedRef.current   = false;
+            setActiveContent({ label: `${bibleRef.bookName} ${bibleRef.chapter}` });
+          } catch {
+            return false;
+          }
+        }
+
+        if (!sections.length) return false;
+
+        setStreamingResponse('');
+        await playReadingSection(sections[0]);
+        return true;
+      }
+
+      /**
+       * buildEmmausContext — construct a FlatContext enriched with the user's
+       * current app state and active reading section for the Emmaus pipeline.
+       *
+       * Bible / journey context is included in the typed fields so Emmaus
+       * can answer follow-up questions ("explain that verse") without the
+       * user being on any particular page.
+       */
+      function buildEmmausContext(intent: VoiceIntent): FlatContext {
+        const base: FlatContext = initContext
+          ? { ...initContext, userName: user.preferredName }
+          : { entryPoint: 'personal', userName: user.preferredName };
+
+        const parts: string[] = [];
+        const appCtx = appContextRef.current;
+
+        if (appCtx?.todaysSummary && appCtx.todaysSummary !== 'No active content today.') {
+          parts.push(`User's active content today: ${appCtx.todaysSummary}`);
+        }
+
+        // Inject current reading section so Emmaus can explain / pray about it
+        if (isReadingRef.current && readingSectionsRef.current.length > 0) {
+          const section = readingSectionsRef.current[readingIndexRef.current];
+          if (section) {
+            parts.push(`Voice is currently reading: ${section.label}`);
+            parts.push(section.text.slice(0, 500));
+          }
+        }
+
+        const voiceAppContext = parts.length > 0 ? parts.join('\n\n') : undefined;
+
+        // Bible context (for "explain that verse" after reading)
+        if (bibleContextRef.current) {
+          return {
+            ...base,
+            bookId:          bibleContextRef.current.bookId,
+            chapter:         bibleContextRef.current.chapter,
+            voiceAppContext,
+          };
+        }
+
+        // Daily rhythm journey context (enriches for "what's today's reflection?" etc.)
+        if (appCtx?.dailyRhythm && (isReadingRef.current || intent.type === 'converse')) {
+          const dr = appCtx.dailyRhythm;
+          return {
+            ...base,
+            journeyId:    dr.journeyId,
+            journeyTitle: dr.journeyTitle,
+            currentDay:   dr.currentDay,
+            voiceAppContext,
+          };
+        }
+
+        return { ...base, voiceAppContext };
+      }
+
+      // ─── Main pipeline ────────────────────────────────────────────────────────
+
       setVoiceState('THINKING');
 
       try {
-        // ── Step 1: Transcribe (Whisper) ──────────────────────────────────
+        // ── Step 1: Transcribe (Whisper) ──────────────────────────────────────
         const audioBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
         const text = await transcribeAudio(audioBlob, user.id);
         if (cancelledRef.current) return;
 
         if (!text.trim()) {
-          // Silent / inaudible — soft error, stay ready for another attempt
+          // In reading mode, silence means the user is listening → advance to next section.
+          if (isReadingRef.current && !readingPausedRef.current) {
+            await advanceReading();
+            return;
+          }
           setErrorMsg("I didn't catch that. Tap to try again.");
           setVoiceState('ERROR');
           return;
@@ -564,10 +865,102 @@ export default function VoiceMode() {
         setTranscript(text);
         setStreamingResponse('');
 
-        // ── Step 2: Ask Emmaus (existing intelligence pipeline) ───────────
-        const context: FlatContext = initContext
-          ? { ...initContext, userName: user.preferredName }
-          : { entryPoint: 'personal', userName: user.preferredName };
+        // ── Phase 3: Intent classification ────────────────────────────────────
+        // Only clearly deterministic commands are classified here.
+        // Conversational, ambiguous, and follow-up utterances fall through as
+        // 'converse' and are handled by the full Emmaus pipeline below.
+        const intent = resolveIntent(text, isReadingRef.current);
+
+        // ─── Reading commands ────────────────────────────────────────────────
+        if (intent.type === 'reading-command') {
+          const { command } = intent;
+
+          if (command === 'pause') {
+            readingPausedRef.current = true;
+            cancelAutoRestart();
+            stopAudio();
+            setVoiceState('READY');
+            return;
+          }
+
+          if (command === 'continue') {
+            readingPausedRef.current = false;
+            await playReadingSection(readingSectionsRef.current[readingIndexRef.current]);
+            return;
+          }
+
+          if (command === 'repeat') {
+            readingPausedRef.current = false;
+            await playReadingSection(readingSectionsRef.current[readingIndexRef.current]);
+            return;
+          }
+
+          if (command === 'next-section') {
+            readingPausedRef.current = false;
+            await advanceReading();
+            return;
+          }
+
+          // 'explain' and 'pray' fall through to Emmaus with the current section injected.
+          // Pause auto-advance so the user gets the response without it skipping ahead.
+          readingPausedRef.current = true;
+        }
+
+        // ─── Navigation ──────────────────────────────────────────────────────
+        if (intent.type === 'navigate') {
+          const routes: Record<string, string> = {
+            walk:     '/walk',
+            bible:    '/walk/bible',
+            discover: '/discover',
+            journeys: '/journeys',
+          };
+          if (intent.target === 'back') { window.history.back(); return; }
+          const route = routes[intent.target];
+          if (route) { navigate(route); return; }
+        }
+
+        // ─── Read content ────────────────────────────────────────────────────
+        if (intent.type === 'read-content') {
+          const started = await loadAndStartReading(intent.content, intent.bibleRef);
+          if (started) return;
+          // Content not available → fall through so Emmaus can explain
+        }
+
+        // ─── Continue walk ───────────────────────────────────────────────────
+        if (intent.type === 'continue-walk') {
+          const walks = appContextRef.current?.activeWalks ?? [];
+          const match = intent.hint
+            ? walks.find((w) => w.title.toLowerCase().includes(intent.hint!.toLowerCase()))
+            : null;
+          const target = match ?? (walks.length === 1 ? walks[0] : null);
+          if (target) {
+            navigate(`/journey/${target.journeyId}/day/${target.currentDay}`);
+            return;
+          }
+          // Multiple walks or no match → Emmaus disambiguates
+        }
+
+        // ─── Continue reading (Bible chapter advance) ────────────────────────
+        if (intent.type === 'continue-reading') {
+          if (isReadingRef.current && !readingPausedRef.current) {
+            await advanceReading();
+            return;
+          }
+          if (bibleContextRef.current) {
+            const { bookId, chapter } = bibleContextRef.current;
+            const started = await loadAndStartReading('bible', {
+              bookId,
+              bookName: bookId,
+              chapter:  chapter + 1,
+            });
+            if (started) return;
+          }
+          // No context → Emmaus handles it
+        }
+
+        // ── Step 2: Ask Emmaus — enriched with current app context ────────────
+        // Every unhandled intent, fallthrough, and conversational message lands here.
+        const context = buildEmmausContext(intent);
 
         let fullResponse = '';
         let latestConvId = convId;
@@ -622,78 +1015,11 @@ export default function VoiceMode() {
           return;
         }
 
-        // ── Step 3: TTS ───────────────────────────────────────────────────
-        // The mic stream is already closed (stopMicStream ran in recorder.onstop).
+        // ── Step 3: TTS ────────────────────────────────────────────────────────
         setResponse(fullResponse);
         setStreamingResponse('');
-        setVoiceState('SPEAKING');
+        await playTTS(fullResponse, false);
 
-        // streamSpeechToAudio pipes OpenAI's streaming response directly into a
-        // MediaSource (Chrome / Firefox / Edge) so audio starts within the first
-        // few hundred ms instead of waiting for the whole file to download.
-        // Falls back to a full blob on Safari where audio/mpeg MediaSource is unsupported.
-        let ttsAudio: HTMLAudioElement;
-        try {
-          const result = await streamSpeechToAudio(fullResponse, user.id);
-          if (cancelledRef.current) { result.dispose(); return; }
-          ttsAudio                = result.audio;
-          audioElRef.current      = result.audio;
-          disposeAudioRef.current = result.dispose;
-        } catch {
-          if (!cancelledRef.current) { setTtsError(true); setVoiceState('READY'); }
-          return;
-        }
-
-        /**
-         * scheduleAutoRestart — called after audio finishes playing.
-         * The 600 ms pause gives a natural breath between turns and lets the
-         * user tap End before the mic reopens.
-         */
-        const scheduleAutoRestart = () => {
-          if (cancelledRef.current) return;
-          setVoiceState('READY');
-          autoRestartTimerRef.current = setTimeout(() => {
-            autoRestartTimerRef.current = null;
-            if (!cancelledRef.current) startListening();
-          }, 600);
-        };
-
-        // Start interrupt monitor before play.  When the user speaks for 1.5 s
-        // while Emmaus is talking the monitor fires, hands over the pre-captured
-        // audio, and the system jumps straight into the user's turn — no words lost.
-        startInterruptMonitor((capture) => {
-          stopAudio(); // stops TTS + tears down monitor (intStream refs already cleared)
-          setStreamingResponse('');
-          startListeningFromCapture(capture);
-        });
-
-        await new Promise<void>((resolve) => {
-          ttsAudio.onended = () => {
-            stopAudio();
-            scheduleAutoRestart();
-            resolve();
-          };
-          ttsAudio.onerror = () => {
-            stopAudio();
-            setVoiceState('READY');
-            resolve();
-          };
-          ttsAudio.play().catch((err: unknown) => {
-            const blocked =
-              err instanceof DOMException &&
-              (err.name === 'NotAllowedError' || err.name === 'AbortError');
-            if (blocked) {
-              // Mobile autoplay blocked — keep audioElRef alive so handleTapToHear
-              // can resume playback without re-fetching the stream.
-              setAutoplayBlocked(true);
-              setVoiceState('READY');
-            } else {
-              stopAudio();
-              setVoiceState('READY');
-            }
-            resolve();
-          });
-        });
       } catch (err) {
         if (cancelledRef.current) return;
         setErrorMsg(
@@ -993,6 +1319,13 @@ export default function VoiceMode() {
           >
             {statusLabel}
           </p>
+
+          {/* Phase 3: active content context — what Voice is reading or discussing */}
+          {activeContent && !isError && (
+            <p className="text-[12px] text-primary/70 font-medium tracking-wide text-center px-4 -mt-1">
+              {activeContent.label}
+            </p>
+          )}
 
           {/* Extended error message */}
           {isError && errorMsg && (

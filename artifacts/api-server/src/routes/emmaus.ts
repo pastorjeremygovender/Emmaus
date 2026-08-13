@@ -52,6 +52,8 @@ interface FlatContext {
   sermonId?: string;
   sermonTitle?: string;
   scriptureReference?: string;
+  // Phase 3: Voice Mode app-state context (plain text injected into system prompt)
+  voiceAppContext?: string;
 }
 
 interface EmmausConversationBody {
@@ -107,6 +109,11 @@ function toContextInput(flat: FlatContext | undefined, userId: string): EmmausCo
       scriptureReference: flat.scriptureReference,
     };
     ctx.sermonContext = sermon;
+  }
+
+  // Phase 3: Voice app-state context — passed through verbatim
+  if (flat?.voiceAppContext) {
+    ctx.voiceAppContext = flat.voiceAppContext;
   }
 
   return ctx;
