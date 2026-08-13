@@ -120,7 +120,11 @@ export function useVoiceSession(): VoiceSessionContextType {
 
 export function VoiceSessionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [location] = useLocation();
+  const [location, providerNavigate] = useLocation();
+  // providerNavigate is always available (provider-level), used as fallback when
+  // VoiceMode is not mounted (user speaking via GlobalVoiceIndicator).
+  const providerNavigateRef = useRef<((to: string) => void) | null>(null);
+  useEffect(() => { providerNavigateRef.current = providerNavigate; }, [providerNavigate]);
 
   // ── Session lifecycle state ────────────────────────────────────────────────
   const [isActive,      setIsActive]      = useState(false);
@@ -355,7 +359,17 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   async function startInterruptMonitor(onInterrupt: (capture: InterruptCapture) => void) {
     if (intStreamRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // echoCancellation + noiseSuppression prevent TTS speaker bleed from
+      // self-triggering the interrupt.  On iOS only one concurrent mic stream
+      // is allowed — this call may fail silently if the primary stream is still
+      // open, which is why we also keep the orb-tap path as a barge-in option.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+        },
+      });
       if (cancelledRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
 
       intStreamRef.current = stream;
@@ -384,7 +398,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         a.getByteFrequencyData(data);
         const avg = data.reduce((s, v) => s + v, 0) / data.length;
 
-        if (avg > 40) {
+        // Threshold lowered 40→25 (catches quieter speech) and
+        // gate lowered 1500→700ms (fires on shorter interruptions).
+        if (avg > 25) {
           if (intSpeechStartRef.current === null) {
             intSpeechStartRef.current = Date.now();
             const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
@@ -395,7 +411,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               rec.start(200);
               intRecorderRef.current = rec;
             } catch { /* recorder unavailable */ }
-          } else if (Date.now() - intSpeechStartRef.current > 1500) {
+          } else if (Date.now() - intSpeechStartRef.current > 700) {
             if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
             intAnalyserRef.current    = null;
             intSpeechStartRef.current = null;
@@ -410,6 +426,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             intRecorderRef.current = null;
             intChunksRef.current   = [];
             intStreamRef.current   = null;
+            console.log('[VOICE] bargeInDetected: true — interrupt monitor fired');
             onInterrupt(capture);
           }
         } else {
@@ -426,7 +443,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           }
         }
       }, 50);
-    } catch { /* mic denied or not available */ }
+    } catch (err) {
+      // Mic denied or device doesn't allow a second concurrent stream (iOS).
+      // Barge-in via orb tap (SPEAKING state → startListening) is still available.
+      console.log('[VOICE] bargeInDetected: false — interrupt monitor unavailable:', String(err));
+    }
   }
 
   // ─── Recording ────────────────────────────────────────────────────────────
@@ -757,8 +778,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
         try {
           chapterData = await remoteBibleProvider.getChapter(resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId);
-        } catch { return false; }
-        if (!chapterData?.verses?.length) return false;
+          console.log('[VOICE] Bible fetch result:', resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId, '→ verses:', chapterData?.verses?.length ?? 0);
+        } catch (err) {
+          console.error('[VOICE] Bible fetch error:', String(err), { bookId: resolvedRef.bookId, chapter: resolvedRef.chapter, translation: translation.resolvedId });
+          return false;
+        }
+        if (!chapterData?.verses?.length) {
+          console.log('[VOICE] Bible fetch: no verses returned for', resolvedRef.bookId, resolvedRef.chapter);
+          return false;
+        }
 
         bibleContextRef.current = { bookId: resolvedRef.bookId, chapter: resolvedRef.chapter, translationId: translation.resolvedId };
 
@@ -855,6 +883,21 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       const intent = resolveIntent(text, isReadingRef.current);
 
+      // ── Diagnostic log ───────────────────────────────────────────────────────
+      console.log('[VOICE]', JSON.stringify({
+        transcript: text,
+        intent:     intent.type,
+        detail:     'type' in intent && intent.type === 'navigate' ? (intent as { target: string }).target
+                  : 'type' in intent && intent.type === 'read-content' ? (intent as { content: string }).content
+                  : undefined,
+        isReading:  isReadingRef.current,
+        executionPath: (
+          intent.type === 'navigate' || intent.type === 'read-content' ||
+          intent.type === 'reading-command' || intent.type === 'continue-walk' ||
+          intent.type === 'continue-reading' || intent.type === 'get-steps'
+        ) ? 'deterministic' : 'conversational',
+      }));
+
       // ── Reading commands ────────────────────────────────────────────────────
       if (intent.type === 'reading-command') {
         const { command } = intent;
@@ -888,16 +931,69 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         const routes: Record<string, string> = {
           walk: '/walk', bible: '/walk/bible', discover: '/discover', journeys: '/journeys',
         };
-        if (intent.target === 'back') { window.history.back(); return; }
-        // Navigate using the stored navigate ref (set by VoiceMode on mount)
-        navigateRef.current?.(routes[intent.target] ?? '/walk');
+        if (intent.target === 'back') {
+          window.history.back();
+          // Restart listening after navigating back (small delay for page to settle)
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current && !pausedRef.current) startListening();
+          }, 1200);
+          return;
+        }
+        const route = routes[intent.target] ?? '/walk';
+        // Prefer VoiceMode's registered navigate; fall back to provider-level navigate
+        const navFn = navigateRef.current ?? providerNavigateRef.current;
+        console.log('[VOICE]', JSON.stringify({ navigationRoute: route, hasFn: !!navFn }));
+        if (navFn) {
+          navFn(route);
+        } else {
+          // Last resort: use browser history API
+          window.history.pushState({}, '', route);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+        // Restart listening after navigation so the session continues on the new screen
+        autoRestartTimerRef.current = setTimeout(() => {
+          autoRestartTimerRef.current = null;
+          if (!cancelledRef.current && !pausedRef.current) startListening();
+        }, 1200);
         return;
       }
 
       // ── Read content ─────────────────────────────────────────────────────────
       if (intent.type === 'read-content') {
         const started = await loadAndStartReading(intent.content, intent.bibleRef);
+        console.log('[VOICE]', JSON.stringify({ contentResolved: started, readingStarted: started, contentType: intent.content }));
         if (started) return;
+
+        // Do NOT fall through to Ask Emmaus when a deterministic read intent was
+        // recognised but content couldn't be loaded.  Speak a specific error so
+        // the user understands what happened.  This prevents the AI from saying
+        // "I cannot directly read Scripture" (which is both wrong and confusing).
+        let errMsg: string;
+        if (intent.content === 'bible') {
+          const ref = intent.bibleRef;
+          if (ref) {
+            errMsg = `I wasn't able to load ${ref.bookName} chapter ${ref.chapter} right now. You can read it in My Bible — just tap the book icon.`;
+          } else {
+            errMsg = `I don't have a Bible passage loaded for context. Try saying "Read John 3" to request a specific chapter.`;
+          }
+        } else if (intent.content === 'daily-rhythm') {
+          errMsg = `I couldn't find your active Daily Rhythm content. Check Today's Steps on your Walk screen to see what's available.`;
+        } else if (intent.content === 'devotional') {
+          const devCtx = appContextRef.current?.activeDevotionals ?? [];
+          errMsg = devCtx.length > 1
+            ? `You have ${devCtx.length} devotionals active. Which one would you like me to read?`
+            : `I couldn't find an active devotional to read right now.`;
+        } else if (intent.content === 'sermon-companion') {
+          errMsg = `I couldn't find an active Sermon Companion to read. Your companion appears in Today's Steps once it's available.`;
+        } else {
+          errMsg = `I wasn't able to load that content right now.`;
+        }
+
+        setResponse(errMsg);
+        setStreamingResponse('');
+        await playTTS(errMsg, false);
+        return;
       }
 
       // ── Continue walk ────────────────────────────────────────────────────────

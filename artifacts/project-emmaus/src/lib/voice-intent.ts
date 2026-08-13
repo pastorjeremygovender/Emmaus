@@ -256,18 +256,34 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   }
 
   // ─── Clear navigation commands ───────────────────────────────────────────
-  // Only match when the ENTIRE utterance is a navigation command.
-  if (/^(go back|back|go to previous|previous page)$/.test(t))
+  // Match both short-form and common phrase variants. Not anchored so natural
+  // phrasing like "please open my Bible" or "can you go to Discover" also works.
+  if (/^(go back|back|go to previous|previous page|take me back)$/.test(t))
     return { type: 'navigate', target: 'back' };
 
-  if (/open (my\s+)?bible|take me to (my\s+)?bible|go to (my\s+)?bible/.test(t))
+  if (/open (my\s+)?(bible|scripture)|take me to (my\s+)?bible|go to (my\s+)?bible|show me (my\s+)?bible/.test(t))
     return { type: 'navigate', target: 'bible' };
 
-  if (/open discover|go to discover|take me to discover/.test(t))
+  if (/open discover(y)?|go to discover(y)?|take me to discover(y)?|show me discover(y)?/.test(t))
     return { type: 'navigate', target: 'discover' };
 
-  if (/open (my\s+)?(walks?|journeys?)\s*(page)?$|go to (my\s+)?(walks?|journeys?)\s*$/.test(t))
+  if (/open (my\s+)?(walks?|journeys?)\s*(page)?$|go to (my\s+)?(walks?|journeys?)\s*$|show me (my\s+)?(walks?|journeys?)/.test(t))
     return { type: 'navigate', target: 'journeys' };
+
+  // "Go to Today's Steps" / "Open Today's Steps" → walk home (/walk = Today's Steps)
+  if (
+    /go to (today'?s?\s+)?steps?/.test(t) ||
+    /open (today'?s?\s+)?steps?/.test(t) ||
+    /take me to (today'?s?\s+)?steps?/.test(t) ||
+    /show me (today'?s?\s+)?steps?/.test(t) ||
+    /^(today'?s?\s+)?steps?$/.test(t)
+  ) {
+    return { type: 'navigate', target: 'walk' };
+  }
+
+  // "Go home" / "Home" → walk
+  if (/^(go home|open home|take me home|home)$/.test(t))
+    return { type: 'navigate', target: 'walk' };
 
   // ─── Bible reading — "read [book] [chapter]" ─────────────────────────────
   // Only match when the sentence begins with "read" and contains a parsed ref.
