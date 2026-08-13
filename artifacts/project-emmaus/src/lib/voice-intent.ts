@@ -23,6 +23,11 @@ export interface BibleRef {
   bookName: string;
   chapter:  number;
   verse?:   number;
+  /**
+   * Explicit translation requested in the voice command (e.g. "read John 3 in ASV").
+   * Null/undefined means "use the user's stored preference".
+   */
+  translationId?: string;
 }
 
 export type VoiceIntent =
@@ -32,7 +37,7 @@ export type VoiceIntent =
   | { type: 'reading-command'; command: ReadingCommand }        // "pause", "explain that"
   | { type: 'read-content'; content: ReadContentType; bibleRef?: BibleRef }
   | { type: 'continue-walk'; hint?: string }                    // "continue my walk"
-  | { type: 'continue-reading' };                               // "continue reading / next chapter"
+  | { type: 'continue-reading'; direction?: 'next' | 'previous' }; // "next / previous chapter"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -147,8 +152,39 @@ const BOOK_MAP: Record<string, { id: string; name: string }> = {
 /**
  * Parse a Bible reference from normalised text.
  * Supports: "psalm 23", "john 3", "romans 8 28", "romans 8 verse 28"
+ *
+ * Also strips a trailing translation specifier ("in ASV", "in the NIV")
+ * BEFORE matching the book, so it doesn't interfere with book name matching.
+ *
+ * Returns the ref with any explicitly named translationId attached.
  */
 function parseBibleRef(t: string): BibleRef | null {
+  // ── Extract explicit translation suffix first ──────────────────────────
+  // Pattern: "in [the] <translation>" at the end of the utterance.
+  // We strip it before matching the book so "in the ASV" doesn't confuse
+  // the book regex.
+  let translationId: string | undefined;
+  const translationSuffix = /(?: in| using) (?:the )?(.+)$/.exec(t);
+  if (translationSuffix) {
+    // Import at module scope is not possible here (circular), so we inline
+    // a small map of abbreviations and common spoken names.
+    const spoken = translationSuffix[1].trim();
+    const INLINE_MAP: Record<string, string> = {
+      bsb: 'bsb', berean: 'bsb', 'berean standard': 'bsb', 'berean standard bible': 'bsb',
+      asv: 'asv', 'american standard': 'asv', 'american standard version': 'asv',
+      kjv: 'kjv', 'king james': 'kjv', 'king james version': 'kjv',
+      niv: 'niv', 'new international': 'niv', 'new international version': 'niv',
+      gnt: 'gnt', 'good news': 'gnt', 'good news translation': 'gnt',
+      msg: 'msg', message: 'msg', 'the message': 'msg',
+    };
+    if (INLINE_MAP[spoken]) {
+      translationId = INLINE_MAP[spoken];
+      // Strip the suffix from t before running the book-match regex
+      t = t.slice(0, translationSuffix.index).trim();
+    }
+  }
+
+  // ── Match book + chapter [+ verse] ────────────────────────────────────
   // Sort entries longest-first so "first corinthians" matches before "corinthians"
   const entries = Object.entries(BOOK_MAP).sort((a, b) => b[0].length - a[0].length);
   for (const [spoken, book] of entries) {
@@ -164,6 +200,7 @@ function parseBibleRef(t: string): BibleRef | null {
         bookName: book.name,
         chapter:  parseInt(m[1], 10),
         verse:    m[2] ? parseInt(m[2], 10) : undefined,
+        translationId,
       };
     }
   }
@@ -232,16 +269,23 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   if (/open (my\s+)?(walks?|journeys?)\s*(page)?$|go to (my\s+)?(walks?|journeys?)\s*$/.test(t))
     return { type: 'navigate', target: 'journeys' };
 
-  // ─── Bible reading — "read [book] [chapter]" ────────────────────────────
-  // Only match when the sentence begins with "read" and contains a parsed reference.
+  // ─── Bible reading — "read [book] [chapter]" ─────────────────────────────
+  // Only match when the sentence begins with "read" and contains a parsed ref.
   if (/^read\s+/.test(t)) {
     const ref = parseBibleRef(t);
     if (ref) return { type: 'read-content', content: 'bible', bibleRef: ref };
   }
 
-  // ─── Continue reading (no book specified) ───────────────────────────────
-  if (/^(continue reading|next chapter|previous chapter|read next chapter)$/.test(t))
-    return { type: 'continue-reading' };
+  // ─── "Read this chapter" — use current context (bibleContextRef / initContext) ──
+  if (/^(read|continue|finish|resume)\s+(this|the current|this current)\s+(chapter|passage|reading)$/.test(t))
+    return { type: 'read-content', content: 'bible' };
+
+  // ─── Continue reading (no book specified) ─────────────────────────────────
+  if (/^(continue reading|next chapter|read next chapter|forward)$/.test(t))
+    return { type: 'continue-reading', direction: 'next' };
+
+  if (/^(previous chapter|go back a chapter|back a chapter|read previous|read the previous chapter)$/.test(t))
+    return { type: 'continue-reading', direction: 'previous' };
 
   // ─── Daily Rhythm / 10 Minutes with Jesus ───────────────────────────────
   if (

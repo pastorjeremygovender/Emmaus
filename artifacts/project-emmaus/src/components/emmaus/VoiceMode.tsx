@@ -56,6 +56,11 @@ import {
 import { cn } from '@/lib/utils';
 import { fetchVoiceContext, type VoiceAppContext } from '@/lib/voice-context';
 import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
+import {
+  resolveVoiceTranslation,
+  buildSubstitutionNotice,
+} from '@/lib/voice-bible';
+import { remoteBibleProvider } from '@/lib/bible-provider';
 
 // ─── State machine ─────────────────────────────────────────────────────────────
 
@@ -119,8 +124,9 @@ export default function VoiceMode() {
   const recordingStartRef   = useRef<number>(0);
   // Phase 3: app context fetched once at session start from /api/voice/context
   const appContextRef      = useRef<VoiceAppContext | null>(null);
-  // Current Bible reading position — persists across turns so follow-up questions work
-  const bibleContextRef    = useRef<{ bookId: string; chapter: number } | null>(null);
+  // Current Bible reading position (book + chapter + translation) — persists across
+  // turns so follow-up questions ("explain that verse", "next chapter") work
+  const bibleContextRef    = useRef<{ bookId: string; chapter: number; translationId: string } | null>(null);
   // Active reading session (section list + cursor)
   const readingSectionsRef = useRef<{ label: string; text: string }[]>([]);
   const readingIndexRef    = useRef(0);
@@ -675,7 +681,7 @@ export default function VoiceMode() {
        */
       async function loadAndStartReading(
         content: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
-        bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number },
+        bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number; translationId?: string },
       ): Promise<boolean> {
         const appCtx = appContextRef.current;
         const sections: { label: string; text: string }[] = [];
@@ -733,49 +739,112 @@ export default function VoiceMode() {
           setActiveContent({ label });
         }
 
-        else if (content === 'bible' && bibleRef) {
+        else if (content === 'bible') {
+          // ── Resolve which book/chapter to read ─────────────────────────────
+          // Priority: explicit bibleRef → current reading context → initContext
+          // (the last case handles "read this chapter" when the user was
+          // viewing a Bible chapter in My Bible before opening Voice)
+          let resolvedRef: {
+            bookId: string; bookName: string; chapter: number;
+            verse?: number; translationId?: string;
+          } | null = null;
+
+          if (bibleRef?.bookId) {
+            resolvedRef = bibleRef;
+          } else if (bibleContextRef.current) {
+            const ctx = bibleContextRef.current;
+            resolvedRef = {
+              bookId:        ctx.bookId,
+              bookName:      ctx.bookId,
+              chapter:       ctx.chapter,
+              translationId: ctx.translationId,
+            };
+          } else if (initContext?.bookId && initContext?.chapter) {
+            resolvedRef = {
+              bookId:   initContext.bookId,
+              bookName: initContext.bookName ?? initContext.bookId,
+              chapter:  initContext.chapter,
+            };
+          }
+
+          if (!resolvedRef) return false;
+
+          // ── Resolve translation (user pref → default BSB) ───────────────────
+          // Licensed translations (NIV, GNT, MSG) are excluded from Voice TTS
+          // until publisher TTS licences are confirmed. resolveVoiceTranslation
+          // handles this and sets `substituted: true` when a fallback is needed.
+          const translation = resolveVoiceTranslation(resolvedRef.translationId ?? null);
+
+          // ── Fetch chapter via shared remoteBibleProvider ─────────────────────
+          // Same singleton the visual Bible reader uses — benefits from the
+          // in-memory request cache, correct apiBase, and deduplication.
+          let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
           try {
-            const res = await fetch(
-              `/api/bible/bsb/${bibleRef.bookId}/${bibleRef.chapter}`,
-              { headers: { 'X-User-Id': user.id } },
+            chapterData = await remoteBibleProvider.getChapter(
+              resolvedRef.bookId,
+              resolvedRef.chapter,
+              translation.resolvedId,
             );
-            if (!res.ok) return false;
-            const data = (await res.json()) as { verses: { verse: number; text: string }[] };
-            if (!data.verses?.length) return false;
-
-            // Track Bible context so follow-up questions ("what does that mean?") work
-            bibleContextRef.current = { bookId: bibleRef.bookId, chapter: bibleRef.chapter };
-
-            if (bibleRef.verse) {
-              const start = Math.max(1, bibleRef.verse - 1);
-              const end   = Math.min(data.verses.length, bibleRef.verse + 4);
-              const chunk = data.verses.filter((v) => v.verse >= start && v.verse <= end);
-              const text  = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
-              sections.push({
-                label: `${bibleRef.bookName} ${bibleRef.chapter}:${bibleRef.verse}`,
-                text,
-              });
-            } else {
-              // Full chapter — chunk into groups of 8 verses for natural pausing
-              const CHUNK = 8;
-              for (let i = 0; i < data.verses.length; i += CHUNK) {
-                const chunk = data.verses.slice(i, i + CHUNK);
-                const startV = chunk[0].verse;
-                const endV   = chunk[chunk.length - 1].verse;
-                const text   = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
-                sections.push({ label: `${bibleRef.bookName} ${bibleRef.chapter}:${startV}–${endV}`, text });
-              }
-            }
-
-            if (!sections.length) return false;
-            readingSectionsRef.current = sections;
-            readingIndexRef.current    = 0;
-            isReadingRef.current       = true;
-            readingPausedRef.current   = false;
-            setActiveContent({ label: `${bibleRef.bookName} ${bibleRef.chapter}` });
           } catch {
             return false;
           }
+          if (!chapterData?.verses?.length) return false;
+
+          // ── Track context for follow-up questions ────────────────────────────
+          bibleContextRef.current = {
+            bookId:        resolvedRef.bookId,
+            chapter:       resolvedRef.chapter,
+            translationId: translation.resolvedId,
+          };
+
+          const displayBook        = resolvedRef.bookName;
+          const displayTranslation = translation.resolvedId.toUpperCase();
+
+          // ── Substitution notice (speaks before reading starts) ───────────────
+          // When the requested translation is not TTS-safe, we explain before
+          // reading so the user is never silently given a different translation.
+          if (translation.substituted) {
+            const wasExplicit = Boolean(resolvedRef.translationId);
+            const notice = buildSubstitutionNotice(
+              translation.requestedId,
+              translation.resolvedName,
+              wasExplicit,
+            );
+            sections.push({ label: 'Translation note', text: notice });
+          }
+
+          // ── Build verse sections ─────────────────────────────────────────────
+          if (resolvedRef.verse) {
+            // Single verse + immediate context
+            const start = Math.max(1, resolvedRef.verse - 1);
+            const end   = Math.min(chapterData.verses.length, resolvedRef.verse + 4);
+            const chunk = chapterData.verses.filter((v) => v.verse >= start && v.verse <= end);
+            const text  = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
+            sections.push({
+              label: `${displayBook} ${resolvedRef.chapter}:${resolvedRef.verse} (${displayTranslation})`,
+              text,
+            });
+          } else {
+            // Full chapter — chunk into groups of 8 verses for natural pausing
+            const CHUNK = 8;
+            for (let i = 0; i < chapterData.verses.length; i += CHUNK) {
+              const chunk  = chapterData.verses.slice(i, i + CHUNK);
+              const startV = chunk[0].verse;
+              const endV   = chunk[chunk.length - 1].verse;
+              const text   = chunk.map((v) => `Verse ${v.verse}: ${v.text}`).join(' ');
+              sections.push({
+                label: `${displayBook} ${resolvedRef.chapter}:${startV}–${endV} (${displayTranslation})`,
+                text,
+              });
+            }
+          }
+
+          if (!sections.length) return false;
+          readingSectionsRef.current = sections;
+          readingIndexRef.current    = 0;
+          isReadingRef.current       = true;
+          readingPausedRef.current   = false;
+          setActiveContent({ label: `${displayBook} ${resolvedRef.chapter} (${displayTranslation})` });
         }
 
         if (!sections.length) return false;
@@ -816,13 +885,20 @@ export default function VoiceMode() {
 
         const voiceAppContext = parts.length > 0 ? parts.join('\n\n') : undefined;
 
-        // Bible context (for "explain that verse" after reading)
+        // Bible context (for "explain that verse" / "what does that mean?" after reading)
         if (bibleContextRef.current) {
+          const bCtx = bibleContextRef.current;
+          // Append translation to voiceAppContext so Emmaus knows which
+          // translation was being read (important for follow-up answers)
+          const translationNote = `\nBible reading translation: ${bCtx.translationId.toUpperCase()}`;
+          const enrichedVoiceCtx = voiceAppContext
+            ? voiceAppContext + translationNote
+            : translationNote.trim();
           return {
             ...base,
-            bookId:          bibleContextRef.current.bookId,
-            chapter:         bibleContextRef.current.chapter,
-            voiceAppContext,
+            bookId:          bCtx.bookId,
+            chapter:         bCtx.chapter,
+            voiceAppContext: enrichedVoiceCtx,
           };
         }
 
@@ -940,22 +1016,29 @@ export default function VoiceMode() {
           // Multiple walks or no match → Emmaus disambiguates
         }
 
-        // ─── Continue reading (Bible chapter advance) ────────────────────────
+        // ─── Continue reading (next / previous chapter) ──────────────────────
         if (intent.type === 'continue-reading') {
-          if (isReadingRef.current && !readingPausedRef.current) {
+          // If actively reading and direction is "next", advance to next section
+          if (isReadingRef.current && !readingPausedRef.current && intent.direction !== 'previous') {
             await advanceReading();
             return;
           }
           if (bibleContextRef.current) {
-            const { bookId, chapter } = bibleContextRef.current;
-            const started = await loadAndStartReading('bible', {
-              bookId,
-              bookName: bookId,
-              chapter:  chapter + 1,
-            });
-            if (started) return;
+            const { bookId, chapter, translationId } = bibleContextRef.current;
+            const targetChapter = intent.direction === 'previous' ? chapter - 1 : chapter + 1;
+            if (targetChapter >= 1) {
+              const started = await loadAndStartReading('bible', {
+                bookId,
+                bookName:      bookId,
+                chapter:       targetChapter,
+                translationId,
+              });
+              if (started) return;
+            }
+            // targetChapter < 1 (user said "previous chapter" at chapter 1)
+            // → fall through to Emmaus which will respond naturally
           }
-          // No context → Emmaus handles it
+          // No Bible context → Emmaus handles it conversationally
         }
 
         // ── Step 2: Ask Emmaus — enriched with current app context ────────────

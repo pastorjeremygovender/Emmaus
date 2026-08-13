@@ -47,3 +47,4 @@
 - [Rooms Four-Level Architecture](rooms-four-level-architecture.md) — V1 done: dual-dimension rooms (contentType + roomType), prayer requests, leader controls scaffold; LiveKit UI paused pending approval.
 - [Foundation v1 Checkpoint](foundation-v1-checkpoint.md) — official restore point 2026-08-08; all systems verified; 3 pre-existing TS errors (canonical-sermon-store/analytics/workflows) are known, not regressions.
 - [Group Media Sharing](group-media-sharing.md) — rooms-api-media.ts is the media API layer; getLeaderAccess takes (userId, appRole) not (roomId, userId); roomsFetch must be exported.
+- [Voice Bible Translation](voice-bible-translation.md) — Phase 3.1: voice-bible.ts is the TTS translation resolver; BSB/ASV/KJV are TTS-safe (public domain); NIV/GNT/MSG excluded pending publisher TTS licence; remoteBibleProvider is the shared fetch singleton; translation stored in localStorage key 'emmaus_bible_translation'.
