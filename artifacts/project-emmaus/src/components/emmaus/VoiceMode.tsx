@@ -1,24 +1,39 @@
 /**
  * VoiceMode — Full-screen voice interface for Ask Emmaus.
+ * Phase 2: Continuous hands-free conversation.
  *
  * Route: /personal/ask-emmaus/voice
  *
- * Flow:
- *   READY → (tap mic) → LISTENING → (tap stop) → THINKING → SPEAKING → READY (loop)
+ * Conversation loop (auto-restart):
+ *   READY → (tap orb) → LISTENING → THINKING → SPEAKING
+ *                ↑                                    |
+ *                └──── auto-restart after 600 ms ────┘
  *
- * Interruption: tapping the mic while SPEAKING cancels playback and starts recording.
+ * The user never needs to tap the mic after an Emmaus response.
+ * Tap the orb to interrupt Emmaus at any time.
+ * Tap "End" to leave Voice Mode.
  *
- * The conversation id is preserved across turns so follow-up questions carry
- * full context (same semantics as the text-based AskEmmausConversation).
+ * Emmaus cannot hear itself: the mic stream is closed inside
+ * recorder.onstop (via stopVisualizer) BEFORE the TTS pipeline
+ * runs — it is not reopened until audio.onended fires.
  *
- * Audio pipeline:
- *   MediaRecorder (audio/webm or audio/mp4 on iOS) → base64 → Whisper → transcript
- *   transcript → Ask Emmaus SSE → response text → OpenAI TTS → HTMLAudioElement
+ * Architecture: Voice is an interface to Emmaus, not a separate AI.
+ * Transcripts feed the existing Ask Emmaus SSE pipeline, and the
+ * same conversation ID / history array is used throughout.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Mic, Square, Loader2, Volume2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Mic,
+  Square,
+  Loader2,
+  Volume2,
+  MessageSquare,
+  X,
+  RotateCcw,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import {
@@ -44,14 +59,6 @@ import { cn } from '@/lib/utils';
 
 type VoiceState = 'READY' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'ERROR';
 
-const STATE_LABELS: Record<VoiceState, string> = {
-  READY: 'Tap to speak',
-  LISTENING: 'Listening… tap to stop',
-  THINKING: 'Emmaus is thinking…',
-  SPEAKING: 'Tap to speak again',
-  ERROR: 'Tap to try again',
-};
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function VoiceMode() {
@@ -59,54 +66,58 @@ export default function VoiceMode() {
   const [, navigate] = useLocation();
   const voiceEnabled = useVoiceEnabled(user?.id);
 
-  // Voice state machine
-  const [voiceState, setVoiceState] = useState<VoiceState>('READY');
-  const [transcript, setTranscript]           = useState('');
-  const [response, setResponse]               = useState('');
+  // ── Voice state ──────────────────────────────────────────────────────────
+  const [voiceState, setVoiceState]               = useState<VoiceState>('READY');
+  const [transcript, setTranscript]               = useState('');
+  const [response, setResponse]                   = useState('');
   const [streamingResponse, setStreamingResponse] = useState('');
-  const [errorMsg, setErrorMsg]               = useState<string | null>(null);
+  const [errorMsg, setErrorMsg]                   = useState<string | null>(null);
+  const [ttsError, setTtsError]                   = useState(false);
 
-  // Conversation context across turns
-  const [convId, setConvId]         = useState<string | null>(null);
-  const [history, setHistory]       = useState<HistoryItem[]>([]);
+  // ── Conversation context (preserved across all turns) ───────────────────
+  const [convId, setConvId]           = useState<string | null>(null);
+  const [history, setHistory]         = useState<HistoryItem[]>([]);
   const [initContext, setInitContext] = useState<FlatContext | null>(null);
 
-  // Whether the browser blocked automatic playback (common on mobile)
+  // ── UI ───────────────────────────────────────────────────────────────────
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [showHistory, setShowHistory]         = useState(false);
 
-  // Refs — non-reactive resources
-  const recorderRef    = useRef<MediaRecorder | null>(null);
-  const chunksRef      = useRef<Blob[]>([]);
-  const streamRef      = useRef<MediaStream | null>(null);
-  const acRef          = useRef<AudioContext | null>(null);
-  const analyserRef    = useRef<AnalyserNode | null>(null);
-  const canvasRef      = useRef<HTMLCanvasElement>(null);
-  const rafRef         = useRef<number | null>(null);
-  const abortRef       = useRef<(() => void) | null>(null);
-  const audioElRef     = useRef<HTMLAudioElement | null>(null);
-  const blobUrlRef     = useRef<string | null>(null);
-  // AudioContext pre-resumed during mic gesture to unlock mobile audio playback
-  const playbackAcRef  = useRef<AudioContext | null>(null);
-  // cancelledRef is set to true on unmount so the async pipeline aborts early.
-  const cancelledRef   = useRef(false);
+  // ── Refs (stable across renders) ─────────────────────────────────────────
+  const recorderRef         = useRef<MediaRecorder | null>(null);
+  const chunksRef           = useRef<Blob[]>([]);
+  const streamRef           = useRef<MediaStream | null>(null);
+  const abortRef            = useRef<(() => void) | null>(null);
+  const audioElRef          = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef          = useRef<string | null>(null);
+  // Pre-resumed during mic gesture to unlock mobile audio autoplay
+  const playbackAcRef       = useRef<AudioContext | null>(null);
+  // Set true on unmount so the async pipeline short-circuits everywhere
+  const cancelledRef        = useRef(false);
+  // Phase 2: tracks the 600 ms delay between speaking and re-listening
+  const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── Mount / unmount ────────────────────────────────────────────────────────
+  // ─── Mount / unmount ──────────────────────────────────────────────────────
 
   useEffect(() => {
     cancelledRef.current = false;
-    // Pick up conversation context set by the originating page
     const pending = takePendingContext();
     if (pending?.context) setInitContext(pending.context);
-
     return () => {
-      // Mark cancelled BEFORE cleanup so the async pipeline short-circuits
       cancelledRef.current = true;
       cleanupAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Cleanup helpers ────────────────────────────────────────────────────────
+  // ─── Cleanup helpers ──────────────────────────────────────────────────────
+
+  function cancelAutoRestart() {
+    if (autoRestartTimerRef.current) {
+      clearTimeout(autoRestartTimerRef.current);
+      autoRestartTimerRef.current = null;
+    }
+  }
 
   function stopAudio() {
     audioElRef.current?.pause();
@@ -116,22 +127,21 @@ export default function VoiceMode() {
       blobUrlRef.current = null;
     }
     setAutoplayBlocked(false);
+    setTtsError(false);
   }
 
-  function stopVisualizer() {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    acRef.current?.close().catch(() => {});
-    acRef.current = null;
-    analyserRef.current = null;
+  /**
+   * stopMicStream — closes the mic tracks so Emmaus cannot accidentally
+   * transcribe its own TTS output. Called inside recorder.onstop, before
+   * the async TTS pipeline begins.
+   */
+  function stopMicStream() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }
 
   /**
-   * stopRecorder — user-initiated stop: keeps onstop intact so processAudioBlob fires.
+   * stopRecorder — user-initiated: keeps onstop intact so processAudioBlob fires.
    */
   function stopRecorder() {
     const rec = recorderRef.current;
@@ -140,8 +150,8 @@ export default function VoiceMode() {
   }
 
   /**
-   * cancelRecorder — unmount/cancel: nulls out onstop BEFORE stopping so the
-   * processing pipeline never triggers after navigation.
+   * cancelRecorder — unmount/interrupt: nulls onstop BEFORE stopping so the
+   * pipeline never triggers after navigation or interruption.
    */
   function cancelRecorder() {
     const rec = recorderRef.current;
@@ -151,81 +161,30 @@ export default function VoiceMode() {
       if (rec.state !== 'inactive') rec.stop();
     }
     recorderRef.current = null;
+    stopMicStream();
   }
 
   function cleanupAll() {
+    cancelAutoRestart();
     stopAudio();
-    stopVisualizer();
-    cancelRecorder(); // not stopRecorder — must not fire onstop after unmount
+    cancelRecorder();
     abortRef.current?.();
     abortRef.current = null;
     playbackAcRef.current?.close().catch(() => {});
     playbackAcRef.current = null;
   }
 
-  // ─── Web Audio visualizer ───────────────────────────────────────────────────
-
-  function startVisualizer(stream: MediaStream) {
-    try {
-      const ac = new AudioContext();
-      acRef.current = ac;
-      const analyser = ac.createAnalyser();
-      analyser.fftSize = 64;
-      analyserRef.current = analyser;
-      const src = ac.createMediaStreamSource(stream);
-      src.connect(analyser);
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const bufLen = analyser.frequencyBinCount;
-      const dataArr = new Uint8Array(bufLen);
-
-      function draw() {
-        if (!canvas || !ctx) return;
-        rafRef.current = requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(dataArr);
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const barW = Math.floor(canvas.width / bufLen) - 2;
-
-        for (let i = 0; i < bufLen; i++) {
-          const v = dataArr[i] / 255;
-          const barH = Math.max(6, v * canvas.height);
-          const alpha = 0.4 + v * 0.6;
-          ctx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
-          const x = i * (barW + 2);
-          const y = (canvas.height - barH) / 2;
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(x, y, barW, barH, 3);
-          } else {
-            ctx.rect(x, y, barW, barH);
-          }
-          ctx.fill();
-        }
-      }
-
-      draw();
-    } catch {
-      // Visualizer is optional — proceed without it on unsupported devices
-    }
-  }
-
-  // ─── Recording ──────────────────────────────────────────────────────────────
+  // ─── Recording ────────────────────────────────────────────────────────────
 
   async function startListening() {
     setErrorMsg(null);
     setTranscript('');
+    setTtsError(false);
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // If the user navigated away while the permission prompt was open, stop
-      // the tracks immediately and bail — cancelRecorder() cannot help here
-      // because no recorder exists yet.
+      // Guard: user may have navigated away while the permission prompt was open
       if (cancelledRef.current) {
         mediaStream.getTracks().forEach((t) => t.stop());
         return;
@@ -244,24 +203,25 @@ export default function VoiceMode() {
       };
 
       recorder.onstop = async () => {
-        stopVisualizer();
-        const blob = new Blob(chunksRef.current, {
-          type: mimeType || 'audio/webm',
-        });
+        // CRITICAL: close the mic stream BEFORE the TTS pipeline starts.
+        // This prevents Emmaus from transcribing its own voice output.
+        stopMicStream();
+        const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
         chunksRef.current = [];
         await processAudioBlob(blob, mimeType || 'audio/webm');
       };
 
       recorder.start(200); // 200 ms chunks
-      startVisualizer(mediaStream);
       setVoiceState('LISTENING');
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
-      if (msg.includes('NotAllowed') || msg.includes('Permission')) {
-        setErrorMsg('Microphone access was denied. Please allow microphone access and try again.');
-      } else {
-        setErrorMsg('Could not start recording. Please check your microphone and try again.');
-      }
+      const isDenied =
+        msg.includes('NotAllowed') || msg.includes('Permission') || msg.includes('denied');
+      setErrorMsg(
+        isDenied
+          ? 'Emmaus needs microphone access for Voice Mode. Please allow microphone access in your browser settings.'
+          : 'Could not start the microphone. Please check your device and try again.',
+      );
       setVoiceState('ERROR');
     }
   }
@@ -271,7 +231,7 @@ export default function VoiceMode() {
     setVoiceState('THINKING');
   }
 
-  // ─── Audio processing pipeline ──────────────────────────────────────────────
+  // ─── Audio processing pipeline ────────────────────────────────────────────
 
   const processAudioBlob = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -279,23 +239,22 @@ export default function VoiceMode() {
       setVoiceState('THINKING');
 
       try {
-        // ── Step 1: Transcribe ─────────────────────────────────────────────
+        // ── Step 1: Transcribe (Whisper) ──────────────────────────────────
         const audioBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
         const text = await transcribeAudio(audioBlob, user.id);
-
-        // Check cancellation after every await — user may have navigated away
         if (cancelledRef.current) return;
 
         if (!text.trim()) {
-          // Empty or silent recording — go back to ready
-          setVoiceState('READY');
+          // Silent / inaudible — soft error, stay ready for another attempt
+          setErrorMsg("I didn't catch that. Tap to try again.");
+          setVoiceState('ERROR');
           return;
         }
 
         setTranscript(text);
         setStreamingResponse('');
 
-        // ── Step 2: Ask Emmaus ─────────────────────────────────────────────
+        // ── Step 2: Ask Emmaus (existing intelligence pipeline) ───────────
         const context: FlatContext = initContext
           ? { ...initContext, userName: user.preferredName }
           : { entryPoint: 'personal', userName: user.preferredName };
@@ -346,8 +305,6 @@ export default function VoiceMode() {
         });
 
         abortRef.current = null;
-
-        // Check cancellation after Ask Emmaus stream completes
         if (cancelledRef.current) return;
 
         if (!fullResponse.trim()) {
@@ -355,34 +312,63 @@ export default function VoiceMode() {
           return;
         }
 
-        // ── Step 3: TTS ────────────────────────────────────────────────────
+        // ── Step 3: TTS ───────────────────────────────────────────────────
+        // The mic stream is already closed (stopMicStream ran in recorder.onstop).
         setResponse(fullResponse);
         setStreamingResponse('');
         setVoiceState('SPEAKING');
 
-        const url = await fetchSpeechBlobUrl(fullResponse, user.id);
+        let url: string;
+        try {
+          url = await fetchSpeechBlobUrl(fullResponse, user.id);
+        } catch {
+          // TTS network error — keep the text visible, offer retry
+          if (!cancelledRef.current) {
+            setTtsError(true);
+            setVoiceState('READY');
+          }
+          return;
+        }
 
-        // Check cancellation after TTS fetch — navigating during TTS fetch
         if (cancelledRef.current) { URL.revokeObjectURL(url); return; }
 
         blobUrlRef.current = url;
-
         const audio = new Audio(url);
         audioElRef.current = audio;
 
-        // Attempt automatic playback. On mobile browsers (especially iOS Safari),
-        // play() may be blocked because we are far from the original user gesture.
-        // When blocked (NotAllowedError) we keep the blob URL and show a fallback
-        // "Tap to hear Emmaus" button — the user tap IS a gesture so it always works.
+        /**
+         * scheduleAutoRestart — called after audio finishes playing.
+         * The 600 ms pause feels natural (like a breath) and also gives the
+         * user time to decide whether to tap End before the mic reopens.
+         */
+        const scheduleAutoRestart = () => {
+          if (cancelledRef.current) return;
+          setVoiceState('READY');
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current) startListening();
+          }, 600);
+        };
+
         await new Promise<void>((resolve) => {
-          audio.onended = () => { stopAudio(); setVoiceState('READY'); resolve(); };
-          audio.onerror = () => { stopAudio(); setVoiceState('READY'); resolve(); };
+          audio.onended = () => {
+            stopAudio();
+            scheduleAutoRestart();
+            resolve();
+          };
+          audio.onerror = () => {
+            // Mid-play error — go to READY without auto-restart (edge case)
+            stopAudio();
+            setVoiceState('READY');
+            resolve();
+          };
           audio.play().catch((err: unknown) => {
             const blocked =
               err instanceof DOMException &&
               (err.name === 'NotAllowedError' || err.name === 'AbortError');
             if (blocked) {
-              // Do NOT revoke blobUrlRef — user needs it to tap-to-play
+              // Mobile autoplay blocked — keep blob URL, show tap-to-play button.
+              // Auto-restart fires after the user taps and playback finishes.
               audioElRef.current = null;
               setAutoplayBlocked(true);
               setVoiceState('READY');
@@ -394,10 +380,10 @@ export default function VoiceMode() {
           });
         });
       } catch (err) {
-        if (cancelledRef.current) return; // suppress errors after unmount
-        const msg =
-          err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-        setErrorMsg(msg);
+        if (cancelledRef.current) return;
+        setErrorMsg(
+          err instanceof Error ? err.message : 'Something went wrong. Tap to try again.',
+        );
         setVoiceState('ERROR');
       }
     },
@@ -405,25 +391,28 @@ export default function VoiceMode() {
     [user, convId, history, initContext],
   );
 
-  // ─── Button handler ──────────────────────────────────────────────────────────
+  // ─── Orb tap (primary action) ────────────────────────────────────────────
 
-  function handleMicButton() {
-    // ── Audio unlock (must be synchronous during user gesture) ────────────────
-    // Resuming an AudioContext during the gesture is the most reliable way to
-    // unlock subsequent audio.play() calls on iOS Safari and Android Chrome.
+  function handleOrbTap() {
+    // AudioContext resume — must happen synchronously in the user gesture.
+    // This is the most reliable way to unlock audio.play() on iOS Safari
+    // and Android Chrome without requiring a separate "tap to play" step.
     try {
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (Ctx) {
         if (!playbackAcRef.current || playbackAcRef.current.state === 'closed') {
           playbackAcRef.current = new Ctx();
         }
         playbackAcRef.current.resume().catch(() => {});
       }
-    } catch {
-      // AudioContext not supported — fall back to tap-to-play if autoplay blocked
-    }
+    } catch { /* ignore — fallback to tap-to-play */ }
 
-    // Clear any pending autoplay-blocked response so the blob URL is revoked
+    // Always cancel any pending auto-restart; the user is taking over
+    cancelAutoRestart();
+
+    // Clear stale autoplay-blocked blob URL
     if (autoplayBlocked) {
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
@@ -432,27 +421,33 @@ export default function VoiceMode() {
       setAutoplayBlocked(false);
     }
 
-    if (voiceState === 'READY' || voiceState === 'ERROR') {
-      setErrorMsg(null);
-      startListening();
-    } else if (voiceState === 'LISTENING') {
-      stopListening();
-    } else if (voiceState === 'SPEAKING') {
-      // Interrupt — stop audio immediately and start a new turn
-      stopAudio();
-      setResponse('');
-      setStreamingResponse('');
-      startListening();
+    switch (voiceState) {
+      case 'READY':
+      case 'ERROR':
+        setErrorMsg(null);
+        startListening();
+        break;
+
+      case 'LISTENING':
+        // User is done speaking — process the recording
+        stopListening();
+        break;
+
+      case 'SPEAKING':
+        // Interrupt Emmaus: stop playback immediately, start new turn
+        stopAudio();
+        setStreamingResponse('');
+        startListening();
+        break;
+
+      case 'THINKING':
+        // Button is disabled during THINKING — no-op
+        break;
     }
-    // THINKING: button is disabled
   }
 
-  // ─── Tap-to-play fallback ────────────────────────────────────────────────────
+  // ─── Tap-to-play fallback (mobile autoplay blocked) ───────────────────────
 
-  /**
-   * Called when the user taps "Tap to hear Emmaus" after autoplay was blocked.
-   * This IS a user gesture so audio.play() always succeeds.
-   */
   function handleTapToHear() {
     const url = blobUrlRef.current;
     if (!url) return;
@@ -460,44 +455,88 @@ export default function VoiceMode() {
     setVoiceState('SPEAKING');
     const audio = new Audio(url);
     audioElRef.current = audio;
-    audio.onended = () => { stopAudio(); setVoiceState('READY'); };
+    audio.onended = () => {
+      stopAudio();
+      // Auto-restart after tap-to-play — same loop as normal playback
+      autoRestartTimerRef.current = setTimeout(() => {
+        autoRestartTimerRef.current = null;
+        if (!cancelledRef.current) startListening();
+      }, 600);
+    };
     audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
     audio.play().catch(() => { stopAudio(); setVoiceState('READY'); });
   }
 
-  // ─── Back navigation ────────────────────────────────────────────────────────
+  // ─── Retry audio (TTS fetch failed) ──────────────────────────────────────
 
-  function handleBack() {
+  async function handleRetryAudio() {
+    if (!user || !response) return;
+    setTtsError(false);
+    setVoiceState('SPEAKING');
+    try {
+      const url = await fetchSpeechBlobUrl(response, user.id);
+      if (cancelledRef.current) { URL.revokeObjectURL(url); return; }
+      blobUrlRef.current = url;
+      const audio = new Audio(url);
+      audioElRef.current = audio;
+      audio.onended = () => {
+        stopAudio();
+        autoRestartTimerRef.current = setTimeout(() => {
+          autoRestartTimerRef.current = null;
+          if (!cancelledRef.current) startListening();
+        }, 600);
+      };
+      audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
+      audio.play().catch(() => { stopAudio(); setVoiceState('READY'); });
+    } catch {
+      setTtsError(true);
+      setVoiceState('READY');
+    }
+  }
+
+  // ─── End / back ───────────────────────────────────────────────────────────
+
+  function handleEnd() {
     cleanupAll();
     const dest = getReturnDestination();
     clearReturnDestination();
     navigate(dest?.pathname ?? '/walk');
   }
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Derived values ───────────────────────────────────────────────────────
 
-  const isThinking = voiceState === 'THINKING';
   const isListening = voiceState === 'LISTENING';
-  const isSpeaking = voiceState === 'SPEAKING';
+  const isThinking  = voiceState === 'THINKING';
+  const isSpeaking  = voiceState === 'SPEAKING';
+  const isError     = voiceState === 'ERROR';
+  const isReady     = voiceState === 'READY';
 
-  // Text shown below the mic
+  const statusLabel = (() => {
+    switch (voiceState) {
+      case 'READY':     return convId ? 'Tap to continue' : 'Tap to begin';
+      case 'LISTENING': return 'Listening…';
+      case 'THINKING':  return 'Thinking…';
+      case 'SPEAKING':  return 'Emmaus is speaking…';
+      case 'ERROR':     return 'Tap to try again';
+    }
+  })();
+
   const displayedResponse = streamingResponse || response;
 
-  // ── Loading state (settings not yet fetched from server) ─────────────────
-  // Fail-closed: hide the mic interface until we know voice is enabled.
-  // All hooks are called above unconditionally — this conditional return is safe.
+  // ─── Loading state (voice settings not yet fetched) ───────────────────────
+
   if (voiceEnabled === null) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col">
         <header className="flex items-center h-14 px-4 border-b border-border/50 shrink-0">
           <button
-            onClick={handleBack}
+            onClick={handleEnd}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Close"
           >
             <ArrowLeft size={20} />
           </button>
-          <span className="ml-2 text-[15px] font-medium text-foreground">Emmaus Voice</span>
+          <span className="ml-3 text-[15px] font-medium text-foreground">Emmaus Voice</span>
         </header>
         <main className="flex-1 flex items-center justify-center">
           <Loader2 size={28} className="animate-spin text-muted-foreground/40" />
@@ -506,19 +545,20 @@ export default function VoiceMode() {
     );
   }
 
-  // ── Disabled state (admin has turned off voice mode) ──────────────────────
+  // ─── Disabled state (admin has turned off voice) ──────────────────────────
+
   if (voiceEnabled === false) {
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col">
         <header className="flex items-center h-14 px-4 border-b border-border/50 shrink-0">
           <button
-            onClick={handleBack}
+            onClick={handleEnd}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Close"
           >
             <ArrowLeft size={20} />
           </button>
-          <span className="ml-2 text-[15px] font-medium text-foreground">Emmaus Voice</span>
+          <span className="ml-3 text-[15px] font-medium text-foreground">Emmaus Voice</span>
         </header>
         <main className="flex-1 flex items-center justify-center px-6">
           <div className="text-center space-y-4 max-w-[280px]">
@@ -535,72 +575,95 @@ export default function VoiceMode() {
     );
   }
 
+  // ─── Main interface ───────────────────────────────────────────────────────
+
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      {/* Header */}
-      <header className="flex items-center h-14 px-4 border-b border-border/50 shrink-0">
+    <div className="fixed inset-0 z-50 bg-background flex flex-col select-none">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between h-14 px-4 border-b border-border/50 shrink-0">
         <button
-          onClick={handleBack}
+          onClick={handleEnd}
           className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           aria-label="Close voice mode"
         >
           <ArrowLeft size={20} />
         </button>
-        <span className="ml-2 text-[15px] font-medium text-foreground">Emmaus Voice</span>
+
+        <span className="text-[15px] font-medium text-foreground">Emmaus Voice</span>
+
+        {/* View conversation history */}
+        <button
+          onClick={() => history.length > 0 && setShowHistory((v) => !v)}
+          className={cn(
+            'p-2 -mr-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg',
+            history.length > 0
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              : 'text-muted-foreground/20 pointer-events-none',
+          )}
+          aria-label="View conversation"
+        >
+          <MessageSquare size={18} />
+        </button>
       </header>
 
-      {/* Body */}
-      <main className="flex-1 flex flex-col items-center justify-between py-10 px-6 overflow-hidden">
+      {/* ── Body ───────────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col items-center justify-between py-8 px-6 overflow-hidden min-h-0">
 
-        {/* ── Transcript (what the user said) ──────────────────────────── */}
-        <div className="w-full max-w-[480px] min-h-[56px] flex items-start justify-end">
+        {/* Last user transcript */}
+        <div className="w-full max-w-[420px] min-h-[52px] flex items-start justify-end">
           {transcript ? (
-            <div className="bg-primary/10 border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%]">
-              <p className="text-[15px] text-foreground leading-relaxed">{transcript}</p>
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[85%]">
+              <p className="text-[14px] text-foreground leading-relaxed">{transcript}</p>
             </div>
           ) : null}
         </div>
 
-        {/* ── Centre: visualiser + mic button ──────────────────────────── */}
-        <div className="flex flex-col items-center gap-6">
-          {/* Canvas visualizer — only visible during LISTENING */}
-          <canvas
-            ref={canvasRef}
-            width={200}
-            height={60}
-            className={cn(
-              'transition-opacity duration-300',
-              isListening ? 'opacity-100' : 'opacity-0',
-            )}
-            aria-hidden="true"
-          />
+        {/* ── Orb ─────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative flex items-center justify-center w-52 h-52">
 
-          {/* Mic button */}
-          <div className="relative flex items-center justify-center">
-            {/* Pulsing outer ring */}
+            {/* Outermost slow-ping ring — only during active states */}
             {(isListening || isSpeaking) && (
               <span
                 className={cn(
                   'absolute inset-0 rounded-full animate-ping',
-                  isListening ? 'bg-red-400/25' : 'bg-primary/20',
+                  isListening ? 'bg-rose-400/12' : 'bg-primary/10',
                 )}
+                style={{ animationDuration: isListening ? '1.8s' : '2.4s' }}
               />
             )}
 
-            <button
-              onClick={handleMicButton}
-              disabled={isThinking}
+            {/* Middle ambient ring */}
+            <div
               className={cn(
-                'relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg focus-visible:outline-none',
+                'absolute w-44 h-44 rounded-full border-2 transition-colors duration-700',
+                isReady     && 'border-primary/20 bg-primary/5 animate-voice-breathe',
+                isListening && 'border-rose-400/40 bg-rose-500/8',
+                isThinking  && 'border-border/60 bg-muted/10',
+                isSpeaking  && 'border-primary/30 bg-primary/8 animate-voice-breathe',
+                isError     && 'border-muted/30 bg-muted/8',
+              )}
+            />
+
+            {/* Core button */}
+            <button
+              onClick={handleOrbTap}
+              disabled={isThinking}
+              aria-label={statusLabel}
+              className={cn(
+                'relative z-10 w-[84px] h-[84px] rounded-full flex items-center justify-center',
+                'transition-all duration-200 shadow-md focus-visible:outline-none',
                 isListening
-                  ? 'bg-red-500 text-white scale-110'
+                  ? 'bg-rose-500 text-white scale-110 shadow-rose-200/80 dark:shadow-rose-900/40'
                   : isThinking
-                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                  ? 'bg-muted text-muted-foreground/40 cursor-not-allowed shadow-none'
                   : isSpeaking
-                  ? 'bg-primary/15 text-primary ring-2 ring-primary/30'
+                  ? 'bg-primary/12 text-primary ring-2 ring-primary/25'
+                  : isError
+                  ? 'bg-destructive/10 text-destructive'
                   : 'bg-primary text-white hover:scale-105 active:scale-95',
               )}
-              aria-label={STATE_LABELS[voiceState]}
             >
               {isListening ? (
                 <Square size={28} className="fill-white" />
@@ -612,38 +675,45 @@ export default function VoiceMode() {
             </button>
           </div>
 
-          {/* State label */}
-          <p className="text-[14px] text-muted-foreground text-center leading-snug min-h-[20px]">
-            {STATE_LABELS[voiceState]}
+          {/* Status label */}
+          <p
+            className={cn(
+              'text-[14px] text-center leading-snug min-h-[20px] transition-all duration-300',
+              isError ? 'text-destructive/70' : 'text-muted-foreground',
+            )}
+          >
+            {statusLabel}
           </p>
 
-          {/* Error message */}
-          {errorMsg && voiceState === 'ERROR' && (
-            <p className="text-[13px] text-destructive text-center max-w-[280px] leading-relaxed">
+          {/* Extended error message */}
+          {isError && errorMsg && (
+            <p className="text-[13px] text-center text-muted-foreground/80 max-w-[260px] leading-relaxed -mt-2">
               {errorMsg}
             </p>
           )}
         </div>
 
-        {/* ── Response (what Emmaus said) ───────────────────────────────── */}
-        <div className="w-full max-w-[480px] min-h-[56px] flex flex-col items-start gap-3">
+        {/* ── Response + action area ───────────────────────────────────────── */}
+        <div className="w-full max-w-[420px] flex flex-col items-start gap-3">
+
+          {/* Last Emmaus response snippet */}
           {displayedResponse ? (
             <div
               className={cn(
-                'bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 w-full overflow-y-auto max-h-[180px]',
-                streamingResponse && !response ? 'border-primary/30' : '',
+                'bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 w-full',
+                streamingResponse && !response ? 'border-primary/25' : '',
               )}
             >
-              <p className="text-[15px] text-foreground leading-relaxed whitespace-pre-wrap">
+              <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
                 {displayedResponse}
               </p>
               {streamingResponse && !response && (
-                <span className="inline-block w-2 h-4 ml-1 bg-foreground/40 animate-pulse rounded-sm align-middle" />
+                <span className="inline-block w-1.5 h-4 ml-1 bg-foreground/40 animate-pulse rounded-sm align-middle" />
               )}
             </div>
           ) : null}
 
-          {/* Tap-to-play fallback — shown when browser blocked autoplay */}
+          {/* Tap-to-play fallback (mobile autoplay blocked) */}
           {autoplayBlocked && blobUrlRef.current && response && (
             <button
               onClick={handleTapToHear}
@@ -653,8 +723,87 @@ export default function VoiceMode() {
               Tap to hear Emmaus
             </button>
           )}
+
+          {/* TTS fetch error — show text, allow retry */}
+          {ttsError && response && (
+            <div className="w-full bg-muted/40 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <p className="text-[13px] text-muted-foreground">Audio unavailable</p>
+              <button
+                onClick={handleRetryAudio}
+                className="flex items-center gap-1.5 text-[13px] text-primary font-medium min-h-[36px] px-3 rounded-lg hover:bg-primary/10 transition-colors"
+              >
+                <RotateCcw size={13} />
+                Retry audio
+              </button>
+            </div>
+          )}
         </div>
       </main>
+
+      {/* ── Footer — End button ────────────────────────────────────────────── */}
+      <footer
+        className="shrink-0 border-t border-border/30 flex items-center justify-center"
+        style={{ paddingTop: '12px', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+      >
+        <button
+          onClick={handleEnd}
+          className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[48px] px-10 rounded-xl hover:bg-muted/40 active:bg-muted/60"
+        >
+          End
+        </button>
+      </footer>
+
+      {/* ── Conversation history panel ─────────────────────────────────────── */}
+      {showHistory && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col"
+          role="dialog"
+          aria-label="Conversation history"
+        >
+          {/* Tap-to-dismiss backdrop */}
+          <button
+            className="flex-1 bg-black/25 backdrop-blur-[2px]"
+            onClick={() => setShowHistory(false)}
+            aria-label="Close conversation"
+          />
+
+          {/* Panel */}
+          <div className="bg-background rounded-t-2xl shadow-xl flex flex-col max-h-[70dvh]">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/50 shrink-0">
+              <span className="text-[15px] font-semibold text-foreground">Conversation</span>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="p-2 -mr-2 text-muted-foreground hover:text-foreground transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg hover:bg-muted/40"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Message list */}
+            <div className="overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+              {history.map((item, i) => (
+                <div
+                  key={i}
+                  className={cn('flex', item.role === 'user' ? 'justify-end' : 'justify-start')}
+                >
+                  <div
+                    className={cn(
+                      'max-w-[85%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed',
+                      item.role === 'user'
+                        ? 'bg-primary/10 border border-primary/20 rounded-tr-sm text-foreground'
+                        : 'bg-card border border-border rounded-tl-sm text-foreground',
+                    )}
+                  >
+                    {item.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
