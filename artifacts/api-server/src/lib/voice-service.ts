@@ -322,10 +322,26 @@ function mimeExtToExt(mimeType: string): string {
 }
 
 // ─── Per-user rate limiter ────────────────────────────────────────────────────
+//
+// Two separate buckets:
+//
+//   checkVoiceRateLimit  — STT (transcribe) + LLM (conversation): 10 req/60s.
+//                          These are the expensive calls; keep the limit tight.
+//
+//   checkTTSRateLimit    — TTS (speak): 40 req/60s.
+//                          Structured reading makes 5 rapid TTS calls per session
+//                          (Introduction → Scripture → Teaching → Reflection → Prayer).
+//                          A user who interrupts and restarts burns ~10 TTS calls in
+//                          under a minute. 40/min prevents abuse while allowing full
+//                          reading sessions to complete without a 429.
 
-const _rateLimitWindow = new Map<string, number[]>();
+const _rateLimitWindow    = new Map<string, number[]>();
+const _ttsRateLimitWindow = new Map<string, number[]>();
+
 const VOICE_RATE_LIMIT_MAX = 10;
 const VOICE_RATE_LIMIT_MS  = 60_000;
+const TTS_RATE_LIMIT_MAX   = 40;
+const TTS_RATE_LIMIT_MS    = 60_000;
 
 export function checkVoiceRateLimit(userId: string): boolean {
   const now    = Date.now();
@@ -335,6 +351,17 @@ export function checkVoiceRateLimit(userId: string): boolean {
   if (recent.length >= VOICE_RATE_LIMIT_MAX) return false;
   recent.push(now);
   _rateLimitWindow.set(userId, recent);
+  return true;
+}
+
+export function checkTTSRateLimit(userId: string): boolean {
+  const now    = Date.now();
+  const recent = (_ttsRateLimitWindow.get(userId) ?? []).filter(
+    (t) => t > now - TTS_RATE_LIMIT_MS,
+  );
+  if (recent.length >= TTS_RATE_LIMIT_MAX) return false;
+  recent.push(now);
+  _ttsRateLimitWindow.set(userId, recent);
   return true;
 }
 

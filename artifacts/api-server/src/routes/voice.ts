@@ -22,6 +22,7 @@ import {
   updateVoiceSettings,
   getProviderStatus,
   checkVoiceRateLimit,
+  checkTTSRateLimit,
   type VoiceId,
 } from "../lib/voice-service.js";
 import {
@@ -119,9 +120,11 @@ router.post("/voice/speak", async (req, res) => {
     return;
   }
 
-  // Per-user rate limit — share the same window as transcribe
-  if (!checkVoiceRateLimit(userId)) {
-    res.status(429).json({ error: "Too many voice requests. Please wait a moment before trying again." });
+  // TTS gets its own higher rate limit (40/min) separate from STT+LLM (10/min).
+  // Structured reading fires 5 TTS calls in rapid succession (one per content section).
+  // Sharing the STT/LLM bucket caused 429s mid-reading after only 2 sessions.
+  if (!checkTTSRateLimit(userId)) {
+    res.status(429).json({ error: "Too many speech requests. Please wait a moment before trying again." });
     return;
   }
 

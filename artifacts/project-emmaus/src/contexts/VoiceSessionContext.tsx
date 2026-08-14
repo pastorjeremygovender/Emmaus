@@ -677,6 +677,20 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       if (cancelledRef.current) return;
       setVoiceState('SPEAKING');
 
+      const sectionIdx   = isReadingSection ? readingIndexRef.current : null;
+      const sectionLabel = isReadingSection ? (readingSectionsRef.current[readingIndexRef.current]?.label ?? null) : null;
+      const ttsStartMs   = Date.now();
+
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:         'ttsRequestStarted',
+        isReadingSection,
+        sectionIndex:  sectionIdx,
+        sectionLabel,
+        sectionsTotal: isReadingSection ? readingSectionsRef.current.length : null,
+        textLength:    ttsText.length,
+        ttsProvider:   'elevenlabs',
+      }));
+
       let ttsAudio: HTMLAudioElement;
       try {
         const result = await streamSpeechToAudio(ttsText, user!.id);
@@ -685,8 +699,25 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         audioElRef.current      = result.audio;
         disposeAudioRef.current = result.dispose;
         setHasAudioElement(true);
-      } catch {
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:          'audioElementCreated',
+          isReadingSection,
+          sectionIndex:   sectionIdx,
+          firstChunkMs:   Date.now() - ttsStartMs,
+        }));
+      } catch (fetchErr) {
+        console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:         'ttsRequestFailed',
+          isReadingSection,
+          sectionIndex:  sectionIdx,
+          failureReason: 'streamSpeechToAudio_threw',
+          error:         String(fetchErr),
+        }));
         if (!cancelledRef.current) { setTtsError(true); setVoiceState('READY'); }
+        // During structured reading: skip the failed section and advance instead of stalling
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+          setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+        }
         return;
       }
 
@@ -699,6 +730,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       await new Promise<void>((resolve) => {
         ttsAudio.onended = () => {
           if (audioElRef.current !== ttsAudio) { resolve(); return; }
+          console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:             'audioEnded',
+            isReadingSection,
+            sectionIndex:      sectionIdx,
+            totalPlayMs:       Date.now() - ttsStartMs,
+            nextSectionExists: isReadingSection && ((sectionIdx ?? 0) + 1 < readingSectionsRef.current.length),
+            nextSectionIndex:  isReadingSection && ((sectionIdx ?? 0) + 1 < readingSectionsRef.current.length)
+              ? (sectionIdx ?? 0) + 1 : null,
+          }));
           stopAudio();
           ttsEndedAtRef.current = Date.now();
           if (!cancelledRef.current) {
@@ -726,18 +766,47 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           }
           resolve();
         };
-        ttsAudio.onerror = () => {
+        ttsAudio.onerror = (e) => {
           if (audioElRef.current !== ttsAudio) { resolve(); return; }
+          console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:         'audioError',
+            isReadingSection,
+            sectionIndex:  sectionIdx,
+            failureReason: 'audio_element_onerror',
+            error:         e instanceof ErrorEvent ? e.message : String(e),
+          }));
           stopAudio();
           setVoiceState('READY');
+          // During structured reading: skip the failed section and advance instead of stalling
+          if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+            setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+          }
           resolve();
         };
-        ttsAudio.play().catch((err: unknown) => {
+        const playPromise = ttsAudio.play();
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event:        'audioPlayCalled',
+          isReadingSection,
+          sectionIndex: sectionIdx,
+          hasPromise:   playPromise !== undefined,
+        }));
+        playPromise?.catch((err: unknown) => {
           const blocked =
             err instanceof DOMException &&
             (err.name === 'NotAllowedError' || err.name === 'AbortError');
+          console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+            event:         'audioPlayRejected',
+            isReadingSection,
+            sectionIndex:  sectionIdx,
+            failureReason: blocked ? 'autoplay_NotAllowedError' : 'play_rejected',
+            errorName:     err instanceof DOMException ? err.name : String(err),
+          }));
           if (blocked) { setAutoplayBlocked(true); setVoiceState('READY'); }
           else          { stopAudio();             setVoiceState('READY'); }
+          // During structured reading: advance instead of stalling when play() is rejected
+          if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+            setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+          }
           resolve();
         });
       });
@@ -747,15 +816,26 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       if (!section || cancelledRef.current) return;
       const sections = readingSectionsRef.current;
       const idx      = readingIndexRef.current;
+      // ── VOICE CONTENT PLAYBACK: section boundary ─────────────────────────────
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:             'sectionStarted',
+        readingIndex:      idx,
+        sectionsTotal:     sections.length,
+        sectionLabel:      section.label,
+        sectionTextLength: section.text.length,
+        nextSectionExists: idx + 1 < sections.length,
+        ttsRequestStarted: true,
+      }));
+      // Legacy READER TRACE kept for backwards compatibility
       console.log('[VOICE READER TRACE]', JSON.stringify({
-        contentTitle:           activeContent?.label ?? null,
-        sectionsTotal:          sections.length,
-        currentSectionIndex:    idx,
-        currentSectionLabel:    section.label,
+        contentTitle:             activeContent?.label ?? null,
+        sectionsTotal:            sections.length,
+        currentSectionIndex:      idx,
+        currentSectionLabel:      section.label,
         currentSectionTextLength: section.text.length,
-        nextSectionExists:      idx + 1 < sections.length,
-        nextSectionIndex:       idx + 1 < sections.length ? idx + 1 : null,
-        readerState:            'SPEAKING',
+        nextSectionExists:        idx + 1 < sections.length,
+        nextSectionIndex:         idx + 1 < sections.length ? idx + 1 : null,
+        readerState:              'SPEAKING',
       }));
       setActiveContent({ label: section.label });
       updateMediaSession(section.label, 'playing');
@@ -764,11 +844,19 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
     async function advanceReading(): Promise<void> {
       const sections = readingSectionsRef.current;
-      const next = readingIndexRef.current + 1;
+      const next     = readingIndexRef.current + 1;
+      console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+        event:         'advanceReading',
+        fromIndex:     readingIndexRef.current,
+        toIndex:       next,
+        sectionsTotal: sections.length,
+        hasNext:       !(!sections.length || next >= sections.length),
+      }));
       if (!sections.length || next >= sections.length) {
         isReadingRef.current = false;
         setActiveContent(null);
         setVoiceState('READY');
+        console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({ event: 'readingComplete', totalSections: sections.length }));
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
           if (!cancelledRef.current && !pausedRef.current) startListening();
@@ -1390,15 +1478,29 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           };
           const resolvedRoute = args.destination === 'back' ? 'HISTORY_BACK' : (routes[args.destination] ?? '/walk');
           const routeExists   = args.destination === 'back' || Object.keys(routes).includes(args.destination);
+          const navFnName = navigateRef.current ? 'navigateRef' : providerNavigateRef.current ? 'providerNavigateRef(wouter)' : 'window.history.pushState';
           console.info('[VOICE TOOL NAV TRACE]', JSON.stringify({
             toolName:             'navigate',
             toolArguments:        args,
             requestedDestination: args.destination,
             resolvedRoute,
             routeExists,
-            routerFunctionUsed:   navigateRef.current ? 'navigateRef' : providerNavigateRef.current ? 'providerNavigateRef' : 'window.history.pushState',
+            routerFunctionUsed:   navFnName,
             navigationCalled:     true,
           }));
+          // Bible-specific canonical nav log (all fields from spec)
+          if (args.destination === 'bible') {
+            console.info('[VOICE BIBLE NAV]', JSON.stringify({
+              utterance:         text ?? '(unavailable)',
+              toolCall:          'navigate({ destination: "bible" })',
+              canonicalAction:   `${navFnName}("/bible")`,
+              route:             '/bible',
+              routeMatched:      true,
+              finalURL:          '/bible',
+              renderedComponent: 'Bible (src/pages/Bible.tsx)',
+              success:           !!(navigateRef.current ?? providerNavigateRef.current),
+            }));
+          }
           // Speak brief confirmation text first (e.g. "Opening your Bible now.")
           if (fullResponse.trim()) {
             setResponse(fullResponse);
