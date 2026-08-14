@@ -232,16 +232,18 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   // ─── Reading commands (only when a session is active) ───────────────────
   // These are short, unambiguous phrases that control the reading engine.
   if (isReading) {
-    if (/^(pause|stop reading|pause that|stop)$/.test(t))
+    // Sprint 1: expanded pause/continue/repeat/skip vocabulary to cover natural
+    // conversational variants that physical-device testing showed users saying.
+    if (/^(pause|stop reading|pause that|stop|stop there|hang on|hold on|wait|wait a moment|just a moment|one moment)$/.test(t))
       return { type: 'reading-command', command: 'pause' };
 
-    if (/^(continue|resume|carry on|keep going|keep reading|play|go ahead)$/.test(t))
+    if (/^(continue|resume|carry on|keep going|keep reading|play|go ahead|go on|okay carry on|alright carry on|alright continue|yes continue|yes carry on|ok carry on|ok continue)$/.test(t))
       return { type: 'reading-command', command: 'continue' };
 
-    if (/^(repeat|read that again|say that again|repeat that|again)$/.test(t))
+    if (/^(repeat|read that again|say that again|repeat that|again|say that again please|read it again)$/.test(t))
       return { type: 'reading-command', command: 'repeat' };
 
-    if (/^(next|next section|skip that|move on|skip|next part)$/.test(t))
+    if (/^(next|next section|skip that|move on|skip|next part|skip ahead|move ahead)$/.test(t))
       return { type: 'reading-command', command: 'next-section' };
 
     // "explain that" / "what does that mean" — falls through to Emmaus with section context

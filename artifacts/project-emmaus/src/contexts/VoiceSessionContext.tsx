@@ -527,9 +527,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           // send garbage audio to Whisper which returns hallucinated text.
           // 35 requires actual voice-level energy.  Keep it here; do NOT lower
           // it without testing in a real room environment.
-          const VAD_THRESHOLD     = 35;  // avg freq bin — was 18, too low
+          const VAD_THRESHOLD     = 35;   // avg freq bin — was 18, too low
           const VAD_MIN_ELAPSED   = 1500; // ms before silence-gate can fire
-          const VAD_SILENCE_GATE  = 2000; // ms of silence after speech to stop
+          // Sprint 1: reduced 2000 → 1200 ms for more natural conversational cadence.
+          // Still long enough to avoid cutting off mid-sentence pauses (~500–800 ms).
+          const VAD_SILENCE_GATE  = 1200; // ms of silence after speech to stop
 
           // Track how long we've been genuinely above threshold
           let vadAboveCount = 0;
@@ -543,10 +545,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
             if (avg > VAD_THRESHOLD) {
               vadAboveCount++;
-              // Require at least 5 consecutive above-threshold ticks (~500 ms)
-              // before marking speech as started — prevents a single loud noise
-              // from locking vadSpokenRef to true.
-              if (vadAboveCount >= 5) {
+              // Sprint 1: reduced from 5 → 3 consecutive above-threshold ticks (~300 ms)
+              // so natural conversational speech (shorter, softer utterances) is detected.
+              // Still prevents a single transient noise from falsely locking vadSpokenRef.
+              if (vadAboveCount >= 3) {
                 vadSpokenRef.current        = true;
                 hadVoiceActivityRef.current = true; // survives clearVAD()
                 vadSilenceStartRef.current  = null;
@@ -649,7 +651,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           } else if (elapsed > 1500) {
             if (vadSilenceStartRef.current === null) {
               vadSilenceStartRef.current = Date.now();
-            } else if (Date.now() - vadSilenceStartRef.current > 2000) {
+            } else if (Date.now() - vadSilenceStartRef.current > 1200) {
+              // Sprint 1: 2000 → 1200 ms (matches startListening silence gate)
               clearVAD();
               stopRecorder();
               setVoiceState('THINKING');
@@ -720,7 +723,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
               // Normal conversation or end-of-reading: open the mic.
               startListening();
-            }, isReadingSection ? 800 : 2500);
+            // Sprint 1: post-TTS mic delay reduced from 2500 → 1000 ms for conversation.
+            // Reading advance stays at 800 ms (bypasses mic entirely — no change needed).
+            }, isReadingSection ? 800 : 1000);
           }
           resolve();
         };
