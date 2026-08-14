@@ -141,19 +141,24 @@ router.post("/voice/speak", async (req, res) => {
   // Voice and speed are admin-controlled — callers cannot override them.
   const { voice, speed } = settings;
 
-  const start = Date.now();
+  const textReadyAt = Date.now();
+  const provider    = process.env.ELEVENLABS_API_KEY ? 'elevenlabs' : 'openai';
   try {
     const ttsResp = await fetchSpeechStream(text, voice, speed);
+    const firstAudioChunkAt = Date.now();
 
-    logger.info(
-      { userId, textLen: Math.min(text.length, 4000), voice, ms: Date.now() - start },
-      "voice: TTS ok",
-    );
+    logger.info({
+      userId,
+      provider,
+      voice,
+      textLen:          Math.min(text.length, 5000),
+      timeToFirstAudio: firstAudioChunkAt - textReadyAt,
+    }, "voice: TTS ok");
 
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
 
-    // Pipe the OpenAI response stream directly to the client
+    // Pipe the TTS response stream directly to the client
     const reader = ttsResp.body!.getReader();
     const pump = async () => {
       while (true) {

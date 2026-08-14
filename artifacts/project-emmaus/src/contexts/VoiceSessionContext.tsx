@@ -974,6 +974,16 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }
 
       if (!sections.length) return false;
+
+      // ── VOICE READING START log (verifiable in browser DevTools) ─────────────
+      console.info('[VOICE READING START]', JSON.stringify({
+        content,
+        entry:               sections[0]?.label ?? '',
+        sectionsTotal:       sections.length,
+        initialSectionIndex: 0,
+        initialSectionLabel: sections[0]?.label ?? '',
+      }));
+
       setStreamingResponse('');
       await playReadingSection(sections[0]);
       return true;
