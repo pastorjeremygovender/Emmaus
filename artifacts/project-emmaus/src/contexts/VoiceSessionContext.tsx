@@ -35,9 +35,6 @@ import React, {
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  startConversation,
-  appendMessage,
-  type SseDoneEvent,
   type FlatContext,
   type HistoryItem,
 } from '@/lib/emmaus-client';
@@ -53,6 +50,7 @@ import {
 } from '@/lib/emmaus-pending';
 import { fetchVoiceContext, type VoiceAppContext } from '@/lib/voice-context';
 import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
+import { sendVoiceConversation, type AnyVoiceToolCall } from '@/lib/voice-conversation-client';
 import {
   resolveVoiceTranslation,
   buildSubstitutionNotice,
@@ -668,7 +666,6 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const processAudioBlob = useCallback(async (blob: Blob, mimeType: string) => {
     // Pull current values from refs — no stale closures
     const user        = userRef.current;
-    const convId      = convIdRef.current;
     const history     = historyRef.current;
     const initContext = initContextRef.current;
 
@@ -1100,24 +1097,20 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const intent = resolveIntent(text, isReadingRef.current);
 
       // ── [VOICE ACTION TRACE] — emitted after every classification ────────────
-      // Captures the full dispatch path so physical-device tests can confirm:
-      //   transcript → classifiedIntent → dispatcher → action executor
-      const _isDeterministic = (
-        intent.type === 'navigate' || intent.type === 'read-content' ||
-        intent.type === 'reading-command' || intent.type === 'continue-walk' ||
-        intent.type === 'continue-reading' || intent.type === 'get-steps'
+      // Sprint 2 routing:
+      //   Fast-path (regex, no LLM): reading-command | navigate | continue-reading
+      //   LLM tool dispatch (everything else): read-content, continue-walk,
+      //     get-steps, converse — LLM decides tool or conversational reply
+      const _isFastPath = (
+        intent.type === 'navigate' ||
+        intent.type === 'reading-command' ||
+        intent.type === 'continue-reading'
       );
       console.log('[VOICE ACTION TRACE]', JSON.stringify({
         transcript:        text,
         classifiedIntent:  intent.type,
-        confidence:        _isDeterministic ? 'deterministic' : 'conversational',
-        actionType:        _isDeterministic ? intent.type : 'converse',
-        contentType:       intent.type === 'read-content' ? (intent as { content: string }).content : null,
-        titleHint:         intent.type === 'read-content' ? ((intent as { titleHint?: string }).titleHint ?? null) : null,
+        dispatch:          _isFastPath ? 'fast-path-regex' : 'llm-tool-dispatch',
         navigationTarget:  intent.type === 'navigate' ? (intent as { target: string }).target : null,
-        dispatcherMatched: _isDeterministic,
-        fallbackTriggered: !_isDeterministic,
-        fallbackReason:    !_isDeterministic ? 'conversational_intent_or_no_pattern_match' : null,
         isReadingActive:   isReadingRef.current,
         voiceContextLoaded: !!appContextRef.current,
       }));
@@ -1183,57 +1176,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      // ── Read content ─────────────────────────────────────────────────────────
-      if (intent.type === 'read-content') {
-        const started = await loadAndStartReading(intent.content, intent.bibleRef, intent.titleHint);
-        console.log('[VOICE]', JSON.stringify({ contentResolved: started, readingStarted: started, contentType: intent.content, titleHint: intent.titleHint ?? null }));
-        if (started) return;
-
-        // Do NOT fall through to Ask Emmaus when a deterministic read intent was
-        // recognised but content couldn't be loaded.  Speak a specific error so
-        // the user understands what happened.  This prevents the AI from saying
-        // "I cannot directly read Scripture" (which is both wrong and confusing).
-        // Note: the 'devotional' disambiguation (multiple active) is handled inside
-        // loadAndStartReading via playTTS — so the error below only fires when
-        // content is genuinely absent or empty.
-        let errMsg: string;
-        if (intent.content === 'bible') {
-          const ref = intent.bibleRef;
-          if (ref) {
-            errMsg = `I wasn't able to load ${ref.bookName} chapter ${ref.chapter} right now. You can read it in My Bible — just tap the book icon.`;
-          } else {
-            errMsg = `I don't have a Bible passage loaded for context. Try saying "Read John 3" to request a specific chapter.`;
-          }
-        } else if (intent.content === 'daily-rhythm') {
-          errMsg = `I couldn't find your active Daily Rhythm content. Check Today's Steps on your Walk screen to see what's available.`;
-        } else if (intent.content === 'devotional') {
-          errMsg = `I couldn't find an active devotional to read right now. Check Today's Steps on your Walk screen.`;
-        } else if (intent.content === 'sermon-companion') {
-          errMsg = `I couldn't find an active Sermon Companion to read. Your companion appears in Today's Steps once it's available.`;
-        } else {
-          errMsg = `I wasn't able to load that content right now.`;
-        }
-
-        setResponse(errMsg);
-        setStreamingResponse('');
-        await playTTS(errMsg, false);
-        return;
-      }
-
-      // ── Continue walk ────────────────────────────────────────────────────────
-      if (intent.type === 'continue-walk') {
-        const walks = appContextRef.current?.activeWalks ?? [];
-        const match = intent.hint
-          ? walks.find((w) => w.title.toLowerCase().includes(intent.hint!.toLowerCase()))
-          : null;
-        const target = match ?? (walks.length === 1 ? walks[0] : null);
-        if (target) {
-          navigateRef.current?.(`/journey/${target.journeyId}/day/${target.currentDay}`);
-          return;
-        }
-      }
-
-      // ── Continue reading ─────────────────────────────────────────────────────
+      // ── Continue reading (fast path — unambiguous chapter navigation) ────────
       if (intent.type === 'continue-reading') {
         if (isReadingRef.current && !readingPausedRef.current && intent.direction !== 'previous') {
           await advanceReading();
@@ -1249,45 +1192,128 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
       }
 
-      // ── Ask Emmaus ───────────────────────────────────────────────────────────
-      const context = buildEmmausContext(intent);
+      // ── LLM tool dispatch ─────────────────────────────────────────────────────
+      //
+      // Sprint 2: all remaining intents (read-content, continue-walk, get-steps,
+      // converse) are sent to POST /api/voice/conversation with tool definitions.
+      // The model decides whether to call read_content, navigate, or respond
+      // conversationally — no rigid command vocabulary required from the user.
+      //
+      // Fast paths kept above (reading-command / navigate / continue-reading) are
+      // deterministic, zero-latency, and need no LLM involvement.
 
+      const emmausCtx   = buildEmmausContext(intent);
+      const voiceAppCtx = emmausCtx.voiceAppContext;
+
+      let toolCallPending: AnyVoiceToolCall | null = null;
+      let hadToolCall = false;
       let fullResponse = '';
-      let latestConvId = convId;
 
       await new Promise<void>((resolve, reject) => {
-        const callbacks = {
-          onText: (chunk: string) => {
-            if (cancelledRef.current) { abortRef.current?.(); return; }
-            fullResponse += chunk;
-            setStreamingResponse(fullResponse);
+        const handle = sendVoiceConversation({
+          message:         text,
+          userId:          user.id,
+          history:         history,
+          voiceAppContext: voiceAppCtx,
+          isReading:       isReadingRef.current,
+          callbacks: {
+            onText: (chunk) => {
+              if (cancelledRef.current) return;
+              fullResponse += chunk;
+              setStreamingResponse(fullResponse);
+            },
+            // Collect the tool call — executed after stream ends so any brief
+            // confirmation text can be spoken before or instead of the action.
+            onToolCall: (tc) => {
+              hadToolCall = true;
+              toolCallPending = tc;
+              console.log('[VOICE TOOL CALL]', JSON.stringify({ tool: tc.tool, args: tc.args }));
+            },
+            onDone: (_finalText, _hadTool) => {
+              if (!_hadTool && !cancelledRef.current) {
+                // Pure conversation — persist to local history for multi-turn context
+                setHistory((prev) => [
+                  ...prev,
+                  { role: 'user' as const,      content: text },
+                  { role: 'assistant' as const, content: fullResponse },
+                ]);
+              }
+              resolve();
+            },
+            onError: (msg) => reject(new Error(msg)),
           },
-          onDone: (payload: SseDoneEvent) => {
-            latestConvId = payload.conversationId;
-            if (!cancelledRef.current) {
-              setConvId(payload.conversationId);
-              setHistory((prev) => [
-                ...prev,
-                { role: 'user' as const,      content: text },
-                { role: 'assistant' as const, content: fullResponse },
-              ]);
-            }
-            resolve();
-          },
-          onError: (msg: string) => reject(new Error(msg)),
-        };
-
-        const handle = latestConvId
-          ? appendMessage({ userId: user.id, conversationId: latestConvId, message: text, context, history, callbacks })
-          : startConversation({ userId: user.id, message: text, context, history, callbacks });
-
+        });
         abortRef.current = handle.abort;
       });
 
       abortRef.current = null;
       if (cancelledRef.current) return;
-      if (!fullResponse.trim()) { setVoiceState('READY'); return; }
 
+      // ── Execute pending tool call ─────────────────────────────────────────────
+      if (hadToolCall && toolCallPending) {
+        const tc = toolCallPending as AnyVoiceToolCall;
+
+        if (tc.tool === 'read_content') {
+          // Reading IS the response — do not TTS any accompanying text.
+          const args = tc.args as {
+            type:          string;
+            bibleBook?:    string;
+            bibleChapter?: number;
+            titleHint?:    string;
+          };
+          let bibleRef: { bookId: string; bookName: string; chapter: number } | undefined;
+          if (args.bibleBook && args.bibleChapter) {
+            bibleRef = { bookId: args.bibleBook, bookName: args.bibleBook, chapter: args.bibleChapter };
+          }
+          const started = await loadAndStartReading(
+            args.type as 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
+            bibleRef,
+            args.titleHint,
+          );
+          if (!started) {
+            // Content genuinely absent — speak a targeted failure message
+            const errMsg = `I wasn't able to find that content right now. Check Today's Steps to see what's available.`;
+            setResponse(errMsg);
+            setStreamingResponse('');
+            await playTTS(errMsg, false);
+          }
+          return;
+        }
+
+        if (tc.tool === 'navigate') {
+          const args = tc.args as { destination: string };
+          const routes: Record<string, string> = {
+            walk: '/walk', bible: '/walk/bible', discover: '/discover', journeys: '/journeys',
+          };
+          // Speak brief confirmation text first (e.g. "Opening your Bible now.")
+          if (fullResponse.trim()) {
+            setResponse(fullResponse);
+            setStreamingResponse('');
+            await playTTS(fullResponse, false);
+            if (cancelledRef.current) return;
+          }
+          if (args.destination === 'back') {
+            window.history.back();
+          } else {
+            const route = routes[args.destination] ?? '/walk';
+            const navFn = navigateRef.current ?? providerNavigateRef.current;
+            if (navFn) navFn(route);
+            else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
+          }
+          if (!fullResponse.trim()) {
+            // No TTS — restart listening after navigation settles
+            autoRestartTimerRef.current = setTimeout(() => {
+              autoRestartTimerRef.current = null;
+              if (!cancelledRef.current && !pausedRef.current) startListening();
+            }, 1200);
+          }
+          // If TTS was spoken, its onended handler restarts listening automatically
+          return;
+        }
+      }
+
+      // ── No tool — pure conversational response ────────────────────────────────
+      if (!fullResponse.trim()) { setVoiceState('READY'); return; }
       setResponse(fullResponse);
       setStreamingResponse('');
       await playTTS(fullResponse, false);

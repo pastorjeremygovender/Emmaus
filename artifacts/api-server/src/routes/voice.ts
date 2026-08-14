@@ -10,6 +10,7 @@
  * TTS audio is streamed directly from OpenAI to the client.
  */
 
+import OpenAI from "openai";
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
@@ -356,6 +357,216 @@ router.get("/voice/context", async (req: Request, res: Response) => {
   } catch (err) {
     logger.error({ err }, "[voice/context] failed");
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /voice/conversation — LLM tool dispatch ────────────────────────────
+//
+// Voice-specific LLM endpoint with function/tool calling.
+// The model receives 2 tools (read_content, navigate) and decides whether to
+// call one, or respond with plain text (Ask Emmaus conversation).
+//
+// SSE event types emitted:
+//   { type: 'text',      content: string }      — streamed text chunks
+//   { type: 'tool_call', tool: string, args: object } — tool the model chose
+//   { type: 'done',      text: string }          — stream complete
+//   { type: 'error',     message: string }        — failure
+
+const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'read_content',
+      description:
+        "Read the user's active discipleship content aloud. Use whenever the user asks to read, start, open, do, or continue any content — their devotional, Daily Rhythm (also called '10 Minutes with Jesus'), Sermon Companion, or a specific Bible passage.",
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['daily-rhythm', 'devotional', 'sermon-companion', 'bible'],
+            description:
+              "'daily-rhythm' — the 10 Minutes with Jesus / Daily Rhythm content. 'devotional' — a devotional series (e.g. Psalms Daily Devotional). 'sermon-companion' — the weekly Sermon Companion. 'bible' — a specific Bible passage.",
+          },
+          bibleBook: {
+            type: 'string',
+            description: "For type='bible': the book name in lowercase (e.g. 'john', 'psalms', 'romans').",
+          },
+          bibleChapter: {
+            type: 'number',
+            description: "For type='bible': the chapter number.",
+          },
+          titleHint: {
+            type: 'string',
+            description:
+              "For type='devotional': a keyword from the series title to select the right one (e.g. 'psalms' for 'Psalms Daily Devotional'). Omit when there is only one active devotional.",
+          },
+        },
+        required: ['type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'navigate',
+      description: 'Navigate the user to a section of the Emmaus app.',
+      parameters: {
+        type: 'object',
+        properties: {
+          destination: {
+            type: 'string',
+            enum: ['walk', 'bible', 'discover', 'journeys', 'back'],
+            description:
+              "'walk' = Today's Steps (home). 'bible' = My Bible. 'discover' = Discover feed. 'journeys' = Walks & Journeys list. 'back' = previous screen.",
+          },
+        },
+        required: ['destination'],
+      },
+    },
+  },
+];
+
+function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean): string {
+  const lines = [
+    'You are Emmaus, a voice companion for a Christian discipleship app.',
+    'This is voice — speak in short plain sentences. No markdown, no bullet points, no headers.',
+    'Keep responses to 2–3 sentences unless the user asks for more detail.',
+    'When a tool is appropriate, call it. Do not explain what you are about to do — just do it.',
+    'If you call read_content, say nothing additional — the reading itself is the response.',
+    'If you call navigate, you may say one brief sentence (e.g. "Opening your Bible now.").',
+    'When the user asks a faith question or wants to talk, respond conversationally — no tool needed.',
+    "Never say you cannot do something that a tool can do. Never say 'I cannot read' or 'I cannot navigate'.",
+  ];
+
+  if (voiceAppContext) {
+    lines.push('', "User's active Emmaus content:", voiceAppContext);
+  }
+
+  if (isReading) {
+    lines.push('', 'Content is currently being read aloud. The user may ask about what they just heard.');
+  }
+
+  return lines.join('\n');
+}
+
+router.post('/voice/conversation', async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const { message, history, voiceAppContext, isReading } = req.body as {
+    message?:        string;
+    history?:        Array<{ role: string; content: string }>;
+    voiceAppContext?: string;
+    isReading?:      boolean;
+  };
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+
+  if (!checkVoiceRateLimit(userId)) {
+    res.status(429).json({ error: 'Too many voice requests. Please wait a moment.' });
+    return;
+  }
+
+  const settings = getVoiceSettings();
+  if (!settings.enabled) {
+    res.status(503).json({ error: 'Voice mode is currently disabled.' });
+    return;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    res.status(503).json({ error: 'Voice AI not configured.' });
+    return;
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  function sse(event: object) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+
+  try {
+    // Use a dedicated fast model for voice — never gpt-5 (90–150s latency).
+    // VOICE_CONV_MODEL allows override; falls back to gpt-4o for speed + tool quality.
+    const model = process.env.VOICE_CONV_MODEL ?? 'gpt-4o';
+    const openai = new OpenAI({ apiKey });
+
+    const systemPrompt = buildVoiceSystemPrompt(voiceAppContext, isReading);
+
+    const safeHistory = (history ?? [])
+      .slice(-6)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...safeHistory,
+      { role: 'user', content: message },
+    ];
+
+    const stream = await openai.chat.completions.create({
+      model,
+      messages,
+      tools:        VOICE_TOOLS,
+      tool_choice:  'auto',
+      stream:       true,
+      max_completion_tokens: 300, // voice responses are short
+    });
+
+    let fullText = '';
+    const toolCalls: Record<number, { id: string; name: string; argsStr: string }> = {};
+
+    for await (const chunk of stream) {
+      const delta       = chunk.choices[0]?.delta;
+      const finishReason = chunk.choices[0]?.finish_reason;
+
+      // Stream text chunks
+      if (delta?.content) {
+        fullText += delta.content;
+        sse({ type: 'text', content: delta.content });
+      }
+
+      // Accumulate tool call fragments (arguments arrive piecemeal)
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          if (!toolCalls[idx]) toolCalls[idx] = { id: '', name: '', argsStr: '' };
+          if (tc.id)                  toolCalls[idx].id = tc.id;
+          if (tc.function?.name)      toolCalls[idx].name = tc.function.name;
+          if (tc.function?.arguments) toolCalls[idx].argsStr += tc.function.arguments;
+        }
+      }
+
+      // Emit tool_call events when the model finishes choosing
+      if (finishReason === 'tool_calls' || finishReason === 'stop') {
+        for (const tc of Object.values(toolCalls)) {
+          if (!tc.name) continue;
+          let args: object = {};
+          try { args = JSON.parse(tc.argsStr || '{}'); } catch { /* malformed args — use empty */ }
+          sse({ type: 'tool_call', tool: tc.name, args });
+        }
+      }
+    }
+
+    sse({ type: 'done', text: fullText });
+    res.end();
+
+    logger.info({ userId, model, chars: fullText.length, tools: Object.keys(toolCalls).length }, 'voice: conversation ok');
+  } catch (err) {
+    logger.warn({ err, userId }, 'voice: conversation error');
+    if (!res.headersSent) {
+      sse({ type: 'error', message: 'Something went wrong. Please try again.' });
+    }
+    res.end();
   }
 });
 
