@@ -205,6 +205,27 @@ export async function streamSpeechToAudio(
   });
 }
 
+/**
+ * Fetch TTS audio for the given text and return it as a decoded ArrayBuffer.
+ * Used by the Web Audio API playback path in playGreeting(), which routes audio
+ * through an already-unlocked AudioContext (no HTMLAudioElement, no autoplay gate).
+ */
+export async function fetchSpeechArrayBuffer(
+  text: string,
+  userId: string,
+): Promise<ArrayBuffer> {
+  const resp = await fetch(`${API_BASE}/api/voice/speak`, {
+    method: 'POST',
+    headers: authHeaders(userId),
+    body: JSON.stringify({ text }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
+    throw new Error(err.error ?? `Speech failed (${resp.status})`);
+  }
+  return resp.arrayBuffer();
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export async function getVoiceSettings(userId: string): Promise<VoiceSettings> {

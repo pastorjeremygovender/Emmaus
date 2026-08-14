@@ -27,6 +27,7 @@ import {
 } from '@/lib/emmaus-pending';
 import type { FlatContext } from '@/lib/emmaus-client';
 import { getActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
+import { unlockVoiceAudio } from '@/lib/voice-audio-unlock';
 
 // ─── Intent detection ─────────────────────────────────────────────────────────
 
@@ -223,6 +224,10 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
 
   function handleMic(e: React.MouseEvent) {
     e.stopPropagation();
+    // Unlock audio synchronously while we are still in the gesture stack.
+    // Must happen before navigate() triggers any async React work.
+    // See lib/voice-audio-unlock.ts for the full rationale.
+    unlockVoiceAudio();
     setReturnDestination({
       pathname: location,
       scrollY: Math.round(window.scrollY),

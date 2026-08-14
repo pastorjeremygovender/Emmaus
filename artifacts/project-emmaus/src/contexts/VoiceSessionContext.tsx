@@ -41,8 +41,10 @@ import {
 import {
   transcribeAudio,
   streamSpeechToAudio,
+  fetchSpeechArrayBuffer,
   getSupportedMimeType,
 } from '@/lib/voice-client';
+import { getUnlockedAudioContext } from '@/lib/voice-audio-unlock';
 import {
   takePendingContext,
   getReturnDestination,
@@ -1795,14 +1797,72 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // ─── Opening greeting ─────────────────────────────────────────────────────
   /**
    * Play a short personalised greeting when a session opens, then start listening.
-   * Reads from refs so it is safe to call from inside a useCallback closure.
    * Silently skips to listening if TTS fails or autoplay is blocked.
+   *
+   * AUTOPLAY STRATEGY — two-tier:
+   *
+   *   Tier 1 (Web Audio API — preferred, iOS-safe):
+   *     unlockVoiceAudio() is called synchronously in the UI tap handler that
+   *     opens Voice Mode (UnifiedEmmausInput.handleMic, AskEmmausHome onClick).
+   *     That creates and resumes an AudioContext which stays in 'running' state
+   *     permanently after a user gesture.  Here we fetch TTS as an ArrayBuffer,
+   *     decode it with audioContext.decodeAudioData(), and play via an
+   *     AudioBufferSourceNode — the AudioContext was unlocked before any async
+   *     work started, so no new gesture is required.
+   *
+   *   Tier 2 (HTMLAudioElement — fallback for non-iOS browsers):
+   *     When no running AudioContext is available we fall back to the old
+   *     HTMLAudioElement path.  If autoplay is still blocked (NotAllowedError)
+   *     we catch it and fall through silently to startListening().
    */
   async function playGreeting(text: string): Promise<void> {
     if (cancelledRef.current) return;
     const uid = userRef.current?.id;
     if (!uid) { startListening(); return; }
     setVoiceState('SPEAKING');
+    console.info('[VOICE GREETING]', JSON.stringify({
+      event:      'greetingAttempted',
+      textLength: text.length,
+    }));
+
+    // ── Tier 1: Web Audio API (iOS-safe) ─────────────────────────────────────
+    const ac = getUnlockedAudioContext();
+    if (ac && ac.state === 'running') {
+      // Assign to playbackAcRef so cleanupAll() can close it at session end.
+      if (playbackAcRef.current !== ac) {
+        playbackAcRef.current?.close().catch(() => {});
+        playbackAcRef.current = ac;
+      }
+      try {
+        console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingWebAudioFetch' }));
+        const arrayBuffer = await fetchSpeechArrayBuffer(text, uid);
+        if (cancelledRef.current) return;
+        const audioBuffer = await ac.decodeAudioData(arrayBuffer);
+        if (cancelledRef.current) return;
+
+        await new Promise<void>((resolve) => {
+          const src = ac.createBufferSource();
+          src.buffer = audioBuffer;
+          src.connect(ac.destination);
+          src.onended = () => {
+            console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingCompleted', path: 'web-audio' }));
+            resolve();
+          };
+          src.start(0);
+          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingPlayStarted', path: 'web-audio' }));
+        });
+      } catch (err) {
+        console.warn('[VOICE GREETING]', JSON.stringify({
+          event: 'greetingWebAudioFailed',
+          error: String(err),
+        }));
+        // Fall through to startListening() below.
+      }
+      if (!cancelledRef.current) startListening();
+      return;
+    }
+
+    // ── Tier 2: HTMLAudioElement (non-iOS / no AudioContext available) ────────
     try {
       const result = await streamSpeechToAudio(text, uid);
       if (cancelledRef.current) { result.dispose(); return; }
@@ -1810,15 +1870,32 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       disposeAudioRef.current = result.dispose;
       setHasAudioElement(true);
       await new Promise<void>((resolve) => {
-        result.audio.onended = () => { stopAudioElement(); resolve(); };
-        result.audio.onerror = () => { stopAudioElement(); resolve(); };
-        result.audio.play().catch(() => {
-          // Autoplay blocked (browser policy) — skip greeting silently.
+        result.audio.onended = () => {
+          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingCompleted', path: 'html-audio' }));
+          stopAudioElement(); resolve();
+        };
+        result.audio.onerror = () => {
+          console.warn('[VOICE GREETING]', JSON.stringify({ event: 'greetingAudioError' }));
+          stopAudioElement(); resolve();
+        };
+        result.audio.play().then(() => {
+          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingPlayStarted', path: 'html-audio' }));
+        }).catch((err: unknown) => {
+          const isNotAllowed = err instanceof DOMException && err.name === 'NotAllowedError';
+          console.warn('[VOICE GREETING]', JSON.stringify({
+            event:     'greetingPlayBlocked',
+            reason:    isNotAllowed ? 'autoplay_NotAllowedError' : 'play_rejected',
+            errorName: err instanceof DOMException ? err.name : String(err),
+          }));
+          // Autoplay blocked — skip greeting silently, go straight to listening.
           stopAudioElement(); resolve();
         });
       });
-    } catch {
-      // TTS unavailable — just skip to listening.
+    } catch (err) {
+      console.warn('[VOICE GREETING]', JSON.stringify({
+        event: 'greetingTtsFailed',
+        error: String(err),
+      }));
       stopAudioElement();
     }
     if (!cancelledRef.current) startListening();
@@ -1843,6 +1920,19 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       setInitContext(context);
       initContextRef.current = context;
     }
+
+    // ── Pick up the AudioContext unlocked in the UI tap handler ──────────────
+    // unlockVoiceAudio() is called synchronously in UnifiedEmmausInput.handleMic
+    // and AskEmmausHome's onClick — both of which are direct user-gesture handlers
+    // that run BEFORE React navigation and this useEffect.  The cached running
+    // AudioContext is retrieved here so playGreeting can use it for Web Audio
+    // playback without needing a new gesture.
+    const unlockedAc = getUnlockedAudioContext();
+    if (unlockedAc && playbackAcRef.current !== unlockedAc) {
+      playbackAcRef.current?.close().catch(() => {});
+      playbackAcRef.current = unlockedAc;
+    }
+
     // Fetch fresh app context, then speak an opening greeting.
     // The greeting tells the user what's available today so they don't
     // need to know exact content names before they say their first command.
@@ -1859,6 +1949,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         if (greetingText) {
           playGreeting(greetingText);
         } else {
+          // No content active — skip greeting, go straight to listening.
+          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingSkipped', reason: 'no_active_content' }));
           startListening();
         }
       }).catch(() => {
