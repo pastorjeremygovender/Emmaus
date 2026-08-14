@@ -202,6 +202,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // initial (false) value of sessionPaused because processAudioBlob has no deps.
   const pausedRef = useRef(false);
 
+  // ── Post-TTS mic guard — records when TTS audio last finished so that
+  // processAudioBlob can compute how long the mic has been open since TTS
+  // ended. Used in [VOICE INPUT TRACE] for diagnostics.
+  const ttsEndedAtRef = useRef<number | null>(null);
+
   // ─── Cleanup helpers ──────────────────────────────────────────────────────
 
   function cancelAutoRestart() {
@@ -471,8 +476,22 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setTranscript('');
     setTtsError(false);
 
+    // Reset VAD speech flag at the start of every new listening session so a
+    // previous utterance cannot carry over and cause processAudioBlob to accept
+    // a silent / echo clip as if it had voice in it.
+    vadSpokenRef.current = false;
+    vadSilenceStartRef.current = null;
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // echoCancellation + noiseSuppression mirror what the interrupt monitor
+      // uses — prevents TTS speaker bleed from being captured as user speech.
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+        },
+      });
       if (cancelledRef.current) { mediaStream.getTracks().forEach((t) => t.stop()); return; }
 
       streamRef.current = mediaStream;
@@ -687,18 +706,27 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         ttsAudio.onended = () => {
           if (audioElRef.current !== ttsAudio) { resolve(); return; }
           stopAudio();
+          ttsEndedAtRef.current = Date.now();
           if (!cancelledRef.current) {
             setVoiceState('READY');
-            // Delay before reopening the mic:
-            //   • Conversation: 2500 ms — gives room reverb / speaker echo time
-            //     to decay so the VAD doesn't immediately see "speech" from the
-            //     tail of Emmaus's response.
-            //   • Reading section: 1500 ms — shorter pause between sections.
-            // Do NOT reduce these below ~1500 ms without retesting on device.
             autoRestartTimerRef.current = setTimeout(() => {
               autoRestartTimerRef.current = null;
-              if (!cancelledRef.current && !pausedRef.current) startListening();
-            }, isReadingSection ? 1500 : 2500);
+              if (cancelledRef.current || pausedRef.current) return;
+
+              // ── Structured reading: advance section directly ─────────────────
+              // Do NOT route through startListening() between sections.
+              // The old path (mic → VAD silence → empty transcript → advanceReading)
+              // fails in a quiet room because VAD requires 5 consecutive ticks
+              // above threshold before silence-gate can fire — it never triggers
+              // when there is no speech, so the reader stalls after section 0.
+              if (isReadingSection && isReadingRef.current && !readingPausedRef.current) {
+                advanceReading();
+                return;
+              }
+
+              // Normal conversation or end-of-reading: open the mic.
+              startListening();
+            }, isReadingSection ? 800 : 2500);
           }
           resolve();
         };
@@ -721,6 +749,18 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
     async function playReadingSection(section: { label: string; text: string } | undefined): Promise<void> {
       if (!section || cancelledRef.current) return;
+      const sections = readingSectionsRef.current;
+      const idx      = readingIndexRef.current;
+      console.log('[VOICE READER TRACE]', JSON.stringify({
+        contentTitle:           activeContent?.label ?? null,
+        sectionsTotal:          sections.length,
+        currentSectionIndex:    idx,
+        currentSectionLabel:    section.label,
+        currentSectionTextLength: section.text.length,
+        nextSectionExists:      idx + 1 < sections.length,
+        nextSectionIndex:       idx + 1 < sections.length ? idx + 1 : null,
+        readerState:            'SPEAKING',
+      }));
       setActiveContent({ label: section.label });
       updateMediaSession(section.label, 'playing');
       await playTTS(section.text, true);
@@ -978,6 +1018,60 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }
 
       return { ...base, voiceAppContext };
+    }
+
+    // ── Pre-transcription validation ──────────────────────────────────────────
+    // Reject audio clips that cannot represent genuine speech before spending
+    // an API call on Whisper.  This catches:
+    //   • residual TTS echo captured immediately after playback ends
+    //   • ambient noise micro-bursts that triggered a VAD false-positive
+    //   • tiny blobs from the MediaRecorder flush on recorder.stop()
+    //
+    // IMPORTANT: reject the bad AUDIO EVENT, not individual words.
+    // A real user saying "yes", "you", or any short word must still be accepted
+    // as long as the VAD detected genuine speech activity.
+    {
+      const nowMs              = Date.now();
+      const timeSinceTts       = ttsEndedAtRef.current !== null ? nowMs - ttsEndedAtRef.current : null;
+      const audioDurationMs    = nowMs - recordingStartRef.current;
+      const audioBytes         = blob.size;
+      const vadSpeechDetected  = vadSpokenRef.current;
+
+      // A clip is rejected if EITHER:
+      //   a) VAD never registered genuine speech in this recording window, OR
+      //   b) the blob is suspiciously small regardless of VAD
+      //      (MediaRecorder sometimes flushes a near-empty chunk on stop)
+      const MIN_BLOB_BYTES = 3000;
+      const rejected = !vadSpeechDetected || audioBytes < MIN_BLOB_BYTES;
+
+      console.log('[VOICE INPUT TRACE]', JSON.stringify({
+        micOpenedAt:         new Date(recordingStartRef.current).toISOString(),
+        ttsEndedAt:          ttsEndedAtRef.current ? new Date(ttsEndedAtRef.current).toISOString() : null,
+        timeSinceTtsEnded:   timeSinceTts,
+        audioDurationMs,
+        audioBytes,
+        vadSpeechDetected,
+        accepted:            !rejected,
+        rejectReason:        rejected
+          ? (!vadSpeechDetected ? 'no_vad_speech_detected' : 'blob_too_small')
+          : null,
+      }));
+
+      if (rejected) {
+        // Do not transcribe, do not dispatch, do not send to Ask Emmaus.
+        // If reading was active, the direct-advance path in playTTS already
+        // handles advancement — this is only a safety net.
+        if (isReadingRef.current && !readingPausedRef.current) {
+          await advanceReading();
+        } else {
+          setVoiceState('LISTENING');
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current && !pausedRef.current) startListening();
+          }, 500);
+        }
+        return;
+      }
     }
 
     // ── Main pipeline ─────────────────────────────────────────────────────────
