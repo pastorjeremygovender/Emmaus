@@ -174,6 +174,12 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const vadIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const vadSilenceStartRef  = useRef<number | null>(null);
   const vadSpokenRef        = useRef(false);
+  // hadVoiceActivityRef is set to true by the VAD interval when speech is
+  // detected (same trigger as vadSpokenRef) but is NOT cleared by clearVAD().
+  // It is only reset at the start of startListening() so that processAudioBlob
+  // can reliably tell whether the user actually spoke — even though clearVAD()
+  // always runs before recorder.onstop fires.
+  const hadVoiceActivityRef = useRef(false);
   const recordingStartRef   = useRef<number>(0);
 
   // ── Phase 3: content context refs ─────────────────────────────────────────
@@ -475,6 +481,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setErrorMsg(null);
     setTranscript('');
     setTtsError(false);
+    hadVoiceActivityRef.current = false; // reset here, NOT in clearVAD()
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -540,8 +547,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               // before marking speech as started — prevents a single loud noise
               // from locking vadSpokenRef to true.
               if (vadAboveCount >= 5) {
-                vadSpokenRef.current       = true;
-                vadSilenceStartRef.current = null;
+                vadSpokenRef.current        = true;
+                hadVoiceActivityRef.current = true; // survives clearVAD()
+                vadSilenceStartRef.current  = null;
               }
             } else {
               vadAboveCount = 0;
@@ -1017,19 +1025,28 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         timeSinceTtsEnded: ttsEndedAtRef.current !== null ? Date.now() - ttsEndedAtRef.current : null,
       }));
 
-      // IMPORTANT: do NOT gate on vadSpokenRef here.
-      // clearVAD() always resets vadSpokenRef.current = false BEFORE recorder.onstop
-      // fires, so vadSpokenRef.current is always false at this point regardless
-      // of whether the user spoke.  Checking it here rejects all real speech.
+      // ── Audio rejection gates ─────────────────────────────────────────────
       //
-      // Only reject blobs that are genuinely empty — a near-zero-byte blob is a
-      // MediaRecorder flush artifact from recorder.stop(), not real audio.
+      // Gate 1: hadVoiceActivityRef — set by the VAD interval when ≥5
+      // consecutive above-threshold ticks are detected (~500 ms of real speech).
+      // Unlike vadSpokenRef, this ref is NOT cleared by clearVAD(), so it
+      // retains the value from the recording session even though clearVAD()
+      // always runs before recorder.onstop fires.  This correctly blocks
+      // near-silence echo picked up after TTS playback ends.
+      //
+      // Gate 2: blob size floor — rejects MediaRecorder flush artifacts (a few
+      // hundred bytes produced by recorder.stop() with no real audio).
       const MIN_BLOB_BYTES = 1000;
-      if (audioBytes < MIN_BLOB_BYTES) {
+
+      const rejectedByVad      = !hadVoiceActivityRef.current;
+      const rejectedByBlobSize = audioBytes < MIN_BLOB_BYTES;
+
+      if (rejectedByVad || rejectedByBlobSize) {
         console.log('[VOICE AUDIO REJECTED]', JSON.stringify({
-          reason:      'blob_too_small',
+          reason:      rejectedByVad ? 'no_vad_speech_detected' : 'blob_too_small',
           duration:    audioDurationMs,
           bytes:       audioBytes,
+          hadVoiceActivity: hadVoiceActivityRef.current,
           vadSpeechMs: null,
         }));
         if (isReadingRef.current && !readingPausedRef.current) {
