@@ -446,13 +446,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const data = new Uint8Array(analyser.frequencyBinCount);
 
       // ── Startup delay ──────────────────────────────────────────────────────
-      // Wait 3 s before starting to poll.  TTS audio plays through the device
-      // speaker and immediately bleeds back into the mic — polling too early
-      // captures TTS output and fires a false interrupt.  3 s gives the audio
-      // system time for AEC (echo cancellation) to lock on before we look for
-      // intentional user speech.
+      // Wait before starting to poll.  TTS audio bleeds back through the mic —
+      // polling too early fires a false interrupt.  AEC (echo cancellation) with
+      // noiseSuppression typically locks within 200–400 ms; 1000 ms is a
+      // conservative but comfortable margin.  We previously used 3000 ms which
+      // meant short responses could never be interrupted at all.
       const monitorStartTime = Date.now();
-      const MONITOR_STARTUP_DELAY_MS = 3000;
+      const MONITOR_STARTUP_DELAY_MS = 1000;
 
       intIntervalRef.current = setInterval(() => {
         // Don't evaluate anything until the startup window has passed
@@ -463,9 +463,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         a.getByteFrequencyData(data);
         const avg = data.reduce((s, v) => s + v, 0) / data.length;
 
-        // Threshold 40 and gate 1500 ms were stable before and are intentional.
-        // Lower values (e.g. 25 / 700 ms) caused TTS bleed to trigger the
-        // interrupt within the first second of every response — do NOT lower them.
+        // Threshold 40: low enough to catch normal speech but high enough that
+        // TTS speaker bleed (attenuated by AEC after the startup delay) doesn't
+        // self-trigger.  Gate 600 ms: user must sustain speech for 600 ms before
+        // the interrupt fires — short enough to feel immediate, long enough to
+        // ignore transient noise.
         if (avg > 40) {
           if (intSpeechStartRef.current === null) {
             intSpeechStartRef.current = Date.now();
@@ -477,7 +479,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               rec.start(200);
               intRecorderRef.current = rec;
             } catch { /* recorder unavailable */ }
-          } else if (Date.now() - intSpeechStartRef.current > 1500) {
+          } else if (Date.now() - intSpeechStartRef.current > 600) {
             if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
             intAnalyserRef.current    = null;
             intSpeechStartRef.current = null;
@@ -1400,6 +1402,28 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       let hadToolCall = false;
       let fullResponse = '';
 
+      // ── Start interrupt monitor NOW (before the LLM call) ────────────────────
+      // Previously the monitor was only started inside playReadingSection, so the
+      // user could never interrupt a conversational response.  Starting it here,
+      // before the LLM request fires, means the 1-second startup delay elapses
+      // during LLM latency (free time) — the monitor is already active when TTS
+      // starts playing.  The guard (intStreamRef.current) makes this idempotent:
+      // if a reading session already started the monitor it stays alive as-is.
+      //
+      // interruptFired: local flag that stops the sentence drain loop and aborts
+      // the SSE stream when a barge-in fires.  Without it, the old drain loop
+      // keeps running and tries to play the next queued sentence over the user's
+      // new recording.
+      let interruptFired = false;
+      startInterruptMonitor((capture) => {
+        interruptFired = true;
+        abortRef.current?.();   // abort any in-flight LLM SSE stream
+        abortRef.current = null;
+        stopAudio();
+        setStreamingResponse('');
+        startListeningFromCapture(capture);
+      });
+
       // ── Sentence streaming queue ──────────────────────────────────────────────
       // Sentences from the server are played via TTS as they arrive so the user
       // hears Emmaus start speaking within 1-2 s of finishing their question,
@@ -1432,16 +1456,18 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
        * Cancels the post-TTS auto-restart timer before each sentence so that the
        * previous sentence's 1-second delay doesn't fire the mic while a new
        * sentence is already queued.
+       * Stops immediately when interruptFired — barge-in owns what happens next.
        */
       async function drainAndPlaySentences(): Promise<void> {
         while (true) {
+          if (interruptFired || cancelledRef.current) return;
           if (sentenceQueue.length > 0) {
             cancelAutoRestart(); // clear timer set by previous playTTS onended
             const sentence = sentenceQueue.shift()!;
-            if (!cancelledRef.current) {
+            if (!cancelledRef.current && !interruptFired) {
               await playTTS(sentence, false);
             }
-            if (cancelledRef.current) return;
+            if (cancelledRef.current || interruptFired) return;
           } else if (sentenceQueueDone) {
             return;
           } else {
@@ -1454,7 +1480,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }
 
       function enqueueSentence(sentence: string) {
-        if (!sentence.trim() || hadToolCall) return;
+        if (!sentence.trim() || hadToolCall || interruptFired) return;
         sentenceEverEnqueued = true; // set before drain starts; survives drain completion
         sentenceQueue.push(sentence);
         if (!sentenceQueueActive) {
@@ -1664,6 +1690,27 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               }, 1200);
             }
           }
+          return;
+        }
+
+        if (tc.tool === 'search_sermons') {
+          // Server resolved the search and returned a TTS-ready sentence + optional route.
+          const args = tc.args as { spokenText: string; navigateRoute?: string };
+          setResponse(args.spokenText);
+          setStreamingResponse('');
+          await playTTS(args.spokenText, false);
+          if (cancelledRef.current) return;
+          // Navigate to the search results page (e.g. /discover?q=faith)
+          if (args.navigateRoute) {
+            const navFn = navigateRef.current ?? providerNavigateRef.current;
+            if (navFn) {
+              navFn(args.navigateRoute);
+            } else {
+              window.history.pushState({}, '', args.navigateRoute);
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+          }
+          // playTTS onended will restart listening automatically
           return;
         }
       }

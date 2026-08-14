@@ -46,6 +46,7 @@ import {
   getProgressForUser,
   type CompanionEntry,
 } from "../lib/sermon-companion-store.js";
+import { searchSermons } from "../lib/sermon-search.js";
 
 const router = Router();
 
@@ -173,7 +174,7 @@ router.post("/voice/speak", async (req, res) => {
     };
     await pump();
   } catch (err) {
-    logger.warn({ err, userId, ms: Date.now() - start }, "voice: TTS failed");
+    logger.warn({ err, userId, ms: Date.now() - textReadyAt }, "voice: TTS failed");
     if (!res.headersSent) {
       res.status(500).json({ error: "Voice playback is not available right now." });
     } else {
@@ -461,7 +462,70 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_sermons',
+      description:
+        "Search for sermons the pastor has preached. Use whenever the user asks 'did Pastor preach about X?', 'find a sermon about Y', 'can you show me where Pastor talked about this?', 'I remember a sermon about Z', or any request to discover specific preached content. The server searches the sermon archive and returns a spoken summary of the top results.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: "The search topic or phrase, e.g. 'faith', 'prayer', 'the cross', 'Gideon'",
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ];
+
+// ─── search_sermons server-side resolver ─────────────────────────────────────
+/**
+ * Search the sermon archive and return a TTS-ready spoken summary plus a
+ * client-side navigation route (e.g. /discover?q=faith).
+ */
+async function resolveSearchSermons(
+  query: string,
+): Promise<{ spokenText: string; navigateRoute?: string }> {
+  try {
+    const results = await searchSermons(query.trim(), { maxResults: 3 });
+    const route = `/discover?q=${encodeURIComponent(query.trim())}`;
+
+    if (results.length === 0) {
+      return {
+        spokenText: `I couldn't find any sermons specifically about "${query}". You can search in Discover for more.`,
+        navigateRoute: route,
+      };
+    }
+
+    const top = results[0];
+    const dateStr = top.sermonDate
+      ? ` from ${new Date(top.sermonDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}`
+      : '';
+    const speakerStr = top.speaker ? ` by ${top.speaker}` : '';
+    const seriesStr  = top.series  ? ` in the "${top.series}" series` : '';
+
+    if (results.length === 1) {
+      return {
+        spokenText: `I found a sermon called "${top.title}"${speakerStr}${dateStr}${seriesStr}. I've opened it in Discover so you can watch or read along.`,
+        navigateRoute: route,
+      };
+    }
+
+    return {
+      spokenText: `I found ${results.length} sermons about that. The closest is "${top.title}"${speakerStr}${dateStr}. I've opened the search results in Discover so you can browse them.`,
+      navigateRoute: route,
+    };
+  } catch {
+    return {
+      spokenText: `Let me open Discover so you can search for "${query}" yourself.`,
+      navigateRoute: `/discover?q=${encodeURIComponent(query.trim())}`,
+    };
+  }
+}
 
 // ─── continue_walk server-side resolver ──────────────────────────────────────
 /**
@@ -560,9 +624,14 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean): 
     '  "[series name] devotional" | "my devotional" | "the devotional" | "my psalms" | "psalms devotional" → type: "devotional"',
     '  "sermon companion" | "companion" | "sunday companion" | "weekly companion" → type: "sermon-companion"',
     '',
+    'SERMON SEARCH:',
+    '- Call search_sermons whenever the user asks about a topic the pastor may have preached on.',
+    '- Triggers: "did Pastor preach about X?", "find a sermon about faith", "I remember a sermon about prayer, can you find it?", "give me something on the cross", "what has Pastor said about grace?", "can you show me where Pastor talked about this?"',
+    '- Do NOT try to answer from memory — call search_sermons and the server will find it.',
+    '',
     'CONVERSATIONAL FAITH QUESTIONS:',
-    '- When the user asks a spiritual question or wants to talk, respond conversationally without calling a tool.',
-    '- Keep the tone warm and accessible — like a pastor friend, not an academic.',
+    '- When the user asks a spiritual question or wants to discuss faith, respond conversationally without calling a tool.',
+    '- Keep the tone warm and accessible — like a knowledgeable pastor friend, not an academic.',
   ];
 
   if (voiceAppContext) {
@@ -724,6 +793,10 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
           if (tc.name === 'continue_walk') {
             const { titleHint } = args as { titleHint?: string };
             const resolvedArgs = await resolveContinueWalk(userId, titleHint);
+            sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
+          } else if (tc.name === 'search_sermons') {
+            const { query } = args as { query?: string };
+            const resolvedArgs = await resolveSearchSermons(query ?? '');
             sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
           } else {
             sse({ type: 'tool_call', tool: tc.name, args });

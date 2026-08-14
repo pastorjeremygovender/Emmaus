@@ -52,7 +52,19 @@ export interface VoiceContinueWalkToolCall {
   args: VoiceContinueWalkArgs;
 }
 
-export type AnyVoiceToolCall = VoiceToolCall | VoiceNavToolCall | VoiceContinueWalkToolCall;
+/** Args returned by the server after executing a sermon search. */
+export interface VoiceSearchSermonsArgs {
+  /** TTS-ready sentence describing the result(s). */
+  spokenText: string;
+  /** Optional client-side route to navigate to (e.g. '/discover?q=faith'). */
+  navigateRoute?: string;
+}
+export interface VoiceSearchSermonsToolCall {
+  tool: 'search_sermons';
+  args: VoiceSearchSermonsArgs;
+}
+
+export type AnyVoiceToolCall = VoiceToolCall | VoiceNavToolCall | VoiceContinueWalkToolCall | VoiceSearchSermonsToolCall;
 
 export interface VoiceConversationCallbacks {
   /** Called for each streamed text chunk from the LLM. For display only — use onSentence for TTS. */
