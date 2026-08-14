@@ -1424,6 +1424,53 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           }
           return;
         }
+
+        if (tc.tool === 'continue_walk') {
+          // The server resolved the walk server-side and returned either a direct
+          // route or a clarification prompt (zero / multiple active walks).
+          const args = tc.args as { route?: string; prompt?: string; journeyTitle?: string; currentDay?: number };
+
+          if (args.prompt) {
+            // Speak clarification or "no walks" message, then re-open the mic.
+            // Persist this exchange to history so the LLM has full context on the
+            // next turn — the user's follow-up ("Walk A") will arrive as the new
+            // user message, and the LLM will call continue_walk({ titleHint: 'Walk A' }).
+            setHistory((prev) => [
+              ...prev,
+              { role: 'user' as const,      content: text },
+              { role: 'assistant' as const, content: args.prompt! },
+            ]);
+            setResponse(args.prompt);
+            setStreamingResponse('');
+            await playTTS(args.prompt, false);
+            return;
+          }
+
+          if (args.route) {
+            // Speak any brief LLM confirmation text first, then navigate
+            if (fullResponse.trim()) {
+              setResponse(fullResponse);
+              setStreamingResponse('');
+              await playTTS(fullResponse, false);
+              if (cancelledRef.current) return;
+            }
+            const navFn = navigateRef.current ?? providerNavigateRef.current;
+            console.log('[VOICE]', JSON.stringify({ continueWalkRoute: args.route, hasFn: !!navFn }));
+            if (navFn) {
+              navFn(args.route);
+            } else {
+              window.history.pushState({}, '', args.route);
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+            if (!fullResponse.trim()) {
+              autoRestartTimerRef.current = setTimeout(() => {
+                autoRestartTimerRef.current = null;
+                if (!cancelledRef.current && !pausedRef.current) startListening();
+              }, 1200);
+            }
+          }
+          return;
+        }
       }
 
       // ── No tool — conversational response with sentence streaming ────────────

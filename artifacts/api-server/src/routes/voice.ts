@@ -248,10 +248,10 @@ router.get("/voice/context", async (req: Request, res: Response) => {
 
     if (drJourney) {
       const steps = await listSteps(drJourney.id).catch((): FrontendStep[] => []);
-      const published = steps.filter((s) => s.status === "Published");
+      const published = entries.filter((e) => e.status === "Published");
       const prog = allProgress[drJourney.id];
-      const maxDay = published.reduce((m, s) => Math.max(m, s.day), 0);
-      const currentDay = Math.min(prog?.currentDay ?? 1, maxDay || 1);
+      const maxDay = entries.reduce((m, e) => Math.max(m, e.dayNumber), 0);
+      const currentDay = progress?.currentDay ?? 1;
       const step = published.find((s) => s.day === currentDay);
       if (step) {
         dailyRhythm = {
@@ -282,8 +282,8 @@ router.get("/voice/context", async (req: Request, res: Response) => {
       if (!full) continue;
       const entries = full.entries.filter((e) => e.status === "Published");
       const maxDay = entries.reduce((m, e) => Math.max(m, e.dayNumber), 0);
-      const currentDay = Math.min(prog.currentDay, maxDay || 1);
-      const entry = entries.find((e) => e.dayNumber === currentDay);
+      const currentDay = progress?.currentDay ?? 1;
+      const entry = published.find((e) => e.dayNumber === currentDay);
       activeDevotionals.push({
         seriesId:     prog.seriesId,
         seriesTitle:  series.title,
@@ -430,13 +430,13 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: 'continue_walk',
       description:
-        "Take the user directly to their current step in an active walk or journey. Use when they say 'continue my walk', 'where was I', 'open my journey', 'keep going', 'resume', 'pick up where I left off', or similar. Never use 'navigate' for this — always prefer this tool. If no walk hint is given and the user has one active walk, use it. If they name a walk (e.g. 'my Psalms journey'), pass the hint.",
+        "Take the user directly to their current step in an active walk or journey. Use when they say 'continue my walk', 'where was I', 'open my journey', 'keep going', 'resume', 'pick up where I left off', 'open my daily rhythm', or any phrase that means 'take me to where I left off'. Never use 'navigate' for this — always prefer this tool. The server resolves which walk and which step automatically. If no hint is given and the user has one active walk, the server uses it. If they name a walk (e.g. 'my Psalms journey'), pass the name as titleHint.",
       parameters: {
         type: 'object',
         properties: {
-          hint: {
+          titleHint: {
             type: 'string',
-            description: 'Optional keyword from the walk title to select among multiple active walks (e.g. "psalms", "john").',
+            description: 'Optional keyword from the walk title to select among multiple active walks (e.g. "psalms", "john", "daily rhythm"). Only provide after a clarification prompt.',
           },
         },
         required: [],
@@ -444,6 +444,80 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     },
   },
 ];
+
+// ─── continue_walk server-side resolver ──────────────────────────────────────
+/**
+ * Looks up the user's active walks and returns either:
+ *   { route: '/journey/{id}/day/{day}' }  — single active walk, navigate directly
+ *   { prompt: '...' }                      — zero or multiple walks, speak clarification
+ */
+async function resolveContinueWalk(
+  userId: string,
+  titleHint?: string,
+): Promise<{ route?: string; prompt?: string; journeyTitle?: string; currentDay?: number }> {
+  const [allJourneys, allProgress] = await Promise.all([
+    listPublishedJourneys().catch((): FrontendJourney[] => []),
+    getAllProgress(userId).catch((): Record<string, FrontendProgress> => ({})),
+  ]);
+
+  // Step 1: keep only journeys with status === 'active'.
+  // 'paused', 'completed', and 'dropped' are not continuable.
+  const activeJourneys = allJourneys.filter((j) => {
+    const prog = allProgress[j.id];
+    return prog?.status === 'active';
+  });
+
+  if (activeJourneys.length === 0) {
+    return {
+      prompt: "I don't see any active walks right now. Head to Today's Steps to get started.",
+    };
+  }
+
+  // Step 2: verify that currentDay has a real Published step.
+  // completeStep() advances currentDay to day + 1 without changing status.
+  // On a finished walk this means currentDay now points past the last step —
+  // routing there would 404/redirect-away, so we exclude those journeys.
+  const continuable = (
+    await Promise.all(
+      activeJourneys.map(async (j) => {
+        const prog     = allProgress[j.id]!;
+        const day      = prog.currentDay ?? 1;
+        const steps    = await listSteps(j.id).catch((): FrontendStep[] => []);
+        const hasStep  = steps.some((s) => s.day === day && s.status === 'Published');
+        return hasStep ? { journeyId: j.id, title: j.title, currentDay: day } : null;
+      }),
+    )
+  ).filter((w): w is { journeyId: string; title: string; currentDay: number } => w !== null);
+
+  if (continuable.length === 0) {
+    return {
+      prompt: "I don't see any active walks with a step ready right now. Head to Today's Steps to see what's available.",
+    };
+  }
+
+  // Step 3: if the user named a walk (after a clarification prompt), fuzzy-match by hint.
+  let candidates = continuable;
+  if (titleHint && titleHint.trim()) {
+    const hint    = titleHint.trim().toLowerCase();
+    const matched = continuable.filter((w) => w.title.toLowerCase().includes(hint));
+    if (matched.length > 0) candidates = matched;
+  }
+
+  if (candidates.length === 1) {
+    const walk = candidates[0];
+    return {
+      route:        `/journey/${walk.journeyId}/day/${walk.currentDay}`,
+      journeyTitle: walk.title,
+      currentDay:   walk.currentDay,
+    };
+  }
+
+  // Multiple walks remain (either no hint or hint was ambiguous) — ask the user to clarify
+  const titles = continuable.map((w) => w.title).join(' and ');
+  return {
+    prompt: `You have ${continuable.length} active walks: ${titles}. Which one would you like to continue?`,
+  };
+}
 
 function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean): string {
   const lines = [
@@ -584,8 +658,13 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
         for (const tc of Object.values(toolCalls)) {
           if (!tc.name) continue;
           let args: object = {};
-          try { args = JSON.parse(tc.argsStr || '{}'); } catch { /* malformed args — use empty */ }
-          sse({ type: 'tool_call', tool: tc.name, args });
+
+            const { titleHint } = args as { titleHint?: string };
+            const resolvedArgs = await resolveContinueWalk(userId, titleHint);
+            sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
+          } else {
+            sse({ type: 'tool_call', tool: tc.name, args });
+          }
         }
       }
     }

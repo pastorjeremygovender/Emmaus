@@ -28,6 +28,17 @@ export interface VoiceNavigateArgs {
   destination: 'walk' | 'bible' | 'discover' | 'journeys' | 'back';
 }
 
+/** Args emitted by the server after resolving the user's active walk. */
+export interface VoiceContinueWalkArgs {
+  /** Direct route to navigate to, e.g. '/journey/{id}/day/{day}'. Present when exactly one active walk found. */
+  route?: string;
+  /** TTS prompt to speak when zero or multiple walks require clarification. */
+  prompt?: string;
+  /** Human-readable journey title included when a single walk was resolved (for TTS announcements). */
+  journeyTitle?: string;
+  /** Current day number included when a single walk was resolved. */
+  currentDay?: number;
+}
 export interface VoiceToolCall {
   tool: 'read_content';
   args: VoiceReadContentArgs;
@@ -38,7 +49,7 @@ export interface VoiceNavToolCall {
 }
 export interface VoiceContinueWalkToolCall {
   tool: 'continue_walk';
-  args: { hint?: string };
+  args: VoiceContinueWalkArgs;
 }
 
 export type AnyVoiceToolCall = VoiceToolCall | VoiceNavToolCall | VoiceContinueWalkToolCall;
