@@ -104,6 +104,43 @@ export interface VoiceSessionContextType {
   registerNavigate:   (fn: (to: string) => void) => void;
 }
 
+// ─── Opening greeting builder ─────────────────────────────────────────────────
+/**
+ * Build a short personalised greeting from the user's active content.
+ * Called once when a voice session starts. Purely data-driven — no LLM call.
+ * Returns null when there is nothing meaningful to announce (skip to listening).
+ */
+function buildOpeningGreeting(
+  ctx: import('@/lib/voice-context').VoiceAppContext,
+  preferredName?: string | null,
+): string | null {
+  const name = preferredName && preferredName.trim() && preferredName !== 'friend'
+    ? preferredName.trim()
+    : null;
+  const hi = name ? `Hi ${name}.` : 'Hi.';
+
+  const items: string[] = [];
+  if (ctx.dailyRhythm) {
+    const dr = ctx.dailyRhythm;
+    items.push(`your ${dr.journeyTitle} on Day ${dr.currentDay}`);
+  }
+  for (const d of ctx.activeDevotionals) {
+    items.push(`your ${d.seriesTitle} on Day ${d.currentDay}`);
+  }
+  if (ctx.sermonCompanion) {
+    items.push('your Sermon Companion');
+  }
+
+  if (items.length === 0) return null;
+
+  if (items.length === 1) {
+    return `${hi} You have ${items[0]} ready. What would you like to do?`;
+  }
+  const last = items[items.length - 1];
+  const rest = items.slice(0, -1).join(', ');
+  return `${hi} You have ${rest} and ${last} ready. What would you like to do?`;
+}
+
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const VoiceSessionContext = createContext<VoiceSessionContextType | null>(null);
@@ -1122,8 +1159,27 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const parts: string[] = [];
       const appCtx = appContextRef.current;
 
-      if (appCtx?.todaysSummary && appCtx.todaysSummary !== 'No active content today.') {
-        parts.push(`User's active content today: ${appCtx.todaysSummary}`);
+      if (appCtx) {
+        const contentLines: string[] = [];
+        if (appCtx.dailyRhythm) {
+          const dr = appCtx.dailyRhythm;
+          const stepInfo = dr.stepTitle ? `, step: "${dr.stepTitle}"` : '';
+          contentLines.push(
+            `• ${dr.journeyTitle} (also known as "Daily Rhythm" or "10 Minutes with Jesus") — Day ${dr.currentDay} of ${dr.totalDays}${stepInfo}`,
+          );
+        }
+        for (const d of appCtx.activeDevotionals) {
+          const entryInfo = d.entryTitle ? `, entry: "${d.entryTitle}"` : '';
+          contentLines.push(`• ${d.seriesTitle} — Day ${d.currentDay} of ${d.totalDays}${entryInfo}`);
+        }
+        if (appCtx.sermonCompanion) {
+          const sc = appCtx.sermonCompanion;
+          const entryInfo = sc.entryTitle ? `, today: "${sc.entryTitle}"` : '';
+          contentLines.push(`• Sermon Companion: "${sc.title}" — Day ${sc.currentDay} of ${sc.totalDays}${entryInfo}`);
+        }
+        if (contentLines.length > 0) {
+          parts.push(`User's available content today:\n${contentLines.join('\n')}`);
+        }
       }
 
       if (isReadingRef.current && readingSectionsRef.current.length > 0) {
@@ -1666,6 +1722,38 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     navigateRef.current = fn;
   }, []);
 
+  // ─── Opening greeting ─────────────────────────────────────────────────────
+  /**
+   * Play a short personalised greeting when a session opens, then start listening.
+   * Reads from refs so it is safe to call from inside a useCallback closure.
+   * Silently skips to listening if TTS fails or autoplay is blocked.
+   */
+  async function playGreeting(text: string): Promise<void> {
+    if (cancelledRef.current) return;
+    const uid = userRef.current?.id;
+    if (!uid) { startListening(); return; }
+    setVoiceState('SPEAKING');
+    try {
+      const result = await streamSpeechToAudio(text, uid);
+      if (cancelledRef.current) { result.dispose(); return; }
+      audioElRef.current      = result.audio;
+      disposeAudioRef.current = result.dispose;
+      setHasAudioElement(true);
+      await new Promise<void>((resolve) => {
+        result.audio.onended = () => { stopAudioElement(); resolve(); };
+        result.audio.onerror = () => { stopAudioElement(); resolve(); };
+        result.audio.play().catch(() => {
+          // Autoplay blocked (browser policy) — skip greeting silently.
+          stopAudioElement(); resolve();
+        });
+      });
+    } catch {
+      // TTS unavailable — just skip to listening.
+      stopAudioElement();
+    }
+    if (!cancelledRef.current) startListening();
+  }
+
   // ─── Session lifecycle ────────────────────────────────────────────────────
 
   const startSession = useCallback((context?: FlatContext) => {
@@ -1685,10 +1773,29 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       setInitContext(context);
       initContextRef.current = context;
     }
-    // Fetch fresh app context for the new session
+    // Fetch fresh app context, then speak an opening greeting.
+    // The greeting tells the user what's available today so they don't
+    // need to know exact content names before they say their first command.
     const uid = userRef.current?.id;
     if (uid) {
-      fetchVoiceContext(uid).then((ctx) => { if (ctx) appContextRef.current = ctx; });
+      fetchVoiceContext(uid).then((ctx) => {
+        if (!ctx || cancelledRef.current) {
+          // No context — start listening straight away.
+          if (!cancelledRef.current) startListening();
+          return;
+        }
+        appContextRef.current = ctx;
+        const greetingText = buildOpeningGreeting(ctx, userRef.current?.preferredName);
+        if (greetingText) {
+          playGreeting(greetingText);
+        } else {
+          startListening();
+        }
+      }).catch(() => {
+        if (!cancelledRef.current) startListening();
+      });
+    } else {
+      startListening();
     }
     setupMediaSessionHandlers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
