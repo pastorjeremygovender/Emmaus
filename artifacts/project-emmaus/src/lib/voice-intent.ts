@@ -218,7 +218,16 @@ function parseBibleRef(t: string): BibleRef | null {
  *                    to avoid false positives during normal conversation.
  */
 export function resolveIntent(transcript: string, isReading: boolean): VoiceIntent {
-  const t = norm(transcript);
+  const raw = norm(transcript);
+
+  // ─── Strip polite/filler prefixes ────────────────────────────────────────
+  // Navigation patterns are unanchored so "please open my Bible" already works.
+  // Read-content, daily-rhythm, devotional etc. use ^-anchors for precision,
+  // so "please read today's devotional" would fall through to Ask Emmaus.
+  // Strip the polite prefix here once so ALL downstream anchored patterns benefit.
+  const POLITE_PREFIX =
+    /^(?:emmaus[,\s]+|hey emmaus[,\s]+)?(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)/;
+  const t = raw.replace(POLITE_PREFIX, '').trim();
 
   // ─── Reading commands (only when a session is active) ───────────────────
   // These are short, unambiguous phrases that control the reading engine.

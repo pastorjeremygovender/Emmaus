@@ -1001,19 +1001,27 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       const intent = resolveIntent(text, isReadingRef.current);
 
-      // ── Diagnostic log ───────────────────────────────────────────────────────
-      console.log('[VOICE]', JSON.stringify({
-        transcript: text,
-        intent:     intent.type,
-        detail:     'type' in intent && intent.type === 'navigate' ? (intent as { target: string }).target
-                  : 'type' in intent && intent.type === 'read-content' ? (intent as { content: string }).content
-                  : undefined,
-        isReading:  isReadingRef.current,
-        executionPath: (
-          intent.type === 'navigate' || intent.type === 'read-content' ||
-          intent.type === 'reading-command' || intent.type === 'continue-walk' ||
-          intent.type === 'continue-reading' || intent.type === 'get-steps'
-        ) ? 'deterministic' : 'conversational',
+      // ── [VOICE ACTION TRACE] — emitted after every classification ────────────
+      // Captures the full dispatch path so physical-device tests can confirm:
+      //   transcript → classifiedIntent → dispatcher → action executor
+      const _isDeterministic = (
+        intent.type === 'navigate' || intent.type === 'read-content' ||
+        intent.type === 'reading-command' || intent.type === 'continue-walk' ||
+        intent.type === 'continue-reading' || intent.type === 'get-steps'
+      );
+      console.log('[VOICE ACTION TRACE]', JSON.stringify({
+        transcript:        text,
+        classifiedIntent:  intent.type,
+        confidence:        _isDeterministic ? 'deterministic' : 'conversational',
+        actionType:        _isDeterministic ? intent.type : 'converse',
+        contentType:       intent.type === 'read-content' ? (intent as { content: string }).content : null,
+        titleHint:         intent.type === 'read-content' ? ((intent as { titleHint?: string }).titleHint ?? null) : null,
+        navigationTarget:  intent.type === 'navigate' ? (intent as { target: string }).target : null,
+        dispatcherMatched: _isDeterministic,
+        fallbackTriggered: !_isDeterministic,
+        fallbackReason:    !_isDeterministic ? 'conversational_intent_or_no_pattern_match' : null,
+        isReadingActive:   isReadingRef.current,
+        voiceContextLoaded: !!appContextRef.current,
       }));
 
       // ── Reading commands ────────────────────────────────────────────────────
