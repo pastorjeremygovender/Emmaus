@@ -251,8 +251,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     streamRef.current = null;
   }
 
-  function stopAudio() {
-    stopInterruptMonitor();
+  function stopAudioElement() {
+    // Clears only the audio element — leaves the interrupt monitor running.
+    // Use this between reading sections so the monitor stays alive across the
+    // whole reading session without restarting getUserMedia per section.
     audioElRef.current?.pause();
     audioElRef.current = null;
     setHasAudioElement(false);
@@ -260,10 +262,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     disposeAudioRef.current = null;
     setAutoplayBlocked(false);
     setTtsError(false);
-    // Clear Media Session state when audio stops
     if ('mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = 'none'; } catch { /* ignore */ }
     }
+  }
+
+  function stopAudio() {
+    stopInterruptMonitor();
+    stopAudioElement();
   }
 
   function cancelRecorder() {
@@ -592,6 +598,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setTranscript('');
     setTtsError(false);
     cancelAutoRestart();
+    // The user was definitely speaking (they triggered the barge-in by talking for 1500 ms).
+    // Mark voice activity so processAudioBlob doesn't reject this blob at the VAD gate.
+    hadVoiceActivityRef.current = true;
 
     if (!stream) { startListening(); return; }
 
@@ -721,11 +730,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      startInterruptMonitor((capture) => {
-        stopAudio();
-        setStreamingResponse('');
-        startListeningFromCapture(capture);
-      });
+      // Interrupt monitor is started once per reading session in playReadingSection,
+      // NOT here per TTS call. Starting getUserMedia mid-playback causes iOS to
+      // briefly interrupt audio routing (audible stutter). By starting it once
+      // before the first section, the mic is already open when audio plays.
 
       await new Promise<void>((resolve) => {
         ttsAudio.onended = () => {
@@ -739,7 +747,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             nextSectionIndex:  isReadingSection && ((sectionIdx ?? 0) + 1 < readingSectionsRef.current.length)
               ? (sectionIdx ?? 0) + 1 : null,
           }));
-          stopAudio();
+          // Between reading sections: clear audio element only, keep interrupt monitor alive.
+          // For normal conversation TTS: full stopAudio (closes monitor, opens mic).
+          if (isReadingSection) { stopAudioElement(); } else { stopAudio(); }
           ttsEndedAtRef.current = Date.now();
           if (!cancelledRef.current) {
             setVoiceState('READY');
@@ -775,7 +785,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             failureReason: 'audio_element_onerror',
             error:         e instanceof ErrorEvent ? e.message : String(e),
           }));
-          stopAudio();
+          // Keep interrupt monitor alive between reading sections.
+          if (isReadingSection) { stopAudioElement(); } else { stopAudio(); }
           setVoiceState('READY');
           // During structured reading: skip the failed section and advance instead of stalling
           if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
@@ -814,6 +825,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             errorName:     err instanceof DOMException ? err.name : String(err),
           }));
           if (isNotAllowed) { setAutoplayBlocked(true); setVoiceState('READY'); }
+          else if (isReadingSection) { stopAudioElement(); setVoiceState('READY'); }
           else               { stopAudio();              setVoiceState('READY'); }
           // Only advance during reading on genuine play() failures (not intentional stops)
           if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
@@ -851,6 +863,17 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }));
       setActiveContent({ label: section.label });
       updateMediaSession(section.label, 'playing');
+      // Start (or keep) interrupt monitor for this reading session.
+      // Called once per section but is a no-op if monitor is already running
+      // (intStreamRef guard at top of startInterruptMonitor). This approach means
+      // getUserMedia is called BEFORE audio starts playing — eliminating the iOS
+      // hardware-routing stutter that occurred when it was called mid-playback.
+      // The 3-second startup delay now counts from session start, not per section.
+      startInterruptMonitor((capture) => {
+        stopAudio();
+        setStreamingResponse('');
+        startListeningFromCapture(capture);
+      });
       await playTTS(section.text, true);
     }
 
@@ -866,6 +889,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }));
       if (!sections.length || next >= sections.length) {
         isReadingRef.current = false;
+        // Reading is done — stop the interrupt monitor that was kept alive across sections.
+        stopInterruptMonitor();
         setActiveContent(null);
         setVoiceState('READY');
         console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({ event: 'readingComplete', totalSections: sections.length }));
