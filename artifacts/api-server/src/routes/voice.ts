@@ -675,7 +675,8 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
         for (const tc of Object.values(toolCalls)) {
           if (!tc.name) continue;
           let args: object = {};
-
+          try { args = JSON.parse(tc.argsStr || '{}'); } catch { /* malformed args — use empty */ }
+          if (tc.name === 'continue_walk') {
             const { titleHint } = args as { titleHint?: string };
             const resolvedArgs = await resolveContinueWalk(userId, titleHint);
             sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });

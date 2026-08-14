@@ -1376,50 +1376,6 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
 
         if (tc.tool === 'continue_walk') {
-          // Navigate directly to the user's current step in their active walk.
-          // Falls back to the journeys list if multiple walks are active.
-          const args  = tc.args as { hint?: string };
-          const walks = appContextRef.current?.activeWalks ?? [];
-
-          const match  = args.hint
-            ? walks.find((w) => w.title.toLowerCase().includes(args.hint!.toLowerCase()))
-            : null;
-          const target = match ?? (walks.length === 1 ? walks[0] : null);
-
-          if (!target && walks.length === 0) {
-            // No active walks — speak a helpful message
-            const msg = `You don't have any active walks right now. Check Today's Steps to start one.`;
-            setResponse(msg);
-            setStreamingResponse('');
-            await playTTS(msg, false);
-            return;
-          }
-
-          const route = target
-            ? `/journey/${target.journeyId}/day/${target.currentDay}`
-            : '/journeys'; // multiple walks — let the user pick
-
-          if (fullResponse.trim()) {
-            setResponse(fullResponse);
-            setStreamingResponse('');
-            await playTTS(fullResponse, false);
-            if (cancelledRef.current) return;
-          }
-
-          const navFn = navigateRef.current ?? providerNavigateRef.current;
-          if (navFn) navFn(route);
-          else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
-
-          if (!fullResponse.trim()) {
-            autoRestartTimerRef.current = setTimeout(() => {
-              autoRestartTimerRef.current = null;
-              if (!cancelledRef.current && !pausedRef.current) startListening();
-            }, 1200);
-          }
-          return;
-        }
-
-        if (tc.tool === 'continue_walk') {
           // The server resolved the walk server-side and returned either a direct
           // route or a clarification prompt (zero / multiple active walks).
           const args = tc.args as { route?: string; prompt?: string; journeyTitle?: string; currentDay?: number };
