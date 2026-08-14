@@ -15,7 +15,7 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type VoiceToolName = 'read_content' | 'navigate';
+export type VoiceToolName = 'read_content' | 'navigate' | 'continue_walk';
 
 export interface VoiceReadContentArgs {
   type: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible';
@@ -36,12 +36,23 @@ export interface VoiceNavToolCall {
   tool: 'navigate';
   args: VoiceNavigateArgs;
 }
+export interface VoiceContinueWalkToolCall {
+  tool: 'continue_walk';
+  args: { hint?: string };
+}
 
-export type AnyVoiceToolCall = VoiceToolCall | VoiceNavToolCall;
+export type AnyVoiceToolCall = VoiceToolCall | VoiceNavToolCall | VoiceContinueWalkToolCall;
 
 export interface VoiceConversationCallbacks {
-  /** Called for each streamed text chunk from the LLM. */
+  /** Called for each streamed text chunk from the LLM. For display only — use onSentence for TTS. */
   onText: (chunk: string) => void;
+  /**
+   * Called for each complete sentence detected server-side as the LLM streams.
+   * Sentences arrive as soon as a sentence boundary (. ! ?) is detected, well
+   * before the stream ends, enabling prefetch + sequential TTS playback.
+   * Optional — if absent the caller should fall back to onDone + single TTS.
+   */
+  onSentence?: (sentence: string) => void;
   /** Called when the LLM decides to call a tool. Emitted after stream ends. */
   onToolCall: (tc: AnyVoiceToolCall) => void;
   /** Called when the stream completes successfully. */
@@ -127,6 +138,8 @@ export function sendVoiceConversation(params: {
             if (evt.type === 'text' && evt.content) {
               fullText += evt.content;
               params.callbacks.onText(evt.content);
+            } else if (evt.type === 'sentence' && evt.content) {
+              params.callbacks.onSentence?.(evt.content);
             } else if (evt.type === 'tool_call' && evt.tool) {
               hadToolCall = true;
               const tc = { tool: evt.tool, args: evt.args ?? {} } as unknown as AnyVoiceToolCall;

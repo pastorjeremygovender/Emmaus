@@ -410,7 +410,7 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'navigate',
-      description: 'Navigate the user to a section of the Emmaus app.',
+      description: 'Navigate the user to a general section of the Emmaus app. Do NOT use this for walk/journey continuation — use continue_walk instead.',
       parameters: {
         type: 'object',
         properties: {
@@ -422,6 +422,24 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           },
         },
         required: ['destination'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'continue_walk',
+      description:
+        "Take the user directly to their current step in an active walk or journey. Use when they say 'continue my walk', 'where was I', 'open my journey', 'keep going', 'resume', 'pick up where I left off', or similar. Never use 'navigate' for this — always prefer this tool. If no walk hint is given and the user has one active walk, use it. If they name a walk (e.g. 'my Psalms journey'), pass the hint.",
+      parameters: {
+        type: 'object',
+        properties: {
+          hint: {
+            type: 'string',
+            description: 'Optional keyword from the walk title to select among multiple active walks (e.g. "psalms", "john").',
+          },
+        },
+        required: [],
       },
     },
   },
@@ -522,17 +540,32 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
       max_completion_tokens: 300, // voice responses are short
     });
 
-    let fullText = '';
+    let fullText       = '';
+    let sentenceBuffer = '';
     const toolCalls: Record<number, { id: string; name: string; argsStr: string }> = {};
 
     for await (const chunk of stream) {
       const delta       = chunk.choices[0]?.delta;
       const finishReason = chunk.choices[0]?.finish_reason;
 
-      // Stream text chunks
+      // Stream text chunks + detect sentence boundaries for client TTS prefetch
       if (delta?.content) {
-        fullText += delta.content;
+        fullText       += delta.content;
+        sentenceBuffer += delta.content;
         sse({ type: 'text', content: delta.content });
+
+        // Split on punctuation followed by whitespace (e.g. ". ", "! ", "? ")
+        // Regex intentionally simple: abbreviations (Dr., U.S.) rarely appear
+        // in short voice responses, and a false split is benign.
+        const sentRe = /[^.!?]*[.!?]+\s+/g;
+        let sLast = 0;
+        let sm: RegExpExecArray | null;
+        while ((sm = sentRe.exec(sentenceBuffer)) !== null) {
+          const s = sm[0].trim();
+          if (s.length > 0) sse({ type: 'sentence', content: s });
+          sLast = sm.index + sm[0].length;
+        }
+        sentenceBuffer = sentenceBuffer.slice(sLast);
       }
 
       // Accumulate tool call fragments (arguments arrive piecemeal)
@@ -555,6 +588,11 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
           sse({ type: 'tool_call', tool: tc.name, args });
         }
       }
+    }
+
+    // Flush any remaining text that didn't end with whitespace-terminated punctuation
+    if (sentenceBuffer.trim().length > 0) {
+      sse({ type: 'sentence', content: sentenceBuffer.trim() });
     }
 
     sse({ type: 'done', text: fullText });

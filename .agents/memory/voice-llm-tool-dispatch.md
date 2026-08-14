@@ -37,7 +37,16 @@ description: Sprint 2 architecture — POST /api/voice/conversation endpoint wit
 
 **Why not persist voice conversations to Emmaus store?** Voice sessions are ephemeral. History in `history` state provides multi-turn context within the session. Persistence to Firestore/in-memory store is separate concern (Task #13).
 
-## What Sprint 3 needs
+## Sprint 3 additions (sentence streaming + smart walk)
 
-- ElevenLabs STT + TTS swap (dismissed in prior session — needs reconnection or separate API key)
-- Or: keep OpenAI STT/TTS, focus on streaming improvements (sentence-boundary TTS flushing)
+**Sentence streaming** (Task #508):
+- Server emits `{ type: 'sentence', content }` SSE events as sentence boundaries are detected mid-stream (regex: `/[^.!?]*[.!?]+\s+/g`; remaining buffer flushed at `done`)
+- Client (`voice-conversation-client.ts`) fires `onSentence?` callback per sentence
+- `processAudioBlob` adds `drainSentences()` inner async function: prefetches TTS per sentence, plays sequentially, restarts mic after last sentence's `onended`
+- Falls back to single `playTTS(fullResponse)` if no sentence events received (e.g. very short reply)
+- `allDonePromise` / `resolveAllDone` synchronisation pattern: SSE promise resolves first, then `await allDonePromise` waits for TTS drain
+
+**Smart walk continuation** (Task #509):
+- Added `continue_walk` tool (3rd tool) to `VOICE_TOOLS` in voice.ts — no parameters; description steers LLM away from `navigate` for walk continuation
+- Client dispatch: reads `appContextRef.current?.activeWalks`; navigates to `/journey/{id}/day/{day}` if single match; falls back to `/journeys` if multiple; speaks error if none
+- `args.hint` allows LLM to name-match when user says "my Psalms journey"

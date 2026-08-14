@@ -1206,8 +1206,74 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const voiceAppCtx = emmausCtx.voiceAppContext;
 
       let toolCallPending: AnyVoiceToolCall | null = null;
-      let hadToolCall = false;
-      let fullResponse = '';
+      let hadToolCall     = false;
+      let fullResponse    = '';
+
+      // ── Sentence streaming TTS queue (Sprint 3) ────────────────────────────────
+      // As the server detects sentence boundaries it emits 'sentence' SSE events.
+      // We immediately start fetching TTS audio for each sentence (prefetch) and
+      // play them sequentially in the background — so the first word is spoken
+      // ~1s after the user speaks, not after the full LLM response arrives.
+
+      const ttsSentenceQueue: Array<Promise<{ audio: HTMLAudioElement; dispose: () => void }>> = [];
+      let sentencesQueued    = 0;
+      let sentenceStreamDone = false;
+      let drainRunning       = false;
+
+      let resolveAllDone!: () => void;
+      const allDonePromise = new Promise<void>(r => { resolveAllDone = r; });
+
+      function startDraining() {
+        if (drainRunning) return;
+        drainRunning = true;
+        drainSentences(); // fire-and-forget; idempotent via drainRunning flag
+      }
+
+      async function drainSentences() {
+        while (!cancelledRef.current && !hadToolCall) {
+          if (ttsSentenceQueue.length === 0) {
+            if (sentenceStreamDone) break;          // stream done + queue empty → done
+            await new Promise<void>(r => setTimeout(r, 30)); // wait for next sentence
+            continue;
+          }
+
+          const fetchPromise = ttsSentenceQueue.shift()!;
+          let ttsResult: { audio: HTMLAudioElement; dispose: () => void };
+          try {
+            ttsResult = await fetchPromise;          // wait for prefetch to complete
+          } catch {
+            continue;                                // TTS fetch failed — skip sentence
+          }
+
+          if (cancelledRef.current || hadToolCall) { ttsResult.dispose(); break; }
+
+          const { audio, dispose } = ttsResult;
+          audioElRef.current      = audio;
+          disposeAudioRef.current = dispose;
+          setHasAudioElement(true);
+          setVoiceState('SPEAKING');
+
+          await new Promise<void>(resOnEnded => {
+            audio.onended = () => {
+              stopAudio();
+              // Restart mic only after the LAST sentence finishes
+              const isLast = ttsSentenceQueue.length === 0 && sentenceStreamDone;
+              if (isLast && !cancelledRef.current) {
+                autoRestartTimerRef.current = setTimeout(() => {
+                  autoRestartTimerRef.current = null;
+                  if (!cancelledRef.current && !pausedRef.current) startListening();
+                }, 800);
+              }
+              resOnEnded();
+            };
+            audio.onerror = () => { stopAudio(); setTtsError(true); resOnEnded(); };
+            audio.play().catch(() => { stopAudio(); setVoiceState('READY'); resOnEnded(); });
+          });
+
+          if (cancelledRef.current) break;
+        }
+        resolveAllDone();
+      }
 
       await new Promise<void>((resolve, reject) => {
         const handle = sendVoiceConversation({
@@ -1222,16 +1288,22 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               fullResponse += chunk;
               setStreamingResponse(fullResponse);
             },
-            // Collect the tool call — executed after stream ends so any brief
-            // confirmation text can be spoken before or instead of the action.
+            // Each complete sentence: prefetch TTS immediately and enqueue
+            onSentence: (sentence) => {
+              if (cancelledRef.current || hadToolCall) return;
+              sentencesQueued++;
+              ttsSentenceQueue.push(streamSpeechToAudio(sentence, user.id));
+              startDraining();
+            },
+            // Collect the tool call — executed after stream ends
             onToolCall: (tc) => {
               hadToolCall = true;
               toolCallPending = tc;
               console.log('[VOICE TOOL CALL]', JSON.stringify({ tool: tc.tool, args: tc.args }));
             },
             onDone: (_finalText, _hadTool) => {
+              sentenceStreamDone = true; // unblocks the drain loop's idle poll
               if (!_hadTool && !cancelledRef.current) {
-                // Pure conversation — persist to local history for multi-turn context
                 setHistory((prev) => [
                   ...prev,
                   { role: 'user' as const,      content: text },
@@ -1301,22 +1373,74 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
           }
           if (!fullResponse.trim()) {
-            // No TTS — restart listening after navigation settles
             autoRestartTimerRef.current = setTimeout(() => {
               autoRestartTimerRef.current = null;
               if (!cancelledRef.current && !pausedRef.current) startListening();
             }, 1200);
           }
-          // If TTS was spoken, its onended handler restarts listening automatically
+          return;
+        }
+
+        if (tc.tool === 'continue_walk') {
+          // Navigate directly to the user's current step in their active walk.
+          // Falls back to the journeys list if multiple walks are active.
+          const args   = tc.args as { hint?: string };
+          const walks  = appContextRef.current?.activeWalks ?? [];
+
+          const match  = args.hint
+            ? walks.find((w) => w.title.toLowerCase().includes(args.hint!.toLowerCase()))
+            : null;
+          const target = match ?? (walks.length === 1 ? walks[0] : null);
+
+          if (!target && walks.length === 0) {
+            // No active walks — speak a helpful message
+            const msg = `You don't have any active walks right now. Check Today's Steps to start one.`;
+            setResponse(msg);
+            setStreamingResponse('');
+            await playTTS(msg, false);
+            return;
+          }
+
+          const route = target
+            ? `/journey/${target.journeyId}/day/${target.currentDay}`
+            : '/journeys'; // multiple walks — let the user pick
+
+          if (fullResponse.trim()) {
+            setResponse(fullResponse);
+            setStreamingResponse('');
+            await playTTS(fullResponse, false);
+            if (cancelledRef.current) return;
+          }
+
+          const navFn = navigateRef.current ?? providerNavigateRef.current;
+          if (navFn) navFn(route);
+          else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
+
+          if (!fullResponse.trim()) {
+            autoRestartTimerRef.current = setTimeout(() => {
+              autoRestartTimerRef.current = null;
+              if (!cancelledRef.current && !pausedRef.current) startListening();
+            }, 1200);
+          }
           return;
         }
       }
 
-      // ── No tool — pure conversational response ────────────────────────────────
+      // ── No tool — conversational response with sentence streaming ────────────
       if (!fullResponse.trim()) { setVoiceState('READY'); return; }
       setResponse(fullResponse);
       setStreamingResponse('');
-      await playTTS(fullResponse, false);
+
+      if (sentencesQueued > 0) {
+        // Sentences were prefetched during the LLM stream.
+        // drainSentences() plays them sequentially and handles mic restart after
+        // the last one. Wait here until the drain is fully complete.
+        await allDonePromise;
+      } else {
+        // Fallback: no sentence events arrived (e.g. very short reply or tool
+        // response with no sentence boundary). Play full text as one TTS call.
+        await playTTS(fullResponse, false);
+      }
 
     } catch (err) {
       if (cancelledRef.current) return;
