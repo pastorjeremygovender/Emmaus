@@ -791,19 +791,31 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           hasPromise:   playPromise !== undefined,
         }));
         playPromise?.catch((err: unknown) => {
-          const blocked =
-            err instanceof DOMException &&
-            (err.name === 'NotAllowedError' || err.name === 'AbortError');
+          // AbortError = audio was deliberately stopped (barge-in / interrupt / stopAudio).
+          // Do NOT advance reading — the interrupt handler owns what happens next.
+          // Also guard against the audio element having been replaced (ref no longer matches).
+          const isAbort = err instanceof DOMException && err.name === 'AbortError';
+          if (isAbort || audioElRef.current !== ttsAudio) {
+            console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+              event:         'audioPlayAborted',
+              isReadingSection,
+              sectionIndex:  sectionIdx,
+              failureReason: isAbort ? 'AbortError_intentional_stop' : 'audio_ref_replaced',
+            }));
+            resolve();
+            return;
+          }
+          const isNotAllowed = err instanceof DOMException && err.name === 'NotAllowedError';
           console.error('[VOICE CONTENT PLAYBACK]', JSON.stringify({
             event:         'audioPlayRejected',
             isReadingSection,
             sectionIndex:  sectionIdx,
-            failureReason: blocked ? 'autoplay_NotAllowedError' : 'play_rejected',
+            failureReason: isNotAllowed ? 'autoplay_NotAllowedError' : 'play_rejected',
             errorName:     err instanceof DOMException ? err.name : String(err),
           }));
-          if (blocked) { setAutoplayBlocked(true); setVoiceState('READY'); }
-          else          { stopAudio();             setVoiceState('READY'); }
-          // During structured reading: advance instead of stalling when play() is rejected
+          if (isNotAllowed) { setAutoplayBlocked(true); setVoiceState('READY'); }
+          else               { stopAudio();              setVoiceState('READY'); }
+          // Only advance during reading on genuine play() failures (not intentional stops)
           if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
             setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
           }
@@ -1244,7 +1256,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       // ── Navigation ───────────────────────────────────────────────────────────
       if (intent.type === 'navigate') {
         const routes: Record<string, string> = {
-          walk: '/walk', bible: '/walk/bible', discover: '/discover', journeys: '/journeys',
+          walk: '/walk', bible: '/bible', discover: '/discover', journeys: '/journeys',
         };
         if (intent.target === 'back') {
           window.history.back();
