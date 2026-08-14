@@ -252,12 +252,22 @@ router.get("/voice/context", async (req: Request, res: Response) => {
     } | null = null;
 
     if (drJourney) {
-      const steps = await listSteps(drJourney.id).catch((): FrontendStep[] => []);
-      const published = entries.filter((e) => e.status === "Published");
-      const prog = allProgress[drJourney.id];
-      const maxDay = entries.reduce((m, e) => Math.max(m, e.dayNumber), 0);
-      const currentDay = progress?.currentDay ?? 1;
-      const step = published.find((s) => s.day === currentDay);
+      const steps    = await listSteps(drJourney.id).catch((): FrontendStep[] => []);
+      const published = steps.filter((e) => e.status === "Published");
+      const prog      = allProgress[drJourney.id];
+      const maxDay    = steps.reduce((m, e) => Math.max(m, e.day), 0);
+      const currentDay = prog?.currentDay ?? 1;
+      const step      = published.find((s) => s.day === currentDay);
+      logger.info({
+        journeyId:    drJourney.id,
+        journeyTitle: drJourney.title,
+        stepsTotal:   steps.length,
+        publishedSteps: published.length,
+        progStatus:   prog?.status ?? 'none',
+        currentDay,
+        stepFound:    !!step,
+        stepTitle:    step?.title ?? null,
+      }, '[VOICE CONTENT TRACE] daily-rhythm resolution');
       if (step) {
         dailyRhythm = {
           journeyId:    drJourney.id,
@@ -287,8 +297,8 @@ router.get("/voice/context", async (req: Request, res: Response) => {
       if (!full) continue;
       const entries = full.entries.filter((e) => e.status === "Published");
       const maxDay = entries.reduce((m, e) => Math.max(m, e.dayNumber), 0);
-      const currentDay = progress?.currentDay ?? 1;
-      const entry = published.find((e) => e.dayNumber === currentDay);
+      const currentDay = prog?.currentDay ?? 1;
+      const entry = entries.find((e) => e.dayNumber === currentDay);
       activeDevotionals.push({
         seriesId:     prog.seriesId,
         seriesTitle:  series.title,

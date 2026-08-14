@@ -1361,8 +1361,21 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             args.titleHint,
           );
           if (!started) {
-            // Content genuinely absent — speak a targeted failure message
-            const errMsg = `I wasn't able to find that content right now. Check Today's Steps to see what's available.`;
+            // Log the real failure so it's visible in DevTools (not hidden behind a friendly string)
+            const errorCode =
+              args.type === 'daily-rhythm'      ? 'VOICE_RESOLVER_NO_ACTIVE_DAILY_RHYTHM' :
+              args.type === 'devotional'         ? 'VOICE_RESOLVER_ENTRY_NOT_FOUND_DEVOTIONAL' :
+              args.type === 'sermon-companion'   ? 'VOICE_RESOLVER_NO_SERMON_COMPANION' :
+              args.type === 'bible'              ? 'VOICE_RESOLVER_BIBLE_FETCH_FAILED' :
+                                                   'VOICE_RESOLVER_UNKNOWN_CONTENT_TYPE';
+            console.error('[VOICE CONTENT BRIDGE FAILED]', JSON.stringify({
+              errorCode,
+              toolArgs: args,
+              appContextLoaded: !!appContextRef.current,
+              dailyRhythmInContext: !!appContextRef.current?.dailyRhythm,
+              activeDevotionalsCount: appContextRef.current?.activeDevotionals?.length ?? 0,
+            }));
+            const errMsg = `I wasn't able to load that content. Check Today's Steps to see what's available.`;
             setResponse(errMsg);
             setStreamingResponse('');
             await playTTS(errMsg, false);
@@ -1373,8 +1386,19 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         if (tc.tool === 'navigate') {
           const args = tc.args as { destination: string };
           const routes: Record<string, string> = {
-            walk: '/walk', bible: '/walk/bible', discover: '/discover', journeys: '/journeys',
+            walk: '/walk', bible: '/bible', discover: '/discover', journeys: '/journeys',
           };
+          const resolvedRoute = args.destination === 'back' ? 'HISTORY_BACK' : (routes[args.destination] ?? '/walk');
+          const routeExists   = args.destination === 'back' || Object.keys(routes).includes(args.destination);
+          console.info('[VOICE TOOL NAV TRACE]', JSON.stringify({
+            toolName:             'navigate',
+            toolArguments:        args,
+            requestedDestination: args.destination,
+            resolvedRoute,
+            routeExists,
+            routerFunctionUsed:   navigateRef.current ? 'navigateRef' : providerNavigateRef.current ? 'providerNavigateRef' : 'window.history.pushState',
+            navigationCalled:     true,
+          }));
           // Speak brief confirmation text first (e.g. "Opening your Bible now.")
           if (fullResponse.trim()) {
             setResponse(fullResponse);
