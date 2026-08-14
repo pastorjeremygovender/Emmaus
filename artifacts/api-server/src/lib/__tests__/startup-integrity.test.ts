@@ -163,6 +163,37 @@ describe("Seed script production guards", () => {
   });
 });
 
+// ─── Test 3: No __TEST__ records in user-facing tables ───────────────────────
+// Test-only records (title starting with __TEST__) must never appear in
+// production-facing tables.  This guard fires in dev so the violation is caught
+// before export:seed ever runs, meaning it can never reach the production DB.
+
+describe("No __TEST__ records in user-facing tables", () => {
+  it("devotional_series has no __TEST__ titles", async () => {
+    const { rows } = await pool.query<{ title: string }>(
+      `SELECT title FROM devotional_series WHERE title LIKE '__TEST__%' LIMIT 5`,
+    );
+    assert.equal(
+      rows.length,
+      0,
+      `Found ${rows.length} __TEST__ devotional series: ${rows.map((r) => r.title).join(", ")}. ` +
+        "Delete test records from the dev database before publishing.",
+    );
+  });
+
+  it("journeys has no __TEST__ titles", async () => {
+    const { rows } = await pool.query<{ title: string }>(
+      `SELECT title FROM journeys WHERE title LIKE '__TEST__%' AND deleted_at IS NULL LIMIT 5`,
+    );
+    assert.equal(
+      rows.length,
+      0,
+      `Found ${rows.length} __TEST__ journeys: ${rows.map((r) => r.title).join(", ")}. ` +
+        "Delete test records from the dev database before publishing.",
+    );
+  });
+});
+
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
 after(async () => {

@@ -89,6 +89,7 @@ async function main() {
              created_by, notify_published_at
       FROM devotional_series
       WHERE deleted_at IS NULL
+        AND title NOT LIKE '__TEST__%'
       ORDER BY created_at
     `);
 
@@ -99,6 +100,9 @@ async function main() {
              status, published_at, display_label
       FROM devotional_entries
       WHERE deleted_at IS NULL
+        AND series_id NOT IN (
+          SELECT id FROM devotional_series WHERE title LIKE '__TEST__%'
+        )
       ORDER BY series_id, day_number
     `);
 

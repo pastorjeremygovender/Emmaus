@@ -1848,4 +1848,28 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     logger.info("Startup migration: voice_settings table ensured (idempotent)");
   }
+
+  // ─── Remove __TEST__ devotional records from all environments ──────────────
+  // Test records created during badge-lifecycle testing leaked into production
+  // via the prod-data-sync upsert.  Delete them idempotently; safe to re-run.
+  {
+    await pool.query(`
+      DELETE FROM devotional_entries
+      WHERE series_id IN (
+        SELECT id FROM devotional_series WHERE title LIKE '__TEST__%'
+      )
+    `);
+    await pool.query(`
+      DELETE FROM devotional_progress
+      WHERE series_id IN (
+        SELECT id FROM devotional_series WHERE title LIKE '__TEST__%'
+      )
+    `);
+    const { rowCount } = await pool.query(`
+      DELETE FROM devotional_series WHERE title LIKE '__TEST__%'
+    `);
+    if (rowCount && rowCount > 0) {
+      logger.info(`Startup migration: removed ${rowCount} __TEST__ devotional series`);
+    }
+  }
 }

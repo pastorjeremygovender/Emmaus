@@ -29,7 +29,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run export:seed && pnpm --filter @workspace/api-server run checksum:content > /tmp/pre-deploy-checksum.json && pnpm --filter @workspace/api-server run test:integrity"
+args = "pnpm --filter @workspace/project-emmaus run build && pnpm --filter @workspace/api-server run export:seed && pnpm --filter @workspace/api-server run checksum:content > /tmp/pre-deploy-checksum.json && pnpm --filter @workspace/api-server run test:integrity"
 
 [agent]
 stack = "PNPM_WORKSPACE"
