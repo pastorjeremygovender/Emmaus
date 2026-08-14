@@ -97,13 +97,15 @@ export interface VoiceConversationCallbacks {
  * Returns an { abort } handle. Call abort() to cancel mid-stream.
  */
 export function sendVoiceConversation(params: {
-  message:         string;
-  userId:          string;
-  context?:        object;
-  history?:        Array<{ role: string; content: string }>;
-  voiceAppContext?: string;
-  isReading?:      boolean;
-  callbacks:       VoiceConversationCallbacks;
+  message:          string;
+  userId:           string;
+  context?:         object;
+  history?:         Array<{ role: string; content: string }>;
+  voiceAppContext?:  string;
+  isReading?:        boolean;
+  /** Sections from the most recently completed reading — enables post-reading follow-up questions. */
+  lastReadContext?:  string;
+  callbacks:         VoiceConversationCallbacks;
 }): { abort: () => void } {
   const controller = new AbortController();
 
@@ -114,11 +116,12 @@ export function sendVoiceConversation(params: {
         headers: { 'Content-Type': 'application/json', 'X-User-Id': params.userId },
         signal:  controller.signal,
         body: JSON.stringify({
-          message:        params.message,
-          context:        params.context,
-          history:        (params.history ?? []).slice(-6),
+          message:         params.message,
+          context:         params.context,
+          history:         (params.history ?? []).slice(-6),
           voiceAppContext: params.voiceAppContext,
-          isReading:      params.isReading ?? false,
+          isReading:       params.isReading ?? false,
+          lastReadContext: params.lastReadContext,
         }),
       });
 

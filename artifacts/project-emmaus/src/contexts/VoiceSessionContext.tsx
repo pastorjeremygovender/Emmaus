@@ -224,6 +224,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const readingIndexRef    = useRef(0);
   const isReadingRef       = useRef(false);
   const readingPausedRef   = useRef(false);
+  // Sections from the most recently completed reading session.
+  // Populated when advanceReading() determines there are no more sections.
+  // Cleared when a new reading session starts or the voice session ends.
+  // Used by buildEmmausContext to give the LLM post-reading recall context.
+  const lastReadSectionsRef = useRef<{ label: string; text: string }[]>([]);
 
   // ── Interrupt monitor refs ─────────────────────────────────────────────────
   const intStreamRef        = useRef<MediaStream | null>(null);
@@ -928,6 +933,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }));
       if (!sections.length || next >= sections.length) {
         isReadingRef.current = false;
+        // Preserve the just-finished sections so follow-up questions work.
+        // e.g. "What was that verse?" after reading completes.
+        lastReadSectionsRef.current = sections.slice();
         // Reading is done — stop the interrupt monitor that was kept alive across sections.
         stopInterruptMonitor();
         setActiveContent(null);
@@ -963,6 +971,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       const appCtx = appContextRef.current;
       const sections: { label: string; text: string }[] = [];
+
+      // Clear last-read memory so follow-up questions target the new session.
+      lastReadSectionsRef.current = [];
 
       // ── Diagnostic log (always emitted, seen in browser console on device) ──
       if (content !== 'bible') {
@@ -1192,6 +1203,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
       }
 
+      if (!isReadingRef.current && lastReadSectionsRef.current.length > 0) {
+        const lastSections = lastReadSectionsRef.current;
+        const summary = lastSections
+          .map((s) => `[${s.label}] ${s.text.slice(0, 300)}`)
+          .join('\n');
+        parts.push(`Content just read aloud (reading has ended — the user may ask follow-up questions about this):\n${summary}`);
+      }
+
       const voiceAppContext = parts.length > 0 ? parts.join('\n\n') : undefined;
 
       if (bibleContextRef.current) {
@@ -1395,8 +1414,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       // Fast paths kept above (reading-command / navigate / continue-reading) are
       // deterministic, zero-latency, and need no LLM involvement.
 
-      const emmausCtx   = buildEmmausContext(intent);
-      const voiceAppCtx = emmausCtx.voiceAppContext;
+      const emmausCtx    = buildEmmausContext(intent);
+      const voiceAppCtx  = emmausCtx.voiceAppContext;
+      const lastReadCtx  = !isReadingRef.current && lastReadSectionsRef.current.length > 0
+        ? lastReadSectionsRef.current.map((s) => `[${s.label}] ${s.text.slice(0, 300)}`).join('\n')
+        : undefined;
 
       let toolCallPending: AnyVoiceToolCall | null = null;
       let hadToolCall = false;
@@ -1500,6 +1522,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           history:         history,
           voiceAppContext: voiceAppCtx,
           isReading:       isReadingRef.current,
+          lastReadContext: lastReadCtx,
           callbacks: {
             onText: (chunk) => {
               if (cancelledRef.current) return;
@@ -1872,12 +1895,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setConvId(null);
     setHistory([]);
     setInitContext(null);
-    isReadingRef.current       = false;
-    readingPausedRef.current   = false;
-    bibleContextRef.current    = null;
-    readingSectionsRef.current = [];
-    readingIndexRef.current    = 0;
-    appContextRef.current      = null;
+    isReadingRef.current        = false;
+    readingPausedRef.current    = false;
+    bibleContextRef.current     = null;
+    readingSectionsRef.current  = [];
+    readingIndexRef.current     = 0;
+    lastReadSectionsRef.current = [];
+    appContextRef.current       = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

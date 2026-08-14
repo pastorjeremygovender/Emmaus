@@ -601,7 +601,7 @@ async function resolveContinueWalk(
   };
 }
 
-function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean): string {
+function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, lastReadContext?: string): string {
   const lines = [
     'You are Emmaus, a warm and knowledgeable voice companion in a Christian discipleship app.',
     'This is a voice conversation. Speak in short, natural sentences — no markdown, bullet points, or headers.',
@@ -645,6 +645,14 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean): 
     lines.push('', 'Content is currently being read aloud. The user may ask questions about what they just heard, or say pause / continue / explain.');
   }
 
+  if (lastReadContext) {
+    lines.push(
+      '',
+      'The following content was just read aloud — the reading session has now ended. The user may ask follow-up questions about it (e.g. "What was that scripture?", "Can you explain what you just read?", "What does that verse mean?"). Answer using the content below:',
+      lastReadContext,
+    );
+  }
+
   return lines.join('\n');
 }
 
@@ -652,11 +660,12 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { message, history, voiceAppContext, isReading } = req.body as {
-    message?:        string;
-    history?:        Array<{ role: string; content: string }>;
-    voiceAppContext?: string;
-    isReading?:      boolean;
+  const { message, history, voiceAppContext, isReading, lastReadContext } = req.body as {
+    message?:         string;
+    history?:         Array<{ role: string; content: string }>;
+    voiceAppContext?:  string;
+    isReading?:        boolean;
+    lastReadContext?:  string;
   };
 
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -698,7 +707,7 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
     const model = process.env.VOICE_CONV_MODEL ?? 'gpt-4o';
     const openai = new OpenAI({ apiKey });
 
-    const systemPrompt = buildVoiceSystemPrompt(voiceAppContext, isReading);
+    const systemPrompt = buildVoiceSystemPrompt(voiceAppContext, isReading, lastReadContext);
 
     const safeHistory = (history ?? [])
       .slice(-6)
