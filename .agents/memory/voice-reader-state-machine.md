@@ -31,7 +31,17 @@ description: Root causes and fixes for section-continuation stalling and phantom
 - `[VOICE READER TRACE]` — emitted by `playReadingSection` for every section: sectionsTotal, currentSectionIndex, currentSectionLabel, nextSectionExists, readerState.
 - `[VOICE INPUT TRACE]` — emitted before every transcription: timeSinceTtsEnded, audioDurationMs, audioBytes, vadSpeechDetected, accepted, rejectReason.
 
+## CRITICAL: clearVAD resets vadSpokenRef before onstop fires
+
+`stopRecorder()` calls `clearVAD()` which sets `vadSpokenRef.current = false`.
+`recorder.stop()` is called AFTER `clearVAD()`, so `onstop` fires with `vadSpokenRef = false`.
+**NEVER check `vadSpokenRef.current` inside `processAudioBlob`** — it is always false there.
+
+The safe rejection gate is `blob.size < 1000` only (catches empty flush artifacts).
+Do NOT use VAD state, post-TTS timing, or any other heuristic in processAudioBlob.
+
 ## What NOT to change
 - Barge-in path (`startListeningFromCapture`) bypasses VAD — the blob validation applies only to the main `startListening` path.
-- `advanceReading()` in `processAudioBlob` (empty transcript path, line ~993) is kept as a safety net.
+- `advanceReading()` in `processAudioBlob` (empty transcript path) is kept as a safety net.
 - VAD thresholds (35 threshold, 5 consecutive ticks) must not be lowered — see existing comments.
+- `getUserMedia({ audio: true })` — do NOT add echoCancellation constraints to the main mic; iOS AudioContext state conflicts can cause subsequent getUserMedia calls to fail silently.

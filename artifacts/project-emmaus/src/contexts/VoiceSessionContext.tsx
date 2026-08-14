@@ -476,22 +476,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setTranscript('');
     setTtsError(false);
 
-    // Reset VAD speech flag at the start of every new listening session so a
-    // previous utterance cannot carry over and cause processAudioBlob to accept
-    // a silent / echo clip as if it had voice in it.
-    vadSpokenRef.current = false;
-    vadSilenceStartRef.current = null;
-
     try {
-      // echoCancellation + noiseSuppression mirror what the interrupt monitor
-      // uses — prevents TTS speaker bleed from being captured as user speech.
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl:  true,
-        },
-      });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (cancelledRef.current) { mediaStream.getTracks().forEach((t) => t.stop()); return; }
 
       streamRef.current = mediaStream;
@@ -1020,47 +1006,32 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       return { ...base, voiceAppContext };
     }
 
-    // ── Pre-transcription validation ──────────────────────────────────────────
-    // Reject audio clips that cannot represent genuine speech before spending
-    // an API call on Whisper.  This catches:
-    //   • residual TTS echo captured immediately after playback ends
-    //   • ambient noise micro-bursts that triggered a VAD false-positive
-    //   • tiny blobs from the MediaRecorder flush on recorder.stop()
-    //
-    // IMPORTANT: reject the bad AUDIO EVENT, not individual words.
-    // A real user saying "yes", "you", or any short word must still be accepted
-    // as long as the VAD detected genuine speech activity.
+    // ── [VOICE INPUT TRACE] — diagnostic for physical-device testing ──────────
     {
-      const nowMs              = Date.now();
-      const timeSinceTts       = ttsEndedAtRef.current !== null ? nowMs - ttsEndedAtRef.current : null;
-      const audioDurationMs    = nowMs - recordingStartRef.current;
-      const audioBytes         = blob.size;
-      const vadSpeechDetected  = vadSpokenRef.current;
-
-      // A clip is rejected if EITHER:
-      //   a) VAD never registered genuine speech in this recording window, OR
-      //   b) the blob is suspiciously small regardless of VAD
-      //      (MediaRecorder sometimes flushes a near-empty chunk on stop)
-      const MIN_BLOB_BYTES = 3000;
-      const rejected = !vadSpeechDetected || audioBytes < MIN_BLOB_BYTES;
-
+      const audioDurationMs = Date.now() - recordingStartRef.current;
+      const audioBytes      = blob.size;
       console.log('[VOICE INPUT TRACE]', JSON.stringify({
-        micOpenedAt:         new Date(recordingStartRef.current).toISOString(),
-        ttsEndedAt:          ttsEndedAtRef.current ? new Date(ttsEndedAtRef.current).toISOString() : null,
-        timeSinceTtsEnded:   timeSinceTts,
         audioDurationMs,
         audioBytes,
-        vadSpeechDetected,
-        accepted:            !rejected,
-        rejectReason:        rejected
-          ? (!vadSpeechDetected ? 'no_vad_speech_detected' : 'blob_too_small')
-          : null,
+        ttsEndedAt:        ttsEndedAtRef.current ? new Date(ttsEndedAtRef.current).toISOString() : null,
+        timeSinceTtsEnded: ttsEndedAtRef.current !== null ? Date.now() - ttsEndedAtRef.current : null,
       }));
 
-      if (rejected) {
-        // Do not transcribe, do not dispatch, do not send to Ask Emmaus.
-        // If reading was active, the direct-advance path in playTTS already
-        // handles advancement — this is only a safety net.
+      // IMPORTANT: do NOT gate on vadSpokenRef here.
+      // clearVAD() always resets vadSpokenRef.current = false BEFORE recorder.onstop
+      // fires, so vadSpokenRef.current is always false at this point regardless
+      // of whether the user spoke.  Checking it here rejects all real speech.
+      //
+      // Only reject blobs that are genuinely empty — a near-zero-byte blob is a
+      // MediaRecorder flush artifact from recorder.stop(), not real audio.
+      const MIN_BLOB_BYTES = 1000;
+      if (audioBytes < MIN_BLOB_BYTES) {
+        console.log('[VOICE AUDIO REJECTED]', JSON.stringify({
+          reason:      'blob_too_small',
+          duration:    audioDurationMs,
+          bytes:       audioBytes,
+          vadSpeechMs: null,
+        }));
         if (isReadingRef.current && !readingPausedRef.current) {
           await advanceReading();
         } else {
@@ -1081,6 +1052,17 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     try {
       const audioBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
       const text = await transcribeAudio(audioBlob, user.id);
+
+      console.log('[VOICE CORE TRACE]', JSON.stringify({
+        event:               'transcription_complete',
+        audioBlobBytes:      blob.size,
+        audioDurationMs:     Date.now() - recordingStartRef.current,
+        transcriptionStarted: true,
+        transcript:          text.trim().slice(0, 120),
+        audioAccepted:       true,
+        nextState:           text.trim() ? 'dispatch' : 'error_or_advance',
+      }));
+
       if (cancelledRef.current) return;
 
       if (!text.trim()) {
@@ -1341,6 +1323,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const endSession = useCallback(() => {
+    console.log('[VOICE STOP TRACE]', JSON.stringify({
+      tapReceived:   true,
+      recorderActive: Boolean(recorderRef.current),
+      ttsActive:     Boolean(audioElRef.current),
+      timerPending:  Boolean(autoRestartTimerRef.current),
+      sessionEnded:  true,
+    }));
     cancelledRef.current = true;
     pausedRef.current    = false;
     cleanupAll();
