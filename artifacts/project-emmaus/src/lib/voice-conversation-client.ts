@@ -60,15 +60,19 @@ export interface VoiceConversationCallbacks {
   /**
    * Called for each complete sentence detected server-side as the LLM streams.
    * Sentences arrive as soon as a sentence boundary (. ! ?) is detected, well
-   * before the stream ends, enabling prefetch + sequential TTS playback.
+   * before the stream ends, enabling sequential TTS playback.
+   * Only emitted for conversational (non-tool-call) responses.
    * Optional — if absent the caller should fall back to onDone + single TTS.
    */
   onSentence?: (sentence: string) => void;
   /** Called when the LLM decides to call a tool. Emitted after stream ends. */
+
   onToolCall: (tc: AnyVoiceToolCall) => void;
   /** Called when the stream completes successfully. */
+
   onDone: (fullText: string, hadToolCall: boolean) => void;
   /** Called on fetch or parse error. */
+
   onError: (msg: string) => void;
 }
 

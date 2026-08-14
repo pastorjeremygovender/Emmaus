@@ -1206,73 +1206,58 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const voiceAppCtx = emmausCtx.voiceAppContext;
 
       let toolCallPending: AnyVoiceToolCall | null = null;
-      let hadToolCall     = false;
-      let fullResponse    = '';
+      let hadToolCall = false;
+      let fullResponse = '';
 
-      // ── Sentence streaming TTS queue (Sprint 3) ────────────────────────────────
-      // As the server detects sentence boundaries it emits 'sentence' SSE events.
-      // We immediately start fetching TTS audio for each sentence (prefetch) and
-      // play them sequentially in the background — so the first word is spoken
-      // ~1s after the user speaks, not after the full LLM response arrives.
+      // ── Sentence streaming queue ──────────────────────────────────────────────
+      // Sentences from the server are played via TTS as they arrive so the user
+      // hears Emmaus start speaking within 1-2 s of finishing their question,
+      // rather than waiting for the full LLM response.  Only used for
+      // conversational (non-tool-call) responses.
+      const sentenceQueue: string[] = [];
+      let   sentenceQueueDone   = false;
+      let   sentenceQueueWaker: (() => void) | null = null;
+      let   sentenceQueueActive = false;
+      let   drainPromise: Promise<void> | null = null;
 
-      const ttsSentenceQueue: Array<Promise<{ audio: HTMLAudioElement; dispose: () => void }>> = [];
-      let sentencesQueued    = 0;
-      let sentenceStreamDone = false;
-      let drainRunning       = false;
-
-      let resolveAllDone!: () => void;
-      const allDonePromise = new Promise<void>(r => { resolveAllDone = r; });
-
-      function startDraining() {
-        if (drainRunning) return;
-        drainRunning = true;
-        drainSentences(); // fire-and-forget; idempotent via drainRunning flag
+      /**
+       * Play sentences from the queue sequentially, waiting for more to arrive
+       * when the queue empties before the stream has finished.
+       * Cancels the post-TTS auto-restart timer before each sentence so that the
+       * previous sentence's 1-second delay doesn't fire the mic while a new
+       * sentence is already queued.
+       */
+      async function drainAndPlaySentences(): Promise<void> {
+        while (true) {
+          if (sentenceQueue.length > 0) {
+            cancelAutoRestart(); // clear timer set by previous playTTS onended
+            const sentence = sentenceQueue.shift()!;
+            if (!cancelledRef.current) {
+              await playTTS(sentence, false);
+            }
+            if (cancelledRef.current) return;
+          } else if (sentenceQueueDone) {
+            return;
+          } else {
+            // Cancel any auto-restart timer that fired while we waited for the
+            // next sentence — prevents the mic from opening between sentences.
+            cancelAutoRestart();
+            await new Promise<void>((r) => { sentenceQueueWaker = r; });
+          }
+        }
       }
 
-      async function drainSentences() {
-        while (!cancelledRef.current && !hadToolCall) {
-          if (ttsSentenceQueue.length === 0) {
-            if (sentenceStreamDone) break;          // stream done + queue empty → done
-            await new Promise<void>(r => setTimeout(r, 30)); // wait for next sentence
-            continue;
-          }
-
-          const fetchPromise = ttsSentenceQueue.shift()!;
-          let ttsResult: { audio: HTMLAudioElement; dispose: () => void };
-          try {
-            ttsResult = await fetchPromise;          // wait for prefetch to complete
-          } catch {
-            continue;                                // TTS fetch failed — skip sentence
-          }
-
-          if (cancelledRef.current || hadToolCall) { ttsResult.dispose(); break; }
-
-          const { audio, dispose } = ttsResult;
-          audioElRef.current      = audio;
-          disposeAudioRef.current = dispose;
-          setHasAudioElement(true);
-          setVoiceState('SPEAKING');
-
-          await new Promise<void>(resOnEnded => {
-            audio.onended = () => {
-              stopAudio();
-              // Restart mic only after the LAST sentence finishes
-              const isLast = ttsSentenceQueue.length === 0 && sentenceStreamDone;
-              if (isLast && !cancelledRef.current) {
-                autoRestartTimerRef.current = setTimeout(() => {
-                  autoRestartTimerRef.current = null;
-                  if (!cancelledRef.current && !pausedRef.current) startListening();
-                }, 800);
-              }
-              resOnEnded();
-            };
-            audio.onerror = () => { stopAudio(); setTtsError(true); resOnEnded(); };
-            audio.play().catch(() => { stopAudio(); setVoiceState('READY'); resOnEnded(); });
-          });
-
-          if (cancelledRef.current) break;
+      function enqueueSentence(sentence: string) {
+        if (!sentence.trim() || hadToolCall) return;
+        sentenceQueue.push(sentence);
+        if (!sentenceQueueActive) {
+          sentenceQueueActive = true;
+          drainPromise = drainAndPlaySentences();
+        } else if (sentenceQueueWaker) {
+          const wake = sentenceQueueWaker;
+          sentenceQueueWaker = null;
+          wake();
         }
-        resolveAllDone();
       }
 
       await new Promise<void>((resolve, reject) => {
@@ -1288,27 +1273,34 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               fullResponse += chunk;
               setStreamingResponse(fullResponse);
             },
-            // Each complete sentence: prefetch TTS immediately and enqueue
+            // Each complete sentence is dispatched to TTS immediately so the
+            // user hears the first sentence before the LLM finishes responding.
             onSentence: (sentence) => {
-              if (cancelledRef.current || hadToolCall) return;
-              sentencesQueued++;
-              ttsSentenceQueue.push(streamSpeechToAudio(sentence, user.id));
-              startDraining();
+              if (cancelledRef.current) return;
+              enqueueSentence(sentence);
             },
-            // Collect the tool call — executed after stream ends
+            // Collect the tool call — executed after stream ends so any brief
+            // confirmation text can be spoken before or instead of the action.
             onToolCall: (tc) => {
               hadToolCall = true;
               toolCallPending = tc;
               console.log('[VOICE TOOL CALL]', JSON.stringify({ tool: tc.tool, args: tc.args }));
             },
             onDone: (_finalText, _hadTool) => {
-              sentenceStreamDone = true; // unblocks the drain loop's idle poll
               if (!_hadTool && !cancelledRef.current) {
+                // Pure conversation — persist to local history for multi-turn context
                 setHistory((prev) => [
                   ...prev,
                   { role: 'user' as const,      content: text },
                   { role: 'assistant' as const, content: fullResponse },
                 ]);
+              }
+              // Signal drain loop that no more sentences are coming
+              sentenceQueueDone = true;
+              if (sentenceQueueWaker) {
+                const wake = sentenceQueueWaker;
+                sentenceQueueWaker = null;
+                wake();
               }
               resolve();
             },
@@ -1373,19 +1365,21 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
           }
           if (!fullResponse.trim()) {
+            // No TTS — restart listening after navigation settles
             autoRestartTimerRef.current = setTimeout(() => {
               autoRestartTimerRef.current = null;
               if (!cancelledRef.current && !pausedRef.current) startListening();
             }, 1200);
           }
+          // If TTS was spoken, its onended handler restarts listening automatically
           return;
         }
 
         if (tc.tool === 'continue_walk') {
           // Navigate directly to the user's current step in their active walk.
           // Falls back to the journeys list if multiple walks are active.
-          const args   = tc.args as { hint?: string };
-          const walks  = appContextRef.current?.activeWalks ?? [];
+          const args  = tc.args as { hint?: string };
+          const walks = appContextRef.current?.activeWalks ?? [];
 
           const match  = args.hint
             ? walks.find((w) => w.title.toLowerCase().includes(args.hint!.toLowerCase()))
@@ -1473,19 +1467,22 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
       }
 
-      // ── No tool — conversational response with sentence streaming ────────────
+      // ── No tool — pure conversational response ────────────────────────────────
       if (!fullResponse.trim()) { setVoiceState('READY'); return; }
       setResponse(fullResponse);
       setStreamingResponse('');
 
-      if (sentencesQueued > 0) {
-        // Sentences were prefetched during the LLM stream.
-        // drainSentences() plays them sequentially and handles mic restart after
-        // the last one. Wait here until the drain is fully complete.
-        await allDonePromise;
+      // If sentence streaming was used (sentences arrived during the LLM stream),
+      // await the drain promise — playback already started on the first sentence,
+      // so the user has been hearing Emmaus speak since ~1-2 s after they spoke.
+      // The last sentence's playTTS onended handler will schedule the mic restart.
+      //
+      // Fallback: if no sentence events arrived (e.g. very short response that
+      // didn't hit a boundary before the stream ended), speak the full response
+      // the traditional way to ensure nothing is silently dropped.
+      if (sentenceQueueActive && drainPromise) {
+        await drainPromise;
       } else {
-        // Fallback: no sentence events arrived (e.g. very short reply or tool
-        // response with no sentence boundary). Play full text as one TTS call.
         await playTTS(fullResponse, false);
       }
 

@@ -614,32 +614,43 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
       max_completion_tokens: 300, // voice responses are short
     });
 
-    let fullText       = '';
-    let sentenceBuffer = '';
+    let fullText = '';
+    let sentenceBuf = '';
     const toolCalls: Record<number, { id: string; name: string; argsStr: string }> = {};
 
+    // Sentence boundary: punctuation mark followed by optional closing quote/paren
+    // then one-or-more whitespace characters.  Keeps trailing whitespace consumed
+    // so the next sentence starts clean.
+    const SENTENCE_END = /[.?!][)\]"'`]*\s+/;
+
+    /** Extract and emit all complete sentences from sentenceBuf. */
+    function flushSentences() {
+      while (true) {
+        const m = SENTENCE_END.exec(sentenceBuf);
+        if (!m) break;
+        const boundary = m.index + m[0].length;
+        const sentence = sentenceBuf.slice(0, boundary).trim();
+        sentenceBuf    = sentenceBuf.slice(boundary);
+        if (sentence) sse({ type: 'sentence', content: sentence });
+      }
+    }
+
     for await (const chunk of stream) {
-      const delta       = chunk.choices[0]?.delta;
+      const delta        = chunk.choices[0]?.delta;
       const finishReason = chunk.choices[0]?.finish_reason;
 
-      // Stream text chunks + detect sentence boundaries for client TTS prefetch
+      // Stream text chunks (kept for display / streaming indicator on the client)
       if (delta?.content) {
-        fullText       += delta.content;
-        sentenceBuffer += delta.content;
+        fullText    += delta.content;
+        sentenceBuf += delta.content;
         sse({ type: 'text', content: delta.content });
 
-        // Split on punctuation followed by whitespace (e.g. ". ", "! ", "? ")
-        // Regex intentionally simple: abbreviations (Dr., U.S.) rarely appear
-        // in short voice responses, and a false split is benign.
-        const sentRe = /[^.!?]*[.!?]+\s+/g;
-        let sLast = 0;
-        let sm: RegExpExecArray | null;
-        while ((sm = sentRe.exec(sentenceBuffer)) !== null) {
-          const s = sm[0].trim();
-          if (s.length > 0) sse({ type: 'sentence', content: s });
-          sLast = sm.index + sm[0].length;
+        // Only flush sentences for conversational responses — tool calls do not
+        // produce delta.content so toolCalls will be empty at this point when
+        // the model is generating a plain reply.
+        if (Object.keys(toolCalls).length === 0) {
+          flushSentences();
         }
-        sentenceBuffer = sentenceBuffer.slice(sLast);
       }
 
       // Accumulate tool call fragments (arguments arrive piecemeal)
@@ -655,6 +666,12 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
 
       // Emit tool_call events when the model finishes choosing
       if (finishReason === 'tool_calls' || finishReason === 'stop') {
+        // Flush any trailing sentence fragment (e.g. a response ending without
+        // trailing whitespace such as "That's great!" with no space after).
+        if (finishReason === 'stop' && sentenceBuf.trim()) {
+          sse({ type: 'sentence', content: sentenceBuf.trim() });
+          sentenceBuf = '';
+        }
         for (const tc of Object.values(toolCalls)) {
           if (!tc.name) continue;
           let args: object = {};
@@ -667,11 +684,6 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
           }
         }
       }
-    }
-
-    // Flush any remaining text that didn't end with whitespace-terminated punctuation
-    if (sentenceBuffer.trim().length > 0) {
-      sse({ type: 'sentence', content: sentenceBuffer.trim() });
     }
 
     sse({ type: 'done', text: fullText });
