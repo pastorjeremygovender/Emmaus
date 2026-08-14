@@ -1214,10 +1214,25 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       // hears Emmaus start speaking within 1-2 s of finishing their question,
       // rather than waiting for the full LLM response.  Only used for
       // conversational (non-tool-call) responses.
+      //
+      // ORDERING INVARIANT: the server always emits { type:'sentence' } before
+      // { type:'done' } for any non-empty conversational response (including the
+      // trailing-fragment flush at finishReason==='stop').  The SSE reader in
+      // voice-conversation-client.ts calls onSentence during the read loop and
+      // calls onDone only after the loop ends, so sentenceEverEnqueued is
+      // guaranteed to be true before the outer Promise resolves whenever the
+      // server emitted at least one sentence.  This makes the fallback branch
+      // below safe from double-speaking.
       const sentenceQueue: string[] = [];
-      let   sentenceQueueDone   = false;
+      let   sentenceQueueDone    = false;
       let   sentenceQueueWaker: (() => void) | null = null;
-      let   sentenceQueueActive = false;
+      let   sentenceQueueActive  = false;
+      // sentenceEverEnqueued is set to true the first time a valid sentence is
+      // pushed to the queue.  It is never cleared, so the fallback guard below
+      // can reliably distinguish "no sentences ever arrived" from "drain already
+      // finished" — the two cases that produce an identical sentenceQueueActive
+      // value after the drain loop exits.
+      let   sentenceEverEnqueued = false;
       let   drainPromise: Promise<void> | null = null;
 
       /**
@@ -1249,6 +1264,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       function enqueueSentence(sentence: string) {
         if (!sentence.trim() || hadToolCall) return;
+        sentenceEverEnqueued = true; // set before drain starts; survives drain completion
         sentenceQueue.push(sentence);
         if (!sentenceQueueActive) {
           sentenceQueueActive = true;
@@ -1433,12 +1449,23 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       // so the user has been hearing Emmaus speak since ~1-2 s after they spoke.
       // The last sentence's playTTS onended handler will schedule the mic restart.
       //
-      // Fallback: if no sentence events arrived (e.g. very short response that
-      // didn't hit a boundary before the stream ended), speak the full response
-      // the traditional way to ensure nothing is silently dropped.
-      if (sentenceQueueActive && drainPromise) {
+      // DOUBLE-SPEAK GUARD: sentenceEverEnqueued is the authoritative flag for
+      // "at least one sentence was enqueued".  It is set before the drain loop
+      // starts and is never cleared, so it remains true even after drainPromise
+      // resolves — unlike sentenceQueueActive which serves the same purpose but
+      // could in principle be confused with a "drain loop already exited" state.
+      // Only take the fallback branch when NO sentence ever arrived; in that
+      // case the full response is guaranteed to be unplayed.
+      if (sentenceEverEnqueued && drainPromise) {
+        // Drain loop already started (and may have already resolved); awaiting
+        // a resolved promise is a no-op, so this is safe in all timings.
         await drainPromise;
       } else {
+        // No sentence events arrived from the server (e.g. empty sentenceBuf at
+        // finishReason==='stop' after flushSentences already consumed all text,
+        // or a tool-call-only response that produced no delta.content at all —
+        // which should be unreachable here because hadToolCall routes above).
+        // Speak the full response exactly once.
         await playTTS(fullResponse, false);
       }
 

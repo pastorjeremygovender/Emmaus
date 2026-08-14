@@ -668,6 +668,14 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
       if (finishReason === 'tool_calls' || finishReason === 'stop') {
         // Flush any trailing sentence fragment (e.g. a response ending without
         // trailing whitespace such as "That's great!" with no space after).
+        //
+        // ORDERING INVARIANT: this { type:'sentence' } event is emitted HERE,
+        // inside the for-await loop, BEFORE the { type:'done' } event that
+        // follows the loop.  The client SSE reader processes events in stream
+        // order, so onSentence always fires before onDone for any non-empty
+        // conversational response.  This guarantees that sentenceEverEnqueued
+        // is true on the client before the drain / fallback check runs.
+        // Do NOT move this flush below the loop or after the done event.
         if (finishReason === 'stop' && sentenceBuf.trim()) {
           sse({ type: 'sentence', content: sentenceBuf.trim() });
           sentenceBuf = '';
