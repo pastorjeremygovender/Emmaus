@@ -23,7 +23,7 @@ const IMAGE_SIZE = "1024x1536";
 // ─── Prompt construction ──────────────────────────────────────────────────────
 
 function buildGenerationPrompt(text: string): string {
-  return `Create a beautiful devotional share image for a Christian discipleship app called Emmaus.
+  return `Create a beautiful Christian devotional share image.
 
 DISPLAY THIS TEXT EXACTLY in the image — do not change, shorten, paraphrase or omit any word:
 """
@@ -41,12 +41,13 @@ VISUAL STYLE:
 - Portrait orientation (taller than wide)
 - Suitable for sharing on WhatsApp, Instagram, and Facebook
 - Christian in spirit — warm and intimate, not ornate or clichéd
+- Do NOT add any logos, watermarks, app names, church names, or branding of any kind
 
-CRITICAL: Preserve the exact wording above verbatim. Typography should be beautiful and unhurried.`;
+CRITICAL: Preserve the exact wording above verbatim. Typography should be beautiful and unhurried. Leave the bottom 8% of the image clear — do not place text or key elements there.`;
 }
 
 function buildEditPrompt(text: string, instruction: string): string {
-  return `You are refining a devotional share image for the Emmaus discipleship app.
+  return `You are refining a Christian devotional share image.
 
 The devotional text displayed in the image is:
 """
@@ -63,7 +64,8 @@ IMPORTANT:
 - Preserve the original devotional text verbatim — same wording, same emphasis
 - Apply the requested change while keeping the warm, clean, premium devotional aesthetic
 - Retain as much of the existing composition as is consistent with the change requested
-- If the change conflicts with showing the text clearly, text legibility always wins`;
+- If the change conflicts with showing the text clearly, text legibility always wins
+- Do NOT add any logos, watermarks, app names, church names, or branding of any kind`;
 }
 
 // ─── Route ────────────────────────────────────────────────────────────────────

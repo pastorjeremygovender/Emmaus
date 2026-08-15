@@ -83,41 +83,60 @@ async function compositeAttributionBlob(
       if (attribution !== "none") {
         const W = canvas.width;
         const H = canvas.height;
-        const FOOTER = Math.round(H * 0.055); // ~5.5% of height
-        const yTop = H - FOOTER;
-
-        // Subtle gradient overlay at the bottom
-        const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.5, 0, H);
-        grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(1, "rgba(0,0,0,0.55)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, yTop - FOOTER * 0.5, W, FOOTER * 1.5);
-
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        const scale = W / 1024; // normalise for image width
+        const scale = W / 1024; // normalise font sizes to image width
 
         if (attribution === "emmaus") {
-          const primary = Math.round(16 * scale);
-          const secondary = Math.round(12 * scale);
+          // Two-line footer: measure both lines first, then position
+          const primarySize = Math.round(18 * scale);
+          const secondarySize = Math.round(13 * scale);
+          const lineGap = Math.round(10 * scale);
+          const padV = Math.round(22 * scale); // vertical padding from bottom edge
 
-          ctx.font = `600 ${primary}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-          ctx.fillStyle = "rgba(255,255,255,0.96)";
-          ctx.fillText("Shared from Emmaus", W / 2, yTop + FOOTER * 0.34);
+          const blockH = primarySize + lineGap + secondarySize;
+          const FOOTER = blockH + padV * 2;
+          const yTop = H - FOOTER;
 
-          ctx.font = `${secondary}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+          // Gradient — fades from transparent to semi-opaque black
+          const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
+          grad.addColorStop(0, "rgba(0,0,0,0)");
+          grad.addColorStop(1, "rgba(0,0,0,0.60)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
+
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+
+          // Line 1 — "Shared from Emmaus"
+          const y1 = H - padV - secondarySize - lineGap - primarySize;
+          ctx.font = `600 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.97)";
+          ctx.fillText("Shared from Emmaus", W / 2, y1);
+
+          // Line 2 — "A discipleship ministry of Isipingo Community Church"
+          const y2 = y1 + primarySize + lineGap;
+          ctx.font = `${secondarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
           ctx.fillStyle = "rgba(255,255,255,0.72)";
-          ctx.fillText(
-            "A discipleship ministry of Isipingo Community Church",
-            W / 2,
-            yTop + FOOTER * 0.72
-          );
+          ctx.fillText("A discipleship ministry of Isipingo Community Church", W / 2, y2);
+
         } else if (attribution === "jeremy") {
-          const primary = Math.round(15 * scale);
-          ctx.font = `500 ${primary}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-          ctx.fillStyle = "rgba(255,255,255,0.93)";
-          ctx.fillText("Jeremy Govender", W / 2, yTop + FOOTER * 0.5);
+          const primarySize = Math.round(17 * scale);
+          const padV = Math.round(24 * scale);
+          const FOOTER = primarySize + padV * 2;
+          const yTop = H - FOOTER;
+
+          const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
+          grad.addColorStop(0, "rgba(0,0,0,0)");
+          grad.addColorStop(1, "rgba(0,0,0,0.55)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
+
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+
+          const y1 = H - padV - primarySize;
+          ctx.font = `500 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+          ctx.fillStyle = "rgba(255,255,255,0.95)";
+          ctx.fillText("Jeremy Govender", W / 2, y1);
         }
       }
 
