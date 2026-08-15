@@ -139,11 +139,6 @@ export default function AskEmmausHome() {
             : '',
         )}
       >
-        {/* Heading */}
-        <h1 className="text-[26px] font-sans font-medium text-foreground leading-tight">
-          Ask Emmaus
-        </h1>
-
         {/* Talk to Emmaus voice button */}
         {voiceEnabled === true && (
           <div className="flex flex-col items-center gap-2.5">
