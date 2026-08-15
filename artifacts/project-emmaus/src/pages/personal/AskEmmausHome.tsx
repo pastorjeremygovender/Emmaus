@@ -155,6 +155,34 @@ export default function AskEmmausHome() {
           )}
         </div>
 
+        {/* Voice mode entry — shown only when voice settings are confirmed enabled */}
+        {voiceEnabled === true && (
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => {
+                if (!user) return;
+                const context = fabContext
+                  ? { ...fabContext, userName: user.preferredName }
+                  : { entryPoint: 'personal' as const, userName: user.preferredName };
+                setPendingContext(context);
+                // Unlock audio synchronously while we are still in the gesture stack.
+                // Must happen before setLocation() triggers any async React work.
+                // See lib/voice-audio-unlock.ts for the full rationale.
+                unlockVoiceAudio();
+                setLocation('/personal/ask-emmaus/voice');
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[14px] font-medium bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-all"
+              aria-label="Open voice mode"
+            >
+              <Mic size={14} />
+              Talk to Emmaus
+            </button>
+            <p className="text-[12px] text-muted-foreground text-center">
+              Speak your question and hear Emmaus respond.
+            </p>
+          </div>
+        )}
+
         {/* Composer + chips */}
         <div className="space-y-3">
           <label htmlFor="emmaus-input" className="sr-only">
@@ -197,34 +225,6 @@ export default function AskEmmausHome() {
         <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
           Emmaus offers pastoral reflection, not counseling or professional advice.
         </p>
-
-        {/* Voice mode entry — shown only when voice settings are confirmed enabled */}
-        {voiceEnabled === true && (
-          <div className="flex flex-col items-center gap-2">
-            <button
-              onClick={() => {
-                if (!user) return;
-                const context = fabContext
-                  ? { ...fabContext, userName: user.preferredName }
-                  : { entryPoint: 'personal' as const, userName: user.preferredName };
-                setPendingContext(context);
-                // Unlock audio synchronously while we are still in the gesture stack.
-                // Must happen before setLocation() triggers any async React work.
-                // See lib/voice-audio-unlock.ts for the full rationale.
-                unlockVoiceAudio();
-                setLocation('/personal/ask-emmaus/voice');
-              }}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[14px] font-medium bg-primary/8 border border-primary/20 text-primary hover:bg-primary/12 transition-all"
-              aria-label="Open voice mode"
-            >
-              <Mic size={14} />
-              Talk to Emmaus
-            </button>
-            <p className="text-[12px] text-muted-foreground text-center">
-              Speak your question and hear Emmaus respond.
-            </p>
-          </div>
-        )}
 
         {/* Previous conversations */}
         {conversations.length > 0 && (
