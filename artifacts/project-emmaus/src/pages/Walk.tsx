@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
@@ -259,13 +259,8 @@ function CompactCard({
             </p>
           )}
         </div>
-        {ctaLabel && onAction && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onAction(); }}
-            className="shrink-0 text-[12px] font-semibold text-primary whitespace-nowrap leading-none ml-1"
-          >
-            {ctaLabel} →
-          </button>
+        {onAction && !done && !trailing && (
+          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         )}
         {trailing && (
           <div className="shrink-0 -mr-0.5" onClick={(e) => e.stopPropagation()}>
