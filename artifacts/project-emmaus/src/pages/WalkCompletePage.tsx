@@ -92,10 +92,9 @@ export default function WalkCompletePage() {
                   continueLabel: `Start ${nextJourney.title}`,
                   onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
                 }
-              : {
-                  continueLabel: 'View Walk Summary',
-                  onContinue: () => setLocation(journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys'),
-                })}
+              : {})}
+            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?from=nextStepsWalks`) : undefined}
+            previousDaysLabel="View Previous Steps →"
           />
 
           {/* Add to Room — shown when the member has Rooms and this Walk isn't already linked */}
