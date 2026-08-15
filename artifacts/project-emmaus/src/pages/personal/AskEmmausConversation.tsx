@@ -424,11 +424,6 @@ export default function AskEmmausConversation() {
           >
             <ArrowLeft size={22} aria-hidden="true" />
           </button>
-          <div className="flex-1 text-center">
-            <p className="text-[14px] font-medium text-muted-foreground">
-              Ask Emmaus
-            </p>
-          </div>
           <div className="min-w-[44px]" aria-hidden="true" />
         </div>
       </header>

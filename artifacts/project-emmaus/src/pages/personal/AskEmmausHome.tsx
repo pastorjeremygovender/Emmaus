@@ -103,12 +103,7 @@ export default function AskEmmausHome() {
     <div className="h-[100dvh] bg-background flex flex-col overflow-hidden">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <header
-        className={cn(
-          'shrink-0 flex items-center px-4 transition-all duration-250',
-          isTyping ? 'h-14 border-b border-border/50' : 'h-12',
-        )}
-      >
+      <header className="shrink-0 h-12 flex items-center px-4">
         <button
           onClick={handleBack}
           className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -116,29 +111,10 @@ export default function AskEmmausHome() {
         >
           <ArrowLeft size={22} aria-hidden="true" />
         </button>
-
-        <p
-          className={cn(
-            'flex-1 text-center text-[17px] font-semibold text-foreground transition-all duration-250',
-            isTyping ? 'opacity-100' : 'opacity-0 pointer-events-none',
-          )}
-        >
-          Ask Emmaus
-        </p>
-
-        {/* Balance the back button */}
-        <div className="min-w-[44px]" />
       </header>
 
-      {/* ── Idle content — collapses when typing ─────────────────────────── */}
-      <div
-        className={cn(
-          'flex flex-col px-5 pt-10 gap-6 transition-all duration-250 overflow-hidden',
-          isTyping
-            ? 'max-h-0 opacity-0 pointer-events-none'
-            : '',
-        )}
-      >
+      {/* ── Content ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col px-5 pt-10 gap-6">
         {/* Talk to Emmaus voice button */}
         {voiceEnabled === true && (
           <div className="flex flex-col items-center gap-2.5">
@@ -173,24 +149,12 @@ export default function AskEmmausHome() {
         </p>
       </div>
 
-      {/* ── WhatsApp spacer — fills space above composer when typing ─────── */}
-      {isTyping && <div className="flex-1" />}
+      {/* ── Spacer — always present, keeps composer at bottom ───────────── */}
+      <div className="flex-1" />
 
       {/* ── Composer ─────────────────────────────────────────────────────── */}
-      <div
-        className={cn(
-          'shrink-0 px-5 py-3 transition-all duration-250',
-          isTyping && 'border-t border-border/50',
-        )}
-      >
-        <div
-          className={cn(
-            'flex items-center gap-2.5 px-4 py-3 rounded-full border bg-card shadow-sm transition-all',
-            isTyping
-              ? 'border-primary/40 ring-2 ring-primary/15 shadow-md'
-              : 'border-border hover:border-primary/25 hover:shadow-md',
-          )}
-        >
+      <div className="shrink-0 px-5 py-3">
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-full border border-border bg-card shadow-sm hover:border-primary/25 hover:shadow-md focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/15 focus-within:shadow-md transition-all">
           {/* Text input */}
           {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
