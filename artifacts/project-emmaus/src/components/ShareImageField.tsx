@@ -35,7 +35,7 @@ export function ShareImageField({ value, onChange }: Props) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
-  const imageUrl = value ? getApiUrl('/storage' + value) : null;
+  const imageUrl = value ? getApiUrl('/api/storage' + value) : null;
 
   // ── Manual upload helpers ──────────────────────────────────────────────────
 

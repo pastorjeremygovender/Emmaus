@@ -21,7 +21,7 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
   if (!shareImageUrl) return null;
 
   // The API server serves objects at /storage/objects/* — same pattern as rooms media.
-  const imageUrl = getApiUrl('/storage' + shareImageUrl);
+  const imageUrl = getApiUrl('/api/storage' + shareImageUrl);
 
   async function handleSave() {
     try {

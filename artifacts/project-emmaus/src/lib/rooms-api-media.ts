@@ -64,7 +64,7 @@ export async function uploadFileToStorage(
 export function getMediaUrl(objectPath: string): string {
   // objectPath is like "/objects/uploads/<uuid>"
   // The server serves it at "/storage/objects/uploads/<uuid>"
-  return getApiUrl('/storage' + objectPath);
+  return getApiUrl('/api/storage' + objectPath);
 }
 
 // ─── Media list ───────────────────────────────────────────────────────────────
