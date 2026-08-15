@@ -147,9 +147,15 @@ interface UnifiedEmmausInputProps {
   className?: string;
   /** Called when the input becomes active (query typed) or inactive (cleared). */
   onActiveChange?: (isActive: boolean) => void;
+  /**
+   * When true the bar is a styled launcher button — same visual appearance but
+   * tapping the bar opens the Ask Emmaus home page instead of typing inline.
+   * The mic button still routes directly to voice mode.
+   */
+  launchOnly?: boolean;
 }
 
-export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausInputProps) {
+export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: UnifiedEmmausInputProps) {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
   const voiceEnabled = useVoiceEnabled(user?.id);
@@ -263,6 +269,47 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
   const showPanel = isFocused && hasQuery;
 
   if (!user) return null;
+
+  // ── Launch-only mode ───────────────────────────────────────────────────────
+  // Looks identical to the bar below but the whole thing is a button that opens
+  // the Ask Emmaus home page. Mic still routes directly to voice mode.
+  if (launchOnly) {
+    function handleLaunch() {
+      setReturnDestination({
+        pathname: location,
+        scrollY: Math.round(window.scrollY),
+        sourceSection: sourceSectionFromPath(location),
+      });
+      const ctx = buildContext(location, lastRead, journeys, progress, getStep);
+      setPendingContext(ctx);
+      navigate('/personal/ask-emmaus');
+    }
+
+    return (
+      <div className={cn('relative', className)}>
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-full border border-border bg-card shadow-sm hover:border-primary/25 hover:shadow-md transition-all">
+          <Search size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />
+          <button
+            onClick={handleLaunch}
+            className="flex-1 text-left text-[14px] text-muted-foreground/50 focus:outline-none"
+            aria-label="Ask Emmaus anything"
+          >
+            Ask Emmaus anything…
+          </button>
+          {voiceEnabled === true && (
+            <button
+              onClick={handleMic}
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 transition-colors focus-visible:outline-none"
+              aria-label="Speak to Emmaus"
+              tabIndex={-1}
+            >
+              <Mic size={15} className="text-primary" strokeWidth={1.8} />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className={cn('relative', className)}>

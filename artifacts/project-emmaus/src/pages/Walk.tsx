@@ -714,7 +714,7 @@ export default function Walk() {
         </header>
 
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
-        <UnifiedEmmausInput />
+        <UnifiedEmmausInput launchOnly />
 
         {/* ── 1. Start Here — Daily Rhythm + This Week's Sermon ─────────────── */}
         {coreJourney ? (

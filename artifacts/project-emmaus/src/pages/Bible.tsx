@@ -43,7 +43,7 @@ export default function Bible() {
         </header>
 
         {/* Ask Emmaus */}
-        <UnifiedEmmausInput />
+        <UnifiedEmmausInput launchOnly />
 
         {/* Tab switcher */}
         <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
