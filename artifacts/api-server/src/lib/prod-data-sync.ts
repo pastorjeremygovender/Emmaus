@@ -227,8 +227,8 @@ export async function runProdDataSync(): Promise<void> {
              (id, journey_id, day, title, content, status,
               mentor_intro, scripture, teaching_content, reflection_question,
               prayer, todays_action, memory_verse, preferred_translation,
-              is_completion_step)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+              is_completion_step, share_image_url)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            ON CONFLICT (id) DO UPDATE SET
              title               = EXCLUDED.title,
              content             = EXCLUDED.content,
@@ -237,7 +237,8 @@ export async function runProdDataSync(): Promise<void> {
              reflection_question = EXCLUDED.reflection_question,
              prayer              = EXCLUDED.prayer,
              todays_action       = EXCLUDED.todays_action,
-             is_completion_step  = EXCLUDED.is_completion_step`,
+             is_completion_step  = EXCLUDED.is_completion_step,
+             share_image_url     = EXCLUDED.share_image_url`,
           [
             s.id, s.journey_id, s.day, s.title ?? "", contentVal,
             s.status ?? "Published",
@@ -246,6 +247,7 @@ export async function runProdDataSync(): Promise<void> {
             s.prayer ?? null, s.todays_action ?? null,
             s.memory_verse ?? null, s.preferred_translation ?? null,
             s.is_completion_step ?? false,
+            s.share_image_url ?? null,
           ],
         );
         stepsInserted += r.rowCount ?? 0;

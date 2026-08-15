@@ -68,7 +68,7 @@ async function main() {
         id, journey_id, day, title, content, status,
         mentor_intro, scripture, teaching_content, reflection_question,
         prayer, todays_action, memory_verse, preferred_translation,
-        is_completion_step
+        is_completion_step, share_image_url
       FROM journey_steps
       WHERE deleted_at IS NULL
       ORDER BY journey_id, day
