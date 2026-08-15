@@ -176,9 +176,9 @@ export default function AskEmmausHome() {
         {voiceEnabled === true && (
           <div className="flex flex-col items-center gap-2.5">
             <div className="relative inline-flex">
-              {/* Ping ring */}
+              {/* Subtle pulse ring */}
               <span
-                className="absolute inset-0 rounded-full bg-primary/15 animate-ping"
+                className="absolute -inset-1.5 rounded-full border border-primary/20 animate-pulse"
                 aria-hidden="true"
               />
               <button
