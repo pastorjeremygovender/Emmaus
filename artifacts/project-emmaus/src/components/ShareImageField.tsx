@@ -46,7 +46,7 @@ export function ShareImageField({ value, onChange }: Props) {
     setProgress(0);
 
     try {
-      const metaRes = await fetch(getApiUrl('/storage/uploads/request-url'), {
+      const metaRes = await fetch(getApiUrl('/api/storage/uploads/request-url'), {
         method: 'POST',
         credentials: 'include',
         headers: {

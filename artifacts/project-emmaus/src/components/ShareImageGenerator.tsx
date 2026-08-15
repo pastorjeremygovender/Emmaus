@@ -165,7 +165,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       body.referenceImageBase64 = referenceImageBase64;
     }
 
-    const res = await fetch(getApiUrl("/share-images/generate"), {
+    const res = await fetch(getApiUrl("/api/share-images/generate"), {
       method: "POST",
       credentials: "include",
       headers: {
@@ -256,7 +256,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       const blob = await compositeAttributionBlob(state.imageBase64, attribution);
 
       // 2. Request presigned upload URL
-      const metaRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
+      const metaRes = await fetch(getApiUrl("/api/storage/uploads/request-url"), {
         method: "POST",
         credentials: "include",
         headers: {
