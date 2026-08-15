@@ -490,8 +490,8 @@ export default function JourneyDay() {
           </section>
 
           {/* Share image — "Take this with you" */}
-          {(step as any).shareImageUrl && (
-            <ShareImageCard shareImageUrl={(step as any).shareImageUrl} />
+          {step.shareImageUrl && (
+            <ShareImageCard shareImageUrl={step.shareImageUrl} />
           )}
 
           {/* Share */}

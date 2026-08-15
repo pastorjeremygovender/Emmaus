@@ -5,6 +5,7 @@ import {
   CollapsibleCard, UnsavedBanner, ConfirmDialog, Field,
   TextInput, TextArea, AdminBtn, SaveMessage,
 } from './shared';
+import { ShareImageField } from '@/components/ShareImageField';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -565,6 +566,17 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
                 <p className="text-base font-serif font-medium text-gray-800">Great job.</p>
                 <p className="text-sm text-gray-500">See you tomorrow.</p>
               </div>
+            </CollapsibleCard>
+
+            {/* Card 11 — Share Image */}
+            <CollapsibleCard title="Share Image" defaultOpen={false}>
+              <p className="text-xs text-gray-500 mb-3">
+                Shown at the bottom of this step as a "Take this with you" card. Portrait (4:5) works best.
+              </p>
+              <ShareImageField
+                value={form.shareImageUrl ?? null}
+                onChange={v => patch('shareImageUrl', v)}
+              />
             </CollapsibleCard>
 
             {/* Bottom save */}

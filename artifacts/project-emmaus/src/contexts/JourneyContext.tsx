@@ -105,6 +105,9 @@ export type Step = {
   isCompletionStep?: boolean;
   /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
   displayLabel?: string | null;
+
+  /** Share image — object-storage path shown as a "Take this with you" card at the bottom of the step. */
+  shareImageUrl?: string | null;
 };
 
 export type Progress = {
