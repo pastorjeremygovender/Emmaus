@@ -729,17 +729,17 @@ function SermonCompanionsPanel({
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'walks',       label: 'Walks'             },
-  { id: 'journeys',    label: 'Journeys'          },
-  { id: 'devotionals', label: 'Daily Devotionals' },
-  { id: 'sermons',     label: 'Sermon Companions' },
+const TABS: { id: TabId; label: string; dot: string }[] = [
+  { id: 'walks',       label: 'Walks',             dot: 'bg-emerald-500' },
+  { id: 'journeys',    label: 'Journeys',           dot: 'bg-amber-500'   },
+  { id: 'devotionals', label: 'Daily Devotionals',  dot: 'bg-violet-500'  },
+  { id: 'sermons',     label: 'Sermon Companions',  dot: 'bg-amber-500'   },
 ];
 
 function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
   return (
     <div className="flex border-b border-border -mx-5 px-5 mt-6 overflow-x-auto scrollbar-none" role="tablist">
-      {TABS.map(({ id, label }) => {
+      {TABS.map(({ id, label, dot }) => {
         const isActive = active === id;
         return (
           <button
@@ -747,12 +747,13 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => 
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(id)}
-            className={`flex-shrink-0 pb-2.5 pt-1 px-1 mr-6 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px ${
+            className={`flex-shrink-0 pb-2.5 pt-1 px-1 mr-6 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px flex items-center gap-1.5 ${
               isActive
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
+            {isActive && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
             {label}
           </button>
         );
@@ -973,20 +974,20 @@ export default function Journeys() {
             <>
               <button
                 onClick={() => setLocation('/rooms')}
-                className="mt-5 w-full flex items-center gap-3 p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-left"
+                className="mt-5 w-full rounded-2xl border bg-blue-50/90 border-blue-200/60 px-4 py-3.5 flex items-center gap-3 hover:border-blue-300/70 transition-colors text-left"
               >
-                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <Users size={17} />
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <Users size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-foreground">My Groups</p>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700">My Groups</p>
+                  <p className="text-[12px] text-blue-600/70 mt-0.5">
                     {myRooms.length > 0
                       ? `${myRooms.length} ${myRooms.length === 1 ? 'Group' : 'Groups'}`
                       : 'Walk journeys together with others'}
                   </p>
                 </div>
-                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                <ChevronRight size={15} className="text-blue-500/60 shrink-0" />
               </button>
 
               {/* Tab bar */}
@@ -1015,53 +1016,75 @@ export default function Journeys() {
         {!discoverActive && !apiLoading && data && (
           <>
             {activeTab === 'devotionals' && (
-              <DevotionalsPanel
-                items={data.dailyDevotionals}
-                onAction={handleDevotionalAction}
-                startingId={startingDevId}
-                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-              />
+              <>
+                <div className="flex items-center gap-1.5 mt-5 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Daily Devotionals</span>
+                </div>
+                <DevotionalsPanel
+                  items={data.dailyDevotionals}
+                  onAction={handleDevotionalAction}
+                  startingId={startingDevId}
+                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                />
+              </>
             )}
 
             {activeTab === 'journeys' && (
-              <JourneysPanel
-                collections={data.journeyCollections}
-                onOpenJourney={(col) => {
-                  // Always open the Journey Details (CollectionPage) — never skip
-                  // directly to a Walk or lesson. The member chooses their Walk there.
-                  setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
-                }}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-              />
+              <>
+                <div className="flex items-center gap-1.5 mt-5 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Journeys</span>
+                </div>
+                <JourneysPanel
+                  collections={data.journeyCollections}
+                  onOpenJourney={(col) => {
+                    setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
+                  }}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
+              </>
             )}
 
             {activeTab === 'walks' && (
-              <WalksPanel
-                standalone={data.standaloneJourneys}
-                onAction={handleJourneyAction}
-                onPause={(id) => setPauseTargetId(id)}
-                onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
-                isGated={isItemGated}
-                onGate={() => setLocation('/walk')}
-                getEnrollmentState={(id) => getState(id)}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
-              />
+              <>
+                <div className="flex items-center gap-1.5 mt-5 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Walks</span>
+                </div>
+                <WalksPanel
+                  standalone={data.standaloneJourneys}
+                  onAction={handleJourneyAction}
+                  onPause={(id) => setPauseTargetId(id)}
+                  onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
+                  isGated={isItemGated}
+                  onGate={() => setLocation('/walk')}
+                  getEnrollmentState={(id) => getState(id)}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                  onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
+                />
+              </>
             )}
 
             {activeTab === 'sermons' && (
-              <SermonCompanionsPanel
-                current={data.currentSermonCompanion}
-                previous={data.previousSermonCompanions}
-                onAction={handleSermonCompanionAction}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-              />
+              <>
+                <div className="flex items-center gap-1.5 mt-5 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Sermon Companions</span>
+                </div>
+                <SermonCompanionsPanel
+                  current={data.currentSermonCompanion}
+                  previous={data.previousSermonCompanions}
+                  onAction={handleSermonCompanionAction}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                />
+              </>
             )}
           </>
         )}

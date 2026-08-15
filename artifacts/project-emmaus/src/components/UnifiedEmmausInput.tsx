@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { MessageCircle, Mic, X, Loader2, ChevronRight } from 'lucide-react';
+import { Search, Mic, X, Loader2, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { useJourney } from '@/contexts/JourneyContext';
@@ -270,17 +270,17 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
       {/* ── Input bar ─────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          'flex items-center gap-2.5 px-4 py-3 rounded-2xl border bg-card transition-all',
+          'flex items-center gap-2.5 px-4 py-3 rounded-full border bg-card shadow-sm transition-all',
           isFocused
-            ? 'border-primary/40 ring-2 ring-primary/15 shadow-sm'
-            : 'border-border hover:border-primary/25',
+            ? 'border-primary/40 ring-2 ring-primary/15 shadow-md'
+            : 'border-border hover:border-primary/25 hover:shadow-md',
         )}
         onClick={() => inputRef.current?.focus()}
       >
-        {/* Icon */}
-        <MessageCircle
+        {/* Search icon */}
+        <Search
           size={15}
-          className={cn('shrink-0 transition-colors', isFocused ? 'text-primary' : 'text-primary/60')}
+          className={cn('shrink-0 transition-colors', isFocused ? 'text-primary' : 'text-muted-foreground/50')}
           strokeWidth={1.8}
         />
 
@@ -288,12 +288,12 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
         <input
           ref={inputRef}
           type="text"
-          placeholder="Ask Emmaus or search…"
+          placeholder="Ask Emmaus anything, or search…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onKeyDown={handleKeyDown}
-          className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/55 focus:outline-none min-w-0"
+          className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-w-0"
           aria-label="Ask Emmaus or search"
           autoComplete="off"
         />
@@ -310,15 +310,15 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
           </button>
         ) : null}
 
-        {/* Mic — shown only when voice settings are confirmed enabled */}
+        {/* Mic — colored pill button so it's clearly tappable */}
         {voiceEnabled === true && (
           <button
             onClick={handleMic}
-            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary/10 transition-colors focus-visible:outline-none"
-            aria-label="Voice input"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 transition-colors focus-visible:outline-none"
+            aria-label="Speak to Emmaus"
             tabIndex={-1}
           >
-            <Mic size={15} className="text-muted-foreground/60" strokeWidth={1.8} />
+            <Mic size={15} className="text-primary" strokeWidth={1.8} />
           </button>
         )}
       </div>
@@ -334,7 +334,7 @@ export function UnifiedEmmausInput({ className, onActiveChange }: UnifiedEmmausI
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/50 transition-colors text-left"
             >
               <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <MessageCircle size={14} className="text-primary" strokeWidth={1.8} />
+                <Search size={14} className="text-primary" strokeWidth={1.8} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-semibold text-foreground">Ask Emmaus</p>

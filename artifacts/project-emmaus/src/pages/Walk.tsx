@@ -37,6 +37,9 @@ import {
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
+import { cn } from '@/lib/utils';
+import { ContentBadge } from '@/components/ContentBadge';
+import type { ReactNode } from 'react';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -155,354 +158,126 @@ function WalkPauseDialog({
   );
 }
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-function SkeletonCard({ lines = 3 }: { lines?: number }) {
+// ─── Section color tokens ─────────────────────────────────────────────────────
+
+const SECTION_COLORS = {
+  amber:   { bg: 'bg-amber-50/90 border-amber-200/60',    title: 'text-amber-700',   dot: 'bg-amber-500'   },
+  violet:  { bg: 'bg-violet-50/90 border-violet-200/60',  title: 'text-violet-700',  dot: 'bg-violet-500'  },
+  emerald: { bg: 'bg-emerald-50/90 border-emerald-200/60',title: 'text-emerald-700', dot: 'bg-emerald-500' },
+  blue:    { bg: 'bg-blue-50/90 border-blue-200/60',      title: 'text-blue-700',    dot: 'bg-blue-500'    },
+} as const;
+type SectionColor = keyof typeof SECTION_COLORS;
+
+// ─── Section wrapper with soft color highlight ────────────────────────────────
+function SectionWrapper({
+  color,
+  label,
+  children,
+  delay = 0,
+}: {
+  color: SectionColor;
+  label: string;
+  children: ReactNode;
+  delay?: number;
+}) {
+  const c = SECTION_COLORS[color];
   return (
-    <div className="bg-card rounded-2xl border border-border p-6 space-y-3 animate-pulse">
-      <div className="h-3 w-24 rounded bg-muted" />
-      <div className="h-6 w-3/4 rounded bg-muted" />
-      {Array.from({ length: lines - 2 }).map((_, i) => (
-        <div key={i} className="h-4 w-full rounded bg-muted" />
-      ))}
+    <motion.section
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay }}
+      className={cn('rounded-2xl border px-4 pt-3 pb-3.5 space-y-2', c.bg)}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', c.dot)} />
+        <h2 className={cn('text-[10px] font-bold uppercase tracking-[0.14em]', c.title)}>
+          {label}
+        </h2>
+      </div>
+      {children}
+    </motion.section>
+  );
+}
+
+// ─── Skeleton loader (compact) ────────────────────────────────────────────────
+function SkeletonCard({ lines: _lines }: { lines?: number } = {}) {
+  return (
+    <div className="bg-card rounded-xl border border-border/50 px-3.5 py-3 space-y-1.5 animate-pulse">
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-3.5 flex-1 rounded bg-muted" />
+        <div className="h-3 w-10 rounded bg-muted" />
+      </div>
+      <div className="h-2.5 w-3/5 rounded bg-muted" />
     </div>
   );
 }
 
-// ─── Section label ────────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
-  );
-}
-
-// ─── Daily Devotional card — active (member has started) ─────────────────────
+// ─── Compact content card (used inside SectionWrapper) ───────────────────────
 //
-// Daily Devotionals are SELF-PACED — members advance by completing entries,
-// not by waiting for the next calendar day.
-// States:
-//   not-started — no entries completed yet
-//   in-progress — some entries completed, more available
-//   complete    — all published entries completed
-function DevotionalCard({
-  series,
-  completedCount,
-  totalPublished,
-  nextDay,
-  nextEntryTitle,
-  nextDisplayLabel,
-  allComplete,
+// A compact two-line card: title + CTA on row 1, subtitle on row 2.
+// ~52 px tall — 3–4× shorter than EmmausContentCard, enabling 4–6 items
+// on screen without scrolling.
+function CompactCard({
+  title,
+  subtitle,
+  ctaLabel,
+  onAction,
+  done = false,
   badge,
-  onOpen,
-  onViewPreviousEntries,
-  onPause,
-  onHide,
+  trailing,
 }: {
-  series: DevotionalSeries;
-  /** Number of entries the member has completed. */
-  completedCount: number;
-  /** Total number of published entries in the series. */
-  totalPublished: number;
-  /** Next available day number (self-paced: last completed + 1). */
-  nextDay: number;
-  /** Title of the next entry to read, if available. */
-  nextEntryTitle?: string;
-  /** Optional display label of the next entry (e.g. "1 January"). */
-  nextDisplayLabel?: string | null;
-  /** True when all published entries have been completed. */
-  allComplete: boolean;
-  /** Smart Content Indicator — UPDATED only on Today's Steps */
-  badge?: 'UPDATED' | null;
-  /** Navigate to the next available entry. */
-  onOpen: () => void;
-  onViewPreviousEntries?: () => void;
-  onPause?: () => void;
-  /** Non-destructive hide: removes from Today's Steps, preserves all progress. */
-  onHide?: () => void;
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  onAction?: () => void;
+  done?: boolean;
+  badge?: 'UPDATED' | 'NEW' | null;
+  trailing?: ReactNode;
 }) {
-  const nextLabel = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextDisplayLabel });
-  const description = allComplete
-    ? `${totalPublished} of ${totalPublished} completed`
-    : completedCount > 0
-      ? nextEntryTitle
-        ? `${nextLabel} of ${totalPublished} · ${nextEntryTitle}`
-        : `${nextLabel} of ${totalPublished}`
-      : totalPublished > 0
-        ? `${nextLabel} of ${totalPublished}`
-        : nextLabel;
-
+  const clickable = !!onAction;
   return (
-    <EmmausContentCard
-      label="DAILY DEVOTIONAL"
-      title={series.title}
-      description={description}
-      primaryActionLabel="Continue"
-      badge={badge ?? null}
-      onAction={onOpen}
-      headerTrailing={
-        allComplete
-          ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-          : (onPause && onHide)
-            ? <WalkMoreMenu onPause={onPause} onHide={onHide} />
-            : undefined
-      }
-      secondaryAction={
-        onViewPreviousEntries
-          ? { label: 'View Devotional Contents', onPress: onViewPreviousEntries }
-          : undefined
-      }
-    />
+    <div
+      className={cn(
+        'bg-card rounded-xl border border-border/50 px-3.5 py-2.5 select-none',
+        clickable && 'cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors',
+      )}
+      onClick={clickable ? onAction : undefined}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-[14px] font-semibold text-foreground leading-snug truncate flex-1">
+              {title}
+            </p>
+            {badge && <ContentBadge badge={badge} />}
+            {done && <CheckCircle2 size={13} className="text-primary shrink-0" />}
+          </div>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-1">
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {ctaLabel && onAction && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAction(); }}
+            className="shrink-0 text-[12px] font-semibold text-primary whitespace-nowrap leading-none ml-1"
+          >
+            {ctaLabel} →
+          </button>
+        )}
+        {trailing && (
+          <div className="shrink-0 -mr-0.5" onClick={(e) => e.stopPropagation()}>
+            {trailing}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-// ─── Daily Devotional discovery card — not yet started ───────────────────────
-function DevotionalDiscoveryCard({
-  series,
-  onBegin,
-  starting,
-}: {
-  series: DevotionalSeries;
-  onBegin: () => void;
-  starting: boolean;
-}) {
-  return (
-    <EmmausContentCard
-      label="DAILY DEVOTIONAL"
-      title={series.title}
-      description="A new devotional series is available."
-      primaryActionLabel="Continue"
-      onAction={onBegin}
-      loading={starting}
-    />
-  );
-}
-
-// ─── 10 Minutes with Jesus card ───────────────────────────────────────────────
-// Highest-priority card. Always first.
-// CRITICAL: must never reference a day that has no published entry.
-//   currentEntry — the actual published step the member should open today
-//                  (null = all published content is already complete)
-//   caughtUp     — true when progress.currentDay exceeds the highest published day;
-//                  the member has finished all available content and must wait for
-//                  new entries to be published before continuing.
-//   onViewPreviousDays — when provided, a "View Previous Days →" text link is shown.
-function FifteenMinutesCard({
-  journey,
-  prog,
-  currentEntry,
-  caughtUp = false,
-  onContinue,
-  onViewPreviousDays,
-  devMode = false,
-}: {
-  journey: import('@/contexts/JourneyContext').Journey;
-  prog: import('@/contexts/JourneyContext').Progress | undefined;
-  /**
-   * The real published entry the card should reference.
-   * Null means all published content is done and the member is waiting for more.
-   */
-  currentEntry: { day: number; title: string; displayLabel?: string | null } | null;
-  /**
-   * True when the member's arithmetic currentDay exceeds the highest published day.
-   * Walk.tsx computes this and must clamp all routing before passing it here.
-   */
-  caughtUp?: boolean;
-  onContinue: () => void;
-  onViewPreviousDays?: () => void;
-  /** When true (admin / super-admin), the daily release schedule is bypassed. */
-  devMode?: boolean;
-}) {
-  // In dev mode the calendar lock is lifted: treat every day as immediately
-  // available so devs can advance freely without waiting for tomorrow.
-  const completedToday = devMode ? false : isCompletedToday(prog?.lastCompletedAt);
-  const nextDayAvail   = devMode ? true  : isNextDayAvailable(prog?.lastCompletedAt);
-  const started        = !!prog;
-
-  /**
-   * State machine — exhaustive:
-   *   start      — member has never started
-   *   ready      — today's entry is available and unread
-   *   complete   — completed today; next day is coming soon
-   *   tomorrow   — completed today; next day is not yet available (normal end-of-day)
-   *   uptodate   — not completed today but caught up to end of published content
-   *   waitlatest — completed today AND caught up (nothing more published yet)
-   *
-   * "waitlatest" is treated identically to "tomorrow" in the UI — both show
-   * the done state with a "Review" action — but the description differs slightly.
-   */
-  type CardState = 'start' | 'ready' | 'complete' | 'tomorrow' | 'uptodate' | 'waitlatest';
-
-  let state: CardState;
-  if (!started)                              state = 'start';
-  else if (caughtUp && completedToday)       state = 'waitlatest';
-  else if (caughtUp && !completedToday)      state = 'uptodate';
-  else if (completedToday && !nextDayAvail)  state = 'tomorrow';
-  else if (completedToday)                   state = 'complete';
-  else                                       state = 'ready';
-
-  const cfg: Record<CardState, { label: string; variant: 'default'; disabled: boolean }> = {
-    start:      { label: "Open Today's Time",      variant: 'default', disabled: false },
-    ready:      {
-      label:   prog && prog.completedDays.length > 0
-                 ? "Return to Today's Time"
-                 : "Open Today's Time",
-      variant: 'default',
-      disabled: false,
-    },
-    complete:   { label: 'Review',                 variant: 'default', disabled: false },
-    tomorrow:   { label: 'Review',                 variant: 'default', disabled: false },
-    uptodate:   { label: 'Review Latest Reading',  variant: 'default', disabled: false },
-    waitlatest: { label: 'Review',                 variant: 'default', disabled: false },
-  };
-
-  const done =
-    state === 'complete' ||
-    state === 'tomorrow' ||
-    state === 'uptodate' ||
-    state === 'waitlatest';
-
-  // ── Title line ──
-  // Always references the real published entry — never a phantom day number.
-  const titleLine = (() => {
-    if (state === 'start') return "Today's time with Jesus is ready.";
-    if (state === 'uptodate') {
-      // Show the last published entry the member has completed
-      return currentEntry
-        ? `${getStepLabel(currentEntry, journey)} — ${currentEntry.title}`
-        : "You're up to date.";
-    }
-    if (done) {
-      // Completed state: show the entry the member just read
-      return currentEntry
-        ? `${getStepLabel(currentEntry, journey)} — done for today`
-        : "Today's time with Jesus is complete.";
-    }
-    // ready — show the entry they are about to open
-    return currentEntry
-      ? `${getStepLabel(currentEntry, journey)} — ${currentEntry.title}`
-      : "Today's time with Jesus is ready.";
-  })();
-
-  // ── Description line ──
-  const descriptionLine = (() => {
-    if (state === 'uptodate') return "You're up to date. The next reading will appear when it is ready.";
-    if (state === 'waitlatest') return "Today's time with Jesus is complete. New content will appear when it is ready.";
-    if (state === 'tomorrow' || state === 'complete') return "Today's time with Jesus is complete. Come back tomorrow.";
-    return undefined;
-  })();
-
-  return (
-    <EmmausContentCard
-      label="DAILY RHYTHM"
-      title={journey.title}
-      description={done ? descriptionLine : titleLine}
-      // When done, suppress the primary button — only the secondary link remains.
-      primaryActionLabel={done ? undefined : cfg[state].label}
-      onAction={done ? undefined : onContinue}
-      disabled={done ? undefined : cfg[state].disabled}
-      variant={done ? 'default' : 'featured'}
-      pulsePrimary={!done}
-      headerTrailing={
-        done
-          ? <CheckCircle2 size={20} className="text-primary shrink-0" />
-          : undefined
-      }
-      secondaryAction={
-        onViewPreviousDays
-          ? { label: 'View Previous →', onPress: onViewPreviousDays }
-          : undefined
-      }
-    />
-  );
-}
-
-// SermonDevotionalCard removed — Walk.tsx now uses the shared SermonCompanionCard component.
-
-// ─── Your Journeys section ────────────────────────────────────────────────────
-// Lists journeys the member has already started as full EmmausContentCards,
-// mirroring the card style used by Devotionals and Sermon Companions.
-// Returns null when there are no started journeys — no heading, no empty state.
-function YourJourneysSection({
-  startedJourneys,
-  onSelect,
-  onViewPrevious,
-  onHide,
-  onPause,
-}: {
-  startedJourneys: Array<{
-    journey: import('@/contexts/JourneyContext').Journey;
-    prog: import('@/contexts/JourneyContext').Progress;
-    currentStep: import('@/contexts/JourneyContext').Step | null;
-    totalPublishedSteps: number;
-  }>;
-  onSelect: (journeyId: string, prog: import('@/contexts/JourneyContext').Progress) => void;
-  onViewPrevious: (journeyId: string) => void;
-  onHide: (journeyId: string) => void;
-  onPause: (journeyId: string, title: string) => void;
-}) {
-  if (startedJourneys.length === 0) return null;
-
-  return (
-    <section className="space-y-4">
-      {startedJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
-        const completedCount = prog.completedDays.length;
-        const isCompleted =
-          totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
-
-        // Mirror the description formula used by Devotionals and Next Steps so
-        // every surface always shows the same progress string for the same walk.
-        const description = isCompleted
-          ? `${totalPublishedSteps} of ${totalPublishedSteps} completed`
-          : completedCount > 0
-            ? currentStep
-              ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-              : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-            : totalPublishedSteps > 0
-              ? currentStep
-                ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-              : undefined;
-
-        // Today's Steps shows UPDATED only — never NEW.
-        // Any journey in startedJourneys has a progress record (hasProgress = true).
-        const badge = computeUpdatedBadge(
-          journey.notifyPublishedAt ?? null,
-          prog.lastOpenedAt ?? null,
-          true,
-        );
-
-        return (
-          <EmmausContentCard
-            key={journey.id}
-            label="WALK"
-            title={journey.title}
-            description={description}
-            badge={badge}
-            primaryActionLabel={isCompleted ? undefined : 'Continue'}
-            onAction={isCompleted ? undefined : () => {
-              void dismissBadge('journey', journey.id);
-              onSelect(journey.id, prog);
-            }}
-            headerTrailing={
-              isCompleted
-                ? <CheckCircle2 size={18} className="text-primary shrink-0 mt-0.5" />
-                : <WalkMoreMenu
-                    onPause={() => onPause(journey.id, journey.title)}
-                    onHide={() => onHide(journey.id)}
-                  />
-            }
-            secondaryAction={
-              completedCount > 0
-                ? { label: 'View Previous →', onPress: () => onViewPrevious(journey.id) }
-                : undefined
-            }
-          />
-        );
-      })}
-    </section>
-  );
-}
+// (DevotionalCard, DevotionalDiscoveryCard, FifteenMinutesCard and YourJourneysSection
+//  have been replaced by CompactCard + inline logic in the SectionWrapper render below.)
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Walk() {
@@ -726,13 +501,21 @@ export default function Walk() {
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-background pb-page-safe">
-        <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
-          <div className="space-y-1.5 pt-2">
-            <div className="h-8 w-48 rounded-lg bg-muted animate-pulse" />
+        <main className="px-4 pt-8 max-w-[480px] mx-auto space-y-3.5">
+          <div className="px-1 space-y-1.5 animate-pulse">
+            <div className="h-7 w-44 rounded-lg bg-muted" />
+            <div className="h-3 w-24 rounded bg-muted" />
           </div>
-          <SkeletonCard lines={5} />
-          <SkeletonCard lines={3} />
-          <SkeletonCard lines={3} />
+          <div className="h-11 rounded-full bg-muted animate-pulse" />
+          <div className="rounded-2xl border bg-amber-50/60 border-amber-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-16 rounded bg-amber-200/60" />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <div className="rounded-2xl border bg-violet-50/60 border-violet-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-20 rounded bg-violet-200/60" />
+            <SkeletonCard />
+          </div>
         </main>
       </div>
     );
@@ -843,315 +626,324 @@ export default function Walk() {
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  // Derive a safe first name — never show 'Friend' or empty strings.
   const rawPreferredName = user.preferredName?.trim();
   const greetingFirstName =
     rawPreferredName && !rawPreferredName.includes('@')
       ? rawPreferredName.split(' ')[0]
       : null;
 
+  // ── Daily Rhythm compact card — state machine (inlined from FifteenMinutesCard) ──
+  type DrState = 'start' | 'ready' | 'complete' | 'tomorrow' | 'uptodate' | 'waitlatest';
+  const drCompletedToday = devMode ? false : isCompletedToday(coreProg?.lastCompletedAt);
+  const drNextDayAvail   = devMode ? true  : isNextDayAvailable(coreProg?.lastCompletedAt);
+  const drStarted        = !!coreProg;
+  let drState: DrState;
+  if (!drStarted)                                drState = 'start';
+  else if (coreCaughtUp && drCompletedToday)     drState = 'waitlatest';
+  else if (coreCaughtUp && !drCompletedToday)    drState = 'uptodate';
+  else if (drCompletedToday && !drNextDayAvail)  drState = 'tomorrow';
+  else if (drCompletedToday)                     drState = 'complete';
+  else                                           drState = 'ready';
+
+  const drDone = drState === 'complete' || drState === 'tomorrow' || drState === 'waitlatest';
+
+  const drSubtitle = (() => {
+    if (drState === 'start') return 'Your daily time with Jesus is ready';
+    if (drState === 'uptodate') {
+      return coreCurrentEntry
+        ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — you're up to date`
+        : "You're up to date";
+    }
+    if (drDone) {
+      return coreCurrentEntry
+        ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — done for today`
+        : 'Complete for today. Come back tomorrow.';
+    }
+    return coreCurrentEntry
+      ? `${getStepLabel(coreCurrentEntry, coreJourney!)} · ${coreCurrentEntry.title}`
+      : 'Ready to continue';
+  })();
+
+  const drCtaLabel = drState === 'start'
+    ? "Open today's reading"
+    : drState === 'ready'
+      ? ((coreProg?.completedDays.length ?? 0) > 0 ? "Return to today's reading" : "Open today's reading")
+      : 'Review';
+
+  function handleDrAction() {
+    if (coreCaughtUp) {
+      const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
+      setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
+    } else if (coreCompletedToday) {
+      const reviewDay = Math.max(1, rawCoreCurrentDay - 1);
+      setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
+    } else {
+      goToDailyRhythmDay(effectiveCoreDay);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Dev mode indicator — shown only to authorised admins with dev mode on */}
       {devMode && <DevModeBanner />}
-      {/* Admin quick-link (shown to admins regardless of dev mode) */}
       {user.role === 'admin' && !devMode && (
         <div className="bg-primary text-primary-foreground text-xs py-1.5 text-center font-medium">
           Admin mode —{' '}
-          <Link href="/admin" className="underline">
-            Go to Admin
-          </Link>
+          <Link href="/admin" className="underline">Go to Admin</Link>
         </div>
       )}
 
-      <main className="px-5 pt-10 max-w-[480px] mx-auto space-y-8">
+      <main className="px-4 pt-8 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        {/* ── Greeting ───────────────────────────────────────────────────────── */}
-        <header>
+        {/* ── Greeting ─────────────────────────────────────────────────────── */}
+        <header className="px-1 pb-0.5">
           <motion.h1
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
-            className="text-[30px] font-sans font-medium tracking-tight leading-tight text-foreground"
+            className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
             data-testid="text-greeting"
           >
             {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
           </motion.h1>
+          <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
         </header>
 
-        {/* ── 1. 10 Minutes with Jesus ───────────────────────────────────────── */}
+        {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
+        <UnifiedEmmausInput />
+
+        {/* ── 1. Start Here — Daily Rhythm + This Week's Sermon ─────────────── */}
         {coreJourney ? (
-          <motion.section
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-          >
-            <div>
-            <FifteenMinutesCard
-              journey={coreJourney}
-              prog={coreProg}
-              currentEntry={coreCurrentEntry}
-              caughtUp={coreCaughtUp}
-              devMode={devMode}
-              onContinue={() => {
-                if (coreCaughtUp) {
-                  // Caught up past all published content → review the last published entry.
-                  // ?from=walk keeps the back arrow pointing to Today's Steps (not Previous Days).
-                  const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
-                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
-                } else if (coreCompletedToday) {
-                  // Completed today's entry. After completeStep runs, currentDay advances by 1,
-                  // so the day just finished is rawCoreCurrentDay - 1.
-                  // ?from=walk keeps the back arrow pointing to Today's Steps.
-                  const reviewDay = Math.max(1, rawCoreCurrentDay - 1);
-                  setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
-                } else {
-                  goToDailyRhythmDay(effectiveCoreDay);
-                }
-              }}
-              onViewPreviousDays={
-                hasPreviousDays ? () => setLocation('/daily-rhythm/previous?from=walk') : undefined
-              }
+          <SectionWrapper color="amber" label="Start Here" delay={0.05}>
+
+            {/* Daily Rhythm */}
+            <CompactCard
+              title={coreJourney.title}
+              subtitle={drSubtitle}
+              ctaLabel={drCtaLabel}
+              onAction={handleDrAction}
+              done={drDone}
             />
-            </div>
-          </motion.section>
+
+            {/* This Week's Sermon */}
+            {thisWeekCompanion === null ? (
+              <SkeletonCard />
+            ) : thisWeekCompanion === 'none' ? (
+              <div className="bg-card/70 rounded-xl border border-border/40 px-3.5 py-2.5">
+                <p className="text-[12px] text-muted-foreground leading-snug">
+                  This week's sermon companion will appear here when published.
+                </p>
+              </div>
+            ) : (() => {
+              const { id, title, publishedDayCount, progress: scProg } = thisWeekCompanion;
+              const completedCount = scProg?.completedDays.length ?? 0;
+              const currentDay     = scProg?.currentDay ?? 1;
+              const allComplete    = publishedDayCount > 0 && currentDay > publishedDayCount;
+              const hasStarted     = scProg !== null;
+              const displayTitle   = title.includes(': ') ? title.split(': ')[0].trim() : title;
+              const twsSubtitle    = !hasStarted
+                ? (publishedDayCount > 0 ? `${publishedDayCount} steps available` : 'Sermon companion')
+                : allComplete
+                  ? `${publishedDayCount} of ${publishedDayCount} steps complete`
+                  : completedCount > 0
+                    ? `Step ${currentDay} of ${publishedDayCount}`
+                    : `Step 1 of ${publishedDayCount}`;
+              return (
+                <CompactCard
+                  title={displayTitle}
+                  subtitle={`This week's sermon · ${twsSubtitle}`}
+                  ctaLabel={!hasStarted ? 'Start' : allComplete ? 'Review' : 'Continue'}
+                  onAction={() => setLocation(`/sermon-companion/${id}/overview?source=today`)}
+                  done={allComplete}
+                />
+              );
+            })()}
+
+          </SectionWrapper>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-            <p className="text-[15px] text-muted-foreground">
-              We couldn't load this step. Please try again.
+          <div className="rounded-2xl border border-dashed border-border p-5 text-center">
+            <p className="text-[14px] text-muted-foreground">
+              We couldn't load your daily reading. Please try again.
             </p>
           </div>
         )}
 
-        {/* ── Unified Ask Emmaus / Search bar ─────────────────────────────────── */}
-        <UnifiedEmmausInput className="mt-1" />
-
-        {/* ── 2. This Week's Sermon — permanent card ─────────────────────────── */}
-        <motion.section
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.07 }}
-        >
-          {thisWeekCompanion === null ? (
-            // Skeleton while loading
-            <div className="rounded-2xl border border-border p-5 space-y-3 animate-pulse">
-              <div className="h-3 w-32 rounded bg-muted" />
-              <div className="h-5 w-48 rounded bg-muted" />
-              <div className="h-3 w-40 rounded bg-muted" />
-            </div>
-          ) : thisWeekCompanion === 'none' ? (
-            // Empty state — no current companion published yet
-            <div className="rounded-2xl border border-dashed border-border p-5">
-              <p className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground mb-2">
-                This Week&#39;s Sermon
-              </p>
-              <p className="text-[14px] text-muted-foreground leading-snug">
-                This week&#39;s Sermon Companion will appear here when it is published.
-              </p>
-            </div>
-          ) : (() => {
-            // Companion exists — compute progress and CTA
-            const { id, title, publishedDayCount, progress } = thisWeekCompanion;
-            const completedCount = progress?.completedDays.length ?? 0;
-            const currentDay = progress?.currentDay ?? 1;
-            const allComplete = publishedDayCount > 0 && currentDay > publishedDayCount;
-            const hasStarted = progress !== null;
-
-            const description = !hasStarted
-              ? publishedDayCount > 0 ? `${publishedDayCount} Steps` : undefined
-              : allComplete
-                ? `${publishedDayCount} of ${publishedDayCount} steps completed`
+        {/* ── 2. My Daily Devotionals ──────────────────────────────────────── */}
+        {activeDevotionals.length > 0 && (
+          <SectionWrapper color="violet" label="My Daily Devotionals" delay={0.07}>
+            {activeDevotionals.map(ad => {
+              const published      = ad.entries.filter(e => e.status === 'Published');
+              const maxDay         = published.length > 0 ? Math.max(...published.map(e => e.dayNumber)) : 1;
+              const completedDays  = ad.progress.completedDays ?? [];
+              const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode);
+              const nextEntry      = ad.entries.find(e => e.dayNumber === nextDay && e.status === 'Published');
+              const completedCount = completedDays.length;
+              const allComplete    = completedCount >= published.length && published.length > 0;
+              const openDay        = allComplete ? Math.max(...completedDays) : nextDay;
+              const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
+              const devSubtitle    = allComplete
+                ? `${published.length} of ${published.length} complete`
                 : completedCount > 0
-                  ? `Step ${currentDay} of ${publishedDayCount}`
-                  : `Step 1 of ${publishedDayCount}`;
-
-            const ctaLabel = !hasStarted
-              ? 'Start Companion'
-              : allComplete
-                ? 'Review Companion'
-                : 'Continue';
-
-            const destination = allComplete
-              ? `/sermon-companion/${id}/overview?source=today`
-              : `/sermon-companion/${id}/overview?source=today`;
-
-            // Strip subtitle from title if present (e.g. "God Uses the Unlikely: 5 Days…")
-            const displayTitle = title.includes(': ') ? title.split(': ')[0].trim() : title;
-
-            return (
-              <EmmausContentCard
-                label="THIS WEEK'S SERMON"
-                title={displayTitle}
-                description={description}
-                metadata={publishedDayCount > 0 ? `${publishedDayCount} Steps` : undefined}
-                primaryActionLabel={ctaLabel}
-                badge={null}
-                onAction={() => setLocation(destination)}
-                onCardPress={() => setLocation(destination)}
-              />
-            );
-          })()}
-        </motion.section>
-
-        {/* ── 3. Daily Devotionals — self-paced (all active series) ─────────── */}
-        {activeDevotionals.length > 0
-          ? activeDevotionals.map(activeDevotional => {
-              const publishedEntries = activeDevotional.entries.filter(e => e.status === 'Published');
-              const maxPublishedDay  = publishedEntries.length > 0
-                ? Math.max(...publishedEntries.map(e => e.dayNumber))
-                : 1;
-              const completedDays   = activeDevotional.progress.completedDays ?? [];
-              const nextDay         = calcAvailableDaySelfPaced(completedDays, maxPublishedDay, devMode);
-              const nextEntry       = activeDevotional.entries.find(
-                e => e.dayNumber === nextDay && e.status === 'Published',
+                  ? nextEntry
+                    ? `${nextLabel} of ${published.length} · ${nextEntry.title}`
+                    : `${nextLabel} of ${published.length}`
+                  : published.length > 0 ? `${nextLabel} of ${published.length}` : nextLabel;
+              const badge = computeUpdatedBadge(
+                ad.series.notifyPublishedAt ?? null,
+                ad.progress.lastOpenedAt ?? null,
+                true,
               );
-              const completedCount  = completedDays.length;
-              const allComplete     = completedCount >= publishedEntries.length && publishedEntries.length > 0;
-              const openDay         = allComplete ? Math.max(...completedDays) : nextDay;
-              const hasAnyEntries   = publishedEntries.length > 0;
-
               return (
-                <motion.section
-                  key={activeDevotional.series.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.09 }}
-                >
-                  <DevotionalCard
-                    series={activeDevotional.series}
-                    completedCount={completedCount}
-                    totalPublished={publishedEntries.length}
-                    nextDay={nextDay}
-                    nextEntryTitle={nextEntry?.title}
-                    nextDisplayLabel={nextEntry?.displayLabel}
-                    allComplete={allComplete}
-                    badge={computeUpdatedBadge(
-                      activeDevotional.series.notifyPublishedAt ?? null,
-                      activeDevotional.progress.lastOpenedAt ?? null,
-                      // hasProgress: any devotional in activeDevotionals has a progress
-                      // record (started), so this is always true here.
-                      true,
-                    )}
-                    onOpen={() => {
-                      void dismissBadge('devotional', activeDevotional.series.id);
-                      setLocation(`/devotional/${activeDevotional.series.id}/day/${openDay}?source=today`);
-                    }}
-                    onViewPreviousEntries={
-                      hasAnyEntries
-                        ? () => setLocation(`/devotional/${activeDevotional.series.id}/previous?from=walk`)
-                        : undefined
-                    }
-                    onPause={() => setPauseTarget({
-                      type: 'devotional',
-                      id: activeDevotional.series.id,
-                      title: activeDevotional.series.title,
-                    })}
-                    onHide={() => {
-                      setActiveDevotionals(prev => prev.filter(d => d.series.id !== activeDevotional.series.id));
-                      void callEngagementAction('devotional', activeDevotional.series.id, 'hide', user?.id);
-                    }}
-                  />
-                </motion.section>
+                <CompactCard
+                  key={ad.series.id}
+                  title={ad.series.title}
+                  subtitle={devSubtitle}
+                  ctaLabel={allComplete ? undefined : 'Continue'}
+                  onAction={() => {
+                    void dismissBadge('devotional', ad.series.id);
+                    setLocation(`/devotional/${ad.series.id}/day/${openDay}?source=today`);
+                  }}
+                  done={allComplete}
+                  badge={badge}
+                  trailing={
+                    !allComplete ? (
+                      <WalkMoreMenu
+                        onPause={() => setPauseTarget({ type: 'devotional', id: ad.series.id, title: ad.series.title })}
+                        onHide={() => {
+                          setActiveDevotionals(prev => prev.filter(d => d.series.id !== ad.series.id));
+                          void callEngagementAction('devotional', ad.series.id, 'hide', user?.id);
+                        }}
+                      />
+                    ) : undefined
+                  }
+                />
               );
-            })
-          : null
-        }
+            })}
+          </SectionWrapper>
+        )}
 
-        {/* ── 4. Your Journeys ───────────────────────────────────────────────── */}
+        {/* ── 3. My Walks — started journeys + in-progress sermon companions ─ */}
+        {(startedJourneys.length > 0 || scCompanions.length > 0) && (
+          <SectionWrapper color="emerald" label="My Walks" delay={0.09}>
+            {startedJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+              const completedCount = prog.completedDays.length;
+              const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+              const walkSubtitle   = isCompleted
+                ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
+                : completedCount > 0
+                  ? currentStep
+                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
+                  : totalPublishedSteps > 0
+                    ? currentStep
+                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
+                    : undefined;
+              const badge = computeUpdatedBadge(
+                journey.notifyPublishedAt ?? null,
+                prog.lastOpenedAt ?? null,
+                true,
+              );
+              return (
+                <CompactCard
+                  key={journey.id}
+                  title={journey.title}
+                  subtitle={walkSubtitle}
+                  ctaLabel={isCompleted ? undefined : 'Continue'}
+                  onAction={() => {
+                    void dismissBadge('journey', journey.id);
+                    goToJourney(journey.id, prog);
+                  }}
+                  done={isCompleted}
+                  badge={badge}
+                  trailing={
+                    !isCompleted ? (
+                      <WalkMoreMenu
+                        onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
+                        onHide={() => {
+                          setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
+                          void callEngagementAction('journey', journey.id, 'hide', user?.id);
+                        }}
+                      />
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+            {scCompanions.map(sc => {
+              const completedCount = sc.completedDays.length;
+              const total          = sc.numberOfDays;
+              const isComplete     = total > 0 && sc.currentDay > total;
+              const allComplete    = total > 0 && completedCount >= total;
+              const scDesc         = allComplete
+                ? `${total} of ${total} steps complete`
+                : completedCount > 0
+                  ? sc.nextEntryTitle
+                    ? `Step ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
+                    : `Step ${sc.currentDay} of ${total}`
+                  : total > 0 ? `Step 1 of ${total}` : 'Step 1';
+              const destination    = isComplete
+                ? `/sermon-companion/${sc.id}/overview?source=today`
+                : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
+              return (
+                <CompactCard
+                  key={sc.id}
+                  title={sc.title}
+                  subtitle={`Sermon companion · ${scDesc}`}
+                  ctaLabel={isComplete ? 'Review' : 'Continue'}
+                  onAction={() => {
+                    void dismissBadge('companion', sc.id);
+                    setLocation(destination);
+                  }}
+                  done={isComplete}
+                  badge={sc.badge ?? null}
+                  trailing={
+                    <WalkMoreMenu
+                      onPause={() => setPauseTarget({ type: 'sermon-companion', id: sc.id, title: sc.title })}
+                      onHide={() => {
+                        setScCompanions(prev => prev.filter(c => c.id !== sc.id));
+                        void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
+                      }}
+                    />
+                  }
+                />
+              );
+            })}
+          </SectionWrapper>
+        )}
+
+        {/* ── 4. My Groups ─────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.10 }}
+          transition={{ duration: 0.4, delay: 0.11 }}
         >
-          <YourJourneysSection
-            startedJourneys={startedJourneys}
-            onSelect={goToJourney}
-            onViewPrevious={(id) => setLocation(`/journey/${id}/previous?from=walk`)}
-            onHide={(journeyId) => {
-              setHiddenJourneyIds(prev => new Set([...prev, journeyId]));
-              void callEngagementAction('journey', journeyId, 'hide', user?.id);
-            }}
-            onPause={(journeyId, title) => setPauseTarget({ type: 'journey', id: journeyId, title })}
-          />
+          <button
+            onClick={() => setLocation('/rooms')}
+            className="w-full rounded-2xl border bg-blue-50/90 border-blue-200/60 px-4 py-3 flex items-center gap-2 hover:border-blue-300/70 transition-colors text-left"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700 flex-1">
+              My Groups
+            </span>
+            <span className="text-[12px] font-medium text-blue-600/80">Open →</span>
+          </button>
         </motion.div>
 
-        {/* ── 5. Sermon Companions — other in-progress (not current-week) ──────── */}
-        {scCompanions.map(sc => {
-          const completedCount = sc.completedDays.length;
-          const total = sc.numberOfDays;
-          const allComplete = total > 0 && completedCount >= total;
-          const description = allComplete
-            ? `${total} of ${total} steps completed`
-            : completedCount > 0
-              ? sc.nextEntryTitle
-                ? `Step ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
-                : `Step ${sc.currentDay} of ${total}`
-              : total > 0 ? `Step 1 of ${total}` : 'Step 1';
-
-          // Complete companions → Overview screen (review mode).
-          // Incomplete companions → next step directly.
-          // Card tap and button always go to the same destination.
-          const isComplete      = total > 0 && sc.currentDay > total;
-          const stepRoute       = `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
-          const overviewRoute   = `/sermon-companion/${sc.id}/overview?source=today`;
-          const destination     = isComplete ? overviewRoute : stepRoute;
-          const ctaLabel        = isComplete ? 'Review Companion' : 'Continue';
-
-          return (
-            <motion.section
-              key={sc.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-            >
-              <EmmausContentCard
-                label={sc.isCurrentWeek ? "THIS WEEK'S SERMON" : "SERMON COMPANION"}
-                title={sc.title}
-                description={description}
-                metadata={`${sc.numberOfDays} Steps`}
-                primaryActionLabel={ctaLabel}
-                badge={sc.badge ?? null}
-                onAction={() => {
-                  void dismissBadge('companion', sc.id);
-                  setLocation(destination);
-                }}
-                onCardPress={() => {
-                  void dismissBadge('companion', sc.id);
-                  setLocation(destination);
-                }}
-                headerTrailing={
-                  <WalkMoreMenu
-                    onPause={() => setPauseTarget({
-                      type: 'sermon-companion',
-                      id: sc.id,
-                      title: sc.title,
-                    })}
-                    onHide={() => {
-                      setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                      void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
-                    }}
-                  />
-                }
-              />
-            </motion.section>
-          );
-        })}
-
-        {/* ── 6. Discover More — entry point to the Discover tab ──────────────── */}
+        {/* ── Discover More ─────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.18 }}
-          className="pb-2"
+          transition={{ duration: 0.4, delay: 0.13 }}
+          className="pb-1"
         >
           <button
             onClick={() => setLocation('/journeys')}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-border bg-card hover:border-primary/30 hover:bg-card/80 transition-all text-[15px] font-medium text-muted-foreground hover:text-foreground"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-[14px] font-medium text-muted-foreground hover:text-foreground"
           >
-            <Compass size={16} className="text-primary" strokeWidth={1.8} />
-            Discover More
+            <Compass size={15} className="text-primary" strokeWidth={1.8} />
+            Discover More Content
           </button>
         </motion.div>
 
@@ -1159,7 +951,7 @@ export default function Walk() {
 
       <BottomNav />
 
-      {/* ── Pause confirmation dialog ─────────────────────────────────────────── */}
+      {/* ── Pause confirmation dialog ───────────────────────────────────────── */}
       {pauseTarget && (
         <WalkPauseDialog
           title={pauseTarget.title}
