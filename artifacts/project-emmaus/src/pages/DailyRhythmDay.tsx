@@ -260,7 +260,7 @@ export default function DailyRhythmDay() {
         prayerPrompt={step.prayerPrompt}
         actionStep={step.actionStep}
         closingText={(step as any).closingText}
-        shareImageUrl={(step as any).shareImageUrl}
+        shareImageUrl={step.shareImageUrl}
         returnPath={`/daily-rhythm/day/${day}`}
         actionButton={actionButton}
         sharePayload={{

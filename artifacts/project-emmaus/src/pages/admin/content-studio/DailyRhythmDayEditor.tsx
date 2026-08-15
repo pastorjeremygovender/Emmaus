@@ -393,7 +393,7 @@ export default function DailyRhythmDayEditor({
           actionStep: existing.actionStep ?? '',
           closingText: existing.closingText ?? '',
           displayLabel: (existing as any).displayLabel ?? '',
-          shareImageUrl: (existing as any).shareImageUrl ?? null,
+          shareImageUrl: existing.shareImageUrl ?? null,
         });
         setCurrentDay(existing.day);
         setStepStatus(((existing as Step & { status?: string }).status as 'Draft' | 'Published') ?? 'Draft');
