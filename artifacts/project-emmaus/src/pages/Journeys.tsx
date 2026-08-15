@@ -28,7 +28,7 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, Pause, MoreHorizontal,
+  X, Pause, MoreHorizontal, ChevronRight,
   BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
@@ -123,7 +123,7 @@ function DiscoverCompactCard({
 }) {
   return (
     <div
-      className="bg-card rounded-xl border border-border/60 px-3.5 py-3 cursor-pointer hover:border-primary/30 active:opacity-70 transition-colors select-none"
+      className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
       onClick={isGated ? onGate : onAction}
     >
       <div className="flex items-center gap-2 min-w-0">
@@ -154,8 +154,10 @@ function DiscoverCompactCard({
         </div>
         {isGated ? (
           <span className="shrink-0 text-[12px] text-muted-foreground/50 whitespace-nowrap leading-none">Locked</span>
+        ) : (onAction && !ctaLabel) ? (
+          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         ) : ctaLabel ? (
-          <span className="shrink-0 text-[12px] font-semibold text-primary whitespace-nowrap leading-none">{ctaLabel} →</span>
+          <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         ) : null}
       </div>
       {!isGated && secondaryLabel && onSecondary && (

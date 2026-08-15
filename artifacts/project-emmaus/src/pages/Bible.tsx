@@ -92,42 +92,40 @@ export default function Bible() {
               <section className="space-y-3">
                 <SectionLabel>Continue Reading</SectionLabel>
                 <div
-                  className="p-4 rounded-xl border border-border bg-card flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform"
+                  className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
                 >
-                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                    <BookOpen size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                      {lastRead.bookName} {lastRead.chapter}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
+                        {lastRead.chapterHeading}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {lastRead.bookName} {lastRead.chapter}
+                      </p>
                     </div>
-                    <div className="text-[16px] font-medium text-foreground truncate">
-                      {lastRead.chapterHeading}
-                    </div>
+                    <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                   </div>
-                  <ChevronRight size={17} className="text-muted-foreground shrink-0" />
                 </div>
               </section>
             ) : (
               <section className="space-y-3">
                 <SectionLabel>Begin Reading</SectionLabel>
                 <div
-                  className="p-4 rounded-xl border border-border bg-card flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform"
+                  className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation('/bible/read/luke/1')}
                 >
-                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                    <BookOpen size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                      Walk Through Luke · Luke 1
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-foreground leading-snug">
+                        The Birth of John the Baptist Foretold
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        Walk Through Luke · Luke 1
+                      </p>
                     </div>
-                    <div className="text-[16px] font-medium text-foreground">
-                      The Birth of John the Baptist Foretold
-                    </div>
+                    <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                   </div>
-                  <ChevronRight size={17} className="text-muted-foreground shrink-0" />
                 </div>
               </section>
             )}
@@ -136,17 +134,16 @@ export default function Bible() {
             <section className="space-y-3">
               <SectionLabel>Browse Books</SectionLabel>
               <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
+                className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                 onClick={() => setLocation('/bible/books')}
               >
-                <div className="flex items-center gap-3">
-                  <BookMarked size={17} className="text-primary" />
-                  <div>
-                    <div className="text-[15px] font-medium text-foreground">Old Testament · New Testament</div>
-                    <div className="text-[12px] text-muted-foreground">66 books</div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-foreground leading-snug">Old Testament · New Testament</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">66 books</p>
                   </div>
+                  <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                 </div>
-                <ChevronRight size={17} className="text-muted-foreground" />
               </div>
             </section>
 
