@@ -44,6 +44,7 @@ import {
   type ContentType,
   type JourneyCollectionGroup,
 } from '@/lib/next-steps-api';
+import { navigatorRoute } from '@/lib/content-navigation';
 import { dismissBadge } from '@/lib/badge-api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -685,8 +686,9 @@ export default function Journeys() {
         await reload();
         return;
       }
-      // Append source so the reader knows to return to Next Steps (Sermon Companions tab)
-      setLocation(item.route + '?source=nextStepsSermons');
+      // In-progress companions → navigator; completed → overview (item.route)
+      const scNav = navigatorRoute('sermon-companion', item.id, item.memberProgressState);
+      setLocation(scNav ?? item.route + '?source=nextStepsSermons');
       return;
     }
     handleJourneyAction(item);
@@ -702,7 +704,8 @@ export default function Journeys() {
       return;
     }
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route + '?source=nextStepsJourneys');
+      const jNav = navigatorRoute('journey', item.id, item.memberProgressState);
+      setLocation(jNav ?? item.route + '?source=nextStepsJourneys');
       return;
     }
     const journey = journeys.find(j => j.id === item.id);
@@ -770,7 +773,8 @@ export default function Journeys() {
       return;
     }
     if (item.memberProgressState !== 'not-started') {
-      setLocation(item.route + '?source=nextStepsDevotionals');
+      const devNav = navigatorRoute('devotional', item.id, item.memberProgressState);
+      setLocation(devNav ?? item.route + '?source=nextStepsDevotionals');
       return;
     }
     const activeDevotional = data?.dailyDevotionals.find(d => d.memberProgressState === 'in-progress');

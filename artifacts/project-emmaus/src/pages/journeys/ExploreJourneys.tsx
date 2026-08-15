@@ -263,8 +263,7 @@ export default function ExploreJourneys() {
     // getState() defaults to 'active' for any journey with no localStorage record —
     // that default must never be used to infer the journey has been opened.
     if (startedIds.has(journeyId)) {
-      const src = j.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}?source=${src}`);
+      setLocation(`/journey/${journeyId}/navigate`);
       return;
     }
     // Not yet started — check enrollment capacity, then open the start modal.
