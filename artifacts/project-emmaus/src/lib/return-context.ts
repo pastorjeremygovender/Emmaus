@@ -40,7 +40,8 @@ export type SourceKey =
   | 'collectionDetail'
   | 'myJourney'
   | 'room'
-  | 'sermonHome';
+  | 'sermonHome'
+  | 'journeyPrevious';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   walk:                 { path: '/walk',                     label: "Today's Steps"  },
@@ -93,6 +94,12 @@ export function resolveReturn(
 
   if (source === 'collectionDetail') {
     if (sourceId) return { path: `/journeys/collections/${sourceId}`, label: 'Collection' };
+    return { path: '/journeys?tab=journeys', label: 'Discover' };
+  }
+
+  // Journey Previous Steps — back returns to that journey's previous-steps list.
+  if (source === 'journeyPrevious') {
+    if (sourceId) return { path: `/journey/${sourceId}/previous`, label: 'Previous Steps' };
     return { path: '/journeys?tab=journeys', label: 'Discover' };
   }
 

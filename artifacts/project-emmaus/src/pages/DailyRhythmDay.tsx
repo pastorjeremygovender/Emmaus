@@ -101,7 +101,8 @@ export default function DailyRhythmDay() {
   // When navigating from Walk's Review button, ?from=walk is set.
   // Back arrow and completion card return to Today's Steps in that case;
   // otherwise (accessed from Previous Days) they stay in the previous-days flow.
-  const fromWalk = new URLSearchParams(location.split('?')[1] ?? '').get('from') === 'walk';
+  // NOTE: wouter's useLocation() returns pathname only — search params must come from window.location.search.
+  const fromWalk = new URLSearchParams(window.location.search).get('from') === 'walk';
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = progress[journeyId];

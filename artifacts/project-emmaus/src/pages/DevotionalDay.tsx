@@ -202,7 +202,7 @@ export default function DevotionalDay() {
     const prevDaysFrom = source ?? 'nextStepsDevotionals';
     const prevDaysUrl  = `/devotional/${seriesId}/previous?from=${prevDaysFrom}`;
     const nextUrl = hasNextEntry
-      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`
+      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsDevotionals'}`
       : '';
     actionButton = (
       <EmmausCompletionCard

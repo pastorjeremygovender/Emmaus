@@ -263,7 +263,8 @@ export default function ExploreJourneys() {
     // getState() defaults to 'active' for any journey with no localStorage record —
     // that default must never be used to infer the journey has been opened.
     if (startedIds.has(journeyId)) {
-      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}`);
+      const src = j.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+      setLocation(`/journey/${journeyId}/day/${progress[journeyId]?.currentDay ?? 1}?source=${src}`);
       return;
     }
     // Not yet started — check enrollment capacity, then open the start modal.
@@ -290,7 +291,8 @@ export default function ExploreJourneys() {
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(id);
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    const srcAlone = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    setLocation(`/journey/${id}/day/${day}?source=${srcAlone}`);
   }
 
   async function handleStartWithRoom(roomId: string) {
@@ -301,7 +303,8 @@ export default function ExploreJourneys() {
     await apiStartShared(user.id, { journeyId: id, roomId });
     await startJourney(id); // sync local progress cache (no-op at DB)
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    const srcShared = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    setLocation(`/journey/${id}/day/${day}?source=${srcShared}`);
   }
 
   async function handleCreateAndStart(roomName: string) {
@@ -311,7 +314,8 @@ export default function ExploreJourneys() {
     const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName });
     await Promise.all([startJourney(id), loadRooms()]);
     setPendingJourneyId(null);
-    setLocation(`/journey/${id}/day/${day}`);
+    const srcRoom = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    setLocation(`/journey/${id}/day/${day}?source=${srcRoom}`);
   }
 
   const pendingJourney = journeys.find(j => j.id === pendingJourneyId) ?? null;

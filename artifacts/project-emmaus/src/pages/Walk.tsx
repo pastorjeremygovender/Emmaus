@@ -631,7 +631,7 @@ export default function Walk() {
   }
 
   function goToDailyRhythmDay(day: number) {
-    setLocation(`/daily-rhythm/day/${day}`);
+    setLocation(`/daily-rhythm/day/${day}?from=walk`);
   }
 
   function goToJourney(journeyId: string, prog: { currentDay: number }) {

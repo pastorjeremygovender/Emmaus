@@ -51,7 +51,7 @@ export default function JourneyPreviousDays() {
       entries={entries}
       loading={loading}
       onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
-      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?from=previous`)}
+      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?source=journeyPrevious&sourceId=${journeyId}`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."
     />

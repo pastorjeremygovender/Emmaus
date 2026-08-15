@@ -361,7 +361,7 @@ export default function SermonCompanionReader() {
     const nextEntry = resolveNextEntry(companion.entries, day);
     const hasNextEntry = !!nextEntry;
     const nextUrl = hasNextEntry
-      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${source ? `?source=${source}${sourceId ? `&sourceId=${sourceId}` : ''}` : ''}`
+      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsSermons'}${sourceId ? `&sourceId=${sourceId}` : ''}`
       : '';
     actionButton = (
       <EmmausCompletionCard
