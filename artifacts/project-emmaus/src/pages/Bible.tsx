@@ -1,355 +1,93 @@
+import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Search, History, ChevronDown, Library } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { useTranslations } from '@/hooks/useTranslations';
-import MyLibrary from '@/pages/bible/MyLibrary';
+import { BookOpen, Clock } from 'lucide-react';
 
-type Tab = 'home' | 'library';
+function formatRelativeDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  } catch { return ''; }
+}
 
 export default function Bible() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const [, setLocation] = useLocation();
-  const { lastRead, favourites, bookmarks, notes, prayers, highlights, translationId, setTranslation } = useBible();
-  const [showTranslations, setShowTranslations] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [copyrightExpanded, setCopyrightExpanded] = useState(false);
-  const { translations } = useTranslations();
-
-  const currentTranslation = translations.find(t => t.id === translationId) ?? translations[0];
-
-  const libraryCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
+  const { readingHistory } = useBible();
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="px-5 pt-12 max-w-[520px] mx-auto space-y-6">
+      <main className="px-5 pt-12 max-w-[520px] mx-auto space-y-6 pb-6">
 
         {/* Header */}
-        <header className="space-y-1">
+        <header>
           <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
-          {activeTab === 'home' && currentTranslation && (
-            <div className="space-y-0.5">
-              {/* Line 1: translation name + abbreviation */}
-              <p className="text-[13px] text-muted-foreground">
-                {currentTranslation.name} ({currentTranslation.abbreviation})
-              </p>
-              {/* Line 2: collapsed short attribution; tap to reveal full legal text */}
-              {currentTranslation.copyright.length > 60 ? (
-                <button
-                  onClick={() => setCopyrightExpanded(v => !v)}
-                  className="flex items-start gap-1 text-left w-full group"
-                  aria-expanded={copyrightExpanded}
-                  aria-label={copyrightExpanded ? 'Collapse copyright notice' : 'Show full copyright notice'}
-                >
-                  <p className="text-[11px] text-muted-foreground/70 flex-1 leading-relaxed">
-                    {copyrightExpanded ? currentTranslation.copyright : shortCopyright(currentTranslation.copyright)}
-                  </p>
-                  <ChevronDown
-                    size={12}
-                    className={['text-muted-foreground/50 mt-0.5 shrink-0 transition-transform duration-150', copyrightExpanded ? 'rotate-180' : ''].join(' ')}
-                  />
-                </button>
-              ) : (
-                <p className="text-[11px] text-muted-foreground/70">{currentTranslation.copyright}</p>
-              )}
-            </div>
-          )}
         </header>
 
-        {/* Tab switcher */}
-        <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
-          <button
-            onClick={() => setActiveTab('home')}
-            className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
-              activeTab === 'home'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            <BookOpen size={14} />
-            Home
-          </button>
-          <button
-            onClick={() => setActiveTab('library')}
-            className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
-              activeTab === 'library'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            <Library size={14} />
-            My Library
-            {libraryCount > 0 && (
-              <span className={[
-                'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                activeTab === 'library'
-                  ? 'bg-primary/10 text-primary'
-                  : 'bg-muted-foreground/20 text-muted-foreground',
-              ].join(' ')}>
-                {libraryCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* ── Home Tab ─────────────────────────────────────────────────────── */}
-        {activeTab === 'home' && (
-          <div className="space-y-9 pb-4">
-
-            {/* Continue / Begin Reading */}
-            {lastRead ? (
-              <section className="space-y-3">
-                <SectionLabel>Continue Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
-                  onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
-                >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        {lastRead.bookName} {lastRead.chapter}
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground truncate">
-                        {lastRead.chapterHeading}
-                      </div>
-                    </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Continue</Button>
-                  </CardContent>
-                </Card>
-              </section>
-            ) : (
-              <section className="space-y-3">
-                <SectionLabel>Begin Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
-                  onClick={() => setLocation('/bible/read/luke/1')}
-                >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        Walk Through Luke · Luke 1
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground">
-                        The Birth of John the Baptist Foretold
-                      </div>
-                    </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Read</Button>
-                  </CardContent>
-                </Card>
-              </section>
-            )}
-
-            {/* Browse Books */}
-            <section className="space-y-3">
-              <SectionLabel>Browse Books</SectionLabel>
-              <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform"
-                onClick={() => setLocation('/bible/books')}
-              >
-                <div className="flex items-center gap-3">
-                  <BookMarked size={17} className="text-primary" />
-                  <div>
-                    <div className="text-[15px] font-medium text-foreground">Old Testament · New Testament</div>
-                    <div className="text-[12px] text-muted-foreground">66 books</div>
-                  </div>
-                </div>
-                <ChevronRight size={17} className="text-muted-foreground" />
-              </div>
-            </section>
-
-            {/* Bookmarks */}
-            <section className="space-y-3">
-              <SectionLabel>Bookmarks</SectionLabel>
-              {bookmarks.length === 0 && favourites.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
-                  <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                    <Bookmark size={18} />
-                  </div>
-                  <p className="text-[14px] text-muted-foreground leading-relaxed">
-                    Tap the bookmark icon while reading to save chapters here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {bookmarks.slice(0, 3).map(bkm => (
-                    <div
-                      key={bkm.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${bkm.bookId}/${bkm.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Bookmark size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {bkm.bookName} {bkm.chapter}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-medium text-foreground">{bkm.chapterHeading}</p>
-                    </div>
-                  ))}
-                  {favourites.slice(0, 2).map(fav => (
-                    <div
-                      key={fav.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1.5 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${fav.bookId}/${fav.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Heart size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {fav.bookName} {fav.chapter}:{fav.verse}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-sans leading-relaxed text-foreground italic line-clamp-2">
-                        "{fav.verseText}"
-                      </p>
-                    </div>
-                  ))}
-                  {(bookmarks.length + favourites.length) > 5 && (
-                    <button
-                      onClick={() => setActiveTab('library')}
-                      className="text-[13px] text-primary font-medium py-1 w-full text-center hover:underline"
-                    >
-                      View all saved passages
-                    </button>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {/* Tools section */}
-            <section className="space-y-2">
-              <SectionLabel>Tools</SectionLabel>
-
-              {/* Search */}
-              <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                onClick={() => setLocation('/bible/search')}
-              >
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary shrink-0">
-                  <Search size={16} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[14px] font-medium text-foreground">Search</div>
-                  <div className="text-[12px] text-muted-foreground">Search by word, phrase, or reference</div>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </div>
-
-              {/* Reading History */}
-              <div
-                className="p-4 rounded-xl border border-border bg-card flex items-center gap-3 cursor-pointer hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                onClick={() => setLocation('/bible/history')}
-              >
-                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
-                  <History size={16} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[14px] font-medium text-foreground">Reading History</div>
-                  <div className="text-[12px] text-muted-foreground">Recently opened chapters</div>
-                </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </div>
-
-              {/* Translation selector */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <button
-                  className="w-full p-4 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                  onClick={() => setShowTranslations(v => !v)}
-                >
-                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-muted-foreground shrink-0">
-                    <span className="text-[10px] font-bold">{currentTranslation?.abbreviation}</span>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-[14px] font-medium text-foreground">Translation</div>
-                    <div className="text-[12px] text-muted-foreground">{currentTranslation?.name}</div>
-                  </div>
-                  <ChevronDown
-                    size={16}
-                    className={['text-muted-foreground transition-transform', showTranslations ? 'rotate-180' : ''].join(' ')}
-                  />
-                </button>
-
-                {showTranslations && (
-                  <div className="border-t border-border divide-y divide-border/60">
-                    {translations.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => { setTranslation(t.id); setShowTranslations(false); }}
-                        className={[
-                          'w-full p-4 flex items-center gap-3 text-left transition-colors',
-                          t.id === translationId ? 'bg-primary/5' : 'hover:bg-muted/40',
-                        ].join(' ')}
-                      >
-                        <div className={['w-8 h-8 rounded-full flex items-center justify-center shrink-0', t.id === translationId ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'].join(' ')}>
-                          <span className="text-[10px] font-bold">{t.abbreviation}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className={['text-[14px] font-medium', t.id === translationId ? 'text-primary' : 'text-foreground'].join(' ')}>
-                            {t.name}
-                          </div>
-                          {/* Show short-form attribution in the list; full text via the header disclosure */}
-                          <div className="text-[11px] text-muted-foreground">{shortCopyright(t.copyright)}</div>
-                        </div>
-                        {t.id === translationId && (
-                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">Active</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-
+        {/* Reading History */}
+        {readingHistory.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center space-y-4">
+            <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+              <Clock size={20} className="text-muted-foreground" />
+            </div>
+            <p className="text-[16px] font-medium text-foreground">No reading history yet</p>
+            <p className="text-[14px] text-muted-foreground">Chapters you read will appear here.</p>
+            <button
+              onClick={() => setLocation('/bible/books')}
+              className="text-[14px] text-primary font-medium"
+            >
+              Browse Books
+            </button>
           </div>
-        )}
-
-        {/* ── My Library Tab ────────────────────────────────────────────────── */}
-        {activeTab === 'library' && (
-          <MyLibrary />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              Reading History
+            </p>
+            <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
+              {readingHistory.map((entry, i) => (
+                <div
+                  key={`${entry.bookId}-${entry.chapter}-${entry.openedAt}`}
+                  onClick={() => setLocation(`/bible/read/${entry.bookId}/${entry.chapter}`)}
+                  className="flex items-center gap-3 px-4 py-3.5 bg-card hover:bg-muted/40 active:bg-muted/60 cursor-pointer transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    {i === 0 ? (
+                      <BookOpen size={16} className="text-primary" />
+                    ) : (
+                      <span className="text-[12px] font-semibold text-muted-foreground">{i + 1}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                      {entry.bookName} {entry.chapter}
+                    </div>
+                    <div className="text-[14px] font-medium text-foreground truncate">
+                      {entry.chapterHeading}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                    {formatRelativeDate(entry.openedAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
       </main>
       <BottomNav />
     </div>
   );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
-  );
-}
-
-/**
- * Extract a compact attribution from a full copyright string.
- *
- * Strategy:
- *  1. Look for a "© year …" clause — return the text up to and including the
- *     first sentence that contains it.
- *  2. Fallback: return the first sentence (up to the first ". ").
- *  3. If there is no sentence break, return the full string unchanged (it is
- *     already short enough).
- *
- * The full legal text is never removed — it stays in the copyright prop and
- * is displayed when the user taps "expand" in the header disclosure.
- */
-function shortCopyright(copyright: string): string {
-  // Try to extract the "© …" sentence
-  const cMatch = copyright.match(/©[^.]*\./);
-  if (cMatch) return cMatch[0].trim();
-  // Fallback: first sentence
-  const dotIdx = copyright.indexOf('. ');
-  return dotIdx > -1 ? copyright.slice(0, dotIdx + 1) : copyright;
 }
