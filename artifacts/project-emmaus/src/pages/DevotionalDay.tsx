@@ -259,14 +259,6 @@ export default function DevotionalDay() {
             contentRoute={`/devotional/${seriesId}/day/1`}
             className="shrink-0"
           />
-          {user && (
-            <HearEmmausButton
-              text={[entry.greeting, entry.considerThis, entry.prayer, entry.closing]
-                .filter(Boolean).join('\n\n')}
-              userId={user.id}
-              label="Hear this devotional"
-            />
-          )}
           {totalEntries > 1 && (
             <button
               onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}

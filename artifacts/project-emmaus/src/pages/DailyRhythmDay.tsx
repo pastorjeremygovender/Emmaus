@@ -238,14 +238,6 @@ export default function DailyRhythmDay() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex-1" />
-          {user && (
-            <HearEmmausButton
-              text={[step.mentorIntro, step.devotional, step.prayerPrompt, step.actionStep]
-                .filter(Boolean).join('\n\n')}
-              userId={user.id}
-              label="Hear this reading"
-            />
-          )}
         </div>
       </header>
 

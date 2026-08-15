@@ -422,15 +422,6 @@ export default function SermonCompanionReader() {
             contentRoute={`/sermon-companion/${companionId}/day/1`}
             className="shrink-0"
           />
-          {user && entry && (
-            <HearEmmausButton
-              text={[entry.greeting, entry.reflection, entry.prayer, entry.closing]
-                .filter(Boolean).join('\n\n')}
-              userId={user.id}
-              label="Hear this entry"
-              className="shrink-0"
-            />
-          )}
           {user && (
             <button
               onClick={() => setShowStudyTogether(true)}
