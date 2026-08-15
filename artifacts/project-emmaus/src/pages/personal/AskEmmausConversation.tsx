@@ -205,19 +205,8 @@ export default function AskEmmausConversation() {
     return () => clearTimeout(timer);
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Scroll to bottom when streaming ends ────────────────────────────────────
-  // When a response completes, the HearEmmausButton and response cards appear
-  // below the text. Scroll the main to the bottom so these are visible on mobile
-  // without requiring the user to scroll manually.
-  useEffect(() => {
-    if (isStreaming) return; // only fire when transitioning to not-streaming
-    if (messages.length === 0) return;
-    const timer = setTimeout(() => {
-      if (!mainRef.current) return;
-      mainRef.current.scrollTo({ top: mainRef.current.scrollHeight, behavior: 'smooth' });
-    }, 120); // small delay lets the DOM paint the new elements first
-    return () => clearTimeout(timer);
-  }, [isStreaming, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Scroll position is set to the top of the new message when streaming starts
+  // (effect above). No additional scroll on stream end — the user reads from the top.
 
   // ─── Stream a response ──────────────────────────────────────────────────────
 
