@@ -3,16 +3,33 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
+import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
 
 type Tab = 'home' | 'library';
 
+function formatRelativeDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  } catch { return ''; }
+}
+
 export default function Bible() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const [, setLocation] = useLocation();
-  const { lastRead, favourites, bookmarks, notes, prayers, highlights } = useBible();
+  const { lastRead, favourites, bookmarks, notes, prayers, highlights, readingHistory } = useBible();
   const [activeTab, setActiveTab] = useState<Tab>('home');
 
   const libraryCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
@@ -135,70 +152,60 @@ export default function Bible() {
               </div>
             </section>
 
-            {/* Bookmarks */}
-            <section className="space-y-3">
-              <SectionLabel>Bookmarks</SectionLabel>
-              {bookmarks.length === 0 && favourites.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
-                  <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                    <Bookmark size={18} />
-                  </div>
-                  <p className="text-[14px] text-muted-foreground leading-relaxed">
-                    Tap the bookmark icon while reading to save chapters here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {bookmarks.slice(0, 3).map(bkm => (
-                    <div
-                      key={bkm.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${bkm.bookId}/${bkm.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Bookmark size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {bkm.bookName} {bkm.chapter}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-medium text-foreground">{bkm.chapterHeading}</p>
-                    </div>
-                  ))}
-                  {favourites.slice(0, 2).map(fav => (
-                    <div
-                      key={fav.id}
-                      className="p-4 rounded-xl border border-border bg-card space-y-1.5 cursor-pointer active:scale-[0.98] transition-transform"
-                      onClick={() => setLocation(`/bible/read/${fav.bookId}/${fav.chapter}`)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Heart size={12} className="text-primary fill-primary" />
-                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                          {fav.bookName} {fav.chapter}:{fav.verse}
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-sans leading-relaxed text-foreground italic line-clamp-2">
-                        "{fav.verseText}"
-                      </p>
-                    </div>
-                  ))}
-                  {(bookmarks.length + favourites.length) > 5 && (
-                    <button
-                      onClick={() => setActiveTab('library')}
-                      className="text-[13px] text-primary font-medium py-1 w-full text-center hover:underline"
-                    >
-                      View all saved passages
-                    </button>
-                  )}
-                </div>
-              )}
-            </section>
 
           </div>
         )}
 
         {/* ── My Library Tab ────────────────────────────────────────────────── */}
         {activeTab === 'library' && (
-          <MyLibrary />
+          <div className="space-y-8 pb-4">
+
+            {/* Reading History */}
+            <section className="space-y-3">
+              <SectionLabel>Reading History</SectionLabel>
+              {readingHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
+                  <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                    <Clock size={18} />
+                  </div>
+                  <p className="text-[14px] text-muted-foreground leading-relaxed">
+                    Chapters you read will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/60 rounded-xl border border-border overflow-hidden">
+                  {readingHistory.map((entry, i) => (
+                    <div
+                      key={`${entry.bookId}-${entry.chapter}-${entry.openedAt}`}
+                      onClick={() => setLocation(`/bible/read/${entry.bookId}/${entry.chapter}`)}
+                      className="flex items-center gap-3 px-4 py-3.5 bg-card hover:bg-muted/40 active:bg-muted/60 cursor-pointer transition-colors"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        {i === 0 ? (
+                          <BookOpen size={16} className="text-primary" />
+                        ) : (
+                          <span className="text-[12px] font-semibold text-muted-foreground">{i + 1}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-semibold text-primary uppercase tracking-widest">
+                          {entry.bookName} {entry.chapter}
+                        </div>
+                        <div className="text-[14px] font-medium text-foreground truncate">
+                          {entry.chapterHeading}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-[11px] text-muted-foreground">
+                        {formatRelativeDate(entry.openedAt)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <MyLibrary />
+          </div>
         )}
 
       </main>
