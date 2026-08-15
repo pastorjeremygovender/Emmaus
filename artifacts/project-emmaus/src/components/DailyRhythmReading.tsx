@@ -392,7 +392,10 @@ export function DailyRhythmReading({
       )}
 
       {/* ── Share image ─────────────────────────────────────────────────────── */}
-      {shareImageUrl && !previewMode && (
+      {/* Note: share image is shown even in previewMode so admins can verify
+          the image they just generated. Only the interactive Share button is
+          suppressed in preview. */}
+      {shareImageUrl && (
         <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 

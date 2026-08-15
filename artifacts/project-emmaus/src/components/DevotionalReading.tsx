@@ -231,7 +231,8 @@ export function DevotionalReading({
       )}
 
       {/* ── Share image ─────────────────────────────────────────────────────── */}
-      {shareImageUrl && !previewMode && (
+      {/* Share image shown even in previewMode so admins can verify what they generated. */}
+      {shareImageUrl && (
         <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
