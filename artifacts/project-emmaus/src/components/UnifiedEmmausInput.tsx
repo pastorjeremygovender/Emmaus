@@ -296,16 +296,6 @@ export function UnifiedEmmausInput({ className, onActiveChange, launchOnly }: Un
           >
             Ask Emmaus anything…
           </button>
-          {voiceEnabled === true && (
-            <button
-              onClick={handleMic}
-              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 hover:bg-primary/20 transition-colors focus-visible:outline-none"
-              aria-label="Speak to Emmaus"
-              tabIndex={-1}
-            >
-              <Mic size={15} className="text-primary" strokeWidth={1.8} />
-            </button>
-          )}
         </div>
       </div>
     );
