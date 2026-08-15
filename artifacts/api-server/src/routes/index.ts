@@ -28,6 +28,7 @@ import { favouritesRouter } from "./favourites";
 import { historyRouter } from "./history";
 import { searchRouter } from "./search";
 import voiceRouter from "./voice";
+import shareImageRouter from "./share-image";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(favouritesRouter);
 router.use(historyRouter);
 router.use(searchRouter);
 router.use(voiceRouter);
+router.use(shareImageRouter);
 
 export default router;
