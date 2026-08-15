@@ -1,8 +1,6 @@
 import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -89,48 +87,44 @@ export default function Bible() {
             {lastRead ? (
               <section className="space-y-3">
                 <SectionLabel>Continue Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
+                <div
+                  className="p-4 rounded-xl border border-border bg-card flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform"
                   onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
                 >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
+                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
+                    <BookOpen size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
+                      {lastRead.bookName} {lastRead.chapter}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        {lastRead.bookName} {lastRead.chapter}
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground truncate">
-                        {lastRead.chapterHeading}
-                      </div>
+                    <div className="text-[16px] font-medium text-foreground truncate">
+                      {lastRead.chapterHeading}
                     </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Continue</Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <ChevronRight size={17} className="text-muted-foreground shrink-0" />
+                </div>
               </section>
             ) : (
               <section className="space-y-3">
                 <SectionLabel>Begin Reading</SectionLabel>
-                <Card
-                  className="bg-card border-border cursor-pointer active:scale-[0.98] transition-transform"
+                <div
+                  className="p-4 rounded-xl border border-border bg-card flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform"
                   onClick={() => setLocation('/bible/read/luke/1')}
                 >
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
-                      <BookOpen size={18} />
+                  <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center shrink-0">
+                    <BookOpen size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
+                      Walk Through Luke · Luke 1
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-0.5">
-                        Walk Through Luke · Luke 1
-                      </div>
-                      <div className="text-[16px] font-medium text-foreground">
-                        The Birth of John the Baptist Foretold
-                      </div>
+                    <div className="text-[16px] font-medium text-foreground">
+                      The Birth of John the Baptist Foretold
                     </div>
-                    <Button size="sm" className="shrink-0 rounded-xl h-9 px-4">Read</Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <ChevronRight size={17} className="text-muted-foreground shrink-0" />
+                </div>
               </section>
             )}
 
