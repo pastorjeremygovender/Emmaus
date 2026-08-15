@@ -814,10 +814,7 @@ export default function Journeys() {
         </header>
 
         {/* Unified Ask Emmaus / Search input */}
-        <UnifiedEmmausInput
-          className="mt-5"
-          launchOnly
-        />
+        <UnifiedEmmausInput launchOnly className="mt-4" />
 
         {/* Tab bar — hidden while search is active */}
         {!discoverActive && <TabBar active={activeTab} onChange={handleTabChange} />}

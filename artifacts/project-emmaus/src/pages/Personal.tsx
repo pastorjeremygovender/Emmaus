@@ -252,7 +252,7 @@ export default function Personal() {
         </header>
 
         {/* Unified Ask Emmaus / Search bar */}
-        <UnifiedEmmausInput className="mt-2" />
+        <UnifiedEmmausInput launchOnly className="mt-4" />
 
         {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
         <Section title="⭐ Favourites">
