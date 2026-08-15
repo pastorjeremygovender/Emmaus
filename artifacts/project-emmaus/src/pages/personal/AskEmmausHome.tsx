@@ -133,10 +133,10 @@ export default function AskEmmausHome() {
       {/* ── Idle content — collapses when typing ─────────────────────────── */}
       <div
         className={cn(
-          'flex flex-col px-5 transition-all duration-250 overflow-hidden',
+          'flex flex-col px-5 pt-10 gap-6 transition-all duration-250 overflow-hidden',
           isTyping
-            ? 'flex-none max-h-0 opacity-0 pointer-events-none'
-            : 'flex-1 justify-center gap-6 pb-2',
+            ? 'max-h-0 opacity-0 pointer-events-none'
+            : '',
         )}
       >
         {/* Heading */}
