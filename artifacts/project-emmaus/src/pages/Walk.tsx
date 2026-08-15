@@ -781,21 +781,26 @@ export default function Walk() {
         <SectionWrapper color="violet" label="Daily Devotionals" delay={0.07}>
           {activeDevotionals.map(ad => {
             const published      = ad.entries.filter(e => e.status === 'Published');
-            const maxDay         = published.length > 0 ? Math.max(...published.map(e => e.dayNumber)) : 1;
+            const sortedPub      = [...published].sort((a, b) => a.dayNumber - b.dayNumber);
+            const maxDay         = sortedPub.length > 0 ? Math.max(...sortedPub.map(e => e.dayNumber)) : 1;
             const completedDays  = ad.progress.completedDays ?? [];
             const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode);
-            const nextEntry      = ad.entries.find(e => e.dayNumber === nextDay && e.status === 'Published');
+            const nextEntry      = sortedPub.find(e => e.dayNumber === nextDay);
             const completedCount = completedDays.length;
             const allComplete    = completedCount >= published.length && published.length > 0;
             const openDay        = allComplete ? Math.max(...completedDays) : nextDay;
+            // Use position within sorted published entries (not raw dayNumber) so that
+            // non-sequential dayNumbers (e.g. day 16 in a 14-entry series) never produce
+            // a confusing "16 of 14" counter.
+            const nextEntryPos   = nextEntry ? (sortedPub.findIndex(e => e.dayNumber === nextEntry.dayNumber) + 1) : null;
             const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
             const devSubtitle    = allComplete
               ? `${published.length} of ${published.length} complete`
               : completedCount > 0
                 ? nextEntry
-                  ? `${nextLabel} of ${published.length} · ${nextEntry.title}`
-                  : `${nextLabel} of ${published.length}`
-                : published.length > 0 ? `${nextLabel} of ${published.length}` : nextLabel;
+                  ? `${nextLabel} · ${nextEntryPos} of ${published.length}${nextEntry.title ? ` · ${nextEntry.title}` : ''}`
+                  : nextLabel
+                : published.length > 0 ? `1 of ${published.length}` : '';
             const badge = computeUpdatedBadge(
               ad.series.notifyPublishedAt ?? null,
               ad.progress.lastOpenedAt ?? null,

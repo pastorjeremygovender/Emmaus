@@ -235,6 +235,16 @@ export function DevotionalNavigatorPage() {
         </div>
       )}
 
+      {/* View all link */}
+      <div className="px-4 pb-4 text-center">
+        <button
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+          onClick={() => setLocation(`/devotional/${seriesId}/previous`)}
+        >
+          View all entries
+        </button>
+      </div>
+
       <BottomNav />
     </div>
   );

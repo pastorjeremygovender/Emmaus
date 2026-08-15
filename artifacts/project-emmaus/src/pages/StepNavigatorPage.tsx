@@ -257,6 +257,20 @@ export function StepNavigatorPage({ mode }: Props) {
         </div>
       )}
 
+      {/* ── View all link ───────────────────────────────────────────────── */}
+      <div className="px-4 pb-4 text-center">
+        <button
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+          onClick={() =>
+            mode === 'daily-rhythm'
+              ? setLocation('/daily-rhythm/previous')
+              : setLocation(`/journey/${params.journeyId}/previous`)
+          }
+        >
+          View all {stepPrefix.toLowerCase()}s
+        </button>
+      </div>
+
       <BottomNav />
     </div>
   );

@@ -33,7 +33,7 @@ export function navigatorRoute(
   id: string,
   state: string | undefined,
 ): string | null {
-  if (state !== 'in-progress' && state !== 'paused') return null;
+  if (state !== 'in-progress' && state !== 'paused' && state !== 'completed') return null;
   switch (kind) {
     case 'daily-rhythm':      return '/daily-rhythm/navigate';
     case 'journey':           return `/journey/${id}/navigate`;

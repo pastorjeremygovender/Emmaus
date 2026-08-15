@@ -242,6 +242,16 @@ export function SermonCompanionNavigatorPage() {
         </div>
       )}
 
+      {/* View all link */}
+      <div className="px-4 pb-4 text-center">
+        <button
+          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+          onClick={() => setLocation(`/sermon-companion/${id}/previous`)}
+        >
+          View all steps
+        </button>
+      </div>
+
       <BottomNav />
     </div>
   );
