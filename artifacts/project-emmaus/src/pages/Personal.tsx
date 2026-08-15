@@ -1,18 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
-  LogOut, Users, ChevronRight, Pencil, Check, X,
-  Star, Clock, BookOpen, Headphones, Map,
+  LogOut, Pencil, Check, X,
+  Star, Clock, BookOpen, Headphones, Map, Users,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -134,12 +131,10 @@ function HistoryRow({ entry, onOpen }: { entry: HistoryEntry; onOpen: () => void
 export default function Personal() {
   const { user, signOut, updateName } = useAuth();
   const { progress, reflections, journeys } = useJourney();
-  const { getMyRooms, getUnreadCount } = useRooms();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // ── Profile editing ────────────────────────────────────────────────────────
-  const [prayerRequest, setPrayerRequest] = useState('');
   const [notifs, setNotifs] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -175,9 +170,6 @@ export default function Personal() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const myRooms = getMyRooms(user.id);
-  const roomUnread = getUnreadCount(user.id);
-
   const coreJourneyId = '15-minutes-with-jesus';
   const coreProg = progress[coreJourneyId];
   const streak = coreProg ? coreProg.completedDays.length : 0;
@@ -191,15 +183,6 @@ export default function Personal() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleSignOut = () => { signOut(); setLocation('/'); };
-
-  const handleSavePrayer = () => {
-    if (!prayerRequest.trim()) return;
-    const existing = JSON.parse(localStorage.getItem('emmaus_prayers') || '[]') as string[];
-    existing.push(prayerRequest.trim());
-    localStorage.setItem('emmaus_prayers', JSON.stringify(existing));
-    setPrayerRequest('');
-    toast({ title: 'Prayer sent', description: 'Your prayer request has been sent to the pastoral team.' });
-  };
 
   const displayedName = user.preferredName?.trim() || '';
   const initials = displayedName
@@ -322,32 +305,6 @@ export default function Personal() {
           )}
         </Section>
 
-        {/* ── Prayer Requests ────────────────────────────────────────────────── */}
-        <Section title="Prayer Requests">
-          <Card className="bg-card border-border">
-            <CardContent className="p-5 space-y-3">
-              <Label htmlFor="prayer-input" className="sr-only">Prayer request</Label>
-              <Textarea
-                id="prayer-input"
-                placeholder="What would you like prayer for today?"
-                value={prayerRequest}
-                onChange={(e) => setPrayerRequest(e.target.value)}
-                className="resize-none bg-background border-border text-[16px] leading-relaxed rounded-xl min-h-[100px]"
-                data-testid="input-prayer-request"
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                className="w-full h-11 text-base rounded-xl"
-                onClick={handleSavePrayer}
-                data-testid="button-save-prayer"
-              >
-                Send Prayer Request
-              </Button>
-            </CardContent>
-          </Card>
-        </Section>
-
         {/* ── Saved Reflections ──────────────────────────────────────────────── */}
         {savedReflections.length > 0 && (
           <Section title="Saved Reflections">
@@ -363,47 +320,6 @@ export default function Personal() {
             </div>
           </Section>
         )}
-
-        {/* ── My Rooms ───────────────────────────────────────────────────────── */}
-        <Section title="My Groups">
-          <div className="flex items-center justify-between -mt-1 mb-1">
-            {roomUnread > 0 && (
-              <span className="text-[11px] font-semibold text-primary">{roomUnread} new</span>
-            )}
-          </div>
-          {myRooms.length === 0 ? (
-            <p className="text-[14px] text-muted-foreground">
-              Any Groups you are part of will appear here.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {myRooms.slice(0, 3).map(room => (
-                <button
-                  key={room.id}
-                  onClick={() => setLocation(`/rooms/${room.id}`)}
-                  className="w-full text-left p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Users size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-medium text-foreground truncate">{room.name}</div>
-                    <div className="text-[12px] text-muted-foreground">{room.memberCount} {room.memberCount === 1 ? 'member' : 'members'}</div>
-                  </div>
-                  <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-                </button>
-              ))}
-              {myRooms.length > 3 && (
-                <button
-                  onClick={() => setLocation('/rooms')}
-                  className="w-full text-center text-[13px] text-primary font-medium py-2 hover:underline"
-                >
-                  View all {myRooms.length} Groups
-                </button>
-              )}
-            </div>
-          )}
-        </Section>
 
         {/* ── Settings ───────────────────────────────────────────────────────── */}
         <Section title="Settings">

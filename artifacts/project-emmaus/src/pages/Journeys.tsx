@@ -63,22 +63,37 @@ function dayLabel(n?: number): string | null {
   return `${n} ${n === 1 ? 'Day' : 'Days'}`;
 }
 
-function sessionTab(): TabId {
-  // Prefer ?tab= URL param — set when returning from content so the right tab opens.
-  try {
-    const urlTab = new URLSearchParams(window.location.search).get('tab');
-    if (urlTab === 'devotionals' || urlTab === 'journeys' || urlTab === 'walks' || urlTab === 'sermons') return urlTab as TabId;
-  } catch { /* ignore */ }
-  // Fall back to last-used tab from sessionStorage.
-  try {
-    const saved = sessionStorage.getItem('discover-tab');
-    if (saved === 'devotionals' || saved === 'journeys' || saved === 'walks' || saved === 'sermons') return saved as TabId;
-  } catch { /* ignore */ }
-  return 'walks';
-}
+// ─── Section wrapper (matches Today's Steps SectionWrapper style) ─────────────
 
-function saveTab(tab: TabId) {
-  try { sessionStorage.setItem('discover-tab', tab); } catch { /* ignore */ }
+const DISCOVER_COLORS = {
+  emerald: { bg: 'bg-emerald-50/90 border-emerald-200/60', title: 'text-emerald-700', dot: 'bg-emerald-500' },
+  amber:   { bg: 'bg-amber-50/90 border-amber-200/60',     title: 'text-amber-700',   dot: 'bg-amber-500'   },
+  violet:  { bg: 'bg-violet-50/90 border-violet-200/60',   title: 'text-violet-700',  dot: 'bg-violet-500'  },
+} as const;
+type DiscoverColor = keyof typeof DISCOVER_COLORS;
+
+function DiscoverSection({
+  color, label, children,
+}: {
+  color: DiscoverColor;
+  label: string;
+  children: React.ReactNode;
+}) {
+  const c = DISCOVER_COLORS[color];
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className={`rounded-2xl border px-4 pt-3 pb-4 ${c.bg}`}
+    >
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+        <h2 className={`text-[10px] font-bold uppercase tracking-[0.14em] ${c.title}`}>{label}</h2>
+      </div>
+      {children}
+    </motion.section>
+  );
 }
 
 // ─── Shared UI atoms ─────────────────────────────────────────────────────────
@@ -490,7 +505,7 @@ function DevotionalsPanel({
 }) {
   if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
-    <div className="space-y-4 pt-6">
+    <div className="space-y-3">
       {items.map(item => (
         <DevotionalCard
           key={item.id}
@@ -560,7 +575,7 @@ function JourneysPanel({
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
   return (
-    <div className="space-y-3 pt-6">
+    <div className="space-y-3">
       {collections.map(col => {
         const walkCount  = col.journeys.length;
         const completed  = col.journeys.filter(j => j.memberProgressState === 'completed').length;
@@ -639,7 +654,7 @@ function WalksPanel({
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
   const cardProps = { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
   return (
-    <div className="space-y-3 pt-6">
+    <div className="space-y-3">
       {journeyItemCards(standalone, cardProps)}
     </div>
   );
@@ -705,62 +720,18 @@ function SermonCompanionsPanel({
   }
 
   return (
-    <div className="space-y-8 pt-6">
-      {current && (
-        <section className="space-y-3">
-          <SectionLabel icon={<Mic2 size={13} />}>This Week's Sermon</SectionLabel>
-          {companionCard(current, true)}
-        </section>
-      )}
-
-      {previous.length > 0 && (
-        <section className="space-y-3">
-          <SectionLabel>Previous Sermon Companions</SectionLabel>
-          <div className="space-y-3">
-            {previous.map(item => (
-              <div key={item.id}>{companionCard(item, false)}</div>
-            ))}
-          </div>
-        </section>
-      )}
+    <div className="space-y-4">
+      {current && companionCard(current, true)}
+      {previous.map(item => (
+        <div key={item.id}>{companionCard(item, false)}</div>
+      ))}
     </div>
   );
 }
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
-const TABS: { id: TabId; label: string; dot: string }[] = [
-  { id: 'walks',       label: 'Walks',             dot: 'bg-emerald-500' },
-  { id: 'journeys',    label: 'Journeys',           dot: 'bg-amber-500'   },
-  { id: 'devotionals', label: 'Daily Devotionals',  dot: 'bg-violet-500'  },
-  { id: 'sermons',     label: 'Sermon Companions',  dot: 'bg-amber-500'   },
-];
-
-function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => void }) {
-  return (
-    <div className="flex border-b border-border -mx-5 px-5 mt-6 overflow-x-auto scrollbar-none" role="tablist">
-      {TABS.map(({ id, label, dot }) => {
-        const isActive = active === id;
-        return (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(id)}
-            className={`flex-shrink-0 pb-2.5 pt-1 px-1 mr-6 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap -mb-px flex items-center gap-1.5 ${
-              isActive
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {isActive && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// (TabBar replaced by stacked DiscoverSection layout)
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -773,15 +744,6 @@ export default function Journeys() {
 
   // ── Unified search/question active state ─────────────────────────────────
   const [discoverActive, setDiscoverActive] = useState(false);
-
-  // ── Tab state ─────────────────────────────────────────────────────────────
-
-  const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
-
-  const handleTabChange = (id: TabId) => {
-    setActiveTab(id);
-    saveTab(id);
-  };
 
   // ── API data ─────────────────────────────────────────────────────────────
 
@@ -967,45 +929,53 @@ export default function Journeys() {
           onActiveChange={setDiscoverActive}
         />
 
-        {/* My Rooms + tabs — hidden while the unified input is active */}
+        {/* My Groups — hidden while search is active */}
         {!discoverActive && (() => {
           const myRooms = user ? getMyRooms(user.id) : [];
+          if (myRooms.length === 0) return null;
           return (
-            <>
-              <button
-                onClick={() => setLocation('/rooms')}
-                className="mt-5 w-full rounded-2xl border bg-blue-50/90 border-blue-200/60 px-4 py-3.5 flex items-center gap-3 hover:border-blue-300/70 transition-colors text-left"
-              >
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                  <Users size={16} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700">My Groups</p>
-                  <p className="text-[12px] text-blue-600/70 mt-0.5">
-                    {myRooms.length > 0
-                      ? `${myRooms.length} ${myRooms.length === 1 ? 'Group' : 'Groups'}`
-                      : 'Walk journeys together with others'}
-                  </p>
-                </div>
-                <ChevronRight size={15} className="text-blue-500/60 shrink-0" />
-              </button>
-
-              {/* Tab bar */}
-              <TabBar active={activeTab} onChange={handleTabChange} />
-            </>
+            <motion.button
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              onClick={() => setLocation('/rooms')}
+              className="mt-5 w-full rounded-2xl border bg-blue-50/90 border-blue-200/60 px-4 py-3 flex items-center gap-3 hover:border-blue-300/70 transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                <Users size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700">My Groups</p>
+                <p className="text-[12px] text-blue-600/70 mt-0.5">
+                  {myRooms.length} {myRooms.length === 1 ? 'Group' : 'Groups'}
+                </p>
+              </div>
+              <ChevronRight size={15} className="text-blue-500/60 shrink-0" />
+            </motion.button>
           );
         })()}
 
-        {/* Loading / Error / Tab content — hidden while unified input is active */}
+        {/* Loading skeletons */}
         {!discoverActive && apiLoading && (
-          <div className="space-y-4 pt-6">
-            <SkeletonCard />
-            <SkeletonCard />
+          <div className="space-y-3 mt-5">
+            <div className="rounded-2xl border bg-emerald-50/60 border-emerald-200/40 p-4 space-y-2 animate-pulse">
+              <div className="h-2 w-10 rounded bg-emerald-200/60" />
+              <SkeletonCard /><SkeletonCard />
+            </div>
+            <div className="rounded-2xl border bg-amber-50/60 border-amber-200/40 p-4 space-y-2 animate-pulse">
+              <div className="h-2 w-14 rounded bg-amber-200/60" />
+              <SkeletonCard />
+            </div>
+            <div className="rounded-2xl border bg-violet-50/60 border-violet-200/40 p-4 space-y-2 animate-pulse">
+              <div className="h-2 w-20 rounded bg-violet-200/60" />
+              <SkeletonCard />
+            </div>
           </div>
         )}
 
+        {/* Error */}
         {!discoverActive && !apiLoading && apiError && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-6">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-5 space-y-3 mt-5">
             <p className="text-[14px] text-destructive">{apiError}</p>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={reload}>
               Try again
@@ -1013,49 +983,12 @@ export default function Journeys() {
           </div>
         )}
 
+        {/* Stacked sections — all content always visible */}
         {!discoverActive && !apiLoading && data && (
-          <>
-            {activeTab === 'devotionals' && (
-              <>
-                <div className="flex items-center gap-1.5 mt-5 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Daily Devotionals</span>
-                </div>
-                <DevotionalsPanel
-                  items={data.dailyDevotionals}
-                  onAction={handleDevotionalAction}
-                  startingId={startingDevId}
-                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                />
-              </>
-            )}
+          <div className="space-y-3 mt-5 pb-4">
 
-            {activeTab === 'journeys' && (
-              <>
-                <div className="flex items-center gap-1.5 mt-5 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Journeys</span>
-                </div>
-                <JourneysPanel
-                  collections={data.journeyCollections}
-                  onOpenJourney={(col) => {
-                    setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`);
-                  }}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                />
-              </>
-            )}
-
-            {activeTab === 'walks' && (
-              <>
-                <div className="flex items-center gap-1.5 mt-5 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Walks</span>
-                </div>
+            {data.standaloneJourneys.length > 0 && (
+              <DiscoverSection color="emerald" label="Walks">
                 <WalksPanel
                   standalone={data.standaloneJourneys}
                   onAction={handleJourneyAction}
@@ -1067,15 +1000,36 @@ export default function Journeys() {
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
                   onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
                 />
-              </>
+              </DiscoverSection>
             )}
 
-            {activeTab === 'sermons' && (
-              <>
-                <div className="flex items-center gap-1.5 mt-5 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Sermon Companions</span>
-                </div>
+            {data.journeyCollections.length > 0 && (
+              <DiscoverSection color="amber" label="Journeys">
+                <JourneysPanel
+                  collections={data.journeyCollections}
+                  onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
+              </DiscoverSection>
+            )}
+
+            {data.dailyDevotionals.length > 0 && (
+              <DiscoverSection color="violet" label="Daily Devotionals">
+                <DevotionalsPanel
+                  items={data.dailyDevotionals}
+                  onAction={handleDevotionalAction}
+                  startingId={startingDevId}
+                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                />
+              </DiscoverSection>
+            )}
+
+            {(data.currentSermonCompanion || data.previousSermonCompanions.length > 0) && (
+              <DiscoverSection color="amber" label="Sermon Companions">
                 <SermonCompanionsPanel
                   current={data.currentSermonCompanion}
                   previous={data.previousSermonCompanions}
@@ -1084,9 +1038,10 @@ export default function Journeys() {
                   onGate={() => setLocation('/walk')}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
                 />
-              </>
+              </DiscoverSection>
             )}
-          </>
+
+          </div>
         )}
 
       </main>
