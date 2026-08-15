@@ -145,7 +145,7 @@ export default function BibleJourneyDetail() {
               const completedStandalone = isChapterComplete(journey.bookId, ch);
               const done = completedViaJourney || completedStandalone;
               const isCurrent = progress?.currentChapter === ch && !done;
-              const isLocked = progress ? ch > (progress.currentChapter) && !done : ch > 1;
+              const isLocked = false; // all chapters freely accessible
               const heading = getHeadingForJourney(journey.bookId, ch);
               const mins = getMinutesForJourney(journey.bookId, ch);
 

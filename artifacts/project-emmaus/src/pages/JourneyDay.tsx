@@ -9,7 +9,6 @@ import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
-import { isCompletedToday } from '@/lib/daily-lock';
 import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { getStepLabel } from '@/lib/step-label';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';

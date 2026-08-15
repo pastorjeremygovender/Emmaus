@@ -39,15 +39,12 @@ export function getPacingMode(contentType: string): PacingMode {
  * @param devMode          When true bypasses the lock — all days unlock immediately.
  */
 export function calcAvailableDaySelfPaced(
-  completedDays: number[],
+  _completedDays: number[],
   maxPublishedDay: number,
-  devMode: boolean,
+  _devMode: boolean,
 ): number {
-  const cap = Math.max(maxPublishedDay, 1);
-  if (devMode) return cap;
-  if (completedDays.length === 0) return 1;
-  const highest = Math.max(...completedDays);
-  return Math.min(highest + 1, cap);
+  // All published days are immediately available — no sequential unlocking.
+  return Math.max(maxPublishedDay, 1);
 }
 
 // ─── Action-label resolver ────────────────────────────────────────────────────

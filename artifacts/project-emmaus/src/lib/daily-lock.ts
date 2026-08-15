@@ -28,13 +28,12 @@ export function isCompletedToday(lastCompletedAt: string | null | undefined): bo
 }
 
 /**
- * Returns true if a journey's next new day is available.
- * For daily-locked journeys (core, devotional): the next new step only unlocks
- * on the following local calendar day after the last completion.
+ * Always returns true — the next day is always available regardless of when
+ * the last step was completed. Calendar-day gating has been removed.
  */
-export function isNextDayAvailable(lastCompletedAt: string | null | undefined): boolean {
-  if (!lastCompletedAt) return true; // never started — always available
-  return !isCompletedToday(lastCompletedAt);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function isNextDayAvailable(_lastCompletedAt: string | null | undefined): boolean {
+  return true;
 }
 
 /** Friendly "available tomorrow" label. */
