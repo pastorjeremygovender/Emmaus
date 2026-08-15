@@ -69,6 +69,7 @@ router.get("/journeys/progress", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
   const progress = await store.getAllProgress(userId);
+  res.set("Cache-Control", "no-store");
   res.json({ progress });
 });
 

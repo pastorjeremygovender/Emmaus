@@ -369,6 +369,8 @@ devotionalsRouter.get("/:id/progress", async (req: Request, res: Response) => {
   if (!userId) return;
   try {
     const progress = await store.getProgress(userId, String(req.params.id));
+    // Prevent browser caching stale completedDays counts — same as /progress/all.
+    res.set("Cache-Control", "no-store");
     res.json(progress ?? null);
   } catch (err) {
     logger.error({ err }, "getProgress failed");

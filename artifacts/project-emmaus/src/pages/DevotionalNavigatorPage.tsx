@@ -1,9 +1,21 @@
 /**
  * DevotionalNavigatorPage — shown when a member taps a Daily Devotional card
- * on Today's Steps. Shows Previous / Current / Next entries so the member can
- * choose where to read instead of being dropped straight into the reading.
+ * from Today's Steps or Discover. Shows Previous / Current / Next entries so
+ * the member can choose where to read instead of being dropped straight in.
  *
  * Route: /devotional/:seriesId/navigate
+ *
+ * IMPORTANT — why we use getAllProgress() not getProgress():
+ *   The devotional_progress.current_day column is seeded at 1 when a series
+ *   starts and is NEVER updated when markDayComplete() runs (only completedDays
+ *   is appended). Relying on currentDay would always show "Entry 1" as current.
+ *   Instead we compute the current entry the same way Walk.tsx does — find the
+ *   first published entry whose dayNumber is not yet in completedDays.
+ *
+ *   We also use getAllProgress() (the aggregate endpoint, same as Walk.tsx)
+ *   rather than the per-series getProgress() endpoint. The per-series endpoint
+ *   previously lacked a Cache-Control: no-store header and could return a stale
+ *   snapshot of completedDays from an earlier browser cache hit.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,7 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ArrowLeft, CheckCircle2, ChevronRight } from 'lucide-react';
 import {
   getSeriesWithEntries,
-  getProgress,
+  getAllProgress,
   type DevotionalEntry,
   type DevotionalProgress,
   type SeriesWithEntries,
@@ -20,7 +32,7 @@ import {
 import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 
-// ── Card components (same visual design as StepNavigatorPage) ─────────────────
+// ── Card components ───────────────────────────────────────────────────────────
 
 interface CardEntry {
   dayNumber: number;
@@ -109,7 +121,7 @@ function EmptySlot({ role }: { role: 'previous' | 'next' }) {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function entryToCard(e: DevotionalEntry): CardEntry {
   return {
@@ -118,6 +130,21 @@ function entryToCard(e: DevotionalEntry): CardEntry {
     title: e.title,
   };
 }
+
+/**
+ * Given sorted published entries and the set of completed dayNumbers, return
+ * the index of the "current" entry — the first uncompleted entry, or the last
+ * entry when all are done. This mirrors Walk.tsx's calcAvailableDaySelfPaced
+ * logic without importing that module.
+ */
+function resolveCurrentIdx(sorted: DevotionalEntry[], completedSet: Set<number>): number {
+  const nextIdx = sorted.findIndex(e => !completedSet.has(e.dayNumber));
+  if (nextIdx !== -1) return nextIdx;
+  // All complete — pin to last entry so the user can review it
+  return sorted.length - 1;
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DevotionalNavigatorPage() {
   const { seriesId } = useParams<{ seriesId: string }>();
@@ -131,12 +158,19 @@ export function DevotionalNavigatorPage() {
   useEffect(() => {
     if (!seriesId || !user?.id) return;
     const auth = { userId: user.id };
+
     Promise.all([
       getSeriesWithEntries(seriesId, auth),
-      getProgress(seriesId, auth),
+      // Use the aggregate endpoint (same source as Walk.tsx). It has
+      // Cache-Control: no-store and always returns the latest completedDays.
+      // We then filter to this specific seriesId.
+      getAllProgress(auth),
     ])
-      .then(([s, p]) => { setSeries(s); setProgress(p); })
-      .catch(() => {/* non-fatal — stay on loading state */})
+      .then(([s, allProg]) => {
+        setSeries(s);
+        setProgress(allProg.find(p => p.seriesId === seriesId) ?? null);
+      })
+      .catch(() => {/* non-fatal */})
       .finally(() => setLoading(false));
   }, [seriesId, user?.id]);
 
@@ -157,24 +191,21 @@ export function DevotionalNavigatorPage() {
     );
   }
 
-  // Sort published entries by day number
-  const published = series.entries
+  // Sort published entries by day number — the only ordering that matters.
+  const sorted = series.entries
     .filter(e => e.status === 'Published')
     .sort((a, b) => a.dayNumber - b.dayNumber);
 
-  const currentDay = progress?.currentDay ?? (published[0]?.dayNumber ?? 1);
-  // Clamp to last published entry if progress is ahead of content
-  const effectiveDay = published.some(e => e.dayNumber === currentDay)
-    ? currentDay
-    : (published[published.length - 1]?.dayNumber ?? currentDay);
+  const completedSet = new Set<number>(progress?.completedDays ?? []);
+  const completedCount = completedSet.size;
+  const totalCount = sorted.length;
 
-  const currentIdx = published.findIndex(e => e.dayNumber === effectiveDay);
-  const prevEntry  = currentIdx > 0 ? published[currentIdx - 1] : null;
-  const currEntry  = published[currentIdx] ?? null;
-  const nextEntry  = currentIdx >= 0 && currentIdx < published.length - 1 ? published[currentIdx + 1] : null;
-
-  const completedCount = progress?.completedDays.length ?? 0;
-  const totalCount     = published.length;
+  // Determine current/prev/next from completedDays — NEVER from currentDay
+  // (which is always 1; see file-level comment).
+  const currentIdx  = sorted.length > 0 ? resolveCurrentIdx(sorted, completedSet) : -1;
+  const prevEntry   = currentIdx > 0 ? sorted[currentIdx - 1] : null;
+  const currEntry   = currentIdx >= 0 ? sorted[currentIdx] : null;
+  const nextEntry   = currentIdx >= 0 && currentIdx < sorted.length - 1 ? sorted[currentIdx + 1] : null;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe flex flex-col">

@@ -156,6 +156,7 @@ sermonCompanionsRouter.get("/member/engagements", async (req: Request, res: Resp
       };
     });
 
+    res.set("Cache-Control", "no-store");
     res.json(result);
   } catch (err) {
     logger.error({ err }, "sermon-companions: member/engagements failed");
@@ -513,6 +514,7 @@ sermonCompanionsRouter.get("/:companionId/member", async (req: Request, res: Res
     }
 
     const progress = await store.getProgressForUser(userId, companion.id);
+    res.set("Cache-Control", "no-store");
     res.json({ ...companion, progress: progress ?? null, sermon });
   } catch (err) {
     logger.error({ err }, "sermon-companions: getMember failed");
