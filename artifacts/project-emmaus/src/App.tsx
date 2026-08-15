@@ -16,6 +16,9 @@ import Onboarding from '@/pages/Onboarding';
 import Auth from '@/pages/Auth';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
+import { StepNavigatorPage } from '@/pages/StepNavigatorPage';
+import { DevotionalNavigatorPage } from '@/pages/DevotionalNavigatorPage';
+import { SermonCompanionNavigatorPage } from '@/pages/SermonCompanionNavigatorPage';
 import JourneyDay from '@/pages/JourneyDay';
 import JourneyPreviousDays from '@/pages/JourneyPreviousDays';
 import DailyRhythmDay from '@/pages/DailyRhythmDay';
@@ -137,19 +140,27 @@ function Router() {
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
       {/* Canonical Daily Rhythm routes */}
+      <Route path="/daily-rhythm/navigate">
+        {() => <StepNavigatorPage mode="daily-rhythm" />}
+      </Route>
       <Route path="/daily-rhythm/previous" component={PreviousDays} />
       <Route path="/daily-rhythm/day/:dayNumber" component={DailyRhythmDay} />
       {/* Daily Devotionals */}
+      <Route path="/devotional/:seriesId/navigate" component={DevotionalNavigatorPage} />
       <Route path="/devotional/:seriesId/previous" component={DevotionalPreviousDays} />
       <Route path="/devotional/:seriesId/day/:day" component={DevotionalDay} />
       {/* Legacy redirect — /journey/15-minutes-with-jesus/day/:day → canonical */}
       <Route path="/journey/15-minutes-with-jesus/day/:day">
         {(params) => <LegacyDailyRhythmRedirect day={params?.day ?? '1'} />}
       </Route>
+      <Route path="/journey/:journeyId/navigate">
+        {(params) => <StepNavigatorPage mode="journey" />}
+      </Route>
       <Route path="/journey/:journeyId/previous" component={JourneyPreviousDays} />
       <Route path="/journey/:journeyId/complete" component={WalkCompletePage} />
       <Route path="/journey/:journeyId/day/:day" component={JourneyDay} />
       {/* Sermon companion — overview must be registered before /:id/day/:day to avoid capture */}
+      <Route path="/sermon-companion/:id/navigate" component={SermonCompanionNavigatorPage} />
       <Route path="/sermon-companion/:id/overview" component={SermonCompanionOverview} />
       <Route path="/sermon-companion/:id/previous" component={SermonCompanionPreviousDays} />
       <Route path="/sermon-companion/:id/day/:day" component={SermonCompanionReader} />

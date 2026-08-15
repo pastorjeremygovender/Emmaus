@@ -630,16 +630,16 @@ export default function Walk() {
     setLocation('/journeys');
   }
 
-  function goToDailyRhythmDay(day: number) {
-    setLocation(`/daily-rhythm/day/${day}?from=walk`);
+  function goToDailyRhythmDay(_day: number) {
+    // Navigate to the step navigator so the member can choose Previous / Current / Next
+    // rather than being dropped straight into the reading.
+    setLocation('/daily-rhythm/navigate');
   }
 
-  function goToJourney(journeyId: string, prog: { currentDay: number }) {
+  function goToJourney(journeyId: string, _prog: { currentDay: number }) {
     // progress[journeyId] is always present here — goToJourney is only called from
-    // "Your Journeys" cards which filter on progress[j.id] existence. The
-    // startJourney guard that was previously here was dead code and has been removed.
-    const day = prog.currentDay ?? 1;
-    setLocation(`/journey/${journeyId}/day/${day}?source=walk`);
+    // "Your Journeys" cards which filter on progress[j.id] existence.
+    setLocation(`/journey/${journeyId}/navigate`);
   }
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
@@ -809,7 +809,7 @@ export default function Walk() {
                 ctaLabel={allComplete ? undefined : 'Continue'}
                 onAction={() => {
                   void dismissBadge('devotional', ad.series.id);
-                  setLocation(`/devotional/${ad.series.id}/day/${openDay}?source=today`);
+                  setLocation(`/devotional/${ad.series.id}/navigate`);
                 }}
                 done={allComplete}
                 badge={badge}
@@ -900,7 +900,13 @@ export default function Walk() {
                 ctaLabel={isComplete ? 'Review' : 'Continue'}
                 onAction={() => {
                   void dismissBadge('companion', sc.id);
-                  setLocation(destination);
+                  // Complete companions go to the overview summary; in-progress
+                  // ones show the Previous / Current / Next navigator.
+                  if (isComplete) {
+                    setLocation(`/sermon-companion/${sc.id}/overview?source=today`);
+                  } else {
+                    setLocation(`/sermon-companion/${sc.id}/navigate`);
+                  }
                 }}
                 done={isComplete}
                 badge={sc.badge ?? null}
