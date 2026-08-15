@@ -276,7 +276,6 @@ export default function AskEmmausHome() {
         />
       </div>
 
-      <BottomNav />
     </div>
   );
 }

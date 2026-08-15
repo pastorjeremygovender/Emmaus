@@ -427,16 +427,8 @@ export default function AskEmmausConversation() {
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
             onClick={() => {
-              // Navigate directly to the originating page — no two-press required.
-              const dest = getReturnDestination();
-              clearReturnDestination();
-              const target = dest?.pathname ?? '/walk';
-              setLocation(target);
-              if (dest?.scrollY) {
-                requestAnimationFrame(() => {
-                  setTimeout(() => window.scrollTo({ top: dest.scrollY, behavior: 'instant' }), 80);
-                });
-              }
+              // Go back to Ask Emmaus home — let it handle the final return to origin.
+              setLocation('/personal/ask-emmaus');
             }}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
