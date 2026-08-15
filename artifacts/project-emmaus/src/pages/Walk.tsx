@@ -935,12 +935,6 @@ export default function Walk() {
                   onAction={() => setLocation(`/rooms/${room.id}`)}
                 />
               ))}
-              <button
-                onClick={() => setLocation('/rooms')}
-                className="text-[12px] font-medium text-blue-600/70 hover:text-blue-700 transition-colors pt-0.5"
-              >
-                View all groups →
-              </button>
             </SectionWrapper>
           );
         })()}
