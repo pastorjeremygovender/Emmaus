@@ -654,20 +654,14 @@ export default function Walk() {
       ? rawPreferredName.split(' ')[0]
       : null;
 
-  // ── Daily Rhythm compact card — state machine (inlined from FifteenMinutesCard) ──
-  type DrState = 'start' | 'ready' | 'complete' | 'tomorrow' | 'uptodate' | 'waitlatest';
-  const drCompletedToday = devMode ? false : isCompletedToday(coreProg?.lastCompletedAt);
-  const drNextDayAvail   = devMode ? true  : isNextDayAvailable(coreProg?.lastCompletedAt);
-  const drStarted        = !!coreProg;
+  // ── Daily Rhythm compact card — state machine ──
+  // One-step-per-day gate removed: members can continue to the next day immediately.
+  type DrState = 'start' | 'ready' | 'uptodate';
+  const drStarted = !!coreProg;
   let drState: DrState;
-  if (!drStarted)                                drState = 'start';
-  else if (coreCaughtUp && drCompletedToday)     drState = 'waitlatest';
-  else if (coreCaughtUp && !drCompletedToday)    drState = 'uptodate';
-  else if (drCompletedToday && !drNextDayAvail)  drState = 'tomorrow';
-  else if (drCompletedToday)                     drState = 'complete';
-  else                                           drState = 'ready';
-
-  const drDone = drState === 'complete' || drState === 'tomorrow' || drState === 'waitlatest';
+  if (!drStarted)    drState = 'start';
+  else if (coreCaughtUp) drState = 'uptodate';
+  else               drState = 'ready';
 
   const drSubtitle = (() => {
     if (drState === 'start') return 'Your daily time with Jesus is ready';
@@ -675,11 +669,6 @@ export default function Walk() {
       return coreCurrentEntry
         ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — you're up to date`
         : "You're up to date";
-    }
-    if (drDone) {
-      return coreCurrentEntry
-        ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — done for today`
-        : 'Complete for today. Come back tomorrow.';
     }
     return coreCurrentEntry
       ? `${getStepLabel(coreCurrentEntry, coreJourney!)} · ${coreCurrentEntry.title}`
@@ -689,15 +678,12 @@ export default function Walk() {
   const drCtaLabel = drState === 'start'
     ? "Open today's reading"
     : drState === 'ready'
-      ? ((coreProg?.completedDays.length ?? 0) > 0 ? "Return to today's reading" : "Open today's reading")
+      ? ((coreProg?.completedDays.length ?? 0) > 0 ? "Continue" : "Open today's reading")
       : 'Review';
 
   function handleDrAction() {
     if (coreCaughtUp) {
       const reviewDay = coreMaxPublishedDay > 0 ? coreMaxPublishedDay : effectiveCoreDay;
-      setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
-    } else if (coreCompletedToday) {
-      const reviewDay = Math.max(1, rawCoreCurrentDay - 1);
       setLocation(`/daily-rhythm/day/${reviewDay}?from=walk`);
     } else {
       goToDailyRhythmDay(effectiveCoreDay);
@@ -745,7 +731,7 @@ export default function Walk() {
               subtitle={drSubtitle}
               ctaLabel={drCtaLabel}
               onAction={handleDrAction}
-              done={drDone}
+              done={drState === 'uptodate'}
             />
 
             {/* This Week's Sermon */}

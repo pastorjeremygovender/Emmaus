@@ -192,11 +192,14 @@ export default function DailyRhythmDay() {
   let actionButton: React.ReactNode;
 
   if (justCompleted) {
-    // Just completed this session — auto-returns in 2 s (see useEffect above)
+    const nextStep = steps.find(s => s.day === day + 1 && s.status === 'Published');
+    const hasNextStep = !!nextStep;
     actionButton = (
       <EmmausCompletionCard
         heading={`${getStepLabel(step, journey)} complete.`}
-        subMessage="We'll continue walking together tomorrow."
+        subMessage={hasNextStep ? 'Continue when you\'re ready.' : 'May the Lord continue His work in your heart today.'}
+        onContinue={hasNextStep ? () => setLocation(`/daily-rhythm/day/${day + 1}?from=walk`) : undefined}
+        continueLabel={hasNextStep ? `Continue to ${getStepLabel(nextStep, journey)}` : undefined}
         returnLabel="Back to Today's Steps"
         onReturn={goBack}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
