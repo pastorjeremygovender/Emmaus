@@ -1,6 +1,7 @@
 import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -40,6 +41,9 @@ export default function Bible() {
         <header className="space-y-1">
           <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
         </header>
+
+        {/* Ask Emmaus */}
+        <UnifiedEmmausInput />
 
         {/* Tab switcher */}
         <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
