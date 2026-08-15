@@ -1,10 +1,10 @@
 import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
-import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock, MessageCircle } from 'lucide-react';
+import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
-import { setPendingContext, setReturnDestination, sourceSectionFromPath } from '@/lib/emmaus-pending';
 
 type Tab = 'home' | 'library';
 
@@ -27,7 +27,7 @@ function formatRelativeDate(dateStr: string): string {
 
 export default function Bible() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { lastRead, favourites, bookmarks, notes, prayers, highlights, readingHistory } = useBible();
   const [activeTab, setActiveTab] = useState<Tab>('home');
 
@@ -43,25 +43,7 @@ export default function Bible() {
         </header>
 
         {/* Ask Emmaus */}
-        <button
-          onClick={() => {
-            setReturnDestination({
-              pathname: location,
-              scrollY: Math.round(window.scrollY),
-              sourceSection: sourceSectionFromPath(location),
-            });
-            const ctx = lastRead
-              ? { entryPoint: 'bible' as const, bookId: lastRead.bookId, bookName: lastRead.bookName, chapter: lastRead.chapter, chapterHeading: lastRead.chapterHeading }
-              : { entryPoint: 'bible' as const };
-            setPendingContext(ctx);
-            setLocation('/personal/ask-emmaus');
-          }}
-          className="w-full flex items-center gap-3 px-4 h-12 rounded-full bg-muted/60 border border-border hover:bg-muted/80 active:bg-muted transition-colors text-left"
-        >
-          <MessageCircle size={16} className="text-primary shrink-0" />
-          <span className="flex-1 text-[14px] text-muted-foreground">Ask Emmaus anything…</span>
-          <ChevronRight size={15} className="text-muted-foreground shrink-0" />
-        </button>
+        <UnifiedEmmausInput />
 
         {/* Tab switcher */}
         <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
