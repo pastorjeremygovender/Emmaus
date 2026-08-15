@@ -36,11 +36,13 @@ export default function WalkCompletePage() {
   // they came from (Walk, Bible, Sermon) rather than always on the journey overview.
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
-  const returnPath = resolveReturn(
-    source,
-    sourceId,
-    journeyId ? `/journeys/${journeyId}` : '/journeys?tab=journeys'
-  ).path;
+  // Always return to the Walk's own detail page — that's the natural parent context
+  // regardless of where the member came from.
+  const returnPath     = journeyId ? `/journeys/${journeyId}` : '/journeys?tab=walks';
+  const walkReturnLabel = 'View Walk Contents';
+
+  // Suppress unused-variable warnings — source/sourceId were used previously.
+  void source; void sourceId; void resolveReturn;
 
   // Rooms — show "Add to Room" CTA when user has rooms and walk isn't already linked
   const myRooms = user ? getMyRooms() : [];
@@ -83,7 +85,7 @@ export default function WalkCompletePage() {
               journey?.completionMessage?.trim() ||
               "You've completed this Walk."
             }
-            returnLabel="Back to Next Steps"
+            returnLabel={walkReturnLabel}
             onReturn={() => setLocation(returnPath)}
             {...(showNextWalk && nextJourney
               ? {

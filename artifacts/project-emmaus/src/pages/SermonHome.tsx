@@ -415,9 +415,15 @@ export default function SermonHome() {
   // ── Derive companion navigation ──────────────────────────────────────────
   // Prefer the URL param (passed from Journeys.tsx which knows the current day).
   // Fall back to sermon.companionId navigating to day 1 (reader handles redirect).
+  const sermonId = params.id ?? '';
   const companionRoute: string | null =
-    companionRouteFromUrl ??
-    (sermon.companionId ? `/sermon-companion/${sermon.companionId}/day/1` : null);
+    companionRouteFromUrl
+      ? (companionRouteFromUrl.includes('?')
+          ? `${companionRouteFromUrl}&source=sermonHome&sourceId=${encodeURIComponent(sermonId)}`
+          : `${companionRouteFromUrl}?source=sermonHome&sourceId=${encodeURIComponent(sermonId)}`)
+      : sermon.companionId
+        ? `/sermon-companion/${sermon.companionId}/day/1?source=sermonHome&sourceId=${encodeURIComponent(sermonId)}`
+        : null;
 
   const isCompanionComplete = companionRouteFromUrl?.includes('/previous') ?? false;
   const companionLabel      = isCompanionComplete ? 'Review Companion' : 'Continue Companion';

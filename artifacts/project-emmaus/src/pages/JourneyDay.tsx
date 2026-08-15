@@ -288,7 +288,8 @@ export default function JourneyDay() {
   // ── Shared completion-path variables ─────────────────────────────────────────
   // Hoisted above isCompleting so the same values are used in both the
   // just-completed full-screen card and the isDayCompleted replay footer.
-  const returnPath = resolveReturn(source, sourceId, '/journeys?tab=journeys').path;
+  const { path: returnPath, label: resolvedLabel } = resolveReturn(source, sourceId, '/journeys?tab=journeys');
+  const backLabel = `Back to ${resolvedLabel}`;
   const nextStep = allSteps.find(s => s.day > day);
   const nextStepUrl = !isFinalStep && nextStep && journeyId
     ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
@@ -307,7 +308,7 @@ export default function JourneyDay() {
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
         continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
-        returnLabel="Back to Next Steps"
+        returnLabel={backLabel}
         onReturn={() => setLocation(returnPath)}
       />
     );
@@ -528,7 +529,7 @@ export default function JourneyDay() {
                     ? 'View Walk Summary'
                     : undefined
                 }
-                returnLabel="Back to Next Steps"
+                returnLabel={backLabel}
                 onReturn={() => setLocation(returnPath)}
               />
             ) : (

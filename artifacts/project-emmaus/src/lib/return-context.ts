@@ -39,24 +39,25 @@ export type SourceKey =
   | 'journeyDetail'
   | 'collectionDetail'
   | 'myJourney'
-  | 'room';
+  | 'room'
+  | 'sermonHome';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   walk:                 { path: '/walk',                     label: "Today's Steps"  },
   today:                { path: '/walk',                     label: "Today's Steps"  },
-  nextSteps:            { path: '/journeys',                 label: 'Next Steps'     },  // legacy
-  nextStepsDevotionals: { path: '/journeys?tab=devotionals', label: 'Next Steps'     },
-  nextStepsJourneys:    { path: '/journeys?tab=journeys',    label: 'Next Steps'     },
-  nextStepsWalks:       { path: '/journeys?tab=walks',       label: 'Next Steps'     },
-  nextStepsSermons:     { path: '/journeys?tab=sermons',     label: 'Next Steps'     },
-  journeys:             { path: '/journeys',                 label: 'Next Steps'     },  // legacy
+  nextSteps:            { path: '/journeys',                 label: 'Discover'       },  // legacy
+  nextStepsDevotionals: { path: '/journeys?tab=devotionals', label: 'Discover'       },
+  nextStepsJourneys:    { path: '/journeys?tab=journeys',    label: 'Discover'       },
+  nextStepsWalks:       { path: '/journeys?tab=walks',       label: 'Discover'       },
+  nextStepsSermons:     { path: '/journeys?tab=sermons',     label: 'Discover'       },
+  journeys:             { path: '/journeys',                 label: 'Discover'       },  // legacy
   myJourney:            { path: '/my-journey',               label: 'My Journey'     },
 };
 
 /** Infer a short label from a route path for the fallback case. */
 function pathLabel(path: string): string {
   if (path === '/walk')              return "Today's Steps";
-  if (path.startsWith('/journeys'))  return 'Next Steps';
+  if (path.startsWith('/journeys'))  return 'Discover';
   if (path === '/my-journey')        return 'My Journey';
   if (path === '/bible')             return 'My Bible';
   return 'Back';
@@ -87,12 +88,12 @@ export function resolveReturn(
 
   if (source === 'journeyDetail') {
     if (sourceId) return { path: `/journeys/${sourceId}`, label: 'Journey' };
-    return { path: '/journeys?tab=journeys', label: 'Next Steps' };
+    return { path: '/journeys?tab=journeys', label: 'Discover' };
   }
 
   if (source === 'collectionDetail') {
     if (sourceId) return { path: `/journeys/collections/${sourceId}`, label: 'Collection' };
-    return { path: '/journeys?tab=journeys', label: 'Next Steps' };
+    return { path: '/journeys?tab=journeys', label: 'Discover' };
   }
 
   // Group context — content opened via a Group's "Today's Study" card.

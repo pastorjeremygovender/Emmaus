@@ -32,15 +32,17 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
-function resolveReturn(source: string | null): { path: string; label: string } {
+function resolveReturn(source: string | null, sourceId?: string | null): { path: string; label: string } {
+  if (source === 'sermonHome' && sourceId)
+    return { path: `/sermon/${sourceId}`, label: "This Week's Sermon" };
   if (source === 'today' || source === 'walk')
     return { path: '/walk', label: "Back to Today's Steps" };
   if (source === 'nextStepsDevotionals')
-    return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
+    return { path: '/journeys?tab=devotionals', label: 'Back to Discover' };
   if (source === 'nextStepsJourneys')
-    return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
+    return { path: '/journeys?tab=journeys', label: 'Back to Discover' };
   // nextStepsSermons, nextSteps (legacy), or unknown → Sermon Companions tab
-  return { path: '/journeys?tab=sermons', label: 'Back to Next Steps' };
+  return { path: '/journeys?tab=sermons', label: 'Back to Discover' };
 }
 
 // ─── API types ────────────────────────────────────────────────────────────────
@@ -166,10 +168,11 @@ export default function SermonCompanionReader() {
   const companionId = params.id ?? '';
   const day = parseInt(params.day ?? '1', 10);
 
-  // Read source once on mount — query string doesn't change during the page lifetime
-  const source = new URLSearchParams(window.location.search).get('source');
+  // Read source/sourceId once on mount — query string doesn't change during the page lifetime
+  const source   = new URLSearchParams(window.location.search).get('source');
+  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
 
-  const { path: returnDest, label: returnLabel } = resolveReturn(source);
+  const { path: returnDest, label: returnLabel } = resolveReturn(source, sourceId);
 
   const [companion, setCompanion]       = useState<MemberCompanion | null>(null);
   const [progress, setProgress]         = useState<SCProgress | null>(null);
@@ -358,7 +361,7 @@ export default function SermonCompanionReader() {
     const nextEntry = resolveNextEntry(companion.entries, day);
     const hasNextEntry = !!nextEntry;
     const nextUrl = hasNextEntry
-      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${source ? `?source=${source}` : ''}`
+      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${source ? `?source=${source}${sourceId ? `&sourceId=${sourceId}` : ''}` : ''}`
       : '';
     actionButton = (
       <EmmausCompletionCard
@@ -407,11 +410,11 @@ export default function SermonCompanionReader() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/40">
         <div className="max-w-[480px] mx-auto px-4 h-12 flex items-center gap-2">
           <button
-            onClick={() => setLocation(returnDest)}
+            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 shrink-0"
           >
             <ChevronLeft size={16} />
-            {source === 'today' || source === 'walk' ? "Today's Steps" : 'Next Steps'}
+            {source === 'today' || source === 'walk' ? "Today's Steps" : source === 'sermonHome' ? "This Week's Sermon" : 'Discover'}
           </button>
           <span className="text-muted-foreground/30 mx-1 shrink-0">·</span>
           <span className="text-sm text-muted-foreground truncate flex-1">{companion.title}</span>

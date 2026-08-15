@@ -186,7 +186,7 @@ export default function ChapterCompletion() {
                 ? 'Back to Bible Journey'
                 : undefined
             }
-            returnLabel="Back to Next Steps"
+            returnLabel="Back to Discover"
             onReturn={() =>
               setLocation(journeyId ? `/bible/journey/${journeyId}` : '/journeys')
             }

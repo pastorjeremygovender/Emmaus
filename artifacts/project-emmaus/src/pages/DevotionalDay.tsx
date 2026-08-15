@@ -48,13 +48,13 @@ function resolveReturn(source: string | null): { path: string; label: string } {
   if (source === 'nextSteps')
     return { path: '/journeys?tab=devotionals', label: 'Discover' };
   if (source === 'nextStepsJourneys')
-    return { path: '/journeys?tab=journeys', label: 'Back to Next Steps' };
+    return { path: '/journeys?tab=journeys', label: 'Back to Discover' };
   if (source === 'nextStepsSermons')
-    return { path: '/journeys?tab=sermons', label: 'Back to Next Steps' };
+    return { path: '/journeys?tab=sermons', label: 'Back to Discover' };
   if (source === 'today' || source === 'walk')
     return { path: '/walk', label: "Back to Today's Steps" };
   // Fallback for deep links with no source — default to devotionals tab
-  if (!source) return { path: '/journeys?tab=devotionals', label: 'Back to Next Steps' };
+  if (!source) return { path: '/journeys?tab=devotionals', label: 'Back to Discover' };
   return { path: '/walk', label: "Back to Today's Steps" };
 }
 
@@ -246,7 +246,7 @@ export default function DevotionalDay() {
       {/* Nav bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2 max-w-[640px] mx-auto">
         <button
-          onClick={() => setLocation(returnPath)}
+          onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ChevronLeft size={16} /> {source === 'nextStepsDevotionals' || source === 'nextSteps' ? 'Discover' : "Today's Steps"}

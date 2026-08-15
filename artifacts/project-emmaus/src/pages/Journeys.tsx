@@ -696,6 +696,11 @@ export default function Journeys() {
 
   function handleJourneyAction(item: NextStepsItem) {
     void dismissBadge('journey', item.id);
+    if (item.memberProgressState === 'completed') {
+      // Completed walks open the Walk detail/overview page, not the walk-complete screen.
+      setLocation(`/journeys/${item.id}?source=nextStepsWalks`);
+      return;
+    }
     if (item.memberProgressState !== 'not-started') {
       setLocation(item.route + '?source=nextStepsJourneys');
       return;
