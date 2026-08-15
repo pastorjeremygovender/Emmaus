@@ -166,6 +166,7 @@ const SECTION_COLORS = {
   violet:  { bg: 'bg-violet-50/90 border-violet-200/60',  title: 'text-violet-700',  dot: 'bg-violet-500'  },
   emerald: { bg: 'bg-emerald-50/90 border-emerald-200/60',title: 'text-emerald-700', dot: 'bg-emerald-500' },
   blue:    { bg: 'bg-blue-50/90 border-blue-200/60',      title: 'text-blue-700',    dot: 'bg-blue-500'    },
+  indigo:  { bg: 'bg-indigo-50/90 border-indigo-200/60',  title: 'text-indigo-700',  dot: 'bg-indigo-500'  },
 } as const;
 type SectionColor = keyof typeof SECTION_COLORS;
 
@@ -269,6 +270,19 @@ function CompactCard({
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Add-more row (used at the bottom of every always-visible section) ─────────
+function AddMoreRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border/60 text-[12px] text-muted-foreground hover:text-foreground hover:border-primary/30 active:opacity-60 transition-colors"
+    >
+      <span className="text-[15px] font-light leading-none">+</span>
+      {label}
+    </button>
   );
 }
 
@@ -604,7 +618,17 @@ export default function Walk() {
     },
   );
 
+  // Split started journeys into walks (quick) vs longer studies
+  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk');
+  const startedLongerJourneys = startedJourneys.filter(({ journey }) => journey.journeyType !== 'walk');
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  /** Navigate to the Discover (Journeys) page with a pre-selected tab. */
+  function navigateToDiscover(tab: 'walks' | 'journeys' | 'devotionals' | 'sermons') {
+    try { sessionStorage.setItem('emmaus_discover_tab', tab); } catch { /* ignore */ }
+    setLocation('/journeys');
+  }
 
   function goToDailyRhythmDay(day: number) {
     setLocation(`/daily-rhythm/day/${day}`);
@@ -767,156 +791,203 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. My Daily Devotionals ──────────────────────────────────────── */}
-        {activeDevotionals.length > 0 && (
-          <SectionWrapper color="violet" label="My Daily Devotionals" delay={0.07}>
-            {activeDevotionals.map(ad => {
-              const published      = ad.entries.filter(e => e.status === 'Published');
-              const maxDay         = published.length > 0 ? Math.max(...published.map(e => e.dayNumber)) : 1;
-              const completedDays  = ad.progress.completedDays ?? [];
-              const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode);
-              const nextEntry      = ad.entries.find(e => e.dayNumber === nextDay && e.status === 'Published');
-              const completedCount = completedDays.length;
-              const allComplete    = completedCount >= published.length && published.length > 0;
-              const openDay        = allComplete ? Math.max(...completedDays) : nextDay;
-              const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
-              const devSubtitle    = allComplete
-                ? `${published.length} of ${published.length} complete`
-                : completedCount > 0
-                  ? nextEntry
-                    ? `${nextLabel} of ${published.length} · ${nextEntry.title}`
-                    : `${nextLabel} of ${published.length}`
-                  : published.length > 0 ? `${nextLabel} of ${published.length}` : nextLabel;
-              const badge = computeUpdatedBadge(
-                ad.series.notifyPublishedAt ?? null,
-                ad.progress.lastOpenedAt ?? null,
-                true,
-              );
-              return (
-                <CompactCard
-                  key={ad.series.id}
-                  title={ad.series.title}
-                  subtitle={devSubtitle}
-                  ctaLabel={allComplete ? undefined : 'Continue'}
-                  onAction={() => {
-                    void dismissBadge('devotional', ad.series.id);
-                    setLocation(`/devotional/${ad.series.id}/day/${openDay}?source=today`);
-                  }}
-                  done={allComplete}
-                  badge={badge}
-                  trailing={
-                    !allComplete ? (
-                      <WalkMoreMenu
-                        onPause={() => setPauseTarget({ type: 'devotional', id: ad.series.id, title: ad.series.title })}
-                        onHide={() => {
-                          setActiveDevotionals(prev => prev.filter(d => d.series.id !== ad.series.id));
-                          void callEngagementAction('devotional', ad.series.id, 'hide', user?.id);
-                        }}
-                      />
-                    ) : undefined
-                  }
-                />
-              );
-            })}
-          </SectionWrapper>
-        )}
-
-        {/* ── 3. My Walks — started journeys + in-progress sermon companions ─ */}
-        {(startedJourneys.length > 0 || scCompanions.length > 0) && (
-          <SectionWrapper color="emerald" label="My Walks" delay={0.09}>
-            {startedJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
-              const completedCount = prog.completedDays.length;
-              const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
-              const walkSubtitle   = isCompleted
-                ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
-                : completedCount > 0
-                  ? currentStep
-                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-                  : totalPublishedSteps > 0
-                    ? currentStep
-                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-                    : undefined;
-              const badge = computeUpdatedBadge(
-                journey.notifyPublishedAt ?? null,
-                prog.lastOpenedAt ?? null,
-                true,
-              );
-              return (
-                <CompactCard
-                  key={journey.id}
-                  title={journey.title}
-                  subtitle={walkSubtitle}
-                  ctaLabel={isCompleted ? undefined : 'Continue'}
-                  onAction={() => {
-                    void dismissBadge('journey', journey.id);
-                    goToJourney(journey.id, prog);
-                  }}
-                  done={isCompleted}
-                  badge={badge}
-                  trailing={
-                    !isCompleted ? (
-                      <WalkMoreMenu
-                        onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
-                        onHide={() => {
-                          setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
-                          void callEngagementAction('journey', journey.id, 'hide', user?.id);
-                        }}
-                      />
-                    ) : undefined
-                  }
-                />
-              );
-            })}
-            {scCompanions.map(sc => {
-              const completedCount = sc.completedDays.length;
-              const total          = sc.numberOfDays;
-              const isComplete     = total > 0 && sc.currentDay > total;
-              const allComplete    = total > 0 && completedCount >= total;
-              const scDesc         = allComplete
-                ? `${total} of ${total} steps complete`
-                : completedCount > 0
-                  ? sc.nextEntryTitle
-                    ? `Step ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
-                    : `Step ${sc.currentDay} of ${total}`
-                  : total > 0 ? `Step 1 of ${total}` : 'Step 1';
-              const destination    = isComplete
-                ? `/sermon-companion/${sc.id}/overview?source=today`
-                : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
-              return (
-                <CompactCard
-                  key={sc.id}
-                  title={sc.title}
-                  subtitle={`Sermon companion · ${scDesc}`}
-                  ctaLabel={isComplete ? 'Review' : 'Continue'}
-                  onAction={() => {
-                    void dismissBadge('companion', sc.id);
-                    setLocation(destination);
-                  }}
-                  done={isComplete}
-                  badge={sc.badge ?? null}
-                  trailing={
+        {/* ── 2. Daily Devotionals — always visible ────────────────────────── */}
+        <SectionWrapper color="violet" label="Daily Devotionals" delay={0.07}>
+          {activeDevotionals.map(ad => {
+            const published      = ad.entries.filter(e => e.status === 'Published');
+            const maxDay         = published.length > 0 ? Math.max(...published.map(e => e.dayNumber)) : 1;
+            const completedDays  = ad.progress.completedDays ?? [];
+            const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode);
+            const nextEntry      = ad.entries.find(e => e.dayNumber === nextDay && e.status === 'Published');
+            const completedCount = completedDays.length;
+            const allComplete    = completedCount >= published.length && published.length > 0;
+            const openDay        = allComplete ? Math.max(...completedDays) : nextDay;
+            const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
+            const devSubtitle    = allComplete
+              ? `${published.length} of ${published.length} complete`
+              : completedCount > 0
+                ? nextEntry
+                  ? `${nextLabel} of ${published.length} · ${nextEntry.title}`
+                  : `${nextLabel} of ${published.length}`
+                : published.length > 0 ? `${nextLabel} of ${published.length}` : nextLabel;
+            const badge = computeUpdatedBadge(
+              ad.series.notifyPublishedAt ?? null,
+              ad.progress.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={ad.series.id}
+                title={ad.series.title}
+                subtitle={devSubtitle}
+                ctaLabel={allComplete ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('devotional', ad.series.id);
+                  setLocation(`/devotional/${ad.series.id}/day/${openDay}?source=today`);
+                }}
+                done={allComplete}
+                badge={badge}
+                trailing={
+                  !allComplete ? (
                     <WalkMoreMenu
-                      onPause={() => setPauseTarget({ type: 'sermon-companion', id: sc.id, title: sc.title })}
+                      onPause={() => setPauseTarget({ type: 'devotional', id: ad.series.id, title: ad.series.title })}
                       onHide={() => {
-                        setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                        void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
+                        setActiveDevotionals(prev => prev.filter(d => d.series.id !== ad.series.id));
+                        void callEngagementAction('devotional', ad.series.id, 'hide', user?.id);
                       }}
                     />
-                  }
-                />
-              );
-            })}
-          </SectionWrapper>
-        )}
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          <AddMoreRow label="Add a devotional" onClick={() => navigateToDiscover('devotionals')} />
+        </SectionWrapper>
 
-        {/* ── 4. My Groups ─────────────────────────────────────────────────── */}
+        {/* ── 3. Walks (Quick Studies) — always visible ─────────────────────── */}
+        <SectionWrapper color="emerald" label="Walks (Quick Studies)" delay={0.09}>
+          {startedWalks.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+            const completedCount = prog.completedDays.length;
+            const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const walkSubtitle   = isCompleted
+              ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
+              : completedCount > 0
+                ? currentStep
+                  ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+                  : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
+                : totalPublishedSteps > 0
+                  ? currentStep
+                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                    : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
+                  : undefined;
+            const badge = computeUpdatedBadge(
+              journey.notifyPublishedAt ?? null,
+              prog.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={journey.id}
+                title={journey.title}
+                subtitle={walkSubtitle}
+                ctaLabel={isCompleted ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  goToJourney(journey.id, prog);
+                }}
+                done={isCompleted}
+                badge={badge}
+                trailing={
+                  !isCompleted ? (
+                    <WalkMoreMenu
+                      onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
+                      onHide={() => {
+                        setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
+                        void callEngagementAction('journey', journey.id, 'hide', user?.id);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          {scCompanions.map(sc => {
+            const completedCount = sc.completedDays.length;
+            const total          = sc.numberOfDays;
+            const isComplete     = total > 0 && sc.currentDay > total;
+            const allComplete    = total > 0 && completedCount >= total;
+            const scDesc         = allComplete
+              ? `${total} of ${total} steps complete`
+              : completedCount > 0
+                ? sc.nextEntryTitle
+                  ? `Step ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
+                  : `Step ${sc.currentDay} of ${total}`
+                : total > 0 ? `Step 1 of ${total}` : 'Step 1';
+            const destination    = isComplete
+              ? `/sermon-companion/${sc.id}/overview?source=today`
+              : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
+            return (
+              <CompactCard
+                key={sc.id}
+                title={sc.title}
+                subtitle={`Sermon companion · ${scDesc}`}
+                ctaLabel={isComplete ? 'Review' : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('companion', sc.id);
+                  setLocation(destination);
+                }}
+                done={isComplete}
+                badge={sc.badge ?? null}
+                trailing={
+                  <WalkMoreMenu
+                    onPause={() => setPauseTarget({ type: 'sermon-companion', id: sc.id, title: sc.title })}
+                    onHide={() => {
+                      setScCompanions(prev => prev.filter(c => c.id !== sc.id));
+                      void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
+                    }}
+                  />
+                }
+              />
+            );
+          })}
+          <AddMoreRow label="Add a Walk" onClick={() => navigateToDiscover('walks')} />
+        </SectionWrapper>
+
+        {/* ── 4. Journeys (Longer Studies) — always visible ─────────────────── */}
+        <SectionWrapper color="indigo" label="Journeys (Longer Studies)" delay={0.11}>
+          {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+            const completedCount = prog.completedDays.length;
+            const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const journeySubtitle = isCompleted
+              ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
+              : completedCount > 0
+                ? currentStep
+                  ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+                  : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
+                : totalPublishedSteps > 0
+                  ? currentStep
+                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                    : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
+                  : undefined;
+            const badge = computeUpdatedBadge(
+              journey.notifyPublishedAt ?? null,
+              prog.lastOpenedAt ?? null,
+              true,
+            );
+            return (
+              <CompactCard
+                key={journey.id}
+                title={journey.title}
+                subtitle={journeySubtitle}
+                ctaLabel={isCompleted ? undefined : 'Continue'}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  goToJourney(journey.id, prog);
+                }}
+                done={isCompleted}
+                badge={badge}
+                trailing={
+                  !isCompleted ? (
+                    <WalkMoreMenu
+                      onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
+                      onHide={() => {
+                        setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
+                        void callEngagementAction('journey', journey.id, 'hide', user?.id);
+                      }}
+                    />
+                  ) : undefined
+                }
+              />
+            );
+          })}
+          <AddMoreRow label="Add a Journey" onClick={() => navigateToDiscover('journeys')} />
+        </SectionWrapper>
+
+        {/* ── 5. My Groups — always visible ─────────────────────────────────── */}
         {(() => {
           const myRooms = getMyRooms(user.id);
-          if (myRooms.length === 0) return null;
           return (
-            <SectionWrapper color="blue" label="My Groups" delay={0.11}>
+            <SectionWrapper color="blue" label="My Groups" delay={0.13}>
               {myRooms.map(room => (
                 <CompactCard
                   key={room.id}
@@ -930,6 +1001,7 @@ export default function Walk() {
                   onAction={() => setLocation(`/rooms/${room.id}`)}
                 />
               ))}
+              <AddMoreRow label="Add a Group" onClick={() => setLocation('/rooms/create')} />
             </SectionWrapper>
           );
         })()}
