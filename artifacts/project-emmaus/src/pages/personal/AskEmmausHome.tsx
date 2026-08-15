@@ -149,9 +149,6 @@ export default function AskEmmausHome() {
         </p>
       </div>
 
-      {/* ── Spacer — always present, keeps composer at bottom ───────────── */}
-      <div className="flex-1" />
-
       {/* ── Composer ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 px-5 py-3">
         <div className="flex items-center gap-2.5 px-4 py-3 rounded-full border border-border bg-card shadow-sm hover:border-primary/25 hover:shadow-md focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/15 focus-within:shadow-md transition-all">
