@@ -153,14 +153,12 @@ export default function AskEmmausHome() {
       <div className="shrink-0 px-5 py-3">
         <div className="flex items-center gap-2.5 px-4 py-3 rounded-full border border-border bg-card shadow-sm hover:border-primary/25 hover:shadow-md focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/15 focus-within:shadow-md transition-all">
           {/* Text input */}
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
             type="text"
             placeholder="What's on your mind?"
             value={message}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            autoFocus
             aria-label="Your message to Emmaus"
             className="flex-1 bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-w-0"
           />
