@@ -1,13 +1,13 @@
 /**
  * WalkCompletePage.test.tsx
  *
- * Covers the next-Walk CTA visibility logic in Task 205:
+ * Covers the next-Walk CTA visibility logic:
  *
  *  1. nextJourneyId → Published walk   : "Start [title]" CTA is shown;
- *                                        "Back to Walk" is rendered as a secondary link.
- *  2. nextJourneyId → Draft walk       : CTA is hidden; only "Back to Walk" button shown.
- *  3. nextJourneyId → unknown walk     : CTA is hidden; only "Back to Walk" button shown.
- *  4. nextJourneyId absent / empty     : CTA is hidden; only "Back to Walk" button shown.
+ *                                        "View Walk Contents" is rendered as a secondary link.
+ *  2. nextJourneyId → Draft walk       : CTA is hidden; only "View Walk Contents" button shown.
+ *  3. nextJourneyId → unknown walk     : CTA is hidden; only "View Walk Contents" button shown.
+ *  4. nextJourneyId absent / empty     : CTA is hidden; only "View Walk Contents" button shown.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -84,8 +84,8 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     // Primary CTA must mention the next walk's title
     expect(screen.getByRole('button', { name: /start walk two/i })).toBeInTheDocument();
 
-    // "Back to Next Steps" is the secondary text button when a continue CTA is present
-    expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+    // "View Walk Contents" is the secondary text button when a continue CTA is present
+    expect(screen.getByRole('button', { name: /view walk contents/i })).toBeInTheDocument();
   });
 
   it('hides the "Start" CTA and shows "View Walk Summary" when nextJourneyId points to a Draft walk', () => {
@@ -108,8 +108,8 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     // No "Start …" CTA for a draft next walk
     expect(screen.queryByRole('button', { name: /start unreleased walk/i })).not.toBeInTheDocument();
 
-    // Fallback primary button is "View Walk Summary"
-    expect(screen.getByRole('button', { name: /view walk summary/i })).toBeInTheDocument();
+    // Fallback primary button — the return label when no continue CTA is shown
+    expect(screen.getByRole('button', { name: /view walk contents/i })).toBeInTheDocument();
   });
 
   it('hides the "Start" CTA when nextJourneyId points to an unknown walk', () => {
@@ -126,7 +126,7 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     render(<WalkCompletePage />);
 
     expect(screen.queryByRole('button', { name: /start/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /view walk summary/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /view walk contents/i })).toBeInTheDocument();
   });
 
   it('hides the "Start" CTA when nextJourneyId is absent', () => {
@@ -142,7 +142,7 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     render(<WalkCompletePage />);
 
     expect(screen.queryByRole('button', { name: /start/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /view walk summary/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /view walk contents/i })).toBeInTheDocument();
   });
 
   it('hides the "Start" CTA when nextJourneyId is a whitespace-only string', () => {
@@ -158,6 +158,6 @@ describe('WalkCompletePage — next-Walk CTA visibility', () => {
     render(<WalkCompletePage />);
 
     expect(screen.queryByRole('button', { name: /start/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /view walk summary/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /view walk contents/i })).toBeInTheDocument();
   });
 });

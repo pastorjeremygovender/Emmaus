@@ -42,10 +42,13 @@ import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
 
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
-function resolveReturn(source: string | null): { path: string; label: string } {
-  if (source === 'nextStepsDevotionals')
+function resolveReturn(source: string | null, sourceId?: string | null): { path: string; label: string } {
+  // Previous-days review — back returns to that series' previous-days list
+  if (source === 'devotionalPrevious') {
+    if (sourceId) return { path: `/devotional/${sourceId}/previous`, label: 'Previous Steps' };
     return { path: '/journeys?tab=devotionals', label: 'Discover' };
-  if (source === 'nextSteps')
+  }
+  if (source === 'nextStepsDevotionals' || source === 'nextSteps')
     return { path: '/journeys?tab=devotionals', label: 'Discover' };
   if (source === 'nextStepsJourneys')
     return { path: '/journeys?tab=journeys', label: 'Back to Discover' };
@@ -66,9 +69,10 @@ export default function DevotionalDay() {
   const seriesId = params.seriesId;
   const day = parseInt(params.day ?? '1', 10);
 
-  // Read source once on mount — query string doesn't change during the page lifetime
-  const source = new URLSearchParams(window.location.search).get('source');
-  const { path: returnPath, label: returnLabel } = resolveReturn(source);
+  // Read source/sourceId once on mount — query string doesn't change during the page lifetime
+  const source   = new URLSearchParams(window.location.search).get('source');
+  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+  const { path: returnPath, label: returnLabel } = resolveReturn(source, sourceId);
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
@@ -199,10 +203,9 @@ export default function DevotionalDay() {
     const nextEntry = resolveNextEntry(seriesData.entries, day);
     const hasNextEntry = !!nextEntry;
     // Previous entries navigation — encode the back destination.
-    const prevDaysFrom = source ?? 'nextStepsDevotionals';
-    const prevDaysUrl  = `/devotional/${seriesId}/previous?from=${prevDaysFrom}`;
+    const prevDaysUrl = `/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`;
     const nextUrl = hasNextEntry
-      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsDevotionals'}`
+      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`
       : '';
     actionButton = (
       <EmmausCompletionCard
@@ -249,7 +252,7 @@ export default function DevotionalDay() {
           onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ChevronLeft size={16} /> {source === 'nextStepsDevotionals' || source === 'nextSteps' ? 'Discover' : "Today's Steps"}
+          <ChevronLeft size={16} /> {source === 'devotionalPrevious' ? 'Previous Steps' : source === 'nextStepsDevotionals' || source === 'nextSteps' ? 'Discover' : "Today's Steps"}
         </button>
         <div className="flex items-center gap-2">
           <FavouriteButton
@@ -261,7 +264,7 @@ export default function DevotionalDay() {
           />
           {totalEntries > 1 && (
             <button
-              onClick={() => setLocation(`/devotional/${seriesId}/previous?from=${source ?? 'nextStepsDevotionals'}`)}
+              onClick={() => setLocation(`/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`)}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               All Devotionals

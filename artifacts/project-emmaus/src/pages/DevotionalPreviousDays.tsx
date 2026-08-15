@@ -6,9 +6,9 @@
  * Thin page: loads devotional data from the API and renders the shared
  * PreviousDaysScreen component.
  *
- * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
- *   default     → /journeys (Next Steps)
+ * Back navigation uses ?source= (standard return-context convention).
+ * Steps opened from this screen receive ?source=devotionalPrevious&sourceId=<seriesId>
+ * so the completion card shows "Back to Previous Steps".
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -30,8 +30,11 @@ export default function DevotionalPreviousDays() {
   const { user } = useAuth();
   const seriesId = params.seriesId;
 
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=devotionals');
+  const qs       = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const source   = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(source, sourceId, '/journeys?tab=devotionals');
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress]     = useState<DevotionalProgress | null>(null);
@@ -72,7 +75,7 @@ export default function DevotionalPreviousDays() {
     }));
 
   const openEntry = (day: number) =>
-    setLocation(`/devotional/${seriesId}/day/${day}?source=${from ?? 'nextStepsDevotionals'}`);
+    setLocation(`/devotional/${seriesId}/day/${day}?source=devotionalPrevious&sourceId=${seriesId}`);
 
   return (
     <PreviousDaysScreen

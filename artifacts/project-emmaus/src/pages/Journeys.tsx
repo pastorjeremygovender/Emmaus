@@ -858,7 +858,7 @@ export default function Journeys() {
                   onGate={() => setLocation('/walk')}
                   getEnrollmentState={(id) => getState(id)}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                  onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
+                  onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)}
                 />
               </SectionWrapper>
             )}
@@ -878,7 +878,7 @@ export default function Journeys() {
                   items={data.dailyDevotionals}
                   onAction={handleDevotionalAction}
                   startingId={startingDevId}
-                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
+                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)}
                   isGated={!gateClear}
                   onGate={() => setLocation('/walk')}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}

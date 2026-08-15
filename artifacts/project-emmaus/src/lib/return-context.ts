@@ -16,16 +16,20 @@
  *   4. Use <EmmausBackButton> (components/EmmausBackButton.tsx) which wraps this automatically.
  *
  * Source key → destination mapping:
- *   walk / today          → /walk                       (Today's Steps)
- *   nextSteps             → /journeys                   (legacy; devotionals default)
- *   nextStepsDevotionals  → /journeys?tab=devotionals
- *   nextStepsJourneys     → /journeys?tab=journeys
- *   nextStepsWalks        → /journeys?tab=walks
- *   nextStepsSermons      → /journeys?tab=sermons
- *   journeyDetail         → /journeys/:sourceId                     (requires sourceId)
- *   collectionDetail      → /journeys/collections/:sourceId          (requires sourceId)
- *   myJourney             → /my-journey
- *   journeys (legacy)     → /journeys
+ *   walk / today               → /walk                       (Today's Steps)
+ *   nextSteps                  → /journeys                   (legacy; devotionals default)
+ *   nextStepsDevotionals       → /journeys?tab=devotionals
+ *   nextStepsJourneys          → /journeys?tab=journeys
+ *   nextStepsWalks             → /journeys?tab=walks
+ *   nextStepsSermons           → /journeys?tab=sermons
+ *   journeyDetail              → /journeys/:sourceId                          (requires sourceId)
+ *   collectionDetail           → /journeys/collections/:sourceId              (requires sourceId)
+ *   myJourney                  → /my-journey
+ *   journeys (legacy)          → /journeys
+ *   journeyPrevious            → /journey/:sourceId/previous                  (requires sourceId)
+ *   devotionalPrevious         → /devotional/:sourceId/previous               (requires sourceId)
+ *   sermonCompanionPrevious    → /sermon-companion/:sourceId/previous         (requires sourceId)
+ *   dailyRhythmPrevious        → /daily-rhythm/previous
  */
 
 export type SourceKey =
@@ -41,7 +45,10 @@ export type SourceKey =
   | 'myJourney'
   | 'room'
   | 'sermonHome'
-  | 'journeyPrevious';
+  | 'journeyPrevious'
+  | 'devotionalPrevious'
+  | 'sermonCompanionPrevious'
+  | 'dailyRhythmPrevious';
 
 const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   walk:                 { path: '/walk',                     label: "Today's Steps"  },
@@ -101,6 +108,23 @@ export function resolveReturn(
   if (source === 'journeyPrevious') {
     if (sourceId) return { path: `/journey/${sourceId}/previous`, label: 'Previous Steps' };
     return { path: '/journeys?tab=journeys', label: 'Discover' };
+  }
+
+  // Devotional Previous Days — back returns to that devotional series' previous-days list.
+  if (source === 'devotionalPrevious') {
+    if (sourceId) return { path: `/devotional/${sourceId}/previous`, label: 'Previous Steps' };
+    return { path: '/journeys?tab=devotionals', label: 'Discover' };
+  }
+
+  // Sermon Companion Previous Steps — back returns to that companion's previous-steps list.
+  if (source === 'sermonCompanionPrevious') {
+    if (sourceId) return { path: `/sermon-companion/${sourceId}/previous`, label: 'Previous Steps' };
+    return { path: '/journeys?tab=sermons', label: 'Discover' };
+  }
+
+  // Daily Rhythm Previous Days — back returns to the daily rhythm previous-days list.
+  if (source === 'dailyRhythmPrevious') {
+    return { path: '/daily-rhythm/previous', label: 'Previous Steps' };
   }
 
   // Group context — content opened via a Group's "Today's Study" card.

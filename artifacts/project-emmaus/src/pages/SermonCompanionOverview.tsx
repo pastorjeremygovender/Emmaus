@@ -748,7 +748,7 @@ export default function SermonCompanionOverview() {
         {isStarted && completedCount > 0 && (
           <button
             type="button"
-            onClick={() => setLocation(`/sermon-companion/${companionId}/previous?from=${source}`)}
+            onClick={() => setLocation(`/sermon-companion/${companionId}/previous?source=${source ?? 'nextStepsSermons'}`)}
             className="w-full text-center text-[13px] text-muted-foreground hover:text-foreground transition-colors"
           >
             View Previous Steps →

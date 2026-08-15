@@ -33,6 +33,11 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 // ─── Source-aware return helpers ──────────────────────────────────────────────
 
 function resolveReturn(source: string | null, sourceId?: string | null): { path: string; label: string } {
+  // Previous-steps review — back returns to that companion's previous-steps list
+  if (source === 'sermonCompanionPrevious') {
+    if (sourceId) return { path: `/sermon-companion/${sourceId}/previous`, label: 'Previous Steps' };
+    return { path: '/journeys?tab=sermons', label: 'Discover' };
+  }
   if (source === 'sermonHome' && sourceId)
     return { path: `/sermon/${sourceId}`, label: "This Week's Sermon" };
   if (source === 'today' || source === 'walk')
@@ -349,8 +354,7 @@ export default function SermonCompanionReader() {
   // ── Main reading view ──
 
   // Previous days URL — encode back destination so the list knows where to return.
-  const prevDaysFrom = source ?? 'nextStepsSermons';
-  const prevDaysUrl  = `/sermon-companion/${companionId}/previous?from=${prevDaysFrom}`;
+  const prevDaysUrl = `/sermon-companion/${companionId}/previous?source=${source ?? 'nextStepsSermons'}${sourceId ? `&sourceId=${sourceId}` : ''}`;
   const hasPreviousDays = day > 1;
 
   // Primary action button shown inside DevotionalReading
@@ -414,7 +418,7 @@ export default function SermonCompanionReader() {
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 shrink-0"
           >
             <ChevronLeft size={16} />
-            {source === 'today' || source === 'walk' ? "Today's Steps" : source === 'sermonHome' ? "This Week's Sermon" : 'Discover'}
+            {source === 'sermonCompanionPrevious' ? 'Previous Steps' : source === 'today' || source === 'walk' ? "Today's Steps" : source === 'sermonHome' ? "This Week's Sermon" : 'Discover'}
           </button>
           <span className="text-muted-foreground/30 mx-1 shrink-0">·</span>
           <span className="text-sm text-muted-foreground truncate flex-1">{companion.title}</span>

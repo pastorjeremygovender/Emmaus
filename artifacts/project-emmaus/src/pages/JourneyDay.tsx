@@ -310,7 +310,7 @@ export default function JourneyDay() {
         continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
         returnLabel={backLabel}
         onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
-        onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?from=${source ?? 'walk'}`) : undefined}
+        onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
         previousDaysLabel="View Previous Steps →"
       />
     );
@@ -533,7 +533,7 @@ export default function JourneyDay() {
                 }
                 returnLabel={backLabel}
                 onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
-                onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?from=${source ?? 'walk'}`) : undefined}
+                onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
                 previousDaysLabel="View Previous Steps →"
               />
             ) : (

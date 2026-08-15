@@ -6,9 +6,9 @@
  * Thin page: loads companion data from the API and renders the shared
  * PreviousDaysScreen component.
  *
- * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
- *   default     → /journeys (Next Steps)
+ * Back navigation uses ?source= (standard return-context convention).
+ * Steps opened from this screen receive ?source=sermonCompanionPrevious&sourceId=<id>
+ * so the completion card shows "Back to Previous Steps".
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -46,8 +46,11 @@ export default function SermonCompanionPreviousDays() {
   const { user } = useAuth();
   const companionId = params.id ?? '';
 
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=sermons');
+  const qs       = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const source   = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(source, sourceId, '/journeys?tab=sermons');
 
   const [companion, setCompanion] = useState<MemberCompanion | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -82,8 +85,6 @@ export default function SermonCompanionPreviousDays() {
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
-  const sourceParam = `?source=${from ?? 'nextStepsSermons'}`;
-
   return (
     <PreviousDaysScreen
       contentTitle={companion?.title ?? 'Sermon Companion'}
@@ -91,7 +92,7 @@ export default function SermonCompanionPreviousDays() {
       loading={loading}
       onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
       onReviewDay={(day) =>
-        setLocation(`/sermon-companion/${companionId}/day/${day}${sourceParam}`)
+        setLocation(`/sermon-companion/${companionId}/day/${day}?source=sermonCompanionPrevious&sourceId=${companionId}`)
       }
       backLabel={backLabel}
       screenTitle="Previous Steps"

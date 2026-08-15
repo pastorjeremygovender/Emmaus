@@ -93,7 +93,7 @@ export default function WalkCompletePage() {
                   onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
                 }
               : {})}
-            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?from=nextStepsWalks`) : undefined}
+            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=nextStepsWalks`) : undefined}
             previousDaysLabel="View Previous Steps →"
           />
 

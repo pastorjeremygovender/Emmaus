@@ -5,13 +5,14 @@
  * recognised ?source= value, and for the case where the parameter is absent.
  *
  * resolveReturn contract (SermonCompanionReader):
- *   source=today               → "Back to Today's Steps"  → /walk
- *   source=walk                → "Back to Today's Steps"  → /walk
- *   source=nextStepsDevotionals→ "Back to Next Steps"     → /journeys?tab=devotionals
- *   source=nextStepsJourneys   → "Back to Next Steps"     → /journeys?tab=journeys
- *   source=nextStepsSermons    → "Back to Next Steps"     → /journeys?tab=sermons
- *   source=nextSteps (legacy)  → "Back to Next Steps"     → /journeys?tab=sermons
- *   source=<missing>           → "Back to Next Steps"     → /journeys?tab=sermons
+ *   source=today                    → "Back to Today's Steps"  → /walk
+ *   source=walk                     → "Back to Today's Steps"  → /walk
+ *   source=nextStepsDevotionals     → "Back to Discover"       → /journeys?tab=devotionals
+ *   source=nextStepsJourneys        → "Back to Discover"       → /journeys?tab=journeys
+ *   source=nextStepsSermons         → "Back to Discover"       → /journeys?tab=sermons
+ *   source=nextSteps (legacy)       → "Back to Discover"       → /journeys?tab=sermons
+ *   source=sermonCompanionPrevious  → "Previous Steps"         → /sermon-companion/:sourceId/previous
+ *   source=<missing>                → "Back to Discover"       → /journeys?tab=sermons
  *
  * Tests use the isAlreadyCompleted path (day 1 already in completedDays,
  * !justCompleted) so the replay completion card is shown without any
@@ -104,11 +105,14 @@ function setupFetch() {
 }
 
 // Helper — set window.location.search before the component reads it on mount.
-function setSource(source: string | null) {
+function setSource(source: string | null, sourceId?: string) {
+  const search = source !== null
+    ? `?source=${source}${sourceId ? `&sourceId=${sourceId}` : ''}`
+    : '';
   Object.defineProperty(window, 'location', {
     configurable: true,
     writable: true,
-    value: { search: source !== null ? `?source=${source}` : '' },
+    value: { search },
   });
 }
 
@@ -145,43 +149,53 @@ describe('SermonCompanionReader — completion card return label per ?source= va
     });
   });
 
-  it('source=nextStepsDevotionals → "Back to Next Steps"', async () => {
+  it('source=nextStepsDevotionals → "Back to Discover"', async () => {
     setSource('nextStepsDevotionals');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
     });
   });
 
-  it('source=nextStepsJourneys → "Back to Next Steps"', async () => {
+  it('source=nextStepsJourneys → "Back to Discover"', async () => {
     setSource('nextStepsJourneys');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
     });
   });
 
-  it('source=nextStepsSermons → "Back to Next Steps"', async () => {
+  it('source=nextStepsSermons → "Back to Discover"', async () => {
     setSource('nextStepsSermons');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
     });
   });
 
-  it('source=nextSteps (legacy) → "Back to Next Steps"', async () => {
+  it('source=nextSteps (legacy) → "Back to Discover"', async () => {
     setSource('nextSteps');
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
     });
   });
 
-  it('no source param (deep link) → "Back to Next Steps"', async () => {
+  it('no source param (deep link) → "Back to Discover"', async () => {
     setSource(null);
     render(<SermonCompanionReader />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /back to next steps/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^back to discover$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('source=sermonCompanionPrevious → at least one "Previous Steps" button visible', async () => {
+    setSource('sermonCompanionPrevious', 'companion-1');
+    render(<SermonCompanionReader />);
+    await waitFor(() => {
+      // Both the nav-bar back button and the completion-card return button show
+      // "Previous Steps" when source=sermonCompanionPrevious — getAllByRole handles both.
+      expect(screen.getAllByRole('button', { name: /previous steps/i }).length).toBeGreaterThan(0);
     });
   });
 });
@@ -211,7 +225,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('source=nextStepsDevotionals → navigates to /journeys?tab=devotionals on return', async () => {
     setSource('nextStepsDevotionals');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to next steps/i });
+    const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
     expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=devotionals');
   });
@@ -219,7 +233,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('source=nextStepsJourneys → navigates to /journeys?tab=journeys on return', async () => {
     setSource('nextStepsJourneys');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to next steps/i });
+    const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
     expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=journeys');
   });
@@ -227,7 +241,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('source=nextStepsSermons → navigates to /journeys?tab=sermons on return', async () => {
     setSource('nextStepsSermons');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to next steps/i });
+    const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
     expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
   });
@@ -235,7 +249,7 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('source=nextSteps (legacy) → navigates to /journeys?tab=sermons on return', async () => {
     setSource('nextSteps');
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to next steps/i });
+    const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
     expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
   });
@@ -243,8 +257,19 @@ describe('SermonCompanionReader — completion card return destination per ?sour
   it('no source param → navigates to /journeys?tab=sermons on return', async () => {
     setSource(null);
     render(<SermonCompanionReader />);
-    const btn = await screen.findByRole('button', { name: /back to next steps/i });
+    const btn = await screen.findByRole('button', { name: /^back to discover$/i });
     btn.click();
     expect(mockSetLocation).toHaveBeenCalledWith('/journeys?tab=sermons');
+  });
+
+  it('source=sermonCompanionPrevious → navigates to /sermon-companion/:sourceId/previous on return', async () => {
+    setSource('sermonCompanionPrevious', 'companion-1');
+    render(<SermonCompanionReader />);
+    // Both the nav bar and completion card show "Previous Steps"; click whichever comes first —
+    // both resolve to the same destination in test (history.length = 1, so setLocation fires).
+    const btns = await screen.findAllByRole('button', { name: /previous steps/i });
+    expect(btns.length).toBeGreaterThan(0);
+    btns[0].click();
+    expect(mockSetLocation).toHaveBeenCalledWith('/sermon-companion/companion-1/previous');
   });
 });

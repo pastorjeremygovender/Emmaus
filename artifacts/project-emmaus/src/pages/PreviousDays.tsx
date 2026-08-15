@@ -6,9 +6,9 @@
  * Thin page: loads Daily Rhythm data from JourneyContext and
  * renders the shared PreviousDaysScreen component.
  *
- * Back navigation:
- *   ?from=walk  → /walk     (Today's Steps)
- *   default     → /journeys (Next Steps)
+ * Back navigation uses ?source= (standard return-context convention).
+ * Steps opened from this screen receive ?source=dailyRhythmPrevious so the
+ * completion card shows "Back to Previous Steps".
  */
 
 import { useLocation } from 'wouter';
@@ -24,9 +24,12 @@ export default function PreviousDays() {
   const { user } = useAuth();
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
 
-  const from      = new URLSearchParams(window.location.search).get('from');
-  // Daily Rhythm is Walk-first content — default to /walk when no ?from= param
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/walk');
+  const qs       = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const source   = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  // Daily Rhythm is Walk-first content — default to /walk when no ?source= param
+  const { path: backPath, label: backLabel } = resolveReturn(source, sourceId, '/walk');
 
   const devMode = isDevelopmentMode(user);
 
@@ -56,7 +59,7 @@ export default function PreviousDays() {
       entries={entries}
       loading={loading}
       onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
-      onReviewDay={(day) => setLocation(`/daily-rhythm/day/${day}`)}
+      onReviewDay={(day) => setLocation(`/daily-rhythm/day/${day}?source=dailyRhythmPrevious`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."
     />

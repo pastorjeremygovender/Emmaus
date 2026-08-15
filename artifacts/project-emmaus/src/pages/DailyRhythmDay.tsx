@@ -98,11 +98,15 @@ export default function DailyRhythmDay() {
   const day = parseInt(dayNumber ?? '1', 10);
   const devMode = isDevelopmentMode(user);
 
-  // When navigating from Walk's Review button, ?from=walk is set.
-  // Back arrow and completion card return to Today's Steps in that case;
-  // otherwise (accessed from Previous Days) they stay in the previous-days flow.
+  // Determine return context.
+  // ?source=dailyRhythmPrevious → opened from Previous Days list → return to Previous Days.
+  // ?source=walk|today or legacy ?from=walk → opened from Today's Steps (Walk review button).
   // NOTE: wouter's useLocation() returns pathname only — search params must come from window.location.search.
-  const fromWalk = new URLSearchParams(window.location.search).get('from') === 'walk';
+  const qs = new URLSearchParams(window.location.search);
+  const source = qs.get('source');
+  const legacyFrom = qs.get('from');
+  const fromWalk = source === 'walk' || source === 'today' || legacyFrom === 'walk';
+  const fromPreviousDays = source === 'dailyRhythmPrevious';
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = progress[journeyId];
@@ -130,10 +134,10 @@ export default function DailyRhythmDay() {
   const goBack = () => { if (window.history.length > 1) window.history.back(); else setLocation('/walk'); };
   // Back to Previous Days — pops history so the Previous Days page itself can still
   // go back naturally. Falls back to forward navigation only when there is no history.
-  const goToPreviousDays = () => { if (window.history.length > 1) window.history.back(); else setLocation('/daily-rhythm/previous?from=walk'); };
+  const goToPreviousDays = () => { if (window.history.length > 1) window.history.back(); else setLocation('/daily-rhythm/previous?source=walk'); };
   // Forward navigation to Previous Days — used for the "See Previous Days →" secondary
   // link when the user arrived from Today's Steps (not from Previous Days).
-  const openPreviousDays = () => setLocation('/daily-rhythm/previous?from=walk');
+  const openPreviousDays = () => setLocation('/daily-rhythm/previous?source=walk');
 
   const hasPreviousDays =
     currentDay > 1 &&
@@ -176,8 +180,8 @@ export default function DailyRhythmDay() {
 
   // Header back arrow:
   //   - Live (not yet completed) → Today's Steps
-  //   - Replay via Review button (?from=walk) → Today's Steps
-  //   - Replay via Previous Days → Previous Days
+  //   - Replay via Review button (?source=walk, or legacy ?from=walk) → Today's Steps
+  //   - Replay via Previous Days (?source=dailyRhythmPrevious) → Previous Days
   const handleBack = isReplay
     ? (fromWalk ? goBack : goToPreviousDays)
     : goBack;
@@ -206,13 +210,18 @@ export default function DailyRhythmDay() {
       />
     );
   } else if (isReplay) {
-    // Review from Today's Steps (?from=walk) → return to Today's Steps.
-    // Review from Previous Days → return to Previous Days.
+    // Review from Today's Steps (?source=walk / legacy ?from=walk) → return to Today's Steps.
+    // Review from Previous Days (?source=dailyRhythmPrevious) → return to Previous Steps.
+    const replayReturnLabel = fromWalk
+      ? "Back to Today's Steps"
+      : fromPreviousDays
+        ? "Back to Previous Steps"
+        : "Back to Previous Days";
     actionButton = (
       <EmmausCompletionCard
         heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="May the Lord continue His work in your heart today."
-        returnLabel={fromWalk ? "Back to Today's Steps" : "Back to Previous Days"}
+        returnLabel={replayReturnLabel}
         onReturn={fromWalk ? goBack : goToPreviousDays}
         onPreviousDays={hasPreviousDays && fromWalk ? openPreviousDays : undefined}
         previousDaysLabel="See Previous Days →"

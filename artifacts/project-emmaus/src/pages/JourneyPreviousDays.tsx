@@ -24,8 +24,11 @@ export default function JourneyPreviousDays() {
   const { journeys, getStepsForJourney, progress, loading } = useJourney();
 
   const journeyId = params.journeyId;
-  const from = new URLSearchParams(window.location.search).get('from');
-  const { path: backPath, label: backLabel } = resolveReturn(from, null, '/journeys?tab=walks');
+  const qs = new URLSearchParams(window.location.search);
+  // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
+  const from     = qs.get('source') ?? qs.get('from');
+  const sourceId = qs.get('sourceId');
+  const { path: backPath, label: backLabel } = resolveReturn(from, sourceId, '/journeys?tab=walks');
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journeyId ? progress[journeyId] : undefined;
