@@ -9,12 +9,12 @@
 
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowLeft, Clock, MessageCircle, ChevronRight, Mic } from 'lucide-react';
+import { ArrowLeft, Mic } from 'lucide-react';
 import { EmmausComposer } from '@/components/emmaus/EmmausComposer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { BottomNav } from '@/components/BottomNav';
-import { listConversations, type ConversationStub, type FlatContext } from '@/lib/emmaus-client';
+import { type FlatContext } from '@/lib/emmaus-client';
 import {
   setPendingMessage,
   setPendingContext,
@@ -73,7 +73,6 @@ export default function AskEmmausHome() {
   const voiceEnabled = useVoiceEnabled(user?.id);
   const [, setLocation] = useLocation();
   const [message, setMessage] = useState('');
-  const [conversations, setConversations] = useState<ConversationStub[]>([]);
   const [fabContext, setFabContext] = useState<FlatContext | null>(null);
 
   const isTyping = message.length > 0;
@@ -83,7 +82,6 @@ export default function AskEmmausHome() {
     const pending = takePendingContext();
     if (pending) setFabContext(pending.context);
     if (!user) return;
-    listConversations(user.id).then(setConversations);
   }, [user]);
 
   function handleBack() {
@@ -220,38 +218,10 @@ export default function AskEmmausHome() {
           ))}
         </div>
 
-        {/* Disclaimer + past conversations */}
-        <div className="space-y-2.5">
-          <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
-            Emmaus offers pastoral reflection, not counseling or professional advice.
-          </p>
-          {conversations.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                <Clock size={11} aria-hidden="true" />
-                Recent
-              </p>
-              {conversations.slice(0, 2).map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setLocation(`/personal/ask-emmaus/history/${conv.id}`)}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-border bg-card hover:border-primary/30 transition-all text-left"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <MessageCircle size={13} aria-hidden="true" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-foreground truncate">{conv.title}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {ENTRY_POINT_LABELS[conv.entryPoint] ?? 'Ask Emmaus'} · {formatDate(conv.updatedAt)}
-                    </p>
-                  </div>
-                  <ChevronRight size={14} className="text-muted-foreground shrink-0" aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Disclaimer */}
+        <p className="text-[12px] text-muted-foreground leading-relaxed text-center">
+          Emmaus offers pastoral reflection, not counseling or professional advice.
+        </p>
       </div>
 
       {/* ── WhatsApp spacer — fills space above composer when typing ─────── */}
