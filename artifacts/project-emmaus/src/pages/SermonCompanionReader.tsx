@@ -374,7 +374,7 @@ export default function SermonCompanionReader() {
         onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
         continueLabel={hasNextEntry ? 'Continue to Next Reflection' : undefined}
         returnLabel={returnLabel}
-        onReturn={() => setLocation(returnDest)}
+        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
         previousDaysLabel="View Previous Reflections →"
         onPreviousDays={hasPreviousDays ? () => setLocation(prevDaysUrl) : undefined}
       />
@@ -386,7 +386,7 @@ export default function SermonCompanionReader() {
         heading={`Step ${day} complete.`}
         subMessage="May the Lord continue His work in your heart today."
         returnLabel={returnLabel}
-        onReturn={() => setLocation(returnDest)}
+        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
       />
     );
   } else {

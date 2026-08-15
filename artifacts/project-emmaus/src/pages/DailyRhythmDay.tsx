@@ -127,9 +127,12 @@ export default function DailyRhythmDay() {
   }, [day]);
 
   const goBack = () => { if (window.history.length > 1) window.history.back(); else setLocation('/walk'); };
-  // Always navigate forward to Previous Days — never history.back(), which goes to
-  // Today's Steps when the user arrived from there rather than from Previous Days.
-  const goToPreviousDays = () => setLocation('/daily-rhythm/previous?from=walk');
+  // Back to Previous Days — pops history so the Previous Days page itself can still
+  // go back naturally. Falls back to forward navigation only when there is no history.
+  const goToPreviousDays = () => { if (window.history.length > 1) window.history.back(); else setLocation('/daily-rhythm/previous?from=walk'); };
+  // Forward navigation to Previous Days — used for the "See Previous Days →" secondary
+  // link when the user arrived from Today's Steps (not from Previous Days).
+  const openPreviousDays = () => setLocation('/daily-rhythm/previous?from=walk');
 
   const hasPreviousDays =
     currentDay > 1 &&
@@ -194,8 +197,8 @@ export default function DailyRhythmDay() {
         heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="We'll continue walking together tomorrow."
         returnLabel="Back to Today's Steps"
-        onReturn={() => setLocation('/walk', { replace: true })}
-        onPreviousDays={hasPreviousDays ? goToPreviousDays : undefined}
+        onReturn={goBack}
+        onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
       />
     );
   } else if (isReplay) {
@@ -207,7 +210,7 @@ export default function DailyRhythmDay() {
         subMessage="May the Lord continue His work in your heart today."
         returnLabel={fromWalk ? "Back to Today's Steps" : "Back to Previous Days"}
         onReturn={fromWalk ? goBack : goToPreviousDays}
-        onPreviousDays={hasPreviousDays && fromWalk ? goToPreviousDays : undefined}
+        onPreviousDays={hasPreviousDays && fromWalk ? openPreviousDays : undefined}
         previousDaysLabel="See Previous Days →"
       />
     );

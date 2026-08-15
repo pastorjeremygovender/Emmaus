@@ -86,7 +86,7 @@ export default function WalkCompletePage() {
               "You've completed this Walk."
             }
             returnLabel={walkReturnLabel}
-            onReturn={() => setLocation(returnPath)}
+            onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
             {...(showNextWalk && nextJourney
               ? {
                   continueLabel: `Start ${nextJourney.title}`,
