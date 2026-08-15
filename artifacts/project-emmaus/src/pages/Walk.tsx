@@ -14,6 +14,7 @@
 import { useLocation, Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { Button } from '@/components/ui/button';
@@ -284,6 +285,7 @@ export default function Walk() {
   const { user } = useAuth();
   const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
   const { getState } = useEnrollment();
+  const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
 
   // Hooks must all be called before early returns.
@@ -476,7 +478,8 @@ export default function Walk() {
     if (!user?.id) return;
     reloadThisWeekCompanion(user.id);
     reloadScCompanions(user.id);
-  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions]);
+    loadRooms().catch(() => {/* rooms are supplementary */});
+  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions, loadRooms]);
 
   // Visibility-change refresh — refreshes the This Week's Sermon card (and the
   // in-progress companions list) whenever the member returns to this tab.
@@ -914,22 +917,33 @@ export default function Walk() {
         )}
 
         {/* ── 4. My Groups ─────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.11 }}
-        >
-          <button
-            onClick={() => setLocation('/rooms')}
-            className="w-full rounded-2xl border bg-blue-50/90 border-blue-200/60 px-4 py-3 flex items-center gap-2 hover:border-blue-300/70 transition-colors text-left"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700 flex-1">
-              My Groups
-            </span>
-            <span className="text-[12px] font-medium text-blue-600/80">Open →</span>
-          </button>
-        </motion.div>
+        {(() => {
+          const myRooms = getMyRooms(user.id);
+          if (myRooms.length === 0) return null;
+          return (
+            <SectionWrapper color="blue" label="My Groups" delay={0.11}>
+              {myRooms.map(room => (
+                <CompactCard
+                  key={room.id}
+                  title={room.name}
+                  subtitle={
+                    room.leaderNote
+                      ? room.leaderNote
+                      : `${room.memberCount} ${room.memberCount === 1 ? 'member' : 'members'}${room.adminName ? ` · Led by ${room.adminName}` : ''}`
+                  }
+                  ctaLabel="Open"
+                  onAction={() => setLocation(`/rooms/${room.id}`)}
+                />
+              ))}
+              <button
+                onClick={() => setLocation('/rooms')}
+                className="text-[12px] font-medium text-blue-600/70 hover:text-blue-700 transition-colors pt-0.5"
+              >
+                View all groups →
+              </button>
+            </SectionWrapper>
+          );
+        })()}
 
         {/* ── Discover More ─────────────────────────────────────────────────── */}
         <motion.div
