@@ -2,6 +2,7 @@ import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -85,12 +86,11 @@ export default function Bible() {
 
         {/* ── Home Tab ─────────────────────────────────────────────────────── */}
         {activeTab === 'home' && (
-          <div className="space-y-9 pb-4">
+          <div className="space-y-4 pb-4">
 
             {/* Continue / Begin Reading */}
             {lastRead ? (
-              <section className="space-y-3">
-                <SectionLabel>Continue Reading</SectionLabel>
+              <SectionWrapper color="amber" label="Continue Reading">
                 <div
                   className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
@@ -107,10 +107,9 @@ export default function Bible() {
                     <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                   </div>
                 </div>
-              </section>
+              </SectionWrapper>
             ) : (
-              <section className="space-y-3">
-                <SectionLabel>Begin Reading</SectionLabel>
+              <SectionWrapper color="amber" label="Begin Reading">
                 <div
                   className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation('/bible/read/luke/1')}
@@ -127,12 +126,11 @@ export default function Bible() {
                     <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                   </div>
                 </div>
-              </section>
+              </SectionWrapper>
             )}
 
             {/* Browse Books */}
-            <section className="space-y-3">
-              <SectionLabel>Browse Books</SectionLabel>
+            <SectionWrapper color="emerald" label="Browse Books">
               <div
                 className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                 onClick={() => setLocation('/bible/books')}
@@ -145,19 +143,17 @@ export default function Bible() {
                   <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" />
                 </div>
               </div>
-            </section>
-
+            </SectionWrapper>
 
           </div>
         )}
 
         {/* ── My Library Tab ────────────────────────────────────────────────── */}
         {activeTab === 'library' && (
-          <div className="space-y-8 pb-4">
+          <div className="space-y-4 pb-4">
 
             {/* Reading History */}
-            <section className="space-y-3">
-              <SectionLabel>Reading History</SectionLabel>
+            <SectionWrapper color="violet" label="Reading History">
               {readingHistory.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-10 border border-dashed border-border rounded-2xl text-center space-y-3">
                   <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
@@ -197,7 +193,7 @@ export default function Bible() {
                   ))}
                 </div>
               )}
-            </section>
+            </SectionWrapper>
 
             <MyLibrary />
           </div>
@@ -206,13 +202,5 @@ export default function Bible() {
       </main>
       <BottomNav />
     </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-      {children}
-    </h2>
   );
 }

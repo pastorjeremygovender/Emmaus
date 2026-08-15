@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -50,16 +51,6 @@ const CONTENT_LABEL: Record<string, string> = {
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
 
 
 // ─── Favourite row ────────────────────────────────────────────────────────────
@@ -198,7 +189,7 @@ export default function Personal() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-9">
+      <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
         <header className="flex items-center gap-5">
@@ -251,17 +242,15 @@ export default function Personal() {
         <UnifiedEmmausInput launchOnly className="mt-4" />
 
         {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
-        <Section title="⭐ Favourites">
+        <SectionWrapper color="amber" label="Favourites">
           {favsLoading ? (
             <div className="space-y-2">
-              {[1, 2].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
+              {[1, 2].map(i => <div key={i} className="h-10 rounded-xl bg-amber-100/80 animate-pulse" />)}
             </div>
           ) : favourites.length === 0 ? (
-            <div className="p-6 border border-dashed border-border rounded-2xl text-center">
-              <p className="text-[14px] text-muted-foreground">
-                Tap the ⭐ on any walk, verse, or sermon to save it here.
-              </p>
-            </div>
+            <p className="text-[13px] text-amber-700/70 text-center py-2">
+              Tap the ⭐ on any walk, verse, or sermon to save it here.
+            </p>
           ) : (
             <div className="space-y-2">
               {favourites.map(fav => (
@@ -274,20 +263,18 @@ export default function Personal() {
               ))}
             </div>
           )}
-        </Section>
+        </SectionWrapper>
 
         {/* ── History ────────────────────────────────────────────────────────── */}
-        <Section title="History">
+        <SectionWrapper color="violet" label="History">
           {histLoading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
+              {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-xl bg-violet-100/80 animate-pulse" />)}
             </div>
           ) : history.length === 0 ? (
-            <div className="p-6 border border-dashed border-border rounded-2xl text-center">
-              <p className="text-[14px] text-muted-foreground">
-                Recently visited walks, sermons and Bible chapters will appear here.
-              </p>
-            </div>
+            <p className="text-[13px] text-violet-700/70 text-center py-2">
+              Recently visited walks, sermons and Bible chapters will appear here.
+            </p>
           ) : (
             <div className="space-y-2">
               {history.slice(0, 20).map(entry => (
@@ -299,28 +286,26 @@ export default function Personal() {
               ))}
             </div>
           )}
-        </Section>
+        </SectionWrapper>
 
         {/* ── Saved Reflections ──────────────────────────────────────────────── */}
         {savedReflections.length > 0 && (
-          <Section title="Saved Reflections">
-            <div className="space-y-3">
+          <SectionWrapper color="emerald" label="Saved Reflections">
+            <div className="space-y-2">
               {savedReflections.map((r, i) => (
-                <div key={i} className="p-4 rounded-xl border border-border bg-card space-y-2">
-                  <h4 className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-                    {r.title}
-                  </h4>
-                  <p className="text-[15px] text-foreground italic leading-relaxed">"{r.text}"</p>
+                <div key={i} className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 space-y-1">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-widest">{r.title}</p>
+                  <p className="text-[13px] text-foreground italic leading-relaxed">"{r.text}"</p>
                 </div>
               ))}
             </div>
-          </Section>
+          </SectionWrapper>
         )}
 
         {/* ── Settings ───────────────────────────────────────────────────────── */}
-        <Section title="Settings">
-          <div className="p-4 rounded-xl border border-border bg-card flex justify-between items-center min-h-[56px]">
-            <Label htmlFor="notifications-toggle" className="text-[16px] font-medium cursor-pointer">
+        <SectionWrapper color="blue" label="Settings">
+          <div className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 flex justify-between items-center">
+            <Label htmlFor="notifications-toggle" className="text-[14px] font-semibold cursor-pointer">
               Daily Reminders
             </Label>
             <Switch
@@ -330,7 +315,7 @@ export default function Personal() {
               data-testid="toggle-notifications"
             />
           </div>
-        </Section>
+        </SectionWrapper>
 
         {/* Sign Out */}
         <Button

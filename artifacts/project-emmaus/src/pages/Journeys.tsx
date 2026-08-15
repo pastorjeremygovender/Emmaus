@@ -32,6 +32,7 @@ import {
   BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
@@ -840,48 +841,56 @@ export default function Journeys() {
 
         {/* Tab content */}
         {!discoverActive && !apiLoading && data && (
-          <div className="pt-4 pb-6 space-y-2">
+          <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
-              <WalksPanel
-                standalone={data.standaloneJourneys}
-                onAction={handleJourneyAction}
-                onPause={(id) => setPauseTargetId(id)}
-                onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
-                isGated={isItemGated}
-                onGate={() => setLocation('/walk')}
-                getEnrollmentState={(id) => getState(id)}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
-              />
+              <SectionWrapper color="emerald" label="Walks">
+                <WalksPanel
+                  standalone={data.standaloneJourneys}
+                  onAction={handleJourneyAction}
+                  onPause={(id) => setPauseTargetId(id)}
+                  onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
+                  isGated={isItemGated}
+                  onGate={() => setLocation('/walk')}
+                  getEnrollmentState={(id) => getState(id)}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                  onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?from=nextStepsWalks`)}
+                />
+              </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
-              <JourneysPanel
-                collections={data.journeyCollections}
-                onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-              />
+              <SectionWrapper color="amber" label="Journeys">
+                <JourneysPanel
+                  collections={data.journeyCollections}
+                  onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
+              </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
-              <DevotionalsPanel
-                items={data.dailyDevotionals}
-                onAction={handleDevotionalAction}
-                startingId={startingDevId}
-                onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-              />
+              <SectionWrapper color="violet" label="Daily Devotionals">
+                <DevotionalsPanel
+                  items={data.dailyDevotionals}
+                  onAction={handleDevotionalAction}
+                  startingId={startingDevId}
+                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?from=nextStepsDevotionals`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                />
+              </SectionWrapper>
             )}
             {activeTab === 'sermons' && (
-              <SermonCompanionsPanel
-                current={data.currentSermonCompanion}
-                previous={data.previousSermonCompanions}
-                onAction={handleSermonCompanionAction}
-                isGated={!gateClear}
-                onGate={() => setLocation('/walk')}
-                getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-              />
+              <SectionWrapper color="blue" label="Sermon Companions">
+                <SermonCompanionsPanel
+                  current={data.currentSermonCompanion}
+                  previous={data.previousSermonCompanions}
+                  onAction={handleSermonCompanionAction}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                />
+              </SectionWrapper>
             )}
           </div>
         )}
