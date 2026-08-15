@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { Journey, Step } from '@/lib/journeys-api';
 import { getStepLabel } from '@/lib/step-label';
 import { DailyRhythmReading, PreviewContinueButton, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { ShareImageField } from '@/components/ShareImageField';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
 import EmmausContentEditor from './EmmausContentEditor';
@@ -78,6 +79,8 @@ interface DayForm {
   closingText: string;
   /** Optional display label (e.g. "1 January"). Overrides the journey-level prefix formula. */
   displayLabel: string;
+  /** Optional share image — object-storage path ("/objects/…"). */
+  shareImageUrl: string | null;
 }
 
 const EMPTY_FORM: DayForm = {
@@ -90,6 +93,7 @@ const EMPTY_FORM: DayForm = {
   actionStep: '',
   closingText: '',
   displayLabel: '',
+  shareImageUrl: null,
 };
 
 // ─── Field sub-components ─────────────────────────────────────────────────────
@@ -389,6 +393,7 @@ export default function DailyRhythmDayEditor({
           actionStep: existing.actionStep ?? '',
           closingText: existing.closingText ?? '',
           displayLabel: (existing as any).displayLabel ?? '',
+          shareImageUrl: (existing as any).shareImageUrl ?? null,
         });
         setCurrentDay(existing.day);
         setStepStatus(((existing as Step & { status?: string }).status as 'Draft' | 'Published') ?? 'Draft');
@@ -412,8 +417,9 @@ export default function DailyRhythmDayEditor({
     actionStep: form.actionStep,
     closingText: form.closingText,
     displayLabel: form.displayLabel || null,
+    shareImageUrl: form.shareImageUrl ?? null,
     status,
-  } as Step & { closingText: string; displayLabel: string | null; status: string });
+  } as Step & { closingText: string; displayLabel: string | null; shareImageUrl: string | null; status: string });
 
   const handleSave = async (status: 'Draft' | 'Published' = 'Draft') => {
     if (saving) return;
@@ -665,6 +671,26 @@ export default function DailyRhythmDayEditor({
                 placeholder="e.g. 1 January"
                 className="w-full px-4 py-3 text-[14px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl
                   focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent"
+              />
+            </div>
+
+            {/* Share Image */}
+            <div>
+              <FieldLabel hint="Members see a 'Take this with you' card with Save + Share buttons">Share Image</FieldLabel>
+              <ShareImageField
+                value={form.shareImageUrl}
+                onChange={async (path) => {
+                  // Update form state and persist immediately with the new path.
+                  // Calling handleSave() would read stale form before the state update settles,
+                  // so we build the payload here and call updateStep directly.
+                  setForm(f => ({ ...f, shareImageUrl: path }));
+                  if (currentDay !== null) {
+                    await updateStep(
+                      { ...buildStepData(stepStatus), shareImageUrl: path },
+                      undefined
+                    );
+                  }
+                }}
               />
             </div>
 

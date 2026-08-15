@@ -25,6 +25,8 @@ export interface CompanionEntry {
   closing: string;
   /** Timestamped YouTube URL linking to the relevant sermon segment. */
   sermonLink: string;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -382,6 +384,7 @@ export async function updateEntry(
     nextStep: 'next_step',
     closing: 'closing',
     sermonLink: 'sermon_link',
+    shareImageUrl: 'share_image_url',
     status: 'status',
   };
 
@@ -685,6 +688,7 @@ function rowToEntry(row: Record<string, unknown>): CompanionEntry {
     nextStep: String(row.next_step ?? ''),
     closing: String(row.closing ?? ''),
     sermonLink: String(row.sermon_link ?? ''),
+    shareImageUrl: row.share_image_url != null ? String(row.share_image_url) : null,
     status: String(row.status ?? 'Draft'),
     createdAt: String(row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),

@@ -144,6 +144,10 @@ export const journeyStepsTable = pgTable("journey_steps", {
   // prefix+number formula when non-empty. Used for date-keyed reading plans.
   displayLabel: text("display_label"),
 
+  // Optional share image — stored as an object-storage path ("/objects/...").
+  // When set, members see a "Take this with you" card with Save + Share actions.
+  shareImageUrl: text("share_image_url"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   // Soft-delete: set by DELETE /journeys/:id/steps/:day, invisible to all queries when not null.

@@ -68,6 +68,8 @@ export interface DevotionalEntry {
   closing: string | null;
   /** Optional per-entry display label (e.g. "1 January"). Overrides "Day N" when set. */
   displayLabel?: string | null;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   publishedAt: string | null;
   createdAt: string;
@@ -162,7 +164,7 @@ export function permanentDeleteSeries(id: string, auth?: AdminAuth): Promise<voi
 export function saveEntry(
   seriesId: string,
   dayNumber: number,
-  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "displayLabel" | "status">>,
+  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "displayLabel" | "shareImageUrl" | "status">>,
   auth?: AdminAuth
 ): Promise<DevotionalEntry> {
   return request<DevotionalEntry>(apiUrl(`/${seriesId}/entries/${dayNumber}`), {

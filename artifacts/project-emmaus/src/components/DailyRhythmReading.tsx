@@ -15,6 +15,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
 import type { SharePayload } from '@/lib/share';
 
 // ─── Greeting personalization ─────────────────────────────────────────────────
@@ -221,6 +222,13 @@ export interface DailyRhythmReadingProps {
    * When provided and non-empty, replaces the default "Day N" sub-heading.
    */
   displayLabel?: string;
+
+  /**
+   * Optional share image — object-storage path ("/objects/…").
+   * When present, a "Take this with you" card is rendered above the Share button.
+   * Omit for admin previews.
+   */
+  shareImageUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -240,6 +248,7 @@ export function DailyRhythmReading({
   actionButton,
   sharePayload,
   displayLabel,
+  shareImageUrl,
 }: DailyRhythmReadingProps) {
 
   // ── Greeting text ───────────────────────────────────────────────────────────
@@ -380,6 +389,11 @@ export function DailyRhythmReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share image ─────────────────────────────────────────────────────── */}
+      {shareImageUrl && !previewMode && (
+        <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
       {/* ── Share ───────────────────────────────────────────────────────────── */}

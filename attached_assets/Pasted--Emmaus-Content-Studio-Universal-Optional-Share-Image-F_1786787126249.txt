@@ -1,0 +1,288 @@
+## Emmaus Content Studio — Universal Optional Share Image Feature
+
+Add a universal **optional Share Image feature** to Emmaus content.
+
+This must be a **small, isolated enhancement**. Do not redesign, restructure, refactor, or alter existing Content Studio functionality, content rendering, navigation, progress tracking, publishing, voice functionality, Bible functionality, Ask Emmaus, or existing layouts.
+
+### Goal
+
+Content creators should be able to optionally attach a shareable image to Emmaus content.
+
+If an image has been added, members should see it naturally near the end of that content with simple Save and Share actions.
+
+If no image has been added, **nothing should appear on the member side and the existing experience must remain exactly as it is now.**
+
+---
+
+## 1. CONTENT STUDIO
+
+Add an optional field:
+
+**Share Image**
+
+Helper text:
+
+> Optional image members can save or share after reading.
+
+Provide:
+
+**Upload Image**
+
+After an image has been uploaded, display:
+
+* Small image preview/thumbnail
+* Replace
+* Remove
+
+Keep this interface extremely simple.
+
+Do NOT add:
+
+* captions
+* image titles
+* descriptions
+* templates
+* positioning controls
+* cropping tools
+* image generation
+* AI generation controls
+* additional publishing steps
+
+We will deal with image generation separately later.
+
+---
+
+## 2. WHERE THIS SHOULD BE AVAILABLE
+
+Make Share Image a reusable content capability across the Content Studio tabs currently available:
+
+### Daily Rhythm
+
+Allow an optional Share Image for each individual Daily Rhythm entry/day.
+
+### Daily Devotionals
+
+Allow an optional Share Image for each individual devotional/day.
+
+### Walks
+
+Allow an optional Share Image for each individual Step.
+
+### Journeys
+
+Allow an optional Share Image at the individual Step/content level where appropriate, rather than treating the entire Journey as one share image.
+
+### Sermons
+
+Allow an optional Share Image for the sermon/sermon content where appropriate.
+
+The architecture should make this reusable for future Emmaus content types without having to rebuild the upload/display functionality every time.
+
+---
+
+## 3. DATA MODEL
+
+Use a generic property such as:
+
+`shareImageUrl`
+
+Do NOT call it `uploadedImageUrl`.
+
+The reason is that later Emmaus may populate the same field through:
+
+* manual uploads
+* AI-generated images
+* automated content generation
+* bulk image generation
+
+Those future methods should be able to populate the same `shareImageUrl` without requiring changes to the member-facing interface.
+
+Do not build any of those future generation systems now.
+
+---
+
+## 4. MEMBER EXPERIENCE
+
+Do NOT place the image near the beginning of the content.
+
+The devotional/content reading experience should remain clean and text-focused.
+
+When `shareImageUrl` exists, display a simple section near the end of the content, after the primary reading/reflection/closing content and before final navigation where appropriate.
+
+Use:
+
+### Take this with you
+
+[SHARE IMAGE]
+
+**Save Image**     **Share**
+
+Keep this visually restrained and consistent with the existing Emmaus design system.
+
+The image should be prominent enough to view comfortably but should not make the page feel like social media.
+
+Use a responsive presentation suitable for a portrait-oriented share image, approximately **4:5**, while respecting the image's actual aspect ratio and avoiding distortion.
+
+---
+
+## 5. SAVE IMAGE
+
+**Save Image** should allow the member to save/download the original share image to their device where browser/device capabilities permit.
+
+Do not save a screenshot of the Emmaus interface.
+
+Save the actual share image.
+
+---
+
+## 6. SHARE
+
+Use the device/browser's native sharing capability where available.
+
+The share action should share the **share image itself** where supported.
+
+Provide a sensible fallback on platforms where direct image sharing is unavailable.
+
+Do not replace or interfere with any existing Emmaus share functionality.
+
+The existing content-sharing functions and this new **Share Image** function are separate capabilities.
+
+---
+
+## 7. CRITICAL CONDITIONAL BEHAVIOUR
+
+If `shareImageUrl` is empty or null:
+
+* Do NOT display "Take this with you"
+* Do NOT display an empty image container
+* Do NOT display Save Image
+* Do NOT display Share
+* Do NOT display a placeholder
+* Do NOT alter spacing
+* Do NOT change the current content experience in any way
+
+The entire component should simply not render.
+
+This is important because Share Images may only be used selectively.
+
+---
+
+## 8. CONTENT STUDIO PLACEMENT
+
+For editors similar to the current Daily Devotional editor, place **Share Image** near the bottom of the editor, after the primary content fields.
+
+For example, in Daily Devotionals it can sit underneath **Display Label**.
+
+The Share Image is publishing/supporting material, not part of the written devotional structure.
+
+Use the same principle for the other content editors.
+
+---
+
+## 9. REUSABLE COMPONENT
+
+Please implement this as a reusable component rather than independently coding five different versions.
+
+Conceptually we should have:
+
+**Admin/content component**
+`ShareImageField`
+
+responsible for:
+
+* upload
+* preview
+* replace
+* remove
+
+And a member-facing component such as:
+
+`ShareImageCard`
+
+responsible for:
+
+* conditional rendering
+* image display
+* Save Image
+* native Share
+
+The exact component names can follow the existing codebase conventions.
+
+Reuse existing Emmaus upload/storage infrastructure if suitable rather than creating an unnecessary second media-storage system.
+
+---
+
+## 10. BULK IMPORT COMPATIBILITY
+
+Do not break the existing Bulk Import system.
+
+Existing imports that contain no Share Image information must continue working exactly as they do now.
+
+The new property must be optional.
+
+Do not require Share Image data for validation, publishing, importing or displaying any content.
+
+Structure the data model so Share Images could be supported by Bulk Import later, but **do not redesign the existing Bulk Import workflow for images in this task.**
+
+---
+
+## 11. DO NOT CHANGE
+
+Do not change:
+
+* existing content
+* existing devotional formatting
+* existing Content Studio fields except for adding Share Image
+* Daily Rhythm behaviour
+* Daily Devotional behaviour
+* Walk progress
+* Journey progress
+* Sermon processing
+* publishing behaviour
+* dates/display labels
+* navigation
+* bottom navigation
+* Ask Emmaus
+* Emmaus Voice
+* Bible functionality
+* existing share buttons
+* existing database content
+* existing user progress
+
+Do not perform unrelated cleanup or refactoring.
+
+---
+
+## 12. TEST BEFORE COMPLETION
+
+Test at least:
+
+**Daily Devotional**
+
+1. Existing devotional with no image → member experience unchanged.
+2. Upload Share Image → save → image appears in "Take this with you."
+3. Replace image → new image appears.
+4. Remove image → entire member Share Image section disappears.
+
+Then verify the same reusable functionality is available for:
+
+* Daily Rhythm entries
+* Daily Devotional entries
+* Walk Steps
+* Journey Steps/content
+* Sermons
+
+Also verify:
+
+* Save Image works.
+* Native Share works where supported.
+* Mobile layout works.
+* Desktop layout works.
+* Existing content still renders correctly.
+* Existing progress is untouched.
+* Existing Bulk Import still works.
+* Existing published content without images is completely unaffected.
+
+Before making changes, inspect the current data models and content renderers and use the **smallest safe implementation** that fits the existing Emmaus architecture.
+
+Do not redesign anything outside this feature.

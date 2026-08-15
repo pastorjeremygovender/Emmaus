@@ -50,6 +50,9 @@ export const devotionalEntriesTable = pgTable("devotional_entries", {
   closing: text("closing").default(""),
   // Optional per-entry display label (e.g. "1 January"). Overrides "Day N" when non-empty.
   displayLabel: text("display_label"),
+  // Optional share image — stored as an object-storage path ("/objects/...").
+  // When set, members see a "Take this with you" card with Save + Share actions.
+  shareImageUrl: text("share_image_url"),
   status: text("status").notNull().default("Draft"),
   publishedAt: timestamp("published_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

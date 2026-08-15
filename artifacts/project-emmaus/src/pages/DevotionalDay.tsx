@@ -302,6 +302,7 @@ export default function DevotionalDay() {
         nextStep={entry.nextStep ?? ''}
         closing={entry.closing ?? ''}
         memberName={resolveDisplayName(user?.preferredName)}
+        shareImageUrl={entry.shareImageUrl}
         returnPath={devotionalReturnPath}
         actionButton={actionButton}
         sharePayload={{

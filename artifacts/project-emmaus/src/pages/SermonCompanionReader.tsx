@@ -58,6 +58,8 @@ interface SCEntry {
   status: string;
   /** Timestamped YouTube URL linking to the sermon moment this entry reflects on. */
   sermonLink?: string | null;
+  /** Optional share image — object-storage path. Members see "Take this with you" card. */
+  shareImageUrl?: string | null;
 }
 
 interface SCProgress {
@@ -512,6 +514,7 @@ export default function SermonCompanionReader() {
           nextStep={entry.nextStep}
           closing={entry.closing}
           memberName={firstName}
+          shareImageUrl={entry.shareImageUrl}
           actionButton={actionButton}
           sharePayload={{
             title: companion.title,

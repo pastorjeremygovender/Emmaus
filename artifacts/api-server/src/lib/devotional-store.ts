@@ -197,6 +197,7 @@ export async function upsertEntry(
       | "nextStep"
       | "closing"
       | "displayLabel"
+      | "shareImageUrl"
       | "status"
     >
   >
@@ -229,6 +230,7 @@ export async function upsertEntry(
       nextStep: data.nextStep ?? "",
       closing: data.closing ?? "",
       ...(data.displayLabel !== undefined ? { displayLabel: data.displayLabel || null } : {}),
+      ...(data.shareImageUrl !== undefined ? { shareImageUrl: data.shareImageUrl || null } : {}),
       status: data.status ?? "Draft",
       ...(publishedAt !== undefined ? { publishedAt } : {}),
     })

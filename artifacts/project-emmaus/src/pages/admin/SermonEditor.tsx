@@ -42,6 +42,7 @@ import {
   Field, TextInput, TextArea, Select, AdminBtn, StatusBadge,
   ContentStudioToolbar,
 } from './shared';
+import { ShareImageField } from '@/components/ShareImageField';
 import {
   Loader2, RefreshCw, Check, X, ChevronRight,
   AlertCircle, CheckCircle2, Trash2,
@@ -153,6 +154,18 @@ function CompanionDayEditor({
   };
 
   const current = localEntries.find(e => e.dayNumber === selectedDay);
+
+  /** Immediately persist a share image path (upload/remove are discrete — no debounce needed). */
+  const handleShareImageChange = useCallback(async (path: string | null) => {
+    setLocalEntries(prev =>
+      prev.map(e => e.dayNumber === selectedDay ? { ...e, shareImageUrl: path } : e)
+    );
+    try {
+      await saveCompanionEntry(companionId, selectedDay, { shareImageUrl: path }, auth);
+    } catch {
+      // Non-fatal — the admin can retry with Save Draft
+    }
+  }, [companionId, selectedDay, auth]);
 
   const patchEntry = useCallback((field: keyof CompanionEntry, value: string) => {
     setLocalEntries(prev => {
@@ -384,6 +397,13 @@ function CompanionDayEditor({
               </a>
             )}
             <p className="mt-1 text-[11px] text-gray-400">Auto-generated timestamped link to the relevant sermon segment.</p>
+          </Field>
+
+          <Field label="Share Image">
+            <ShareImageField
+              value={current.shareImageUrl}
+              onChange={handleShareImageChange}
+            />
           </Field>
         </div>
       }

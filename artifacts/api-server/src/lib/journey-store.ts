@@ -93,6 +93,8 @@ export interface FrontendStep {
   isCompletionStep?: boolean;
   /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
   displayLabel?: string | null;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
 }
 
 export interface FrontendJourney {
@@ -258,6 +260,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     lookingAhead,
     isCompletionStep: row.isCompletionStep ?? false,
     displayLabel: row.displayLabel ?? null,
+    shareImageUrl: row.shareImageUrl ?? null,
   };
 }
 
@@ -287,6 +290,7 @@ function buildStepColumns(data: Partial<FrontendStep>): Record<string, unknown> 
   if (data.status !== undefined)             cols.status             = data.status;
   if (data.isCompletionStep !== undefined)   cols.isCompletionStep   = data.isCompletionStep;
   if (data.displayLabel !== undefined)       cols.displayLabel       = data.displayLabel ?? null;
+  if (data.shareImageUrl !== undefined)      cols.shareImageUrl      = data.shareImageUrl ?? null;
 
   if (data.title !== undefined)              cols.title              = data.title;
   if (data.mentorIntro !== undefined)        cols.mentorIntro        = data.mentorIntro;

@@ -13,6 +13,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
 import type { SharePayload } from '@/lib/share';
 import {
   SectionLabel,
@@ -79,6 +80,13 @@ export interface DevotionalReadingProps {
    * `getDevotionalLabel(entry)` from the caller; do not pass the raw DB value.
    */
   displayLabel?: string;
+
+  /**
+   * Optional share image — object-storage path ("/objects/…").
+   * When present, a "Take this with you" card is rendered above the Share button.
+   * Omit for admin previews.
+   */
+  shareImageUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -99,6 +107,7 @@ export function DevotionalReading({
   actionButton,
   sharePayload,
   displayLabel,
+  shareImageUrl,
 }: DevotionalReadingProps) {
 
   const greetingFull = greeting
@@ -219,6 +228,11 @@ export function DevotionalReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share image ─────────────────────────────────────────────────────── */}
+      {shareImageUrl && !previewMode && (
+        <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
       {/* ── Share ───────────────────────────────────────────────────────────── */}

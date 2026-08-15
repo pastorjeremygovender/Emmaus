@@ -128,6 +128,8 @@ export interface CompanionEntry {
   closing: string;
   /** Timestamped YouTube URL linking to the relevant sermon segment. */
   sermonLink: string;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;

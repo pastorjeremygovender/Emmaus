@@ -14,6 +14,7 @@ import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/componen
 import { getStepLabel } from '@/lib/step-label';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
 import { BottomNav } from '@/components/BottomNav';
 import { dismissBadge } from '@/lib/badge-api';
 import { recordView } from '@/lib/history-api';
@@ -487,6 +488,11 @@ export default function JourneyDay() {
               {step.actionStep}
             </p>
           </section>
+
+          {/* Share image — "Take this with you" */}
+          {(step as any).shareImageUrl && (
+            <ShareImageCard shareImageUrl={(step as any).shareImageUrl} />
+          )}
 
           {/* Share */}
           <ShareButton payload={{

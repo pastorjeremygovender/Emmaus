@@ -99,6 +99,8 @@ export type Step = {
   closingText?: string;
   /** Optional per-step display label (e.g. "1 January"). Overrides prefix+number when set. */
   displayLabel?: string | null;
+  /** Optional share image — object-storage path ("/objects/…"). Members see a "Take this with you" card. */
+  shareImageUrl?: string | null;
 };
 
 export type Progress = {

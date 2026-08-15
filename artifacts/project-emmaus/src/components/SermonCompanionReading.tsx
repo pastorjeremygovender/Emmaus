@@ -13,6 +13,7 @@
 import React from 'react';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
+import { ShareImageCard } from '@/components/ShareImageCard';
 import type { SharePayload } from '@/lib/share';
 import {
   SectionLabel,
@@ -67,6 +68,12 @@ export interface SermonCompanionReadingProps {
    * Share button is rendered above the action button.
    */
   sharePayload?: SharePayload;
+
+  /**
+   * Optional share image — object-storage path ("/objects/…").
+   * When present, a "Take this with you" card is rendered above the Share button.
+   */
+  shareImageUrl?: string | null;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -85,6 +92,7 @@ export function SermonCompanionReading({
   returnPath,
   actionButton,
   sharePayload,
+  shareImageUrl,
 }: SermonCompanionReadingProps) {
 
   const greetingFull = greeting
@@ -177,6 +185,11 @@ export function SermonCompanionReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
+      )}
+
+      {/* ── Share image ─────────────────────────────────────────────────────── */}
+      {shareImageUrl && (
+        <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
       {/* ── Share ───────────────────────────────────────────────────────────── */}

@@ -1849,6 +1849,16 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: voice_settings table ensured (idempotent)");
   }
 
+  // ─── Share image URL columns ───────────────────────────────────────────────
+  // Optional per-step/entry share image stored as an object-storage path.
+  // Added to journey_steps, devotional_entries, and sermon_companion_entry.
+  {
+    await pool.query(`ALTER TABLE journey_steps          ADD COLUMN IF NOT EXISTS share_image_url TEXT`);
+    await pool.query(`ALTER TABLE devotional_entries     ADD COLUMN IF NOT EXISTS share_image_url TEXT`);
+    await pool.query(`ALTER TABLE sermon_companion_entry ADD COLUMN IF NOT EXISTS share_image_url TEXT`);
+    logger.info("Startup migration: share_image_url columns ensured (idempotent)");
+  }
+
   // ─── Remove __TEST__ devotional records from all environments ──────────────
   // Test records created during badge-lifecycle testing leaked into production
   // via the prod-data-sync upsert.  Delete them idempotently; safe to re-run.
