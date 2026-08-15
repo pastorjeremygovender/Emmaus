@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
-  LogOut, Pencil, Check, X,
+  LogOut, Pencil, Check, X, ChevronRight,
   Star, Clock, BookOpen, Headphones, Map, Users,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -75,28 +75,25 @@ function FavouriteRow({
 }) {
   const Icon = CONTENT_ICON[fav.content_type] ?? BookOpen;
   return (
-    <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card">
-      <button onClick={onOpen} className="flex-1 flex items-center gap-3 min-w-0 text-left">
-        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-          <Icon size={15} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-medium text-foreground leading-snug truncate">
+    <div className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 hover:border-primary/25 transition-colors select-none">
+      <div className="flex items-center gap-2 min-w-0">
+        <button onClick={onOpen} className="flex-1 flex flex-col min-w-0 text-left">
+          <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
             {fav.content_title}
           </p>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             {CONTENT_LABEL[fav.content_type] ?? fav.content_type}
           </p>
-        </div>
-      </button>
-      <FavouriteButton
-        contentType={fav.content_type as Parameters<typeof FavouriteButton>[0]['contentType']}
-        contentId={fav.content_id}
-        contentTitle={fav.content_title}
-        contentRoute={fav.content_route}
-        className="shrink-0"
-        size={16}
-      />
+        </button>
+        <FavouriteButton
+          contentType={fav.content_type as Parameters<typeof FavouriteButton>[0]['contentType']}
+          contentId={fav.content_id}
+          contentTitle={fav.content_title}
+          contentRoute={fav.content_route}
+          className="shrink-0"
+          size={15}
+        />
+      </div>
     </div>
   );
 }
@@ -108,20 +105,19 @@ function HistoryRow({ entry, onOpen }: { entry: HistoryEntry; onOpen: () => void
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-all"
+      className="w-full text-left bg-card rounded-xl border border-border/50 px-3.5 py-2.5 hover:border-primary/25 active:opacity-75 transition-colors select-none"
     >
-      <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-        <Icon size={15} />
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-semibold text-foreground leading-snug truncate">
+            {entry.content_title}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {historyTimeLabel(entry.viewed_at)}
+          </p>
+        </div>
+        <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[15px] font-medium text-foreground leading-snug truncate">
-          {entry.content_title}
-        </p>
-        <p className="text-[12px] text-muted-foreground mt-0.5">
-          {historyTimeLabel(entry.viewed_at)}
-        </p>
-      </div>
-      <Clock size={13} className="text-muted-foreground/50 shrink-0" />
     </button>
   );
 }
