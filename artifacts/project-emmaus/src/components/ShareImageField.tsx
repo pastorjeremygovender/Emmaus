@@ -118,12 +118,11 @@ export function ShareImageField({ value, onChange }: Props) {
       {/* If an image is already saved, show it with Replace / Generate / Remove */}
       {imageUrl && mode === 'upload' ? (
         <div>
-          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
             <img
               src={imageUrl}
               alt="Share image"
-              className="w-full object-contain block"
-              style={{ maxHeight: 280 }}
+              className="w-full h-full object-cover block"
             />
           </div>
           <div className="flex gap-2 mt-2">

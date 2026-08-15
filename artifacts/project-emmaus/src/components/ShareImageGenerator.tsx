@@ -369,12 +369,11 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
       {/* ── Generated image preview ──────────────────────────────────────── */}
       {previewImage && (
-        <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+        <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
           <img
             src={`data:image/png;base64,${previewImage}`}
             alt="Generated share image preview"
-            className="w-full object-contain block"
-            style={{ maxHeight: 340 }}
+            className="w-full h-full object-cover block"
           />
         </div>
       )}

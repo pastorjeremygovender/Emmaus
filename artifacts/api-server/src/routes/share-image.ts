@@ -17,8 +17,8 @@ const router = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const IMAGE_MODEL = "gpt-image-1";
-// 1024×1536 is portrait (2:3). gpt-image-1 supports this natively.
-const IMAGE_SIZE = "1024x1536";
+// 1024×1024 square (1:1). gpt-image-1 supports this natively.
+const IMAGE_SIZE = "1024x1024";
 
 // ─── Prompt construction ──────────────────────────────────────────────────────
 
@@ -38,12 +38,12 @@ VISUAL STYLE:
 - Premium, contemporary aesthetic — NOT generic church clip-art or stock imagery
 - Subtle, beautiful background: soft light, gentle nature, or warm abstract art
 - The text should be large, readable, and beautifully set
-- Portrait orientation (taller than wide)
+- Square format (1:1 aspect ratio) — compose specifically for a square canvas
 - Suitable for sharing on WhatsApp, Instagram, and Facebook
 - Christian in spirit — warm and intimate, not ornate or clichéd
 - Do NOT add any logos, watermarks, app names, church names, or branding of any kind
 
-CRITICAL: Preserve the exact wording above verbatim. Typography should be beautiful and unhurried. Leave the bottom 8% of the image clear — do not place text or key elements there.`;
+CRITICAL: Preserve the exact wording above verbatim. Typography should be beautiful and unhurried. Leave the bottom 10% of the image clear — do not place text or key elements there, as an attribution footer will be added programmatically.`;
 }
 
 function buildEditPrompt(text: string, instruction: string): string {
@@ -65,6 +65,7 @@ IMPORTANT:
 - Apply the requested change while keeping the warm, clean, premium devotional aesthetic
 - Retain as much of the existing composition as is consistent with the change requested
 - If the change conflicts with showing the text clearly, text legibility always wins
+- Maintain the square (1:1) canvas format — do not alter the aspect ratio
 - Do NOT add any logos, watermarks, app names, church names, or branding of any kind`;
 }
 

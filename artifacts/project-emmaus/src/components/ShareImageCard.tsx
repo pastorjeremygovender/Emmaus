@@ -69,13 +69,12 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
         Take this with you
       </p>
 
-      {/* Image — preserve actual aspect ratio; max height keeps it reasonable on tall screens */}
-      <div className="rounded-2xl overflow-hidden bg-muted">
+      {/* Image — square 1:1 canvas */}
+      <div className="rounded-2xl overflow-hidden bg-muted aspect-square">
         <img
           src={imageUrl}
           alt=""
-          className="w-full object-contain block"
-          style={{ maxHeight: 520 }}
+          className="w-full h-full object-cover block"
           loading="lazy"
         />
       </div>
