@@ -217,7 +217,7 @@ export default function DevotionalDay() {
         returnLabel={returnLabel}
         onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
         previousDaysLabel="View Devotional Contents"
-        onPreviousDays={justCompleted ? () => setLocation(prevDaysUrl) : undefined}
+        onPreviousDays={justCompleted || alreadyCompleted ? () => setLocation(prevDaysUrl) : undefined}
       />
     );
   } else {
