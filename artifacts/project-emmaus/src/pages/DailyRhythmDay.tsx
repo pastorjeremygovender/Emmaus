@@ -118,13 +118,7 @@ export default function DailyRhythmDay() {
     setJustCompleted(false); // reset on day change
   }, [day]);
 
-  // Auto-return to Today's Steps 2 s after the completion panel appears (spec §1).
-  // Uses replace semantics so Back does not return to the just-completed reading.
-  useEffect(() => {
-    if (!justCompleted) return;
-    const timer = setTimeout(() => setLocation('/walk', { replace: true }), 2000);
-    return () => clearTimeout(timer);
-  }, [justCompleted, setLocation]);
+  // No auto-return — navigation back to Today's Steps is always click-driven.
 
   // Preserve scroll position for EmbeddedScripture deep-links
   useEffect(() => {
@@ -185,8 +179,6 @@ export default function DailyRhythmDay() {
   const handleComplete = () => {
     completeStep(journeyId, day, '');
     setJustCompleted(true);
-    // Auto-navigation is handled by the useEffect above (2 s replace).
-    // EmmausCompletionCard gives an immediate tap-to-return option.
   };
 
   // ── Action button / footer ────────────────────────────────────────────────
