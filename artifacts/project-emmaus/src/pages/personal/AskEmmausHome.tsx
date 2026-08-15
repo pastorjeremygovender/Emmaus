@@ -87,13 +87,12 @@ export default function AskEmmausHome() {
   }, [user]);
 
   function handleBack() {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      const dest = getReturnDestination();
-      clearReturnDestination();
-      setLocation(dest?.pathname ?? '/walk');
-    }
+    // Always return to the stored origin (set by the card/FAB that opened Ask Emmaus).
+    // Using window.history.back() would loop back to the conversation page when the
+    // user arrived here via the conversation's own back button.
+    const dest = getReturnDestination();
+    clearReturnDestination();
+    setLocation(dest?.pathname ?? '/walk');
   }
 
   function handleContinue() {
