@@ -11,6 +11,7 @@ import {
   detectSermonStarts, repairTimestamps, generateAudio, getAudioStreamUrl,
   type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob,
 } from '@/lib/youtube-archive-api';
+import { getPublicOrigin, getApiBase } from '@/lib/api';
 
 // ─── Shared mini-components ──────────────────────────────────────────────────
 
@@ -153,7 +154,7 @@ function ConnectionPanel({
         <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
           <p className="text-[11px] font-medium text-gray-500 mb-1">Authorized redirect URI (must match Google Cloud Console exactly)</p>
           <code className="text-[11px] text-gray-700 break-all select-all">
-            {window.location.origin.replace(/:\d+$/, '')}/api/youtube-archive/oauth/callback
+            {getPublicOrigin()}{getApiBase()}/api/youtube-archive/oauth/callback
           </code>
         </div>
       )}

@@ -20,6 +20,12 @@ const basePath = process.env.BASE_PATH ?? '/';
 
 export default defineConfig({
   base: basePath,
+  // Expose REPLIT_DEV_DOMAIN to the client bundle so invite links and OAuth
+  // redirect URIs use the correct public domain instead of window.location.origin
+  // (which resolves to localhost inside the Replit proxy container).
+  define: {
+    'import.meta.env.REPLIT_DEV_DOMAIN': JSON.stringify(process.env.REPLIT_DEV_DOMAIN ?? ''),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -6,6 +6,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Share2, Loader2 } from 'lucide-react';
 import type { RoomDetail } from '@/lib/rooms-types';
+import { getPublicUrl } from '@/lib/api';
 
 export default function InviteMembers() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -46,7 +47,7 @@ export default function InviteMembers() {
     );
   }
 
-  const inviteLink = `${window.location.origin}${import.meta.env.BASE_URL}join-room/${room.inviteToken}`;
+  const inviteLink = getPublicUrl(`/join-room/${room.inviteToken}`);
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(inviteLink);
