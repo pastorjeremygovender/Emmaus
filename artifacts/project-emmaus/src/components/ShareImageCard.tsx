@@ -8,7 +8,7 @@
  *   <ShareImageCard shareImageUrl={step.shareImageUrl} />
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, Share2 } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
@@ -18,10 +18,16 @@ interface ShareImageCardProps {
 }
 
 export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
+  const [imgError, setImgError] = useState(false);
+
   if (!shareImageUrl) return null;
 
   // The API server serves objects at /storage/objects/* — same pattern as rooms media.
   const imageUrl = getApiUrl('/api/storage' + shareImageUrl);
+
+  // If the image fails to load (storage unavailable, wrong env, etc.) hide the card
+  // entirely rather than showing a broken-image placeholder.
+  if (imgError) return null;
 
   async function handleSave() {
     try {
@@ -75,7 +81,8 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
           src={imageUrl}
           alt=""
           className="w-full h-full object-cover block"
-          loading="lazy"
+          loading="eager"
+          onError={() => setImgError(true)}
         />
       </div>
 
