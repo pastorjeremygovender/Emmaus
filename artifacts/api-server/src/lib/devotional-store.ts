@@ -395,14 +395,13 @@ export async function markDayComplete(
   // P2-2: atomic upsert — avoids the read-then-write race where two concurrent
   // device completions of different days overwrite each other.  The SQL CASE
   // expression appends the day only when it is not already present, keeping the
-  // operation idempotent.  currentDay is seeded at 1 and never incremented;
-  // the available day is derived client-side from startedAt.
-  const [row] = await db
+  // operation idempotent.
+  await db
     .insert(devotionalProgressTable)
     .values({
       userId,
       seriesId,
-      currentDay: 1,
+      currentDay: day,
       completedDays: [day],
     })
     .onConflictDoUpdate({
@@ -418,7 +417,54 @@ export async function markDayComplete(
         `,
         updatedAt: new Date(),
       },
-    })
-    .returning();
-  return row;
+    });
+
+  // After completing a day, advance current_day to the next uncompleted
+  // published entry so that server-side reads (analytics, pastoral signals,
+  // admin views) always reflect the member's true position.
+  // The subquery picks the lowest published day_number not already in
+  // completed_days; COALESCE keeps the existing value when all days are done.
+  const result = await pool.query<{
+    id: string;
+    user_id: string;
+    series_id: string;
+    current_day: number;
+    completed_days: number[];
+    status: string;
+    started_at: Date;
+    updated_at: Date;
+    last_opened_at: Date | null;
+  }>(
+    `UPDATE devotional_progress dp
+     SET current_day = COALESCE(
+       (
+         SELECT de.day_number
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+           AND NOT (dp.completed_days @> to_jsonb(de.day_number::int))
+         ORDER BY de.day_number ASC
+         LIMIT 1
+       ),
+       dp.current_day
+     ),
+     updated_at = NOW()
+     WHERE dp.user_id = $2 AND dp.series_id = $1
+     RETURNING *`,
+    [seriesId, userId],
+  );
+
+  const r = result.rows[0];
+  // Map raw DB columns back to the DevotionalProgress shape.
+  return {
+    id: String(r.id),
+    userId: String(r.user_id),
+    seriesId: String(r.series_id),
+    currentDay: Number(r.current_day),
+    completedDays: Array.isArray(r.completed_days) ? r.completed_days : [],
+    status: String(r.status ?? "active"),
+    startedAt: r.started_at ? new Date(r.started_at) : new Date(),
+    updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
+    lastOpenedAt: r.last_opened_at ? new Date(r.last_opened_at) : null,
+  } as DevotionalProgress;
 }
