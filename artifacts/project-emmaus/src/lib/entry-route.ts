@@ -79,33 +79,52 @@ export function resolveDailyOpenRoute(
   // If this is NOT the first open today, defer to the standard entry route.
   // NOTE: we only write the key on success, so a failed navigation never
   // consumes the daily slot.
-  if (lastOpened === today) return null;
+  if (lastOpened === today) {
+    console.debug('[DailyOpen] already opened today →', today);
+    return null;
+  }
 
   // Find the Daily Rhythm journey by type — the same way Walk.tsx does it.
   // Never use a hardcoded slug: progress is keyed by the journey's DB id.
   const drJourney = journeys.find(
     j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
   );
-  if (!drJourney) return null;
+  if (!drJourney) {
+    console.debug('[DailyOpen] no DR journey found in', journeys.map(j => `${j.id}:${j.journeyType}`));
+    return null;
+  }
+  console.debug('[DailyOpen] DR journey found:', drJourney.id);
 
   // First open today — try to resume the member's Daily Rhythm step.
   const drProgress = progress[drJourney.id];
-  if (!drProgress) return null; // journey not yet started
+  if (!drProgress) {
+    console.debug('[DailyOpen] no progress for DR journey — keys:', Object.keys(progress));
+    return null; // journey not yet started
+  }
 
   const currentDay = drProgress.currentDay ?? 1;
+  console.debug('[DailyOpen] currentDay:', currentDay);
   if (currentDay < 1) return null;
 
   // Only navigate if the target day is a real published step (not beyond the end).
   const steps = getStepsForJourney(drJourney.id);
-  if (steps.length === 0) return null;
+  if (steps.length === 0) {
+    console.debug('[DailyOpen] no published steps for DR journey');
+    return null;
+  }
 
   const dayNumbers = steps.map(s => s.day);
   const maxDay     = Math.max(...dayNumbers);
-  if (currentDay > maxDay) return null; // journey fully complete — go to walk
+  console.debug('[DailyOpen] steps:', dayNumbers.length, 'maxDay:', maxDay);
+  if (currentDay > maxDay) {
+    console.debug('[DailyOpen] currentDay > maxDay — journey complete');
+    return null; // journey fully complete — go to walk
+  }
 
   // Mark today ONLY on a successful navigation so a failed attempt
   // (missing data, journey complete, etc.) never blocks the next open.
   localStorage.setItem(LAST_OPENED_KEY, today);
+  console.debug('[DailyOpen] navigating to /daily-rhythm/day/' + currentDay);
 
   return `/daily-rhythm/day/${currentDay}`;
 }

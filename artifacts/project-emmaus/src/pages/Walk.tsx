@@ -27,6 +27,7 @@ import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
+import { resolveDailyOpenRoute } from '@/lib/entry-route';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
@@ -513,6 +514,27 @@ export default function Walk() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [user?.id, reloadThisWeekCompanion, reloadScCompanions, reloadDevotionals]);
+
+  // ── First-daily-open redirect ─────────────────────────────────────────────
+  // On the first app open each day, navigate the member directly to their
+  // current Daily Rhythm step instead of landing on Today's Steps.
+  //
+  // Walk.tsx is the correct place for this check: by the time it mounts,
+  // JourneyContext has finished loading journeys + progress for the
+  // authenticated user, so resolveDailyOpenRoute has real data to work with.
+  // Welcome.tsx only calls this during the full splash path (first cold start
+  // where the splash screen is shown). When the user arrives via the login
+  // flow (Auth.tsx → /walk), the check lives here so it fires reliably.
+  const dailyOpenCheckedRef = useRef(false);
+  useEffect(() => {
+    if (loading) return;                          // wait for real data
+    if (!user || user.role === 'admin' || user.role === 'superAdmin') return;
+    if (dailyOpenCheckedRef.current) return;      // only run once per mount
+    dailyOpenCheckedRef.current = true;
+
+    const route = resolveDailyOpenRoute(journeys, progress, getStepsForJourney);
+    if (route) setLocation(route);
+  }, [loading, user, journeys, progress, getStepsForJourney, setLocation]);
 
   if (!user) return null;
 

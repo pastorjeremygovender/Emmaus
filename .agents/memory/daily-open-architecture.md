@@ -11,35 +11,31 @@ On the first app open each day, members should land on their current Daily Rhyth
 - Returns null if: no DR journey found, no DR progress, steps not loaded, or already completed
 - Writes the key ONLY on successful navigation (not on failure)
 
-## Architecture
+## Architecture (final)
 
-`resolveDailyOpenRoute` must be called in **both** Welcome.tsx paths:
+Two call sites for `resolveDailyOpenRoute`:
 
-### Splash path (lines 76–106): `alreadyShown = false`
-- Fires on fresh browser sessions (new tab, reload, first install)
+### 1. Welcome.tsx splash path (`alreadyShown = false`)
+- Fires on fresh browser sessions (new tab, full reload, first install)
 - Waits for `timerDone + !authLoading + !loadingProfile + !journeyLoading`
-- Already calls `resolveDailyOpenRoute` correctly
+- Handles: user already logged in, opens app fresh → lands on DR step directly
 
-### Fast path (lines 44–66): `alreadyShown = true`
-- Fires when user returns to `/` within the same session
-- Also fires after Auth.tsx redirects back to `/` post-login
-- **Must also call `resolveDailyOpenRoute`** (with `journeyLoading` guard + `navigatedFastRef`)
+### 2. Walk.tsx `dailyOpenCheckedRef` effect
+- Fires once per Walk.tsx mount, after `loading = false` (journeys + progress ready)
+- Handles: user logs in via `/auth` → Auth.tsx sends to `/walk` → Walk mounts with real data → daily-open redirect fires
+- `dailyOpenCheckedRef` prevents re-firing on subsequent effect runs
+- `emmaus_last_opened_v2` guard in `resolveDailyOpenRoute` prevents firing on second daily visit
 
-## Bug Class: Auth Login Bypasses Daily Open
+## Why Walk.tsx (not Welcome.tsx fast path)
 
-**Symptom:** Clearing browser data + logging in always lands on /walk, never on the DR step.
+Putting the check in Welcome.tsx fast path creates a race condition:
+- When Auth.tsx redirects to `/`, JourneyContext hasn't set `journeyLoading = true` yet for the newly-authenticated user
+- Fast path fires with stale `progress = {}` from the unauthenticated load
+- `resolveDailyOpenRoute` returns null (no DR progress) → navigates to /walk
+- Any guard (navigatedFastRef) then locks out the subsequent correct firing
 
-**Root cause:**
-1. Unauthenticated first visit to `/` → splash path fires → sets `SPLASH_KEY = 'true'` → sends to `/auth`
-2. Auth.tsx (old code) sent members to `/walk` directly after login
-3. Welcome.tsx never runs again; fast path (which called only `resolveEntryRoute → /walk`) was never reached with journey data
+Walk.tsx mounts AFTER auth is established and journeys+progress are fully loaded → no race condition possible.
 
-**Fix applied (2026-08-16):**
-- Auth.tsx: all member post-login redirects changed from `/walk` to `/`
-- Welcome.tsx fast path: added `journeyLoading` to guard, `navigatedFastRef` to prevent double-navigation, and `resolveDailyOpenRoute` call
-
-**Why:** Auth.tsx → `/` means Welcome fires. If `SPLASH_KEY` is set, fast path runs — now with proper journey loading guard and daily-open check.
-
-## The `navigatedFastRef` Guard
-
-Prevents re-navigation when effect re-fires due to dependency changes (e.g., `journeys` or `progress` updating). Without it, after the first navigation writes `emmaus_last_opened_v2`, a second effect fire would call `resolveDailyOpenRoute` → null → /walk, overriding the DR navigation.
+## Auth.tsx
+- Members are sent to `/walk` (not `/`) after login — Auth.tsx is correct as-is
+- All daily-open routing is handled by Walk.tsx or Welcome.tsx splash path
