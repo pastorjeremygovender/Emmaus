@@ -495,6 +495,11 @@ export default function Walk() {
   // Critical for Sunday mornings: admin marks a new companion as This Week's
   // Sermon while the member has Today's Steps open; when they switch back to the
   // app the card updates immediately without requiring a manual reload.
+  //
+  // Devotionals are also refreshed here so that after a member completes an entry
+  // in the reader and taps Back, the Walk card immediately shows the updated
+  // position (next uncompleted entry) rather than the stale completedDays snapshot
+  // from the previous mount.
   useEffect(() => {
     if (!user?.id) return;
     const userId = user.id;
@@ -502,11 +507,12 @@ export default function Walk() {
       if (document.visibilityState === 'visible') {
         reloadThisWeekCompanion(userId);
         reloadScCompanions(userId);
+        reloadDevotionals(userId).catch(() => {/* non-fatal */});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions]);
+  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions, reloadDevotionals]);
 
   if (!user) return null;
 
