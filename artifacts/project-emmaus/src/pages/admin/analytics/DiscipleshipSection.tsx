@@ -35,6 +35,7 @@ export function DiscipleshipSection({ data, loading, error }: Props) {
           { label: "Walk Completions",   value: data.totalWalkCompletions },
           { label: "Avg Completion",     value: `${data.overallAvgCompletionPct}%` },
           { label: "Devotional Users",   value: data.devotionalEngagements },
+          { label: "Devotional Avg Progress", value: `${data.devotionalAvgCompletionPct}%` },
           { label: "Daily Rhythm",       value: data.dailyRhythmEnrollments },
           { label: "Rhythm Completed",   value: data.dailyRhythmCompletions },
           { label: "Companion Users",    value: data.companionEngagements },

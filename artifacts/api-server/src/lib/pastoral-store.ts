@@ -2310,10 +2310,11 @@ async function gatherPersonContext(
       ),
       pool.query<{
         id: string; title: string; started_at: string | null;
-        updated_at: string; status: string;
+        updated_at: string; status: string; current_day: number;
       }>(
         `SELECT dp.series_id::text AS id, ds.title,
-                dp.started_at::text, dp.updated_at::text, dp.status
+                dp.started_at::text, dp.updated_at::text, dp.status,
+                dp.current_day
          FROM devotional_progress dp JOIN devotional_series ds ON ds.id = dp.series_id
          WHERE dp.user_id = $1`,
         [emmausUserId],
@@ -2333,6 +2334,7 @@ async function gatherPersonContext(
     devotionals = devRows.rows.map((r) => ({
       id: r.id, title: r.title, startedAt: r.started_at,
       updatedAt: r.updated_at, status: r.status,
+      currentDay: Number(r.current_day ?? 1),
     }));
     rooms = roomRows.rows.map((r) => ({
       id: r.id, name: r.name, joinedAt: r.joined_at,

@@ -15,7 +15,7 @@
     "backfill:knowledge-index": "node --experimental-strip-types src/scripts/backfill-knowledge-index.ts",
     "export:seed": "node --experimental-strip-types src/scripts/export-seed.ts",
     "checksum:content": "node --experimental-strip-types src/scripts/content-checksum.ts",
-    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts",
+    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts src/lib/__tests__/devotional-completion-pct.test.ts",
     "test:integration": "node --test --experimental-strip-types src/routes/__tests__/audio-route.test.ts src/routes/__tests__/next-steps.test.ts src/routes/__tests__/devotional-multi-series.test.ts src/routes/__tests__/devotional-position-tracking.test.ts src/routes/__tests__/hide-progress-regression.test.ts src/emmaus/__tests__/authz.test.ts src/emmaus/__tests__/streaming.test.ts src/routes/__tests__/implicit-absence-flag.test.ts",
     "test:integrity": "node --test --import=tsx/esm src/lib/__tests__/startup-integrity.test.ts && node --test --import=tsx/esm src/lib/__tests__/sermon-retrieval.test.ts && node --test --import=tsx/esm src/lib/__tests__/sermon-knowledge-index.test.ts",
     "test": "pnpm run test:unit && pnpm run test:integration"

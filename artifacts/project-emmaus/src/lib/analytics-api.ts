@@ -87,6 +87,8 @@ export interface DiscipleshipAnalytics {
   dailyRhythmEnrollments: number;
   dailyRhythmCompletions: number;
   devotionalEngagements: number;
+  /** Average % through a devotional series across all enrolled members (server-authoritative). */
+  devotionalAvgCompletionPct: number;
   companionEngagements: number;
   weeklyWalkStarts: { week: string; count: number }[];
   weeklyWalkCompletions: { week: string; count: number }[];

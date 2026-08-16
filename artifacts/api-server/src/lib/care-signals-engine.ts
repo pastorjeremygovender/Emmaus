@@ -45,6 +45,8 @@ export interface DevotionalRecord {
   startedAt: string | null;
   updatedAt: string;
   status: string;
+  /** Server-authoritative next day to complete (1-based). currentDay - 1 = days completed. */
+  currentDay: number;
 }
 
 export interface RoomRecord {
@@ -145,6 +147,31 @@ function isActive(status: string): boolean {
 export const ALL_RULES: SignalRule[] = [
 
   // ── CELEBRATION ─────────────────────────────────────────────────────────────
+
+  {
+    id: "completed_devotional",
+    category: "celebration",
+    enabled: true,
+    isStateBased: false,
+    title: "Completed a Daily Devotional",
+    description: "Person completed a Daily Devotional series.",
+    detect(ctx) {
+      if (!ctx.emmausUserId) return null;
+      const done = ctx.devotionals.filter((d) => d.status === "completed");
+      if (done.length === 0) return null;
+      const latest = [...done].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      )[0];
+      return {
+        signalType: "completed_devotional",
+        category: "celebration",
+        title: "Completed a Daily Devotional",
+        explanation: `Completed "${latest.title}"${done.length > 1 ? ` (${done.length} devotional series completed in total)` : " — their first devotional series"}.`,
+        evidence: { devotionalTitle: latest.title, totalCompleted: done.length },
+        isStateBased: false,
+      };
+    },
+  },
 
   {
     id: "completed_first_walk",
@@ -292,7 +319,7 @@ export const ALL_RULES: SignalRule[] = [
         category: "growth",
         title: "Started Daily Rhythm",
         explanation: `Started "${dev.title}" ${d === 0 ? "today" : `${d} day${d === 1 ? "" : "s"} ago`}.`,
-        evidence: { devotionalTitle: dev.title, startedAt: dev.startedAt },
+        evidence: { devotionalTitle: dev.title, startedAt: dev.startedAt, currentDay: dev.currentDay },
         isStateBased: false,
       };
     },
@@ -444,7 +471,7 @@ export const ALL_RULES: SignalRule[] = [
         category: "attention",
         title: "Daily Rhythm stopped",
         explanation: `"${dev.title}" has had no progress for ${d} day${d === 1 ? "" : "s"}.`,
-        evidence: { devotionalTitle: dev.title, lastActivityDate: dev.updatedAt, daysInactive: d },
+        evidence: { devotionalTitle: dev.title, lastActivityDate: dev.updatedAt, daysInactive: d, currentDay: dev.currentDay },
         isStateBased: true,
       };
     },

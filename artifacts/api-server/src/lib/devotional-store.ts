@@ -453,6 +453,16 @@ export async function markDayComplete(
            AND de.status = 'Published'
        )
      ),
+     status = CASE
+       WHEN NOT EXISTS (
+         SELECT 1
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+           AND NOT (dp.completed_days @> to_jsonb(de.day_number::int))
+       ) THEN 'completed'
+       ELSE dp.status
+     END,
      updated_at = NOW()
      WHERE dp.user_id = $2 AND dp.series_id = $1
      RETURNING *`,

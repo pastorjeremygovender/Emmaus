@@ -56,6 +56,8 @@ export interface DiscipleshipAnalytics {
   dailyRhythmEnrollments: number;
   dailyRhythmCompletions: number;
   devotionalEngagements: number;
+  /** Average % through a devotional series across all enrolled members (completed series = 100%). */
+  devotionalAvgCompletionPct: number;
   companionEngagements: number;
   weeklyWalkStarts: { week: string; count: number }[];
   weeklyWalkCompletions: { week: string; count: number }[];
@@ -405,8 +407,39 @@ export async function getDiscipleshipAnalytics(): Promise<DiscipleshipAnalytics>
       GROUP BY 1
       ORDER BY 1
     `),
-    // Devotional engagement
-    pool.query(`SELECT COUNT(*) AS cnt FROM devotional_progress WHERE status != 'not_started'`),
+    // Devotional engagement + avg completion %.
+    // current_day is server-authoritative but its numeric value is NOT a count
+    // of completed entries — day numbers may be non-sequential (e.g. [1, 100]).
+    // Safe approach: count published entries whose day_number < current_day
+    // (i.e. entries the member has passed) and divide by total published entries.
+    // Completed series are always 100% regardless of current_day.
+    pool.query(`
+      SELECT
+        COUNT(*) AS cnt,
+        ROUND(AVG(
+          CASE
+            WHEN dp.status = 'completed' THEN 100
+            WHEN ec.total > 0 THEN
+              LEAST(100, GREATEST(0,
+                (
+                  SELECT COUNT(*)
+                  FROM devotional_entries de2
+                  WHERE de2.series_id = dp.series_id
+                    AND de2.status = 'Published'
+                    AND de2.day_number < dp.current_day
+                )::float / ec.total * 100
+              ))
+            ELSE 0
+          END
+        )) AS avg_completion_pct
+      FROM devotional_progress dp
+      LEFT JOIN (
+        SELECT series_id, COUNT(*) FILTER (WHERE status = 'Published') AS total
+        FROM devotional_entries
+        GROUP BY series_id
+      ) ec ON ec.series_id = dp.series_id
+      WHERE dp.status != 'not_started'
+    `),
     // Daily rhythm
     pool.query(`
       SELECT
@@ -470,6 +503,7 @@ export async function getDiscipleshipAnalytics(): Promise<DiscipleshipAnalytics>
     dailyRhythmEnrollments: Number(rhythmRes.rows[0]?.enrollments ?? 0),
     dailyRhythmCompletions: Number(rhythmRes.rows[0]?.completions ?? 0),
     devotionalEngagements: Number(devotionalRes.rows[0]?.cnt ?? 0),
+    devotionalAvgCompletionPct: Number(devotionalRes.rows[0]?.avg_completion_pct ?? 0),
     companionEngagements: Number(companionRes.rows[0]?.cnt ?? 0),
     weeklyWalkStarts,
     weeklyWalkCompletions,
