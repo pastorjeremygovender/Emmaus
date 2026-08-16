@@ -784,7 +784,7 @@ export default function Walk() {
             const sortedPub      = [...published].sort((a, b) => a.dayNumber - b.dayNumber);
             const maxDay         = sortedPub.length > 0 ? Math.max(...sortedPub.map(e => e.dayNumber)) : 1;
             const completedDays  = ad.progress.completedDays ?? [];
-            const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode);
+            const nextDay        = calcAvailableDaySelfPaced(completedDays, maxDay, devMode, sortedPub.map(e => e.dayNumber));
             const nextEntry      = sortedPub.find(e => e.dayNumber === nextDay);
             const completedCount = completedDays.length;
             const allComplete    = completedCount >= published.length && published.length > 0;

@@ -102,6 +102,10 @@ export default function ChapterReader() {
   const dropdownWrapperRef = useRef<HTMLDivElement>(null);
   const prevTranslationRef = useRef<string>(translationId);
 
+  // ── Swipe navigation ──────────────────────────────────────────────────────
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+
   const chapterNotes = getChapterNotes(resolvedBookId, chapterNum);
 
   // Save scroll position when unmounting (covers navigating to Ask Emmaus via FAB)
@@ -356,8 +360,46 @@ export default function ChapterReader() {
     });
   }
 
+  // Any open overlay should suppress swipe so the gesture doesn't fire through panels
+  const anyOverlayOpen =
+    !!verseSheet || !!studyPanelVerse || !!compareSheet ||
+    notesOpen || pickerOpen || preachedHereOpen ||
+    translationDropdownOpen || !!preachedHerePlayer;
+
+  function handleSwipeTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    swipeTouchStartX.current = t.clientX;
+    swipeTouchStartY.current = t.clientY;
+  }
+
+  function handleSwipeTouchEnd(e: React.TouchEvent) {
+    if (anyOverlayOpen) return;
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeTouchStartX.current;
+    const dy = t.clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+
+    const MIN_SWIPE = 60; // px — minimum horizontal travel
+    // Only treat as a horizontal swipe if the lateral movement clearly dominates vertical
+    if (Math.abs(dx) < MIN_SWIPE || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+    if (dx < 0 && nextPath) {
+      // Swiped left → next chapter
+      navigateChapter(nextPath);
+    } else if (dx > 0 && prevPath) {
+      // Swiped right → previous chapter
+      navigateChapter(prevPath);
+    }
+  }
+
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div
+      className="min-h-[100dvh] bg-background"
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
+    >
 
       {/* ── Bible Book + Chapter sheet ───────────────────────────────────────── */}
       <BibleBookChapterSheet

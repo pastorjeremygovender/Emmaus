@@ -39,16 +39,12 @@
  *   – Ask Emmaus              : in-memory (conversations are ephemeral by design).
  */
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-/** The journey ID for the Daily Rhythm ("10 Minutes with Jesus") journey. */
-export const DAILY_RHYTHM_JOURNEY_ID = '15-minutes-with-jesus';
-
 /** localStorage key that stores the ISO date (YYYY-MM-DD) of the last app open. */
 const LAST_OPENED_KEY = 'emmaus_last_opened_date';
 
 // ─── Types (minimal duck-typed to avoid circular imports) ─────────────────────
 
+type JourneyLike  = { id: string; journeyType: string };
 type ProgressLike = { currentDay?: number; completedDays?: number[] };
 type StepLike     = { day: number };
 
@@ -61,10 +57,12 @@ type StepLike     = { day: number };
  * Also records today's date in localStorage so subsequent calls (same day)
  * return null immediately.
  *
- * @param progress        - Journey progress map (keyed by journey ID)
- * @param getStepsForJourney - Returns steps for a given journey ID
+ * @param journeys           - Published journeys list from JourneyContext
+ * @param progress           - Journey progress map (keyed by journey DB id)
+ * @param getStepsForJourney - Returns published steps for a given journey ID
  */
 export function resolveDailyOpenRoute(
+  journeys: JourneyLike[],
   progress: Record<string, ProgressLike>,
   getStepsForJourney: (id: string) => StepLike[],
 ): string | null {
@@ -79,15 +77,22 @@ export function resolveDailyOpenRoute(
   // If this is NOT the first open today, defer to the standard entry route.
   if (lastOpened === today) return null;
 
+  // Find the Daily Rhythm journey by type — the same way Walk.tsx does it.
+  // Never use a hardcoded slug: progress is keyed by the journey's DB id.
+  const drJourney = journeys.find(
+    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
+  );
+  if (!drJourney) return null;
+
   // First open today — try to resume the member's Daily Rhythm step.
-  const drProgress = progress[DAILY_RHYTHM_JOURNEY_ID];
+  const drProgress = progress[drJourney.id];
   if (!drProgress) return null; // journey not yet started
 
   const currentDay = drProgress.currentDay ?? 1;
   if (currentDay < 1) return null;
 
   // Only navigate if the target day is a real published step (not beyond the end).
-  const steps = getStepsForJourney(DAILY_RHYTHM_JOURNEY_ID);
+  const steps = getStepsForJourney(drJourney.id);
   if (steps.length === 0) return null;
 
   const dayNumbers = steps.map(s => s.day);

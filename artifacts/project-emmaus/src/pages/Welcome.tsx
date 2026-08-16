@@ -93,7 +93,7 @@ export default function Welcome() {
       if (!isOnboarded()) markOnboarded();
       // First open of the day → land on the member's current Daily Rhythm step.
       // Subsequent same-day opens → Today's Walk (/walk).
-      const dailyRoute = resolveDailyOpenRoute(progress, getStepsForJourney);
+      const dailyRoute = resolveDailyOpenRoute(journeys, progress, getStepsForJourney);
       const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
       console.debug('[Emmaus routing] Route selected (splash):', dest);
       return dest;
