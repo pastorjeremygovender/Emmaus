@@ -18,7 +18,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { Loader2, ChevronLeft, Users } from 'lucide-react';
+import { Loader2, ArrowLeft, Users, List } from 'lucide-react';
 import { HearEmmausButton } from '@/components/emmaus/HearEmmausButton';
 import { BottomNav } from '@/components/BottomNav';
 import { DevotionalReading } from '@/components/DevotionalReading';
@@ -246,43 +246,58 @@ export default function DevotionalDay() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      {/* Nav bar */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-2 max-w-[640px] mx-auto">
-        <button
-          onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft size={16} /> {source === 'devotionalPrevious' ? 'Previous Steps' : source === 'nextStepsDevotionals' || source === 'nextSteps' ? 'Discover' : "Today's Steps"}
-        </button>
-        <div className="flex items-center gap-2">
-          <FavouriteButton
-            contentType="devotional"
-            contentId={seriesId!}
-            contentTitle={seriesData.title}
-            contentRoute={`/devotional/${seriesId}/day/1`}
-            className="shrink-0"
-          />
-          {totalEntries > 1 && (
-            <button
-              onClick={() => setLocation(`/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              All Devotionals
-            </button>
-          )}
-          {user && (
-            <button
-              onClick={() => setShowStudyTogether(true)}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Study Together"
-              title="Study Together"
-            >
-              <Users size={16} />
-              <span className="hidden sm:inline">Study Together</span>
-            </button>
-          )}
+      {/* Sticky header — matches Walk step reader pattern */}
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
+        <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
+
+          {/* Back — arrow only, no text label */}
+          <button
+            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+            className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Back"
+          >
+            <ArrowLeft size={22} />
+          </button>
+
+          {/* Centered series title + day label */}
+          <div className="flex-1 min-w-0 text-center px-3">
+            <div className="font-medium text-sm text-foreground truncate leading-tight">{seriesData.title}</div>
+            <div className="text-[12px] text-muted-foreground">{getDevotionalLabel(entry)}</div>
+          </div>
+
+          {/* Right actions — icon-only */}
+          <div className="flex items-center justify-end">
+            <FavouriteButton
+              contentType="devotional"
+              contentId={seriesId!}
+              contentTitle={seriesData.title}
+              contentRoute={`/devotional/${seriesId}/day/1`}
+              className="shrink-0"
+            />
+            {totalEntries > 1 && (
+              <button
+                onClick={() => setLocation(`/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="All Devotionals"
+                title="All Devotionals"
+              >
+                <List size={18} />
+              </button>
+            )}
+            {user && (
+              <button
+                onClick={() => setShowStudyTogether(true)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Study Together"
+                title="Study Together"
+              >
+                <Users size={18} />
+              </button>
+            )}
+          </div>
+
         </div>
-      </div>
+      </header>
 
       {/* Reading */}
       <DevotionalReading
