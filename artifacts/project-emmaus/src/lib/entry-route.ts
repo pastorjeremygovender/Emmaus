@@ -39,8 +39,14 @@
  *   – Ask Emmaus              : in-memory (conversations are ephemeral by design).
  */
 
-/** localStorage key that stores the ISO date (YYYY-MM-DD) of the last app open. */
-const LAST_OPENED_KEY = 'emmaus_last_opened_date';
+/**
+ * localStorage key that stores the ISO date (YYYY-MM-DD) of the last
+ * successful Daily Rhythm auto-open.
+ *
+ * Key is versioned (_v2) so a stale value from an earlier buggy build
+ * (which wrote the date even when navigation failed) is never consulted.
+ */
+const LAST_OPENED_KEY = 'emmaus_last_opened_v2';
 
 // ─── Types (minimal duck-typed to avoid circular imports) ─────────────────────
 
@@ -70,11 +76,9 @@ export function resolveDailyOpenRoute(
   const today = new Date().toLocaleDateString('en-CA');
   const lastOpened = localStorage.getItem(LAST_OPENED_KEY);
 
-  // Record this open regardless of whether we navigate to Daily Rhythm.
-  // This ensures subsequent opens today go straight to /walk.
-  localStorage.setItem(LAST_OPENED_KEY, today);
-
   // If this is NOT the first open today, defer to the standard entry route.
+  // NOTE: we only write the key on success, so a failed navigation never
+  // consumes the daily slot.
   if (lastOpened === today) return null;
 
   // Find the Daily Rhythm journey by type — the same way Walk.tsx does it.
@@ -98,6 +102,10 @@ export function resolveDailyOpenRoute(
   const dayNumbers = steps.map(s => s.day);
   const maxDay     = Math.max(...dayNumbers);
   if (currentDay > maxDay) return null; // journey fully complete — go to walk
+
+  // Mark today ONLY on a successful navigation so a failed attempt
+  // (missing data, journey complete, etc.) never blocks the next open.
+  localStorage.setItem(LAST_OPENED_KEY, today);
 
   return `/daily-rhythm/day/${currentDay}`;
 }
