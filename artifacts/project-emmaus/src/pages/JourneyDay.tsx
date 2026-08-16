@@ -9,7 +9,7 @@ import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
-import { DailyRhythmReading, SectionLabel, resolveDisplayName } from '@/components/DailyRhythmReading';
+import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { getStepLabel } from '@/lib/step-label';
 import { EmbeddedScripture } from '@/components/EmbeddedScripture';
 import { ShareButton } from '@/components/ShareButton';
@@ -395,10 +395,10 @@ export default function JourneyDay() {
       ) : (
 
         /* ── Regular journey ─────────────────────────────────────────────── */
-        <main className="px-5 pt-10 max-w-[640px] mx-auto">
+        <main className="px-4 pt-8 max-w-[640px] mx-auto">
 
           {/* Day label + title */}
-          <section className="mb-12">
+          <section className="mb-7">
             <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
               {getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </span>
@@ -409,20 +409,27 @@ export default function JourneyDay() {
 
           {/* Mentor introduction */}
           {step.mentorIntro ? (
-            <section className="mb-12">
-              <p className="text-[18px] text-foreground leading-[1.8]">
-                {step.mentorIntro}
-              </p>
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Greeting</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.mentorIntro}
+                </p>
+              </div>
             </section>
           ) : null}
 
-          {/* Scripture — uses the shared EmbeddedScripture pipeline (same as Daily Rhythm,
-              Devotionals, Sermon Companions) so the reference is parsed, the passage
-              fetched from the Bible API, and loading/error states are surfaced. */}
+          {/* Scripture */}
           {step.scripture && (
-            <section className="mb-12">
-              <SectionLabel>Scripture</SectionLabel>
-              <div className="mt-3">
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Scripture</h2>
+                </div>
                 <EmbeddedScripture
                   scripture={step.scripture}
                   returnPath={`/journey/${journeyId}/day/${day}`}
@@ -432,63 +439,88 @@ export default function JourneyDay() {
           )}
 
           {/* Devotional reflection */}
-          <section className="mb-12">
-            <SectionLabel>Reflection</SectionLabel>
-            <p className="mt-3 text-[18px] leading-[1.8] text-foreground">
-              {step.devotional}
-            </p>
+          <section className="mb-3.5">
+            <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Reflection</h2>
+              </div>
+              <p className="text-[18px] leading-[1.8] text-foreground">
+                {step.devotional}
+              </p>
+            </div>
           </section>
 
           {/* Sermon moment */}
           {hasSermon && (
-            <section className="mb-12">
-              <SectionLabel>Sermon Moment</SectionLabel>
-              <p className="mt-3 text-[17px] text-foreground leading-[1.8]">
-                This moment in Sunday's sermon connects directly with today's reflection.
-              </p>
-              <a
-                href={(step as any).sermonLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
-                aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
-              >
-                <PlayCircle size={18} className="shrink-0" />
-                Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
-              </a>
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Sermon Moment</h2>
+                </div>
+                <p className="text-[17px] text-foreground leading-[1.8]">
+                  This moment in Sunday's sermon connects directly with today's reflection.
+                </p>
+                <a
+                  href={(step as any).sermonLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-2 text-primary font-medium text-[15px] hover:underline"
+                  aria-label={`Watch sermon from ${formatTimestamp((step as any).sermonTimestampSeconds)}`}
+                >
+                  <PlayCircle size={18} className="shrink-0" />
+                  Watch from {formatTimestamp((step as any).sermonTimestampSeconds)}
+                </a>
+              </div>
             </section>
           )}
 
           {/* Reflection question + optional response */}
-          <section className="mb-12">
-            <SectionLabel>Consider</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.reflectionQuestion}
-            </p>
-            <Textarea
-              placeholder="What stood out to you today?"
-              className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
-              value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
-              data-testid="input-reflection"
-              aria-label="Your reflection"
-            />
+          <section className="mb-3.5">
+            <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider</h2>
+              </div>
+              <p className="text-[18px] text-foreground leading-[1.8]">
+                {step.reflectionQuestion}
+              </p>
+              <Textarea
+                placeholder="What stood out to you today?"
+                className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+                value={reflection}
+                onChange={(e) => setReflection(e.target.value)}
+                data-testid="input-reflection"
+                aria-label="Your reflection"
+              />
+            </div>
           </section>
 
           {/* Prayer */}
-          <section className="mb-12">
-            <SectionLabel>Prayer</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.prayerPrompt}
-            </p>
+          <section className="mb-3.5">
+            <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+              </div>
+              <p className="text-[18px] text-foreground leading-[1.8]">
+                {step.prayerPrompt}
+              </p>
+            </div>
           </section>
 
           {/* Action step */}
-          <section className="mb-12">
-            <SectionLabel>Your Next Step</SectionLabel>
-            <p className="mt-3 text-[18px] text-foreground leading-[1.8]">
-              {step.actionStep}
-            </p>
+          <section className="mb-3.5">
+            <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+              </div>
+              <p className="text-[18px] text-foreground leading-[1.8]">
+                {step.actionStep}
+              </p>
+            </div>
           </section>
 
           {/* Share image — "Take this with you" */}

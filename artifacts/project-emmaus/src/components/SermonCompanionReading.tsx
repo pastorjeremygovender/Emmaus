@@ -16,7 +16,6 @@ import { ShareButton } from '@/components/ShareButton';
 import { ShareImageCard } from '@/components/ShareImageCard';
 import type { SharePayload } from '@/lib/share';
 import {
-  SectionLabel,
   personalizeGreeting,
 } from '@/components/DailyRhythmReading';
 
@@ -104,10 +103,10 @@ export function SermonCompanionReading({
   const greetingRest = firstBreak === -1 ? '' : greetingFull.slice(firstBreak + 2).trim();
 
   return (
-    <div className="px-5 pt-10 max-w-[640px] mx-auto">
+    <div className="px-4 pt-8 max-w-[640px] mx-auto">
 
       {/* ── Identity header ─────────────────────────────────────────────────── */}
-      <section className="mb-10 text-center">
+      <section className="mb-7 text-center">
         <p className="text-[14px] font-medium text-muted-foreground tracking-wide mb-1">
           {companionTitle}
         </p>
@@ -123,8 +122,12 @@ export function SermonCompanionReading({
 
       {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {greeting && (
-        <section className="mb-10">
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Greeting</h2>
+            </div>
             <p className="text-[17px] font-medium text-foreground leading-[1.65]">
               {greetingLead}
             </p>
@@ -139,9 +142,12 @@ export function SermonCompanionReading({
 
       {/* ── Today's Reading ─────────────────────────────────────────────────── */}
       {scripture && (
-        <section className="mb-10">
-          <SectionLabel>Today's Reading</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Today's Reading</h2>
+            </div>
             <EmbeddedScripture scripture={scripture} returnPath={returnPath} />
           </div>
         </section>
@@ -149,9 +155,12 @@ export function SermonCompanionReading({
 
       {/* ── Consider This ───────────────────────────────────────────────────── */}
       {considerThis && (
-        <section className="mb-10">
-          <SectionLabel>Consider This</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
+            </div>
             <BodyParagraphs text={considerThis} />
           </div>
         </section>
@@ -159,9 +168,12 @@ export function SermonCompanionReading({
 
       {/* ── Prayer ──────────────────────────────────────────────────────────── */}
       {prayer && (
-        <section className="mb-10">
-          <SectionLabel>Prayer</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+            </div>
             <BodyParagraphs text={prayer} />
           </div>
         </section>
@@ -169,9 +181,12 @@ export function SermonCompanionReading({
 
       {/* ── Your Next Step ───────────────────────────────────────────────────── */}
       {nextStep && (
-        <section className="mb-10">
-          <SectionLabel>Your Next Step</SectionLabel>
-          <div className="mt-3">
+        <section className="mb-3.5">
+          <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+            </div>
             <BodyParagraphs text={nextStep} />
           </div>
         </section>
@@ -179,7 +194,7 @@ export function SermonCompanionReading({
 
       {/* ── Closing ─────────────────────────────────────────────────────────── */}
       {closing && (
-        <section className="mb-8">
+        <section className="mt-2 mb-6">
           <BodyParagraphs
             text={closing}
             className="!text-[16px] !text-muted-foreground"
