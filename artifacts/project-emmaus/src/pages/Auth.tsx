@@ -21,11 +21,12 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect if already authed
+  // Redirect if already authed — members go to "/" so Welcome.tsx can run
+  // resolveDailyOpenRoute and land them on their Daily Rhythm step.
   useEffect(() => {
     if (user) {
       if (user.role === 'admin' || user.role === 'superAdmin') setLocation('/admin');
-      else setLocation('/walk');
+      else setLocation('/');
     }
   }, [user]);
 
@@ -50,10 +51,10 @@ export default function Auth() {
     try {
       if (mode === 'login') {
         const role = await signIn(email, password);
-        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/walk');
+        setLocation(role === 'admin' || role === 'superAdmin' ? '/admin' : '/');
       } else {
         await signUp(email, password, name);
-        setLocation('/walk');
+        setLocation('/');
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -64,7 +65,7 @@ export default function Auth() {
 
   const handleDemo = () => {
     signInDemo(false);
-    setLocation('/walk');
+    setLocation('/');
   };
 
   const handleDemoAdmin = () => {

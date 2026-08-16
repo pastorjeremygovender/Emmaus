@@ -39,11 +39,23 @@ export default function Welcome() {
   const [timerDone, setTimerDone] = useState(false);
   const [fading, setFading]       = useState(false);
   const navigatedRef               = useRef(false);
+  // Guard for the fast path — prevents double-navigation when journey data
+  // arrives in a second effect firing after the initial render.
+  const navigatedFastRef           = useRef(false);
 
   // ── Fast path: splash already shown this session ──────────────────────────
+  // Also handles the post-login case: Auth.tsx sends members back to "/" after
+  // a successful sign-in so that this path — which now waits for journey data —
+  // can call resolveDailyOpenRoute and land the member on their Daily Rhythm
+  // step on the first open of each day.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (authLoading || loadingProfile) return;
+    // Wait for auth, profile, AND journey/progress data so resolveDailyOpenRoute
+    // has the populated journeys and progress it needs.
+    if (authLoading || loadingProfile || journeyLoading) return;
+    if (navigatedFastRef.current) return;
+    navigatedFastRef.current = true;
+
     if (user) {
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
       if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
@@ -57,13 +69,16 @@ export default function Welcome() {
         setLocation('/onboarding');
       } else {
         if (!isOnboarded()) markOnboarded();
-        console.debug('[Emmaus routing] Route selected:', resolveEntryRoute(journeys, progress, getStepsForJourney));
-        setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
+        // First open of the day → land on the member's current Daily Rhythm step.
+        const dailyRoute = resolveDailyOpenRoute(journeys, progress, getStepsForJourney);
+        const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
+        console.debug('[Emmaus routing] Route selected (fast):', dest);
+        setLocation(dest);
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, authLoading, loadingProfile, user, journeys, progress, getStepsForJourney]);
+  }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {

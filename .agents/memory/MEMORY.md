@@ -6,6 +6,7 @@
 - [Create Journey wizard](create-journey-wizard.md) — 3-step modal (method → contentType → details); JourneyBuilderWizard gains initialTitle + initialScreen props; this is the reference pattern for all creation workflows.
 - [Member Home & Next-Step Engine](member-home-next-step-engine.md) — Walk.tsx home, daily-lock.ts, enrollment.ts, next-step-engine.ts; hooks must be before early returns.
 - [App entry point rule](app-entry-point.md) — resolveEntryRoute() always returns /walk (spec-locked). Previous logic routed members to their Daily Rhythm day — that was the root cause of wrong launch destination.
+- [Daily Open Architecture](daily-open-architecture.md) — resolveDailyOpenRoute must run in BOTH Welcome paths; Auth.tsx must redirect members to / not /walk; fast path needs journeyLoading guard + navigatedFastRef.
 - [Completion flow standardisation](completion-flow.md) — JourneyCompletionPanel shared component; source param pattern for return-destination routing; sermon companion routes from sermon_companion table not journeys table.
 - [Sermon Companion Overview flow](sermon-companion-overview.md) — new /sermon-companion/:id/overview page; discovery cards always → overview; Walk complete → overview; subtitle extracted from title "X: Y" pattern; "Days" renamed "Steps" everywhere.
 - [Continue rule & route guards](continue-rule.md) — resolveNextEntry/resolveNextStep helpers in lib/resolve-next-entry.ts; guards now redirect instead of showing dead-end messages; Step uses `day` not `dayNumber`.
