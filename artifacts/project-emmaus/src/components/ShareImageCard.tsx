@@ -100,7 +100,7 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
           className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all"
         >
           <Share2 className="w-4 h-4" />
-          Share
+          Share Image
         </button>
       </div>
     </section>

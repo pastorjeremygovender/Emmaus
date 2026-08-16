@@ -202,14 +202,14 @@ export function SermonCompanionReading({
         </section>
       )}
 
+      {/* ── Share (text) — above the image card so it's clearly about the content ── */}
+      {sharePayload && (
+        <ShareButton payload={sharePayload} />
+      )}
+
       {/* ── Share image ─────────────────────────────────────────────────────── */}
       {shareImageUrl && (
         <ShareImageCard shareImageUrl={shareImageUrl} />
-      )}
-
-      {/* ── Share ───────────────────────────────────────────────────────────── */}
-      {sharePayload && (
-        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}

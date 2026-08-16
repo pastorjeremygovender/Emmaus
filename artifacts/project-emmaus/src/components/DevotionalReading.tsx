@@ -245,15 +245,15 @@ export function DevotionalReading({
         </section>
       )}
 
+      {/* ── Share (text) — above the image card so it's clearly about the content ── */}
+      {sharePayload && !previewMode && (
+        <ShareButton payload={sharePayload} />
+      )}
+
       {/* ── Share image ─────────────────────────────────────────────────────── */}
       {/* Share image shown even in previewMode so admins can verify what they generated. */}
       {shareImageUrl && (
         <ShareImageCard shareImageUrl={shareImageUrl} />
-      )}
-
-      {/* ── Share ───────────────────────────────────────────────────────────── */}
-      {sharePayload && !previewMode && (
-        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}

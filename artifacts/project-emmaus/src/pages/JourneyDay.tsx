@@ -523,12 +523,7 @@ export default function JourneyDay() {
             </div>
           </section>
 
-          {/* Share image — "Take this with you" */}
-          {step.shareImageUrl && (
-            <ShareImageCard shareImageUrl={step.shareImageUrl} />
-          )}
-
-          {/* Share */}
+          {/* Share (text) — above the image card so it's clearly about the content */}
           <ShareButton payload={{
             title: journey?.title ?? 'Emmaus',
             dayTitle: step.title,
@@ -539,6 +534,11 @@ export default function JourneyDay() {
             nextStep: step.actionStep ?? undefined,
             closing: (step as any).closingText ?? undefined,
           }} />
+
+          {/* Share image — "Take this with you" */}
+          {step.shareImageUrl && (
+            <ShareImageCard shareImageUrl={step.shareImageUrl} />
+          )}
 
           {/* Primary action — "Finished" for a fresh read; completion card for replay */}
           <div className="pt-2 pb-8">

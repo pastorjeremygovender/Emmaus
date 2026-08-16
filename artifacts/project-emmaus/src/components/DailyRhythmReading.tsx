@@ -409,17 +409,17 @@ export function DailyRhythmReading({
         </section>
       )}
 
+      {/* ── Share (text) — above the image card so it's clearly about the content ── */}
+      {sharePayload && !previewMode && (
+        <ShareButton payload={sharePayload} />
+      )}
+
       {/* ── Share image ─────────────────────────────────────────────────────── */}
       {/* Note: share image is shown even in previewMode so admins can verify
           the image they just generated. Only the interactive Share button is
           suppressed in preview. */}
       {shareImageUrl && (
         <ShareImageCard shareImageUrl={shareImageUrl} />
-      )}
-
-      {/* ── Share ───────────────────────────────────────────────────────────── */}
-      {sharePayload && !previewMode && (
-        <ShareButton payload={sharePayload} />
       )}
 
       {/* ── Action button slot ──────────────────────────────────────────────── */}
