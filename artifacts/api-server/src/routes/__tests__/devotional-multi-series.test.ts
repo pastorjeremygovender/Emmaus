@@ -75,7 +75,7 @@ function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
 const RUN_TAG = Date.now();
-const ADMIN_USER_ID = `test-admin-mseries-${RUN_TAG}`;
+const ADMIN_USER_ID = "demo-superadmin-1";
 const MEMBER_USER_ID = `test-member-mseries-${RUN_TAG}`;
 
 let seriesAId = "";
