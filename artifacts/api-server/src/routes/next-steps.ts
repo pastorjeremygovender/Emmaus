@@ -214,14 +214,23 @@ function buildDevotionalItem(
   const nextEntry = publishedEntries.find(e => e.dayNumber === currentDay);
   const nextEntryTitle = nextEntry?.title || undefined;
 
+  // Convert the raw dayNumber into a 1-based positional index within the
+  // sorted published entries. dayNumbers may be calendar-based (e.g. 3–16 for
+  // January 3–16), so displaying the raw dayNumber against publishedEntryCount
+  // (14) would produce "Day 16 of 14". The route still uses the raw dayNumber
+  // for correct navigation; only the display label uses the position.
+  const nextEntryIdx = allComplete
+    ? publishedEntryCount
+    : Math.max(publishedEntries.findIndex(e => e.dayNumber === currentDay) + 1, 1);
+
   // Mirror the description formula used by Walk.tsx > DevotionalCard so both
   // screens always show exactly the same progress string.
   const description = allComplete
     ? `${publishedEntryCount} of ${publishedEntryCount} completed`
     : completedCount > 0
       ? nextEntryTitle
-        ? `Day ${currentDay} of ${publishedEntryCount} · ${nextEntryTitle}`
-        : `Day ${currentDay} of ${publishedEntryCount}`
+        ? `Day ${nextEntryIdx} of ${publishedEntryCount} · ${nextEntryTitle}`
+        : `Day ${nextEntryIdx} of ${publishedEntryCount}`
       : publishedEntryCount > 0
         ? `Day 1 of ${publishedEntryCount}`
         : "Day 1";
@@ -235,7 +244,7 @@ function buildDevotionalItem(
     metadata: {
       durationDays: publishedEntryCount || undefined,
       publishedAt: s.publishedAt?.toISOString?.() ?? (s.publishedAt as unknown as string) ?? undefined,
-      currentDay,
+      currentDay: nextEntryIdx, // positional (1-based) for display; route uses raw dayNumber
     },
     route: `/devotional/${s.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel("daily-devotional", state),
