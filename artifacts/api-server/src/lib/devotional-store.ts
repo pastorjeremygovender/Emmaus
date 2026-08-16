@@ -446,7 +446,12 @@ export async function markDayComplete(
          ORDER BY de.day_number ASC
          LIMIT 1
        ),
-       dp.current_day
+       (
+         SELECT MAX(de.day_number)
+         FROM devotional_entries de
+         WHERE de.series_id = $1
+           AND de.status = 'Published'
+       )
      ),
      updated_at = NOW()
      WHERE dp.user_id = $2 AND dp.series_id = $1
