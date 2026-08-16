@@ -21,7 +21,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded, markOnboarded } from '@/lib/onboarding';
-import { resolveEntryRoute } from '@/lib/entry-route';
+import { resolveEntryRoute, resolveDailyOpenRoute } from '@/lib/entry-route';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
@@ -91,7 +91,10 @@ export default function Welcome() {
       if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
       if (!isOnboarded() && !user.preferredName?.trim()) return '/onboarding';
       if (!isOnboarded()) markOnboarded();
-      const dest = resolveEntryRoute(journeys, progress, getStepsForJourney);
+      // First open of the day → land on the member's current Daily Rhythm step.
+      // Subsequent same-day opens → Today's Walk (/walk).
+      const dailyRoute = resolveDailyOpenRoute(progress, getStepsForJourney);
+      const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
       console.debug('[Emmaus routing] Route selected (splash):', dest);
       return dest;
     }
