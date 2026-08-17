@@ -433,7 +433,7 @@ export default function ChapterReader() {
                 className="flex items-center gap-1 px-3.5 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[36px]"
                 aria-label={`Currently reading ${book.name} chapter ${chapterNum}. Tap to change.`}
               >
-                <span className="text-[14px] font-semibold text-foreground">
+                <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
                   {book.name} {chapterNum}
                 </span>
                 <ChevronDown size={12} className="text-muted-foreground" />
