@@ -20,7 +20,13 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw, Ban } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
-import { ShareImageGenerator, compositeAttributionBlob } from '@/components/ShareImageGenerator';
+import { ShareImageGenerator, compositeAttributionBlob, type Attribution } from '@/components/ShareImageGenerator';
+
+const AUTO_ATTRIBUTION_OPTIONS: Array<{ value: Attribution; label: string }> = [
+  { value: 'emmaus',  label: 'Emmaus Ministry' },
+  { value: 'jeremy',  label: 'Jeremy Govender' },
+  { value: 'none',    label: 'None' },
+];
 
 type Mode = 'upload' | 'generate';
 
@@ -61,6 +67,7 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
   const [autoPhase, setAutoPhase] = useState<AutoPhase>({ phase: 'idle' });
   const [autoError, setAutoError] = useState('');
   const [customPhrase, setCustomPhrase] = useState('');
+  const [autoAttribution, setAutoAttribution] = useState<Attribution>('emmaus');
   const autoTriggeredRef = useRef(false); // only fire once per mount
 
   // `overridePhrase` — when set, skips extraction and uses this text directly.
@@ -119,7 +126,7 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
     setAutoPhase({ phase: 'saving', imageBase64, phrase });
     try {
       // Composite attribution footer (same as manual generation)
-      const blob = await compositeAttributionBlob(imageBase64, 'emmaus');
+      const blob = await compositeAttributionBlob(imageBase64, autoAttribution);
 
       // Request presigned upload URL
       const metaRes = await fetch(getApiUrl('/api/storage/uploads/request-url'), {
@@ -254,14 +261,60 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
           </span>
         </div>
 
-        {/* Image / spinner */}
-        <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square flex items-center justify-center">
+        {/* Image / spinner — with live attribution overlay */}
+        <div
+          className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square flex items-center justify-center relative"
+          style={{ containerType: 'inline-size' } as React.CSSProperties}
+        >
           {previewB64 ? (
-            <img
-              src={`data:image/png;base64,${previewB64}`}
-              alt="Auto-generated share image"
-              className="w-full h-full object-cover block"
-            />
+            <>
+              <img
+                src={`data:image/png;base64,${previewB64}`}
+                alt="Auto-generated share image"
+                className="w-full h-full object-cover block"
+              />
+              {/* Attribution overlay — mirrors the canvas compositor */}
+              {autoAttribution !== 'none' && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 flex items-center justify-center"
+                  style={{
+                    background: autoAttribution === 'emmaus'
+                      ? 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 100%)'
+                      : 'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%)',
+                    paddingTop: '8.1cqw',
+                    paddingBottom: autoAttribution === 'emmaus' ? '2.15cqw' : '2.34cqw',
+                  } as React.CSSProperties}
+                >
+                  <img
+                    src="/icon.png"
+                    alt=""
+                    style={{
+                      width: autoAttribution === 'emmaus' ? '3.81cqw' : '2.64cqw',
+                      height: autoAttribution === 'emmaus' ? '3.81cqw' : '2.64cqw',
+                      borderRadius: '0.59cqw',
+                      objectFit: 'cover',
+                      flexShrink: 0,
+                    } as React.CSSProperties}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div style={{ width: '0.098cqw', height: autoAttribution === 'emmaus' ? '3.24cqw' : '1.41cqw', background: 'rgba(255,255,255,0.35)', margin: '0 1.37cqw', flexShrink: 0 } as React.CSSProperties} />
+                  {autoAttribution === 'emmaus' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '1.758cqw', fontWeight: 600, color: 'rgba(255,255,255,0.97)', lineHeight: 1.2 } as React.CSSProperties}>
+                        Shared from Emmaus
+                      </span>
+                      <span style={{ fontSize: '1.27cqw', marginTop: '0.78cqw', color: 'rgba(255,255,255,0.72)', lineHeight: 1.2 } as React.CSSProperties}>
+                        A discipleship ministry of Isipingo Community Church
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '1.66cqw', fontWeight: 500, color: 'rgba(255,255,255,0.95)', lineHeight: 1.2 } as React.CSSProperties}>
+                      Jeremy Govender
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex flex-col items-center gap-3 text-gray-400">
               <Loader2 className="w-6 h-6 animate-spin text-teal-500" />
@@ -269,6 +322,27 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
             </div>
           )}
         </div>
+
+        {/* Attribution selector */}
+        {previewB64 && !isGenerating && (
+          <div className="flex items-center gap-4">
+            <span className="text-[11px] font-medium text-gray-500 shrink-0">Attribution:</span>
+            {AUTO_ATTRIBUTION_OPTIONS.map(opt => (
+              <label key={opt.value} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="auto-share-attribution"
+                  value={opt.value}
+                  checked={autoAttribution === opt.value}
+                  onChange={() => setAutoAttribution(opt.value)}
+                  disabled={isSaving}
+                  className="accent-teal-600"
+                />
+                <span className="text-[12px] text-gray-700">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* Editable phrase — shown once preview is ready */}
         {!isGenerating && (
