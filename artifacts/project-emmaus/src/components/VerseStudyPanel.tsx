@@ -501,7 +501,6 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                   icon={<BookOpen size={17} />}
                   title="Explanation"
                   content={studyNote?.content}
-                  defaultOpen
                 />
 
                 {/* 2. Passage Context */}
