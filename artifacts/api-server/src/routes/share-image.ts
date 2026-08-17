@@ -30,20 +30,43 @@ DISPLAY THIS TEXT EXACTLY in the image — do not change, shorten, paraphrase or
 ${text}
 """
 
-VISUAL STYLE:
-- Warm, modern, emotionally resonant
-- Soft colour palette: gentle golds, warm creams, subtle blues, or earthy tones
-- Clean typography with strong visual hierarchy — the devotional text is the clear focal point
-- Uncluttered composition — the text must breathe and be fully legible
-- Premium, contemporary aesthetic — NOT generic church clip-art or stock imagery
-- Subtle, beautiful background: soft light, gentle nature, or warm abstract art
-- The text should be large, readable, and beautifully set
-- Square format (1:1 aspect ratio) — compose specifically for a square canvas
-- Suitable for sharing on WhatsApp, Instagram, and Facebook
-- Christian in spirit — warm and intimate, not ornate or clichéd
-- Do NOT add any logos, watermarks, app names, church names, or branding of any kind
+VISUAL IDENTITY:
+Emmaus visual language: warm, calm, modern, uncluttered, premium, reflective, and highly readable.
+Colour palette: gentle golds, warm creams, deep muted blues, soft greys, earthy terracottas, or cool stone whites — chosen to suit the specific visual concept below.
+Typography: large, beautiful, unhurried. The text is always the clear focal point with strong contrast.
+Aesthetic: premium contemporary — NOT generic church clip-art, stock sunsets, or clichéd stained glass.
+Do NOT add logos, watermarks, app names, church names, or branding of any kind.
 
-CRITICAL: Preserve the exact wording above verbatim. Typography should be beautiful and unhurried. Leave the bottom 10% of the image clear — do not place text or key elements there, as an attribution footer will be added programmatically.`;
+CHOOSE ONE VISUAL CONCEPT — read the devotional text above and pick whichever of the following fits it most naturally and honestly. Do not default to the same type every time:
+
+A. Natural landscape — a wide field, mountain range, forest, desert plain, or open sky. Must feel specific and painterly, not a generic blur.
+B. Close-up symbolic object — a single candle, an open book, worn hands holding something, a seed, bread, water in a cup. Shot with intimate macro depth.
+C. Architecture — the interior of a stone chapel, a doorway of light, old wooden beams, a quiet courtyard, ancient steps. Atmosphere over grandeur.
+D. Road or pathway — a narrow dirt path through a field, a stone stairway, a corridor of trees. Something that evokes journey or direction.
+E. Water — still lake reflection, a single raindrop on glass, a stream over rocks, ocean at dawn. Serene and meditative.
+F. Hands — two hands clasped in prayer, a hand holding a worn Bible, hands open and receiving, aged hands and young hands together. Human and intimate.
+G. Silhouette — a single figure standing before vast sky or light, arms raised or head bowed. Minimalist and reverent.
+H. Abstract light and texture — soft rays through a window, light through leaves onto stone, bokeh of warm gold on linen. Purely atmospheric.
+I. Everyday human moment — someone reading quietly, a shared meal, a lone person on a bench, walking in the rain. Grounded and real.
+J. Minimal graphic composition — a single geometric element (circle, line, cross) with negative space and a rich colour field. Graphic and modern.
+K. Scripture-era imagery — an oil lamp, a clay vessel, rolled parchment, ancient stone, a vineyard, wheat sheaves. Evocative, not theatrical.
+
+After choosing the concept, commit to it fully and specifically. Describe the scene in detail so it feels original, not generic.
+
+FORBIDDEN DEFAULTS — do not produce:
+- A blurred golden hill or rolling pastoral landscape with warm-beige sky
+- A generic sunset or sunrise as the sole background element
+- A soft bokeh blur with no discernible subject
+- Any repeated warm-beige gradient background
+- Overlapping clichéd religious symbols (rays + cross + dove)
+
+COMPOSITION:
+- Square format (1:1 aspect ratio)
+- Text breathes — surround it with visual calm, never clutter
+- Leave the bottom 10% of the canvas clear — an attribution footer will be added programmatically
+- Suitable for WhatsApp, Instagram, and Facebook sharing
+
+CRITICAL: Preserve the exact devotional wording verbatim. If regenerating text you have seen before, intentionally choose a substantially different visual concept from any previous generation.`;
 }
 
 function buildEditPrompt(text: string, instruction: string): string {
