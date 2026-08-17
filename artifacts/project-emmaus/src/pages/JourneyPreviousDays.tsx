@@ -35,16 +35,18 @@ export default function JourneyPreviousDays() {
   const currentDay = prog?.currentDay ?? 1;
   const completedSet = new Set(prog?.completedDays ?? []);
 
+  // Show ALL published steps — nothing locked or restricted.
+  // Members can access any step at any time.
   const entries: PreviousDayEntry[] = journey
     ? getStepsForJourney(journey.id)
-        .filter(s => s.status === 'Published' && s.day < currentDay)
-        .sort((a, b) => b.day - a.day)
+        .filter(s => s.status === 'Published' && !s.isCompletionStep)
+        .sort((a, b) => a.day - b.day)
         .map(s => ({
           dayNumber: s.day,
           label: getStepLabel(s, journey),
           title: s.title,
           subtitle: s.scripture || undefined,
-          status: completedSet.has(s.day) ? 'completed' : 'current',
+          status: completedSet.has(s.day) ? 'completed' : (s.day === currentDay ? 'current' : 'upcoming'),
         }))
     : [];
 
