@@ -582,7 +582,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           // send garbage audio to Whisper which returns hallucinated text.
           // 35 requires actual voice-level energy.  Keep it here; do NOT lower
           // it without testing in a real room environment.
-          const VAD_THRESHOLD     = 35;   // avg freq bin — was 18, too low
+          // Raised from 35 → 50 to reject TV / room audio at normal listening volume.
+          // A person speaking at the device needs ~50+ avg amplitude; ambient TV sits
+          // below that at typical room distances.  Consecutive-tick requirement raised
+          // from 3 → 6 (~600 ms sustained) so a brief noise burst cannot lock VAD.
+          const VAD_THRESHOLD     = 50;   // avg freq bin
           const VAD_MIN_ELAPSED   = 1000; // ms before silence-gate can fire (was 1500)
           // Sprint 1: reduced 2000 → 1200 ms. Sprint 2: reduced to 800 ms for faster
           // conversational turn-taking. Mid-sentence pauses are ~200–500 ms so 800 ms
@@ -601,10 +605,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
             if (avg > VAD_THRESHOLD) {
               vadAboveCount++;
-              // Sprint 1: reduced from 5 → 3 consecutive above-threshold ticks (~300 ms)
-              // so natural conversational speech (shorter, softer utterances) is detected.
-              // Still prevents a single transient noise from falsely locking vadSpokenRef.
-              if (vadAboveCount >= 3) {
+              // 6 consecutive ticks ≈ 600 ms of sustained speech — filters TV / ambient
+              // noise while still detecting shorter utterances from a close-by speaker.
+              if (vadAboveCount >= 6) {
                 vadSpokenRef.current        = true;
                 hadVoiceActivityRef.current = true; // survives clearVAD()
                 vadSilenceStartRef.current  = null;
@@ -705,7 +708,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           a.getByteFrequencyData(dataArray);
           const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
           const elapsed = Date.now() - recordingStartRef.current;
-          if (avg > 35) {
+          if (avg > 50) {  // matches startListening VAD_THRESHOLD
             vadSilenceStartRef.current = null;
           } else if (elapsed > 1000) {
             if (vadSilenceStartRef.current === null) {
@@ -1128,6 +1131,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
 
         bibleContextRef.current = { bookId: resolvedRef.bookId, chapter: resolvedRef.chapter, translationId: translation.resolvedId };
+
+        // Navigate the screen to the chapter being read so the user can follow along.
+        const navFnBible = navigateRef.current ?? providerNavigateRef.current;
+        const bibleRoute = `/bible/${resolvedRef.bookId}/${resolvedRef.chapter}`;
+        if (navFnBible) {
+          navFnBible(bibleRoute);
+        } else {
+          window.history.pushState({}, '', bibleRoute);
+        }
 
         const displayBook        = resolvedRef.bookName;
         const displayTranslation = translation.resolvedId.toUpperCase();

@@ -5,8 +5,8 @@ description: Tuned values and structural rules for the barge-in / interrupt moni
 
 # Voice interrupt architecture
 
-## Timing values (Sprint 2 — 2026-08-17)
-Current tuned values for device-mic-without-earphones, optimised for conversational cadence:
+## Timing values (Sprint 3 — 2026-08-17, ambient-noise fix)
+Current tuned values for device-mic-without-earphones, optimised for conversational cadence AND rejecting ambient TV/room audio:
 
 | Constant | Value | Notes |
 |---|---|---|
@@ -15,12 +15,15 @@ Current tuned values for device-mic-without-earphones, optimised for conversatio
 | Interrupt amplitude threshold | 36 | Was 40. More sensitive for device mic at arm's length; AEC prevents bleed-through at this level. |
 | VAD silence gate | 800 ms | Was 1200 ms. Mid-sentence pauses are 200–500 ms; 800 ms avoids cutting off natural speech. |
 | VAD min elapsed | 1000 ms | Was 1500 ms. Allows auto-stop sooner on short utterances. |
-| VAD amplitude threshold | 35 | Unchanged — robust against HVAC/ambient hum. Do not lower without room-noise testing. |
+| VAD amplitude threshold | **50** | Was 35. TV at normal room volume sits below 50; a person speaking to the device is above it. Do NOT lower below 45. |
+| VAD consecutive ticks | **6** (≈600 ms) | Was 3. Requires ~600 ms of sustained speech before VAD locks in — rejects TV audio bursts, door slams, etc. Do NOT lower below 4. |
 | Post-TTS conversational mic delay | 350 ms | Was 1000 ms. Major responsiveness gain for back-and-forth conversation. |
 | Post-TTS section advance delay | 250 ms | Was 800 ms. Pacing between reading sections; bypasses mic entirely. |
 | Post-reading complete mic delay | 600 ms | Was 1500 ms. Opens mic promptly for follow-up questions after reading ends. |
 
-**Why these were lowered:** Previous values were conservative guard rails from early development; real-world testing showed they made the conversation feel sluggish and unnatural. AEC + noiseSuppression + autoGainControl on the main mic stream (added Sprint 2) makes lower thresholds safe.
+**Why threshold was raised:** Real-world use with TV on in background — VAD threshold 35 + 3 ticks (~300 ms) was picked up TV speech and triggering false transcription. 50 + 6 ticks ensures only direct device speech triggers VAD. Both startListening and startListeningFromCapture (barge-in path) use the same threshold.
+
+**Why these were lowered (Sprint 2):** Previous values were conservative guard rails from early development; real-world testing showed they made the conversation feel sluggish and unnatural. AEC + noiseSuppression + autoGainControl on the main mic stream (added Sprint 2) makes lower thresholds safe.
 
 ## Main mic now requests AEC explicitly
 `startListening()` previously used `{ audio: true }`. Now requests:
