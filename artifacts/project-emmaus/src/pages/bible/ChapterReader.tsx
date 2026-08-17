@@ -551,9 +551,8 @@ export default function ChapterReader() {
       </header>
 
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
-      {/* pb accounts for the raised FAB on the bible reader: FAB bottom 8.5rem + FAB height 3rem + breathing 1rem */}
       <main
-        className="px-5 pt-8 max-w-[600px] mx-auto"
+        className="max-w-[600px] mx-auto"
         style={{ paddingBottom: 'calc(12.5rem + env(safe-area-inset-bottom, 0px))' }}
       >
         {loading ? (
@@ -562,93 +561,97 @@ export default function ChapterReader() {
             <p className="text-[14px] text-muted-foreground">Loading {book.name} {chapterNum}…</p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-5">
             <p className="text-[16px] text-muted-foreground">{error}</p>
             <Button variant="outline" onClick={retry} className="gap-2">
               <RefreshCw size={15} />Try again
             </Button>
           </div>
         ) : !chapterData ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="flex flex-col items-center justify-center py-24 gap-4 text-center px-5">
             <p className="text-[16px] text-muted-foreground">
               {book.name} {chapterNum} is not available in this translation.
             </p>
             <Button variant="outline" onClick={() => setLocation('/bible')}>Back to My Bible</Button>
           </div>
         ) : (
-          <div className="space-y-0">
-
-            {/* Book intro card — shown on chapter 1 only */}
+          <div>
+            {/* About card — tinted band, chapter 1 only */}
             {chapterNum === 1 && bookIntro && (
-              <div className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
-                <button
-                  onClick={() => setIntroExpanded(v => !v)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                >
-                  <div className="w-8 h-8 bg-primary/15 rounded-xl flex items-center justify-center shrink-0">
-                    <Info size={15} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-foreground">About {book.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{bookIntro.theme}</p>
-                  </div>
-                  <ChevronDown
-                    size={15}
-                    className={['text-muted-foreground transition-transform shrink-0', introExpanded ? 'rotate-180' : ''].join(' ')}
-                  />
-                </button>
-
-                {introExpanded && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-primary/10">
-                    <p className="text-[14px] text-foreground leading-[1.7] pt-3">{bookIntro.overview}</p>
-
-                    <div className="rounded-xl bg-background/60 border border-primary/10 p-3.5 space-y-1">
-                      <p className="text-[12px] font-semibold text-primary/80 uppercase tracking-widest">Key Verse</p>
-                      <p className="text-[14px] text-foreground italic leading-[1.6]">"{bookIntro.keyVerse}"</p>
-                      <p className="text-[12px] text-muted-foreground font-medium">— {bookIntro.keyVerseRef}</p>
+              <div className="bg-muted/30 px-5 pt-6 pb-5">
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
+                  <button
+                    onClick={() => setIntroExpanded(v => !v)}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                  >
+                    <div className="w-8 h-8 bg-primary/15 rounded-xl flex items-center justify-center shrink-0">
+                      <Info size={15} className="text-primary" />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-foreground">About {book.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{bookIntro.theme}</p>
+                    </div>
+                    <ChevronDown
+                      size={15}
+                      className={['text-muted-foreground transition-transform shrink-0', introExpanded ? 'rotate-180' : ''].join(' ')}
+                    />
+                  </button>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Author</p>
-                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.author}</p>
+                  {introExpanded && (
+                    <div className="px-4 pb-4 space-y-3 border-t border-primary/10">
+                      <p className="text-[14px] text-foreground leading-[1.7] pt-3">{bookIntro.overview}</p>
+
+                      <div className="rounded-xl bg-background/60 border border-primary/10 p-3.5 space-y-1">
+                        <p className="text-[12px] font-semibold text-primary/80 uppercase tracking-widest">Key Verse</p>
+                        <p className="text-[14px] text-foreground italic leading-[1.6]">"{bookIntro.keyVerse}"</p>
+                        <p className="text-[12px] text-muted-foreground font-medium">— {bookIntro.keyVerseRef}</p>
                       </div>
-                      <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Written</p>
-                        <p className="text-[13px] text-foreground leading-snug">{bookIntro.dateWritten}</p>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-xl bg-background/60 border border-border/50 p-3">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Author</p>
+                          <p className="text-[13px] text-foreground leading-snug">{bookIntro.author}</p>
+                        </div>
+                        <div className="rounded-xl bg-background/60 border border-border/50 p-3">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Written</p>
+                          <p className="text-[13px] text-foreground leading-snug">{bookIntro.dateWritten}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
-            {chapterData.verses.map(v => {
-              const hl = getHighlight(book.id, chapterNum, v.verse);
-              const fav = isFavourite(book.id, chapterNum, v.verse);
-              const note = getNote(book.id, chapterNum, v.verse);
-              return (
-                <span
-                  id={`verse-${v.verse}`}
-                  key={v.verse}
-                  onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
-                  className={[
-                    'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
-                    hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
-                  ].join(' ')}
-                >
-                  <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
-                  <span className="font-sans text-[19px] text-foreground">{v.text}</span>
-                  {(fav || note) && (
-                    <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
-                      {fav && <Heart size={10} className="text-primary fill-primary" />}
-                      {note && <FileText size={10} className="text-muted-foreground" />}
-                    </span>
-                  )}
-                  {' '}
-                </span>
-              );
-            })}
+            {/* Scripture zone */}
+            <div className="px-5 pt-8">
+              {chapterData.verses.map(v => {
+                const hl = getHighlight(book.id, chapterNum, v.verse);
+                const fav = isFavourite(book.id, chapterNum, v.verse);
+                const note = getNote(book.id, chapterNum, v.verse);
+                return (
+                  <span
+                    id={`verse-${v.verse}`}
+                    key={v.verse}
+                    onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
+                    className={[
+                      'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
+                      hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
+                    ].join(' ')}
+                  >
+                    <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>
+                    <span className="font-sans text-[19px] text-foreground">{v.text}</span>
+                    {(fav || note) && (
+                      <span className="inline-flex items-center gap-0.5 mx-1 align-middle">
+                        {fav && <Heart size={10} className="text-primary fill-primary" />}
+                        {note && <FileText size={10} className="text-muted-foreground" />}
+                      </span>
+                    )}
+                    {' '}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         )}
       </main>
