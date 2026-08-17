@@ -453,13 +453,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       const data = new Uint8Array(analyser.frequencyBinCount);
 
       // ── Startup delay ──────────────────────────────────────────────────────
-      // Wait before starting to poll.  TTS audio bleeds back through the mic —
-      // polling too early fires a false interrupt.  AEC (echo cancellation) with
-      // noiseSuppression typically locks within 200–400 ms; 1000 ms is a
-      // conservative but comfortable margin.  We previously used 3000 ms which
-      // meant short responses could never be interrupted at all.
+      // Wait before polling. AEC typically locks within 200–400 ms; 600 ms is
+      // a comfortable margin that still allows barge-in on short TTS responses.
+      // Previously 1000 ms — reduced to cut barge-in latency floor.
       const monitorStartTime = Date.now();
-      const MONITOR_STARTUP_DELAY_MS = 1000;
+      const MONITOR_STARTUP_DELAY_MS = 600;
 
       intIntervalRef.current = setInterval(() => {
         // Don't evaluate anything until the startup window has passed
@@ -470,12 +468,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         a.getByteFrequencyData(data);
         const avg = data.reduce((s, v) => s + v, 0) / data.length;
 
-        // Threshold 40: low enough to catch normal speech but high enough that
-        // TTS speaker bleed (attenuated by AEC after the startup delay) doesn't
-        // self-trigger.  Gate 600 ms: user must sustain speech for 600 ms before
-        // the interrupt fires — short enough to feel immediate, long enough to
-        // ignore transient noise.
-        if (avg > 40) {
+        // Threshold 36: sensitive enough for normal device-mic speech at arm's
+        // length, robust against AEC-attenuated speaker bleed after the startup
+        // delay.  Gate 350 ms: enough to reject transient knocks while still
+        // feeling instant — previously 600 ms which felt sluggish.
+        if (avg > 36) {
           if (intSpeechStartRef.current === null) {
             intSpeechStartRef.current = Date.now();
             const opts: MediaRecorderOptions = mimeType ? { mimeType } : {};
@@ -486,7 +483,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               rec.start(200);
               intRecorderRef.current = rec;
             } catch { /* recorder unavailable */ }
-          } else if (Date.now() - intSpeechStartRef.current > 600) {
+          } else if (Date.now() - intSpeechStartRef.current > 350) {
             if (intIntervalRef.current) { clearInterval(intIntervalRef.current); intIntervalRef.current = null; }
             intAnalyserRef.current    = null;
             intSpeechStartRef.current = null;
@@ -534,7 +531,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     hadVoiceActivityRef.current = false; // reset here, NOT in clearVAD()
 
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request AEC + noise suppression explicitly — critical for device speakers
+      // without earphones, where TTS audio bleeds back into the mic.
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl:  true,
+        },
+      });
       if (cancelledRef.current) { mediaStream.getTracks().forEach((t) => t.stop()); return; }
 
       streamRef.current = mediaStream;
@@ -578,10 +583,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           // 35 requires actual voice-level energy.  Keep it here; do NOT lower
           // it without testing in a real room environment.
           const VAD_THRESHOLD     = 35;   // avg freq bin — was 18, too low
-          const VAD_MIN_ELAPSED   = 1500; // ms before silence-gate can fire
-          // Sprint 1: reduced 2000 → 1200 ms for more natural conversational cadence.
-          // Still long enough to avoid cutting off mid-sentence pauses (~500–800 ms).
-          const VAD_SILENCE_GATE  = 1200; // ms of silence after speech to stop
+          const VAD_MIN_ELAPSED   = 1000; // ms before silence-gate can fire (was 1500)
+          // Sprint 1: reduced 2000 → 1200 ms. Sprint 2: reduced to 800 ms for faster
+          // conversational turn-taking. Mid-sentence pauses are ~200–500 ms so 800 ms
+          // still avoids cutting off naturally paced speech.
+          const VAD_SILENCE_GATE  = 800; // ms of silence after speech to stop
 
           // Track how long we've been genuinely above threshold
           let vadAboveCount = 0;
@@ -701,11 +707,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           const elapsed = Date.now() - recordingStartRef.current;
           if (avg > 35) {
             vadSilenceStartRef.current = null;
-          } else if (elapsed > 1500) {
+          } else if (elapsed > 1000) {
             if (vadSilenceStartRef.current === null) {
               vadSilenceStartRef.current = Date.now();
-            } else if (Date.now() - vadSilenceStartRef.current > 1200) {
-              // Sprint 1: 2000 → 1200 ms (matches startListening silence gate)
+            } else if (Date.now() - vadSilenceStartRef.current > 800) {
+              // Matches startListening silence gate: 800 ms
               clearVAD();
               stopRecorder();
               setVoiceState('THINKING');
@@ -816,9 +822,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
               // Normal conversation or end-of-reading: open the mic.
               startListening();
-            // Sprint 1: post-TTS mic delay reduced from 2500 → 1000 ms for conversation.
-            // Reading advance stays at 800 ms (bypasses mic entirely — no change needed).
-            }, isReadingSection ? 800 : 1000);
+            // Sprint 2: conversational mic delay 1000 → 350 ms (much faster turn-taking).
+            // Reading section advance 800 → 250 ms (bypasses mic — just pacing between sections).
+            }, isReadingSection ? 250 : 350);
           }
           resolve();
         };
@@ -946,7 +952,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
           if (!cancelledRef.current && !pausedRef.current) startListening();
-        }, 1500);
+        // Sprint 2: 1500 → 600 ms — open mic promptly after reading ends so
+        // follow-up questions feel like natural conversation.
+        }, 600);
         return;
       }
       readingIndexRef.current = next;

@@ -5,12 +5,29 @@ description: Tuned values and structural rules for the barge-in / interrupt moni
 
 # Voice interrupt architecture
 
-## Timing values (do not lower without testing)
-- **Startup delay**: 1000 ms — time before the monitor starts polling after `getUserMedia`. AEC (echo cancellation) locks in ~200–400 ms; 1000 ms prevents TTS bleed false-triggers.
-- **Speech gate**: 600 ms — user must sustain audio > threshold for this long before interrupt fires. Below ~500 ms risks transient noise triggers.
-- **Amplitude threshold**: 40 — empirically stable. Lower values (≤ 25) caused TTS bleed to self-trigger immediately.
+## Timing values (Sprint 2 — 2026-08-17)
+Current tuned values for device-mic-without-earphones, optimised for conversational cadence:
 
-**Why:** 3000 ms startup + 1500 ms gate meant the monitor never activated during short responses (<3 s), and users perceived it as "broken after a few uses."
+| Constant | Value | Notes |
+|---|---|---|
+| Interrupt startup delay | 600 ms | Was 1000 ms. AEC locks in 200–400 ms; 600 ms is a safe margin that allows barge-in on short TTS replies. |
+| Interrupt speech gate | 350 ms | Was 600 ms. Rejects transient knocks, still feels instant. |
+| Interrupt amplitude threshold | 36 | Was 40. More sensitive for device mic at arm's length; AEC prevents bleed-through at this level. |
+| VAD silence gate | 800 ms | Was 1200 ms. Mid-sentence pauses are 200–500 ms; 800 ms avoids cutting off natural speech. |
+| VAD min elapsed | 1000 ms | Was 1500 ms. Allows auto-stop sooner on short utterances. |
+| VAD amplitude threshold | 35 | Unchanged — robust against HVAC/ambient hum. Do not lower without room-noise testing. |
+| Post-TTS conversational mic delay | 350 ms | Was 1000 ms. Major responsiveness gain for back-and-forth conversation. |
+| Post-TTS section advance delay | 250 ms | Was 800 ms. Pacing between reading sections; bypasses mic entirely. |
+| Post-reading complete mic delay | 600 ms | Was 1500 ms. Opens mic promptly for follow-up questions after reading ends. |
+
+**Why these were lowered:** Previous values were conservative guard rails from early development; real-world testing showed they made the conversation feel sluggish and unnatural. AEC + noiseSuppression + autoGainControl on the main mic stream (added Sprint 2) makes lower thresholds safe.
+
+## Main mic now requests AEC explicitly
+`startListening()` previously used `{ audio: true }`. Now requests:
+```
+{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+```
+Critical for device-speaker-without-earphones scenarios — prevents TTS bleed triggering false VAD events.
 
 ## Monitor must start BEFORE the LLM call (not inside playReadingSection)
 - `startInterruptMonitor` is called at the top of the LLM dispatch section in `processAudioBlob`, *before* `sendVoiceConversation`.
@@ -38,3 +55,14 @@ description: Tuned values and structural rules for the barge-in / interrupt moni
 - Resolved server-side in `resolveSearchSermons(query)` — calls `searchSermons()` from `lib/sermon-search.ts`, formats a TTS-ready spoken summary, returns `{ spokenText, navigateRoute }`.
 - Client handles it in `processAudioBlob`: speaks `spokenText`, navigates to `navigateRoute` (typically `/discover?q=<query>`).
 - Types in `voice-conversation-client.ts`: `VoiceSearchSermonsArgs`, `VoiceSearchSermonsToolCall` added to `AnyVoiceToolCall`.
+
+## ElevenLabs voice settings (Sprint 2)
+`voice-service.ts` `fetchSpeechStreamElevenLabs`:
+- `stability: 0.25` (was 0.45) — more expressive, natural delivery; lower = less rigid monotone
+- `style: 0.20` (was 0.0) — adds human inflection; 0.0 sounded robotic
+- `similarity_boost: 0.80` — unchanged
+- `use_speaker_boost: true` — unchanged
+- Speed parameter from DB settings is still NOT sent to ElevenLabs (eleven_turbo_v2_5 has no direct speed param in this API shape); this is a known limitation.
+
+## iOS one-stream constraint (known limitation)
+iOS only allows one concurrent `getUserMedia` stream. If the main recording stream is open, `startInterruptMonitor` will fail silently. Orb-tap (SPEAKING → startListening) remains the iOS barge-in fallback. No fix attempted — requires MediaSession or AudioWorklet approach.

@@ -259,9 +259,13 @@ async function fetchSpeechStreamElevenLabs(
         text:       input,
         model_id:   model,
         voice_settings: {
-          stability:        0.45,
-          similarity_boost: 0.80,
-          style:            0.0,
+          // stability 0.25: less rigid, more natural and expressive delivery —
+          // critical for conversational voice. Was 0.45 which sounded flat.
+          // similarity_boost 0.80: keeps the voice character consistent.
+          // style 0.20: adds natural human inflection; 0.0 was robotic.
+          stability:         0.25,
+          similarity_boost:  0.80,
+          style:             0.20,
           use_speaker_boost: true,
         },
       }),
