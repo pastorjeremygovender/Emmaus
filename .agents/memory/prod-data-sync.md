@@ -37,6 +37,14 @@ Called from `app.ts` after `runStartupMigrations()`.
 - `content` column is **JSONB**, not text — pass null or `JSON.stringify(obj)`, never empty string ""
 - No `created_by`/`updated_by` columns on `journey_steps` (unlike `journeys` and `bible_chapter_overviews`)
 
+## CRITICAL: admin-editable fields must use COALESCE in the upsert
+Any column that admins set independently after the seed is exported (e.g. `share_image_url`) MUST use:
+```sql
+share_image_url = COALESCE(journey_steps.share_image_url, EXCLUDED.share_image_url)
+```
+NOT `= EXCLUDED.share_image_url`. The upsert runs on every boot — a plain assignment resets the admin's value to the seed null every deployment.
+**Rule:** editorial/media fields the admin fills in after content is authored → COALESCE. Structural/content fields → plain EXCLUDED assignment.
+
 ## How to add new content types to the sync
 1. Add the SELECT to `export-seed.ts`
 2. Add the upsert loop to `prod-data-sync.ts`

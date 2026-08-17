@@ -238,7 +238,8 @@ export async function runProdDataSync(): Promise<void> {
              prayer              = EXCLUDED.prayer,
              todays_action       = EXCLUDED.todays_action,
              is_completion_step  = EXCLUDED.is_completion_step,
-             share_image_url     = EXCLUDED.share_image_url`,
+             -- Preserve admin-saved share images; only fill from seed when the DB value is null
+             share_image_url     = COALESCE(journey_steps.share_image_url, EXCLUDED.share_image_url)`,
           [
             s.id, s.journey_id, s.day, s.title ?? "", contentVal,
             s.status ?? "Published",
