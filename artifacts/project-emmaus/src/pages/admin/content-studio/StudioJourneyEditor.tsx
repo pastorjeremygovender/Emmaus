@@ -50,9 +50,13 @@ interface Props {
 }
 
 // ─── Journey scaffold ─────────────────────────────────────────────────────────
-// Locked 7-section structure. Every journey follows this shape exactly.
-// Authors never create these manually — the editor guides them through each one.
-const JOURNEY_SCAFFOLD = [
+// The scaffold is computed dynamically from the journey's actual steps so it
+// handles any length — 3-day, 5-day, 10-day, AI-generated, or manually built.
+// JOURNEY_SCAFFOLD_DEFAULT is the static fallback used before steps load.
+
+type ScaffoldSection = { readonly day: number; readonly label: string; readonly shortLabel: string };
+
+const JOURNEY_SCAFFOLD_DEFAULT: ScaffoldSection[] = [
   { day: 0, label: 'Walk Introduction', shortLabel: 'I' },
   { day: 1, label: 'Day 1',             shortLabel: '1' },
   { day: 2, label: 'Day 2',             shortLabel: '2' },
@@ -60,17 +64,17 @@ const JOURNEY_SCAFFOLD = [
   { day: 4, label: 'Day 4',             shortLabel: '4' },
   { day: 5, label: 'Day 5',             shortLabel: '5' },
   { day: 6, label: 'Walk Complete',     shortLabel: '✓' },
-] as const;
+];
 
-function getSectionLabel(day: number): string {
-  return JOURNEY_SCAFFOLD.find(s => s.day === day)?.label ?? `Day ${day}`;
+function getSectionLabel(day: number, scaffold: ScaffoldSection[] = JOURNEY_SCAFFOLD_DEFAULT): string {
+  return scaffold.find(s => s.day === day)?.label ?? (day === 0 ? 'Walk Introduction' : `Day ${day}`);
 }
 
 /** Returns the day number of the section that follows `currentDay`, or null if it is the last. */
-function getNextScaffoldDay(currentDay: number): number | null {
-  const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === currentDay);
-  if (idx === -1 || idx >= JOURNEY_SCAFFOLD.length - 1) return null;
-  return JOURNEY_SCAFFOLD[idx + 1].day;
+function getNextScaffoldDay(currentDay: number, scaffold: ScaffoldSection[]): number | null {
+  const idx = scaffold.findIndex(s => s.day === currentDay);
+  if (idx === -1 || idx >= scaffold.length - 1) return null;
+  return scaffold[idx + 1].day;
 }
 
 /**
@@ -106,13 +110,14 @@ function isSectionClickable(
   sectionDay: number,
   stepsWithBlocks: StepWithBlocks[],
   introIsComplete: boolean,
+  scaffold: ScaffoldSection[],
 ): boolean {
   if (sectionDay === 0) return true; // Intro always accessible
   // A section that's already been opened stays accessible regardless of content.
   if (stepsWithBlocks.some(s => s.day === sectionDay)) return true;
   // For sequential unlock, ALL preceding sections must be COMPLETE (not just opened).
-  const idx = JOURNEY_SCAFFOLD.findIndex(s => s.day === sectionDay);
-  return JOURNEY_SCAFFOLD.slice(0, idx).every(s => {
+  const idx = scaffold.findIndex(s => s.day === sectionDay);
+  return scaffold.slice(0, idx).every(s => {
     if (s.day === 0) return introIsComplete;
     return isStepComplete(stepsWithBlocks.find(step => step.day === s.day));
   });
@@ -608,6 +613,7 @@ function StepFieldEditor({
 }: {
   step: StepWithBlocks;
   titleRef: React.RefObject<HTMLInputElement | null>;
+  scaffold: ScaffoldSection[];
   onMetaChange: (changes: Partial<Step>) => void;
   onSaveDraft: () => void;
   /** null for the last section (Journey Complete) */
@@ -619,13 +625,13 @@ function StepFieldEditor({
     'focus:border-teal-400 transition-colors bg-white';
   const textareaCls = inputCls + ' resize-y leading-relaxed';
 
-  const nextDay = getNextScaffoldDay(step.day);
-  const continueLabel = nextDay !== null ? getSectionLabel(nextDay) : null;
+  const nextDay = getNextScaffoldDay(step.day, scaffold);
+  const continueLabel = nextDay !== null ? getSectionLabel(nextDay, scaffold) : null;
 
   return (
     <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
       <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-widest">
-        {getSectionLabel(step.day)}
+        {getSectionLabel(step.day, scaffold)}
       </div>
 
       <FieldBlock label="Step Title">
@@ -991,20 +997,22 @@ function GuidedProgressPanel({
   stepsWithBlocks,
   introIsComplete,
   onOpenSection,
+  scaffold,
 }: {
   stepsWithBlocks: StepWithBlocks[];
   introIsComplete: boolean;
   onOpenSection: (day: number) => void;
+  scaffold: ScaffoldSection[];
 }) {
-  const totalSections = JOURNEY_SCAFFOLD.length;
-  const completedCount = JOURNEY_SCAFFOLD.filter(s =>
+  const totalSections = scaffold.length;
+  const completedCount = scaffold.filter(s =>
     s.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(step => step.day === s.day))
   ).length;
   const allComplete = completedCount === totalSections;
 
-  const nextSection = JOURNEY_SCAFFOLD.find(s => {
+  const nextSection = scaffold.find(s => {
     const complete = s.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(step => step.day === s.day));
-    return !complete && isSectionClickable(s.day, stepsWithBlocks, introIsComplete);
+    return !complete && isSectionClickable(s.day, stepsWithBlocks, introIsComplete, scaffold);
   });
 
   return (
@@ -1021,9 +1029,9 @@ function GuidedProgressPanel({
       </div>
 
       <div className="space-y-1.5 mb-8">
-        {JOURNEY_SCAFFOLD.map(section => {
+        {scaffold.map(section => {
           const started = section.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(s => s.day === section.day));
-          const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
+          const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, scaffold);
           return (
             <button
               key={section.day}
@@ -1110,6 +1118,31 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
   const journey = contextJourney ?? localJourney;
   const rawSteps = getStepsForJourney(journeyId);
+
+  // Dynamic scaffold — built from actual steps so any journey length works correctly.
+  // Falls back to the 5-day default while steps are still loading.
+  const journeyScaffold = useMemo<ScaffoldSection[]>(() => {
+    const lessonDays = rawSteps
+      .filter(s => !s.isCompletionStep && s.day > 0)
+      .sort((a, b) => a.day - b.day)
+      .map(s => ({ day: s.day, label: `Day ${s.day}`, shortLabel: `${s.day}` } as ScaffoldSection));
+
+    if (lessonDays.length === 0) return JOURNEY_SCAFFOLD_DEFAULT;
+
+    const completionStep = rawSteps.find(s => s.isCompletionStep);
+    const lastLessonDay = lessonDays[lessonDays.length - 1].day;
+    const completionDay = completionStep?.day ?? lastLessonDay + 1;
+
+    return [
+      { day: 0, label: 'Walk Introduction', shortLabel: 'I' },
+      ...lessonDays,
+      { day: completionDay, label: 'Walk Complete', shortLabel: '✓' },
+    ];
+  }, [rawSteps]);
+
+  // Ref so callbacks don't need to be recreated when the scaffold changes.
+  const scaffoldRef = useRef<ScaffoldSection[]>(journeyScaffold);
+  useEffect(() => { scaffoldRef.current = journeyScaffold; }, [journeyScaffold]);
 
   const [stepsWithBlocks, setStepsWithBlocks] = useState<StepWithBlocks[]>([]);
   const [selectedView, setSelectedView] = useState<SelectedView>('overview');
@@ -1274,7 +1307,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       return;
     }
     // Otherwise create it using the scaffold label as the initial title.
-    const label = getSectionLabel(sectionDay);
+    const label = getSectionLabel(sectionDay, scaffoldRef.current);
     const newStep = await addStep({
       journeyId,
       day: sectionDay,
@@ -1430,7 +1463,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   /** Save the current section's content then navigate into the next scaffold section. */
   const handleSaveAndAdvance = useCallback(async (currentDay: number) => {
     await saveStep(currentDay);
-    const nextDay = getNextScaffoldDay(currentDay);
+    const nextDay = getNextScaffoldDay(currentDay, scaffoldRef.current);
     if (nextDay !== null) {
       await handleOpenSection(nextDay);
     }
@@ -1537,16 +1570,16 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
             <div className="mx-3 border-t border-gray-100" />
 
-            {/* Content section — fixed 7-section scaffold */}
+            {/* Content section — dynamic scaffold based on actual steps */}
             <div className="flex-shrink-0 px-2 pt-2 pb-1">
               <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1">Content</div>
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
-              {JOURNEY_SCAFFOLD.map(section => {
+              {journeyScaffold.map(section => {
                 const step = section.day !== 0 ? stepsWithBlocks.find(s => s.day === section.day) : undefined;
                 const started = section.day === 0 ? introIsComplete : isStepComplete(step);
                 const active = section.day === 0 ? selectedView === 'introduction' : selectedView === section.day;
-                const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
+                const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, journeyScaffold);
                 const status = step ? saveStatus[step.day] : undefined;
                 return (
                   <button
@@ -1602,9 +1635,9 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               <PanelLeftOpen size={14} />
             </button>
             <div className="flex-1 flex flex-col items-center gap-1 overflow-hidden pt-1">
-              {JOURNEY_SCAFFOLD.map(section => {
+              {journeyScaffold.map(section => {
                 const started = section.day === 0 ? introIsComplete : isStepComplete(stepsWithBlocks.find(s => s.day === section.day));
-                const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete);
+                const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, journeyScaffold);
                 return (
                   <button
                     key={section.day}
@@ -1652,8 +1685,8 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               <span className="text-sm font-semibold text-gray-700 truncate">Journey Introduction</span>
             ) : selectedStep ? (
               <span className="text-sm font-semibold text-gray-700 truncate">
-                {getSectionLabel(selectedStep.day)}
-                {selectedStep.title && selectedStep.title !== getSectionLabel(selectedStep.day)
+                {getSectionLabel(selectedStep.day, journeyScaffold)}
+                {selectedStep.title && selectedStep.title !== getSectionLabel(selectedStep.day, journeyScaffold)
                   ? ` — ${selectedStep.title}` : ''}
               </span>
             ) : null}
@@ -1663,7 +1696,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             {/* Autosave status */}
             {selectedView === 'introduction' ? (
               <SaveIndicator status={introSaveStatus} />
-            ) : selectedStep?.day === 6 ? (
+            ) : selectedStep?.isCompletionStep ? (
               <SaveIndicator status={completeSaveStatus} />
             ) : selectedStep ? (
               <>
@@ -1710,6 +1743,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               stepsWithBlocks={stepsWithBlocks}
               introIsComplete={introIsComplete}
               onOpenSection={handleOpenSection}
+              scaffold={journeyScaffold}
             />
           </div>
         ) : selectedView === 'introduction' ? (
@@ -1723,7 +1757,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               saveStatus={introSaveStatus}
             />
           </div>
-        ) : selectedStep?.day === 6 ? (
+        ) : selectedStep?.isCompletionStep ? (
           /* Journey Complete — dedicated completion editor */
           <div className="flex-1 overflow-y-auto bg-white">
             <JourneyCompleteEditor
@@ -1745,10 +1779,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             <StepFieldEditor
               step={selectedStep}
               titleRef={titleInputRef}
+              scaffold={journeyScaffold}
               onMetaChange={changes => handleStepMetaChange(selectedStep.day, changes)}
               onSaveDraft={() => saveStep(selectedStep.day)}
               onContinue={
-                getNextScaffoldDay(selectedStep.day) !== null
+                getNextScaffoldDay(selectedStep.day, journeyScaffold) !== null
                   ? () => handleSaveAndAdvance(selectedStep.day)
                   : null
               }
@@ -1834,7 +1869,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       {deleteTarget !== null && (
         <ConfirmDialog
           title="Remove Section"
-          message={`Remove "${getSectionLabel(deleteTarget)}"? This cannot be undone.`}
+          message={`Remove "${getSectionLabel(deleteTarget, scaffoldRef.current)}"? This cannot be undone.`}
           confirmLabel="Remove"
           danger
           onConfirm={() => handleDeleteStep(deleteTarget)}

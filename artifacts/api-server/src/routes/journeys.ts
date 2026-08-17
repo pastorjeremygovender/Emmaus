@@ -382,6 +382,11 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
       });
     }
 
+    // Restore durationDays: refreshJourneyDuration (called inside createStep) only
+    // counts Published steps, so Draft-only AI-built journeys end up with durationDays=0.
+    // Set it explicitly here after all steps are created.
+    await store.updateJourney(journeyId, { durationDays: generated.steps.length });
+
     // Generate and save the Walk Introduction (introductionContent) — the plain-text
     // welcome passage shown before Day 1. Fire-and-forget pattern: if it fails we
     // still return the journey; the admin can write the intro manually.
