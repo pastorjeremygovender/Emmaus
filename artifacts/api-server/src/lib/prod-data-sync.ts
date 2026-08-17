@@ -193,6 +193,7 @@ export async function runProdDataSync(): Promise<void> {
              -- Status is written only on INSERT (new journeys); existing journeys always
              -- keep whatever the admin set. A contaminated seed must NOT revert a
              -- journey the admin has already published.
+             duration_days = EXCLUDED.duration_days,
              theme_color  = EXCLUDED.theme_color,
              version      = EXCLUDED.version,
              updated_by   = EXCLUDED.updated_by`,
@@ -240,7 +241,13 @@ export async function runProdDataSync(): Promise<void> {
              -- Authored content: NEVER overwrite what an admin wrote.
              -- Use COALESCE/NULLIF for text fields; use CASE for JSONB to also
              -- treat empty-object {} and empty-array [] as "no content".
-             -- status intentionally omitted: admin publish/unpublish is the source of truth.
+             -- Upgrade Draft → Published if the seed says Published, but never downgrade.
+             -- This repairs steps that were saved as Draft before the auto-publish fix.
+             status              = CASE
+                                     WHEN journey_steps.status = 'Draft' AND EXCLUDED.status = 'Published'
+                                     THEN 'Published'
+                                     ELSE journey_steps.status
+                                   END,
              content             = CASE
                                      WHEN journey_steps.content IS NOT NULL
                                        AND journey_steps.content::text NOT IN ('null','{}','[]')
