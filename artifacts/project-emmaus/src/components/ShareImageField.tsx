@@ -17,7 +17,7 @@
  */
 
 import React, { useRef, useState, useCallback } from 'react';
-import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw, Ban } from 'lucide-react';
+import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw, Ban, ZoomIn } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
 import { ShareImageGenerator, compositeAttributionBlob, type Attribution } from '@/components/ShareImageGenerator';
@@ -62,6 +62,9 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
   const [autoError, setAutoError] = useState('');
   const [customPhrase, setCustomPhrase] = useState('');
   const [autoAttribution, setAutoAttribution] = useState<Attribution>('emmaus');
+
+  // ── Lightbox ──────────────────────────────────────────────────────────────
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // `overridePhrase` — when set, skips extraction and uses this text directly.
   const triggerAutoGenerate = useCallback(async (content: string, overridePhrase?: string) => {
@@ -249,6 +252,12 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
         >
           {previewB64 ? (
             <>
+              <button
+                type="button"
+                onClick={() => setLightboxSrc(`data:image/png;base64,${previewB64}`)}
+                className="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none"
+                aria-label="View full size"
+              />
               <img
                 src={`data:image/png;base64,${previewB64}`}
                 alt="Auto-generated share image"
@@ -419,12 +428,20 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
       {/* If an image is already saved, show it with Replace / Generate / Remove */}
       {imageUrl && mode === 'upload' ? (
         <div>
-          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
+          <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square relative group">
             <img
               src={imageUrl}
               alt="Share image"
               className="w-full h-full object-cover block"
             />
+            <button
+              type="button"
+              onClick={() => setLightboxSrc(imageUrl)}
+              className="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors"
+              aria-label="View full size"
+            >
+              <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-80 transition-opacity drop-shadow-md" />
+            </button>
           </div>
           <div className="flex gap-2 mt-2">
             <button
@@ -530,6 +547,29 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
           </button>{' '}
           to create one with AI.
         </p>
+      )}
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

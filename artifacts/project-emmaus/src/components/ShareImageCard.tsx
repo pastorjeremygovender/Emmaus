@@ -1,15 +1,13 @@
 /**
- * ShareImageCard — member-facing "Take this with you" share image display.
+ * ShareImageCard — member-facing share image display.
  *
- * Renders a portrait image with Save + Share actions.
+ * Renders a square image with Save + Share actions.
+ * Tapping the image opens a full-screen lightbox.
  * Returns null when shareImageUrl is falsy — zero layout change for content without an image.
- *
- * Usage:
- *   <ShareImageCard shareImageUrl={step.shareImageUrl} />
  */
 
 import React, { useState } from 'react';
-import { Download, Share2 } from 'lucide-react';
+import { Download, Share2, X } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
 interface ShareImageCardProps {
@@ -19,14 +17,12 @@ interface ShareImageCardProps {
 
 export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   if (!shareImageUrl) return null;
 
-  // The API server serves objects at /storage/objects/* — same pattern as rooms media.
   const imageUrl = getApiUrl('/api/storage' + shareImageUrl);
 
-  // If the image fails to load (storage unavailable, wrong env, etc.) hide the card
-  // entirely rather than showing a broken-image placeholder.
   if (imgError) return null;
 
   async function handleSave() {
@@ -36,7 +32,6 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objectUrl;
-      // Infer a file extension from MIME type; default to .jpg
       const ext = blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : '.jpg';
       a.download = `emmaus-share${ext}`;
       document.body.appendChild(a);
@@ -44,7 +39,6 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch {
-      // Fallback: open in a new tab so the user can long-press / right-click to save
       window.open(imageUrl, '_blank');
     }
   }
@@ -64,42 +58,74 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
         return;
       }
     } catch {
-      // Fall through to save-as-download
+      // fall through
     }
     await handleSave();
   }
 
   return (
-    <section className="mb-8">
-
-      {/* Image — square 1:1 canvas */}
-      <div className="rounded-2xl overflow-hidden bg-muted aspect-square">
-        <img
-          src={imageUrl}
-          alt=""
-          className="w-full h-full object-cover block"
-          loading="eager"
-          onError={() => setImgError(true)}
-        />
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-3 mt-3">
+    <>
+      <section className="mb-8">
+        {/* Image — tap to open lightbox */}
         <button
-          onClick={handleSave}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium border border-border text-foreground hover:bg-muted/60 active:scale-[0.97] transition-all"
+          type="button"
+          onClick={() => setLightboxOpen(true)}
+          className="w-full rounded-2xl overflow-hidden bg-muted aspect-square block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label="View full size"
         >
-          <Download className="w-4 h-4" />
-          Save Image
+          <img
+            src={imageUrl}
+            alt=""
+            className="w-full h-full object-cover block"
+            loading="eager"
+            onError={() => setImgError(true)}
+          />
         </button>
-        <button
-          onClick={handleShare}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all"
+
+        {/* Actions */}
+        <div className="flex gap-3 mt-3">
+          <button
+            onClick={handleSave}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium border border-border text-foreground hover:bg-muted/60 active:scale-[0.97] transition-all"
+          >
+            <Download className="w-4 h-4" />
+            Save Image
+          </button>
+          <button
+            onClick={handleShare}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all"
+          >
+            <Share2 className="w-4 h-4" />
+            Share Image
+          </button>
+        </div>
+      </section>
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightboxOpen(false)}
         >
-          <Share2 className="w-4 h-4" />
-          Share Image
-        </button>
-      </div>
-    </section>
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Full image — constrained to viewport, never overflows */}
+          <img
+            src={imageUrl}
+            alt=""
+            className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </>
   );
 }

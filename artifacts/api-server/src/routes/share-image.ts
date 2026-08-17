@@ -77,7 +77,7 @@ Unless the text's mood is clearly cool or solemn (grief, reverence, night), choo
 ABSOLUTE CONSTRAINTS:
 - No logo, watermark, "Emmaus", church name, or attribution — these are added separately
 - Never use the words "Christian" or "devotional" in the brief itself
-- Leave the bottom 12% of the image completely clear — no text or key visuals there (a footer is added programmatically)
+- Leave the bottom 20% of the image completely clear — no text or key visuals there (a footer is composited programmatically and must not be obscured)
 - Text must be legible — high contrast, never translucent, never decorative to the point of being unreadable`,
       },
       {
@@ -118,7 +118,7 @@ NON-NEGOTIABLE RULES:
 - All text must be completely legible — high contrast, never faded, never translucent
 - Hero text must be the typographically dominant element on the canvas
 - Square canvas (1:1 aspect ratio)
-- The bottom 12% of the canvas must be completely clear — no text, no key visual elements there (a footer is added programmatically)
+- The bottom 20% of the canvas must be completely clear — no text, no key visual elements there (a footer is composited programmatically and must not be obscured)
 - No logos, watermarks, app names, church names, or branding of any kind
 - No generic stock-photo clichés, no overlapping religious symbols (rays + cross + dove), no soft-focus blur with no subject`;
 }
