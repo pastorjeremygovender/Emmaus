@@ -139,6 +139,83 @@ IMPORTANT:
 - Do NOT add any logos, watermarks, app names, church names, or branding of any kind`;
 }
 
+// ─── Auto-generate: phrase extraction + full pipeline ─────────────────────────
+//
+// Called by the content editors when new content is created without a share image.
+// Steps:
+//   1. GPT-4o reads the full step content and picks the best short shareable phrase
+//   2. Art-direction pass turns that phrase into a detailed visual brief
+//   3. gpt-image-1 renders the final image
+// Returns { phrase, imageBase64 }
+
+async function extractBestPhrase(content: string): Promise<string> {
+  const response = await openai.chat.completions.create({
+    model: process.env.ART_DIRECTION_MODEL ?? 'gpt-4o',
+    max_completion_tokens: 80,
+    messages: [
+      {
+        role: 'system',
+        content: `You are a skilled devotional content curator. Your only job is to extract the single most powerful, emotionally resonant, shareable phrase or sentence from the devotional content provided.
+
+Rules:
+- Pick ONE phrase that would stop someone scrolling on Instagram or WhatsApp
+- Prefer scripture quotes, key turning-point sentences, or the heart of the teaching
+- Maximum 18 words — shorter is better (6–14 words is ideal)
+- Output ONLY the phrase itself — no quotes, no explanation, no punctuation changes beyond what's in the original
+- Never invent words that aren't in the content`,
+      },
+      {
+        role: 'user',
+        content: `Extract the single best shareable phrase from this devotional content:\n\n${content.slice(0, 3000)}`,
+      },
+    ],
+  });
+
+  const phrase = response.choices[0]?.message?.content?.trim() ?? '';
+  if (!phrase) throw new Error('Phrase extraction returned empty result');
+  return phrase;
+}
+
+router.post("/share-images/auto-generate", async (req: Request, res: Response) => {
+  // Admin-only
+  const userRole = req.headers["x-user-role"] as string | undefined;
+  if (!userRole || !["admin", "superAdmin"].includes(userRole)) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+
+  const { content } = req.body as { content?: string };
+  if (!content?.trim() || content.trim().length < 20) {
+    return res.status(400).json({ error: "Content is required (at least 20 characters)" });
+  }
+
+  try {
+    // Step 1: Extract the best phrase from the full content
+    const phrase = await extractBestPhrase(content.trim());
+    console.log('[share-image] auto-generate extracted phrase:', phrase);
+
+    // Step 2 + 3: Art-direction + image generation (same pipeline as manual)
+    const artDirection = await artDirectImage(phrase);
+    console.log('[share-image] auto-generate art direction:', artDirection.slice(0, 300));
+
+    const finalPrompt = buildImagePrompt(phrase, artDirection);
+    const genRes = await openai.images.generate({
+      model: IMAGE_MODEL,
+      prompt: finalPrompt,
+      size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
+      n: 1,
+    });
+
+    const imageBase64 = genRes.data[0]?.b64_json;
+    if (!imageBase64) throw new Error("No image returned from generation");
+
+    return res.json({ phrase, imageBase64 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Auto-generation failed";
+    console.error("[share-image] auto-generate error:", message);
+    return res.status(500).json({ error: message });
+  }
+});
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.post("/share-images/generate", async (req: Request, res: Response) => {

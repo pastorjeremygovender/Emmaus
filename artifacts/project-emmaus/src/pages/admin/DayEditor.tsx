@@ -576,6 +576,15 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
               <ShareImageField
                 value={form.shareImageUrl ?? null}
                 onChange={v => patch('shareImageUrl', v)}
+                autoGenerate={!form.shareImageUrl}
+                stepContent={[
+                  form.title,
+                  form.mentorIntro,
+                  form.scripture,
+                  form.devotional,
+                  form.reflectionQuestion,
+                  form.prayerPrompt,
+                ].filter(Boolean).join('\n\n')}
               />
             </CollapsibleCard>
 

@@ -303,6 +303,15 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
                 setShareImageUrl(path);
                 doSave({ ...currentFields(), shareImageUrl: path });
               }}
+              autoGenerate={!shareImageUrl}
+              stepContent={[
+                scriptureReference,
+                greeting,
+                considerThis,
+                prayer,
+                nextStep,
+                closing,
+              ].filter(Boolean).join('\n\n')}
             />
           </Field>
         </div>

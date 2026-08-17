@@ -691,6 +691,14 @@ export default function DailyRhythmDayEditor({
                     );
                   }
                 }}
+                autoGenerate={!form.shareImageUrl}
+                stepContent={[
+                  form.title,
+                  form.scripture,
+                  form.devotional,
+                  form.prayerPrompt,
+                  form.actionStep,
+                ].filter(Boolean).join('\n\n')}
               />
             </div>
 

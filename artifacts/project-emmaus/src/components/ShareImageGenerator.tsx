@@ -74,7 +74,7 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-async function compositeAttributionBlob(
+export async function compositeAttributionBlob(
   imageBase64: string,
   attribution: Attribution
 ): Promise<Blob> {

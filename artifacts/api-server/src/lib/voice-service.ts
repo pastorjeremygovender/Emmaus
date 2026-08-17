@@ -138,16 +138,26 @@ export async function transcribeAudioBase64(
   return transcribeWithOpenAI(base64Audio, mimeType, start);
 }
 
+/** Strip codec parameters so `audio/webm;codecs=opus` → `audio/webm`.
+ *  ElevenLabs and OpenAI Whisper reject the codecs= suffix in the content-type. */
+function cleanMimeType(mimeType: string): string {
+  return mimeType.split(';')[0].trim();
+}
+
 async function transcribeWithElevenLabs(
   base64Audio: string,
   mimeType: string,
   apiKey: string,
   startMs: number,
 ): Promise<string> {
-  const buffer = Buffer.from(base64Audio, 'base64');
-  const ext    = mimeExtToExt(mimeType);
-  const blob   = new Blob([buffer], { type: mimeType });
-  const file   = new File([blob], `voice.${ext}`, { type: mimeType });
+  const buffer      = Buffer.from(base64Audio, 'base64');
+  const ext         = mimeExtToExt(mimeType);
+  const cleanedMime = cleanMimeType(mimeType);
+
+  logger.info({ blobBytes: buffer.byteLength, mimeType, cleanedMime, ext }, '[VOICE STT] ElevenLabs attempt');
+
+  const blob   = new Blob([buffer], { type: cleanedMime });
+  const file   = new File([blob], `voice.${ext}`, { type: cleanedMime });
 
   const formData = new FormData();
   formData.append('file', file);
@@ -188,10 +198,14 @@ async function transcribeWithOpenAI(
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured — transcription unavailable');
 
-  const buffer = Buffer.from(base64Audio, 'base64');
-  const ext    = mimeExtToExt(mimeType);
-  const blob   = new Blob([buffer], { type: mimeType });
-  const file   = new File([blob], `voice.${ext}`, { type: mimeType });
+  const buffer      = Buffer.from(base64Audio, 'base64');
+  const ext         = mimeExtToExt(mimeType);
+  const cleanedMime = cleanMimeType(mimeType);
+
+  logger.info({ blobBytes: buffer.byteLength, mimeType, cleanedMime, ext }, '[VOICE STT] OpenAI Whisper attempt');
+
+  const blob   = new Blob([buffer], { type: cleanedMime });
+  const file   = new File([blob], `voice.${ext}`, { type: cleanedMime });
 
   const formData = new FormData();
   formData.append('file', file);
