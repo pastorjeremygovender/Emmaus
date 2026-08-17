@@ -177,20 +177,23 @@ Rules:
 }
 
 router.post("/share-images/auto-generate", async (req: Request, res: Response) => {
+  // If the admin supplies a custom phrase, skip extraction and use it directly.
   // Admin-only
   const userRole = req.headers["x-user-role"] as string | undefined;
   if (!userRole || !["admin", "superAdmin"].includes(userRole)) {
     return res.status(403).json({ error: "Admin access required" });
   }
 
-  const { content } = req.body as { content?: string };
-  if (!content?.trim() || content.trim().length < 20) {
+  const { content, phrase: customPhrase } = req.body as { content?: string; phrase?: string };
+  if (!customPhrase && (!content?.trim() || content.trim().length < 20)) {
     return res.status(400).json({ error: "Content is required (at least 20 characters)" });
   }
 
   try {
-    // Step 1: Extract the best phrase from the full content
-    const phrase = await extractBestPhrase(content.trim());
+    // Step 1: Use the admin's custom phrase if provided; otherwise extract from content.
+    const phrase = customPhrase?.trim()
+      ? customPhrase.trim()
+      : await extractBestPhrase(content!.trim());
     console.log('[share-image] auto-generate extracted phrase:', phrase);
 
     // Step 2 + 3: Art-direction + image generation (same pipeline as manual)

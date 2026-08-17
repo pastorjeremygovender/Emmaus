@@ -17,7 +17,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw } from 'lucide-react';
+import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw, Ban } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
 import { ShareImageGenerator, compositeAttributionBlob } from '@/components/ShareImageGenerator';
@@ -60,9 +60,11 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
   // ── Auto-generate state machine ───────────────────────────────────────────
   const [autoPhase, setAutoPhase] = useState<AutoPhase>({ phase: 'idle' });
   const [autoError, setAutoError] = useState('');
+  const [customPhrase, setCustomPhrase] = useState('');
   const autoTriggeredRef = useRef(false); // only fire once per mount
 
-  const triggerAutoGenerate = useCallback(async (content: string) => {
+  // `overridePhrase` — when set, skips extraction and uses this text directly.
+  const triggerAutoGenerate = useCallback(async (content: string, overridePhrase?: string) => {
     if (!user) return;
     setAutoError('');
     setAutoPhase({ phase: 'generating' });
@@ -76,7 +78,10 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
           'x-user-id': user.id,
           'x-user-role': user.role,
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          ...(overridePhrase ? { phrase: overridePhrase } : {}),
+        }),
       });
 
       if (!res.ok) {
@@ -86,6 +91,7 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
 
       const { phrase, imageBase64 } = await res.json() as { phrase: string; imageBase64: string };
       setAutoPhase({ phase: 'preview', imageBase64, phrase });
+      setCustomPhrase(phrase); // pre-fill the editable input with whatever phrase was used
     } catch (e) {
       setAutoError(e instanceof Error ? e.message : 'Auto-generation failed');
       setAutoPhase({ phase: 'dismissed' }); // fall back to manual UI
@@ -151,7 +157,9 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
   async function handleRegenerateAuto() {
     if (!stepContent) return;
     autoTriggeredRef.current = true; // keep guard set — this is an explicit retry
-    triggerAutoGenerate(stepContent.trim());
+    // Use the admin's custom phrase if they've typed one; otherwise let AI pick.
+    const override = customPhrase.trim() || undefined;
+    triggerAutoGenerate(stepContent.trim(), override);
   }
 
   // ── Manual upload helpers ──────────────────────────────────────────────────
@@ -235,8 +243,6 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
     const isSaving     = autoPhase.phase === 'saving';
     const previewB64   = autoPhase.phase === 'preview' || autoPhase.phase === 'saving'
       ? autoPhase.imageBase64 : null;
-    const phrase       = autoPhase.phase === 'preview' || autoPhase.phase === 'saving'
-      ? autoPhase.phrase : null;
 
     return (
       <div className="space-y-3">
@@ -246,16 +252,6 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
           <span className="text-[13px] font-medium text-gray-700">
             {isGenerating ? 'Generating share image…' : 'Share image ready to review'}
           </span>
-          {!isGenerating && !isSaving && (
-            <button
-              type="button"
-              onClick={() => { setAutoPhase({ phase: 'dismissed' }); setAutoError(''); }}
-              className="ml-auto p-1 text-gray-400 hover:text-gray-600 rounded"
-              aria-label="Dismiss"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
 
         {/* Image / spinner */}
@@ -274,41 +270,77 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
           )}
         </div>
 
-        {/* Phrase used */}
-        {phrase && (
-          <p className="text-[11px] text-gray-500 italic leading-relaxed">
-            <span className="font-medium not-italic text-gray-600">Phrase used: </span>
-            "{phrase}"
-          </p>
-        )}
-
-        {/* Actions */}
-        {previewB64 && (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleAcceptAutoImage}
-              disabled={isSaving}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
-            >
-              {isSaving ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Saving…</>
-              ) : (
-                <><CheckCircle className="w-3.5 h-3.5" />Use this image</>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleRegenerateAuto}
-              disabled={isSaving}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-              title="Regenerate with a different phrase"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Try again
-            </button>
+        {/* Editable phrase — shown once preview is ready */}
+        {!isGenerating && (
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+              Text on image
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={customPhrase}
+                onChange={(e) => setCustomPhrase(e.target.value)}
+                placeholder="Type a phrase to use instead…"
+                disabled={isSaving}
+                className="flex-1 text-[13px] px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={handleRegenerateAuto}
+                disabled={isSaving || isGenerating}
+                className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 shrink-0"
+                title={customPhrase.trim() ? 'Regenerate using your text' : 'Regenerate with a new AI phrase'}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                {customPhrase.trim() ? 'Use this text' : 'Try again'}
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Edit the text above and click "Use this text" to regenerate with your own words.
+            </p>
           </div>
         )}
+
+        {/* Primary actions */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Use this image */}
+          <button
+            type="button"
+            onClick={handleAcceptAutoImage}
+            disabled={isSaving || isGenerating || !previewB64}
+            className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg text-[12px] font-medium bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-40"
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CheckCircle className="w-4 h-4" />
+            )}
+            {isSaving ? 'Saving…' : 'Use this image'}
+          </button>
+
+          {/* Upload your own */}
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={isSaving}
+            className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-40"
+          >
+            <Upload className="w-4 h-4" />
+            Upload image
+          </button>
+
+          {/* No image */}
+          <button
+            type="button"
+            onClick={() => { setAutoPhase({ phase: 'dismissed' }); setAutoError(''); }}
+            disabled={isSaving}
+            className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-red-500 hover:border-red-200 transition-colors disabled:opacity-40"
+          >
+            <Ban className="w-4 h-4" />
+            No image
+          </button>
+        </div>
 
         {autoError && <p className="text-[12px] text-red-500">{autoError}</p>}
       </div>
