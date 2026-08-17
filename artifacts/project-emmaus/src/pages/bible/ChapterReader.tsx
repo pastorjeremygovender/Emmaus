@@ -411,8 +411,8 @@ export default function ChapterReader() {
       />
 
       {/* ── Sticky Header ───────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
-        <div className="flex items-center h-14 px-4 max-w-[600px] mx-auto gap-2">
+      <header className="sticky top-0 z-20 bg-muted/30 backdrop-blur-sm border-b border-border/50">
+        <div className="relative flex items-center h-14 px-4 max-w-[600px] mx-auto">
 
           {/* Back — returns to caller (Daily Rhythm) or My Bible home */}
           <button
@@ -423,8 +423,8 @@ export default function ChapterReader() {
             <ArrowLeft size={22} />
           </button>
 
-          {/* Combined book/chapter + translation pill — centred */}
-          <div className="flex-1 flex justify-center" ref={dropdownWrapperRef}>
+          {/* Combined book/chapter + translation pill — absolutely centred */}
+          <div className="absolute left-1/2 -translate-x-1/2" ref={dropdownWrapperRef}>
             <div className="inline-flex items-stretch border border-border/50 rounded-full overflow-hidden bg-muted/30">
 
               {/* LEFT: Book & Chapter */}
