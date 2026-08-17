@@ -71,11 +71,11 @@ export default function SermonCompanionPreviousDays() {
 
   useEffect(() => { load(); }, [load]);
 
-  const completedSet  = new Set(companion?.progress?.completedDays ?? []);
-  const currentDay    = companion?.progress?.currentDay ?? 1;
+  const completedSet = new Set(companion?.progress?.completedDays ?? []);
 
+  // All published entries are accessible — members can open any step freely.
   const entries: PreviousDayEntry[] = (companion?.entries ?? [])
-    .filter(e => e.status === 'Published' && e.dayNumber < currentDay)
+    .filter(e => e.status === 'Published')
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
@@ -85,18 +85,20 @@ export default function SermonCompanionPreviousDays() {
       status: completedSet.has(e.dayNumber) ? 'completed' : 'current',
     }));
 
+  const openDay = (day: number) =>
+    setLocation(`/sermon-companion/${companionId}/day/${day}?source=sermonCompanionPrevious&sourceId=${companionId}`);
+
   return (
     <PreviousDaysScreen
       contentTitle={companion?.title ?? 'Sermon Companion'}
       entries={entries}
       loading={loading}
       onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
-      onReviewDay={(day) =>
-        setLocation(`/sermon-companion/${companionId}/day/${day}?source=sermonCompanionPrevious&sourceId=${companionId}`)
-      }
+      onReviewDay={openDay}
+      onContinueDay={openDay}
       backLabel={backLabel}
-      screenTitle="Previous Steps"
-      emptyMessage="No previous companion steps are available yet."
+      screenTitle="All Steps"
+      emptyMessage="No companion steps are available yet."
     />
   );
 }

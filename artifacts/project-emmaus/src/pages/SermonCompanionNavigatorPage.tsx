@@ -159,24 +159,28 @@ export function SermonCompanionNavigatorPage() {
   }
 
   const prog = companion.progress;
-  const currentDay = prog?.currentDay ?? 1;
 
   // Sort published entries
   const published = companion.entries
     .filter(e => e.status === 'Published')
     .sort((a, b) => a.dayNumber - b.dayNumber);
 
-  // Clamp to last published entry if progress is beyond all content
-  const effectiveDay = published.some(e => e.dayNumber === currentDay)
-    ? currentDay
-    : (published[published.length - 1]?.dayNumber ?? currentDay);
+  // Use completion-based current index — same approach as DevotionalNavigatorPage.
+  // currentDay from the DB is not reliably updated as members progress, so we
+  // find the first uncompleted entry instead. If all are done, pin to the last.
+  const completedSet = new Set<number>(prog?.completedDays ?? []);
+  const resolvedIdx = (() => {
+    const nextIdx = published.findIndex(e => !completedSet.has(e.dayNumber));
+    if (nextIdx !== -1) return nextIdx;
+    return published.length - 1; // all done — pin to last
+  })();
 
-  const currentIdx = published.findIndex(e => e.dayNumber === effectiveDay);
+  const currentIdx = published.length > 0 ? resolvedIdx : -1;
   const prevEntry  = currentIdx > 0 ? published[currentIdx - 1] : null;
-  const currEntry  = published[currentIdx] ?? null;
+  const currEntry  = currentIdx >= 0 ? published[currentIdx] : null;
   const nextEntry  = currentIdx >= 0 && currentIdx < published.length - 1 ? published[currentIdx + 1] : null;
 
-  const completedCount = prog?.completedDays.length ?? 0;
+  const completedCount = completedSet.size;
   const totalCount     = published.length;
 
   function toCard(e: SCEntry): CardEntry {
