@@ -245,15 +245,21 @@ export async function runProdDataSync(): Promise<void> {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            ON CONFLICT (id) DO UPDATE SET
              title               = EXCLUDED.title,
-             content             = EXCLUDED.content,
+             -- Authored content: NEVER overwrite what an admin wrote.
+             -- Use COALESCE/NULLIF for text fields; use CASE for JSONB to also
+             -- treat empty-object {} and empty-array [] as "no content".
              -- status intentionally omitted: admin publish/unpublish is the source of truth.
-             -- Status is written only on INSERT (new rows); existing rows always keep
-             -- whatever the admin set last. A seed with wrong status must NOT revert a
-             -- step the admin has already published or drafted.
-             teaching_content    = EXCLUDED.teaching_content,
-             reflection_question = EXCLUDED.reflection_question,
-             prayer              = EXCLUDED.prayer,
-             todays_action       = EXCLUDED.todays_action,
+             content             = CASE
+                                     WHEN journey_steps.content IS NOT NULL
+                                       AND journey_steps.content::text NOT IN ('null','{}','[]')
+                                     THEN journey_steps.content
+                                     ELSE EXCLUDED.content
+                                   END,
+             teaching_content    = COALESCE(NULLIF(journey_steps.teaching_content, ''), EXCLUDED.teaching_content),
+             reflection_question = COALESCE(NULLIF(journey_steps.reflection_question, ''), EXCLUDED.reflection_question),
+             prayer              = COALESCE(NULLIF(journey_steps.prayer, ''), EXCLUDED.prayer),
+             todays_action       = COALESCE(NULLIF(journey_steps.todays_action, ''), EXCLUDED.todays_action),
+             mentor_intro        = COALESCE(NULLIF(journey_steps.mentor_intro, ''), EXCLUDED.mentor_intro),
              is_completion_step  = EXCLUDED.is_completion_step,
              -- Preserve admin-saved share images; only fill from seed when the DB value is null
              share_image_url     = COALESCE(journey_steps.share_image_url, EXCLUDED.share_image_url)`,
