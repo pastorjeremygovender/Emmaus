@@ -334,7 +334,11 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
       title: generated.title,
       description: generated.description,
       subtitle: generated.subtitle,
-      journeyType: payload.contentType ?? "core",
+      // Map the wizard's UI contentType to a valid DB journey_type.
+      // 'core' is a longer discipleship journey; everything else the wizard
+      // produces ('daily-devotional', 'sermon-companion', 'bible-study',
+      // 'prayer-journey', 'small-group') is a quick-study Walk.
+      journeyType: payload.contentType === "core" ? "core" : "walk",
       status: "Draft",
       tags: generated.tags,
       durationDays: generated.steps.length,
