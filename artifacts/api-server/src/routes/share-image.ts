@@ -51,10 +51,8 @@ Your job: read the text and write a single vivid image generation brief. Coheren
 Cover all four areas, woven together:
 
 ──────────────────────────────────────────────────────────
-1. VISUAL SCENE — default to HUMAN subjects
-The very first choice you make is this: is there a person, a pair of hands, or a human silhouette that fits this text? If yes, lead with a human subject — a lone figure walking a dusty trail at golden hour, two weathered hands cupped together, a person standing at the edge of a cliff looking outward. Human subjects create instant emotional connection and make the image feel personal, not generic. Only fall back to pure landscape or objects if no human treatment honestly fits the text.
-
-Be precise and specific: name the exact subject, angle, lighting, time of day, texture. Not "peaceful nature" — say "a low-angle shot of a man's silhouette walking a narrow stone path, warm amber backlight from the setting sun, distant hills soft and hazy, long shadow stretching forward." Pick what genuinely matches the text — never default to the same concept twice.
+1. VISUAL SCENE
+Choose ONE specific photorealistic scene that emotionally matches the text's theme and mood. Let the text lead the visual — it could be a landscape, an object, a body of water, architecture, a close-up texture, a moment in nature, or a figure. Be precise and specific: name the exact subject, angle, lighting, time of day, texture. Not "peaceful nature" — say "a lone wooden rowing boat resting on still mist-covered water at dawn, soft warm light breaking through low fog, reflections just visible on the glassy surface." Pick what genuinely suits this specific text — never default to the same concept twice.
 
 ──────────────────────────────────────────────────────────
 2. COMPOSITION
