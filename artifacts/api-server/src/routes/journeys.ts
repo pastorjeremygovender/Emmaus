@@ -609,6 +609,17 @@ router.delete("/journeys/:id", async (req: Request, res: Response) => {
       // Use getJourneyIncludingDeleted so this works after a prior soft-delete.
       const journeySnapshot = await store.getJourneyIncludingDeleted(id);
       const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
+
+      // Record in reseed_tombstones so prod-data-sync never restores this journey.
+      // Non-fatal if the table doesn't exist yet (first boot before migration runs).
+      try {
+        const { pool: dbPool } = await import("@workspace/db");
+        await dbPool.query(
+          `INSERT INTO reseed_tombstones (journey_id, deleted_by) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [id, callerId],
+        );
+      } catch { /* non-fatal */ }
+
       await logAuditEvent({
         contentType: "journey",
         contentId: id,

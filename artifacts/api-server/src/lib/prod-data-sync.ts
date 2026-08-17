@@ -169,8 +169,19 @@ export async function runProdDataSync(): Promise<void> {
       }
     }
 
-    // ── 4. Upsert journeys ────────────────────────────────────────────────
+    // ── 4. Upsert journeys (skip tombstoned IDs) ─────────────────────────
+    // Tombstones record journeys the admin permanently deleted — we must not
+    // restore them from seed data on subsequent boots.
+    let tombstones = new Set<string>();
+    try {
+      const { rows } = await pool.query<{ journey_id: string }>(
+        "SELECT journey_id FROM reseed_tombstones",
+      );
+      tombstones = new Set(rows.map((r) => r.journey_id));
+    } catch { /* table may not exist on very first boot — safe to skip */ }
+
     for (const j of journeys) {
+      if (tombstones.has(j.id)) continue; // admin permanently deleted this — skip
       try {
         await pool.query(
           `INSERT INTO journeys

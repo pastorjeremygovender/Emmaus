@@ -1865,6 +1865,22 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: share_image_url columns ensured (idempotent)");
   }
 
+  // ─── Reseed tombstones — tracks permanently deleted seed journeys ───────────
+  // When an admin permanently deletes a journey that is part of the seed data,
+  // prod-data-sync must not restore it on the next boot.  This table is the
+  // authoritative "do not re-insert" list checked by prod-data-sync before
+  // upserting any journey.
+  {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS reseed_tombstones (
+        journey_id   TEXT        PRIMARY KEY,
+        deleted_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deleted_by   TEXT
+      )
+    `);
+    logger.info("Startup migration: reseed_tombstones table ensured (idempotent)");
+  }
+
   // ─── Remove __TEST__ devotional records from all environments ──────────────
   // Test records created during badge-lifecycle testing leaked into production
   // via the prod-data-sync upsert.  Delete them idempotently; safe to re-run.
