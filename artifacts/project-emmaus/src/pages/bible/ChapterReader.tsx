@@ -486,35 +486,6 @@ export default function ChapterReader() {
             </div>
           </div>
 
-          {/* Notes + Save + Favourite — moved here from bottom toolbar to avoid FAB overlap */}
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setNotesOpen(true)}
-              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Chapter notes"
-            >
-              <FileText size={20} />
-              {chapterNotes.length > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-primary text-[7px] text-primary-foreground rounded-full flex items-center justify-center font-bold leading-none">
-                  {chapterNotes.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={handleToggleBookmark}
-              className={['p-2 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center', bookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground'].join(' ')}
-              aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark this chapter'}
-            >
-              <Bookmark size={20} className={bookmarked ? 'fill-primary' : ''} />
-            </button>
-            <FavouriteButton
-              contentType="bible-chapter"
-              contentId={`${resolvedBookId}-${chapterNum}`}
-              contentTitle={`${book.name} ${chapterNum}${chapterData?.heading ? ` — ${chapterData.heading}` : ''}`}
-              contentRoute={`/bible/read/${resolvedBookId}/${chapterNum}`}
-              size={20}
-            />
-          </div>
         </div>
 
         {/* Chapter heading sub-line */}
