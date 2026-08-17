@@ -66,6 +66,9 @@ export default function JourneyDay() {
   // All published steps for this journey — used to resolve the next lesson in the completion card.
   const allSteps = getStepsForJourney(journeyId || '');
 
+  // Real step count from live data — avoids showing "of 0" when durationDays is stale/unset.
+  const publishedStepCount = allSteps.filter(s => s.status === 'Published' && !s.isCompletionStep).length;
+
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
@@ -336,7 +339,7 @@ export default function JourneyDay() {
             <div className="text-[12px] text-muted-foreground">
               {isDailyRhythmJourney
               ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
-              : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${journey.durationDays}`}
+              : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${publishedStepCount || journey.durationDays}`}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
