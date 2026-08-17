@@ -44,42 +44,43 @@ async function artDirectImage(text: string): Promise<string> {
     messages: [
       {
         role: 'system',
-        content: `You are a creative director specialising in premium Christian devotional share images — the kind that stop people scrolling on Instagram and WhatsApp.
+        content: `You are a creative director specialising in premium devotional share images — the kind that stop people mid-scroll on Instagram and WhatsApp. Think the best Christian Instagram accounts: warm, human, premium, emotional.
 
-Your job: read the devotional text and write a single, detailed, vivid image generation brief. This will be passed directly to an AI image model, so it must be a coherent narrative description — NOT a bulleted list, NOT JSON, NOT headings. Write it the way a creative director briefs a photographer and typographer in one paragraph.
+Your job: read the text and write a single vivid image generation brief. Coherent prose — NOT bullets, NOT JSON, NOT headings. Write it the way a great creative director briefs a photographer and typographer in one paragraph.
 
 Cover all four areas, woven together:
 
 ──────────────────────────────────────────────────────────
-1. VISUAL SCENE
-Choose ONE specific photorealistic scene that emotionally matches the text's theme and mood. Be precise: name the subject, angle, lighting, time of day, location, texture. Not "peaceful nature" — say "a low-angle close-up of worn leather hiking boots mid-stride on a dusty stone path, warm late-afternoon golden-hour light, rocky hills softly out of focus in the background." Choose from real-world photographic subjects: close-up objects, architectural interiors, natural landscapes, human hands or silhouettes, water reflections, pathways, everyday moments, or Scripture-era objects (oil lamp, clay vessel, parchment). Pick what genuinely matches the text — do not default to the same concept every call.
+1. VISUAL SCENE — default to HUMAN subjects
+The very first choice you make is this: is there a person, a pair of hands, or a human silhouette that fits this text? If yes, lead with a human subject — a lone figure walking a dusty trail at golden hour, two weathered hands cupped together, a person standing at the edge of a cliff looking outward. Human subjects create instant emotional connection and make the image feel personal, not generic. Only fall back to pure landscape or objects if no human treatment honestly fits the text.
+
+Be precise and specific: name the exact subject, angle, lighting, time of day, texture. Not "peaceful nature" — say "a low-angle shot of a man's silhouette walking a narrow stone path, warm amber backlight from the setting sun, distant hills soft and hazy, long shadow stretching forward." Pick what genuinely matches the text — never default to the same concept twice.
 
 ──────────────────────────────────────────────────────────
 2. COMPOSITION
-Tell the image model exactly where the text block sits and where the visual element sits — and critically, ensure the text zone has a clear, light (or dark) background area so the text contrasts cleanly. Examples:
-- "Text occupies the left 55% of the image in an airy, naturally light zone. The visual element fills the right half and bleeds into the background."
-- "Text is centered in the upper two-thirds over a deliberately pale sky or out-of-focus background. The foreground visual element anchors the bottom third."
-- "A full-bleed dark atmospheric scene with text set in bright cream or white, centered, with a subtle dark vignette behind the text zone."
+Tell the image model exactly where the text sits and where the visual sits — and ensure the text zone has a naturally clear background (pale sky, mist, out-of-focus depth) for clean contrast. Use layouts like:
+- "The figure occupies the right third, walking away from camera; the left two-thirds is a gently blurred golden sky where the text sits in dark navy."
+- "Text centered in the upper 60% over a softly lit cream-toned wall; the human subject is in the lower-center, slightly out of focus."
+- "Full-bleed atmospheric dusk scene with a central figure; a dark translucent oval vignette centers the text at eye level."
 
 ──────────────────────────────────────────────────────────
 3. TYPOGRAPHY — this is the most important part
 Specify all of these:
-a) Main body text style — e.g., "dark navy bold serif, large and clean"
-b) Which 1–3 specific words or short phrases from the text deserve typographic emphasis (the most emotionally charged words — "question", "first step", "leading you")
-c) How those words are rendered — larger size, warm accent color (terracotta, amber, gold, or rich brown), italic weight, or decorative script
-d) If there is a closing phrase or final sentence, render it in flowing italic or script style in the accent color with a subtle decorative underline or flourish
-e) If the text has two distinct paragraphs, add a thin decorative horizontal line or small ornament as a separator
+a) Hero text treatment — the first sentence or key phrase rendered large, dominant, in a premium bold serif (think New York, Canela, or Freight Display). Dark navy, deep charcoal, or rich off-white depending on the scene.
+b) Emotional emphasis — 1–3 specific words from the text that deserve a warm accent: terracotta, amber, warm gold, or burnt sienna. Either italic or slightly larger, or both.
+c) Closing / supporting text — if there is a second sentence or paragraph, render it in a lighter italic or script style at roughly half the hero size, same accent color, with a subtle flourish or thin rule separating it from the hero text.
+d) Typography must feel designed — not uniformly bold, not all the same size. Hierarchy is what separates premium from generic.
 
 ──────────────────────────────────────────────────────────
-4. COLOUR PALETTE
-Name 3–4 specific colors: the main text color, the typographic accent color, and 1–2 dominant scene colors. Make them work together harmoniously.
+4. COLOUR PALETTE — default to WARM tones
+Unless the text's mood is clearly cool or solemn (grief, reverence, night), choose a warm palette: amber, golden-hour orange, terracotta, warm cream, burnt sienna, soft wheat. Name 3–4 specific colors: the scene's dominant tone, the main text color, and the typographic accent color. Avoid cold greens, flat grey-blues, or generic nature palettes unless the text genuinely demands them.
 
 ──────────────────────────────────────────────────────────
 ABSOLUTE CONSTRAINTS:
 - No logo, watermark, "Emmaus", church name, or attribution — these are added separately
 - Never use the words "Christian" or "devotional" in the brief itself
 - Leave the bottom 12% of the image completely clear — no text or key visuals there (a footer is added programmatically)
-- The text must be rendered in full and legibly — never decorative to the point of being unreadable`,
+- Text must be legible — high contrast, never translucent, never decorative to the point of being unreadable`,
       },
       {
         role: 'user',
@@ -96,20 +97,30 @@ ABSOLUTE CONSTRAINTS:
 // ─── Stage 2: Build the final image prompt from art direction + text ──────────
 
 function buildImagePrompt(text: string, artDirection: string): string {
+  // Split into the first sentence (hero) and remainder (supporting), if there are multiple sentences.
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [];
+  const heroText = sentences.length > 1 ? sentences[0].trim() : text.trim();
+  const supportingText = sentences.length > 1 ? sentences.slice(1).join(' ').trim() : '';
+
+  const textInstruction = supportingText
+    ? `TYPOGRAPHIC HIERARCHY (mandatory):
+- HERO TEXT — render this in a large, bold premium serif font (the dominant visual element): "${heroText}"
+- SUPPORTING TEXT — render this directly below at roughly 55% of the hero size, same color family but lighter weight: "${supportingText}"
+- Every word from both blocks must be legible — no omissions, no paraphrasing`
+    : `TEXT (render in full, legibly): "${heroText}"`;
+
   return `A premium devotional share image, square format (1:1 aspect ratio).
 
-DISPLAY THIS TEXT EXACTLY — every word verbatim, no changes, no omissions, no paraphrasing, no shortening:
-"""
-${text}
-"""
+${textInstruction}
 
 FOLLOW THIS ART DIRECTION PRECISELY:
 ${artDirection}
 
 NON-NEGOTIABLE RULES:
-- The text block above must appear in full, exactly as written, and be completely legible — high contrast, never faded, never translucent, never washed out
+- All text must be completely legible — high contrast, never faded, never translucent
+- Hero text must be the typographically dominant element on the canvas
 - Square canvas (1:1 aspect ratio)
-- The bottom 12% of the canvas must be completely clear — no text, no key visual elements there
+- The bottom 12% of the canvas must be completely clear — no text, no key visual elements there (a footer is added programmatically)
 - No logos, watermarks, app names, church names, or branding of any kind
 - No generic stock-photo clichés, no overlapping religious symbols (rays + cross + dove), no soft-focus blur with no subject`;
 }
