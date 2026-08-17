@@ -54,6 +54,7 @@ const HIDDEN_PREFIXES = [
   '/personal/ask-emmaus',  // Ask Emmaus screens themselves
   '/admin',
   '/join-room',
+  '/bible/read',           // Bible chapter reader — focused reading, no FAB
 ];
 
 // Primary screens use the inline AskEmmausBar instead of the FAB
