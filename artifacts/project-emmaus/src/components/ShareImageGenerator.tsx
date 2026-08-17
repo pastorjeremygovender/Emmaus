@@ -107,11 +107,11 @@ export async function compositeAttributionBlob(
       const LOGO_CORNER_R = Math.round(6 * scale); // rounded corners on logo mark
 
       if (attribution === "emmaus") {
-        // Two-line text block
-        const primarySize = Math.round(18 * scale);
-        const secondarySize = Math.round(13 * scale);
-        const lineGap = Math.round(8 * scale);
-        const padV = Math.round(22 * scale);
+        // Two-line text block — sizes tuned to remain readable on a mobile screen
+        const primarySize = Math.round(28 * scale);
+        const secondarySize = Math.round(19 * scale);
+        const lineGap = Math.round(10 * scale);
+        const padV = Math.round(30 * scale);
 
         const textBlockH = primarySize + lineGap + secondarySize;
         const FOOTER = textBlockH + padV * 2;
@@ -128,7 +128,7 @@ export async function compositeAttributionBlob(
         const footerMidY = H - padV - textBlockH / 2;
 
         // Logo mark — square, height = textBlockH, with a bit of breathing room
-        const logoSize = Math.round(textBlockH * 1.0);
+        const logoSize = Math.round(textBlockH * 1.1);
         const logoX = W / 2; // will recompute after measuring text
 
         // Measure text widths to centre the composed unit
@@ -181,8 +181,8 @@ export async function compositeAttributionBlob(
         ctx.fillText("A discipleship ministry of Isipingo Community Church", textStartX, y2);
 
       } else if (attribution === "jeremy") {
-        const primarySize = Math.round(17 * scale);
-        const padV = Math.round(24 * scale);
+        const primarySize = Math.round(26 * scale);
+        const padV = Math.round(30 * scale);
         const FOOTER = primarySize + padV * 2;
         const yTop = H - FOOTER;
 
@@ -193,7 +193,7 @@ export async function compositeAttributionBlob(
         ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
 
         const footerMidY = H - padV - primarySize / 2;
-        const logoSize = Math.round(primarySize * 1.6);
+        const logoSize = Math.round(primarySize * 1.8);
 
         // Measure text
         ctx.font = `500 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;

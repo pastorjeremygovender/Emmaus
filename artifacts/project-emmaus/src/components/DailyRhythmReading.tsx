@@ -266,7 +266,7 @@ export function DailyRhythmReading({
     <div className="px-4 pt-8 max-w-[640px] mx-auto">
 
       {/* ── Identity header — centered ─────────────────────────────────────── */}
-      <section className="mb-7 text-center">
+      <section className={shareImageUrl ? "mb-4 text-center" : "mb-7 text-center"}>
         <p className="text-[14px] font-medium text-muted-foreground tracking-wide mb-1">
           10 Minutes with Jesus
         </p>
@@ -279,6 +279,13 @@ export function DailyRhythmReading({
             : null)}
         </h1>
       </section>
+
+      {/* ── Share image — shown directly under the title ────────────────────── */}
+      {shareImageUrl && (
+        <div className="mb-7">
+          <ShareImageCard shareImageUrl={shareImageUrl} />
+        </div>
+      )}
 
       {/* ── Greeting ───────────────────────────────────────────────────────── */}
       {(mentorIntro || previewMode) && (
@@ -409,17 +416,9 @@ export function DailyRhythmReading({
         </section>
       )}
 
-      {/* ── Share (text) — above the image card so it's clearly about the content ── */}
+      {/* ── Share (text) — above the action button so it's clearly about the content ── */}
       {sharePayload && !previewMode && (
         <ShareButton payload={sharePayload} />
-      )}
-
-      {/* ── Share image ─────────────────────────────────────────────────────── */}
-      {/* Note: share image is shown even in previewMode so admins can verify
-          the image they just generated. Only the interactive Share button is
-          suppressed in preview. */}
-      {shareImageUrl && (
-        <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
       {/* ── Action button slot ──────────────────────────────────────────────── */}

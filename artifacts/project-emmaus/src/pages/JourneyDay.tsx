@@ -398,7 +398,7 @@ export default function JourneyDay() {
         <main className="px-4 pt-8 max-w-[640px] mx-auto">
 
           {/* Day label + title */}
-          <section className="mb-7">
+          <section className={step.shareImageUrl ? "mb-4" : "mb-7"}>
             <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
               {getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </span>
@@ -406,6 +406,13 @@ export default function JourneyDay() {
               {step.title}
             </h1>
           </section>
+
+          {/* Share image — shown directly under the title */}
+          {step.shareImageUrl && (
+            <div className="mb-7">
+              <ShareImageCard shareImageUrl={step.shareImageUrl} />
+            </div>
+          )}
 
           {/* Mentor introduction */}
           {step.mentorIntro ? (
@@ -523,7 +530,7 @@ export default function JourneyDay() {
             </div>
           </section>
 
-          {/* Share (text) — above the image card so it's clearly about the content */}
+          {/* Share (text) */}
           <ShareButton payload={{
             title: journey?.title ?? 'Emmaus',
             dayTitle: step.title,
@@ -534,11 +541,6 @@ export default function JourneyDay() {
             nextStep: step.actionStep ?? undefined,
             closing: (step as any).closingText ?? undefined,
           }} />
-
-          {/* Share image — "Take this with you" */}
-          {step.shareImageUrl && (
-            <ShareImageCard shareImageUrl={step.shareImageUrl} />
-          )}
 
           {/* Primary action — "Finished" for a fresh read; completion card for replay */}
           <div className="pt-2 pb-8">
