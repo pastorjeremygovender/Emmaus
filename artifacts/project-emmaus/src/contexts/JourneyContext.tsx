@@ -382,7 +382,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       setSteps(ss => [...ss.filter(s => !(s.journeyId === created.journeyId && s.day === created.day)), created]);
       // Refresh journey to get updated durationDays
       try {
-        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        const jList = isAdmin ? await api.listJourneys() : await api.listPublishedJourneys();
         setJourneys(jList);
       } catch { /* ignore */ }
       return created;
@@ -408,7 +409,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       await api.deleteStep(journeyId, day, user?.id);
       setSteps(ss => ss.filter(s => !(s.journeyId === journeyId && s.day === day)));
       try {
-        const jList = user?.role === 'admin' ? await api.listJourneys() : await api.listPublishedJourneys();
+        const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+        const jList = isAdmin ? await api.listJourneys() : await api.listPublishedJourneys();
         setJourneys(jList);
       } catch { /* ignore */ }
     },
@@ -440,7 +442,8 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
 
   const refreshJourneys = useCallback(async () => {
     try {
-      const jList = user?.role === 'admin'
+      const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
+      const jList = isAdmin
         ? await api.listJourneys()
         : await api.listPublishedJourneys();
       setJourneys(jList);
