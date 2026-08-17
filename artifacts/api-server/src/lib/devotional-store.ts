@@ -125,10 +125,30 @@ export async function deleteSeries(id: string): Promise<void> {
     .where(eq(devotionalSeriesTable.id, id));
 }
 
-export async function permanentDeleteSeries(id: string): Promise<void> {
-  await db
-    .delete(devotionalSeriesTable)
-    .where(eq(devotionalSeriesTable.id, id));
+export async function permanentDeleteSeries(id: string, deletedBy: string): Promise<void> {
+  // Atomically record the tombstone and delete the series in one transaction.
+  // If either step fails the whole operation rolls back — the series is not
+  // deleted without a tombstone, and no tombstone is written without deletion.
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO reseed_devotional_tombstones (series_id, deleted_by)
+       VALUES ($1, $2)
+       ON CONFLICT (series_id) DO UPDATE SET deleted_by = EXCLUDED.deleted_by`,
+      [id, deletedBy],
+    );
+    await client.query(
+      "DELETE FROM devotional_series WHERE id = $1",
+      [id],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ─── Date-label inference ─────────────────────────────────────────────────────

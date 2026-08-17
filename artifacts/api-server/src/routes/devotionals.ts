@@ -224,7 +224,9 @@ devotionalsRouter.delete("/:id/permanent", async (req: Request, res: Response) =
   const seriesId = String(req.params.id);
   try {
     const seriesBefore = await store.getSeriesById(seriesId);
-    await store.permanentDeleteSeries(seriesId);
+    // Atomically writes tombstone + deletes series in a single DB transaction.
+    // Throws if either step fails — the series is not deleted without a tombstone.
+    await store.permanentDeleteSeries(seriesId, adminId);
     await logAuditEvent({
       contentType: "devotional_series",
       contentId: seriesId,

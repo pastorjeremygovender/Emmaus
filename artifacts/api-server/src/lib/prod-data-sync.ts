@@ -287,8 +287,19 @@ export async function runProdDataSync(): Promise<void> {
       "prod-data-sync: journeys/steps synced",
     );
 
-    // ── 6. Upsert devotional series ───────────────────────────────────────
+    // ── 6. Upsert devotional series (skip tombstoned IDs) ────────────────
+    // Tombstones record series the admin permanently deleted — we must not
+    // restore them from seed data on subsequent boots.
+    let devTombstones = new Set<string>();
+    try {
+      const { rows: devTombRows } = await pool.query<{ series_id: string }>(
+        "SELECT series_id FROM reseed_devotional_tombstones",
+      );
+      devTombstones = new Set(devTombRows.map((r) => r.series_id));
+    } catch { /* table may not exist on very first boot — safe to skip */ }
+
     for (const s of devSeries) {
+      if (devTombstones.has(s.id)) continue; // admin permanently deleted this — skip
       try {
         await pool.query(
           `INSERT INTO devotional_series
@@ -312,8 +323,11 @@ export async function runProdDataSync(): Promise<void> {
     }
 
     // ── 7. Upsert devotional entries (including display_label) ────────────
+    // Skip entries whose parent series was permanently deleted (tombstoned).
+    // Without this guard, foreign-key errors fire on every boot for orphaned entries.
     let entriesUpserted = 0;
     for (const e of devEntries) {
+      if (devTombstones.has(e.series_id)) continue; // parent series was permanently deleted
       try {
         const r = await pool.query(
           `INSERT INTO devotional_entries

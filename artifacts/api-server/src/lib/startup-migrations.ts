@@ -1881,6 +1881,21 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: reseed_tombstones table ensured (idempotent)");
   }
 
+  // ─── Reseed devotional tombstones — tracks permanently deleted seed series ──
+  // Mirrors reseed_tombstones (journeys) for devotional series.  When an admin
+  // permanently deletes a devotional series that is part of the seed data,
+  // prod-data-sync must not restore it on the next boot.
+  {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS reseed_devotional_tombstones (
+        series_id  TEXT        PRIMARY KEY,
+        deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        deleted_by TEXT
+      )
+    `);
+    logger.info("Startup migration: reseed_devotional_tombstones table ensured (idempotent)");
+  }
+
   // ─── Remove __TEST__ devotional records from all environments ──────────────
   // Test records created during badge-lifecycle testing leaked into production
   // via the prod-data-sync upsert.  Delete them idempotently; safe to re-run.
