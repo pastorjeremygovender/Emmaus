@@ -459,12 +459,106 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
       {/* ── Generated image preview ──────────────────────────────────────── */}
       {previewImage && (
-        <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square">
+        // container-type: inline-size enables cqw units inside so all sizing
+        // scales with preview width — matching the canvas compositor's
+        // scale = W / 1024 approach.
+        <div
+          className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 aspect-square relative"
+          style={{ containerType: "inline-size" } as React.CSSProperties}
+        >
           <img
             src={`data:image/png;base64,${previewImage}`}
             alt="Generated share image preview"
             className="w-full h-full object-cover block"
           />
+
+          {/* ── Attribution footer overlay (live CSS preview of the canvas composite) ──
+               All dimensions in cqw = % of container width, mirroring the canvas
+               scale = W / 1024 calculation:
+                 emmaus: primarySize 18px → 1.758cqw, secondarySize 13px → 1.27cqw
+                         logoSize 39cqpx → 3.81cqw, padV 22px → 2.15cqw
+                 jeremy: primarySize 17px → 1.66cqw, logoSize 27px → 2.64cqw
+                         padV 24px → 2.34cqw
+               DIVIDER_GAP 14px → 1.37cqw each side, DIVIDER_W 1px → 0.098cqw
+          */}
+          {attribution !== "none" && (
+            <div
+              className="absolute bottom-0 left-0 right-0 flex items-center justify-center"
+              style={{
+                background:
+                  attribution === "emmaus"
+                    ? "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 100%)"
+                    : "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%)",
+                paddingTop: "8.1cqw",
+                paddingBottom: attribution === "emmaus" ? "2.15cqw" : "2.34cqw",
+              }}
+            >
+              {/* Logo mark */}
+              <img
+                src="/icon.png"
+                alt=""
+                style={{
+                  width: attribution === "emmaus" ? "3.81cqw" : "2.64cqw",
+                  height: attribution === "emmaus" ? "3.81cqw" : "2.64cqw",
+                  borderRadius: "0.59cqw",
+                  objectFit: "cover",
+                  flexShrink: 0,
+                } as React.CSSProperties}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+
+              {/* Vertical divider */}
+              <div
+                style={{
+                  width: "0.098cqw",
+                  height: attribution === "emmaus" ? "3.24cqw" : "1.41cqw",
+                  background: "rgba(255,255,255,0.35)",
+                  margin: "0 1.37cqw",
+                  flexShrink: 0,
+                } as React.CSSProperties}
+              />
+
+              {/* Text block */}
+              {attribution === "emmaus" ? (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span
+                    style={{
+                      fontSize: "1.758cqw",
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,0.97)",
+                      lineHeight: 1.2,
+                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                    } as React.CSSProperties}
+                  >
+                    Shared from Emmaus
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "1.27cqw",
+                      marginTop: "0.78cqw",
+                      color: "rgba(255,255,255,0.72)",
+                      lineHeight: 1.2,
+                      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                    } as React.CSSProperties}
+                  >
+                    A discipleship ministry of Isipingo Community Church
+                  </span>
+                </div>
+              ) : (
+                <span
+                  style={{
+                    fontSize: "1.66cqw",
+                    fontWeight: 500,
+                    color: "rgba(255,255,255,0.95)",
+                    lineHeight: 1.2,
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                  } as React.CSSProperties}
+                >
+                  Jeremy Govender
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
