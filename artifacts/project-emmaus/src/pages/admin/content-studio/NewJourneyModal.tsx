@@ -30,7 +30,9 @@ interface Props {
 type WizardStep     = 1 | 2;
 type CreationMethod = 'ai' | 'scratch';
 
-const JOURNEY_TYPE_OPTIONS = ['core', 'companion', 'series', 'course'];
+// Walks created from this modal are always journeyType='walk'.
+// The sub-type options below are retired — journeyType is not used for
+// sub-classification anywhere in the product.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
     title:           '',
     description:     '',
     collectionId:    defaultCollectionId ?? '',
-    journeyType:     'core',
+    journeyType:     'walk',
     estimatedLength: '',
   });
   const [saving, setSaving] = useState(false);
@@ -297,38 +299,24 @@ export default function NewJourneyModal({ onClose, onCreated, defaultCollectionI
                 />
               </div>
 
-              {/* Collection + Walk Type */}
-              <div className="grid grid-cols-2 gap-3">
-                {collections.length > 0 && (
-                  <div>
-                    <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                      Collection
-                    </label>
-                    <select
-                      value={form.collectionId}
-                      onChange={e => patchForm('collectionId', e.target.value)}
-                      className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
-                    >
-                      <option value="">None</option>
-                      {collections.map(c => (
-                        <option key={c.id} value={c.id}>{c.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div className={collections.length === 0 ? 'col-span-2' : ''}>
+              {/* Collection */}
+              {collections.length > 0 && (
+                <div>
                   <label className="block text-[13px] font-semibold text-gray-800 mb-1.5">
-                    Walk Type
+                    Collection
                   </label>
                   <select
-                    value={form.journeyType}
-                    onChange={e => patchForm('journeyType', e.target.value)}
+                    value={form.collectionId}
+                    onChange={e => patchForm('collectionId', e.target.value)}
                     className="w-full px-3 py-2.5 text-[13px] text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 bg-white"
                   >
-                    {JOURNEY_TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                    <option value="">None</option>
+                    {collections.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
                   </select>
                 </div>
-              </div>
+              )}
 
               {/* Estimated length */}
               <div>
