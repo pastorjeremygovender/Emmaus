@@ -16,7 +16,7 @@
  * Both modes ultimately populate the same `shareImageUrl` via `onChange`.
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { ImagePlus, Loader2, Upload, X, Sparkles, CheckCircle, RefreshCw, Ban } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api';
@@ -145,7 +145,6 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
 
   async function handleRegenerateAuto() {
     if (!stepContent) return;
-    autoTriggeredRef.current = true; // keep guard set — this is an explicit retry
     // Use the admin's custom phrase if they've typed one; otherwise let AI pick.
     const override = customPhrase.trim() || undefined;
     triggerAutoGenerate(stepContent.trim(), override);
