@@ -64,92 +64,182 @@ interface Props {
 // then returns the result as a PNG Blob. This keeps attribution pixel-perfect —
 // the AI model only creates the devotional artwork.
 
+/** Load an Image element from a src URL; resolves even if the logo 404s (returns null). */
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => resolve(null); // gracefully degrade — footer still renders text
+    el.src = src;
+  });
+}
+
 async function compositeAttributionBlob(
   imageBase64: string,
   attribution: Attribution
 ): Promise<Blob> {
+  // Load the base image and logo mark in parallel
+  const [img, logoImg] = await Promise.all([
+    loadImage(`data:image/png;base64,${imageBase64}`),
+    attribution !== "none" ? loadImage("/icon.png") : Promise.resolve(null),
+  ]);
+
+  if (!img) throw new Error("Failed to load generated image onto canvas");
+
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("Canvas context unavailable")); return; }
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { reject(new Error("Canvas context unavailable")); return; }
 
-      // ── Base image ────────────────────────────────────────────────────────
-      ctx.drawImage(img, 0, 0);
+    // ── Base image ────────────────────────────────────────────────────────
+    ctx.drawImage(img, 0, 0);
 
-      if (attribution !== "none") {
-        const W = canvas.width;
-        const H = canvas.height;
-        const scale = W / 1024; // normalise font sizes to image width
+    if (attribution !== "none") {
+      const W = canvas.width;
+      const H = canvas.height;
+      const scale = W / 1024; // normalise font sizes to image width
 
-        if (attribution === "emmaus") {
-          // Two-line footer: measure both lines first, then position
-          const primarySize = Math.round(18 * scale);
-          const secondarySize = Math.round(13 * scale);
-          const lineGap = Math.round(10 * scale);
-          const padV = Math.round(22 * scale); // vertical padding from bottom edge
+      // Shared layout helpers
+      const DIVIDER_W = Math.round(1 * scale);
+      const DIVIDER_GAP = Math.round(14 * scale); // gap each side of divider
+      const LOGO_CORNER_R = Math.round(6 * scale); // rounded corners on logo mark
 
-          const blockH = primarySize + lineGap + secondarySize;
-          const FOOTER = blockH + padV * 2;
-          const yTop = H - FOOTER;
+      if (attribution === "emmaus") {
+        // Two-line text block
+        const primarySize = Math.round(18 * scale);
+        const secondarySize = Math.round(13 * scale);
+        const lineGap = Math.round(8 * scale);
+        const padV = Math.round(22 * scale);
 
-          // Gradient — fades from transparent to semi-opaque black
-          const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
-          grad.addColorStop(0, "rgba(0,0,0,0)");
-          grad.addColorStop(1, "rgba(0,0,0,0.60)");
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
+        const textBlockH = primarySize + lineGap + secondarySize;
+        const FOOTER = textBlockH + padV * 2;
+        const yTop = H - FOOTER;
 
-          ctx.textAlign = "center";
-          ctx.textBaseline = "top";
+        // Gradient — fades from transparent to semi-opaque black
+        const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, "rgba(0,0,0,0.65)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
 
-          // Line 1 — "Shared from Emmaus"
-          const y1 = H - padV - secondarySize - lineGap - primarySize;
-          ctx.font = `600 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-          ctx.fillStyle = "rgba(255,255,255,0.97)";
-          ctx.fillText("Shared from Emmaus", W / 2, y1);
+        // Vertical centre of the footer text block
+        const footerMidY = H - padV - textBlockH / 2;
 
-          // Line 2 — "A discipleship ministry of Isipingo Community Church"
-          const y2 = y1 + primarySize + lineGap;
-          ctx.font = `${secondarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-          ctx.fillStyle = "rgba(255,255,255,0.72)";
-          ctx.fillText("A discipleship ministry of Isipingo Community Church", W / 2, y2);
+        // Logo mark — square, height = textBlockH, with a bit of breathing room
+        const logoSize = Math.round(textBlockH * 1.0);
+        const logoX = W / 2; // will recompute after measuring text
 
-        } else if (attribution === "jeremy") {
-          const primarySize = Math.round(17 * scale);
-          const padV = Math.round(24 * scale);
-          const FOOTER = primarySize + padV * 2;
-          const yTop = H - FOOTER;
+        // Measure text widths to centre the composed unit
+        ctx.font = `600 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        const line1W = ctx.measureText("Shared from Emmaus").width;
+        ctx.font = `${secondarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        const line2W = ctx.measureText("A discipleship ministry of Isipingo Community Church").width;
+        const maxTextW = Math.max(line1W, line2W);
 
-          const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
-          grad.addColorStop(0, "rgba(0,0,0,0)");
-          grad.addColorStop(1, "rgba(0,0,0,0.55)");
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
+        // Total composed width: logo + gap + divider + gap + text
+        const composedW = (logoImg ? logoSize + DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP : 0) + maxTextW;
+        const startX = (W - composedW) / 2;
 
-          ctx.textAlign = "center";
-          ctx.textBaseline = "top";
+        let textStartX = startX;
 
-          const y1 = H - padV - primarySize;
-          ctx.font = `500 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-          ctx.fillStyle = "rgba(255,255,255,0.95)";
-          ctx.fillText("Jeremy Govender", W / 2, y1);
+        // Draw logo mark
+        if (logoImg) {
+          const lx = startX;
+          const ly = footerMidY - logoSize / 2;
+
+          // Rounded-corner clip
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(lx, ly, logoSize, logoSize, LOGO_CORNER_R);
+          ctx.clip();
+          ctx.drawImage(logoImg, lx, ly, logoSize, logoSize);
+          ctx.restore();
+
+          // Vertical divider
+          const divX = lx + logoSize + DIVIDER_GAP;
+          const divH = Math.round(textBlockH * 0.85);
+          ctx.fillStyle = "rgba(255,255,255,0.35)";
+          ctx.fillRect(divX, footerMidY - divH / 2, DIVIDER_W, divH);
+
+          textStartX = divX + DIVIDER_W + DIVIDER_GAP;
         }
-      }
 
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Canvas to blob conversion failed"));
-        },
-        "image/png"
-      );
-    };
-    img.onerror = () => reject(new Error("Failed to load generated image onto canvas"));
-    img.src = `data:image/png;base64,${imageBase64}`;
+        // Text — left-aligned from textStartX
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+
+        const y1 = footerMidY - textBlockH / 2;
+        ctx.font = `600 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        ctx.fillStyle = "rgba(255,255,255,0.97)";
+        ctx.fillText("Shared from Emmaus", textStartX, y1);
+
+        const y2 = y1 + primarySize + lineGap;
+        ctx.font = `${secondarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.fillText("A discipleship ministry of Isipingo Community Church", textStartX, y2);
+
+      } else if (attribution === "jeremy") {
+        const primarySize = Math.round(17 * scale);
+        const padV = Math.round(24 * scale);
+        const FOOTER = primarySize + padV * 2;
+        const yTop = H - FOOTER;
+
+        const grad = ctx.createLinearGradient(0, yTop - FOOTER * 0.4, 0, H);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, "rgba(0,0,0,0.55)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, yTop - FOOTER * 0.4, W, FOOTER * 1.4);
+
+        const footerMidY = H - padV - primarySize / 2;
+        const logoSize = Math.round(primarySize * 1.6);
+
+        // Measure text
+        ctx.font = `500 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        const textW = ctx.measureText("Jeremy Govender").width;
+
+        const composedW = (logoImg ? logoSize + DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP : 0) + textW;
+        const startX = (W - composedW) / 2;
+
+        let textStartX = startX;
+
+        if (logoImg) {
+          const lx = startX;
+          const ly = footerMidY - logoSize / 2;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(lx, ly, logoSize, logoSize, LOGO_CORNER_R);
+          ctx.clip();
+          ctx.drawImage(logoImg, lx, ly, logoSize, logoSize);
+          ctx.restore();
+
+          const divX = lx + logoSize + DIVIDER_GAP;
+          const divH = Math.round(primarySize * 0.85);
+          ctx.fillStyle = "rgba(255,255,255,0.35)";
+          ctx.fillRect(divX, footerMidY - divH / 2, DIVIDER_W, divH);
+
+          textStartX = divX + DIVIDER_W + DIVIDER_GAP;
+        }
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+
+        const y1 = footerMidY;
+        ctx.font = `500 ${primarySize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.fillText("Jeremy Govender", textStartX, y1);
+      }
+    }
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Canvas to blob conversion failed"));
+      },
+      "image/png"
+    );
   });
 }
 
