@@ -31,7 +31,8 @@
 - [Walk card & completion flow](walk-card-completion-flow.md) — card is one clickable button → JourneyDetail; backSource thread preserves chain; completion always "Back to Walk".
 - [Journey step status inheritance](journey-step-status.md) — createStep always inherits parent journey status; refreshJourneyDuration counts Published steps only; startup migration repairs legacy Draft-steps-on-Published-journey data idempotently.
 - [Launch Board P2 fixes](launch-board-p2-fixes.md) — atomic devotional progress, invite token sessionStorage bridge, companion atomic publish, P2-7/SC-2/DEV-2/RM-1 deferred post-launch.
-- [prod-data-sync](prod-data-sync.md) — three-part countermeasure against dev/prod DB drift: export:seed script + data-safety workflow gate + always-upsert boot sync.
+- [prod-data-sync](prod-data-sync.md) — COALESCE rule protects authored content; tombstone table prevents seed resurrections; OLD_JOURNEY_IDS must stay current; write content in dev not production.
+- [journey-context-role-bug](journey-context-role-bug.md) — refreshJourneys/addStep/deleteStep must check 'admin' OR 'superAdmin'; missing superAdmin causes all Drafts to vanish for superAdmin users.
 - [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.
 - [ffmpeg production PATH fix](ffmpeg-production-path.md) — `which ffmpeg` fails in production; glob fallback `ls /nix/store/*-replit-runtime-path*/bin/ffmpeg` resolves it instantly.

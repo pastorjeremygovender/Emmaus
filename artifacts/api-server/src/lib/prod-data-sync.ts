@@ -38,6 +38,8 @@ const OLD_JOURNEY_IDS = [
   "church", "baptism", "holy-communion", "faith", "the-holy-spirit",
   "following-jesus-every-day", "serving-others", "overcoming-temptation",
   "the-fruit-of-the-spirit", "living-with-hope",
+  // Incomplete Draft AI walk (1 step only) — the published 5-day version is the-emmaus-road-2
+  "the-emmaus-road",
 ];
 
 export async function runProdDataSync(): Promise<void> {

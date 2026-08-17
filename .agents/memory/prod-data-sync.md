@@ -1,53 +1,42 @@
 ---
 name: prod-data-sync
-description: How authored content is kept in sync between dev and production databases, and the permanent countermeasure against drift.
+description: Rules and gotchas for the dev→production data sync pipeline (export-seed + prod-data-sync.ts).
 ---
 
-## The problem
-Replit uses separate dev and production PostgreSQL databases. Authored content (chapter overviews, journeys, steps) created via the admin UI in dev never reaches production automatically.
+# prod-data-sync
 
-## The permanent solution (three parts)
+## The pipeline
+Three-part countermeasure against dev/prod DB drift:
+1. `export:seed` — runs on every API server startup; dumps dev DB → `dist/data/prod-sync-*.json`
+2. `data-safety` workflow — gate that must pass before any publish
+3. `runProdDataSync()` — runs on every production boot; upserts seed files into production DB
 
-### 1. export:seed script — runs before every deploy
-`artifacts/api-server/src/scripts/export-seed.ts`
-`pnpm --filter @workspace/api-server run export:seed`
+## Content preservation rule (CRITICAL)
+Step upsert uses COALESCE so authored content is **never overwritten** by seed data:
+- `content` (JSONB): `CASE WHEN existing IS NOT NULL AND existing::text NOT IN ('null','{}','[]') THEN existing ELSE seed END`
+- Text fields (`teaching_content`, `reflection_question`, `prayer`, `todays_action`, `mentor_intro`): `COALESCE(NULLIF(existing, ''), seed)`
+- `share_image_url`: `COALESCE(existing, seed)`
+- `status`: intentionally omitted from DO UPDATE — admin publish/unpublish is source of truth
 
-Dumps the current dev DB to two seed files:
-- `src/data/prod-sync-overviews.json` — all Published chapter overviews (247+)
-- `src/data/prod-sync-journeys.json` — all journeys + steps
+**Why:** A previous version directly overwrote content columns on every boot, wiping anything an admin had written in production that wasn't in the seed file.
 
-Blocked in NODE_ENV=production. Safe to run multiple times.
+## Tombstone pattern
+`reseed_tombstones` table (created by startup migration) tracks permanently deleted seed journeys.
+- Written by the permanent-delete route in `routes/journeys.ts` immediately after `permanentDeleteJourney()`
+- Read by `prod-data-sync.ts` before each journey upsert; IDs in the table are skipped
+- Prevents the "deleted walk comes back after restart" class of bug
 
-### 2. data-safety workflow — export runs before every integrity check
-Command: `export:seed && checksum:content > /tmp/pre-deploy-checksum.json && test:integrity`
+## OLD_JOURNEY_IDS cleanup list
+Any journey ID that was ever published to production but no longer exists in dev **must** be added to `OLD_JOURNEY_IDS` in `prod-data-sync.ts`. Otherwise it persists in production forever because prod-data-sync only upserts (never deletes) journeys not in that list.
 
-This means seed files are always refreshed before the pre-deploy snapshot is taken. You cannot deploy stale seed files — the export runs first.
+**How to apply:** After deleting an AI-generated or test walk from dev, query production DB for orphans (`SELECT id FROM journeys WHERE id NOT IN (<seed IDs>)`) and add any found IDs to `OLD_JOURNEY_IDS`.
 
-### 3. prod-data-sync.ts — always-upsert on every boot
-`artifacts/api-server/src/lib/prod-data-sync.ts`
-Called from `app.ts` after `runStartupMigrations()`.
+## Critical rule: admins must write content in dev, not production
+The export-seed reads the **dev** database. Content written in the production admin panel (`*.replit.app/admin`) lives only in the production DB and is never captured by export-seed. If an admin writes step content in the production editor and then publishes, the seed (built from dev) will overwrite it — unless the COALESCE rule above is in place AND the existing prod value is non-empty.
 
-- **Chapter overviews**: `ON CONFLICT (book_id, chapter) DO UPDATE SET ...` — always syncs, not just when table is empty
-- **Journeys**: `ON CONFLICT (id) DO UPDATE SET ...`
-- **Steps**: `ON CONFLICT (id) DO UPDATE SET ...`
-- Also deletes stale old journey IDs that don't exist in dev (OLD_JOURNEY_IDS list)
-- Non-fatal — any failure logs a WARN but never aborts server startup
+**Correct workflow:** Write/edit content in the Replit workspace preview (dev), then publish to sync to production.
 
-## Key schema facts for journey_steps
-- `content` column is **JSONB**, not text — pass null or `JSON.stringify(obj)`, never empty string ""
-- No `created_by`/`updated_by` columns on `journey_steps` (unlike `journeys` and `bible_chapter_overviews`)
-
-## CRITICAL: admin-editable fields must use COALESCE in the upsert
-Any column that admins set independently after the seed is exported (e.g. `share_image_url`) MUST use:
-```sql
-share_image_url = COALESCE(journey_steps.share_image_url, EXCLUDED.share_image_url)
-```
-NOT `= EXCLUDED.share_image_url`. The upsert runs on every boot — a plain assignment resets the admin's value to the seed null every deployment.
-**Rule:** editorial/media fields the admin fills in after content is authored → COALESCE. Structural/content fields → plain EXCLUDED assignment.
-
-## How to add new content types to the sync
-1. Add the SELECT to `export-seed.ts`
-2. Add the upsert loop to `prod-data-sync.ts`
-3. Add the cp() call in `build.mjs` if it's a separate file
-
-**Why:** Without this, every new deployment that adds authored content requires a manual migration. The three-part system makes it automatic and impossible to miss.
+## Seeded journeys (current)
+- `the-road-to-emmaus` — "The Road to Emmaus", 3 steps, all with content
+- `coming-to-jesus` — "Who Is God?", 5 steps + completion, all currently empty
+- `15-minutes-with-jesus` — "10 Minutes with Jesus", 7 steps, all with content
