@@ -294,7 +294,7 @@ export function DailyRhythmReading({
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
               <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">
-                Greeting
+                Welcome
                 {previewMode && (
                   <span className="ml-1.5 font-normal normal-case tracking-normal text-amber-600/70">
                     · personalized per member
@@ -315,7 +315,7 @@ export function DailyRhythmReading({
               </>
             ) : previewMode ? (
               <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
-                Greeting will appear here…
+                Welcome will appear here…
               </p>
             ) : null}
           </div>
@@ -355,13 +355,13 @@ export function DailyRhythmReading({
           <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Reflection</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
             </div>
             {devotional ? (
               <BodyParagraphs text={devotional} />
             ) : previewMode ? (
               <p className="text-[17px] text-muted-foreground/40 leading-[1.65]">
-                Reflection will appear here…
+                Consider This will appear here…
               </p>
             ) : null}
           </div>

@@ -423,7 +423,7 @@ export default function JourneyDay() {
               <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
                 <div className="flex items-center gap-1.5 mb-2.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Greeting</h2>
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Welcome</h2>
                 </div>
                 <p className="text-[18px] text-foreground leading-[1.8]">
                   {step.mentorIntro}
@@ -453,7 +453,7 @@ export default function JourneyDay() {
             <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
               <div className="flex items-center gap-1.5 mb-2.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Reflection</h2>
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
               </div>
               <p className="text-[18px] leading-[1.8] text-foreground">
                 {step.devotional}
