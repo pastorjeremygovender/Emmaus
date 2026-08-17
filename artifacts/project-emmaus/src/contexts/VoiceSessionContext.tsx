@@ -1647,49 +1647,63 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
 
         if (tc.tool === 'navigate') {
-          const args = tc.args as { destination: string };
+          const args = tc.args as {
+            destination: string;
+            bibleBookId?: string;
+            bibleChapter?: number;
+            resolvedRoute?: string;
+          };
           const routes: Record<string, string> = {
             walk: '/walk', bible: '/bible', discover: '/discover', journeys: '/journeys',
           };
-          const resolvedRoute = args.destination === 'back' ? 'HISTORY_BACK' : (routes[args.destination] ?? '/walk');
-          const routeExists   = args.destination === 'back' || Object.keys(routes).includes(args.destination);
+          // Prefer server-resolved route (deep Bible chapter link) over generic lookup
+          const finalRoute =
+            args.resolvedRoute ??
+            (args.destination === 'back' ? 'HISTORY_BACK' : (routes[args.destination] ?? '/walk'));
+          const isChapterNav = !!(args.bibleBookId && args.bibleChapter);
           const navFnName = navigateRef.current ? 'navigateRef' : providerNavigateRef.current ? 'providerNavigateRef(wouter)' : 'window.history.pushState';
           console.info('[VOICE TOOL NAV TRACE]', JSON.stringify({
             toolName:             'navigate',
             toolArguments:        args,
             requestedDestination: args.destination,
-            resolvedRoute,
-            routeExists,
+            bibleBookId:          args.bibleBookId ?? null,
+            bibleChapter:         args.bibleChapter ?? null,
+            resolvedRoute:        finalRoute,
+            isChapterNav,
             routerFunctionUsed:   navFnName,
             navigationCalled:     true,
           }));
-          // Bible-specific canonical nav log (all fields from spec)
+          // Bible-specific canonical nav log
           if (args.destination === 'bible') {
+            const route = isChapterNav ? finalRoute : '/bible';
             console.info('[VOICE BIBLE NAV]', JSON.stringify({
               utterance:         text ?? '(unavailable)',
-              toolCall:          'navigate({ destination: "bible" })',
-              canonicalAction:   `${navFnName}("/bible")`,
-              route:             '/bible',
+              toolCall:          isChapterNav
+                ? `navigate({ destination: "bible", bibleBookId: "${args.bibleBookId}", bibleChapter: ${args.bibleChapter} })`
+                : 'navigate({ destination: "bible" })',
+              canonicalAction:   `${navFnName}("${route}")`,
+              route,
               routeMatched:      true,
-              finalURL:          '/bible',
-              renderedComponent: 'Bible (src/pages/Bible.tsx)',
+              finalURL:          route,
+              renderedComponent: isChapterNav
+                ? `ChapterReader (/bible/read/${args.bibleBookId}/${args.bibleChapter})`
+                : 'Bible (src/pages/Bible.tsx)',
               success:           !!(navigateRef.current ?? providerNavigateRef.current),
             }));
           }
-          // Speak brief confirmation text first (e.g. "Opening your Bible now.")
+          // Speak brief confirmation text first (e.g. "Opening John 3.")
           if (fullResponse.trim()) {
             setResponse(fullResponse);
             setStreamingResponse('');
             await playTTS(fullResponse, false);
             if (cancelledRef.current) return;
           }
-          if (args.destination === 'back') {
+          if (args.destination === 'back' && !args.resolvedRoute) {
             window.history.back();
           } else {
-            const route = routes[args.destination] ?? '/walk';
             const navFn = navigateRef.current ?? providerNavigateRef.current;
-            if (navFn) navFn(route);
-            else { window.history.pushState({}, '', route); window.dispatchEvent(new PopStateEvent('popstate')); }
+            if (navFn) navFn(finalRoute);
+            else { window.history.pushState({}, '', finalRoute); window.dispatchEvent(new PopStateEvent('popstate')); }
           }
           if (!fullResponse.trim()) {
             // No TTS — restart listening after navigation settles

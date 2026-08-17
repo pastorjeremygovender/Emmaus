@@ -433,7 +433,8 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'navigate',
-      description: 'Navigate the user to a general section of the Emmaus app. Do NOT use this for walk/journey continuation — use continue_walk instead.',
+      description:
+        "Navigate the user to a section of the Emmaus app, or to a specific Bible chapter. Do NOT use this for walk/journey continuation — use continue_walk instead. Do NOT use this to read a Bible passage aloud — use read_content with type 'bible' instead. Use this only when the user says 'go to', 'open', 'take me to', or 'show me' a destination without asking it to be read.",
       parameters: {
         type: 'object',
         properties: {
@@ -441,7 +442,17 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
             type: 'string',
             enum: ['walk', 'bible', 'discover', 'journeys', 'back'],
             description:
-              "'walk' = Today's Steps (home). 'bible' = My Bible. 'discover' = Discover feed. 'journeys' = Walks & Journeys list. 'back' = previous screen.",
+              "'walk' = Today's Steps (home). 'bible' = My Bible (chapter list). 'discover' = Discover feed. 'journeys' = Walks & Journeys list. 'back' = previous screen. Use 'bible' when navigating to a specific chapter too.",
+          },
+          bibleBookId: {
+            type: 'string',
+            description:
+              "When navigating to a specific Bible chapter: the book id in lowercase (e.g. 'john', 'psalms', 'romans'). Omit for general Bible navigation.",
+          },
+          bibleChapter: {
+            type: 'number',
+            description:
+              "When navigating to a specific Bible chapter: the chapter number (e.g. 3 for John 3). Must be paired with bibleBookId.",
           },
         },
         required: ['destination'],
@@ -621,9 +632,15 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, l
     'TOOLS — act immediately, never announce:',
     '- Call the right tool the moment it applies. No preamble, no "I will now…", no announcement.',
     '- read_content → say NOTHING. The content playing IS your response.',
-    '- navigate → one brief orienting line at most: "Opening your Bible."',
+    '- navigate → one brief orienting line at most: "Opening John 3." / "Opening your Bible."',
     '- search_sermons → call it; never guess from memory.',
     '- Never say you cannot do something a tool handles. Just use the tool.',
+    '',
+    'BIBLE — READ vs NAVIGATE (critical distinction):',
+    '- "Read John 3", "read me Psalms 23", "read the passage" → read_content, type "bible", bibleBook+bibleChapter.',
+    '- "Go to John 3", "open John 3", "take me to Psalms 23", "show me Romans 8" → navigate, destination "bible", bibleBookId+bibleChapter.',
+    '- The difference: read_content plays the text aloud. navigate opens the chapter on screen silently.',
+    '- Always use the book id in lowercase (e.g. bibleBookId: "john", "psalms", "romans", "genesis").',
     '',
     'READING REQUESTS — resolve immediately:',
     '- "Read", "read to me", "get me started", "start my reading", "my reading", "let\'s go", "start" → read_content. Use "daily-rhythm" if available; otherwise "devotional".',
@@ -824,6 +841,16 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
             const { query } = args as { query?: string };
             const resolvedArgs = await resolveSearchSermons(query ?? '');
             sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
+          } else if (tc.name === 'navigate') {
+            const navArgs = args as { destination: string; bibleBookId?: string; bibleChapter?: number };
+            if (navArgs.bibleBookId && navArgs.bibleChapter) {
+              // Deep-link to a specific Bible chapter — resolve the route server-side.
+              // The chapter reader is mounted at /bible/read/:bookId/:chapter in App.tsx.
+              const resolvedRoute = `/bible/read/${navArgs.bibleBookId}/${navArgs.bibleChapter}`;
+              sse({ type: 'tool_call', tool: tc.name, args: { ...navArgs, resolvedRoute } });
+            } else {
+              sse({ type: 'tool_call', tool: tc.name, args });
+            }
           } else {
             sse({ type: 'tool_call', tool: tc.name, args });
           }
