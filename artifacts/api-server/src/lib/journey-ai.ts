@@ -395,6 +395,43 @@ function extractParagraph(blocks: GeneratedBlock[], index: number): string {
   return (paras[index]?.content?.["text"] as string) ?? "";
 }
 
+// ─── Walk Introduction generator ─────────────────────────────────────────────
+
+/**
+ * Generates the Walk Introduction — the plain-text welcome passage shown to
+ * members before they start Day 1.  Stored as journey.introductionContent.
+ */
+export async function generateWalkIntroduction(payload: BuilderPayload, journeyTitle: string): Promise<string> {
+  const audienceLabel = [...payload.audience, payload.customAudience].filter(Boolean).join(", ");
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    messages: [
+      {
+        role: "system",
+        content: `You are a pastoral writer for Emmaus, a church discipleship app.
+Write a warm Walk Introduction — 2 to 3 short paragraphs — that welcomes the reader to the journey.
+Tone: personal, pastoral, inviting. First person ("you") directed at the reader.
+Do NOT use headings, bullet points, or markdown formatting.
+Do NOT be generic — tie the welcome directly to the journey's purpose and theme.
+End by giving the reader permission to begin at their own pace.`,
+      },
+      {
+        role: "user",
+        content: `Journey title: "${journeyTitle}"
+Purpose: ${payload.purpose}
+Desired outcome: ${payload.desiredOutcome}
+Audience: ${audienceLabel}
+${payload.specialInstructions ? `Special instructions: ${payload.specialInstructions}` : ""}
+
+Write the Walk Introduction now (plain text, 2-3 paragraphs).`,
+      },
+    ],
+    max_completion_tokens: 600,
+  });
+
+  return (completion.choices[0]?.message?.content ?? "").trim();
+}
+
 // ─── Block AI action ──────────────────────────────────────────────────────────
 
 export async function aiBlockAction(

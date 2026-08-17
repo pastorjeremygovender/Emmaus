@@ -14,7 +14,7 @@ import { extractUserId, requireAuth, requireSuperAdmin } from "../emmaus/auth.js
 import * as store from "../lib/journey-store.js";
 import type { FrontendStep } from "../lib/journey-store.js";
 import { parseImportCsv, exportJourneysToCsv } from "../lib/journey-csv.js";
-import { generateJourney, generateStructuredJourney, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
+import { generateJourney, generateStructuredJourney, generateWalkIntroduction, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
 import { logAuditEvent } from "../lib/audit-log.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 
@@ -380,6 +380,18 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
           link: undefined,
         })),
       });
+    }
+
+    // Generate and save the Walk Introduction (introductionContent) — the plain-text
+    // welcome passage shown before Day 1. Fire-and-forget pattern: if it fails we
+    // still return the journey; the admin can write the intro manually.
+    try {
+      const introText = await generateWalkIntroduction(payload, generated.title);
+      if (introText) {
+        await store.updateJourney(journeyId, { introductionContent: introText });
+      }
+    } catch (introErr) {
+      console.warn("[journey-ai] Walk Introduction generation failed (non-fatal):", introErr);
     }
 
     await logAuditEvent({
