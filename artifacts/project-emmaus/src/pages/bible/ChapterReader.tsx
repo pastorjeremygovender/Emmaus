@@ -423,17 +423,68 @@ export default function ChapterReader() {
             <ArrowLeft size={22} />
           </button>
 
-          {/* Book + Chapter — clean centered button, tap to open picker */}
-          <button
-            onClick={() => { setTranslationDropdownOpen(false); setPickerOpen(true); }}
-            className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px]"
-            aria-label={`Currently reading ${book.name} chapter ${chapterNum}. Tap to change book or chapter.`}
-          >
-            <span className="text-[17px] font-semibold text-foreground">
-              {book.name} {chapterNum}
-            </span>
-            <ChevronDown size={15} className="text-muted-foreground shrink-0" />
-          </button>
+          {/* Combined book/chapter + translation pill */}
+          <div className="flex-1 flex justify-center" ref={dropdownWrapperRef}>
+            <div className="inline-flex items-stretch border border-border/50 rounded-full overflow-hidden bg-muted/30">
+
+              {/* LEFT: Book & Chapter */}
+              <button
+                onClick={() => { setTranslationDropdownOpen(false); setPickerOpen(true); }}
+                className="flex items-center gap-1 px-3.5 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[36px]"
+                aria-label={`Currently reading ${book.name} chapter ${chapterNum}. Tap to change.`}
+              >
+                <span className="text-[14px] font-semibold text-foreground">
+                  {book.name} {chapterNum}
+                </span>
+                <ChevronDown size={12} className="text-muted-foreground" />
+              </button>
+
+              {/* Divider */}
+              <div className="w-px bg-border/60 my-2" />
+
+              {/* RIGHT: Translation */}
+              <button
+                onClick={() => setTranslationDropdownOpen(v => !v)}
+                className="flex items-center gap-0.5 px-3 py-2 hover:bg-muted/60 active:bg-muted transition-colors min-h-[36px]"
+                aria-label={`Translation: ${currentTranslation?.name ?? ''}. Tap to change.`}
+                aria-expanded={translationDropdownOpen}
+                aria-haspopup="listbox"
+              >
+                <span className="text-[12px] font-bold text-muted-foreground">
+                  {currentTranslation?.abbreviation ?? '—'}
+                </span>
+                <ChevronDown
+                  size={10}
+                  className={['text-muted-foreground transition-transform', translationDropdownOpen ? 'rotate-180' : ''].join(' ')}
+                />
+              </button>
+
+              {/* Translation dropdown */}
+              {translationDropdownOpen && (
+                <div
+                  role="listbox"
+                  aria-label="Select translation"
+                  className="absolute top-14 left-1/2 -translate-x-1/2 w-56 bg-popover border border-border rounded-2xl shadow-lg z-50 overflow-hidden"
+                >
+                  {translations.map(t => (
+                    <button
+                      key={t.id}
+                      role="option"
+                      aria-selected={t.id === translationId}
+                      onClick={() => handleSetTranslation(t.id)}
+                      className={['w-full flex items-center gap-3 px-4 py-3 text-left transition-colors', t.id === translationId ? 'bg-primary/8 text-primary' : 'hover:bg-muted'].join(' ')}
+                    >
+                      <span className={['w-9 h-6 rounded text-[10px] font-bold flex items-center justify-center shrink-0', t.id === translationId ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'].join(' ')}>
+                        {t.abbreviation}
+                      </span>
+                      <span className="text-[13px] font-medium leading-tight">{t.name}</span>
+                      {t.id === translationId && <Check size={14} className="ml-auto text-primary shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Notes + Save + Favourite — moved here from bottom toolbar to avoid FAB overlap */}
           <div className="flex items-center gap-1 shrink-0">
@@ -466,58 +517,12 @@ export default function ChapterReader() {
           </div>
         </div>
 
-        {/* Subtitle row — translation badge + chapter heading */}
-        <div
-          className="relative flex items-center justify-center gap-2 pb-2.5 px-4"
-          ref={dropdownWrapperRef}
-        >
-          {/* Translation badge — small pill, tappable */}
-          <button
-            onClick={() => setTranslationDropdownOpen(v => !v)}
-            className="inline-flex items-center gap-0.5 px-2.5 py-1 rounded-full border border-border/70 bg-muted/40 text-[11px] font-bold text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted transition-colors shrink-0"
-            aria-label={`Translation: ${currentTranslation?.name ?? ''}. Tap to change.`}
-            aria-expanded={translationDropdownOpen}
-            aria-haspopup="listbox"
-          >
-            {currentTranslation?.abbreviation ?? '—'}
-            <ChevronDown
-              size={9}
-              className={['text-muted-foreground transition-transform', translationDropdownOpen ? 'rotate-180' : ''].join(' ')}
-            />
-          </button>
-
-          {chapterData?.heading && (
-            <>
-              <span className="text-muted-foreground/30 select-none">·</span>
-              <span className="text-[12px] text-muted-foreground truncate">{chapterData.heading}</span>
-            </>
-          )}
-
-          {/* Translation dropdown */}
-          {translationDropdownOpen && (
-            <div
-              role="listbox"
-              aria-label="Select translation"
-              className="absolute left-4 top-full mt-1 w-56 bg-popover border border-border rounded-xl shadow-lg z-50 overflow-hidden"
-            >
-              {translations.map(t => (
-                <button
-                  key={t.id}
-                  role="option"
-                  aria-selected={t.id === translationId}
-                  onClick={() => handleSetTranslation(t.id)}
-                  className={['w-full flex items-center gap-3 px-4 py-3 text-left transition-colors', t.id === translationId ? 'bg-primary/8 text-primary' : 'hover:bg-muted'].join(' ')}
-                >
-                  <span className={['w-9 h-6 rounded text-[10px] font-bold flex items-center justify-center shrink-0', t.id === translationId ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'].join(' ')}>
-                    {t.abbreviation}
-                  </span>
-                  <span className="text-[13px] font-medium leading-tight">{t.name}</span>
-                  {t.id === translationId && <Check size={14} className="ml-auto text-primary shrink-0" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Chapter heading sub-line */}
+        {chapterData?.heading && (
+          <div className="flex justify-center pb-2 px-4">
+            <span className="text-[11px] text-muted-foreground">{chapterData.heading}</span>
+          </div>
+        )}
 
         {/* Preached Here badge — appears when ICC sermons reference this chapter */}
         {preachedHereSermons.length > 0 && (
