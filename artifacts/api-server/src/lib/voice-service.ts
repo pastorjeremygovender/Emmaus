@@ -120,7 +120,20 @@ export async function transcribeAudioBase64(
   const start  = Date.now();
 
   if (elKey) {
-    return transcribeWithElevenLabs(base64Audio, mimeType, elKey, start);
+    try {
+      return await transcribeWithElevenLabs(base64Audio, mimeType, elKey, start);
+    } catch (elErr) {
+      // ElevenLabs STT failed (quota, plan restriction, temporary outage, etc.)
+      // Fall back to OpenAI Whisper if an API key is available.
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) throw elErr; // no fallback available — re-throw original error
+
+      logger.warn(
+        { err: String(elErr) },
+        '[VOICE STT] ElevenLabs STT failed — falling back to OpenAI Whisper',
+      );
+      return transcribeWithOpenAI(base64Audio, mimeType, start);
+    }
   }
   return transcribeWithOpenAI(base64Audio, mimeType, start);
 }
