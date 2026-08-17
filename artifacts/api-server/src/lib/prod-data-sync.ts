@@ -40,6 +40,8 @@ const OLD_JOURNEY_IDS = [
   "the-fruit-of-the-spirit", "living-with-hope",
   // Incomplete Draft AI walk (1 step only) — the published 5-day version is the-emmaus-road-2
   "the-emmaus-road",
+  // Admin permanently deleted 2026-08-17
+  "the-road-to-emmaus",
 ];
 
 export async function runProdDataSync(): Promise<void> {
