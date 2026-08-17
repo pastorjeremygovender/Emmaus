@@ -1827,6 +1827,12 @@ export async function runStartupMigrations(): Promise<void> {
     } catch {
       // Silently ignore — already the correct type or column doesn't exist yet
     }
+    // Add VAD tuning columns (idempotent — ADD COLUMN IF NOT EXISTS).
+    // vad_threshold: average frequency-bin amplitude required to count as speech (1–100).
+    // vad_ticks:     consecutive 100 ms intervals above threshold required to confirm speech (1–20).
+    // Defaults match the hardcoded values that were shipped in the initial Voice release.
+    await pool.query(`ALTER TABLE voice_settings ADD COLUMN IF NOT EXISTS vad_threshold INTEGER NOT NULL DEFAULT 50`);
+    await pool.query(`ALTER TABLE voice_settings ADD COLUMN IF NOT EXISTS vad_ticks     INTEGER NOT NULL DEFAULT 6`);
     // Seed row defaults to enabled = true.
     // ON CONFLICT: preserve the enabled column if an admin has already touched it,
     // but upgrade the row from the original false default so existing deployments

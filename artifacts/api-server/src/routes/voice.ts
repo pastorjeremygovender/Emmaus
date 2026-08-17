@@ -202,10 +202,12 @@ router.put("/voice/settings", async (req, res) => {
     return;
   }
 
-  const { enabled, voice, speed } = req.body as {
+  const { enabled, voice, speed, vadThreshold, vadTicks } = req.body as {
     enabled?: boolean;
     voice?: string;
     speed?: number;
+    vadThreshold?: number;
+    vadTicks?: number;
   };
 
   try {
@@ -213,6 +215,8 @@ router.put("/voice/settings", async (req, res) => {
       ...(typeof enabled === "boolean" ? { enabled } : {}),
       ...(voice ? { voice: voice as VoiceId } : {}),
       ...(typeof speed === "number" ? { speed } : {}),
+      ...(typeof vadThreshold === "number" ? { vadThreshold } : {}),
+      ...(typeof vadTicks === "number" ? { vadTicks } : {}),
     });
     res.json(updated);
   } catch (err) {

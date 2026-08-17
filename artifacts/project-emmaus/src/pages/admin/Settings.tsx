@@ -19,7 +19,14 @@ import {
   type DevAuditEntry,
 } from '@/lib/dev-mode';
 import { FlaskConical, ChevronDown, Video, Mic } from 'lucide-react';
-import { getVoiceSettings, updateVoiceSettings, type VoiceSettings } from '@/lib/voice-client';
+import {
+  getVoiceSettings,
+  updateVoiceSettings,
+  sensitivityFromSettings,
+  VAD_PRESETS,
+  type VoiceSettings,
+  type VadSensitivity,
+} from '@/lib/voice-client';
 import { apiGetVideoSettings, apiUpdateVideoSettings } from '@/lib/rooms-api';
 
 // ─── Rooms & Video settings section ──────────────────────────────────────────
@@ -287,6 +294,52 @@ function VoiceSettingsSection() {
           <span>0.5× (slower)</span>
           <span>2.0× (faster)</span>
         </div>
+      </div>
+
+      {/* Microphone sensitivity */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block">
+          Microphone sensitivity
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {(['low', 'medium', 'high'] as VadSensitivity[]).map(level => {
+            const active = sensitivityFromSettings(settings) === level;
+            const labels: Record<VadSensitivity, { name: string; hint: string }> = {
+              low:    { name: 'Low',    hint: 'Noisy rooms — harder to trigger' },
+              medium: { name: 'Medium', hint: 'Balanced (default)' },
+              high:   { name: 'High',   hint: 'Quiet rooms — easier to trigger' },
+            };
+            return (
+              <button
+                key={level}
+                onClick={() => {
+                  const preset = VAD_PRESETS[level];
+                  // patch both fields in one optimistic update then save each
+                  const next = { ...settings, ...preset };
+                  setSettings(next);
+                  setSaving(true);
+                  setError(null);
+                  updateVoiceSettings(user!.id, preset)
+                    .then(updated => { setSettings(updated); setSaved(true); setTimeout(() => setSaved(false), 2000); })
+                    .catch(e => setError(e instanceof Error ? e.message : 'Failed to save'))
+                    .finally(() => setSaving(false));
+                }}
+                className={[
+                  'flex flex-col items-center py-2.5 px-1 rounded-lg border text-center transition-colors',
+                  active
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300',
+                ].join(' ')}
+              >
+                <span className="text-sm font-medium">{labels[level].name}</span>
+                <span className="text-[10px] text-gray-400 mt-0.5 leading-tight">{labels[level].hint}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400">
+          Controls how easily the microphone picks up speech. Use High in quiet rooms or for soft speakers; use Low in noisy environments.
+        </p>
       </div>
     </div>
   );

@@ -34,8 +34,21 @@ export type VoiceId = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 export interface VoiceSettings {
   enabled: boolean;
   voice: VoiceId;
-  speed: number;   // 0.25 – 4.0
+  speed: number;        // 0.25 – 4.0
+  vadThreshold: number; // 1 – 100  (avg freq-bin amplitude to detect speech)
+  vadTicks: number;     // 1 – 20   (consecutive 100 ms ticks above threshold)
 }
+
+// Sensitivity presets exposed to the admin UI.
+// Stored as vadThreshold + vadTicks in the DB; the UI maps a label to these.
+// "Sensitivity" = how easily the mic triggers speech detection.
+// High sensitivity = lower threshold = triggers more easily = best for quiet rooms / soft speakers.
+// Low  sensitivity = higher threshold = harder to trigger  = best for noisy environments.
+export const VAD_SENSITIVITY_PRESETS = {
+  low:    { vadThreshold: 65, vadTicks: 9 }, // noisy environments — hard to trigger
+  medium: { vadThreshold: 50, vadTicks: 6 }, // balanced default
+  high:   { vadThreshold: 35, vadTicks: 3 }, // quiet rooms / soft speakers — easy to trigger
+} as const;
 
 // In-memory cache — warmed from DB on boot via initVoiceSettings().
 // Default is DISABLED so the server fails closed during the startup window
@@ -44,6 +57,8 @@ let _settings: VoiceSettings = {
   enabled: false,
   voice: 'nova',
   speed: 1.0,
+  vadThreshold: 50,
+  vadTicks: 6,
 };
 
 /**
@@ -57,8 +72,8 @@ export async function initVoiceSettings(): Promise<void> {
   logger.info({ apiKeyConfigured: elKeyConfigured }, '[VOICE ELEVENLABS]');
 
   try {
-    const result = await pool.query<{ enabled: boolean; voice: string; speed: string }>(
-      'SELECT enabled, voice, speed FROM voice_settings WHERE id = 1',
+    const result = await pool.query<{ enabled: boolean; voice: string; speed: string; vad_threshold: number | null; vad_ticks: number | null }>(
+      'SELECT enabled, voice, speed, vad_threshold, vad_ticks FROM voice_settings WHERE id = 1',
     );
     if (result.rows.length > 0) {
       const row = result.rows[0];
@@ -66,6 +81,8 @@ export async function initVoiceSettings(): Promise<void> {
         enabled: row.enabled,
         voice: row.voice as VoiceId,
         speed: parseFloat(row.speed),
+        vadThreshold: row.vad_threshold ?? 50,
+        vadTicks:     row.vad_ticks     ?? 6,
       };
       logger.info({ settings: _settings }, 'voice: settings loaded from DB');
     }
@@ -92,12 +109,18 @@ export async function updateVoiceSettings(
   if (partial.speed !== undefined && (partial.speed < 0.25 || partial.speed > 4.0)) {
     throw new Error(`Speed out of range: ${partial.speed} (must be 0.25–4.0)`);
   }
+  if (partial.vadThreshold !== undefined && (partial.vadThreshold < 1 || partial.vadThreshold > 100)) {
+    throw new Error(`VAD threshold out of range: ${partial.vadThreshold} (must be 1–100)`);
+  }
+  if (partial.vadTicks !== undefined && (partial.vadTicks < 1 || partial.vadTicks > 20)) {
+    throw new Error(`VAD ticks out of range: ${partial.vadTicks} (must be 1–20)`);
+  }
 
   const updated = { ..._settings, ...partial };
 
   await pool.query(
-    'UPDATE voice_settings SET enabled=$1, voice=$2, speed=$3 WHERE id=1',
-    [updated.enabled, updated.voice, updated.speed],
+    'UPDATE voice_settings SET enabled=$1, voice=$2, speed=$3, vad_threshold=$4, vad_ticks=$5 WHERE id=1',
+    [updated.enabled, updated.voice, updated.speed, updated.vadThreshold, updated.vadTicks],
   );
 
   _settings = updated;

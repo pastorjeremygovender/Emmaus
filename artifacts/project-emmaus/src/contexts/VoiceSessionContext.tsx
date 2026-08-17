@@ -43,6 +43,7 @@ import {
   streamSpeechToAudio,
   fetchSpeechArrayBuffer,
   getSupportedMimeType,
+  getVoiceSettings,
 } from '@/lib/voice-client';
 import { getUnlockedAudioContext } from '@/lib/voice-audio-unlock';
 import {
@@ -211,6 +212,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const vadIntervalRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const vadSilenceStartRef  = useRef<number | null>(null);
   const vadSpokenRef        = useRef(false);
+  // Admin-tunable VAD parameters loaded from the server at session start.
+  // Defaults match the hardcoded values that shipped before this feature.
+  const vadSettingsRef      = useRef<{ threshold: number; ticks: number }>({ threshold: 50, ticks: 6 });
   // hadVoiceActivityRef is set to true by the VAD interval when speech is
   // detected (same trigger as vadSpokenRef) but is NOT cleared by clearVAD().
   // It is only reset at the start of startListening() so that processAudioBlob
@@ -586,8 +590,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           // A person speaking at the device needs ~50+ avg amplitude; ambient TV sits
           // below that at typical room distances.  Consecutive-tick requirement raised
           // from 3 → 6 (~600 ms sustained) so a brief noise burst cannot lock VAD.
-          const VAD_THRESHOLD     = 50;   // avg freq bin
+          //
+          // Both values are now admin-tunable via Settings → Voice → Microphone sensitivity.
+          // The vadSettingsRef is populated from the server at session start;
+          // defaults (50 / 6) are used until the fetch resolves.
+          const VAD_THRESHOLD     = vadSettingsRef.current.threshold; // admin-tunable
           const VAD_MIN_ELAPSED   = 1000; // ms before silence-gate can fire (was 1500)
+          const VAD_CONSECUTIVE   = vadSettingsRef.current.ticks;     // admin-tunable
           // Sprint 1: reduced 2000 → 1200 ms. Sprint 2: reduced to 800 ms for faster
           // conversational turn-taking. Mid-sentence pauses are ~200–500 ms so 800 ms
           // still avoids cutting off naturally paced speech.
@@ -605,9 +614,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
             if (avg > VAD_THRESHOLD) {
               vadAboveCount++;
-              // 6 consecutive ticks ≈ 600 ms of sustained speech — filters TV / ambient
-              // noise while still detecting shorter utterances from a close-by speaker.
-              if (vadAboveCount >= 6) {
+              // VAD_CONSECUTIVE ticks ≈ ticks×100 ms of sustained speech — filters TV /
+              // ambient noise while still detecting shorter utterances from a close-by speaker.
+              // Admin-tunable via Settings → Voice → Microphone sensitivity.
+              if (vadAboveCount >= VAD_CONSECUTIVE) {
                 vadSpokenRef.current        = true;
                 hadVoiceActivityRef.current = true; // survives clearVAD()
                 vadSilenceStartRef.current  = null;
@@ -702,13 +712,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         // startListeningFromCapture — capture continues from barge-in.
         // vadSpokenRef is already true (user was speaking), so only the
         // silence gate matters here.  Same thresholds as startListening.
+        const captureThreshold = vadSettingsRef.current.threshold;
         vadIntervalRef.current = setInterval(() => {
           const a = analyserRef.current;
           if (!a) return;
           a.getByteFrequencyData(dataArray);
           const avg     = dataArray.reduce((s, v) => s + v, 0) / dataArray.length;
           const elapsed = Date.now() - recordingStartRef.current;
-          if (avg > 50) {  // matches startListening VAD_THRESHOLD
+          if (avg > captureThreshold) {  // matches startListening VAD_THRESHOLD
             vadSilenceStartRef.current = null;
           } else if (elapsed > 1000) {
             if (vadSilenceStartRef.current === null) {
@@ -1953,14 +1964,26 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       playbackAcRef.current = unlockedAc;
     }
 
-    // Fetch fresh app context, then speak an opening greeting.
-    // The greeting tells the user what's available today so they don't
-    // need to know exact content names before they say their first command.
+    // Fetch voice settings + app context in parallel so VAD tuning is applied
+    // before the very first startListening() call (no race between the two fetches).
     const uid = userRef.current?.id;
     if (uid) {
-      fetchVoiceContext(uid).then((ctx) => {
-        if (!ctx || cancelledRef.current) {
-          // No context — start listening straight away.
+      Promise.all([
+        getVoiceSettings(uid).catch(() => null),
+        fetchVoiceContext(uid).catch(() => null),
+      ]).then(([vs, ctx]) => {
+        if (cancelledRef.current) return;
+
+        // Apply admin-tuned VAD parameters — must happen before startListening().
+        if (vs) {
+          vadSettingsRef.current = {
+            threshold: vs.vadThreshold ?? 50,
+            ticks:     vs.vadTicks     ?? 6,
+          };
+        }
+
+        if (!ctx) {
+          // No content context — start listening straight away.
           if (!cancelledRef.current) startListening();
           return;
         }

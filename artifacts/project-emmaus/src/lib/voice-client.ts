@@ -14,6 +14,30 @@ export interface VoiceSettings {
   enabled: boolean;
   voice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
   speed: number;
+  vadThreshold: number; // 1–100 avg freq-bin amplitude; admin-tunable
+  vadTicks: number;     // 1–20 consecutive 100 ms ticks above threshold
+}
+
+/** Sensitivity label derived from vadThreshold + vadTicks stored in the DB. */
+export type VadSensitivity = 'low' | 'medium' | 'high';
+
+// "Sensitivity" = how easily the mic triggers speech detection.
+// High sensitivity = lower threshold = triggers more easily = best for quiet rooms / soft speakers.
+// Low  sensitivity = higher threshold = harder to trigger = best for noisy environments.
+export const VAD_PRESETS: Record<VadSensitivity, { vadThreshold: number; vadTicks: number }> = {
+  low:    { vadThreshold: 65, vadTicks: 9 }, // noisy environments — hard to trigger
+  medium: { vadThreshold: 50, vadTicks: 6 }, // balanced default
+  high:   { vadThreshold: 35, vadTicks: 3 }, // quiet rooms / soft speakers — easy to trigger
+};
+
+/** Map stored threshold back to the nearest sensitivity label.
+ *  High sensitivity = low threshold (easy to trigger).
+ *  Low  sensitivity = high threshold (hard to trigger).
+ */
+export function sensitivityFromSettings(s: Pick<VoiceSettings, 'vadThreshold'>): VadSensitivity {
+  if (s.vadThreshold <= 42) return 'high';   // 35 → high (easy to trigger)
+  if (s.vadThreshold <= 57) return 'medium'; // 50 → medium
+  return 'low';                               // 65 → low (hard to trigger)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
