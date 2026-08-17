@@ -186,7 +186,10 @@ export async function runProdDataSync(): Promise<void> {
              subtitle     = EXCLUDED.subtitle,
              description  = EXCLUDED.description,
              journey_type = EXCLUDED.journey_type,
-             status       = EXCLUDED.status,
+             -- status intentionally omitted: admin publish/unpublish is the source of truth.
+             -- Status is written only on INSERT (new journeys); existing journeys always
+             -- keep whatever the admin set. A contaminated seed must NOT revert a
+             -- journey the admin has already published.
              theme_color  = EXCLUDED.theme_color,
              version      = EXCLUDED.version,
              updated_by   = EXCLUDED.updated_by`,
@@ -232,7 +235,10 @@ export async function runProdDataSync(): Promise<void> {
            ON CONFLICT (id) DO UPDATE SET
              title               = EXCLUDED.title,
              content             = EXCLUDED.content,
-             status              = EXCLUDED.status,
+             -- status intentionally omitted: admin publish/unpublish is the source of truth.
+             -- Status is written only on INSERT (new rows); existing rows always keep
+             -- whatever the admin set last. A seed with wrong status must NOT revert a
+             -- step the admin has already published or drafted.
              teaching_content    = EXCLUDED.teaching_content,
              reflection_question = EXCLUDED.reflection_question,
              prayer              = EXCLUDED.prayer,

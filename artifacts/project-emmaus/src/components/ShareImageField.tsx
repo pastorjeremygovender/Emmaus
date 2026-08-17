@@ -41,7 +41,7 @@ interface Props {
   /** Current object-storage path ("/objects/…") or null when not set. */
   value: string | null | undefined;
   /** Called with the new objectPath after a successful upload/generation, or null to remove. */
-  onChange: (path: string | null) => void;
+  onChange: (path: string | null) => void | Promise<void>;
   /**
    * When true and `value` is empty, automatically generate a share image from
    * `stepContent` on mount. The admin reviews/approves the result before it
@@ -153,10 +153,10 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
       });
       if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status}`);
 
-      onChange(objectPath);
+      await Promise.resolve(onChange(objectPath));
       setAutoPhase({ phase: 'dismissed' }); // preview cleared — value now set
     } catch (e) {
-      setAutoError(e instanceof Error ? e.message : 'Save failed');
+      setAutoError(e instanceof Error ? e.message : 'Save failed — please try again');
       setAutoPhase({ phase: 'preview', imageBase64, phrase }); // restore preview
     }
   }
