@@ -1,0 +1,64 @@
+Fix the current API error in the Emmaus AI Walk Generator.
+
+CURRENT ERROR:
+
+`API error 500: {"error":"400 Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}`
+
+The Generate Walk request is successfully reaching the AI API, but the request is using an unsupported parameter.
+
+### Required fix
+
+Find the server-side AI/OpenAI request used by the Emmaus Walk Generator.
+
+Replace:
+
+`max_tokens`
+
+with:
+
+`max_completion_tokens`
+
+where required by the model currently being used.
+
+Also search the Emmaus codebase for any other OpenAI/API calls still using `max_tokens` and update them where they are using a model that requires `max_completion_tokens`.
+
+### Important
+
+Do NOT redesign or refactor the Walk Generator.
+
+Do NOT change:
+
+* the Style & Review screen
+* Walk creation workflow
+* Content Studio structure
+* prompt/content structure
+* existing UI
+* selected AI model unless absolutely necessary
+
+This is a targeted compatibility fix.
+
+### Error handling
+
+While fixing this, improve the server error handling so that an OpenAI 400-level API error is not incorrectly presented as a generic Emmaus `API error 500` if the underlying API provides a useful message.
+
+Log the underlying API error server-side and return a safe, readable message to the admin UI.
+
+### Verification
+
+After making the change:
+
+1. Run the existing Walk Generator using the current configuration.
+2. Confirm the API request no longer contains unsupported `max_tokens`.
+3. Confirm Generate Walk successfully returns generated content.
+4. Confirm the generated Walk proceeds into the existing review/edit workflow.
+5. Confirm no unrelated Emmaus functionality or UI has been changed.
+
+Do not make additional improvements or architectural changes during this fix.
+
+Report exactly:
+
+* which file(s) were changed
+* which API call was affected
+* the old parameter
+* the new parameter
+* whether generation was successfully tested

@@ -327,7 +327,7 @@ export async function generateDailyRhythmDraft(
     ],
     response_format: { type: "json_object" },
     temperature: 0.7,
-    max_tokens: 2000,
+    max_completion_tokens: 2000,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -414,7 +414,7 @@ Return ONLY the refined text — no JSON, no markdown, no explanation.
       { role: "user",   content: user },
     ],
     temperature: 0.6,
-    max_tokens: 600,
+    max_completion_tokens: 600,
   });
 
   return (completion.choices[0]?.message?.content ?? "").trim();

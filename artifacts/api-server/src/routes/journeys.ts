@@ -399,8 +399,25 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     buildInProgress.delete(dedupKey);
-    const msg = err instanceof Error ? err.message : "Journey generation failed";
-    res.status(500).json({ error: msg });
+
+    // Surface OpenAI / upstream API errors with their actual status code and message
+    // rather than wrapping everything as a generic 500.
+    const apiStatus = (err as Record<string, unknown>)?.status;
+    const isUpstreamClientError =
+      typeof apiStatus === "number" && apiStatus >= 400 && apiStatus < 500;
+
+    const msg =
+      err instanceof Error
+        ? err.message
+        : "Journey generation failed — please try again";
+
+    if (isUpstreamClientError) {
+      console.error("[journey-ai] Upstream API error:", apiStatus, msg);
+      res.status(400).json({ error: `API error ${apiStatus}: ${msg}` });
+    } else {
+      console.error("[journey-ai] Generation error:", msg);
+      res.status(500).json({ error: msg });
+    }
   }
 });
 

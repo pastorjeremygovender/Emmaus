@@ -155,7 +155,7 @@ export async function generateJourney(prompt: string): Promise<{
     ],
     response_format: { type: "json_object" },
     temperature: 0.7,
-    max_tokens: 16000,
+    max_completion_tokens: 16000,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -331,7 +331,7 @@ Generate all ${payload.length} steps now. Ensure each step advances toward the d
     ],
     response_format: { type: "json_object" },
     temperature: 0.72,
-    max_tokens: 20000,
+    max_completion_tokens: 20000,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -447,7 +447,7 @@ Return the updated content object only (same structure, no extra wrapper).`;
     ],
     response_format: { type: "json_object" },
     temperature: 0.65,
-    max_tokens: 1200,
+    max_completion_tokens: 1200,
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
