@@ -691,7 +691,7 @@ export default function DailyRhythmDayEditor({
                     );
                   }
                 }}
-                autoGenerate={!form.shareImageUrl}
+
                 stepContent={[
                   form.title,
                   form.scripture,

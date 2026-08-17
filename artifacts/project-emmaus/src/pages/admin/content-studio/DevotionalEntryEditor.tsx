@@ -303,7 +303,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
                 setShareImageUrl(path);
                 doSave({ ...currentFields(), shareImageUrl: path });
               }}
-              autoGenerate={!shareImageUrl}
+
               stepContent={[
                 scriptureReference,
                 greeting,

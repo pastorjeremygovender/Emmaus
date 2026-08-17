@@ -576,7 +576,7 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
               <ShareImageField
                 value={form.shareImageUrl ?? null}
                 onChange={v => patch('shareImageUrl', v)}
-                autoGenerate={!form.shareImageUrl}
+
                 stepContent={[
                   form.title,
                   form.mentorIntro,

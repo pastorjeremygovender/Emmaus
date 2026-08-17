@@ -43,19 +43,13 @@ interface Props {
   /** Called with the new objectPath after a successful upload/generation, or null to remove. */
   onChange: (path: string | null) => void | Promise<void>;
   /**
-   * When true and `value` is empty, automatically generate a share image from
-   * `stepContent` on mount. The admin reviews/approves the result before it
-   * is saved.
-   */
-  autoGenerate?: boolean;
-  /**
    * Concatenated step/entry content used to pick the best phrase and generate
-   * the image. Required when `autoGenerate` is true.
+   * the image when the admin clicks "Generate Image".
    */
   stepContent?: string;
 }
 
-export function ShareImageField({ value, onChange, autoGenerate, stepContent }: Props) {
+export function ShareImageField({ value, onChange, stepContent }: Props) {
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>('upload');
@@ -68,7 +62,6 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
   const [autoError, setAutoError] = useState('');
   const [customPhrase, setCustomPhrase] = useState('');
   const [autoAttribution, setAutoAttribution] = useState<Attribution>('emmaus');
-  const autoTriggeredRef = useRef(false); // only fire once per mount
 
   // `overridePhrase` — when set, skips extraction and uses this text directly.
   const triggerAutoGenerate = useCallback(async (content: string, overridePhrase?: string) => {
@@ -105,17 +98,6 @@ export function ShareImageField({ value, onChange, autoGenerate, stepContent }: 
     }
   }, [user]);
 
-  useEffect(() => {
-    if (
-      !autoGenerate ||
-      !stepContent ||
-      stepContent.trim().length < 40 ||
-      value ||                           // already has an image
-      autoTriggeredRef.current          // already triggered once
-    ) return;
-    autoTriggeredRef.current = true;
-    triggerAutoGenerate(stepContent.trim());
-  }, [autoGenerate, stepContent, value, triggerAutoGenerate]);
 
   // ── Accept auto-generated image ────────────────────────────────────────────
   async function handleAcceptAutoImage() {
