@@ -689,6 +689,7 @@ router.post("/journeys/:id/duplicate", async (req: Request, res: Response) => {
 // ─── Steps (admin mutations require auth) ─────────────────────────────────────
 
 router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
+  res.set("Cache-Control", "no-store");
   const steps = await store.listSteps(String(req.params["id"]));
   res.json({ steps });
 });
