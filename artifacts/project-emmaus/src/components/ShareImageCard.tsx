@@ -71,9 +71,6 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
 
   return (
     <section className="mb-8">
-      <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-        Take this with you
-      </p>
 
       {/* Image — square 1:1 canvas */}
       <div className="rounded-2xl overflow-hidden bg-muted aspect-square">
