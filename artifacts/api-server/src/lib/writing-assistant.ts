@@ -326,7 +326,6 @@ export async function generateDailyRhythmDraft(
       { role: "user",   content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
     max_completion_tokens: 2000,
   });
 
@@ -413,7 +412,6 @@ Return ONLY the refined text — no JSON, no markdown, no explanation.
       { role: "system", content: system },
       { role: "user",   content: user },
     ],
-    temperature: 0.6,
     max_completion_tokens: 600,
   });
 

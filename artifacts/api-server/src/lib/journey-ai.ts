@@ -154,7 +154,6 @@ export async function generateJourney(prompt: string): Promise<{
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
     max_completion_tokens: 16000,
   });
 
@@ -330,7 +329,6 @@ Generate all ${payload.length} steps now. Ensure each step advances toward the d
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.72,
     max_completion_tokens: 20000,
   });
 
@@ -446,7 +444,6 @@ Return the updated content object only (same structure, no extra wrapper).`;
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.65,
     max_completion_tokens: 1200,
   });
 
