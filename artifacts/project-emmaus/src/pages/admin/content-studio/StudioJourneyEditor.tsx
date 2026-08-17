@@ -607,6 +607,7 @@ function FieldBlock({
 function StepFieldEditor({
   step,
   titleRef,
+  scaffold,
   onMetaChange,
   onSaveDraft,
   onContinue,
