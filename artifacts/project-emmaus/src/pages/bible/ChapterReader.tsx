@@ -517,12 +517,16 @@ export default function ChapterReader() {
           </div>
         </div>
 
-        {/* Chapter heading sub-line */}
-        {chapterData?.heading && (
-          <div className="flex justify-center pb-2 px-4">
+        {/* Chapter heading + hint sub-line */}
+        <div className="flex justify-center items-center gap-2 pb-2 px-4">
+          {chapterData?.heading && (
             <span className="text-[11px] text-muted-foreground">{chapterData.heading}</span>
-          </div>
-        )}
+          )}
+          {chapterData?.heading && (
+            <span className="text-muted-foreground/30 select-none">·</span>
+          )}
+          <span className="text-[11px] text-muted-foreground/60">Tap any verse to open Bible Study options.</span>
+        </div>
 
         {/* Preached Here badge — appears when ICC sermons reference this chapter */}
         {preachedHereSermons.length > 0 && (
