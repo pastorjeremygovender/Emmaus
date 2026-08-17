@@ -806,7 +806,7 @@ export default function ChapterReader() {
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
                   >
                     <Sparkles size={20} className="text-muted-foreground" />
-                    <span className="text-[11px] font-medium text-foreground">Ask AI</span>
+                    <span className="text-[11px] font-medium text-foreground">Ask Emmaus</span>
                   </button>
 
                   {/* Compare translations */}
