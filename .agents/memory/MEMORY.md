@@ -32,6 +32,7 @@
 - [Journey step status inheritance](journey-step-status.md) — createStep always inherits parent journey status; refreshJourneyDuration counts Published steps only; startup migration repairs legacy Draft-steps-on-Published-journey data idempotently.
 - [Launch Board P2 fixes](launch-board-p2-fixes.md) — atomic devotional progress, invite token sessionStorage bridge, companion atomic publish, P2-7/SC-2/DEV-2/RM-1 deferred post-launch.
 - [prod-data-sync](prod-data-sync.md) — COALESCE rule protects authored content; tombstone table prevents seed resurrections; OLD_JOURNEY_IDS must stay current; write content in dev not production.
+- [AI Walk Pipeline Safety](ai-walk-pipeline-safety.md) — 4 fixes: orphan cleanup on failure, tombstone-before-delete, no step-exclusion-delete in prod-data-sync, step count mismatch = hard failure.
 - [journey-context-role-bug](journey-context-role-bug.md) — refreshJourneys/addStep/deleteStep must check 'admin' OR 'superAdmin'; missing superAdmin causes all Drafts to vanish for superAdmin users.
 - [Unified Sermons Module](unified-sermons-module.md) — canonical sermons DB table; 8-phase build; Ask Emmaus priority-1; Preached Here canonical-first; SermonHome member page.
 - [Canonical sermon store contract](canonical-sermon-store-contract.md) — transcript vs fullTranscript split; publishedAt in PATCH; atomic deleteSermonFully; skipServerPersist; detection metadata columns.

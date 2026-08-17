@@ -155,23 +155,11 @@ export async function runProdDataSync(): Promise<void> {
       }
     }
 
-    // ── 3. Clear stale null-titled steps for coming-to-jesus ─────────────
-    const devStepIds = steps
-      .filter((s) => s.journey_id === "coming-to-jesus")
-      .map((s) => s.id as string);
-    if (devStepIds.length > 0) {
-      try {
-        const placeholders = devStepIds.map((_, i) => `$${i + 1}`).join(",");
-        await pool.query(
-          `DELETE FROM journey_steps
-             WHERE journey_id='coming-to-jesus'
-               AND id NOT IN (${placeholders})`,
-          devStepIds,
-        );
-      } catch (err) {
-        logger.warn({ err }, "prod-data-sync: stale step cleanup failed (non-fatal)");
-      }
-    }
+    // ── 3. [Removed] Stale step cleanup was here.
+    // It was too aggressive: it deleted any production step not in the dev seed
+    // for a given journey, destroying admin-authored content on every boot.
+    // The COALESCE/NULLIF guards on the step upsert (step 4 below) are sufficient
+    // to protect authored content — no destructive cleanup is needed.
 
     // ── 4. Upsert journeys (skip tombstoned IDs) ─────────────────────────
     // Tombstones record journeys the admin permanently deleted — we must not

@@ -319,12 +319,15 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
   }
   buildInProgress.set(dedupKey, now + BUILD_DEDUP_MS);
 
+  // Hoisted so the catch block can clean up a partially-created journey on failure.
+  let journeyId = "";
+
   try {
     const generated = await generateStructuredJourney(payload);
 
     // Create Journey in DB as Draft
     const baseId = slugify(payload.title) || `journey-${Date.now()}`;
-    const journeyId = await findUniqueId(baseId);
+    journeyId = await findUniqueId(baseId);
 
     await store.createJourney({
       id: journeyId,
@@ -416,6 +419,19 @@ router.post("/journeys/ai-build", async (req: Request, res: Response) => {
     });
   } catch (err: unknown) {
     buildInProgress.delete(dedupKey);
+
+    // Clean up a partially-created journey (steps failed mid-loop or intro errored
+    // before we returned 201). Avoids orphan Draft journeys accumulating in the admin.
+    if (journeyId) {
+      try {
+        const { pool: cleanupPool } = await import("@workspace/db");
+        await cleanupPool.query("DELETE FROM journey_steps WHERE journey_id=$1", [journeyId]);
+        await cleanupPool.query("DELETE FROM journeys WHERE id=$1", [journeyId]);
+        console.warn(`[journey-ai] Cleaned up orphan journey "${journeyId}" after build failure`);
+      } catch (cleanErr) {
+        console.error("[journey-ai] Failed to clean up orphan journey:", cleanErr);
+      }
+    }
 
     // Surface OpenAI / upstream API errors with their actual status code and message
     // rather than wrapping everything as a generic 500.
@@ -608,17 +624,19 @@ router.delete("/journeys/:id", async (req: Request, res: Response) => {
       const adminEmail = req.headers["x-user-email"] as string ?? "";
       // Use getJourneyIncludingDeleted so this works after a prior soft-delete.
       const journeySnapshot = await store.getJourneyIncludingDeleted(id);
-      const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
 
-      // Record in reseed_tombstones so prod-data-sync never restores this journey.
-      // Non-fatal if the table doesn't exist yet (first boot before migration runs).
+      // Insert tombstone BEFORE deleting — prevents a resurrection window where
+      // the server restarts between the delete and the tombstone write.
+      // If the table doesn't exist yet (pre-migration first boot), this is non-fatal.
       try {
         const { pool: dbPool } = await import("@workspace/db");
         await dbPool.query(
           `INSERT INTO reseed_tombstones (journey_id, deleted_by) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
           [id, callerId],
         );
-      } catch { /* non-fatal */ }
+      } catch { /* non-fatal: table may not exist on very first boot */ }
+
+      const counts = await store.permanentDeleteJourney(id, callerId, adminEmail);
 
       await logAuditEvent({
         contentType: "journey",

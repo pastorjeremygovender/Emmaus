@@ -345,10 +345,15 @@ Generate all ${payload.length} steps now. Ensure each step advances toward the d
     throw new Error("We couldn't create the Journey draft. Your setup has been saved. Please try again.");
   }
 
-  // Validate step count
+  // Validate step count — a mismatch means the model stopped early or hallucinated
+  // extra steps. Either way the content would be incomplete or wrong. Fail hard so
+  // the orphan-cleanup in the route deletes any partial journey and the user sees
+  // a clear retry prompt instead of a truncated walk they might not notice.
   if (parsed.steps.length !== payload.length) {
-    // Trim or warn but don't fail
-    parsed.steps = parsed.steps.slice(0, payload.length);
+    throw new Error(
+      `The AI produced ${parsed.steps.length} step${parsed.steps.length !== 1 ? "s" : ""} but ${payload.length} were requested. ` +
+      "Please try generating again — this occasionally happens with longer journeys."
+    );
   }
 
   // Build source summary
