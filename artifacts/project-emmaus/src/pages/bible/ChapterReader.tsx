@@ -517,14 +517,15 @@ export default function ChapterReader() {
           </div>
         </div>
 
-        {/* Chapter heading + hint sub-line */}
-        <div className="flex justify-center items-center gap-2 pb-2 px-4">
-          {chapterData?.heading && (
+        {/* Chapter heading sub-line */}
+        {chapterData?.heading && (
+          <div className="flex justify-center pb-1 px-4">
             <span className="text-[11px] text-muted-foreground">{chapterData.heading}</span>
-          )}
-          {chapterData?.heading && (
-            <span className="text-muted-foreground/30 select-none">·</span>
-          )}
+          </div>
+        )}
+
+        {/* Verse-tap hint */}
+        <div className="flex justify-center pb-2 px-4">
           <span className="text-[11px] text-muted-foreground/60">Tap any verse to open Bible Study options.</span>
         </div>
 
