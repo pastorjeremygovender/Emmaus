@@ -91,6 +91,9 @@ function getNextScaffoldDay(currentDay: number): number | null {
  */
 function isStepComplete(step: StepWithBlocks | undefined | null): boolean {
   if (!step) return false;
+  // Block-based steps (AI-generated or block editor): any saved blocks = written
+  if (step.blocks && step.blocks.length > 0) return true;
+  // Legacy field-based steps
   return Boolean(
     step.devotional?.trim()  ||   // Reflection
     step.actionStep?.trim()  ||   // Today's Step
@@ -1643,7 +1646,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
             {selectedView === 'overview' ? (
               <div className="flex items-center gap-2">
                 <StatusBadge status={journey.status} />
-                <span className="text-xs text-gray-400">{journey.durationDays} days</span>
+                <span className="text-xs text-gray-400">{rawSteps.filter(s => !s.isCompletionStep && s.day > 0).length || journey.durationDays} days</span>
               </div>
             ) : selectedView === 'introduction' ? (
               <span className="text-sm font-semibold text-gray-700 truncate">Journey Introduction</span>
