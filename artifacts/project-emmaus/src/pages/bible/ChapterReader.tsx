@@ -547,52 +547,6 @@ export default function ChapterReader() {
           </div>
         ) : (
           <div>
-            {/* About card — tinted band, chapter 1 only */}
-            {chapterNum === 1 && bookIntro && (
-              <div className="bg-muted/30 px-5 pt-6 pb-5">
-                <div className="rounded-2xl border border-primary/20 bg-primary/5 overflow-hidden">
-                  <button
-                    onClick={() => setIntroExpanded(v => !v)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-                  >
-                    <div className="w-8 h-8 bg-primary/15 rounded-xl flex items-center justify-center shrink-0">
-                      <Info size={15} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-foreground">About {book.name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{bookIntro.theme}</p>
-                    </div>
-                    <ChevronDown
-                      size={15}
-                      className={['text-muted-foreground transition-transform shrink-0', introExpanded ? 'rotate-180' : ''].join(' ')}
-                    />
-                  </button>
-
-                  {introExpanded && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-primary/10">
-                      <p className="text-[14px] text-foreground leading-[1.7] pt-3">{bookIntro.overview}</p>
-
-                      <div className="rounded-xl bg-background/60 border border-primary/10 p-3.5 space-y-1">
-                        <p className="text-[12px] font-semibold text-primary/80 uppercase tracking-widest">Key Verse</p>
-                        <p className="text-[14px] text-foreground italic leading-[1.6]">"{bookIntro.keyVerse}"</p>
-                        <p className="text-[12px] text-muted-foreground font-medium">— {bookIntro.keyVerseRef}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Author</p>
-                          <p className="text-[13px] text-foreground leading-snug">{bookIntro.author}</p>
-                        </div>
-                        <div className="rounded-xl bg-background/60 border border-border/50 p-3">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Written</p>
-                          <p className="text-[13px] text-foreground leading-snug">{bookIntro.dateWritten}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             {/* Scripture zone */}
             <div className="px-5 pt-8">
