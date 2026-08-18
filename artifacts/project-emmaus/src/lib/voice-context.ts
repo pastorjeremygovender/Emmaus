@@ -37,6 +37,13 @@ export interface WalkContext {
   title: string;
   slug: string;
   currentDay: number;
+  totalDays: number;
+  // Step content — populated from the DB so Voice can read it aloud
+  stepTitle?: string;
+  stepScripture?: string;
+  stepTeaching?: string;
+  stepReflection?: string;
+  stepPrayer?: string;
 }
 
 export interface SermonCompanionContext {

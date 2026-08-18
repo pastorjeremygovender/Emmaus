@@ -1852,6 +1852,19 @@ export async function runStartupMigrations(): Promise<void> {
     await pool.query(`
       UPDATE voice_settings SET enabled = true WHERE id = 1 AND enabled = false
     `);
+    // Lower VAD defaults: threshold 50 → 30, ticks 6 → 3.
+    // The old values (50/6) were too aggressive for many devices and caused the
+    // voice input to be silently rejected even when the user was clearly speaking.
+    // Only update rows that still carry the original defaults — admin-customised
+    // values (those not equal to the old defaults) are left untouched.
+    await pool.query(`
+      UPDATE voice_settings
+      SET    vad_threshold = 30,
+             vad_ticks     = 3
+      WHERE  id = 1
+        AND  vad_threshold = 50
+        AND  vad_ticks     = 6
+    `);
     logger.info("Startup migration: voice_settings table ensured (idempotent)");
   }
 

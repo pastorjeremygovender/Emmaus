@@ -29,6 +29,7 @@ import {
   listPublishedJourneys,
   getAllProgress,
   listSteps,
+  getStep,
   type FrontendJourney,
   type FrontendProgress,
   type FrontendStep,
@@ -282,11 +283,11 @@ router.get("/voice/context", async (req: Request, res: Response) => {
           journeyTitle: drJourney.title,
           currentDay,
           totalDays:    maxDay,
-          stepTitle:    step.title ?? "",
+          stepTitle:     step.title ?? "",
           stepScripture: step.scripture ?? "",
-          stepTeaching:  step.devotional ?? "",
+          stepTeaching:  step.teachingContent ?? "",
           stepReflection: step.reflectionQuestion ?? "",
-          stepPrayer:    step.prayerPrompt ?? "",
+          stepPrayer:    step.prayer ?? "",
         };
       }
     }
@@ -349,25 +350,39 @@ router.get("/voice/context", async (req: Request, res: Response) => {
     }
 
     // ── 5. Active Walks (non-DR, started, not paused) ────────────────────────
-    const activeWalks = allJourneys
+    // Fetch step content in parallel so Voice can read walk steps aloud.
+    const activeWalksRaw = allJourneys
       .filter((j) => j.journeyType !== "daily-rhythm")
       .filter((j) => {
         const prog = allProgress[j.id];
         return prog !== undefined && prog.status !== "paused";
+      });
+
+    const activeWalks = await Promise.all(
+      activeWalksRaw.map(async (j) => {
+        const currentDay = allProgress[j.id]?.currentDay ?? 1;
+        const step = await getStep(j.id, currentDay).catch(() => null);
+        return {
+          journeyId:  j.id,
+          title:      j.title,
+          slug:       j.id,
+          currentDay,
+          totalDays:  j.durationDays ?? 0,
+          stepTitle:      step?.title           ?? undefined,
+          stepScripture:  step?.scripture       ?? undefined,
+          stepTeaching:   step?.teachingContent ?? undefined,
+          stepReflection: step?.reflectionQuestion ?? undefined,
+          stepPrayer:     step?.prayer          ?? undefined,
+        };
       })
-      .map((j) => ({
-        journeyId:  j.id,
-        title:      j.title,
-        slug:       j.id,
-        currentDay: allProgress[j.id]?.currentDay ?? 1,
-      }));
+    );
 
     // ── 6. Plain-text summary ────────────────────────────────────────────────
     const summaryParts: string[] = [];
     if (dailyRhythm) summaryParts.push(`${dailyRhythm.journeyTitle} (Day ${dailyRhythm.currentDay})`);
-    activeDevotionals.forEach((d) => summaryParts.push(`${d.seriesTitle} Devotional`));
+    activeDevotionals.forEach((d) => summaryParts.push(`${d.seriesTitle} Devotional (Day ${d.currentDay})`));
     if (sermonCompanion) summaryParts.push(`Sermon Companion: ${sermonCompanion.title}`);
-    activeWalks.forEach((w) => summaryParts.push(`Walk: ${w.title} (Day ${w.currentDay})`));
+    activeWalks.forEach((w) => summaryParts.push(`Walk: ${w.title} (Day ${w.currentDay} of ${w.totalDays || '?'})${w.stepTitle ? ` — "${w.stepTitle}"` : ''}`));
 
     res.set("Cache-Control", "no-store");
     res.json({
@@ -407,9 +422,9 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         properties: {
           type: {
             type: 'string',
-            enum: ['daily-rhythm', 'devotional', 'sermon-companion', 'bible'],
+            enum: ['daily-rhythm', 'devotional', 'walk', 'sermon-companion', 'bible'],
             description:
-              "'daily-rhythm' — the 10 Minutes with Jesus / Daily Rhythm content. 'devotional' — a devotional series (e.g. Psalms Daily Devotional). 'sermon-companion' — the weekly Sermon Companion. 'bible' — a specific Bible passage.",
+              "'daily-rhythm' — the 10 Minutes with Jesus / Daily Rhythm content. 'devotional' — a devotional series (e.g. Psalms Daily Devotional). 'walk' — an active Walk (Quick Study) the user is working through. 'sermon-companion' — the weekly Sermon Companion. 'bible' — a specific Bible passage.",
           },
           bibleBook: {
             type: 'string',
@@ -643,8 +658,9 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, l
     '- Always use the book id in lowercase (e.g. bibleBookId: "john", "psalms", "romans", "genesis").',
     '',
     'READING REQUESTS — resolve immediately:',
-    '- "Read", "read to me", "get me started", "start my reading", "my reading", "let\'s go", "start" → read_content. Use "daily-rhythm" if available; otherwise "devotional".',
+    '- "Read", "read to me", "get me started", "start my reading", "my reading", "let\'s go", "start" → read_content. Use "daily-rhythm" if available; otherwise "walk" if active; otherwise "devotional".',
     '- "My devotional", "open devotional", "today\'s devotional" → read_content, type "devotional".',
+    '- "My walk", "read my walk", "today\'s walk", "read my step" → read_content, type "walk".',
     '- "Sermon companion", "companion", "Sunday companion" → read_content, type "sermon-companion".',
     '- "What do I have?", "what\'s on today?", "what can I read?" → ONE sentence naming available content, then "Which would you like?" — do NOT call a tool yet.',
     '- "Yes", "go ahead", "start it", "do it" after you named content → call read_content immediately.',
@@ -652,6 +668,7 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, l
     'CONTENT ALIASES — what users say → what you call:',
     '  "daily rhythm" | "10 minutes with jesus" | "10 minutes" | "my daily reading" | "morning reading" → type: "daily-rhythm"',
     '  "[series] devotional" | "my devotional" | "my psalms" | "psalms" → type: "devotional"',
+    '  "my walk" | "read my walk" | "today\'s walk" | "my step" | "the walk" → type: "walk"',
     '  "sermon companion" | "companion" | "sunday companion" → type: "sermon-companion"',
     '',
     'SERMON SEARCH:',
@@ -670,7 +687,11 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, l
 
   if (voiceAppContext) {
     lines.push('', "User's available content today (resolve all vague reading requests against this):", voiceAppContext);
-    lines.push('', 'If the user says anything like "get me started", "read something", or "my reading" and Daily Rhythm is listed above — call read_content with type "daily-rhythm" immediately. Only ask for clarification when there is genuine ambiguity (e.g. two devotionals, neither named).');
+    lines.push('', 'Priority for vague requests ("get me started", "read something", "my reading"):');
+    lines.push('  1. daily-rhythm if listed above, otherwise');
+    lines.push('  2. walk (type: "walk") if listed above, otherwise');
+    lines.push('  3. devotional if listed above.');
+    lines.push('Only ask for clarification when there is genuine ambiguity (e.g. two active walks and the user hasn\'t named one).');
   } else {
     lines.push('', 'No active content found today. Respond conversationally and invite them to tell you what they need.');
   }

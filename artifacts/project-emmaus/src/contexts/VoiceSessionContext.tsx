@@ -133,6 +133,10 @@ function buildOpeningGreeting(
   if (ctx.sermonCompanion) {
     items.push('your Sermon Companion');
   }
+  for (const w of ctx.activeWalks) {
+    const stepNote = w.stepTitle ? ` — "${w.stepTitle}"` : '';
+    items.push(`your walk "${w.title}" on Day ${w.currentDay}${stepNote}`);
+  }
 
   if (items.length === 0) return null;
 
@@ -214,7 +218,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const vadSpokenRef        = useRef(false);
   // Admin-tunable VAD parameters loaded from the server at session start.
   // Defaults match the hardcoded values that shipped before this feature.
-  const vadSettingsRef      = useRef<{ threshold: number; ticks: number }>({ threshold: 50, ticks: 6 });
+  const vadSettingsRef      = useRef<{ threshold: number; ticks: number }>({ threshold: 30, ticks: 3 });
   // hadVoiceActivityRef is set to true by the VAD interval when speech is
   // detected (same trigger as vadSpokenRef) but is NOT cleared by clearVAD().
   // It is only reset at the start of startListening() so that processAudioBlob
@@ -976,7 +980,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     }
 
     async function loadAndStartReading(
-      content: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
+      content: 'daily-rhythm' | 'devotional' | 'walk' | 'sermon-companion' | 'bible',
       bibleRef?: { bookId: string; bookName: string; chapter: number; verse?: number; translationId?: string },
       titleHint?: string,
     ): Promise<boolean> {
@@ -1086,6 +1090,56 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           failureReason: sections.length === 0 ? 'all_fields_empty' : null,
         }));
         if (!sections.length) return false;
+        readingSectionsRef.current = sections;
+        readingIndexRef.current    = 0;
+        isReadingRef.current       = true;
+        readingPausedRef.current   = false;
+        setActiveContent({ label });
+      }
+
+      else if (content === 'walk') {
+        const allWalks = appCtx?.activeWalks ?? [];
+
+        // Fuzzy match titleHint (e.g. "god", "serve") against walk titles.
+        let walks = allWalks;
+        if (titleHint && allWalks.length > 0) {
+          const hint = titleHint.toLowerCase();
+          const matched = allWalks.filter(w => w.title.toLowerCase().includes(hint));
+          if (matched.length > 0) walks = matched;
+        }
+
+        console.log('[VOICE CONTENT DEBUG] walk', JSON.stringify({
+          titleHint: titleHint ?? null, totalActive: allWalks.length,
+          matchedCount: walks.length, matchedTitles: walks.map(w => w.title),
+        }));
+
+        if (walks.length === 0) {
+          console.log('[VOICE CONTENT DEBUG] walk: failureReason=no_active_walks');
+          return false;
+        }
+        if (walks.length > 1 && !titleHint) {
+          const titles = walks.map(w => w.title).join(' and ');
+          await playTTS(`You have ${titles} active. Which walk would you like me to read?`, false);
+          return false;
+        }
+
+        const walk = walks[0];
+        const label = `${walk.title} — Day ${walk.currentDay}`;
+        if (walk.stepTitle)      sections.push({ label: 'Introduction',  text: walk.stepTitle });
+        if (walk.stepScripture)  sections.push({ label: 'Scripture',     text: `Today's scripture is ${walk.stepScripture}.` });
+        if (walk.stepTeaching)   sections.push({ label: 'Teaching',      text: walk.stepTeaching });
+        if (walk.stepReflection) sections.push({ label: 'Consider This', text: walk.stepReflection });
+        if (walk.stepPrayer)     sections.push({ label: 'Prayer',        text: walk.stepPrayer });
+
+        console.log('[VOICE CONTENT DEBUG] walk resolved', JSON.stringify({
+          journeyId: walk.journeyId, walkTitle: walk.title, currentDay: walk.currentDay,
+          sectionsCount: sections.length,
+          failureReason: sections.length === 0 ? 'all_step_fields_empty_or_missing' : null,
+        }));
+        if (!sections.length) {
+          await playTTS(`I can see your "${walk.title}" walk on Day ${walk.currentDay}, but the step content hasn't loaded yet. Try opening it from Today's Steps.`, false);
+          return false;
+        }
         readingSectionsRef.current = sections;
         readingIndexRef.current    = 0;
         isReadingRef.current       = true;
@@ -1222,6 +1276,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           const sc = appCtx.sermonCompanion;
           const entryInfo = sc.entryTitle ? `, today: "${sc.entryTitle}"` : '';
           contentLines.push(`• Sermon Companion: "${sc.title}" — Day ${sc.currentDay} of ${sc.totalDays}${entryInfo}`);
+        }
+        for (const w of appCtx.activeWalks) {
+          const stepInfo = w.stepTitle ? `, step: "${w.stepTitle}"` : '';
+          contentLines.push(`• Walk: "${w.title}" — Day ${w.currentDay} of ${w.totalDays || '?'}${stepInfo} (type: walk)`);
         }
         if (contentLines.length > 0) {
           parts.push(`User's available content today:\n${contentLines.join('\n')}`);
@@ -2150,6 +2208,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         startListening();
         break;
       case 'LISTENING':
+        // Manual stop — user intentionally tapped to end their turn.
+        // Bypass the VAD gate so this audio is always sent to transcription,
+        // regardless of whether the VAD threshold fired during the recording.
+        hadVoiceActivityRef.current = true;
         stopListening();
         break;
       case 'SPEAKING':
