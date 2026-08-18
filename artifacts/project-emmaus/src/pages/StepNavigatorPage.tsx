@@ -174,22 +174,6 @@ export function StepNavigatorPage({ mode }: Props) {
         )}
       </div>
 
-      {/* ── Progress bar ───────────────────────────────────────────────── */}
-      {totalSteps > 0 && (
-        <div className="px-4 pb-4">
-          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-            <span>Progress</span>
-            <span>{completedCount} of {totalSteps} {stepPrefix.toLowerCase()}s completed</span>
-          </div>
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
-              style={{ width: `${totalSteps > 0 ? Math.min(100, (completedCount / totalSteps) * 100) : 0}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       <BottomNav />
     </div>
   );
