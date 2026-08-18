@@ -444,8 +444,8 @@ export default function JourneyDay() {
             </div>
           )}
 
-          {/* Mentor introduction */}
-          {step.mentorIntro ? (
+          {/* Mentor introduction — hidden on Walk Complete steps (content lives in devotional) */}
+          {step.mentorIntro && !isOnCompletionStep ? (
             <section className="mb-3.5">
               <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
                 <div className="flex items-center gap-1.5 mb-2.5">
@@ -475,12 +475,14 @@ export default function JourneyDay() {
             </section>
           )}
 
-          {/* Devotional reflection */}
+          {/* Devotional reflection — labelled "Congratulations" on Walk Complete steps */}
           <section className="mb-3.5">
-            <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+            <div className={`rounded-2xl px-4 py-4 ${isOnCompletionStep ? 'border border-teal-200/60 bg-teal-50/60' : 'border border-violet-200/60 bg-violet-50/60'}`}>
               <div className="flex items-center gap-1.5 mb-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
+                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isOnCompletionStep ? 'bg-teal-500' : 'bg-violet-500'}`} />
+                <h2 className={`text-[10px] font-bold uppercase tracking-[0.14em] ${isOnCompletionStep ? 'text-teal-700' : 'text-violet-700'}`}>
+                  {isOnCompletionStep ? 'Congratulations' : 'Consider This'}
+                </h2>
               </div>
               <p className="text-[18px] leading-[1.8] text-foreground">
                 {step.devotional}
@@ -513,33 +515,37 @@ export default function JourneyDay() {
             </section>
           )}
 
-          {/* Reflection question + optional response */}
-          <section className="mb-3.5">
-            <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
-              <div className="flex items-center gap-1.5 mb-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider</h2>
+          {/* Reflection question + optional response — hidden on Walk Complete steps */}
+          {!isOnCompletionStep && (
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.reflectionQuestion}
+                </p>
+                <Textarea
+                  placeholder="What stood out to you today?"
+                  className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
+                  value={reflection}
+                  onChange={(e) => setReflection(e.target.value)}
+                  data-testid="input-reflection"
+                  aria-label="Your reflection"
+                />
               </div>
-              <p className="text-[18px] text-foreground leading-[1.8]">
-                {step.reflectionQuestion}
-              </p>
-              <Textarea
-                placeholder="What stood out to you today?"
-                className="mt-4 min-h-[120px] text-[17px] resize-none rounded-xl"
-                value={reflection}
-                onChange={(e) => setReflection(e.target.value)}
-                data-testid="input-reflection"
-                aria-label="Your reflection"
-              />
-            </div>
-          </section>
+            </section>
+          )}
 
-          {/* Prayer */}
+          {/* Prayer — labelled "Closing Prayer" on Walk Complete steps */}
           <section className="mb-3.5">
             <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
               <div className="flex items-center gap-1.5 mb-2.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                  {isOnCompletionStep ? 'Closing Prayer' : 'Prayer'}
+                </h2>
               </div>
               <p className="text-[18px] text-foreground leading-[1.8]">
                 {step.prayerPrompt}
@@ -547,18 +553,20 @@ export default function JourneyDay() {
             </div>
           </section>
 
-          {/* Action step */}
-          <section className="mb-3.5">
-            <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
-              <div className="flex items-center gap-1.5 mb-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-                <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+          {/* Action step — hidden on Walk Complete steps */}
+          {!isOnCompletionStep && (
+            <section className="mb-3.5">
+              <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                  <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+                </div>
+                <p className="text-[18px] text-foreground leading-[1.8]">
+                  {step.actionStep}
+                </p>
               </div>
-              <p className="text-[18px] text-foreground leading-[1.8]">
-                {step.actionStep}
-              </p>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Share (text) */}
           <ShareButton payload={{
