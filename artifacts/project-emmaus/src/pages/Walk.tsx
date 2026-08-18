@@ -835,12 +835,8 @@ export default function Walk() {
             const nextEntryPos   = nextEntry ? (sortedPub.findIndex(e => e.dayNumber === nextEntry.dayNumber) + 1) : null;
             const nextLabel      = getDevotionalLabel({ dayNumber: nextDay, displayLabel: nextEntry?.displayLabel });
             const devSubtitle    = allComplete
-              ? `${published.length} of ${published.length} complete`
-              : completedCount > 0
-                ? nextEntry
-                  ? `${nextLabel} · ${nextEntryPos} of ${published.length}${nextEntry.title ? ` · ${nextEntry.title}` : ''}`
-                  : nextLabel
-                : published.length > 0 ? `1 of ${published.length}` : '';
+              ? 'Complete'
+              : nextEntry?.title || undefined;
             const badge = computeUpdatedBadge(
               ad.series.notifyPublishedAt ?? null,
               ad.progress.lastOpenedAt ?? null,
