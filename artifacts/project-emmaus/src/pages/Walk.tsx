@@ -42,6 +42,7 @@ import { calcAvailableDaySelfPaced } from '@/lib/devotional-calendar';
 import { cn } from '@/lib/utils';
 import { ContentBadge } from '@/components/ContentBadge';
 import type { ReactNode } from 'react';
+import { listCollections, type Collection } from '@/lib/collections-api';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -312,6 +313,15 @@ export default function Walk() {
   }>>([]);
   const [unstartedSeries, setUnstartedSeries] = useState<DevotionalSeries[]>([]);
   const [startingId, setStartingId] = useState<string | null>(null);
+
+  // Collections — used to look up the parent collection title for journey cards
+  const [collections, setCollections] = useState<Collection[]>([]);
+  useEffect(() => { listCollections().then(setCollections).catch(() => {}); }, []);
+  const collectionMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of collections) m.set(c.id, c.title);
+    return m;
+  }, [collections]);
 
   const reloadDevotionals = useCallback(async (userId?: string) => {
     const auth = userId ? { userId } : undefined;
@@ -868,17 +878,20 @@ export default function Walk() {
           {startedWalks.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
             const completedCount = prog.completedDays.length;
             const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
             const walkSubtitle   = isCompleted
               ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
-              : completedCount > 0
-                ? currentStep
-                  ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-                  : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-                : totalPublishedSteps > 0
+              : onWalkComplete
+                ? 'Walk Complete'
+                : completedCount > 0
                   ? currentStep
-                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                    : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-                  : undefined;
+                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
+                  : totalPublishedSteps > 0
+                    ? currentStep
+                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
+                    : undefined;
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
@@ -963,27 +976,41 @@ export default function Walk() {
           {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
             const completedCount = prog.completedDays.length;
             const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            // When currentStep is null and currentDay > totalPublishedSteps the member
+            // is on the Walk Complete step — show that label instead of "Step X of Y".
+            const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
             const journeySubtitle = isCompleted
               ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
-              : completedCount > 0
-                ? currentStep
-                  ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-                  : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-                : totalPublishedSteps > 0
+              : onWalkComplete
+                ? 'Walk Complete'
+                : completedCount > 0
                   ? currentStep
-                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                    : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-                  : undefined;
+                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
+                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
+                  : totalPublishedSteps > 0
+                    ? currentStep
+                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
+                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
+                    : undefined;
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
               true,
             );
+            // If this journey belongs to a collection, show the collection name as the
+            // card title and prefix the subtitle with the journey name.
+            const collectionTitle = journey.collectionId ? collectionMap.get(journey.collectionId) : undefined;
+            const cardTitle    = collectionTitle ?? journey.title;
+            const cardSubtitle = collectionTitle && journeySubtitle
+              ? `${journey.title} · ${journeySubtitle}`
+              : collectionTitle
+                ? journey.title
+                : journeySubtitle;
             return (
               <CompactCard
                 key={journey.id}
-                title={journey.title}
-                subtitle={journeySubtitle}
+                title={cardTitle}
+                subtitle={cardSubtitle}
                 ctaLabel={isCompleted ? undefined : 'Continue'}
                 onAction={() => {
                   void dismissBadge('journey', journey.id);

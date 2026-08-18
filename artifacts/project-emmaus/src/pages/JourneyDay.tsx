@@ -598,7 +598,7 @@ export default function JourneyDay() {
                 }
                 continueLabel={
                   nextStepUrl
-                    ? 'Continue to Next Day'
+                    ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day')
                     : isFinalStep
                     ? 'View Walk Summary'
                     : undefined
