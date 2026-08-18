@@ -661,28 +661,76 @@ export async function getStep(journeyId: string, day: number): Promise<FrontendS
 
 export async function createStep(journeyId: string, data: Partial<FrontendStep> & { day: number }): Promise<FrontendStep> {
   const now = new Date();
-  const cols = buildStepColumns(data);
 
-  // Inherit the parent journey's published state so steps added to a
-  // live journey are immediately visible without a separate publish action.
+  // Inherit the parent journey's published state so steps added to a live
+  // journey are immediately visible without a separate publish action.
   const parent = await getJourney(journeyId);
   const stepStatus = parent?.status === "Published" ? "Published" : "Draft";
 
-  const rows = await db.insert(journeyStepsTable).values({
-    journeyId,
-    day: data.day,
-    title: (data.title ?? "") as string,
-    status: stepStatus,
-    content: {},  // legacy JSONB left empty; real data is in columns
-    createdAt: now,
-    updatedAt: now,
-    ...cols,
-  }).returning();
+  // All completion-step enforcement, competing-flag clearing, and the INSERT
+  // happen inside a single transaction.  Performing the position guard INSIDE
+  // the transaction prevents the check-then-act race that allows two concurrent
+  // requests to each observe "no completion step" and both commit with the flag.
+  //
+  // A partial unique index (uidx_journey_one_completion_step) created in
+  // startup-migrations provides an additional DB-level safety net: even if the
+  // application guard is somehow bypassed, Postgres will reject the second commit.
+  const row = await db.transaction(async (tx) => {
+    let finalData = data;
 
-  // Update journey durationDays
+    if (data.isCompletionStep === true) {
+      // Evaluate the position guard inside the transaction (concurrency-safe).
+      // Uses live max of non-completion, non-deleted steps — independent of the
+      // cached durationDays which only counts Published regular steps.
+      const maxRes = await tx.execute(
+        sql`SELECT COALESCE(MAX(day), 0) AS max_day
+              FROM journey_steps
+             WHERE journey_id         = ${journeyId}
+               AND is_completion_step  = false
+               AND deleted_at         IS NULL`,
+      );
+      const maxRegularDay = Number((maxRes.rows[0] as { max_day: unknown }).max_day ?? 0);
+
+      if (data.day <= maxRegularDay) {
+        // Within the lesson range — strip the flag silently.
+        finalData = { ...data, isCompletionStep: false };
+      } else {
+        // Valid position — atomically clear any competing completion flag so the
+        // partial unique index never sees two flagged rows simultaneously.
+        await tx.execute(
+          sql`UPDATE journey_steps
+                 SET is_completion_step = false, updated_at = NOW()
+               WHERE journey_id         = ${journeyId}
+                 AND is_completion_step  = true
+                 AND day                != ${data.day}
+                 AND deleted_at         IS NULL`,
+        );
+      }
+    }
+
+    const cols = buildStepColumns(finalData);
+    const rows = await tx.insert(journeyStepsTable).values({
+      journeyId,
+      day: data.day,
+      title: (data.title ?? "") as string,
+      status: stepStatus,
+      content: {},  // legacy JSONB left empty; real data is in columns
+      createdAt: now,
+      updatedAt: now,
+      ...cols,
+    }).returning();
+    return rows[0];
+  });
+
+  // Refresh the cached durationDays count.
   await refreshJourneyDuration(journeyId, now);
 
-  return toFrontendStep(rows[0]);
+  // After any new step, revalidate the completion step's position.
+  // A regular step added at a higher day than the existing Walk Complete step
+  // makes that completion step fall within the lesson range — clear it.
+  await revalidateCompletionStepPosition(journeyId, now);
+
+  return toFrontendStep(row);
 }
 
 export async function updateStep(journeyId: string, day: number, data: Partial<FrontendStep>): Promise<FrontendStep | null> {
@@ -692,26 +740,71 @@ export async function updateStep(journeyId: string, day: number, data: Partial<F
     .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day), isNull(journeyStepsTable.deletedAt)));
   if (!existing[0]) return null;
 
+  // Effective target day — may differ from the URL :day when the caller is
+  // renumbering a step (e.g. PATCH /steps/99 body { day: 2 }).
+  const effectiveDay = (data.day !== undefined && data.day !== day) ? data.day : day;
   const now = new Date();
-  const cols = buildStepColumns(data);
 
-  // Support explicit day renumbering: if data.day differs from the route key,
-  // include it in the update. The unique constraint prevents collision with
-  // an existing row — the DB will throw a unique-violation error if there's a conflict.
-  const updateFields: Record<string, unknown> = { updatedAt: now, ...cols };
-  if (data.day !== undefined && data.day !== day) {
-    updateFields.day = data.day;
-  }
+  // All completion-step enforcement, competing-flag clearing, and the UPDATE
+  // happen inside a single transaction so the position guard cannot be raced.
+  // See createStep above for full rationale on the transaction+unique-index design.
+  const rows = await db.transaction(async (tx) => {
+    let finalData = data;
 
-  const rows = await db
-    .update(journeyStepsTable)
-    .set(updateFields)
-    .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day)))
-    .returning();
+    if ((data as Record<string, unknown>).isCompletionStep === true) {
+      // Evaluate the position guard inside the transaction (concurrency-safe).
+      // Uses effectiveDay (the renumber target) — not the URL :day — so a
+      // PATCH /steps/99 { day: 2, isCompletionStep: true } payload is correctly
+      // rejected when day 2 sits within the lesson range.
+      const maxRes = await tx.execute(
+        sql`SELECT COALESCE(MAX(day), 0) AS max_day
+              FROM journey_steps
+             WHERE journey_id         = ${journeyId}
+               AND is_completion_step  = false
+               AND deleted_at         IS NULL`,
+      );
+      const maxRegularDay = Number((maxRes.rows[0] as { max_day: unknown }).max_day ?? 0);
 
-  // If the day number changed, recompute durationDays (max day may have changed)
-  if (data.day !== undefined && data.day !== day) {
+      if (effectiveDay <= maxRegularDay) {
+        // Within the lesson range — strip the flag silently.
+        finalData = { ...data, isCompletionStep: false };
+      } else {
+        // Valid position — atomically clear any competing completion flag.
+        await tx.execute(
+          sql`UPDATE journey_steps
+                 SET is_completion_step = false, updated_at = NOW()
+               WHERE journey_id         = ${journeyId}
+                 AND is_completion_step  = true
+                 AND day                != ${effectiveDay}
+                 AND deleted_at         IS NULL`,
+        );
+      }
+    }
+
+    const cols = buildStepColumns(finalData);
+
+    // Support explicit day renumbering: if data.day differs from the route key,
+    // include it in the update. The unique constraint prevents collision with
+    // an existing row — the DB will throw a unique-violation error if there's a conflict.
+    const updateFields: Record<string, unknown> = { updatedAt: now, ...cols };
+    if (data.day !== undefined && data.day !== day) {
+      updateFields.day = data.day;
+    }
+
+    return tx
+      .update(journeyStepsTable)
+      .set(updateFields)
+      .where(and(eq(journeyStepsTable.journeyId, journeyId), eq(journeyStepsTable.day, day)))
+      .returning();
+  });
+
+  const isRenumber = data.day !== undefined && data.day !== day;
+  if (isRenumber) {
+    // Recalculate durationDays after a renumber (the max lesson day may have changed).
     await refreshJourneyDuration(journeyId, now);
+    // A step renumbered beyond the existing Walk Complete step pushes it into
+    // the lesson range — revalidate after any ordering change.
+    await revalidateCompletionStepPosition(journeyId, now);
   } else {
     await db.update(journeysTable).set({ updatedAt: now }).where(eq(journeysTable.id, journeyId));
   }
@@ -798,6 +891,36 @@ async function refreshJourneyDuration(journeyId: string, now: Date): Promise<voi
     .update(journeysTable)
     .set({ durationDays: maxDay, updatedAt: now })
     .where(eq(journeysTable.id, journeyId));
+}
+
+/**
+ * Revalidate the completion step's position after any mutation that changes
+ * step ordering (create, renumber).
+ *
+ * A completion-flagged step is only valid when it sits beyond ALL regular
+ * lesson steps. This check is independent of the cached `durationDays`
+ * column: it directly computes the maximum day of non-completion steps,
+ * so corrupted cached values cannot mask a position violation.
+ *
+ * If a completion-flagged step now has a day ≤ the highest regular lesson
+ * day (e.g. a new regular step was added beyond it), the flag is cleared.
+ */
+async function revalidateCompletionStepPosition(journeyId: string, now: Date): Promise<void> {
+  await pool.query(
+    `UPDATE journey_steps js
+        SET is_completion_step = false, updated_at = $1
+      WHERE js.journey_id         = $2
+        AND js.is_completion_step  = true
+        AND js.deleted_at         IS NULL
+        AND js.day               <= (
+          SELECT COALESCE(MAX(regular.day), 0)
+            FROM journey_steps regular
+           WHERE regular.journey_id         = $2
+             AND regular.is_completion_step  = false
+             AND regular.deleted_at         IS NULL
+        )`,
+    [now, journeyId],
+  );
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────────

@@ -817,8 +817,13 @@ router.patch("/journeys/:id/steps/:day", async (req: Request, res: Response) => 
   const day = parseInt(String(req.params["day"]), 10);
   if (isNaN(day)) { res.status(400).json({ error: "day must be a number" }); return; }
   const stepBefore = await store.getStep(journeyId, day);
+
+  // The completion-step position and uniqueness invariant is enforced inside
+  // updateStep (store layer), using a live max-regular-day query that covers
+  // renumber payloads and draft steps. The route passes the body through unchanged.
+  const body = req.body as Parameters<typeof store.updateStep>[2];
   try {
-    const updated = await store.updateStep(journeyId, day, req.body as Parameters<typeof store.updateStep>[2]);
+    const updated = await store.updateStep(journeyId, day, body);
     if (!updated) { res.status(404).json({ error: "Step not found" }); return; }
     await logAuditEvent({
       contentType: "journey_step",

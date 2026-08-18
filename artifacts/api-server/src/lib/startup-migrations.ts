@@ -2081,21 +2081,98 @@ export async function runStartupMigrations(): Promise<void> {
     }
   }
 
-  // ── Fix misassigned Walk Complete on "Created in God's Image" Day 2 (2026-08) ──
-  // Day 2 was incorrectly flagged as is_completion_step=true, causing it to render
-  // the Walk Complete editor. Idempotent — no effect once already false.
+  // ── Generalised is_completion_step integrity scan (2026-08) ──────────────────
+  // Replaces the one-off "created-in-god-s-image day 2" fix.
+  //
+  // Two rules enforced without touching duration_days (which is computed from
+  // non-completion steps and would already be wrong when a regular lesson is
+  // mis-flagged):
+  //
+  //  Position rule: a completion-flagged step must be the HIGHEST-day step in
+  //    its journey.  If a higher-numbered non-deleted step exists in the same
+  //    journey, the flagged step cannot be the legitimate completion card —
+  //    clear it.  This is independent of the cached duration_days column.
+  //
+  //  Uniqueness rule: at most ONE step per journey may carry the flag.  If
+  //    position cleanup still leaves multiple flagged steps (all tied at the
+  //    max day is impossible, but defensive), keep only the highest-day one.
+  //
+  // Idempotent — safe to re-run on every boot; typically a no-op after the
+  // first pass.
   try {
-    const { rowCount } = await db.query(`
-      UPDATE journey_steps
-      SET    is_completion_step = false
-      WHERE  journey_id = 'created-in-god-s-image'
-        AND  day        = 2
-        AND  is_completion_step = true
+    // 1. Position invariant — clear any completion-flagged step that has a
+    //    higher-numbered non-deleted sibling in the same journey.
+    const posResult = await pool.query(`
+      UPDATE journey_steps js
+         SET is_completion_step = false,
+             updated_at         = NOW()
+       WHERE js.is_completion_step = true
+         AND js.deleted_at         IS NULL
+         AND EXISTS (
+           SELECT 1
+             FROM journey_steps higher
+            WHERE higher.journey_id = js.journey_id
+              AND higher.day        > js.day
+              AND higher.deleted_at IS NULL
+         )
     `);
-    if ((rowCount ?? 0) > 0) {
-      logger.info("Startup migration: cleared is_completion_step on created-in-god-s-image day 2");
+    if ((posResult.rowCount ?? 0) > 0) {
+      logger.info(
+        `Startup migration: cleared is_completion_step on ${posResult.rowCount} step(s) that had a higher-numbered sibling (position invariant)`
+      );
+    }
+
+    // 2. Uniqueness invariant — after position cleanup, keep only the
+    //    highest-day completion step per journey if duplicates remain.
+    const dupResult = await pool.query(`
+      UPDATE journey_steps
+         SET is_completion_step = false,
+             updated_at         = NOW()
+       WHERE (journey_id, day) IN (
+         SELECT journey_id, day
+           FROM (
+             SELECT journey_id,
+                    day,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY journey_id
+                      ORDER BY day DESC
+                    ) AS rn
+               FROM journey_steps
+              WHERE is_completion_step = true
+                AND deleted_at IS NULL
+           ) ranked
+          WHERE rn > 1
+       )
+    `);
+    if ((dupResult.rowCount ?? 0) > 0) {
+      logger.info(
+        `Startup migration: cleared duplicate is_completion_step on ${dupResult.rowCount} step(s) (uniqueness invariant)`
+      );
     }
   } catch (err) {
-    logger.warn({ err }, "Startup migration: failed to clear is_completion_step on created-in-god-s-image day 2 (non-fatal)");
+    logger.warn({ err }, "Startup migration: is_completion_step integrity scan failed (non-fatal)");
+  }
+
+  // ── Partial unique index: at most one completion step per journey (2026-08) ──
+  // This index is the DB-level safety net for the application-layer invariant:
+  // only one step per journey may have is_completion_step = true AND deleted_at IS NULL.
+  //
+  // The cleanup scans above run first to remove any existing violations before
+  // this index is created. On all subsequent boots this is a fast no-op.
+  //
+  // In the store layer (createStep / updateStep), the competing-flag clear and
+  // the insert/update happen inside a single transaction. The partial unique
+  // index prevents a concurrent transaction from committing a second completion
+  // step even if two requests race past the application guard simultaneously.
+  try {
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uidx_journey_one_completion_step
+        ON journey_steps (journey_id)
+        WHERE is_completion_step = true
+          AND deleted_at IS NULL
+    `);
+    logger.info("Startup migration: uidx_journey_one_completion_step partial unique index ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: uidx_journey_one_completion_step index failed (non-fatal)");
   }
 }
