@@ -1143,7 +1143,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   // lesson day when only a subset of steps have been opened/created so far.
   const journeyScaffold = useMemo<ScaffoldSection[]>(() => {
     const lessonDays = rawSteps
-      .filter(s => !s.isCompletionStep && s.day > 0)
+      .filter(s => !s.isCompletionStep && s.day > 0 && !removedDays.has(s.day))
       .sort((a, b) => a.day - b.day)
       .map(s => ({ day: s.day, label: `Day ${s.day}`, shortLabel: `${s.day}` } as ScaffoldSection));
 
@@ -1172,7 +1172,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       ...allDaySlots,
       { day: completionDay, label: 'Walk Complete', shortLabel: '✓' },
     ];
-  }, [rawSteps, journey?.durationDays]);
+  }, [rawSteps, journey?.durationDays, removedDays]);
 
   // Ref so callbacks don't need to be recreated when the scaffold changes.
   const scaffoldRef = useRef<ScaffoldSection[]>(journeyScaffold);
@@ -1185,6 +1185,10 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [saveStatus, setSaveStatus] = useState<Record<number, SaveStatus>>({});
   const [journeyForm, setJourneyForm] = useState<Partial<Journey>>({});
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<number | null>(null);
+  // Days soft-removed this session (set to Draft, hidden from scaffold). Resets on reload.
+  const [removedDays, setRemovedDays] = useState<Set<number>>(new Set());
+  const [convertingStep, setConvertingStep] = useState(false);
   const [confirmBack, setConfirmBack] = useState(false);
   // Journey-level toolbar state
   const [journeySaving, setJourneySaving] = useState<'saving' | 'publishing' | 'unpublishing' | 'deleting' | null>(null);
@@ -1370,6 +1374,36 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       setSelectedView(remaining.length > 0 ? remaining[0].day : 'overview');
     }
     setDeleteTarget(null);
+  };
+
+  // Soft-remove: sets step to Draft so nothing is deleted from the DB.
+  // The step disappears from the scaffold and member view; it can be recovered
+  // later via the audit log or by an admin viewing Draft steps.
+  const handleRemoveDay = async (day: number) => {
+    const step = stepsWithBlocks.find(s => s.day === day);
+    if (!step) return;
+    try {
+      await updateStep({ ...step, status: 'Draft', isCompletionStep: false }, day);
+    } catch { /* non-fatal — step still removed from UI */ }
+    setRemovedDays(prev => new Set([...prev, day]));
+    setStepsWithBlocks(ss => ss.filter(s => s.day !== day));
+    if (selectedView === day) setSelectedView('overview');
+    setRemoveTarget(null);
+  };
+
+  // Convert a step that was incorrectly flagged as is_completion_step back to a
+  // regular lesson step. Nothing is deleted; only the flag changes.
+  const handleConvertToRegularStep = async () => {
+    if (!selectedStep) return;
+    setConvertingStep(true);
+    try {
+      await updateStep({ ...selectedStep, isCompletionStep: false }, selectedStep.day);
+      setStepsWithBlocks(ss =>
+        ss.map(s => s.day === selectedStep.day ? { ...s, isCompletionStep: false } : s),
+      );
+    } finally {
+      setConvertingStep(false);
+    }
   };
 
   const handleSaveJourney = useCallback(async () => {
@@ -1623,45 +1657,58 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                 const active = section.day === 0 ? selectedView === 'introduction' : selectedView === section.day;
                 const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, journeyScaffold);
                 const status = step ? saveStatus[step.day] : undefined;
+                // Regular lesson step (day 1..N) — show a remove button on hover.
+                const isRemovableDay = section.day > 0 && section.day <= (journey?.durationDays ?? 0);
                 return (
-                  <button
-                    key={section.day}
-                    onClick={() => clickable && handleOpenSection(section.day)}
-                    disabled={!clickable}
-                    className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors group ${
-                      active
-                        ? 'bg-teal-50'
-                        : clickable
-                        ? 'hover:bg-gray-50'
-                        : 'opacity-40 cursor-default'
-                    }`}
-                  >
-                    {/* Completion dot */}
-                    <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                      started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
-                    }`}>
-                      {started && <Check size={8} className="text-white" strokeWidth={3} />}
-                    </span>
-                    {/* Label */}
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[13px] font-medium truncate leading-tight ${
-                        active ? 'text-teal-900' : started ? 'text-gray-700' : 'text-gray-400'
+                  <div key={section.day} className="relative group/row">
+                    <button
+                      onClick={() => clickable && handleOpenSection(section.day)}
+                      disabled={!clickable}
+                      className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors ${
+                        active
+                          ? 'bg-teal-50'
+                          : clickable
+                          ? 'hover:bg-gray-50'
+                          : 'opacity-40 cursor-default'
+                      } ${isRemovableDay ? 'pr-7' : ''}`}
+                    >
+                      {/* Completion dot */}
+                      <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
                       }`}>
-                        {section.label}
-                      </div>
-                      {step?.estimatedReadingTime && (
-                        <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                          <Clock size={9} /> {step.estimatedReadingTime} min
+                        {started && <Check size={8} className="text-white" strokeWidth={3} />}
+                      </span>
+                      {/* Label */}
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-[13px] font-medium truncate leading-tight ${
+                          active ? 'text-teal-900' : started ? 'text-gray-700' : 'text-gray-400'
+                        }`}>
+                          {section.label}
                         </div>
-                      )}
-                    </div>
-                    {/* Autosave indicators */}
-                    <div className="flex-shrink-0 flex items-center gap-1">
-                      {step?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
-                      {status === 'saved' && <Check size={10} className="text-emerald-500" />}
-                      {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
-                    </div>
-                  </button>
+                        {step?.estimatedReadingTime && (
+                          <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                            <Clock size={9} /> {step.estimatedReadingTime} min
+                          </div>
+                        )}
+                      </div>
+                      {/* Autosave indicators */}
+                      <div className="flex-shrink-0 flex items-center gap-1">
+                        {step?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
+                        {status === 'saved' && <Check size={10} className="text-emerald-500" />}
+                        {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
+                      </div>
+                    </button>
+                    {/* Remove-day button — only on regular lesson steps, visible on row hover */}
+                    {isRemovableDay && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setRemoveTarget(section.day); }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover/row:opacity-100 hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all"
+                        title="Remove this day"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -1735,6 +1782,19 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
+            {/* "Convert to Regular Step" — shown when a day was accidentally
+                flagged as is_completion_step. A proper Walk Complete step sits
+                beyond durationDays; anything within the lesson range is wrong. */}
+            {selectedStep?.isCompletionStep && (selectedStep.day <= (journey?.durationDays ?? 0)) && (
+              <button
+                onClick={handleConvertToRegularStep}
+                disabled={convertingStep}
+                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                title="This day was set up as Walk Complete by mistake. Click to restore it as a regular lesson day."
+              >
+                {convertingStep ? 'Fixing…' : '⚠ Convert to Regular Step'}
+              </button>
+            )}
             {/* Autosave status */}
             {selectedView === 'introduction' ? (
               <SaveIndicator status={introSaveStatus} />
@@ -1908,6 +1968,16 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       </div>{/* end flex-1 min-h-0 panels wrapper */}
 
       {/* Dialogs */}
+      {removeTarget !== null && (
+        <ConfirmDialog
+          title={`Remove ${getSectionLabel(removeTarget, scaffoldRef.current)}?`}
+          message="The content is preserved in your database — nothing is deleted. This day will be hidden from members and removed from the editor sidebar. You can restore it later from the audit log."
+          confirmLabel="Remove Day"
+          danger={false}
+          onConfirm={() => handleRemoveDay(removeTarget)}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
       {deleteTarget !== null && (
         <ConfirmDialog
           title="Remove Section"
