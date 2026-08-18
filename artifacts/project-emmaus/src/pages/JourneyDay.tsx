@@ -68,6 +68,15 @@ export default function JourneyDay() {
 
   // Real step count from live data — avoids showing "of 0" when durationDays is stale/unset.
   const publishedStepCount = allSteps.filter(s => s.status === 'Published' && !s.isCompletionStep).length;
+  // For admins previewing walks whose steps are still Draft, durationDays = 0 and
+  // publishedStepCount = 0. Fall back to the total non-completion step count so the
+  // header and isFinalStep detection work correctly during content-creation.
+  const allNonCompletionStepCount = allSteps.filter(s => !s.isCompletionStep).length;
+  const effectiveStepTotal = (journey?.durationDays ?? 0) > 0
+    ? (journey?.durationDays ?? 0)
+    : publishedStepCount > 0
+      ? publishedStepCount
+      : allNonCompletionStepCount;
 
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
@@ -112,7 +121,7 @@ export default function JourneyDay() {
     : undefined;
   const isOnCompletionStep = step?.isCompletionStep === true;
   // Use optional chaining on journey — it may be null during the loading phase.
-  const isLastContentDay = !isDailyRhythmJourney && (journey?.durationDays ?? 0) > 0 && day >= (journey?.durationDays ?? 0);
+  const isLastContentDay = !isDailyRhythmJourney && effectiveStepTotal > 0 && day >= effectiveStepTotal;
   // isFinalStep: true when this IS the completion step, OR when it's the last
   // content day and no published completion step exists to route into next.
   const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep);
@@ -366,7 +375,9 @@ export default function JourneyDay() {
               ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
               : isOnCompletionStep
                 ? 'Walk Complete'
-                : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${publishedStepCount || journey.durationDays}`}
+                : effectiveStepTotal > 0
+                  ? `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${effectiveStepTotal}`
+                  : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
