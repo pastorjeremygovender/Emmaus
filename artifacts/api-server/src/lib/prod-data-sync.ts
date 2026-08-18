@@ -33,7 +33,11 @@ const _require = createRequire(import.meta.url);
 
 // Journeys in production that don't exist in dev — remove them.
 const OLD_JOURNEY_IDS = [
-  "who-is-god", "created-in-god-s-image", "what-went-wrong", "jesus-saves",
+  // "who-is-god" intentionally REMOVED 2026-08-18:
+  // The admin created a NEW walk with this ID in production on 2026-08-18.
+  // Keeping it here caused prod-data-sync to delete the admin's walk on every boot.
+  // Do NOT add it back — the ID is reused for authored content.
+  "created-in-god-s-image", "what-went-wrong", "jesus-saves",
   "beginning-your-new-life", "walking-with-god", "prayer", "the-bible",
   "church", "baptism", "holy-communion", "faith", "the-holy-spirit",
   "following-jesus-every-day", "serving-others", "overcoming-temptation",

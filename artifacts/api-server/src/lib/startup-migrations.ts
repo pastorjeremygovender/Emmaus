@@ -2004,4 +2004,63 @@ export async function runStartupMigrations(): Promise<void> {
       logger.info(`Startup migration: removed ${rowCount} __TEST__ devotional series`);
     }
   }
+
+  // ─── Restore who-is-god journey (deleted by prod-data-sync OLD_JOURNEY_IDS bug) ──
+  // Background: "who-is-god" was in OLD_JOURNEY_IDS, which deletes matching rows on
+  // every boot. The admin created a NEW walk with this ID in production on 2026-08-18,
+  // and prod-data-sync wiped it. This migration restores the journey shell and the
+  // six step stubs (titles recovered from content_audit_log; body content must be
+  // re-authored by the admin).
+  //
+  // Guard: only runs in environments that have the "Come and See" collection
+  // (id: 7b42bd4e-9325-4bf2-b789-2147b9ca2407). That collection only exists in
+  // production — so this is a no-op in development.
+  {
+    const COME_AND_SEE_ID = "7b42bd4e-9325-4bf2-b789-2147b9ca2407";
+    const { rows: colRows } = await pool.query(
+      "SELECT id FROM collections WHERE id = $1", [COME_AND_SEE_ID],
+    );
+    if (colRows.length > 0) {
+      const { rows: existing } = await pool.query(
+        "SELECT id FROM journeys WHERE id = 'who-is-god'",
+      );
+      if (existing.length === 0) {
+        // Restore the journey shell
+        await pool.query(`
+          INSERT INTO journeys
+            (id, title, description, journey_type, duration_days, status,
+             collection_id, created_by, updated_by)
+          VALUES
+            ('who-is-god', 'Who is God?', '', 'growth', 5, 'Draft',
+             $1, 'system-restore', 'system-restore')
+          ON CONFLICT (id) DO NOTHING
+        `, [COME_AND_SEE_ID]);
+
+        // Restore step stubs — titles from content_audit_log; content must be re-authored
+        const steps = [
+          { day: 1, title: "God Wants to Be Known",  isCompletion: false },
+          { day: 2, title: "God the Creator",         isCompletion: false },
+          { day: 3, title: "What Is God Like?",       isCompletion: false },
+          { day: 4, title: "God Is Love",             isCompletion: false },
+          { day: 5, title: "Knowing God",             isCompletion: false },
+          { day: 6, title: "Walk Complete",           isCompletion: true  },
+        ];
+        for (const s of steps) {
+          await pool.query(`
+            INSERT INTO journey_steps
+              (journey_id, day, title, status, is_completion_step)
+            VALUES ($1, $2, $3, 'Draft', $4)
+            ON CONFLICT DO NOTHING
+          `, ["who-is-god", s.day, s.title, s.isCompletion]);
+        }
+        logger.warn(
+          "Startup migration: restored who-is-god journey shell + 6 step stubs. " +
+          "Step body content (teaching, scripture, prayer, reflection) was not in " +
+          "the audit log and must be re-authored by the admin.",
+        );
+      } else {
+        logger.info("Startup migration: who-is-god journey already present — no restore needed (idempotent)");
+      }
+    }
+  }
 }
