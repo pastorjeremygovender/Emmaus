@@ -344,7 +344,7 @@ function DiscoveryCard({
 
   let subtitle: string | undefined;
   if (state === 'in-progress' || state === 'paused') {
-    subtitle = (total > 0 && day > total) ? 'Walk Complete' : (item.description ?? undefined);
+    subtitle = item.description ?? undefined;
   } else if (state === 'not-started') {
     const parts = [dayLabel(total), item.metadata.difficulty].filter(Boolean);
     subtitle = parts.length ? parts.join(' · ') : (item.description ?? undefined);

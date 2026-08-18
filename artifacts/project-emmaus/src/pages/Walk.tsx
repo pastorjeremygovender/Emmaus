@@ -878,12 +878,7 @@ export default function Walk() {
           {startedWalks.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
             const completedCount = prog.completedDays.length;
             const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
-            const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
-            const walkSubtitle   = isCompleted
-              ? 'Walk Complete'
-              : onWalkComplete
-                ? 'Walk Complete'
-                : currentStep?.title || undefined;
+            const walkSubtitle   = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
@@ -962,16 +957,9 @@ export default function Walk() {
         {/* ── 4. Journeys (Longer Studies) — always visible ─────────────────── */}
         <SectionWrapper color="indigo" label="Journeys (Longer Studies)" delay={0.11}>
           {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
-            const completedCount = prog.completedDays.length;
-            const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
-            // When currentStep is null and currentDay > totalPublishedSteps the member
-            // is on the Walk Complete step — show that label instead of "Step X of Y".
-            const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
-            const journeySubtitle = isCompleted
-              ? 'Walk Complete'
-              : onWalkComplete
-                ? 'Walk Complete'
-                : currentStep?.title || undefined;
+            const completedCount  = prog.completedDays.length;
+            const isCompleted     = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
+            const journeySubtitle = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
