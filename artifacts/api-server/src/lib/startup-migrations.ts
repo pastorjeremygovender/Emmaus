@@ -1898,6 +1898,61 @@ export async function runStartupMigrations(): Promise<void> {
     }
   }
 
+  // ─── Refresh duration_days for all journeys from actual published step count ─
+  // duration_days is a cached count used by member-facing cards to render the
+  // "Day X of Y" subtitle.  For admin-created walks (not in the seed) this count
+  // can drift to 0 when steps are imported or created without going through the
+  // normal publish path.  This migration brings every journey back in sync with
+  // its real published, non-completion step count.  Runs on every boot; only
+  // rows that are already correct are skipped (IS DISTINCT FROM guard).
+  {
+    const { rowCount } = await pool.query(`
+      UPDATE journeys
+      SET    duration_days = sub.max_day
+      FROM (
+        SELECT journey_id,
+               COALESCE(MAX(day), 0) AS max_day
+        FROM   journey_steps
+        WHERE  is_completion_step = false
+          AND  status = 'Published'
+        GROUP BY journey_id
+      ) sub
+      WHERE  journeys.id = sub.journey_id
+        AND  journeys.duration_days IS DISTINCT FROM sub.max_day
+    `);
+    if (rowCount && rowCount > 0) {
+      logger.info(`Startup migration: refreshed duration_days on ${rowCount} journey(s) from live published step count`);
+    } else {
+      logger.info("Startup migration: duration_days sync — all journeys already correct (idempotent)");
+    }
+  }
+
+  // ─── Repair spurious empty completion steps created by Walk authoring bug ───
+  // A bug in StudioJourneyEditor caused clicking "Walk Complete" to create a
+  // regular (is_completion_step=false) step at day N+1 with title "Walk Complete"
+  // instead of the genuine completion step.  This migration removes any such
+  // spurious step provided it contains no authored content (all content fields
+  // null/blank) — preserving any step that an admin has written real content into.
+  {
+    const { rowCount } = await pool.query(`
+      DELETE FROM journey_steps
+      WHERE  is_completion_step = false
+        AND  title = 'Walk Complete'
+        AND  COALESCE(TRIM(teaching_content),    '') = ''
+        AND  COALESCE(TRIM(mentor_intro),        '') = ''
+        AND  COALESCE(TRIM(scripture),           '') = ''
+        AND  COALESCE(TRIM(reflection_question), '') = ''
+        AND  COALESCE(TRIM(prayer),              '') = ''
+        AND  COALESCE(TRIM(todays_action),       '') = ''
+        AND  COALESCE(TRIM(memory_verse),        '') = ''
+    `);
+    if (rowCount && rowCount > 0) {
+      logger.info(`Startup migration: removed ${rowCount} spurious empty "Walk Complete" step(s) (is_completion_step=false)`);
+    } else {
+      logger.info("Startup migration: spurious Walk Complete step cleanup — no rows found (idempotent)");
+    }
+  }
+
   // ─── Reseed devotional tombstones — tracks permanently deleted seed series ──
   // Mirrors reseed_tombstones (journeys) for devotional series.  When an admin
   // permanently deletes a devotional series that is part of the seed data,

@@ -1120,26 +1120,42 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const journey = contextJourney ?? localJourney;
   const rawSteps = getStepsForJourney(journeyId);
 
-  // Dynamic scaffold — built from actual steps so any journey length works correctly.
-  // Falls back to the 5-day default while steps are still loading.
+  // Dynamic scaffold — built from actual steps + the journey's configured step count.
+  // The configured count (durationDays) is the source of truth for how many day
+  // slots to expose.  This prevents Walk Complete from masquerading as the next
+  // lesson day when only a subset of steps have been opened/created so far.
   const journeyScaffold = useMemo<ScaffoldSection[]>(() => {
     const lessonDays = rawSteps
       .filter(s => !s.isCompletionStep && s.day > 0)
       .sort((a, b) => a.day - b.day)
       .map(s => ({ day: s.day, label: `Day ${s.day}`, shortLabel: `${s.day}` } as ScaffoldSection));
 
-    if (lessonDays.length === 0) return JOURNEY_SCAFFOLD_DEFAULT;
+    // Always show at least as many slots as the admin configured (durationDays).
+    // Also never shrink below the highest existing lesson day (handles AI-generated
+    // walks where step count may differ from durationDays).
+    const configuredCount = journey?.durationDays ?? 0;
+    const maxExistingDay   = lessonDays.length > 0 ? lessonDays[lessonDays.length - 1].day : 0;
+    const totalDays        = Math.max(configuredCount, maxExistingDay);
+
+    if (totalDays === 0) return JOURNEY_SCAFFOLD_DEFAULT;
+
+    // Build a slot for every day from 1..totalDays regardless of whether a DB
+    // row for that day exists yet.  handleOpenSection creates the row on demand.
+    const allDaySlots: ScaffoldSection[] = Array.from({ length: totalDays }, (_, i) => ({
+      day: i + 1,
+      label: `Day ${i + 1}`,
+      shortLabel: `${i + 1}`,
+    }));
 
     const completionStep = rawSteps.find(s => s.isCompletionStep);
-    const lastLessonDay = lessonDays[lessonDays.length - 1].day;
-    const completionDay = completionStep?.day ?? lastLessonDay + 1;
+    const completionDay  = completionStep?.day ?? totalDays + 1;
 
     return [
       { day: 0, label: 'Walk Introduction', shortLabel: 'I' },
-      ...lessonDays,
+      ...allDaySlots,
       { day: completionDay, label: 'Walk Complete', shortLabel: '✓' },
     ];
-  }, [rawSteps]);
+  }, [rawSteps, journey?.durationDays]);
 
   // Ref so callbacks don't need to be recreated when the scaffold changes.
   const scaffoldRef = useRef<ScaffoldSection[]>(journeyScaffold);
@@ -1307,13 +1323,18 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
       setSelectedView(sectionDay);
       return;
     }
-    // Otherwise create it using the scaffold label as the initial title.
-    const label = getSectionLabel(sectionDay, scaffoldRef.current);
+    // Detect whether this is the Walk Complete slot (always the last scaffold entry).
+    // If so, mark it as a completion step so it is never counted as a lesson day
+    // and the Walk Complete editor is rendered instead of the normal day editor.
+    const scaffold          = scaffoldRef.current;
+    const isCompletionSlot  = scaffold[scaffold.length - 1]?.day === sectionDay;
+    const label             = isCompletionSlot ? 'Walk Complete' : getSectionLabel(sectionDay, scaffold);
     const newStep = await addStep({
       journeyId,
       day: sectionDay,
       title: label,
       status: 'Draft',
+      isCompletionStep: isCompletionSlot,
       mentorIntro: '', scripture: '', devotional: '',
       reflectionQuestion: '', prayerPrompt: '', actionStep: '', lookingAhead: '',
       closingText: '',
@@ -1372,8 +1393,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     if (!journey) return;
     setCompleteSaveStatus('saving');
     try {
+      // Resolve the actual completion step's day dynamically — do not hardcode 6.
+      // (A hardcoded 6 only works for 5-day walks; longer walks have a higher day.)
+      const completionStepDay = stepsRef.current.find(s => s.isCompletionStep)?.day ?? 6;
       await Promise.all([
-        saveStep(6),
+        saveStep(completionStepDay),
         updateJourney({
           ...journey,
           nextJourneyId: completeNextJourneyId || undefined,
