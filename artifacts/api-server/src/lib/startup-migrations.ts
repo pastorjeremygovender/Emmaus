@@ -1936,7 +1936,7 @@ export async function runStartupMigrations(): Promise<void> {
   {
     const { rowCount } = await pool.query(`
       DELETE FROM journey_steps
-      WHERE  is_completion_step = false
+      WHERE  is_completion_step IS NOT TRUE
         AND  title = 'Walk Complete'
         AND  COALESCE(TRIM(teaching_content),    '') = ''
         AND  COALESCE(TRIM(mentor_intro),        '') = ''

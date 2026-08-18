@@ -772,7 +772,31 @@ router.post("/journeys/:id/steps", async (req: Request, res: Response) => {
     res.status(400).json({ error: "day (number) is required" });
     return;
   }
-  const step = await store.createStep(journeyId, { day: day as number, title: title as string, ...rest } as Parameters<typeof store.createStep>[1]);
+
+  // Upsert logic: if a step already exists at this day (e.g. a spurious
+  // non-completion step left over from the old Walk Complete bug), update it
+  // in-place rather than failing with a unique-constraint violation.
+  const existing = await store.getStep(journeyId, day as number);
+  let step;
+  if (existing) {
+    step = await store.updateStep(journeyId, day as number, { title: title as string, ...rest } as Parameters<typeof store.updateStep>[2]);
+    if (!step) {
+      res.status(404).json({ error: "Step not found after upsert" });
+      return;
+    }
+    await logAuditEvent({
+      contentType: "journey_step",
+      contentId: `${journeyId}:day:${step.day}`,
+      action: "edit",
+      performedBy: callerId,
+      previousState: { day: existing.day, title: existing.title, status: existing.status },
+      newState: { journeyId: step.journeyId, day: step.day, title: step.title, status: step.status },
+    });
+    res.status(200).json(step);
+    return;
+  }
+
+  step = await store.createStep(journeyId, { day: day as number, title: title as string, ...rest } as Parameters<typeof store.createStep>[1]);
   await logAuditEvent({
     contentType: "journey_step",
     contentId: `${journeyId}:day:${step.day}`,
