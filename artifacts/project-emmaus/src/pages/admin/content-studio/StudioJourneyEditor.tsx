@@ -508,15 +508,32 @@ function JourneySettings({ journey, form, onPatch, onBlur, onSaveNow }: {
         <p className="text-[11px] text-gray-400 mt-1">Per-step display labels can be set in the day editor.</p>
       </div>
       <div>
-        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Duration (days)</label>
-        <input
-          type="number"
-          value={(form as any).durationDays ?? journey.durationDays ?? ''}
-          onChange={e => onPatch('durationDays' as keyof Journey, e.target.value)}
-          onBlur={onBlur}
-          min={1}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 bg-gray-50"
-        />
+        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Number of Steps</label>
+        {journey.aiGenerated ? (
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+            <Sparkles size={12} className="text-teal-500 flex-shrink-0" />
+            <span className="text-sm text-gray-700">{(journey as any).durationDays ?? '—'} steps</span>
+            <span className="text-[11px] text-gray-400 ml-1">— managed by AI builder</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={(form as any).durationDays ?? journey.durationDays ?? ''}
+                onChange={e => onPatch('durationDays' as keyof Journey, e.target.value)}
+                onBlur={onBlur}
+                min={1}
+                max={365}
+                className="w-24 px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent bg-gray-50"
+              />
+              <span className="text-sm text-gray-500">steps</span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              Reducing the count hides extra slots from the sidebar — existing step content is not deleted.
+            </p>
+          </>
+        )}
       </div>
       <div className="flex items-center justify-between">
         <div>
