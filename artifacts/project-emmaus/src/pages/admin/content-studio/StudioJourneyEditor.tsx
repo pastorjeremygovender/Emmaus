@@ -643,8 +643,18 @@ function StepFieldEditor({
     'focus:border-teal-400 transition-colors bg-white';
   const textareaCls = inputCls + ' resize-y leading-relaxed';
 
-  const nextDay = getNextScaffoldDay(step.day, scaffold);
-  const continueLabel = nextDay !== null ? getSectionLabel(nextDay, scaffold) : null;
+  // Look up the next section by scaffold position (not by day number) so that a
+  // Walk Complete step sharing a day number with a lesson slot still gets the
+  // correct "Walk Complete" label rather than "Day N".
+  const currentIdx = scaffold.findIndex(s => s.day === step.day);
+  const nextSection = currentIdx >= 0 && currentIdx < scaffold.length - 1
+    ? scaffold[currentIdx + 1]
+    : null;
+  // Human-friendly label: "next day" for lesson→lesson, "Walk Complete" for
+  // the final transition — satisfies the admin's "Continue to next day" request.
+  const continueLabel = nextSection
+    ? (nextSection.label === 'Walk Complete' ? 'Walk Complete' : 'next day')
+    : null;
 
   return (
     <div className="max-w-2xl mx-auto px-8 py-8 space-y-6">
