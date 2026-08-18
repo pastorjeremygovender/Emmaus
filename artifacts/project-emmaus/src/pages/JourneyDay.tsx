@@ -407,9 +407,7 @@ export default function JourneyDay() {
               ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
               : isOnCompletionStep
                 ? 'Walk Complete'
-                : effectiveStepTotal > 0
-                  ? `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${effectiveStepTotal}`
-                  : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
+                : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </div>
           </div>
           {/* spacer to balance the back arrow */}

@@ -344,11 +344,7 @@ function DiscoveryCard({
 
   let subtitle: string | undefined;
   if (state === 'in-progress' || state === 'paused') {
-    if (total > 0 && day > total) {
-      subtitle = 'Walk Complete';
-    } else {
-      subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
-    }
+    subtitle = (total > 0 && day > total) ? 'Walk Complete' : (item.description ?? undefined);
   } else if (state === 'not-started') {
     const parts = [dayLabel(total), item.metadata.difficulty].filter(Boolean);
     subtitle = parts.length ? parts.join(' · ') : (item.description ?? undefined);
@@ -394,11 +390,7 @@ function DevotionalCard({
 
   let subtitle: string | undefined;
   if (state === 'in-progress' || state === 'paused') {
-    if (total > 0 && day > total) {
-      subtitle = 'Complete';
-    } else {
-      subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
-    }
+    subtitle = (total > 0 && day > total) ? 'Complete' : (item.description ?? undefined);
   } else {
     subtitle = dayLabel(total) ?? (item.description ?? undefined);
   }
@@ -622,12 +614,7 @@ function SermonCompanionsPanel({
     const total       = item.metadata.durationDays ?? 0;
 
     let subtitle: string | undefined;
-    if (isCurrent) subtitle = item.metadata.subtitle ?? item.description ?? undefined;
-    else if (state === 'in-progress' || state === 'paused') {
-      subtitle = total > 0 ? `Day ${currentDay} of ${total}` : (item.metadata.subtitle ?? item.description ?? undefined);
-    } else {
-      subtitle = total > 0 ? `${total} Steps` : (item.metadata.subtitle ?? item.description ?? undefined);
-    }
+    subtitle = item.metadata.subtitle ?? item.description ?? undefined;
 
     return (
       <DiscoverCompactCard

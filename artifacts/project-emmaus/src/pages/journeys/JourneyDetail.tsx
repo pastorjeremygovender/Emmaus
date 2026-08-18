@@ -280,40 +280,13 @@ export default function JourneyDetail() {
           )}
         </div>
 
-        {/* ── Progress (if started) ─────────────────────────────────── */}
-        {isActive && prog && (() => {
-          const nextStep = steps.find(s => s.day === nextUnfinishedDay);
-          const currentStepForLabel = steps.find(s => s.day === prog.currentDay);
-          // Show "Walk Complete" only when the step itself is a completion step.
-          // Never infer completion from currentDay > durationDays — that violates
-          // the integrity rule (completing the last step ≠ completing the walk).
-          const onCompletion = currentStepForLabel?.isCompletionStep === true;
-          const stepTotal = journey.durationDays || steps.length;
-          const progressLabel = onCompletion
-            ? 'Walk Complete'
-            : `${getStepLabel(currentStepForLabel ?? { day: prog.currentDay }, journey)} of ${stepTotal}`;
-          return (
-            <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/15">
-              <p className="text-[13px] font-medium text-primary">{progressLabel}</p>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.min(100, Math.round((prog.completedDays.length / (journey.durationDays || 1)) * 100))}%` }}
-                />
-              </div>
-              {nextStep?.title && (
-                <p className="text-[12px] text-primary/70 truncate">Up next: {nextStep.title}</p>
-              )}
-            </div>
-          );
-        })()}
         {isPaused && prog && (() => {
           const pausedStep = steps.find(s => s.day === prog.currentDay);
           const onCompletion = pausedStep?.isCompletionStep === true;
           const stepTotal = journey.durationDays || steps.length;
           const pausedLabel = onCompletion
             ? 'Walk Complete'
-            : `Paused at ${getStepLabel(pausedStep ?? { day: prog.currentDay }, journey)} of ${stepTotal}`;
+            : `Paused`;
           return (
             <div className="p-4 rounded-xl bg-muted/50 border border-border">
               <p className="text-[13px] text-muted-foreground">{pausedLabel}</p>

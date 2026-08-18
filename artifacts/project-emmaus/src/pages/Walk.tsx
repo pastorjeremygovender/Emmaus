@@ -880,18 +880,10 @@ export default function Walk() {
             const isCompleted    = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
             const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
             const walkSubtitle   = isCompleted
-              ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
+              ? 'Walk Complete'
               : onWalkComplete
                 ? 'Walk Complete'
-                : completedCount > 0
-                  ? currentStep
-                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-                  : totalPublishedSteps > 0
-                    ? currentStep
-                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-                    : undefined;
+                : currentStep?.title || undefined;
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
@@ -929,12 +921,8 @@ export default function Walk() {
             const isComplete     = total > 0 && sc.currentDay > total;
             const allComplete    = total > 0 && completedCount >= total;
             const scDesc         = allComplete
-              ? `${total} of ${total} steps complete`
-              : completedCount > 0
-                ? sc.nextEntryTitle
-                  ? `Step ${sc.currentDay} of ${total} · ${sc.nextEntryTitle}`
-                  : `Step ${sc.currentDay} of ${total}`
-                : total > 0 ? `Step 1 of ${total}` : 'Step 1';
+              ? 'Complete'
+              : sc.nextEntryTitle || undefined;
             const destination    = isComplete
               ? `/sermon-companion/${sc.id}/overview?source=today`
               : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
@@ -980,18 +968,10 @@ export default function Walk() {
             // is on the Walk Complete step — show that label instead of "Step X of Y".
             const onWalkComplete = !currentStep && prog.currentDay > totalPublishedSteps && totalPublishedSteps > 0;
             const journeySubtitle = isCompleted
-              ? `${totalPublishedSteps} of ${totalPublishedSteps} complete`
+              ? 'Walk Complete'
               : onWalkComplete
                 ? 'Walk Complete'
-                : completedCount > 0
-                  ? currentStep
-                    ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}${currentStep.title ? ` · ${currentStep.title}` : ''}`
-                    : `${resolveStepPrefix(journey)} ${prog.currentDay} of ${totalPublishedSteps}`
-                  : totalPublishedSteps > 0
-                    ? currentStep
-                      ? `${getStepLabel(currentStep, journey)} of ${totalPublishedSteps}`
-                      : `${resolveStepPrefix(journey)} 1 of ${totalPublishedSteps}`
-                    : undefined;
+                : currentStep?.title || undefined;
             const badge = computeUpdatedBadge(
               journey.notifyPublishedAt ?? null,
               prog.lastOpenedAt ?? null,
