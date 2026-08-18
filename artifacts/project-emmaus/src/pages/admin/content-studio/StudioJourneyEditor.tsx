@@ -1137,6 +1137,12 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const journey = contextJourney ?? localJourney;
   const rawSteps = getStepsForJourney(journeyId);
 
+  // Must be declared before journeyScaffold useMemo (which references removedDays).
+  const [removeTarget, setRemoveTarget] = useState<number | null>(null);
+  // Days soft-removed this session (set to Draft, hidden from scaffold). Resets on reload.
+  const [removedDays, setRemovedDays] = useState<Set<number>>(new Set());
+  const [convertingStep, setConvertingStep] = useState(false);
+
   // Dynamic scaffold — built from actual steps + the journey's configured step count.
   // The configured count (durationDays) is the source of truth for how many day
   // slots to expose.  This prevents Walk Complete from masquerading as the next
@@ -1185,10 +1191,6 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   const [saveStatus, setSaveStatus] = useState<Record<number, SaveStatus>>({});
   const [journeyForm, setJourneyForm] = useState<Partial<Journey>>({});
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<number | null>(null);
-  // Days soft-removed this session (set to Draft, hidden from scaffold). Resets on reload.
-  const [removedDays, setRemovedDays] = useState<Set<number>>(new Set());
-  const [convertingStep, setConvertingStep] = useState(false);
   const [confirmBack, setConfirmBack] = useState(false);
   // Journey-level toolbar state
   const [journeySaving, setJourneySaving] = useState<'saving' | 'publishing' | 'unpublishing' | 'deleting' | null>(null);
