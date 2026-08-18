@@ -119,7 +119,7 @@ function JourneyCard({
             )}
           </div>
           {journey.description && (
-            <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
+            <p className="text-[12px] text-muted-foreground leading-snug">
               {journey.description}
             </p>
           )}

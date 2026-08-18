@@ -57,6 +57,7 @@ export default function JourneyDetail() {
   const [collectionName, setCollectionName]   = useState<string | null>(null);
   const [showRoomPicker, setShowRoomPicker]   = useState(false);
   const [showStudyTogether, setShowStudyTogether] = useState(false);
+  const [showIntro, setShowIntro]             = useState(false);
 
   const journey = journeys.find(j => j.id === journeyId);
   const prog = journey ? progress[journey.id] : undefined;
@@ -283,13 +284,14 @@ export default function JourneyDetail() {
         {isActive && prog && (() => {
           const nextStep = steps.find(s => s.day === nextUnfinishedDay);
           const currentStepForLabel = steps.find(s => s.day === prog.currentDay);
-          // If member has advanced onto (or past) the Walk Complete step, show
-          // "Walk Complete" rather than a nonsensical "Step 7 of 5" label.
-          const onCompletion = currentStepForLabel?.isCompletionStep ||
-            (journey.durationDays != null && prog.currentDay > journey.durationDays);
+          // Show "Walk Complete" only when the step itself is a completion step.
+          // Never infer completion from currentDay > durationDays — that violates
+          // the integrity rule (completing the last step ≠ completing the walk).
+          const onCompletion = currentStepForLabel?.isCompletionStep === true;
+          const stepTotal = journey.durationDays || steps.length;
           const progressLabel = onCompletion
             ? 'Walk Complete'
-            : `${getStepLabel(currentStepForLabel ?? { day: prog.currentDay }, journey)} of ${journey.durationDays}`;
+            : `${getStepLabel(currentStepForLabel ?? { day: prog.currentDay }, journey)} of ${stepTotal}`;
           return (
             <div className="space-y-2 p-4 rounded-xl bg-primary/5 border border-primary/15">
               <p className="text-[13px] font-medium text-primary">{progressLabel}</p>
@@ -307,11 +309,11 @@ export default function JourneyDetail() {
         })()}
         {isPaused && prog && (() => {
           const pausedStep = steps.find(s => s.day === prog.currentDay);
-          const onCompletion = pausedStep?.isCompletionStep ||
-            (journey.durationDays != null && prog.currentDay > journey.durationDays);
+          const onCompletion = pausedStep?.isCompletionStep === true;
+          const stepTotal = journey.durationDays || steps.length;
           const pausedLabel = onCompletion
             ? 'Walk Complete'
-            : `Paused at ${getStepLabel(pausedStep ?? { day: prog.currentDay }, journey)} of ${journey.durationDays}`;
+            : `Paused at ${getStepLabel(pausedStep ?? { day: prog.currentDay }, journey)} of ${stepTotal}`;
           return (
             <div className="p-4 rounded-xl bg-muted/50 border border-border">
               <p className="text-[13px] text-muted-foreground">{pausedLabel}</p>
@@ -435,6 +437,29 @@ export default function JourneyDetail() {
               Steps
             </h2>
             <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
+              {/* Walk Introduction — shown if the admin authored one */}
+              {(journey as any).introductionContent && (
+                <>
+                  <button
+                    className="w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left bg-card hover:bg-muted/40 active:bg-muted/60"
+                    onClick={() => setShowIntro(v => !v)}
+                    aria-expanded={showIntro}
+                  >
+                    <span className="text-[12px] font-medium w-6 shrink-0 mt-0.5 text-muted-foreground">↳</span>
+                    <span className="text-[14px] leading-snug flex-1 text-foreground">Introduction</span>
+                    <span className="ml-auto text-[11px] font-medium text-muted-foreground shrink-0">
+                      {showIntro ? '▲' : '▼'}
+                    </span>
+                  </button>
+                  {showIntro && (
+                    <div className="px-6 py-4 bg-muted/30">
+                      <p className="text-[15px] text-foreground leading-[1.8] whitespace-pre-wrap">
+                        {(journey as any).introductionContent}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
               {steps.map(s => {
                 const done = prog?.completedDays.includes(s.day);
                 // Show "Up next" only when the journey is in progress (started but not fully completed)
