@@ -104,7 +104,7 @@ export default function WalkCompletePage() {
               className="w-full flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors py-1"
             >
               <Users size={13} />
-              Continue this Walk with others in a Room
+              Continue this Walk with others in a Group
             </button>
           )}
         </div>
