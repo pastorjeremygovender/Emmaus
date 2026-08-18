@@ -149,8 +149,42 @@ export async function runProdDataSync(): Promise<void> {
     );
 
     // ── 2. Remove old journey IDs not present in dev ──────────────────────
+    // Guard: before deleting, check every authored field in journey_steps.
+    // A step is considered "authored" when ANY text or JSONB content column
+    // is non-empty — covering all columns an admin can write to (teaching
+    // text, scripture, reflection, prayer, mentor intro, today's action,
+    // memory verse, and the generic JSONB content block).
+    // If authored content is found the journey is SKIPPED and a WARN is
+    // emitted naming the ID and step count so a developer can review and
+    // remove the ID from OLD_JOURNEY_IDS instead.  We never silently
+    // discard content; when provenance is unclear we err on the side of
+    // preservation.
     for (const jid of OLD_JOURNEY_IDS) {
       try {
+        const { rows: authoredRows } = await pool.query<{ cnt: string }>(
+          `SELECT COUNT(*) AS cnt FROM journey_steps
+           WHERE journey_id = $1
+             AND (
+               (teaching_content    IS NOT NULL AND teaching_content    <> '') OR
+               (scripture           IS NOT NULL AND scripture            <> '') OR
+               (reflection_question IS NOT NULL AND reflection_question  <> '') OR
+               (prayer              IS NOT NULL AND prayer               <> '') OR
+               (mentor_intro        IS NOT NULL AND mentor_intro         <> '') OR
+               (todays_action       IS NOT NULL AND todays_action        <> '') OR
+               (memory_verse        IS NOT NULL AND memory_verse         <> '') OR
+               (content IS NOT NULL AND content::text NOT IN ('null','{}','[]'))
+             )`,
+          [jid],
+        );
+        const authoredCount = parseInt(authoredRows[0]?.cnt ?? "0", 10);
+        if (authoredCount > 0) {
+          logger.warn(
+            { jid, authoredSteps: authoredCount },
+            "prod-data-sync: skipping delete of OLD_JOURNEY_ID — admin-authored content detected; remove this ID from OLD_JOURNEY_IDS to silence this warning",
+          );
+          continue;
+        }
+
         await pool.query("DELETE FROM user_journey_progress WHERE journey_id=$1", [jid]);
         await pool.query("DELETE FROM journey_steps WHERE journey_id=$1", [jid]);
         await pool.query("DELETE FROM journeys WHERE id=$1", [jid]);

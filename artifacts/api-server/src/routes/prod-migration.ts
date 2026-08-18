@@ -22,8 +22,9 @@ const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
 // Old journey IDs that exist in production but not in dev — must be removed.
+// NOTE: "who-is-god" was intentionally removed 2026-08-18.  The admin created
+// a new walk with that ID; adding it back here would delete their content.
 const OLD_JOURNEY_IDS = [
-  "who-is-god",
   "created-in-god-s-image",
   "what-went-wrong",
   "jesus-saves",
@@ -102,9 +103,40 @@ router.post(
       logger.info(report.chapter_overviews, "prod-sync: chapter overviews done");
 
       // ── 2. Remove old journeys (not in dev) ───────────────────────────────
+      // Guard: before deleting, check every authored field in journey_steps.
+      // A step is "authored" when ANY text or JSONB content column is non-empty.
+      // If authored content is found the journey is SKIPPED and a WARN is emitted
+      // so a developer can review and remove the ID from OLD_JOURNEY_IDS instead.
+      // When provenance is unclear we err on the side of preservation.
       let oldJourneysDeleted = 0;
+      const oldJourneysSkipped: string[] = [];
       for (const jid of OLD_JOURNEY_IDS) {
         try {
+          const { rows: authoredRows } = await pool.query<{ cnt: string }>(
+            `SELECT COUNT(*) AS cnt FROM journey_steps
+             WHERE journey_id = $1
+               AND (
+                 (teaching_content    IS NOT NULL AND teaching_content    <> '') OR
+                 (scripture           IS NOT NULL AND scripture            <> '') OR
+                 (reflection_question IS NOT NULL AND reflection_question  <> '') OR
+                 (prayer              IS NOT NULL AND prayer               <> '') OR
+                 (mentor_intro        IS NOT NULL AND mentor_intro         <> '') OR
+                 (todays_action       IS NOT NULL AND todays_action        <> '') OR
+                 (memory_verse        IS NOT NULL AND memory_verse         <> '') OR
+                 (content IS NOT NULL AND content::text NOT IN ('null','{}','[]'))
+               )`,
+            [jid],
+          );
+          const authoredCount = parseInt(authoredRows[0]?.cnt ?? "0", 10);
+          if (authoredCount > 0) {
+            logger.warn(
+              { jid, authoredSteps: authoredCount },
+              "prod-sync: skipping delete of OLD_JOURNEY_ID — admin-authored content detected; remove this ID from OLD_JOURNEY_IDS to silence this warning",
+            );
+            oldJourneysSkipped.push(jid);
+            continue;
+          }
+
           // Remove user progress for these journeys first
           await pool.query(
             `DELETE FROM user_journey_progress WHERE journey_id = $1`,
@@ -126,6 +158,9 @@ router.post(
         }
       }
       report.old_journeys_deleted = oldJourneysDeleted;
+      if (oldJourneysSkipped.length > 0) {
+        report.old_journeys_skipped_authored = oldJourneysSkipped;
+      }
 
       // ── 3. Also clear the old null-titled steps for coming-to-jesus ───────
       //    (the correct steps will be inserted below)
