@@ -344,7 +344,11 @@ function DiscoveryCard({
 
   let subtitle: string | undefined;
   if (state === 'in-progress' || state === 'paused') {
-    subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
+    if (total > 0 && day > total) {
+      subtitle = 'Walk Complete';
+    } else {
+      subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
+    }
   } else if (state === 'not-started') {
     const parts = [dayLabel(total), item.metadata.difficulty].filter(Boolean);
     subtitle = parts.length ? parts.join(' · ') : (item.description ?? undefined);
@@ -390,7 +394,11 @@ function DevotionalCard({
 
   let subtitle: string | undefined;
   if (state === 'in-progress' || state === 'paused') {
-    subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
+    if (total > 0 && day > total) {
+      subtitle = 'Complete';
+    } else {
+      subtitle = total > 0 ? `Day ${day} of ${total}` : (item.description ?? undefined);
+    }
   } else {
     subtitle = dayLabel(total) ?? (item.description ?? undefined);
   }

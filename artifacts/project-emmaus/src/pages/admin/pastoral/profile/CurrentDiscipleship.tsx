@@ -90,7 +90,9 @@ export default function CurrentDiscipleship({ discipleship, loading }: Props) {
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-gray-900 truncate">{j.title}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">
-                      Day {j.currentDay}{j.totalDays > 0 ? ` of ${j.totalDays}` : ''}
+                      {j.totalDays > 0 && j.currentDay > j.totalDays
+                      ? 'Walk Complete'
+                      : <>Day {j.currentDay}{j.totalDays > 0 ? ` of ${j.totalDays}` : ''}</>}
                       {j.updatedAt && <> · last active {fmt(j.updatedAt)}</>}
                     </p>
                   </div>
@@ -99,7 +101,7 @@ export default function CurrentDiscipleship({ discipleship, loading }: Props) {
                   </span>
                 </div>
                 {j.totalDays > 0 && (
-                  <ProgressBar value={j.currentDay} max={j.totalDays} color="bg-teal-500" />
+                  <ProgressBar value={Math.min(j.currentDay, j.totalDays)} max={j.totalDays} color="bg-teal-500" />
                 )}
               </div>
             ))}

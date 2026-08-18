@@ -476,9 +476,11 @@ export default function RoomDetail() {
   const contentTitle = primaryLinkedJourney?.title ?? null;
   const myProgressInLinkedJourney = room.linkedContentId ? myProgress[room.linkedContentId] : null;
   const currentStep = myProgressInLinkedJourney?.currentDay ?? null;
+  // Exclude Walk Complete steps so the count never makes "Step 7 of 5" possible.
   const totalSteps = room.linkedContentId
-    ? getStepsForJourney(room.linkedContentId).filter(s => s.status === 'Published').length
+    ? getStepsForJourney(room.linkedContentId).filter(s => s.status === 'Published' && !s.isCompletionStep).length
     : 0;
+  const onWalkCompleteStep = currentStep != null && totalSteps > 0 && currentStep > totalSteps;
 
   const leaderMember = room.members.find(m => m.role === 'admin');
   const leaderName = leaderMember?.preferredName ?? 'Your leader';
@@ -971,7 +973,7 @@ export default function RoomDetail() {
                         <p className="text-[16px] font-semibold text-foreground truncate leading-snug">{contentTitle}</p>
                         {currentStep != null && (
                           <p className="text-[13px] text-muted-foreground mt-0.5">
-                            Step {currentStep}{totalSteps > 0 ? ` of ${totalSteps}` : ''}
+                            {onWalkCompleteStep ? 'Walk Complete' : `Step ${currentStep}${totalSteps > 0 ? ` of ${totalSteps}` : ''}`}
                           </p>
                         )}
                       </div>
@@ -1403,7 +1405,7 @@ export default function RoomDetail() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-semibold text-foreground truncate">{contentTitle}</p>
-                    {currentStep != null && <p className="text-[12px] text-muted-foreground mt-0.5">Step {currentStep}{totalSteps > 0 ? ` of ${totalSteps}` : ''}</p>}
+                    {currentStep != null && <p className="text-[12px] text-muted-foreground mt-0.5">{onWalkCompleteStep ? 'Walk Complete' : `Step ${currentStep}${totalSteps > 0 ? ` of ${totalSteps}` : ''}`}</p>}
                   </div>
                   <div className="shrink-0 flex items-center gap-1 text-primary font-medium text-[13px]">
                     {isAuthorizedLeader ? 'Present' : 'Open'}
