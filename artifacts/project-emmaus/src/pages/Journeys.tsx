@@ -495,7 +495,7 @@ function journeyItemCards(
 // Journeys tab — one card per Journey (collection).
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
-function JourneysPanel({
+export function JourneysPanel({
   collections, onOpenJourney, isGated, onGate, progress,
 }: {
   collections: JourneyCollectionGroup[];
