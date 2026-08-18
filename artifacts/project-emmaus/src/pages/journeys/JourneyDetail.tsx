@@ -68,6 +68,9 @@ export default function JourneyDetail() {
   const steps = journey
     ? getStepsForJourney(journey.id).filter(s => !s.isCompletionStep)
     : [];
+  const completionStep = journey
+    ? getStepsForJourney(journey.id).find(s => s.isCompletionStep && s.status === 'Published')
+    : undefined;
 
   const enrollState = journey ? getState(journey.id) : 'active';
   const isStarted   = !!prog;
@@ -460,6 +463,32 @@ export default function JourneyDetail() {
                   </button>
                 );
               })}
+              {/* Walk Complete row — always shown; only navigable once all steps are done */}
+              {completionStep && (
+                <button
+                  className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
+                    isCompleted
+                      ? 'bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-100'
+                      : 'bg-card opacity-40 cursor-default'
+                  }`}
+                  onClick={() => {
+                    if (!isCompleted) return;
+                    setLocation(`/journey/${journey.id}/day/${completionStep.day}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+                  }}
+                  aria-label={isCompleted ? 'Open Walk Complete' : 'Walk Complete — finish all steps to unlock'}
+                  aria-disabled={!isCompleted}
+                >
+                  <span className="text-[12px] font-medium w-6 shrink-0 mt-0.5 text-emerald-600">✓</span>
+                  <span className={`text-[14px] leading-snug flex-1 font-medium ${isCompleted ? 'text-emerald-800' : 'text-muted-foreground'}`}>
+                    Walk Complete
+                  </span>
+                  {isCompleted && (
+                    <span className="ml-auto text-[11px] font-medium shrink-0 text-emerald-700">
+                      Open →
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </section>
         )}
