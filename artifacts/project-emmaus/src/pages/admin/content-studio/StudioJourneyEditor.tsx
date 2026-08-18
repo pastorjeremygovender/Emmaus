@@ -1786,8 +1786,11 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           <div className="flex items-center gap-3 flex-shrink-0">
             {/* "Convert to Regular Step" — shown when a day was accidentally
                 flagged as is_completion_step. A proper Walk Complete step sits
-                beyond durationDays; anything within the lesson range is wrong. */}
-            {selectedStep?.isCompletionStep && (selectedStep.day <= (journey?.durationDays ?? 0)) && (
+                after all lesson days; if any lesson day slot comes after this
+                step's day number, it's misassigned. Uses scaffold, not
+                durationDays, so it works even when durationDays is null. */}
+            {selectedStep?.isCompletionStep &&
+              journeyScaffold.some(s => s.day > (selectedStep?.day ?? 0) && s.label.startsWith('Day ')) && (
               <button
                 onClick={handleConvertToRegularStep}
                 disabled={convertingStep}
