@@ -101,21 +101,42 @@ export default function JourneyDay() {
     window.scrollTo(0, 0);
   }, [journeyId]);
 
+  // ── Completion-step derivations (hoisted so the navigation effect below can use them) ──
+  // If a Walk has a published completion step (is_completion_step=true) the last
+  // content day should route into it rather than jumping straight to the complete
+  // page.  The completion step itself is the true "final step" that triggers the
+  // complete-page navigation.
+  // These are declared before any useEffect that references them to avoid TDZ errors.
+  const publishedCompletionStep = !isDailyRhythmJourney
+    ? allSteps.find(s => s.isCompletionStep && s.status === 'Published')
+    : undefined;
+  const isOnCompletionStep = step?.isCompletionStep === true;
+  // Use optional chaining on journey — it may be null during the loading phase.
+  const isLastContentDay = !isDailyRhythmJourney && (journey?.durationDays ?? 0) > 0 && day >= (journey?.durationDays ?? 0);
+  // isFinalStep: true when this IS the completion step, OR when it's the last
+  // content day and no published completion step exists to route into next.
+  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep);
+
   // After the final step is completed (and any sharing prompt resolved),
   // navigate to the dedicated Walk Complete page instead of showing an inline card.
+  //
+  // ⚠️  Must gate on isFinalStep, NOT on `day >= journey.durationDays`.
+  //     The last content day (day == durationDays) is NOT the final step when a
+  //     published Walk Complete step exists — routing there would bypass it.
+  //     isFinalStep is true only when:
+  //       • we are on the completion step itself, OR
+  //       • it's the last content day and no published completion step exists.
   useEffect(() => {
     if (
       isCompleting &&
       !isDailyRhythmJourney &&
-      journey?.durationDays != null &&
-      journey.durationDays > 0 &&
-      day >= journey.durationDays &&
+      isFinalStep &&
       (!showSharePrompt || sharingDone)
     ) {
       setLocation(walkCompleteUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCompleting, showSharePrompt, sharingDone]);
+  }, [isCompleting, showSharePrompt, sharingDone, isFinalStep]);
 
   // Route guard — redirect non-Daily-Rhythm journeys when the requested step
   // is unavailable (unpublished, missing, or out of range). Uses replace so Back
@@ -190,19 +211,6 @@ export default function JourneyDay() {
     : [];
 
   const reflectionKey = `${journeyId}-${day}`;
-
-  // If a Walk has a published completion step (is_completion_step=true) the last
-  // content day should route into it rather than jumping straight to the complete
-  // page.  The completion step itself is the true "final step" that triggers the
-  // complete-page navigation.
-  const publishedCompletionStep = !isDailyRhythmJourney
-    ? allSteps.find(s => s.isCompletionStep && s.status === 'Published')
-    : undefined;
-  const isOnCompletionStep = step?.isCompletionStep === true;
-  const isLastContentDay   = !isDailyRhythmJourney && journey.durationDays > 0 && day >= journey.durationDays;
-  // isFinalStep: true when this IS the completion step, OR when it's the last
-  // content day and no published completion step exists to route into next.
-  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep);
 
   const handleComplete = () => {
     // Daily Rhythm: complete and navigate directly to Walk (no intermediate screen)
@@ -327,7 +335,7 @@ export default function JourneyDay() {
         heading={isOnCompletionStep ? 'Walk complete.' : `${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
-        continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
+        continueLabel={nextStepUrl ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day') : undefined}
         returnLabel={backLabel}
         onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
         onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
