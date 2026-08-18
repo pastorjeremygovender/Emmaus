@@ -89,10 +89,11 @@ function CollectionBanner({ collection }: { collection: Collection }) {
 // ─── Journey card ─────────────────────────────────────────────────────────────
 
 function JourneyCard({
-  journey, onOpen,
+  journey, onOpen, isCompleted = false,
 }: {
   journey: Journey;
   onOpen: () => void;
+  isCompleted?: boolean;
 }) {
   const dur    = durationLabel(journey);
   const rhythm = rhythmLabel(journey);
@@ -109,9 +110,14 @@ function JourneyCard({
           <CoverThumb url={journey.coverImageUrl} title={journey.title} className="w-full h-full" />
         </div>
         <div className="flex-1 min-w-0 px-4 py-4 space-y-1">
-          <h3 className="text-[16px] font-medium text-foreground leading-snug line-clamp-2">
-            {journey.title}
-          </h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-[16px] font-medium text-foreground leading-snug line-clamp-2">
+              {journey.title}
+            </h3>
+            {isCompleted && (
+              <span className="shrink-0 text-[11px] font-medium text-primary mt-0.5">✓</span>
+            )}
+          </div>
           {journey.description && (
             <p className="text-[12px] text-muted-foreground leading-snug line-clamp-2">
               {journey.description}
@@ -121,6 +127,9 @@ function JourneyCard({
             {dur    && <span>{dur}</span>}
             {rhythm && <><span className="opacity-30">·</span><span>{rhythm}</span></>}
             {time   && <><span className="opacity-30">·</span><span>{time}</span></>}
+            {isCompleted && (
+              <><span className="opacity-30">·</span><span className="text-primary font-medium">Completed</span></>
+            )}
           </div>
         </div>
       </div>
@@ -144,7 +153,7 @@ export default function CollectionPage() {
     } catch { /* ignore */ }
     return '/journeys/explore';
   })();
-  const { journeys, progress } = useJourney();
+  const { journeys, steps, progress } = useJourney();
   const { getState } = useEnrollment();
 
   const [collection, setCollection] = useState<Collection | null>(null);
@@ -175,6 +184,27 @@ export default function CollectionPage() {
     () => publishedJourneys.filter(j => journeyIds.includes(j.id)),
     [publishedJourneys, journeyIds]
   );
+
+  /**
+   * Build a per-journey completion flag using the live client-side progress map.
+   * A walk is "completed" when the member has completed at least as many steps
+   * as the published step count (same logic as JourneysPanel).
+   */
+  const completedSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const j of collectionJourneys) {
+      const p = progress[j.id];
+      if (!p) continue;
+      // Count non-completion Published steps for this journey
+      const total = steps.filter(
+        s => s.journeyId === j.id && s.status === 'Published' && !s.isCompletionStep
+      ).length;
+      if (total > 0 && p.completedDays.length >= total) {
+        set.add(j.id);
+      }
+    }
+    return set;
+  }, [collectionJourneys, steps, progress]);
 
   // ── Not found ──────────────────────────────────────────────────────────────
   if (!loading && !collection) {
@@ -256,6 +286,7 @@ export default function CollectionPage() {
                 <JourneyCard
                   key={j.id}
                   journey={j}
+                  isCompleted={completedSet.has(j.id)}
                   onOpen={() => setLocation(`/journeys/${j.id}?source=collectionDetail&sourceId=${id}`)}
                 />
               ))
