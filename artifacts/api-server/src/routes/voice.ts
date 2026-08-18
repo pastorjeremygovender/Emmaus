@@ -428,7 +428,7 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           },
           bibleBook: {
             type: 'string',
-            description: "For type='bible': the book name in lowercase (e.g. 'john', 'psalms', 'romans').",
+            description: "For type='bible': the book name in lowercase with NO spaces or hyphens (e.g. 'john', 'psalms', 'romans', '1corinthians', '2timothy', '1peter', 'songofsolomon'). Strip all spaces and hyphens — never include them.",
           },
           bibleChapter: {
             type: 'number',
@@ -655,7 +655,7 @@ function buildVoiceSystemPrompt(voiceAppContext?: string, isReading?: boolean, l
     '- "Read John 3", "read me Psalms 23", "read the passage" → read_content, type "bible", bibleBook+bibleChapter.',
     '- "Go to John 3", "open John 3", "take me to Psalms 23", "show me Romans 8" → navigate, destination "bible", bibleBookId+bibleChapter.',
     '- The difference: read_content plays the text aloud. navigate opens the chapter on screen silently.',
-    '- Always use the book id in lowercase (e.g. bibleBookId: "john", "psalms", "romans", "genesis").',
+    '- Always use the book id in lowercase with NO spaces or hyphens: "john", "psalms", "romans", "1corinthians", "2corinthians", "1timothy", "2timothy", "1peter", "2peter", "1john", "songofsolomon". Strip spaces — never "1 corinthians".',
     '',
     'READING REQUESTS — resolve immediately:',
     '- "Read", "read to me", "get me started", "start my reading", "my reading", "let\'s go", "start" → read_content. Use "daily-rhythm" if available; otherwise "walk" if active; otherwise "devotional".',

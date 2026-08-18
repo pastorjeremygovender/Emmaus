@@ -1674,7 +1674,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           };
           let bibleRef: { bookId: string; bookName: string; chapter: number } | undefined;
           if (args.bibleBook && args.bibleChapter) {
-            bibleRef = { bookId: args.bibleBook, bookName: args.bibleBook, chapter: args.bibleChapter };
+            // Normalise: strip spaces/hyphens so "1 corinthians" → "1corinthians"
+            const normBookId = String(args.bibleBook).toLowerCase().replace(/[\s\-]+/g, '');
+            bibleRef = { bookId: normBookId, bookName: String(args.bibleBook), chapter: args.bibleChapter };
           }
           const started = await loadAndStartReading(
             args.type as 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
