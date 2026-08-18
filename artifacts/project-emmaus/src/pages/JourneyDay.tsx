@@ -78,6 +78,16 @@ export default function JourneyDay() {
       ? publishedStepCount
       : allNonCompletionStepCount;
 
+  // ── Walk completion integrity ─────────────────────────────────────────────
+  // Required step days: every non-completion step this user can see.
+  // Members see Published-only; admins see all (already filtered by context).
+  const requiredStepDays = allSteps.filter(s => !s.isCompletionStep).map(s => s.day);
+  const completedDaysSet = new Set(journeyProgress?.completedDays ?? []);
+  // A Walk is complete ONLY when every required step has been individually completed.
+  // Using day >= total (highest reached) is explicitly prohibited by the integrity rule.
+  const allRequiredStepsComplete =
+    requiredStepDays.length > 0 && requiredStepDays.every(d => completedDaysSet.has(d));
+
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
@@ -123,8 +133,9 @@ export default function JourneyDay() {
   // Use optional chaining on journey — it may be null during the loading phase.
   const isLastContentDay = !isDailyRhythmJourney && effectiveStepTotal > 0 && day >= effectiveStepTotal;
   // isFinalStep: true when this IS the completion step, OR when it's the last
-  // content day and no published completion step exists to route into next.
-  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep);
+  // content day, no published completion step exists, AND every required step
+  // has been individually completed (integrity rule — see spec).
+  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep && allRequiredStepsComplete);
 
   // After the final step is completed (and any sharing prompt resolved),
   // navigate to the dedicated Walk Complete page instead of showing an inline card.
@@ -325,7 +336,10 @@ export default function JourneyDay() {
   const nextRegularStep = allSteps.find(
     s => s.day > day && !s.isCompletionStep && s.status === 'Published',
   );
-  const nextStep = isLastContentDay && publishedCompletionStep
+  // Only route into the Walk Complete step when ALL required steps are done.
+  // If the member finished the last numbered step but skipped earlier ones,
+  // treat it as a mid-walk completion — no Walk Complete routing yet.
+  const nextStep = isLastContentDay && publishedCompletionStep && allRequiredStepsComplete
     ? publishedCompletionStep
     : nextRegularStep;
   const nextStepUrl = !isFinalStep && nextStep && journeyId
@@ -337,6 +351,24 @@ export default function JourneyDay() {
     // Final step: the useEffect above is navigating to the Walk Complete page.
     // Return null to avoid flashing the completion card in the meantime.
     if (isFinalStep) return null;
+
+    // Member just finished the last numbered step but earlier steps remain.
+    // Walk Complete must not open yet — show a gentle nudge and return them
+    // to the Walk so they can finish the remaining steps (integrity rule).
+    if (isLastContentDay && !allRequiredStepsComplete) {
+      const remainingCount = requiredStepDays.filter(d => !completedDaysSet.has(d)).length;
+      return (
+        <EmmausCompletionCard
+          fullScreen
+          heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
+          subMessage={`You've completed this Step. There ${remainingCount === 1 ? 'is still 1 part' : `are still ${remainingCount} parts`} of this Walk waiting for you.`}
+          returnLabel={backLabel}
+          onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+          onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
+          previousDaysLabel="View Previous Steps →"
+        />
+      );
+    }
 
     return (
       <EmmausCompletionCard
