@@ -2080,4 +2080,22 @@ export async function runStartupMigrations(): Promise<void> {
       }
     }
   }
+
+  // ── Fix misassigned Walk Complete on "Created in God's Image" Day 2 (2026-08) ──
+  // Day 2 was incorrectly flagged as is_completion_step=true, causing it to render
+  // the Walk Complete editor. Idempotent — no effect once already false.
+  try {
+    const { rowCount } = await db.query(`
+      UPDATE journey_steps
+      SET    is_completion_step = false
+      WHERE  journey_id = 'created-in-god-s-image'
+        AND  day        = 2
+        AND  is_completion_step = true
+    `);
+    if ((rowCount ?? 0) > 0) {
+      logger.info("Startup migration: cleared is_completion_step on created-in-god-s-image day 2");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: failed to clear is_completion_step on created-in-god-s-image day 2 (non-fatal)");
+  }
 }
