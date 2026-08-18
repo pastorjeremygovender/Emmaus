@@ -191,8 +191,18 @@ export default function JourneyDay() {
 
   const reflectionKey = `${journeyId}-${day}`;
 
-  // Daily Rhythm journeys never reach a "final step" — they continue indefinitely.
-  const isFinalStep = !isDailyRhythmJourney && journey.durationDays > 0 && day >= journey.durationDays;
+  // If a Walk has a published completion step (is_completion_step=true) the last
+  // content day should route into it rather than jumping straight to the complete
+  // page.  The completion step itself is the true "final step" that triggers the
+  // complete-page navigation.
+  const publishedCompletionStep = !isDailyRhythmJourney
+    ? allSteps.find(s => s.isCompletionStep && s.status === 'Published')
+    : undefined;
+  const isOnCompletionStep = step?.isCompletionStep === true;
+  const isLastContentDay   = !isDailyRhythmJourney && journey.durationDays > 0 && day >= journey.durationDays;
+  // isFinalStep: true when this IS the completion step, OR when it's the last
+  // content day and no published completion step exists to route into next.
+  const isFinalStep = isOnCompletionStep || (isLastContentDay && !publishedCompletionStep);
 
   const handleComplete = () => {
     // Daily Rhythm: complete and navigate directly to Walk (no intermediate screen)
@@ -293,7 +303,14 @@ export default function JourneyDay() {
   // just-completed full-screen card and the isDayCompleted replay footer.
   const { path: returnPath, label: resolvedLabel } = resolveReturn(source, sourceId, '/journeys?tab=journeys');
   const backLabel = `Back to ${resolvedLabel}`;
-  const nextStep = allSteps.find(s => s.day > day);
+  // When on the last content day, prefer routing into the published completion
+  // step.  For all other days, find the next published non-completion step.
+  const nextRegularStep = allSteps.find(
+    s => s.day > day && !s.isCompletionStep && s.status === 'Published',
+  );
+  const nextStep = isLastContentDay && publishedCompletionStep
+    ? publishedCompletionStep
+    : nextRegularStep;
   const nextStepUrl = !isFinalStep && nextStep && journeyId
     ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
     : undefined;
@@ -307,7 +324,7 @@ export default function JourneyDay() {
     return (
       <EmmausCompletionCard
         fullScreen
-        heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
+        heading={isOnCompletionStep ? 'Walk complete.' : `${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
         subMessage="Continue when you're ready."
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
         continueLabel={nextStepUrl ? 'Continue to Next Day' : undefined}
@@ -339,7 +356,9 @@ export default function JourneyDay() {
             <div className="text-[12px] text-muted-foreground">
               {isDailyRhythmJourney
               ? getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)
-              : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${publishedStepCount || journey.durationDays}`}
+              : isOnCompletionStep
+                ? 'Walk Complete'
+                : `${getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)} of ${publishedStepCount || journey.durationDays}`}
             </div>
           </div>
           {/* spacer to balance the back arrow */}
@@ -403,7 +422,7 @@ export default function JourneyDay() {
           {/* Day label + title */}
           <section className={step.shareImageUrl ? "mb-4" : "mb-7"}>
             <span className="text-[11px] font-semibold text-primary uppercase tracking-widest">
-              {getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
+              {isOnCompletionStep ? 'Walk Complete' : getStepLabel({ day, displayLabel: (step as any).displayLabel }, journey)}
             </span>
             <h1 className="mt-2 text-[32px] font-serif font-semibold leading-tight">
               {step.title}
@@ -552,7 +571,7 @@ export default function JourneyDay() {
                  with Continue to Next Day (if a next published step exists) or
                  View Walk Summary (if this was the final step). */
               <EmmausCompletionCard
-                heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
+                heading={isOnCompletionStep ? 'Walk complete.' : `${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
                 subMessage="Continue when you're ready."
                 onContinue={
                   nextStepUrl
