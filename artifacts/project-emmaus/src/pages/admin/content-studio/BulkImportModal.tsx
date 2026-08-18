@@ -35,7 +35,7 @@ type UploadMethod = 'csv' | 'xlsx' | 'emmaus';
 const ALL_CANONICAL_FIELDS: CanonicalField[] = [
   'day', 'title', 'scripture', 'mentorIntro', 'devotional',
   'reflectionQuestion', 'prayerPrompt', 'actionStep', 'closingText',
-  'memoryVerse', 'status',
+  'lookingAhead', 'memoryVerse', 'status',
 ];
 
 interface Props {
@@ -327,6 +327,7 @@ export default function BulkImportModal({ onClose }: Props) {
             prayerPrompt:       row.mapped.prayerPrompt,
             actionStep:         row.mapped.actionStep,
             closingText:        row.mapped.closingText,
+            lookingAhead:       row.mapped.lookingAhead,
             memoryVerse:        row.mapped.memoryVerse,
             status:             row.mapped.status,
           };
@@ -687,7 +688,7 @@ export default function BulkImportModal({ onClose }: Props) {
                       onChange={e => { setPasteText(e.target.value); setRawRows([]); setParsedRows([]); setParseError(''); }}
                       rows={12}
                       placeholder={
-                        'Day: 10\nTitle: Faith That Trusts Jesus\nScripture Reference: John 4:43\u201354\n\nGreeting:\nGood morning. I\u2019m glad you\u2019re here.\n\nReflection:\nA royal official came to Jesus because his son was dying.\n\nPrayer:\nFather, help me to trust You. Amen.\n\nYour Next Step:\nThink of an area where you need to trust God today.\n\nClosing:\nTomorrow we\u2019ll discover what happens when Jesus meets someone who has lost hope.'
+                        'DAY: 10\nTITLE: Faith That Trusts Jesus\nSCRIPTURE: John 4:43\u201354\n\nWELCOME:\nGood morning. I\u2019m glad you\u2019re here.\n\nCONSIDER_THIS:\nA royal official came to Jesus because his son was dying...\n\nPRAYER:\nFather, help me to trust You. Amen.\n\nNEXT_STEP:\nThink of an area where you need to trust God today.\n\nCLOSING:\nThank you for walking with us today.\n\nLOOKING_AHEAD:\nTomorrow we\u2019ll discover what happens when Jesus meets someone who has lost hope.'
                       }
                       className="w-full px-3 py-2.5 text-[12px] font-mono text-gray-800 placeholder:text-gray-300 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-300 resize-y leading-relaxed"
                     />
@@ -695,23 +696,25 @@ export default function BulkImportModal({ onClose }: Props) {
 
                   {/* Format hint */}
                   <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl space-y-1">
-                    <p className="text-[11px] font-semibold text-teal-700">Emmaus format — recognised labels</p>
-                    <div className="grid grid-cols-2 gap-x-4 text-[11px] text-teal-600 leading-relaxed">
+                    <p className="text-[11px] font-semibold text-teal-700">Emmaus format — canonical field labels</p>
+                    <div className="grid grid-cols-2 gap-x-4 text-[11px] text-teal-600 leading-relaxed font-mono">
                       <div>
-                        <span className="font-medium">Day / Step:</span> day number<br />
-                        <span className="font-medium">Title:</span> step title<br />
-                        <span className="font-medium">Scripture Reference:</span> passage<br />
-                        <span className="font-medium">Greeting / Intro:</span> opening
+                        <span className="font-bold">DAY:</span> day number<br />
+                        <span className="font-bold">TITLE:</span> step title<br />
+                        <span className="font-bold">WELCOME:</span> opening<br />
+                        <span className="font-bold">SCRIPTURE:</span> passage<br />
                       </div>
                       <div>
-                        <span className="font-medium">Reflection / Teaching:</span> body<br />
-                        <span className="font-medium">Prayer:</span> prayer text<br />
-                        <span className="font-medium">Your Next Step:</span> action<br />
-                        <span className="font-medium">Closing:</span> send-off
+                        <span className="font-bold">CONSIDER_THIS:</span> reflection<br />
+                        <span className="font-bold">PRAYER:</span> prayer text<br />
+                        <span className="font-bold">NEXT_STEP:</span> action<br />
+                        <span className="font-bold">CLOSING:</span> send-off<br />
+                        <span className="font-bold">LOOKING_AHEAD:</span> tomorrow's intro
                       </div>
                     </div>
                     <p className="text-[10px] text-teal-500 mt-1">
-                      Paste multiple days together &mdash; a new item begins whenever a new Day: or Step: line appears.
+                      Paste multiple days together — a new item begins whenever a new DAY: or STEP: line appears.
+                      Legacy labels (CONSIDER:, Reflection:, Greeting:, etc.) are also accepted.
                     </p>
                   </div>
                 </div>
@@ -918,11 +921,12 @@ export default function BulkImportModal({ onClose }: Props) {
                             <td colSpan={5} className="px-4 py-3">
                               <div className="grid grid-cols-2 gap-2 text-[11px]">
                                 {[
-                                  ['Greeting / Intro', row.mapped.mentorIntro],
-                                  ['Devotional',       row.mapped.devotional],
+                                  ['Welcome',          row.mapped.mentorIntro],
+                                  ['Consider This',    row.mapped.devotional],
                                   ['Prayer',           row.mapped.prayerPrompt],
                                   ['Next Step',        row.mapped.actionStep],
                                   ['Closing',          row.mapped.closingText],
+                                  ['Looking Ahead',    row.mapped.lookingAhead],
                                   ['Memory Verse',     row.mapped.memoryVerse],
                                 ].map(([label, value]) => value ? (
                                   <div key={label}>

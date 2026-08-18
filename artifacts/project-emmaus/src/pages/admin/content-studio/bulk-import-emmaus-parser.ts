@@ -43,7 +43,8 @@ type EmmausField =
   | 'reflectionQuestion'
   | 'prayerPrompt'
   | 'actionStep'
-  | 'closingText';
+  | 'closingText'
+  | 'lookingAhead';
 
 /** Maps normalised label text → canonical field. Order matters (longest-first wins nothing here — we strip all punctuation before matching). */
 const LABEL_MAP: Record<string, EmmausField> = {
@@ -62,15 +63,18 @@ const LABEL_MAP: Record<string, EmmausField> = {
   'verse':              'scripture',
   'versereference':     'scripture',
 
-  // greeting / mentor intro
+  // greeting / mentor intro  (Welcome)
   'greeting':     'mentorIntro',
   'intro':        'mentorIntro',
   'introduction': 'mentorIntro',
+  'welcome':      'mentorIntro',
 
-  // reflection / devotional body
-  'reflection': 'devotional',
-  'devotional': 'devotional',
-  'teaching':   'devotional',
+  // reflection / devotional body  (Consider This)
+  'considerthis':  'devotional',   // canonical: CONSIDER_THIS:
+  'consider':      'devotional',   // legacy alias: CONSIDER:
+  'reflection':    'devotional',
+  'devotional':    'devotional',
+  'teaching':      'devotional',
 
   // reflection question (rare, but keep separate)
   'reflectionquestion': 'reflectionQuestion',
@@ -87,6 +91,13 @@ const LABEL_MAP: Record<string, EmmausField> = {
 
   // closing
   'closing': 'closingText',
+
+  // looking ahead  (canonical: LOOKING_AHEAD:)
+  'lookinahead':  'lookingAhead',   // normalised form of LOOKING_AHEAD (underscore stripped)
+  'lookahead':    'lookingAhead',
+  'lookingahead': 'lookingAhead',
+  'tomorrow':     'lookingAhead',
+  'preview':      'lookingAhead',
 };
 
 /** Normalise a label for map lookup: lowercase, strip everything except a-z0-9. */
@@ -106,6 +117,7 @@ interface ItemAccumulator {
   prayerPrompt: string[];
   actionStep: string[];
   closingText: string[];
+  lookingAhead: string[];
   currentField: EmmausField | null;
 }
 
@@ -113,7 +125,7 @@ function blankItem(): ItemAccumulator {
   return {
     day: '', title: '', scripture: '',
     mentorIntro: [], devotional: [], reflectionQuestion: [],
-    prayerPrompt: [], actionStep: [], closingText: [],
+    prayerPrompt: [], actionStep: [], closingText: [], lookingAhead: [],
     currentField: null,
   };
 }
@@ -180,6 +192,7 @@ function flushItem(
     prayerPrompt:       joinField(item.prayerPrompt),
     actionStep:         joinField(item.actionStep),
     closingText:        joinField(item.closingText),
+    lookingAhead:       joinField(item.lookingAhead),
     memoryVerse:        '',
     status:             defaultStatus,
   };
@@ -312,6 +325,7 @@ function appendToField(item: ItemAccumulator, field: EmmausField, line: string):
     case 'prayerPrompt':       item.prayerPrompt.push(line);       break;
     case 'actionStep':         item.actionStep.push(line);         break;
     case 'closingText':        item.closingText.push(line);        break;
+    case 'lookingAhead':       item.lookingAhead.push(line);       break;
     // day / title / scripture are single-line — should never reach here
   }
 }

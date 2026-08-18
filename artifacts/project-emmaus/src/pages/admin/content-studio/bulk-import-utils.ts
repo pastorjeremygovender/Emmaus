@@ -21,12 +21,13 @@ export type CanonicalField =
   | 'day'               // step/day number (required)
   | 'title'             // step title (required)
   | 'scripture'         // journey: scripture | devotional: scriptureReference
-  | 'mentorIntro'       // journey: mentorIntro | devotional: greeting
-  | 'devotional'        // journey: devotional  | devotional: considerThis
+  | 'mentorIntro'       // journey: mentorIntro | devotional: greeting  (Welcome)
+  | 'devotional'        // journey: devotional  | devotional: considerThis  (Consider This)
   | 'reflectionQuestion'
   | 'prayerPrompt'      // journey: prayerPrompt | devotional: prayer
   | 'actionStep'        // journey: actionStep   | devotional: nextStep
   | 'closingText'       // journey: closingText  | devotional: closing
+  | 'lookingAhead'      // journey: lookingAhead (intro to next day — stored in content JSONB)
   | 'memoryVerse'
   | 'status';
 
@@ -34,12 +35,13 @@ export const CANONICAL_FIELD_LABELS: Record<CanonicalField, string> = {
   day:                'Day / Step Number',
   title:              'Title',
   scripture:          'Scripture Reference',
-  mentorIntro:        'Greeting / Mentor Intro',
-  devotional:         'Devotional / Reflection',
+  mentorIntro:        'Welcome / Greeting',
+  devotional:         'Consider This / Reflection',
   reflectionQuestion: 'Reflection Question',
   prayerPrompt:       'Prayer',
   actionStep:         'Your Next Step',
   closingText:        'Closing',
+  lookingAhead:       'Looking Ahead',
   memoryVerse:        'Memory Verse',
   status:             'Status',
 };
@@ -59,8 +61,9 @@ const ALIASES: Record<string, CanonicalField> = {
   // mentorIntro / greeting
   greeting: 'mentorIntro', mentorintro: 'mentorIntro', intro: 'mentorIntro',
   introduction: 'mentorIntro', mentor: 'mentorIntro', opening: 'mentorIntro',
-  // devotional / reflection
-  devotional: 'devotional', reflection: 'devotional', considerthis: 'devotional',
+  // devotional / reflection  (Consider This)
+  devotional: 'devotional', reflection: 'devotional',
+  considerthis: 'devotional', consider: 'devotional',  // CONSIDER_THIS: and legacy CONSIDER:
   body: 'devotional', content: 'devotional', message: 'devotional', reading: 'devotional',
   // reflectionQuestion
   reflectionquestion: 'reflectionQuestion', question: 'reflectionQuestion',
@@ -72,6 +75,9 @@ const ALIASES: Record<string, CanonicalField> = {
   // closing
   closing: 'closingText', closingtext: 'closingText', outro: 'closingText',
   sendoff: 'closingText', close: 'closingText',
+  // lookingAhead  (LOOKING_AHEAD:)
+  lookinahead: 'lookingAhead', lookingahead: 'lookingAhead', lookahead: 'lookingAhead',
+  tomorrow: 'lookingAhead', preview: 'lookingAhead',
   // memoryVerse
   memoryverse: 'memoryVerse', memoryscripture: 'memoryVerse',
   // status
@@ -161,6 +167,7 @@ export interface MappedRow {
   prayerPrompt: string;
   actionStep: string;
   closingText: string;
+  lookingAhead: string;
   memoryVerse: string;
   status: 'Draft' | 'Published';
 }
@@ -194,6 +201,7 @@ export function applyMappings(
       prayerPrompt: m.prayerPrompt ?? '',
       actionStep: m.actionStep ?? '',
       closingText: m.closingText ?? '',
+      lookingAhead: m.lookingAhead ?? '',
       memoryVerse: m.memoryVerse ?? '',
       status: m.status ?? defaultStatus,
     };
