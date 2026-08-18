@@ -710,9 +710,7 @@ export default function Walk() {
         ? `${getStepLabel(coreCurrentEntry, coreJourney!)} — you're up to date`
         : "You're up to date";
     }
-    return coreCurrentEntry
-      ? `${getStepLabel(coreCurrentEntry, coreJourney!)} · ${coreCurrentEntry.title}`
-      : 'Ready to continue';
+    return coreCurrentEntry?.title || 'Ready to continue';
   })();
 
   const drCtaLabel = drState === 'start'
@@ -790,17 +788,10 @@ export default function Walk() {
               const allComplete    = publishedDayCount > 0 && currentDay > publishedDayCount;
               const hasStarted     = scProg !== null;
               const displayTitle   = title.includes(': ') ? title.split(': ')[0].trim() : title;
-              const twsSubtitle    = !hasStarted
-                ? (publishedDayCount > 0 ? `${publishedDayCount} steps available` : 'Sermon companion')
-                : allComplete
-                  ? `${publishedDayCount} of ${publishedDayCount} steps complete`
-                  : completedCount > 0
-                    ? `Step ${currentDay} of ${publishedDayCount}`
-                    : `Step 1 of ${publishedDayCount}`;
               return (
                 <CompactCard
                   title={displayTitle}
-                  subtitle={`This week's sermon · ${twsSubtitle}`}
+                  subtitle="This week's sermon"
                   ctaLabel={!hasStarted ? 'Start' : allComplete ? 'Review' : 'Continue'}
                   onAction={() => setLocation(`/sermon-companion/${id}/overview?source=today`)}
                   done={allComplete}
