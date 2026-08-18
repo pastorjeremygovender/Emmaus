@@ -657,7 +657,9 @@ export default function Walk() {
   );
 
   // Split started journeys into walks (quick) vs longer studies
-  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk');
+  // Only standalone walks (no collectionId) appear in the Walks section.
+  // Walks that belong to a collection are accessed through their collection, not listed here.
+  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk' && !journey.collectionId);
   const startedLongerJourneys = startedJourneys.filter(({ journey }) => journey.journeyType !== 'walk');
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
