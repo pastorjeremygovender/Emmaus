@@ -1418,6 +1418,16 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
     }
   };
 
+  // Appends a new lesson day at the end of the current scaffold, persists the
+  // new durationDays count on the journey record, then opens the new day.
+  const handleAddNewDay = useCallback(async () => {
+    if (!journey) return;
+    const lessonSlots = journeyScaffold.filter(s => s.day > 0 && s.label.startsWith('Day '));
+    const nextDay = lessonSlots.length + 1;
+    await updateJourney({ ...journey, ...journeyForm, durationDays: nextDay } as Journey);
+    await handleOpenSection(nextDay);
+  }, [journey, journeyForm, journeyScaffold, updateJourney, handleOpenSection]);
+
   const handleSaveJourney = useCallback(async () => {
     if (!journey) return;
     await updateJourney({ ...journey, ...journeyForm } as Journey);
@@ -1663,66 +1673,91 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
               <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-1">Content</div>
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
-              {journeyScaffold.map(section => {
-                const step = section.day !== 0 ? stepsWithBlocks.find(s => s.day === section.day) : undefined;
-                const started = section.day === 0 ? introIsComplete : isStepComplete(step);
-                const active = section.day === 0 ? selectedView === 'introduction' : selectedView === section.day;
-                const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, journeyScaffold);
-                const status = step ? saveStatus[step.day] : undefined;
-                // Regular lesson step (day 1..N) — show a remove button on hover.
-                const isRemovableDay = section.day > 0 && section.day <= (journey?.durationDays ?? 0);
-                return (
-                  <div key={section.day} className="relative group/row">
-                    <button
-                      onClick={() => clickable && handleOpenSection(section.day)}
-                      disabled={!clickable}
-                      className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors ${
-                        active
-                          ? 'bg-teal-50'
-                          : clickable
-                          ? 'hover:bg-gray-50'
-                          : 'opacity-40 cursor-default'
-                      } ${isRemovableDay ? 'pr-7' : ''}`}
-                    >
-                      {/* Completion dot */}
-                      <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                        started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
-                      }`}>
-                        {started && <Check size={8} className="text-white" strokeWidth={3} />}
-                      </span>
-                      {/* Label */}
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-[13px] font-medium truncate leading-tight ${
-                          active ? 'text-teal-900' : started ? 'text-gray-700' : 'text-gray-400'
-                        }`}>
-                          {section.label}
-                        </div>
-                        {step?.estimatedReadingTime && (
-                          <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                            <Clock size={9} /> {step.estimatedReadingTime} min
-                          </div>
-                        )}
-                      </div>
-                      {/* Autosave indicators */}
-                      <div className="flex-shrink-0 flex items-center gap-1">
-                        {step?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
-                        {status === 'saved' && <Check size={10} className="text-emerald-500" />}
-                        {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
-                      </div>
-                    </button>
-                    {/* Remove-day button — only on regular lesson steps, visible on row hover */}
-                    {isRemovableDay && (
+              {(() => {
+                // Split scaffold into lesson sections (Walk Intro + Day N) and the
+                // Walk Complete section so we can insert "+ Add Day" between them.
+                const lessonSections = journeyScaffold.filter(s => s.label !== 'Walk Complete');
+                const completionSection = journeyScaffold.find(s => s.label === 'Walk Complete');
+
+                const renderRow = (section: ScaffoldSection) => {
+                  const step = section.day !== 0 ? stepsWithBlocks.find(s => s.day === section.day) : undefined;
+                  const started = section.day === 0 ? introIsComplete : isStepComplete(step);
+                  const active = section.day === 0 ? selectedView === 'introduction' : selectedView === section.day;
+                  const clickable = isSectionClickable(section.day, stepsWithBlocks, introIsComplete, journeyScaffold);
+                  const status = step ? saveStatus[step.day] : undefined;
+                  // A regular lesson day (Day 1…N) gets a remove icon on hover.
+                  // Use label check — avoids the durationDays-null false-negative bug.
+                  const isRemovableDay = section.label.startsWith('Day ');
+                  return (
+                    <div key={section.day} className="relative group/row">
                       <button
-                        onClick={e => { e.stopPropagation(); setRemoveTarget(section.day); }}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover/row:opacity-100 hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all"
-                        title="Remove this day"
+                        onClick={() => clickable && handleOpenSection(section.day)}
+                        disabled={!clickable}
+                        className={`w-full flex items-center gap-2 px-2 py-2.5 rounded-lg text-left transition-colors ${
+                          active
+                            ? 'bg-teal-50'
+                            : clickable
+                            ? 'hover:bg-gray-50'
+                            : 'opacity-40 cursor-default'
+                        } ${isRemovableDay ? 'pr-7' : ''}`}
                       >
-                        <Trash2 size={12} />
+                        {/* Completion dot */}
+                        <span className={`flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          started ? 'border-teal-500 bg-teal-500' : 'border-gray-300 bg-white'
+                        }`}>
+                          {started && <Check size={8} className="text-white" strokeWidth={3} />}
+                        </span>
+                        {/* Label */}
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[13px] font-medium truncate leading-tight ${
+                            active ? 'text-teal-900' : started ? 'text-gray-700' : 'text-gray-400'
+                          }`}>
+                            {section.label}
+                          </div>
+                          {step?.estimatedReadingTime && (
+                            <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                              <Clock size={9} /> {step.estimatedReadingTime} min
+                            </div>
+                          )}
+                        </div>
+                        {/* Autosave indicators */}
+                        <div className="flex-shrink-0 flex items-center gap-1">
+                          {step?.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Unsaved" />}
+                          {status === 'saved' && <Check size={10} className="text-emerald-500" />}
+                          {status === 'error' && <AlertCircle size={10} className="text-red-400" />}
+                        </div>
                       </button>
-                    )}
-                  </div>
+                      {/* Remove icon — lesson days only, visible on row hover */}
+                      {isRemovableDay && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setRemoveTarget(section.day); }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover/row:opacity-100 hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all"
+                          title="Remove this day"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                };
+
+                return (
+                  <>
+                    {lessonSections.map(renderRow)}
+
+                    {/* ── Add Day ─────────────────────────────────────────── */}
+                    <button
+                      onClick={handleAddNewDay}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[12px] font-medium text-teal-600 hover:bg-teal-50 transition-colors mt-0.5"
+                    >
+                      <Plus size={12} /> Add Day
+                    </button>
+
+                    {/* Walk Complete — always last */}
+                    {completionSection && renderRow(completionSection)}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </>
         ) : (
