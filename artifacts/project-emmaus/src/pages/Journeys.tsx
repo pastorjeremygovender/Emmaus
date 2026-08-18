@@ -496,21 +496,43 @@ function journeyItemCards(
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
 function JourneysPanel({
-  collections, onOpenJourney, isGated, onGate,
+  collections, onOpenJourney, isGated, onGate, progress,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
   isGated: boolean;
   onGate: () => void;
+  /** Client-side progress map from JourneyContext — always reflects the latest
+   *  completed steps, even before the next-steps API cache refreshes. */
+  progress: Record<string, { completedDays: number[] }>;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
   return (
     <div className="space-y-3">
       {collections.map(col => {
-        const walkCount  = col.journeys.length;
-        const completed  = col.journeys.filter(j => j.memberProgressState === 'completed').length;
-        const hasInProgress = col.journeys.some(j => j.memberProgressState === 'in-progress');
+        const walkCount = col.journeys.length;
+
+        // Use client-side progress for accurate, always-current counts.
+        // memberProgressState from the server can be stale if the user completed
+        // a walk while the page was already loaded (next-steps is fetched once on mount).
+        const completed = col.journeys.filter(j => {
+          const p = progress[j.id];
+          const total = j.metadata.durationDays ?? 0;
+          return total > 0 && (p?.completedDays.length ?? 0) >= total;
+        }).length;
+
+        // A walk is in-progress when the member has a progress record (started)
+        // but has not yet completed all steps. startJourney creates a record with
+        // completedDays=[] so we must NOT gate on completedDays.length > 0.
+        const hasInProgress = col.journeys.some(j => {
+          const p = progress[j.id];
+          if (!p) return false; // never started
+          const total = j.metadata.durationDays ?? 0;
+          const isCompleted = total > 0 && p.completedDays.length >= total;
+          return !isCompleted;
+        });
+
         const hasProgress   = completed > 0 || hasInProgress;
         const actionLabel   = hasInProgress ? 'Continue' : 'Open';
 
@@ -881,6 +903,7 @@ export default function Journeys() {
                   onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
                   isGated={!gateClear}
                   onGate={() => setLocation('/walk')}
+                  progress={progress}
                 />
               </SectionWrapper>
             )}
