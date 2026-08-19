@@ -62,3 +62,4 @@
 - [Verified identity and role bootstrap](verified-identity-auth.md) — OIDC subject is immutable identity; roles stay DB-controlled; initial super-admin claim is one-time and non-repeatable.
 - [Supabase server-mediated authentication](supabase-server-auth.md) — Opaque sessions; per-tab subject assertions reject stale cross-tab requests; recovery authorization is one-use.
 - [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.
+- [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.

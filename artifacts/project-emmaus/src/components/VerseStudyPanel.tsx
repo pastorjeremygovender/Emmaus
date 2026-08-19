@@ -65,6 +65,7 @@ type StudyNote = {
 
 type ChapterOverview = {
   id: string;
+  title: string;
   summary: string;
   main_themes: string[];
   important_people: string[];
@@ -283,6 +284,11 @@ function ChapterOverviewSection({
             </div>
           ) : (
             <div className="space-y-3">
+                {overview.title && (
+                  <h3 className="text-[16px] font-bold text-foreground leading-snug">
+                    {overview.title}
+                  </h3>
+                )}
               {overview.summary && (
                 <p className="text-[15px] text-foreground leading-[1.7]">{overview.summary}</p>
               )}

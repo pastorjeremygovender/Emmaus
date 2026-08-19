@@ -654,6 +654,41 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: bible_chapter_overviews table failed (non-fatal)");
   }
 
+  // ── Bible: bulk study import support (2026-08) ─────────────────────────────
+  // TITLE belongs to the existing chapter overview record; import history is
+  // operational/audit metadata, not authored Bible content.
+  try {
+    await pool.query(`
+      ALTER TABLE bible_chapter_overviews
+        ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT '';
+
+      CREATE TABLE IF NOT EXISTS bible_study_import_history (
+        id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        imported_by    text NOT NULL,
+        books          jsonb NOT NULL DEFAULT '[]',
+        chapters       jsonb NOT NULL DEFAULT '[]',
+        passage_count  int NOT NULL DEFAULT 0,
+        conflict_mode  text NOT NULL
+          CHECK (conflict_mode IN ('skip','replace','merge')),
+        target_status  text NOT NULL
+          CHECK (target_status IN ('Draft','Published')),
+        status         text NOT NULL DEFAULT 'Running'
+          CHECK (status IN ('Running','Completed','Partial','Failed')),
+        result         jsonb NOT NULL DEFAULT '{}',
+        created_at     timestamptz NOT NULL DEFAULT now(),
+        completed_at   timestamptz
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_bible_study_import_history_created_at
+        ON bible_study_import_history (created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_bible_study_import_history_imported_by
+        ON bible_study_import_history (imported_by, created_at DESC);
+    `);
+    logger.info("Startup migration: Bible bulk import schema ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: Bible bulk import schema failed (non-fatal)");
+  }
+
   // ── Today's Steps: hide-from-today flag on devotional progress (2026-08) ──────
   try {
     await pool.query(`

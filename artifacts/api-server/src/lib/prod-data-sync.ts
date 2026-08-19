@@ -48,6 +48,21 @@ const OLD_JOURNEY_IDS = [
   "the-road-to-emmaus",
 ];
 
+/**
+ * Seeded chapter overviews are insert-only. Once a chapter exists, it may have
+ * been authored or bulk-imported by an admin and must never be overwritten by a
+ * later deploy (including its Draft/Published status).
+ */
+export const CHAPTER_OVERVIEW_SEED_INSERT_SQL = `
+  INSERT INTO bible_chapter_overviews
+    (id, book_id, chapter, title, summary,
+     main_themes, important_people, important_locations, passage_divisions,
+     key_verse, key_verse_start, key_verse_end,
+     book_connection, jesus_connection,
+     status, created_by, updated_by)
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+  ON CONFLICT (book_id, chapter) DO NOTHING`;
+
 export async function runProdDataSync(): Promise<void> {
   try {
     // ── Quick check: how many overviews do we have? ───────────────────────
@@ -88,37 +103,17 @@ export async function runProdDataSync(): Promise<void> {
     }
 
     // ── 1. Chapter overviews ─────────────────────────────────────────────
-    // Always upsert — ensures any newly authored overview reaches production
-    // on the next deploy, not just when the table is empty.
+    // Insert missing seed chapters only. Existing rows are authored content and
+    // their text/status must survive every subsequent boot.
     let overviewsInserted = 0;
-    let overviewsUpdated = 0;
     for (const ov of overviews) {
       try {
         const jsonbStr = (v: unknown) =>
           v != null ? (typeof v === "string" ? v : JSON.stringify(v)) : "[]";
         const r = await pool.query(
-          `INSERT INTO bible_chapter_overviews
-             (id, book_id, chapter, summary,
-              main_themes, important_people, important_locations, passage_divisions,
-              key_verse, key_verse_start, key_verse_end,
-              book_connection, jesus_connection,
-              status, created_by, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-           ON CONFLICT (book_id, chapter) DO UPDATE SET
-             summary            = EXCLUDED.summary,
-             main_themes        = EXCLUDED.main_themes,
-             important_people   = EXCLUDED.important_people,
-             important_locations = EXCLUDED.important_locations,
-             passage_divisions  = EXCLUDED.passage_divisions,
-             key_verse          = EXCLUDED.key_verse,
-             key_verse_start    = EXCLUDED.key_verse_start,
-             key_verse_end      = EXCLUDED.key_verse_end,
-             book_connection    = EXCLUDED.book_connection,
-             jesus_connection   = EXCLUDED.jesus_connection,
-             status             = EXCLUDED.status,
-             updated_by         = EXCLUDED.updated_by`,
+          CHAPTER_OVERVIEW_SEED_INSERT_SQL,
           [
-            ov.id, ov.book_id, ov.chapter, ov.summary ?? "",
+             ov.id, ov.book_id, ov.chapter, ov.title ?? "", ov.summary ?? "",
             jsonbStr(ov.main_themes),
             jsonbStr(ov.important_people),
             jsonbStr(ov.important_locations),
@@ -129,11 +124,7 @@ export async function runProdDataSync(): Promise<void> {
             ov.created_by ?? "seed", ov.updated_by ?? "seed",
           ],
         );
-        if ((r.rowCount ?? 0) > 0) {
-          // rowCount=1 on both INSERT and UPDATE for ON CONFLICT DO UPDATE.
-          // Track by comparing against the pre-existing count.
-          overviewsInserted++;
-        }
+        overviewsInserted += r.rowCount ?? 0;
       } catch (err) {
         logger.warn(
           { err, book_id: ov.book_id, chapter: ov.chapter },
@@ -141,10 +132,8 @@ export async function runProdDataSync(): Promise<void> {
         );
       }
     }
-    // Rows updated = upserts that touched existing rows.
-    overviewsUpdated = overviewsInserted - Math.max(0, overviews.length - overviewCount);
     logger.info(
-      { seed: overviews.length, dbBefore: overviewCount, upserted: overviewsInserted },
+      { seed: overviews.length, dbBefore: overviewCount, inserted: overviewsInserted },
       "prod-data-sync: chapter overviews synced",
     );
 

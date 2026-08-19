@@ -8,6 +8,19 @@ import { type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import { getBibleData, patchBibleData, type UserBibleData } from "../bible/store.js";
 import { isAdmin } from "../lib/user-role-store.js";
+import { pool } from "@workspace/db";
+import {
+  parseBulkImport,
+  type VerseCountResolver,
+} from "../lib/bible-bulk-import.js";
+import {
+  addImportConflicts,
+  importBibleStudyChapters,
+  listBibleStudyImportHistory,
+  PUBLISHED_STUDY_NOTE_FOR_VERSE_SQL,
+  type ImportConflictMode,
+  type ImportTargetStatus,
+} from "../lib/bible-bulk-import-store.js";
 
 // Resolve data dir relative to the compiled bundle file, not process.cwd().
 // In production the run command is `node artifacts/api-server/dist/index.mjs`
@@ -763,8 +776,6 @@ router.delete("/bible/cross-references/admin/:id", async (req: Request, res: Res
 //   PATCH  /api/bible/study-notes/admin/:id/status
 //   DELETE /api/bible/study-notes/admin/:id
 
-import { pool } from "@workspace/db";
-
 /**
  * Verifies the caller is an authenticated admin or superAdmin using the
  * server-side role store — never trusts the client-controlled x-user-role header.
@@ -782,6 +793,144 @@ async function requireAdminRole(req: Request, res: Response): Promise<string | n
   return userId;
 }
 
+// ─── Bulk Bible Study Import ──────────────────────────────────────────────────
+
+const MAX_BULK_IMPORT_CHARS = 10_000_000;
+const bulkImportVerseCountCache = new Map<string, number | null>();
+
+const resolveBulkImportVerseCount: VerseCountResolver = (bookId, chapter) => {
+  const key = `${bookId}:${chapter}`;
+  if (bulkImportVerseCountCache.has(key)) {
+    return bulkImportVerseCountCache.get(key) ?? null;
+  }
+  if (!VALID_BOOK_IDS.has(bookId)) return null;
+
+  try {
+    const filePath = join(DATA_DIR, "bsb", `${bookId}.json`);
+    if (!existsSync(filePath)) {
+      bulkImportVerseCountCache.set(key, null);
+      return null;
+    }
+    const data = JSON.parse(readFileSync(filePath, "utf8")) as {
+      chapters?: Record<string, Array<{ verse: number; text: string }>>;
+    };
+    const count = data.chapters?.[String(chapter)]?.length ?? null;
+    bulkImportVerseCountCache.set(key, count);
+    return count;
+  } catch {
+    bulkImportVerseCountCache.set(key, null);
+    return null;
+  }
+};
+
+function validateBulkImportText(
+  value: unknown,
+  res: Response,
+): value is string {
+  if (typeof value !== "string" || !value.trim()) {
+    res.status(400).json({ error: "A non-empty text block is required" });
+    return false;
+  }
+  if (value.length > MAX_BULK_IMPORT_CHARS) {
+    res.status(413).json({
+      error: "Import text is too large",
+      maxCharacters: MAX_BULK_IMPORT_CHARS,
+    });
+    return false;
+  }
+  return true;
+}
+
+router.post("/bible/study-import/preview", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  const text = req.body?.text;
+  if (!validateBulkImportText(text, res)) return;
+
+  try {
+    const parsed = await parseBulkImport(text, resolveBulkImportVerseCount);
+    const preview = await addImportConflicts(parsed);
+    res.json(preview);
+  } catch (err) {
+    logger.error({ err, userId }, "POST /bible/study-import/preview failed");
+    res.status(500).json({ error: "Failed to parse Bible Study import" });
+  }
+});
+
+router.post("/bible/study-import", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+
+  const text = req.body?.text;
+  const mode = req.body?.mode as ImportConflictMode;
+  const targetStatus = req.body?.targetStatus as ImportTargetStatus;
+  const selectedChapterKeys = req.body?.selectedChapterKeys;
+
+  if (!validateBulkImportText(text, res)) return;
+  if (!["skip", "replace", "merge"].includes(mode)) {
+    res.status(400).json({ error: "mode must be skip, replace, or merge" });
+    return;
+  }
+  if (!["Draft", "Published"].includes(targetStatus)) {
+    res.status(400).json({ error: "targetStatus must be Draft or Published" });
+    return;
+  }
+  if (
+    !Array.isArray(selectedChapterKeys) ||
+    selectedChapterKeys.length === 0 ||
+    !selectedChapterKeys.every(
+      (key: unknown) => typeof key === "string" && /^[a-z0-9]+:\d+$/.test(key),
+    )
+  ) {
+    res.status(400).json({ error: "At least one valid chapter must be selected" });
+    return;
+  }
+
+  try {
+    // Reparse on import so writes never trust a client-edited preview payload.
+    const parsed = await parseBulkImport(text, resolveBulkImportVerseCount);
+    if (!parsed.valid) {
+      res.status(400).json({
+        error: "The import contains validation errors",
+        preview: await addImportConflicts(parsed),
+      });
+      return;
+    }
+
+    const result = await importBibleStudyChapters({
+      preview: parsed,
+      selectedChapterKeys,
+      mode,
+      targetStatus,
+      userId,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Import failed";
+    logger.error({ err, userId }, "POST /bible/study-import failed");
+    if (message === "No valid chapters were selected") {
+      res.status(400).json({ error: message });
+      return;
+    }
+    res.status(500).json({ error: "Bible Study import failed" });
+  }
+});
+
+router.get("/bible/study-import/history", async (req: Request, res: Response) => {
+  const userId = await requireAdminRole(req, res);
+  if (!userId) return;
+  const limit = Number(req.query.limit ?? 50);
+  try {
+    const history = await listBibleStudyImportHistory(
+      Number.isFinite(limit) ? limit : 50,
+    );
+    res.json({ history });
+  } catch (err) {
+    logger.error({ err, userId }, "GET /bible/study-import/history failed");
+    res.status(500).json({ error: "Failed to load import history" });
+  }
+});
+
 // Member: fetch Published study note for a specific verse
 router.get("/bible/study-notes", async (req: Request, res: Response) => {
   const bookId  = String(req.query.bookId ?? "").trim().toLowerCase();
@@ -794,17 +943,11 @@ router.get("/bible/study-notes", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
-      `SELECT * FROM bible_study_notes
-       WHERE book_id = $1
-         AND chapter = $2
-         AND verse_start <= $3
-         AND (verse_end IS NULL OR verse_end >= $3)
-         AND status = 'Published'
-       ORDER BY verse_start ASC
-       LIMIT 1`,
-      [bookId, chapter, verse]
-    );
+    const result = await pool.query(PUBLISHED_STUDY_NOTE_FOR_VERSE_SQL, [
+      bookId,
+      chapter,
+      verse,
+    ]);
     res.json(result.rows[0] ?? null);
   } catch (err) {
     logger.error({ err }, "GET /bible/study-notes failed");
