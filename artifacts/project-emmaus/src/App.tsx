@@ -14,6 +14,7 @@ import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import Welcome from '@/pages/Welcome';
 import Onboarding from '@/pages/Onboarding';
 import Auth from '@/pages/Auth';
+import AuthCallback from '@/pages/AuthCallback';
 import CheckIn from '@/pages/CheckIn';
 import Walk from '@/pages/Walk';
 import { StepNavigatorPage } from '@/pages/StepNavigatorPage';
@@ -137,6 +138,7 @@ function Router() {
       <Route path="/" component={Welcome} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/auth" component={Auth} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/checkin" component={CheckIn} />
       <Route path="/walk" component={Walk} />
       {/* Canonical Daily Rhythm routes */}

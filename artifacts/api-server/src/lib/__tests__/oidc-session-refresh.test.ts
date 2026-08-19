@@ -2,7 +2,7 @@
  * oidc-session-refresh.test.ts
  *
  * Focused coverage for the concurrency-safe expired-token refresh introduced in
- * lib/oidc-auth.ts. A real OIDC provider and a real PostgreSQL instance are not
+ * lib/oidc-auth.ts. A real provider and a real PostgreSQL instance are not
  * available in unit tests, so this file covers the parts that are deterministic
  * and DB-independent:
  *

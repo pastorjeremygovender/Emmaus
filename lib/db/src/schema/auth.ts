@@ -12,8 +12,8 @@ import {
 
 export type UserRole = "user" | "admin" | "superAdmin";
 
-// Mandatory Replit Auth session storage. Session identifiers are random,
-// opaque values; provider access tokens never reach browser JavaScript.
+// Emmaus session storage. Session identifiers are random, opaque values;
+// provider access tokens never reach browser JavaScript.
 export const sessionsTable = pgTable(
   "sessions",
   {
@@ -24,7 +24,7 @@ export const sessionsTable = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// Immutable provider identities. The primary key is the verified OIDC subject.
+// Immutable provider identities. The primary key is the verified provider subject.
 export const usersTable = pgTable("users", {
   id: varchar("id").primaryKey(),
   email: varchar("email").unique(),

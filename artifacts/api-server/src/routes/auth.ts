@@ -7,19 +7,27 @@ import {
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
-import * as oidc from "openid-client";
 import {
   clearSession,
   createSession,
-  getOidcConfig,
+  getSession,
   getSessionId,
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
 } from "../lib/oidc-auth.js";
 import { getCanonicalPublicOrigin } from "../lib/public-origin.js";
-
-const OIDC_COOKIE_TTL = 10 * 60 * 1000;
+import {
+  getVerifiedSupabaseUser,
+  revokeSupabaseSession,
+  sendPasswordRecoveryEmail,
+  signInWithPassword,
+  signUpWithPassword,
+  SupabaseAuthError,
+  type SupabaseSession,
+  type SupabaseUser,
+  updateSupabasePassword,
+} from "../lib/supabase-auth.js";
 
 export const authRouter = Router();
 
@@ -33,37 +41,6 @@ function setSessionCookie(res: Response, sid: string): void {
   });
 }
 
-function setOidcCookie(
-  res: Response,
-  name: string,
-  value: string,
-): void {
-  res.cookie(name, value, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: OIDC_COOKIE_TTL,
-  });
-}
-
-function clearOidcCookies(res: Response): void {
-  for (const name of ["code_verifier", "nonce", "state", "return_to"]) {
-    res.clearCookie(name, { path: "/" });
-  }
-}
-
-function getSafeReturnTo(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    !value.startsWith("/") ||
-    value.startsWith("//")
-  ) {
-    return "/";
-  }
-  return value;
-}
-
 function claimString(
   claims: Record<string, unknown>,
   ...keys: string[]
@@ -75,6 +52,21 @@ function claimString(
   return null;
 }
 
+function readEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+}
+
+function readPassword(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.length >= 8 && value.length <= 128 ? value : null;
+}
+
+function getAuthRedirectUrl(): string {
+  return `${getCanonicalPublicOrigin()}/auth/callback`;
+}
+
 class IdentityConflictError extends Error {
   constructor() {
     super("This verified email is already bound to another identity.");
@@ -82,30 +74,43 @@ class IdentityConflictError extends Error {
   }
 }
 
+function supabaseClaims(user: SupabaseUser): Record<string, unknown> {
+  const metadata = user.user_metadata ?? {};
+  return {
+    sub: user.id,
+    email: user.email,
+    email_verified: Boolean(user.email_confirmed_at || user.confirmed_at),
+    first_name: claimString(metadata, "first_name", "given_name"),
+    last_name: claimString(metadata, "last_name", "family_name"),
+    picture: claimString(metadata, "avatar_url", "picture"),
+  };
+}
+
 async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   const subject = claimString(claims, "sub");
-  if (!subject) throw new Error("OIDC token did not contain a subject");
+  if (!subject) throw new Error("Verified identity did not contain a subject");
 
   const emailVerified = claims.email_verified === true;
   const claimedEmail = claimString(claims, "email")?.toLowerCase() ?? null;
   const verifiedEmail = emailVerified ? claimedEmail : null;
   const firstName = claimString(claims, "first_name", "given_name");
   const lastName = claimString(claims, "last_name", "family_name");
-  const profileImageUrl = claimString(
-    claims,
-    "profile_image_url",
-    "picture",
-  );
+  const profileImageUrl = claimString(claims, "profile_image_url", "picture");
+  const bootstrapEmail =
+    process.env.EMMAUS_INITIAL_SUPERADMIN_EMAIL?.trim().toLowerCase();
+  const isConfiguredInitialOwner = bootstrapEmail === verifiedEmail;
+
+  if (!verifiedEmail) {
+    throw new Error("The identity provider did not return a verified email");
+  }
 
   return db.transaction(async (tx) => {
-    if (verifiedEmail) {
-      const [emailOwner] = await tx
-        .select({ id: usersTable.id })
-        .from(usersTable)
-        .where(eq(usersTable.email, verifiedEmail));
-      if (emailOwner && emailOwner.id !== subject) {
-        throw new IdentityConflictError();
-      }
+    const [emailOwner] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, verifiedEmail));
+    if (emailOwner && emailOwner.id !== subject) {
+      throw new IdentityConflictError();
     }
 
     const [user] = await tx
@@ -120,7 +125,7 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
       .onConflictDoUpdate({
         target: usersTable.id,
         set: {
-          ...(verifiedEmail ? { email: verifiedEmail } : {}),
+          email: verifiedEmail,
           firstName,
           lastName,
           profileImageUrl,
@@ -134,7 +139,7 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
       .from(userProfilesTable)
       .where(eq(userProfilesTable.authSubject, subject));
 
-    if (!profile && verifiedEmail) {
+    if (!profile) {
       const [emailProfile] = await tx
         .select()
         .from(userProfilesTable)
@@ -144,7 +149,14 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
         throw new IdentityConflictError();
       }
 
+      if (emailProfile && !isConfiguredInitialOwner) {
+        // An email-only record may belong to an unverified legacy identity.
+        // Never claim it automatically from an email match.
+        throw new IdentityConflictError();
+      }
       if (emailProfile) {
+        // The configured initial owner is the narrow exception: the matching
+        // mailbox was verified by Supabase and can claim the profile only once.
         [profile] = await tx
           .update(userProfilesTable)
           .set({ authSubject: subject, updatedAt: new Date() })
@@ -162,8 +174,6 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
       }
     }
 
-    const bootstrapEmail =
-      process.env.EMMAUS_INITIAL_SUPERADMIN_EMAIL?.trim().toLowerCase();
     const bootstrapKey = "initial-superadmin";
     const [bootstrapState] = await tx
       .select()
@@ -186,7 +196,6 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
           })
           .onConflictDoNothing();
       } else if (
-        profile &&
         verifiedEmail === bootstrapEmail &&
         profile.authSubject === subject
       ) {
@@ -214,137 +223,191 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   });
 }
 
+async function establishSession(
+  req: Request,
+  res: Response,
+  session: SupabaseSession,
+): Promise<void> {
+  if (!session.access_token) {
+    throw new Error("The account service did not return an access token");
+  }
+  const providerUser = await getVerifiedSupabaseUser(session.access_token);
+  const { user } = await upsertVerifiedIdentity(supabaseClaims(providerUser));
+  const sessionData: SessionData = {
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      profileImageUrl: user.profileImageUrl,
+    },
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at:
+      typeof session.expires_in === "number"
+        ? Math.floor(Date.now() / 1000) + session.expires_in
+        : undefined,
+  };
+
+  const priorSid = getSessionId(req);
+  if (priorSid) await clearSession(res, priorSid);
+  const sid = await createSession(sessionData);
+  setSessionCookie(res, sid);
+  req.log.info({ userId: user.id }, "Verified Supabase session created");
+}
+
+function writeAuthError(res: Response, error: unknown): void {
+  if (error instanceof IdentityConflictError) {
+    res.status(409).json({
+      error:
+        "This email is already connected to a different Emmaus account. Please contact support.",
+    });
+    return;
+  }
+  if (error instanceof SupabaseAuthError) {
+    if (error.status === 401 || error.status === 400) {
+      res.status(401).json({ error: "Email or password is incorrect." });
+      return;
+    }
+    if (error.status === 403) {
+      res.status(403).json({
+        error: "Please verify your email address before signing in.",
+      });
+      return;
+    }
+    if (error.status >= 500) {
+      res.status(503).json({
+        error: "The account service is temporarily unavailable. Please try again.",
+      });
+      return;
+    }
+  }
+  res.status(400).json({ error: "We could not complete that account request." });
+}
+
 authRouter.get("/auth/user", (req: Request, res: Response): void => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ user: req.isAuthenticated() ? req.user : null });
 });
 
-authRouter.get("/login", async (req: Request, res: Response): Promise<void> => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getCanonicalPublicOrigin()}/api/callback`;
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-
-  const state = oidc.randomState();
-  const nonce = oidc.randomNonce();
-  const codeVerifier = oidc.randomPKCECodeVerifier();
-  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
-
-  const redirectTo = oidc.buildAuthorizationUrl(config, {
-    redirect_uri: callbackUrl,
-    scope: "openid email profile offline_access",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    prompt: "login consent",
-    state,
-    nonce,
-  });
-
-  setOidcCookie(res, "code_verifier", codeVerifier);
-  setOidcCookie(res, "nonce", nonce);
-  setOidcCookie(res, "state", state);
-  setOidcCookie(res, "return_to", returnTo);
-  res.redirect(redirectTo.href);
-});
-
-authRouter.get(
-  "/callback",
+authRouter.post(
+  "/auth/signup",
   async (req: Request, res: Response): Promise<void> => {
-    const config = await getOidcConfig();
-    const publicOrigin = getCanonicalPublicOrigin();
-    const callbackUrl = `${publicOrigin}/api/callback`;
-    const codeVerifier = req.cookies?.code_verifier;
-    const nonce = req.cookies?.nonce;
-    const expectedState = req.cookies?.state;
-
-    if (!codeVerifier || !expectedState) {
-      res.redirect("/api/login");
+    const email = readEmail(req.body?.email);
+    const password = readPassword(req.body?.password);
+    if (!email || !password) {
+      res.status(400).json({
+        error: "Enter a valid email address and a password of at least 8 characters.",
+      });
       return;
     }
 
-    const returnTo = getSafeReturnTo(req.cookies?.return_to);
-    const requestUrl = new URL(req.originalUrl, publicOrigin);
-    const currentUrl = new URL(callbackUrl);
-    currentUrl.search = requestUrl.search;
+    try {
+      await signUpWithPassword({
+        email,
+        password,
+        redirectTo: getAuthRedirectUrl(),
+      });
+      // Deliberately generic: do not expose whether this email already exists.
+      res.status(202).json({
+        message:
+          "If this address can create an account, we have sent a verification email.",
+      });
+    } catch (error) {
+      writeAuthError(res, error);
+    }
+  },
+);
+
+authRouter.post(
+  "/auth/login",
+  async (req: Request, res: Response): Promise<void> => {
+    const email = readEmail(req.body?.email);
+    const password = readPassword(req.body?.password);
+    if (!email || !password) {
+      res.status(400).json({ error: "Enter your email address and password." });
+      return;
+    }
 
     try {
-      const tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
-        pkceCodeVerifier: String(codeVerifier),
-        expectedNonce: nonce ? String(nonce) : undefined,
-        expectedState: String(expectedState),
-        idTokenExpected: true,
-      });
-
-      const idTokenClaims = tokens.claims();
-      if (!idTokenClaims?.sub) {
-        throw new Error("OIDC token did not contain a subject");
-      }
-
-      let claims = idTokenClaims as unknown as Record<string, unknown>;
-      if (tokens.access_token) {
-        try {
-          const userInfo = await oidc.fetchUserInfo(
-            config,
-            tokens.access_token,
-            idTokenClaims.sub,
-          );
-          claims = {
-            ...claims,
-            ...userInfo,
-            sub: idTokenClaims.sub,
-          };
-        } catch (error) {
-          if (typeof idTokenClaims.email !== "string") throw error;
-          req.log.warn(
-            { err: error },
-            "OIDC UserInfo unavailable; using verified ID token claims",
-          );
-        }
-      }
-
-      if (
-        typeof claims.email !== "string" ||
-        !claims.email.trim() ||
-        claims.email_verified !== true
-      ) {
-        throw new Error("The identity provider did not return a verified email");
-      }
-
-      const { user } = await upsertVerifiedIdentity(claims);
-      const now = Math.floor(Date.now() / 1000);
-      const sessionData: SessionData = {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          profileImageUrl: user.profileImageUrl,
-        },
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiresIn()
-          ? now + tokens.expiresIn()!
-          : typeof claims.exp === "number"
-            ? claims.exp
-            : undefined,
-      };
-
-      const priorSid = getSessionId(req);
-      if (priorSid) await clearSession(res, priorSid);
-      const sid = await createSession(sessionData);
-      setSessionCookie(res, sid);
-      clearOidcCookies(res);
-      req.log.info({ userId: user.id }, "Verified OIDC session created");
-      res.redirect(returnTo);
+      const session = await signInWithPassword({ email, password });
+      await establishSession(req, res, session);
+      res.status(200).json({ ok: true });
     } catch (error) {
-      clearOidcCookies(res);
-      req.log.warn(
-        {
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        },
-        "OIDC callback rejected",
-      );
-      const appRoot = returnTo.replace(/\/+$/, "");
-      res.redirect(`${appRoot}/auth?error=signin`);
+      writeAuthError(res, error);
+    }
+  },
+);
+
+authRouter.post(
+  "/auth/complete",
+  async (req: Request, res: Response): Promise<void> => {
+    const accessToken =
+      typeof req.body?.accessToken === "string" ? req.body.accessToken : "";
+    const refreshToken =
+      typeof req.body?.refreshToken === "string"
+        ? req.body.refreshToken
+        : undefined;
+    if (!accessToken) {
+      res.status(400).json({ error: "This account link is incomplete." });
+      return;
+    }
+
+    try {
+      await establishSession(req, res, {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      writeAuthError(res, error);
+    }
+  },
+);
+
+authRouter.post(
+  "/auth/recover",
+  async (req: Request, res: Response): Promise<void> => {
+    const email = readEmail(req.body?.email);
+    if (!email) {
+      res.status(400).json({ error: "Enter a valid email address." });
+      return;
+    }
+
+    try {
+      await sendPasswordRecoveryEmail({
+        email,
+        redirectTo: getAuthRedirectUrl(),
+      });
+      res.status(202).json({
+        message:
+          "If an account exists for this email, we have sent password reset instructions.",
+      });
+    } catch (error) {
+      writeAuthError(res, error);
+    }
+  },
+);
+
+authRouter.post(
+  "/auth/password",
+  async (req: Request, res: Response): Promise<void> => {
+    const accessToken =
+      typeof req.body?.accessToken === "string" ? req.body.accessToken : "";
+    const password = readPassword(req.body?.password);
+    if (!accessToken || !password) {
+      res.status(400).json({
+        error: "Choose a password between 8 and 128 characters.",
+      });
+      return;
+    }
+
+    try {
+      await getVerifiedSupabaseUser(accessToken);
+      await updateSupabasePassword({ accessToken, password });
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      writeAuthError(res, error);
     }
   },
 );
@@ -352,26 +415,21 @@ authRouter.get(
 authRouter.post(
   "/logout",
   async (req: Request, res: Response): Promise<void> => {
-    const origin = getCanonicalPublicOrigin();
-    const returnTo = getSafeReturnTo(req.query.returnTo);
-    const postLogoutRedirectUrl = new URL(returnTo, `${origin}/`).href;
     const sid = getSessionId(req);
+    const session = sid ? await getSession(sid) : null;
     await clearSession(res, sid);
-
-    try {
-      const config = await getOidcConfig();
-      const endSessionUrl = oidc.buildEndSessionUrl(config, {
-        client_id: process.env.REPL_ID!,
-        post_logout_redirect_uri: postLogoutRedirectUrl,
-      });
-      res.redirect(endSessionUrl.href);
-    } catch {
-      res.redirect(returnTo);
+    if (session?.access_token) {
+      try {
+        await revokeSupabaseSession(session.access_token);
+      } catch {
+        // The opaque Emmaus session is already deleted, which is the local
+        // security boundary even when the provider is temporarily unavailable.
+      }
     }
+    res.status(200).json({ ok: true });
   },
 );
 
-// The legacy endpoint accepted an arbitrary browser-supplied userId.
 authRouter.post("/auth/session", (_req: Request, res: Response): void => {
   res.status(410).json({
     error: "Legacy session creation has been removed. Use verified sign-in.",

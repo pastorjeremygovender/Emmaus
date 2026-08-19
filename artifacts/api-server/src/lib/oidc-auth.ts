@@ -2,9 +2,8 @@ import crypto from "node:crypto";
 import { db, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { Request, Response } from "express";
-import * as oidc from "openid-client";
+import { refreshSupabaseSession } from "./supabase-auth.js";
 
-export const ISSUER_URL = process.env.ISSUER_URL ?? "https://replit.com/oidc";
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
@@ -26,19 +25,6 @@ export interface SessionData {
   access_token: string;
   refresh_token?: string;
   expires_at?: number;
-}
-
-let oidcConfig: oidc.Configuration | null = null;
-
-export async function getOidcConfig(): Promise<oidc.Configuration> {
-  if (!oidcConfig) {
-    const clientId = process.env.REPL_ID;
-    if (!clientId) {
-      throw new Error("REPL_ID is required for Replit Auth");
-    }
-    oidcConfig = await oidc.discovery(new URL(ISSUER_URL), clientId);
-  }
-  return oidcConfig;
 }
 
 export async function createSession(data: SessionData): Promise<string> {
@@ -119,7 +105,7 @@ export function parseStoredSession(raw: unknown): SessionData | null {
 }
 
 /**
- * Obtain a currently-valid session for `sid`, refreshing the OIDC tokens if the
+ * Obtain a currently-valid session for `sid`, refreshing provider tokens if the
  * access token has expired.
  *
  * Concurrency contract (safe across multiple server instances sharing one
@@ -188,15 +174,18 @@ export async function refreshSessionIfExpired(
     }
 
     try {
-      const config = await getOidcConfig();
-      const tokens = await oidc.refreshTokenGrant(config, current.refresh_token);
+      const tokens = await refreshSupabaseSession(current.refresh_token);
+      if (!tokens.access_token) {
+        throw new Error("Supabase refresh did not return an access token");
+      }
       const refreshed: SessionData = {
         ...current,
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? current.refresh_token,
-        expires_at: tokens.expiresIn()
-          ? lockNow + tokens.expiresIn()!
-          : current.expires_at,
+        expires_at:
+          typeof tokens.expires_in === "number"
+            ? lockNow + tokens.expires_in
+            : current.expires_at,
       };
       await tx
         .update(sessionsTable)

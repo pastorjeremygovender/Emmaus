@@ -1,7 +1,7 @@
 /**
  * test-auth.ts — Shared integration-test authentication harness.
  *
- * Creates REAL opaque OIDC sessions in the development PostgreSQL database so
+ * Creates REAL opaque provider sessions in the development PostgreSQL database so
  * networked integration tests can authenticate exactly the way a browser does:
  * with an `Authorization: Bearer <sid>` header that the server resolves through
  * its production auth middleware (session → users.id → user_profiles.app_role).
