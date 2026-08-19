@@ -61,6 +61,21 @@ export interface UnifiedPerson {
   churchId: string;
 }
 
+export interface EmmausAccount {
+  id: string;
+  email: string;
+  preferredName: string;
+  role: "user" | "admin" | "superAdmin";
+  joinedAt: string;
+  lastActiveAt: string;
+  currentJourneyId: string | null;
+  currentJourneyTitle: string | null;
+  currentDay: number | null;
+  daysWalking: number;
+  completedJourneys: string[];
+  reflectionCount: number;
+}
+
 export interface PastoralPerson {
   id: string;
   fullName: string;
@@ -178,6 +193,9 @@ export const STATUS_COLOURS: Record<AttendanceStatus, string> = {
 };
 
 // ─── People ──────────────────────────────────────────────────────────────────
+
+export const listEmmausAccounts = (auth: AuthHeaders) =>
+  apiFetch<EmmausAccount[]>("/accounts", "GET", auth);
 
 export const listPeople = (auth: AuthHeaders) =>
   apiFetch<UnifiedPerson[]>("/people", "GET", auth);

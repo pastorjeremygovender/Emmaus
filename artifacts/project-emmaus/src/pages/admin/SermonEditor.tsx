@@ -13,7 +13,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sermon } from '@/lib/admin-demo-data';
+import { Sermon } from '@/lib/admin-types';
 import { DevotionalReading, PreviewDevotionalContinueButton } from '@/components/DevotionalReading';
 import {
   generateSermonDraft,

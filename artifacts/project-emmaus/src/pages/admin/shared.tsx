@@ -302,8 +302,12 @@ export function Th({ children, className = '' }: { children?: React.ReactNode; c
   );
 }
 
-export function Td({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 text-gray-700 ${className}`}>{children}</td>;
+export function Td({
+  children,
+  className = '',
+  ...props
+}: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return <td {...props} className={`px-4 py-3 text-gray-700 ${className}`}>{children}</td>;
 }
 
 // ─── Content Studio Toolbar ───────────────────────────────────────────────────

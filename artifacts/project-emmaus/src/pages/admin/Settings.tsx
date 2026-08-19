@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { useAdmin } from '@/contexts/AdminContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { ChurchSettings } from '@/lib/admin-demo-data';
+import { ChurchSettings } from '@/lib/admin-types';
 import {
   UnsavedBanner, SaveMessage, PageHeader, Field,
   TextInput, AdminBtn, ConfirmDialog,

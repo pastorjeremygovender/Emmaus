@@ -112,7 +112,7 @@ export interface AttendanceExpectation {
 
 /** Unified person record returned by the combined people list */
 export interface UnifiedPerson {
-  id: string;           // pastoral_persons.id  OR  user_profiles.email (acting as id)
+  id: string;           // pastoral_persons.id OR verified provider subject
   sourceId: string;     // the raw id in its home table
   personType: PersonType;
   fullName: string;
@@ -125,6 +125,21 @@ export interface UnifiedPerson {
   lastAttendanceStatus: string | null;
   openSignals?: number;
   churchId: string;
+}
+
+export interface EmmausAccount {
+  id: string;
+  email: string;
+  preferredName: string;
+  role: "user" | "admin" | "superAdmin";
+  joinedAt: string;
+  lastActiveAt: string;
+  currentJourneyId: string | null;
+  currentJourneyTitle: string | null;
+  currentDay: number | null;
+  daysWalking: number;
+  completedJourneys: string[];
+  reflectionCount: number;
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────────
@@ -358,24 +373,127 @@ export async function linkPersonToUser(
   return { ok: true };
 }
 
+// ─── Verified Emmaus Accounts ─────────────────────────────────────────────────
+
+/**
+ * Canonical admin-facing account source.
+ *
+ * Only profiles bound to an immutable, verified provider subject are visible.
+ * Member-owned data is joined by that subject rather than by mutable email.
+ */
+export async function listEmmausAccounts(): Promise<EmmausAccount[]> {
+  const { rows } = await pool.query<{
+    id: string;
+    email: string;
+    preferred_name: string;
+    app_role: "user" | "admin" | "superAdmin";
+    joined_at: Date;
+    last_active_at: Date;
+    current_journey_id: string | null;
+    current_journey_title: string | null;
+    current_day: number | null;
+    days_walking: string;
+    completed_journeys: string[];
+    reflection_count: string;
+  }>(`
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(
+        NULLIF(up.preferred_name, ''),
+        NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''),
+        SPLIT_PART(u.email, '@', 1)
+      ) AS preferred_name,
+      up.app_role,
+      u.created_at AS joined_at,
+      GREATEST(
+        u.updated_at,
+        up.updated_at,
+        COALESCE(activity.last_progress_at, TIMESTAMPTZ 'epoch'),
+        COALESCE(activity.last_reflection_at, TIMESTAMPTZ 'epoch'),
+        COALESCE(activity.last_devotional_at, TIMESTAMPTZ 'epoch'),
+        COALESCE(activity.last_companion_at, TIMESTAMPTZ 'epoch')
+      ) AS last_active_at,
+      current_walk.journey_id AS current_journey_id,
+      current_walk.journey_title AS current_journey_title,
+      current_walk.current_day,
+      CASE
+        WHEN activity.first_walk_at IS NULL THEN 0
+        ELSE GREATEST(1, CURRENT_DATE - activity.first_walk_at::date + 1)
+      END::text AS days_walking,
+      COALESCE(completed.journey_ids, ARRAY[]::text[]) AS completed_journeys,
+      COALESCE(activity.reflection_count, 0)::text AS reflection_count
+    FROM users u
+    INNER JOIN user_profiles up ON up.auth_subject = u.id
+    LEFT JOIN LATERAL (
+      SELECT
+        ujp.journey_id,
+        j.title AS journey_title,
+        ujp.current_day
+      FROM user_journey_progress ujp
+      LEFT JOIN journeys j ON j.id = ujp.journey_id
+      WHERE ujp.user_id = u.id
+        AND ujp.status = 'active'
+      ORDER BY ujp.updated_at DESC
+      LIMIT 1
+    ) current_walk ON true
+    LEFT JOIN LATERAL (
+      SELECT ARRAY_AGG(ujp.journey_id ORDER BY ujp.updated_at DESC) AS journey_ids
+      FROM user_journey_progress ujp
+      WHERE ujp.user_id = u.id
+        AND ujp.status = 'completed'
+    ) completed ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        (SELECT MIN(started_at) FROM user_journey_progress WHERE user_id = u.id) AS first_walk_at,
+        (SELECT MAX(updated_at) FROM user_journey_progress WHERE user_id = u.id) AS last_progress_at,
+        (SELECT MAX(updated_at) FROM step_reflections WHERE user_id = u.id) AS last_reflection_at,
+        (SELECT COUNT(*) FROM step_reflections WHERE user_id = u.id) AS reflection_count,
+        (SELECT MAX(updated_at) FROM devotional_progress WHERE user_id = u.id) AS last_devotional_at,
+        (SELECT MAX(updated_at) FROM sermon_companion_progress WHERE user_id = u.id) AS last_companion_at
+    ) activity ON true
+    WHERE u.email IS NOT NULL
+    ORDER BY last_active_at DESC, preferred_name ASC
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    email: row.email,
+    preferredName: row.preferred_name,
+    role: row.app_role,
+    joinedAt: row.joined_at.toISOString(),
+    lastActiveAt: row.last_active_at.toISOString(),
+    currentJourneyId: row.current_journey_id,
+    currentJourneyTitle: row.current_journey_title,
+    currentDay: row.current_day,
+    daysWalking: Number(row.days_walking),
+    completedJourneys: row.completed_journeys,
+    reflectionCount: Number(row.reflection_count),
+  }));
+}
+
 // ─── Unified People List ──────────────────────────────────────────────────────
 
 /** Returns merged list of Emmaus users + pastoral_persons with last attendance info. */
 export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
-  // Emmaus users (from user_profiles)
+  // Emmaus users: verified provider identities only.
   const emmausRes = await pool.query(
     `SELECT
-       up.email,
+       u.id,
+       u.email,
+       u.first_name,
+       u.last_name,
        up.preferred_name,
        ar_latest.session_date  AS last_attendance_date,
        ar_latest.status        AS last_attendance_status,
        COALESCE(sig.open_count, 0) AS open_signals
      FROM user_profiles up
+      INNER JOIN users u ON u.id = up.auth_subject
      LEFT JOIN LATERAL (
        SELECT ar.status, ms.session_date
        FROM attendance_records ar
        JOIN meeting_sessions ms ON ms.id = ar.session_id
-       WHERE ar.person_id = up.email
+        WHERE ar.person_id = u.id
          AND ar.person_type = 'emmaus_user'
          AND ar.church_id = $1
        ORDER BY ms.session_date DESC
@@ -384,13 +502,18 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS open_count
        FROM care_signals cs
-       WHERE cs.person_id = up.email
+        WHERE cs.person_id = u.id
          AND cs.person_type = 'emmaus_user'
          AND cs.church_id = $1
          AND cs.dismissed_at IS NULL
          AND cs.auto_dismissed = false
      ) sig ON true
-     ORDER BY COALESCE(up.preferred_name, up.email) ASC`,
+      WHERE u.email IS NOT NULL
+      ORDER BY COALESCE(
+        NULLIF(up.preferred_name, ''),
+        NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''),
+        u.email
+      ) ASC`,
     [CHURCH_ID]
   );
 
@@ -427,13 +550,18 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
   );
 
   const emmausUsers: UnifiedPerson[] = emmausRes.rows.map((r) => ({
-    id:                   String(r.email),
-    sourceId:             String(r.email),
+    id:                   String(r.id),
+    sourceId:             String(r.id),
     personType:           "emmaus_user" as PersonType,
-    fullName:             String(r.preferred_name ?? r.email ?? ""),
+    fullName:             String(
+      r.preferred_name ||
+      [r.first_name, r.last_name].filter(Boolean).join(" ") ||
+      r.email ||
+      ""
+    ),
     email:                String(r.email),
     phone:                null,
-    linkedUserId:         String(r.email),
+    linkedUserId:         String(r.id),
     isLinked:             true,
     subType:              "emmaus_user" as const,
     lastAttendanceDate:   r.last_attendance_date ? String(r.last_attendance_date).slice(0, 10) : null,
@@ -676,7 +804,8 @@ export async function getRegister(sessionId: string): Promise<AttendanceRecord[]
             up.email                                   AS person_email
      FROM attendance_records ar
      LEFT JOIN user_profiles up
-       ON ar.person_type = 'emmaus_user' AND up.email = ar.person_id
+       ON ar.person_type = 'emmaus_user'
+      AND (up.auth_subject = ar.person_id OR up.email = ar.person_id)
      WHERE ar.session_id = $1 AND ar.church_id = $2
      ORDER BY person_name ASC`,
     [sessionId, CHURCH_ID]
@@ -1109,7 +1238,8 @@ export async function getCareSignals(opts?: {
      LEFT JOIN pastoral_persons pp
        ON cs.person_type = 'pastoral_person' AND pp.id::text = cs.person_id
      LEFT JOIN user_profiles up
-       ON cs.person_type = 'emmaus_user' AND up.email = cs.person_id
+       ON cs.person_type = 'emmaus_user'
+      AND (up.auth_subject = cs.person_id OR up.email = cs.person_id)
      ${visitJoins}
      WHERE ${conditions.join(" AND ")}
      ORDER BY ms.session_date DESC, person_name ASC
@@ -2189,7 +2319,8 @@ export async function listDiscipleshipSignals(opts?: {
      LEFT JOIN pastoral_persons pp
        ON ds.person_type = 'pastoral_person' AND pp.id::text = ds.person_id
      LEFT JOIN user_profiles up
-       ON ds.person_type = 'emmaus_user' AND up.email = ds.person_id
+       ON ds.person_type = 'emmaus_user'
+      AND (up.auth_subject = ds.person_id OR up.email = ds.person_id)
      WHERE ${conditions.join(" AND ")}
      ORDER BY ds.detected_at DESC
      LIMIT $${idx}`,

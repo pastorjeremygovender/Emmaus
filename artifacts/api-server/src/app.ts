@@ -9,6 +9,7 @@ import { initVoiceSettings } from "./lib/voice-service.js";
 import { runProdDataSync } from "./lib/prod-data-sync.js";
 import { runSermonDataMigration } from "./lib/sermon-data-migration.js";
 import { ensureSystemTemplates } from "./lib/workflows-store.js";
+import { removeKnownAccountFixtures } from "./lib/known-account-fixtures.js";
 import { authMiddleware } from "./middlewares/authMiddleware.js";
 import { protectCookieAuthenticatedMutation } from "./middlewares/originProtection.js";
 import { isCanonicalRequestOrigin } from "./lib/public-origin.js";
@@ -58,6 +59,7 @@ app.use("/api", router);
 
 export function startBackgroundInitialization(): void {
   runStartupMigrations()
+    .then(() => removeKnownAccountFixtures())
     .then(() => initVoiceSettings())
     .then(() => runProdDataSync())
     .then(() => runSermonDataMigration())

@@ -116,8 +116,9 @@ export async function getTodayStats(): Promise<TodayStats> {
       // New emmaus accounts this week
       pool.query<{ count: string }>(`
         SELECT COUNT(*)::text AS count
-        FROM user_profiles
-        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+        FROM user_profiles up
+        INNER JOIN users u ON u.id = up.auth_subject
+        WHERE u.created_at >= CURRENT_DATE - INTERVAL '7 days'
       `),
 
       // Open follow-up / significant signals
@@ -324,7 +325,8 @@ export async function getNewBelievers(): Promise<NewBeliever[]> {
            ujp.last_completed_at::text AS completed_at
     FROM user_journey_progress ujp
     JOIN journeys j ON j.id = ujp.journey_id
-    LEFT JOIN user_profiles up ON up.email = ujp.user_id
+    LEFT JOIN user_profiles up
+      ON up.auth_subject = ujp.user_id OR up.email = ujp.user_id
     WHERE ujp.status = 'completed'
       AND ujp.last_completed_at >= CURRENT_DATE - INTERVAL '60 days'
       AND (j.title ILIKE '%coming to jesus%' OR j.title ILIKE '%made free%'
@@ -341,7 +343,7 @@ export async function getNewBelievers(): Promise<NewBeliever[]> {
           `SELECT 1 FROM pastoral_milestones pm
            JOIN pastoral_persons pp ON pp.id::text = pm.person_id
            WHERE pm.church_id = $1 AND pm.milestone_type = 'baptised'
-             AND pm.is_active = true AND pp.emmaus_user_id = $2
+              AND pm.is_active = true AND pp.linked_user_id = $2
            LIMIT 1`,
           [CHURCH_ID, r.user_id],
         ),
@@ -384,7 +386,8 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
              ujp.updated_at::text AS event_at
       FROM user_journey_progress ujp
       JOIN journeys j ON j.id = ujp.journey_id
-      LEFT JOIN user_profiles up ON up.email = ujp.user_id
+      LEFT JOIN user_profiles up
+        ON up.auth_subject = ujp.user_id OR up.email = ujp.user_id
       WHERE ujp.updated_at >= CURRENT_DATE - INTERVAL '14 days'
 
       UNION ALL
@@ -397,7 +400,8 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
              rm.joined_at::text AS event_at
       FROM room_members rm
       JOIN rooms r ON r.id = rm.room_id
-      LEFT JOIN user_profiles up ON up.email = rm.user_id
+      LEFT JOIN user_profiles up
+        ON up.auth_subject = rm.user_id OR up.email = rm.user_id
       WHERE rm.joined_at >= CURRENT_DATE - INTERVAL '14 days'
 
       UNION ALL
@@ -431,7 +435,8 @@ export async function getRecentActivity(limit = 25): Promise<ActivityItem[]> {
       JOIN meeting_sessions ms ON ms.id = ar.session_id
       JOIN meeting_types mt    ON mt.id = ms.meeting_type_id
       LEFT JOIN pastoral_persons pp ON pp.id::text = ar.person_id
-      LEFT JOIN user_profiles eu    ON eu.email = ar.person_id
+      LEFT JOIN user_profiles eu
+        ON eu.auth_subject = ar.person_id OR eu.email = ar.person_id
       WHERE ms.church_id = $1
         AND ms.session_date >= CURRENT_DATE - INTERVAL '14 days'
         AND ar.status IN ('present','visitor')

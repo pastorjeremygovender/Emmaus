@@ -333,10 +333,10 @@ router.post("/:roomId/video/token", async (req, res) => {
     const isHost = await canHostVideo(userId, String(roomId), appRole);
 
     // Resolve display name from user_profiles (never expose raw userId).
-    // user_profiles uses email as the key — userId in session context is the email/identifier.
+    // Resolve by immutable subject, with email fallback for historical rows.
     const { rows } = await import("@workspace/db").then(m =>
       m.pool.query(
-        "SELECT preferred_name FROM user_profiles WHERE email = $1",
+        "SELECT preferred_name FROM user_profiles WHERE auth_subject = $1 OR email = $1",
         [userId]
       )
     );
@@ -2575,7 +2575,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
 
     // Resolve presenter name
     const { rows: nameRows } = await pool.query(
-      `SELECT preferred_name FROM user_profiles WHERE email = $1`, [userId]
+      `SELECT preferred_name FROM user_profiles WHERE auth_subject = $1 OR email = $1`, [userId]
     );
     const presenterName = String(nameRows[0]?.preferred_name ?? "").trim() || "Member";
 

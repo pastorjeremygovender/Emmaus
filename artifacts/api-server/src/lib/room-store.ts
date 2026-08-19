@@ -301,7 +301,8 @@ export async function getAllRoomsAdmin(): Promise<RoomSummary[]> {
      FROM   rooms r
      LEFT JOIN room_members rm       ON rm.room_id = r.id
      LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
-     LEFT JOIN user_profiles up      ON up.email = rm_admin.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      GROUP BY r.id, up.preferred_name, rm_admin.user_id
      ORDER BY r.created_at DESC`
   );
@@ -320,7 +321,8 @@ export async function getRoomsForUser(
      JOIN   room_members rm ON rm.room_id = r.id AND rm.user_id = $1
      JOIN   room_members rm2 ON rm2.room_id = r.id
      LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
-     LEFT JOIN user_profiles up ON up.email = rm_admin.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      GROUP  BY r.id, up.preferred_name, rm_admin.user_id, rm.role
      ORDER  BY r.created_at DESC`,
     [userId]
@@ -339,7 +341,8 @@ export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
      FROM   rooms r
      LEFT JOIN room_members rm ON rm.room_id = r.id
      LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
-     LEFT JOIN user_profiles up ON up.email = rm_admin.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      WHERE  r.id = $1
      GROUP  BY r.id, up.preferred_name`,
     [roomId]
@@ -349,7 +352,8 @@ export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
   const membersRes = await pool.query(
     `SELECT rm.user_id, rm.role, rm.joined_at, up.preferred_name
      FROM   room_members rm
-     LEFT JOIN user_profiles up ON up.email = rm.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm.user_id OR up.email = rm.user_id
      WHERE  rm.room_id = $1
      ORDER  BY rm.joined_at ASC`,
     [roomId]
@@ -582,7 +586,8 @@ export async function getMessages(
   const res = await pool.query(
     `SELECT rm.*, up.preferred_name
      FROM   room_messages rm
-     LEFT JOIN user_profiles up ON up.email = rm.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm.user_id OR up.email = rm.user_id
      WHERE  rm.room_id = $1
      ${beforeClause}
      ORDER  BY rm.created_at DESC
@@ -607,7 +612,9 @@ export async function addMessage(
   const row = res.rows[0] as Record<string, unknown>;
   // Fetch sender name separately to include in response
   const nameRes = await pool.query(
-    `SELECT preferred_name FROM user_profiles WHERE email = $1`,
+    `SELECT preferred_name
+     FROM user_profiles
+     WHERE auth_subject = $1 OR email = $1`,
     [userId]
   );
   const preferred_name = nameRes.rows[0]?.preferred_name ?? null;
@@ -626,7 +633,8 @@ export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMed
   const res = await pool.query(
     `SELECT rm.id, rm.user_id, rm.attachment, rm.created_at, up.preferred_name
      FROM   room_messages rm
-     LEFT JOIN user_profiles up ON up.email = rm.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm.user_id OR up.email = rm.user_id
      WHERE  rm.room_id = $1 AND rm.attachment IS NOT NULL
      ORDER  BY rm.created_at DESC
      LIMIT  $2`,
@@ -883,7 +891,8 @@ export async function getMemberJourneyProgress(
             ujp.current_day,
             ujp.status
      FROM   room_members rm
-     LEFT JOIN user_profiles up    ON up.email = rm.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm.user_id OR up.email = rm.user_id
      LEFT JOIN user_journey_progress ujp
                ON ujp.user_id = rm.user_id AND ujp.journey_id = $2
      WHERE  rm.room_id = $1
@@ -1612,7 +1621,8 @@ export async function getSessionAttendance(
      -- Ownership validation: session must belong to this room;
      -- cross-room session UUIDs produce 0 rows.
      JOIN room_sessions rs ON rs.id = a.session_id AND rs.room_id = $2
-     LEFT JOIN user_profiles up ON up.email = a.user_id
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = a.user_id OR up.email = a.user_id
      WHERE a.session_id = $1
      ORDER BY a.joined_at ASC`,
     [sessionId, roomId]
@@ -2090,7 +2100,8 @@ export async function isAuthorizedLeader(
   if (appRole === "admin" || appRole === "superAdmin") return true;
   const { rows } = await pool.query(
     `SELECT authorized_room_leader, pastoral_role
-       FROM user_profiles WHERE email = $1`,
+       FROM user_profiles
+       WHERE auth_subject = $1 OR email = $1`,
     [userId]
   );
   if (!rows[0]) return false;
@@ -2112,7 +2123,8 @@ export async function getLeaderAccess(
   }
   const { rows } = await pool.query(
     `SELECT authorized_room_leader, pastoral_role
-       FROM user_profiles WHERE email = $1`,
+       FROM user_profiles
+       WHERE auth_subject = $1 OR email = $1`,
     [userId]
   );
   if (!rows[0]) return { authorized: false, source: "none" };
@@ -2134,12 +2146,15 @@ export async function setLeaderAccess(
   userId: string,
   authorized: boolean
 ): Promise<void> {
-  await pool.query(
-    `INSERT INTO user_profiles (email, authorized_room_leader)
-     VALUES ($1, $2)
-     ON CONFLICT (email) DO UPDATE SET authorized_room_leader = EXCLUDED.authorized_room_leader`,
+  const result = await pool.query(
+    `UPDATE user_profiles
+     SET authorized_room_leader = $2, updated_at = NOW()
+     WHERE auth_subject = $1 OR email = $1`,
     [userId, authorized]
   );
+  if (result.rowCount === 0) {
+    throw new Error("Cannot update Room leader access for an unknown account");
+  }
 }
 
 /**

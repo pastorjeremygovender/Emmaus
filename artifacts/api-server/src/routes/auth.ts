@@ -137,11 +137,11 @@ export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   const firstName = claimString(claims, "first_name", "given_name");
   const lastName = claimString(claims, "last_name", "family_name");
   const profileImageUrl = claimString(claims, "profile_image_url", "picture");
-  const isInitialOwner = isConfiguredInitialOwner(verifiedEmail);
 
   if (!verifiedEmail) {
     throw new Error("The identity provider did not return a verified email");
   }
+  const isInitialOwner = isConfiguredInitialOwner(verifiedEmail);
 
   return db.transaction(async (tx) => {
     const [emailOwner] = await tx
@@ -245,6 +245,17 @@ export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
           })
           .returning();
       }
+    } else {
+      // Repeated sign-ins refresh the same subject-bound profile; they never
+      // create a second profile row for an existing verified subject.
+      [profile] = await tx
+        .update(userProfilesTable)
+        .set({
+          preferredName: profile.preferredName || firstName || "",
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfilesTable.authSubject, subject))
+        .returning();
     }
 
     if (initialOwnerClaimed) {

@@ -57,7 +57,7 @@ async function requirePastoralAccess(req: Request, res: Response): Promise<strin
   // Fallback: check pastoral_role in user_profiles (for users assigned pastoral duties)
   try {
     const result = await pool.query(
-      `SELECT pastoral_role FROM user_profiles WHERE email = $1`,
+      `SELECT pastoral_role FROM user_profiles WHERE auth_subject = $1`,
       [userId]
     );
     const pRole = result.rows[0]?.pastoral_role;
@@ -92,7 +92,7 @@ async function requirePastorAccess(req: Request, res: Response): Promise<string 
   // Fallback: pastoral users with pastor role can access pastor-level routes
   try {
     const result = await pool.query(
-      `SELECT pastoral_role FROM user_profiles WHERE email = $1`,
+      `SELECT pastoral_role FROM user_profiles WHERE auth_subject = $1`,
       [userId]
     );
     const pRole = result.rows[0]?.pastoral_role;
@@ -116,6 +116,17 @@ function parsePersonKey(key: string): { personId: string; personType: store.Pers
 }
 
 // ─── People ──────────────────────────────────────────────────────────────────
+
+pastoralRouter.get("/accounts", async (req: Request, res: Response) => {
+  const userId = await requirePastorAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await store.listEmmausAccounts());
+  } catch (err) {
+    logger.error({ err }, "pastoral: listEmmausAccounts failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 pastoralRouter.get("/people", async (req: Request, res: Response) => {
   const userId = await requireRecorderAccess(req, res);
@@ -209,7 +220,7 @@ pastoralRouter.post("/people/:id/link", async (req: Request, res: Response) => {
   try {
     // Verify the Emmaus user exists
     const userCheck = await pool.query(
-      `SELECT email FROM user_profiles WHERE email = $1`,
+      `SELECT email FROM user_profiles WHERE auth_subject = $1`,
       [linkedUserId.trim()]
     );
     if (userCheck.rows.length === 0) {
@@ -728,9 +739,9 @@ pastoralRouter.get("/people/:personKey/discipleship-summary", async (req: Reques
     let emmausUserId: string | null = null;
 
     if (parsed.personType === "emmaus_user") {
-      // Verify this user exists in the system (user_profiles is the canonical user store).
+      // Verify this immutable provider subject is bound to a real account.
       const userRow = await pool.query(
-        `SELECT email FROM user_profiles WHERE email = $1`,
+        `SELECT email FROM user_profiles WHERE auth_subject = $1`,
         [parsed.personId]
       );
       if (userRow.rows.length === 0) {

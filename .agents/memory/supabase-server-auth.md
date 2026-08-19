@@ -72,3 +72,30 @@ can silently send a recovery session into the app instead of the reset screen.
 **How to apply:** Surface only a boolean recovery status to the current session,
 never provider tokens or capability values. Clear/consume the capability on the
 password update, and let normal routing resume only after it is gone.
+
+Admin and pastoral account populations must include only verified identities:
+an `auth_subject`-bound profile whose subject also exists in the identity table.
+New member-owned activity uses that immutable subject; read paths may resolve
+the subject first and fall back to email only for pre-migration historical rows.
+
+**Why:** Email-only profiles and frontend fixtures made blank or demo accounts
+look real, while subject-only display joins made historical activity lose the
+member's name.
+
+**How to apply:** Use the same verified population for Emmaus Accounts, All
+People, and account-count metrics. Keep roles database-controlled. Do not create
+a profile by placing a provider subject into an email field. Cover both subject-
+keyed and historical email-keyed display joins in database-backed tests.
+
+Confirmed fixture deletion must be a one-time, auditable maintenance action,
+not a recurring email allowlist.
+
+**Why:** A broad cleanup rerun on every boot could delete a future legitimate
+account or locally authored content whose identifier collides with old demo
+data.
+
+**How to apply:** Target only a production-confirmed fixture, acquire a
+transaction lock, write a durable receipt even when skipped/not found, and
+refuse verified, privileged, configured-owner, or data-bearing profiles.
+Browser-cache cleanup must match a complete known fixture signature rather than
+an ID alone.

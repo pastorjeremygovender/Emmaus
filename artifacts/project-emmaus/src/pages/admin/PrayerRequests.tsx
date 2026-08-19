@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAdmin } from '@/contexts/AdminContext';
-import { PrayerRequest } from '@/lib/admin-demo-data';
+import { PrayerRequest } from '@/lib/admin-types';
 import { StatusBadge, AdminBtn, AdminTable, Th, Td, PageHeader, Field, TextArea, Select } from './shared';
 
 const PRIVACY_LABELS = { private: 'Private', pastoral: 'Pastoral', prayer_team: 'Prayer Team' };

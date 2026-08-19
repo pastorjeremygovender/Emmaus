@@ -2,13 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import {
   Sermon,
   PrayerRequest,
-  AdminUser,
   ChurchSettings,
-  DEMO_SERMON_RECORD,
-  DEMO_PRAYER_REQUESTS,
-  DEMO_ADMIN_USERS,
-  DEMO_CHURCH_SETTINGS,
-} from '../lib/admin-demo-data';
+  DEFAULT_CHURCH_SETTINGS,
+} from '../lib/admin-types';
 import {
   listServerSermons,
   saveServerSermon,
@@ -28,7 +24,6 @@ type AdminContextType = {
   removeSermon: (id: string) => void;
   prayerRequests: PrayerRequest[];
   updatePrayerRequest: (req: PrayerRequest) => void;
-  adminUsers: AdminUser[];
   settings: ChurchSettings;
   updateSettings: (s: ChurchSettings) => void;
 };
@@ -77,14 +72,39 @@ function mergeSermons(local: Sermon[], server: AdminSermonRecord[]): Sermon[] {
   );
 }
 
+const KNOWN_FIXTURE_SERMONS = new Map([
+  ['sermon-john-3', 'Born Again: The Night Nicodemus Met Jesus'],
+  ['sermon-2-samuel-9', "God's Kindness Restores the Broken"],
+]);
+const KNOWN_FIXTURE_PRAYERS = new Map([
+  ['prayer-1', 'demo-user-1'],
+  ['prayer-2', 'demo-user-2'],
+  ['prayer-3', 'demo-user-3'],
+]);
+
+function removeKnownSermonFixtures(sermons: Sermon[]): Sermon[] {
+  return sermons.filter((sermon) => {
+    const fixtureTitle = KNOWN_FIXTURE_SERMONS.get(sermon.id);
+    return !(
+      fixtureTitle === sermon.title &&
+      sermon.youtubeUrl.includes('PLACEHOLDER_VIDEO_ID')
+    );
+  });
+}
+
+function removeKnownPrayerFixtures(requests: PrayerRequest[]): PrayerRequest[] {
+  return requests.filter(
+    (request) => KNOWN_FIXTURE_PRAYERS.get(request.id) !== request.userId,
+  );
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AdminProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [prayerRequests, setPrayerRequests] = useState<PrayerRequest[]>([]);
-  const [adminUsers] = useState<AdminUser[]>(DEMO_ADMIN_USERS);
-  const [settings, setSettings] = useState<ChurchSettings>(DEMO_CHURCH_SETTINGS);
+  const [settings, setSettings] = useState<ChurchSettings>(DEFAULT_CHURCH_SETTINGS);
   const [loadedSubject, setLoadedSubject] = useState<string | null>(null);
 
   // Build auth headers from current user — used for API calls
@@ -104,18 +124,22 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     if (!sermonKey || !prayerKey || !settingsKey) {
       setSermons([]);
       setPrayerRequests([]);
-      setSettings(DEMO_CHURCH_SETTINGS);
+      setSettings(DEFAULT_CHURCH_SETTINGS);
       setLoadedSubject(null);
       return;
     }
     const s = localStorage.getItem(sermonKey);
-    setSermons(s ? JSON.parse(s) : [DEMO_SERMON_RECORD]);
+    const storedSermons = removeKnownSermonFixtures(s ? JSON.parse(s) : []);
+    setSermons(storedSermons);
+    if (s) localStorage.setItem(sermonKey, JSON.stringify(storedSermons));
 
     const p = localStorage.getItem(prayerKey);
-    setPrayerRequests(p ? JSON.parse(p) : DEMO_PRAYER_REQUESTS);
+    const storedPrayers = removeKnownPrayerFixtures(p ? JSON.parse(p) : []);
+    setPrayerRequests(storedPrayers);
+    if (p) localStorage.setItem(prayerKey, JSON.stringify(storedPrayers));
 
     const cfg = localStorage.getItem(settingsKey);
-    setSettings(cfg ? JSON.parse(cfg) : DEMO_CHURCH_SETTINGS);
+    setSettings(cfg ? JSON.parse(cfg) : DEFAULT_CHURCH_SETTINGS);
     setLoadedSubject(user?.id ?? null);
   }, [storageKey, user?.id]);
 
@@ -216,8 +240,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
         removeSermon,
         prayerRequests: ownsVisibleState ? prayerRequests : [],
         updatePrayerRequest,
-        adminUsers,
-        settings: ownsVisibleState ? settings : DEMO_CHURCH_SETTINGS,
+        settings: ownsVisibleState ? settings : DEFAULT_CHURCH_SETTINGS,
         updateSettings,
       }}
     >

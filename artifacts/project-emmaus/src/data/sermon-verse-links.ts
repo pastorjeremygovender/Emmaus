@@ -6,7 +6,7 @@ import { PASTOR_DISPLAY_NAME } from '@/lib/pastor-name';
 // the "Preached Here" row appears in the verse-action sheet.
 //
 // Key format: `${bookId}:${chapter}:${verse}`  (all lowercase bookId)
-// Sermons are cross-referenced by their ID in admin-demo-data.ts.
+// Sermons are cross-referenced by their canonical sermon ID.
 
 export type SermonVerseLink = {
   sermonId: string;

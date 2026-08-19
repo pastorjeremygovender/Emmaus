@@ -5,7 +5,7 @@
  * so they survive browser refreshes, device changes, and localStorage clears.
  *
  * Storage: data/sermons/admin-drafts.json (atomic writes via temp→rename).
- * Schema matches the Sermon type in admin-demo-data.ts.
+ * Schema matches the frontend Sermon type in admin-types.ts.
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -16,7 +16,7 @@ import { logger } from "./logger.js";
 const DATA_DIR = join(process.cwd(), "data", "sermons");
 const DRAFTS_FILE = join(DATA_DIR, "admin-drafts.json");
 
-// ─── Sermon record type (mirrors frontend Sermon in admin-demo-data.ts) ────────
+// ─── Sermon record type (mirrors frontend Sermon in admin-types.ts) ────────────
 
 export interface AdminSermonRecord {
   id: string;
