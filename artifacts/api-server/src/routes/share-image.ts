@@ -18,6 +18,7 @@
 
 import { Router, type Request, type Response } from "express";
 import OpenAI, { toFile } from "openai";
+import { requireAdmin } from "../emmaus/auth.js";
 
 const router = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -97,7 +98,7 @@ ABSOLUTE CONSTRAINTS:
 function buildImagePrompt(text: string, artDirection: string): string {
   // Split into the first sentence (hero) and remainder (supporting), if there are multiple sentences.
   const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [];
-  const heroText = sentences.length > 1 ? sentences[0].trim() : text.trim();
+  const heroText = sentences.length > 1 ? sentences[0]?.trim() ?? text.trim() : text.trim();
   const supportingText = sentences.length > 1 ? sentences.slice(1).join(' ').trim() : '';
 
   const textInstruction = supportingText
@@ -186,12 +187,8 @@ Rules:
 }
 
 router.post("/share-images/auto-generate", async (req: Request, res: Response) => {
-  // If the admin supplies a custom phrase, skip extraction and use it directly.
-  // Admin-only
-  const userRole = req.headers["x-user-role"] as string | undefined;
-  if (!userRole || !["admin", "superAdmin"].includes(userRole)) {
-    return res.status(403).json({ error: "Admin access required" });
-  }
+  const userId = requireAdmin(req, res);
+  if (!userId) return;
 
   const { content, phrase: customPhrase } = req.body as { content?: string; phrase?: string };
   if (!customPhrase && (!content?.trim() || content.trim().length < 20)) {
@@ -203,11 +200,11 @@ router.post("/share-images/auto-generate", async (req: Request, res: Response) =
     const phrase = customPhrase?.trim()
       ? customPhrase.trim()
       : await extractBestPhrase(content!.trim());
-    console.log('[share-image] auto-generate extracted phrase:', phrase);
+    req.log.info({ userId }, "Share image phrase extracted");
 
     // Step 2 + 3: Art-direction + image generation (same pipeline as manual)
     const artDirection = await artDirectImage(phrase);
-    console.log('[share-image] auto-generate art direction:', artDirection.slice(0, 300));
+    req.log.debug({ userId }, "Share image art direction created");
 
     const finalPrompt = buildImagePrompt(phrase, artDirection);
     const genRes = await openai.images.generate({
@@ -217,13 +214,13 @@ router.post("/share-images/auto-generate", async (req: Request, res: Response) =
       n: 1,
     });
 
-    const imageBase64 = genRes.data[0]?.b64_json;
+    const imageBase64 = genRes.data?.[0]?.b64_json;
     if (!imageBase64) throw new Error("No image returned from generation");
 
     return res.json({ phrase, imageBase64 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Auto-generation failed";
-    console.error("[share-image] auto-generate error:", message);
+    req.log.error({ userId, error: message }, "Share image auto-generation failed");
     return res.status(500).json({ error: message });
   }
 });
@@ -231,11 +228,8 @@ router.post("/share-images/auto-generate", async (req: Request, res: Response) =
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.post("/share-images/generate", async (req: Request, res: Response) => {
-  // Admin-only
-  const userRole = req.headers["x-user-role"] as string | undefined;
-  if (!userRole || !["admin", "superAdmin"].includes(userRole)) {
-    return res.status(403).json({ error: "Admin access required" });
-  }
+  const userId = requireAdmin(req, res);
+  if (!userId) return;
 
   const { text, editInstruction, referenceImageBase64 } = req.body as {
     text?: string;
@@ -282,7 +276,7 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
           size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
           n: 1,
         });
-        const b64 = genRes.data[0]?.b64_json;
+        const b64 = genRes.data?.[0]?.b64_json;
         if (!b64) throw new Error("No b64_json in fallback generation response");
         imageBase64 = b64;
       }
@@ -301,7 +295,7 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
         size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
         n: 1,
       });
-      const b64 = genRes.data[0]?.b64_json;
+      const b64 = genRes.data?.[0]?.b64_json;
       if (!b64) throw new Error("No b64_json in generation response");
       imageBase64 = b64;
     }

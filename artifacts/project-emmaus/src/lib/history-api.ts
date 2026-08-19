@@ -24,9 +24,7 @@ export interface RecordViewParams {
 const BASE = '/api/history';
 
 export async function fetchHistory(limit = 50): Promise<HistoryEntry[]> {
-  const res = await fetch(`${BASE}?limit=${limit}`, {
-    headers: { 'x-user-id': 'demo', 'x-user-role': 'member' },
-  });
+  const res = await fetch(`${BASE}?limit=${limit}`);
   if (!res.ok) throw new Error('Failed to load history');
   const data = (await res.json()) as { history: HistoryEntry[] };
   return data.history;
@@ -38,8 +36,6 @@ export function recordView(params: RecordViewParams): void {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': 'demo',
-      'x-user-role': 'member',
     },
     body: JSON.stringify(params),
   }).catch(() => {

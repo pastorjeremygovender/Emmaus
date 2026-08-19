@@ -1,8 +1,8 @@
 /**
  * pastoral-api.ts — typed client for the Pastoral Care API.
  *
- * All fetch calls include credentials and X-User-Id / X-User-Role headers
- * sourced from the AuthContext pattern used elsewhere in the app.
+ * All fetch calls include credentials; identity and role are derived
+ * server-side from the secure session cookie.
  */
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -18,11 +18,9 @@ export interface AuthHeaders {
   userRole: string;
 }
 
-function headers(auth: AuthHeaders): HeadersInit {
+function headers(_auth: AuthHeaders): HeadersInit {
   return {
     "Content-Type":  "application/json",
-    "X-User-Id":     auth.userId,
-    "X-User-Role":   auth.userRole,
   };
 }
 
@@ -244,7 +242,7 @@ export const updateSession = (
 /** Cancel a session. Returns { requiresConfirmation, attendanceCount } if the session
  *  has existing attendance records and force is not set. */
 export async function cancelSession(
-  auth: AuthHeaders,
+  _auth: AuthHeaders,
   id: string,
   force = false
 ): Promise<{ ok: true } | { requiresConfirmation: true; attendanceCount: number; error: string }> {
@@ -253,8 +251,6 @@ export async function cancelSession(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id":    auth.userId,
-      "X-User-Role":  auth.userRole,
     },
     body: JSON.stringify({ status: "cancelled", force }),
   });

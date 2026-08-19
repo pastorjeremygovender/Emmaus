@@ -24,6 +24,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -36,16 +37,20 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role)   headers["X-User-Role"] = opts.role;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload)     headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -156,20 +161,30 @@ before(async () => {
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
 after(async () => {
-  // Remove test progress records so they don't pollute other test runs.
-  if (devotionalSeriesId) {
-    await request({
-      method: "POST",
-      path:   `/api/engagements/devotional/${encodeURIComponent(devotionalSeriesId)}/remove`,
-      userId: MEMBER,
-    });
-  }
-  if (companionId) {
-    await request({
-      method: "POST",
-      path:   `/api/engagements/sermon-companion/${encodeURIComponent(companionId)}/remove`,
-      userId: MEMBER,
-    });
+  try {
+    // Delete the authored series (cascade removes its devotional_progress).
+    if (devotionalSeriesId) {
+      await request({
+        method: "DELETE",
+        path:   `/api/devotionals/${devotionalSeriesId}/permanent`,
+        userId: ADMIN,
+        role:   "superAdmin",
+      });
+    }
+    // Companion content is pre-existing (not ours to delete); remove only the
+    // member's engagement so no sermon_companion_progress residue remains. The
+    // cleanupTestAuth purge also covers this by verified user_id as a backstop.
+    if (companionId) {
+      await request({
+        method: "POST",
+        path:   `/api/engagements/sermon-companion/${encodeURIComponent(companionId)}/remove`,
+        userId: MEMBER,
+      });
+    }
+  } finally {
+    // Remove helper-created auth rows + server-persisted residue (progress,
+    // created_by) keyed by our verified ids. Always runs.
+    await cleanupTestAuth();
   }
 });
 

@@ -12,13 +12,16 @@
  */
 
 import http from "node:http";
-import { describe, it } from "node:test";
+import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE);
 
-function postConversation(message: string): Promise<{ events: string[]; doneEvent: Record<string, unknown> | null }> {
+async function postConversation(message: string): Promise<{ events: string[]; doneEvent: Record<string, unknown> | null }> {
+  // Authenticate with a real opaque session (app_role "user") — no X-User-* header.
+  const auth = await authHeader("user-stream-test", { role: "user" });
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ message, context: { entryPoint: "personal" } });
     const req = http.request(
@@ -30,7 +33,7 @@ function postConversation(message: string): Promise<{ events: string[]; doneEven
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body),
-          "X-User-Id": "user-stream-test",
+          ...auth,
         },
       },
       (res) => {
@@ -107,4 +110,10 @@ describe("Emmaus streaming — metadata stripping", () => {
       "every followUpPrompt should be a non-empty string"
     );
   });
+});
+
+// ─── Module teardown ──────────────────────────────────────────────────────────
+// Idempotent and concurrency-safe (auth rows are unique per process nonce).
+after(async () => {
+  await cleanupTestAuth();
 });

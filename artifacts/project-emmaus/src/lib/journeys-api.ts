@@ -2,9 +2,8 @@
  * Journeys API client
  * Thin wrappers around the server-side journeys routes.
  *
- * Admin mutation calls accept an optional `userId` that is sent as the
- * X-User-Id header — the server uses this (or the session cookie) to verify
- * the caller. Pass `user.id` from AuthContext when calling admin functions.
+ * Admin mutation calls accept an optional `userId` for backwards-compatible
+ * signatures; identity is derived server-side from the secure session cookie.
  */
 
 import { getApiUrl } from './api';
@@ -199,14 +198,11 @@ async function apiFetch<T>(
   path: string,
   options?: RequestInit & { userId?: string }
 ): Promise<T> {
-  const { userId, ...fetchOptions } = options ?? {};
+  const { userId: _userId, ...fetchOptions } = options ?? {};
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string> ?? {}),
   };
-  if (userId) {
-    headers['X-User-Id'] = userId;
-  }
   const res = await fetch(getApiUrl(path), {
     ...fetchOptions,
     credentials: 'include',   // always send the signed emmaus_uid session cookie; cannot be overridden
@@ -267,8 +263,8 @@ export async function deleteJourney(id: string, userId?: string): Promise<void> 
 
 /**
  * Permanently deletes a Journey and all associated records.
- * Requires the caller to be a Super Administrator (role checked server-side).
- * Sends X-User-Role: superAdmin so the backend permits the action.
+ * Requires the caller to be a Super Administrator (identity and role are
+ * derived server-side from the secure session cookie).
  */
 export async function permanentDeleteJourney(
   id: string,
@@ -280,7 +276,6 @@ export async function permanentDeleteJourney(
     userId,
     body: JSON.stringify({ confirm: 'PERMANENTLY_DELETE' }),
     headers: {
-      ...(userEmail ? { 'X-User-Email': userEmail } : {}),
     },
   });
 }
@@ -384,13 +379,12 @@ export async function searchJourneys(q: string, tags?: string[]): Promise<Search
 
 export async function validateImportCsv(
   csv: string,
-  userId?: string
+  _userId?: string
 ): Promise<{ errors: ImportValidationError[]; journeys: never[]; imported: 0 } | ImportResult> {
   const res = await fetch(getApiUrl('/api/journeys/import'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(userId ? { 'X-User-Id': userId } : {}),
     },
     body: JSON.stringify({ csv, dryRun: true }),
   });
@@ -405,10 +399,9 @@ export async function importJourneys(csv: string, userId?: string): Promise<Impo
   });
 }
 
-export async function exportJourneysAsCsv(ids?: string[], userId?: string): Promise<string> {
+export async function exportJourneysAsCsv(ids?: string[], _userId?: string): Promise<string> {
   const params = ids?.length ? `?ids=${ids.join(',')}` : '';
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (userId) headers['X-User-Id'] = userId;
   const res = await fetch(getApiUrl(`/api/journeys/export${params}`), { headers });
   if (!res.ok) throw new Error(`Export failed: ${res.status}`);
   return res.text();

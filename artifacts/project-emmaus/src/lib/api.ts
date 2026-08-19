@@ -10,9 +10,10 @@ export function getApiBase(): string {
 }
 
 export function getApiUrl(path: string): string {
-  const base = getApiBase();
-  // path should start with /api/...
-  return `${base}${path}`;
+  // The API is a separate artifact mounted at /api. Prefixing API requests
+  // with the web artifact base path returns the Vite HTML fallback instead.
+  if (path === '/api' || path.startsWith('/api/')) return path;
+  return `${getApiBase()}${path}`;
 }
 
 /**

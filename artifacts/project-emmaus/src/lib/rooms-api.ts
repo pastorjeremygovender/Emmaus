@@ -1,8 +1,7 @@
 /**
  * rooms-api.ts — Typed fetch wrappers for the Rooms API.
  *
- * All calls pass the userId via X-User-Id header (dev/demo mode).
- * In production, the signed session cookie takes precedence.
+ * Identity is derived server-side from the secure session cookie.
  */
 
 import { getApiUrl } from './api';
@@ -17,7 +16,7 @@ import type {
 
 export async function roomsFetch<T>(
   path: string,
-  userId: string,
+  _userId: string,
   options: RequestInit = {}
 ): Promise<T> {
   const res = await fetch(getApiUrl(path), {
@@ -25,7 +24,6 @@ export async function roomsFetch<T>(
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'X-User-Id': userId,
       ...(options.headers as Record<string, string> | undefined),
     },
   });

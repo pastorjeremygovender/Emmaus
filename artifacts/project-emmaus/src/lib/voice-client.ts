@@ -5,7 +5,7 @@
  * TTS: fetches audio blob from POST /api/voice/speak, returns it as a Blob URL.
  * Settings: GET/PUT /api/voice/settings.
  *
- * All calls pass X-User-Id for identity (same pattern as emmaus-client.ts).
+ * Identity is derived server-side from the secure session cookie.
  */
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
@@ -42,8 +42,8 @@ export function sensitivityFromSettings(s: Pick<VoiceSettings, 'vadThreshold'>):
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function authHeaders(userId: string): Record<string, string> {
-  return { 'Content-Type': 'application/json', 'X-User-Id': userId };
+function authHeaders(_userId: string): Record<string, string> {
+  return { 'Content-Type': 'application/json' };
 }
 
 /** Detect the best MIME type the browser's MediaRecorder supports. */
@@ -252,10 +252,8 @@ export async function fetchSpeechArrayBuffer(
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
-export async function getVoiceSettings(userId: string): Promise<VoiceSettings> {
-  const resp = await fetch(`${API_BASE}/api/voice/settings`, {
-    headers: { 'X-User-Id': userId },
-  });
+export async function getVoiceSettings(_userId: string): Promise<VoiceSettings> {
+  const resp = await fetch(`${API_BASE}/api/voice/settings`);
   if (!resp.ok) throw new Error(`Failed to load voice settings (${resp.status})`);
   return resp.json() as Promise<VoiceSettings>;
 }

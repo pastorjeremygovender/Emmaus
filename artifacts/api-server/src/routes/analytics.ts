@@ -134,12 +134,19 @@ analyticsRouter.get("/saved-reports", async (_req, res) => {
   }
 });
 
-analyticsRouter.post("/saved-reports", async (req: any, res) => {
+analyticsRouter.post("/saved-reports", async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, description = "", config = {} } = req.body ?? {};
-    if (!name) return res.status(400).json({ error: "name required" });
-    const userId = req.session?.userId ?? req.headers["x-user-id"] ?? "admin";
-    res.json(await createSavedReport("icc", name, description, config, String(userId)));
+    if (!name) {
+      res.status(400).json({ error: "name required" });
+      return;
+    }
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+    res.json(await createSavedReport("icc", name, description, config, userId));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

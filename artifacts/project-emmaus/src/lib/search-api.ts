@@ -24,9 +24,7 @@ export const CONTENT_TYPE_LABEL: Record<string, string> = {
 export async function globalSearch(query: string): Promise<SearchResult[]> {
   if (!query.trim() || query.trim().length < 2) return [];
   const params = new URLSearchParams({ q: query });
-  const res = await fetch(`/api/search?${params.toString()}`, {
-    headers: { 'x-user-id': 'demo', 'x-user-role': 'member' },
-  });
+  const res = await fetch(`/api/search?${params.toString()}`);
   if (!res.ok) throw new Error('Search failed');
   const data = (await res.json()) as { results: SearchResult[] };
   return data.results;

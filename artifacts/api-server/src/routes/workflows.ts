@@ -27,7 +27,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 function currentUser(req: Request): string {
-  return (req.session as Record<string, unknown>)?.userId as string ?? "unknown";
+  return req.user?.id ?? "unknown";
 }
 
 workflowsRouter.use(requireAdmin);

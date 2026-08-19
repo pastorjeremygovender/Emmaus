@@ -1,12 +1,11 @@
 /**
  * Journey CMS Routes
  *
- * Admin mutation routes require an authenticated caller (via signed session cookie
- * or X-User-Id header). Identity is always derived server-side via extractUserId().
+ * Admin mutation routes require an authenticated caller. Identity is always
+ * derived server-side from the secure session cookie via extractUserId().
  *
- * Progress routes accept userId from body/query as a fallback so the user-facing
- * app works before full session auth is wired. A future task (#48) will tighten
- * these to session-only once Clerk/Replit Auth is integrated.
+ * Progress routes also derive identity server-side via the session cookie —
+ * body and query params are never trusted as an identity source.
  */
 
 import { Router, type Request, type Response } from "express";
@@ -24,9 +23,9 @@ const router = Router();
 
 /**
  * Resolve userId for progress routes from trusted server-side identity only.
- * The signed session cookie and X-User-Id header (dev/non-production) are the
- * only accepted sources — body and query params are NOT trusted to prevent a
- * caller from reading or writing another user's progress.
+ * The secure session cookie is the only accepted source — body and query params
+ * are NOT trusted to prevent a caller from reading or writing another user's
+ * progress.
  */
 function resolveUserId(req: Request): string | null {
   return extractUserId(req);
@@ -625,7 +624,7 @@ router.delete("/journeys/:id", async (req: Request, res: Response) => {
     deleteInProgress.set(dedupeKey, Date.now());
 
     try {
-      const adminEmail = req.headers["x-user-email"] as string ?? "";
+      const adminEmail = req.user?.email ?? "";
       // Use getJourneyIncludingDeleted so this works after a prior soft-delete.
       const journeySnapshot = await store.getJourneyIncludingDeleted(id);
 

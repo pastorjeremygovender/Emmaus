@@ -78,8 +78,6 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user.id,
-          'x-user-role': user.role,
         },
         body: JSON.stringify({
           content,
@@ -119,8 +117,6 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user.id,
-          'x-user-role': user.role,
         },
         body: JSON.stringify({ name: 'emmaus-share.png', size: blob.size, contentType: 'image/png' }),
       });
@@ -167,8 +163,6 @@ export function ShareImageField({ value, onChange, stepContent }: Props) {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user.id,
-          'x-user-role': user.role,
         },
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });

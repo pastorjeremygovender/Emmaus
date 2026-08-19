@@ -17,7 +17,6 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { PASTOR_DISPLAY_NAME } from "../lib/pastor-name.js";
 import { randomBytes } from "node:crypto";
 import {
   getAllVideos, getVideoById, upsertVideo, updateVideo,
@@ -35,7 +34,8 @@ import {
   clearOAuthCredentials, getOAuthStatus,
   addPendingState, verifyAndConsumePendingState,
 } from "../lib/oauth-store.js";
-import { classifyVideo, shouldAutoApprove } from "../lib/sermon-classifier.js";
+import { classifyVideo } from "../lib/sermon-classifier.js";
+import { requireAdmin } from "../emmaus/auth.js";
 import { processCaption } from "../lib/transcript-segmenter.js";
 import { enrichSegment, enrichSermon } from "../lib/sermon-enricher.js";
 import { invalidateIndex, searchByScripture } from "../lib/sermon-search.js";
@@ -50,6 +50,50 @@ import { readFile, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const router = Router();
+
+// ─── Authorization allowlist ────────────────────────────────────────────────
+//
+// Only a small set of member/public routes may be reached unauthenticated.
+// Every other youtube-archive route — status, video/job/segment listings,
+// OAuth management, and every mutation/pipeline/process endpoint — requires a
+// verified DB role of admin or superAdmin (req.user.role is populated from the
+// user's profile by authMiddleware, never from client-supplied headers).
+//
+// The allowlist is matched by method + exact path so that a new route added
+// later is admin-gated by default (fails closed).
+const PUBLIC_ALLOWLIST: ReadonlyArray<{ method: string; path: string }> = [
+  { method: "POST", path: "/youtube-archive/search" },
+  { method: "GET", path: "/youtube-archive/preached-here" },
+  // Audio streaming is matched by prefix below (path carries the :id param).
+];
+
+function isPublicArchiveRoute(method: string, path: string): boolean {
+  // Preflight requests are always allowed (no state change, no data access).
+  if (method === "OPTIONS") return true;
+  // GET /youtube-archive/audio/:id — public audio streaming.
+  if (method === "GET" && /^\/youtube-archive\/audio\/[^/]+\/?$/.test(path)) {
+    return true;
+  }
+  return PUBLIC_ALLOWLIST.some(
+    (r) => r.method === method && r.path === path.replace(/\/$/, ""),
+  );
+}
+
+router.use((req: Request, res: Response, next) => {
+  // Only guard youtube-archive routes; leave anything else this router might
+  // carry untouched (defensive — every route here is /youtube-archive/*).
+  if (!req.path.startsWith("/youtube-archive/")) {
+    next();
+    return;
+  }
+  if (isPublicArchiveRoute(req.method, req.path)) {
+    next();
+    return;
+  }
+  // requireAdmin sends 401 (unauthenticated) or 403 (wrong role) itself.
+  if (!requireAdmin(req, res)) return;
+  next();
+});
 
 // OAuth state is now persisted to disk via oauth-store so it survives
 // hot-reloads and process restarts (see addPendingState / verifyAndConsumePendingState).
@@ -130,9 +174,10 @@ router.post("/youtube-archive/sync", async (req: Request, res: Response) => {
           for (const meta of metadataList) {
             try {
               const cls = classifyVideo(meta.title, meta.description, meta.durationSeconds);
-              const reviewStatus = shouldAutoApprove(cls.sermonLikelihood, meta.durationSeconds)
-                ? "auto-approved"
-                : "pending";
+              // New videos are ALWAYS persisted as pending. Approval is an
+              // explicit, manual admin action (PATCH reviewStatus) — sync must
+              // never auto-approve, regardless of classification confidence.
+              const reviewStatus = "pending" as const;
 
               await upsertVideo({
                 youtubeVideoId: meta.videoId,
@@ -448,18 +493,18 @@ async function processVideoInternal(
   }
 }
 
-// ─── Bulk pipeline (auto-approve + process all) ───────────────────────────────
+// ─── Bulk pipeline (process approved only) ─────────────────────────────────────
 
 /**
  * POST /api/youtube-archive/pipeline/run
  *
- * Phase 1 — Auto-approve: every pending video with contentType === "sermon"
- *            or sermonLikelihood >= 0.6 is approved and assigned to
- *            "Pastor Jeremy Govender" (unless a speaker is already set).
+ * Processes every video that has ALREADY been explicitly approved by an admin
+ * (reviewStatus === "approved") and has no transcript yet. Each is processed
+ * sequentially: caption download → segmentation → OpenAI enrichment → search
+ * index rebuild.
  *
- * Phase 2 — Process: every approved/auto-approved video that has no transcript
- *            is processed sequentially: caption download → segmentation →
- *            OpenAI enrichment → search index rebuild.
+ * This pipeline NEVER approves videos. Approval is a manual admin action via
+ * PATCH /youtube-archive/videos/:id — pending items are left untouched.
  */
 router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response) => {
   const job = await createJob("pipeline-run", {});
@@ -469,33 +514,13 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
     try {
       await updateJob(job.id, { status: "running" });
 
-      // ── Phase 1: Auto-approve pending sermon videos ──────────────────────
+      // ── Process explicitly-approved videos without transcripts ───────────
+      // Only records an admin has manually approved (reviewStatus === "approved")
+      // are eligible. Pending / rejected videos are never processed or approved.
       const allVideos = await getAllVideos();
-      const toApprove = allVideos.filter(
+      const toProcess = allVideos.filter(
         (v) =>
-          v.reviewStatus === "pending" &&
-          (v.contentType === "sermon" || v.sermonLikelihood >= 0.6)
-      );
-
-      let autoApproved = 0;
-      for (const video of toApprove) {
-        await updateVideo(video.id, {
-          reviewStatus: "auto-approved",
-          speaker: video.speaker || PASTOR_DISPLAY_NAME,
-        });
-        autoApproved++;
-      }
-
-      if (autoApproved > 0) {
-        invalidateIndex();
-        logger.info({ autoApproved }, "Pipeline: auto-approved sermon videos");
-      }
-
-      // ── Phase 2: Process approved without transcripts ────────────────────
-      const freshVideos = await getAllVideos();
-      const toProcess = freshVideos.filter(
-        (v) =>
-          (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
+          v.reviewStatus === "approved" &&
           (v.transcriptStatus === "none" || v.transcriptStatus === "failed")
       );
 
@@ -504,7 +529,7 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           total: toProcess.length,
           done: 0,
           failed: 0,
-          currentItem: `Auto-approved ${autoApproved} videos`,
+          currentItem: `${toProcess.length} approved videos queued`,
         },
       });
 
@@ -544,12 +569,12 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           total: toProcess.length,
           done,
           failed,
-          currentItem: `${autoApproved} approved · ${done} indexed · ${totalSegments} segments`,
+          currentItem: `${done} indexed · ${totalSegments} segments`,
         },
       });
 
       logger.info(
-        { autoApproved, done, failed, totalSegments, total: toProcess.length },
+        { done, failed, totalSegments, total: toProcess.length },
         "Pipeline job completed"
       );
 

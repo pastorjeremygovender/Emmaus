@@ -204,9 +204,7 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
 
   useEffect(() => {
     if (!leaderTargetId) return;
-    fetch(`/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`, {
-      headers: { 'x-user-id': user?.id ?? '', 'x-user-role': user?.role ?? 'admin' },
-    })
+    fetch(`/api/rooms/admin/persons/${encodeURIComponent(leaderTargetId)}/leader-access`)
       .then(r => r.ok ? r.json() : null)
       .then((d: { authorized: boolean; source: LeaderSource } | null) => {
         if (!d) return;
@@ -227,8 +225,6 @@ export default function PersonPage({ person, onBack, scrollToCareSignals }: Prop
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-id': user?.id ?? '',
-            'x-user-role': user?.role ?? 'admin',
           },
           body: JSON.stringify({ authorized: next }),
         }

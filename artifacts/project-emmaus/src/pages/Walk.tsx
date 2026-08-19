@@ -47,17 +47,15 @@ import { listCollections, type Collection } from '@/lib/collections-api';
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 /** Fire-and-forget engagement action (pause / hide / unhide / remove).
- *  userId must be supplied so the X-User-Id header is always sent — the signed
- *  session cookie alone is not reliable in all deployment environments. */
+ *  Identity is derived server-side from the secure session cookie. */
 async function callEngagementAction(
   type: 'journey' | 'devotional' | 'sermon-companion',
   id: string,
   action: 'pause' | 'remove' | 'hide' | 'unhide',
-  userId?: string,
+  _userId?: string,
 ): Promise<void> {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-Id'] = userId;
     await fetch(
       `${BASE_URL}/api/engagements/${type}/${encodeURIComponent(id)}/${action}`,
       { method: 'POST', credentials: 'include', headers },

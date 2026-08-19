@@ -16,8 +16,8 @@
  * Each sub-test uses its own unique member ID so tests are fully independent
  * and can run in any order without shared mutable state.
  *
- * Uses `demo-superadmin-1` (pre-seeded in user-roles.json) for admin routes
- * so the server-side role check passes without any extra setup.
+ * Admin routes use a synthetic superAdmin test identity created by the shared
+ * test-auth harness (a real opaque session with app_role superAdmin).
  *
  * Requires the API server to be running.
  *
@@ -30,6 +30,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -42,16 +43,20 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role) headers["X-User-Role"] = opts.role;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload) headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -80,8 +85,8 @@ function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
 
 const RUN_TAG = Date.now();
 
-// Pre-seeded in user-roles.json — passes the server-side admin role check.
-const ADMIN = "demo-superadmin-1";
+// Synthetic superAdmin setup key — mapped to a real test session by the harness.
+const ADMIN = `test-admin-postrack-${RUN_TAG}`;
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -144,13 +149,19 @@ before(async () => {
 });
 
 after(async () => {
-  if (seriesId) {
-    await request({
-      method: "DELETE",
-      path: `/api/devotionals/${seriesId}/permanent`,
-      userId: ADMIN,
-      role: "superAdmin",
-    });
+  try {
+    if (seriesId) {
+      await request({
+        method: "DELETE",
+        path: `/api/devotionals/${seriesId}/permanent`,
+        userId: ADMIN,
+        role: "superAdmin",
+      });
+    }
+  } finally {
+    // Remove helper-created auth rows + server-persisted residue (progress,
+    // created_by) keyed by our verified ids. Always runs.
+    await cleanupTestAuth();
   }
 });
 

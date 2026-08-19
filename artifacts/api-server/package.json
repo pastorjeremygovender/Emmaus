@@ -15,8 +15,8 @@
     "backfill:knowledge-index": "node --experimental-strip-types src/scripts/backfill-knowledge-index.ts",
     "export:seed": "node --experimental-strip-types src/scripts/export-seed.ts",
     "checksum:content": "node --experimental-strip-types src/scripts/content-checksum.ts",
-    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts src/lib/__tests__/devotional-completion-pct.test.ts",
-    "test:integration": "node --test --experimental-strip-types src/routes/__tests__/audio-route.test.ts src/routes/__tests__/next-steps.test.ts src/routes/__tests__/devotional-multi-series.test.ts src/routes/__tests__/devotional-position-tracking.test.ts src/routes/__tests__/hide-progress-regression.test.ts src/emmaus/__tests__/authz.test.ts src/emmaus/__tests__/streaming.test.ts src/routes/__tests__/implicit-absence-flag.test.ts src/routes/__tests__/collection-completion-persistence.test.ts",
+    "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts src/lib/__tests__/devotional-completion-pct.test.ts src/lib/__tests__/oidc-session-refresh.test.ts src/test-utils/__tests__/test-auth-guard.test.ts",
+    "test:integration": "export NODE_ENV=test && export ALLOW_TEST_AUTH_HARNESS=1 && node --test --experimental-strip-types src/routes/__tests__/audio-route.test.ts src/routes/__tests__/archive-authz.test.ts src/routes/__tests__/next-steps.test.ts src/routes/__tests__/devotional-multi-series.test.ts src/routes/__tests__/devotional-position-tracking.test.ts src/routes/__tests__/hide-progress-regression.test.ts src/emmaus/__tests__/authz.test.ts src/emmaus/__tests__/streaming.test.ts src/emmaus/__tests__/verified-auth.test.ts src/routes/__tests__/implicit-absence-flag.test.ts src/routes/__tests__/collection-completion-persistence.test.ts",
     "test:integrity": "node --test --import=tsx/esm src/lib/__tests__/startup-integrity.test.ts && node --test --import=tsx/esm src/lib/__tests__/sermon-retrieval.test.ts && node --test --import=tsx/esm src/lib/__tests__/sermon-knowledge-index.test.ts",
     "test": "pnpm run test:unit && pnpm run test:integration"
   },
@@ -34,6 +34,7 @@
     "google-auth-library": "^11.0.0",
     "livekit-server-sdk": "^2.17.0",
     "openai": "^4.100.0",
+    "openid-client": "^6.8.5",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "uuid": "^11.1.0"

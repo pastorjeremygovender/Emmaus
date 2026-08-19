@@ -70,11 +70,9 @@ export interface VoiceAppContext {
 
 // ─── Fetcher ─────────────────────────────────────────────────────────────────
 
-export async function fetchVoiceContext(userId: string): Promise<VoiceAppContext | null> {
+export async function fetchVoiceContext(_userId: string): Promise<VoiceAppContext | null> {
   try {
-    const res = await fetch('/api/voice/context', {
-      headers: { 'X-User-Id': userId },
-    });
+    const res = await fetch('/api/voice/context');
     if (!res.ok) return null;
     return (await res.json()) as VoiceAppContext;
   } catch {

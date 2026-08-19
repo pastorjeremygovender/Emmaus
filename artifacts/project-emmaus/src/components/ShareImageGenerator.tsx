@@ -279,8 +279,6 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        "x-user-id": user?.id ?? "",
-        "x-user-role": user?.role ?? "",
       },
       body: JSON.stringify(body),
     });
@@ -370,8 +368,6 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": user.id,
-          "x-user-role": user.role,
         },
         body: JSON.stringify({
           name: "emmaus-share.png",

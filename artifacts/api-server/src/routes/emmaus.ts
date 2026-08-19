@@ -1,8 +1,7 @@
 /**
  * Emmaus API Routes
  *
- * Identity is derived server-side from a signed session cookie (emmaus_uid)
- * or the X-User-Id header in dev/demo mode — never from request body or query.
+ * Identity is derived server-side from a verified OIDC session.
  *
  * POST   /api/emmaus/conversation               — start or continue; streams SSE
  * POST   /api/emmaus/conversation/:id/message   — append to existing; streams SSE
@@ -24,7 +23,7 @@ import {
 } from "../emmaus/conversation-service.js";
 import type { EmmausContextInput, BibleContext, JourneyContext, SermonContext } from "../emmaus/context-builder.js";
 import type { EntryPoint } from "../emmaus/firestore-model.js";
-import { requireAuth, isOwner, setUserCookie } from "../emmaus/auth.js";
+import { requireAuth, isOwner } from "../emmaus/auth.js";
 
 const router: IRouter = Router();
 
@@ -134,7 +133,7 @@ function parseHistory(raw: unknown): Array<{ role: "user" | "assistant"; content
 /**
  * POST /api/emmaus/conversation
  * Starts a new Ask Emmaus conversation (or continues one via context.conversationId).
- * Requires authenticated identity; issues a session cookie for subsequent requests.
+ * Requires an authenticated identity.
  */
 router.post("/emmaus/conversation", async (req: Request, res: Response) => {
   const body = req.body as EmmausConversationBody;
@@ -146,8 +145,6 @@ router.post("/emmaus/conversation", async (req: Request, res: Response) => {
     return;
   }
 
-  // Issue a signed session cookie so subsequent requests use it instead of the header
-  setUserCookie(res, userId);
   setSseHeaders(res);
 
   await handleConversation(
@@ -187,7 +184,6 @@ router.post("/emmaus/conversation/:id/message", async (req: Request, res: Respon
     return;
   }
 
-  setUserCookie(res, userId);
   setSseHeaders(res);
 
   await handleConversation(

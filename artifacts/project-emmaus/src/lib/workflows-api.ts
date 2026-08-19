@@ -13,7 +13,7 @@ export interface AuthHeaders {
 async function apiFetch<T>(
   path: string,
   method: "GET" | "POST" | "PATCH" | "DELETE",
-  auth: AuthHeaders,
+  _auth: AuthHeaders,
   body?: unknown,
 ): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -21,7 +21,6 @@ async function apiFetch<T>(
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...auth,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });

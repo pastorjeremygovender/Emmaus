@@ -2,8 +2,7 @@
  * Bible Data API Client
  *
  * Typed fetch helpers for reading/writing Bible progress data to the API server.
- * Identity: signed session cookie (production) with X-User-Id header fallback
- * for dev/demo mode — mirrors the pattern used by rooms-api, devotionals-api, etc.
+ * Identity: derived server-side from the secure session cookie.
  *
  * When the API is unreachable, functions fail silently so localStorage
  * remains the last-resort fallback in BibleContext.
@@ -34,12 +33,9 @@ export type UserBibleData = {
   prayers: PersonalPrayer[];
 };
 
-function authHeaders(userId: string): Record<string, string> {
+function authHeaders(_userId: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    // Dev/demo: identify the caller via header; in production the signed
-    // session cookie (emmaus_uid) takes precedence — see auth.ts extractUserId.
-    'X-User-Id': userId,
   };
 }
 

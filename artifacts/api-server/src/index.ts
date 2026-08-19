@@ -1,7 +1,8 @@
-import app from "./app";
+import app, { startBackgroundInitialization } from "./app";
 import { logger } from "./lib/logger";
 import { runSignalsEngine, logEngineRun } from "./lib/pastoral-store.js";
-import { ensureSystemTemplates } from "./lib/workflows-store.js";
+import { ensureAuthSchema } from "./lib/ensure-auth-schema.js";
+import { getCanonicalPublicOrigin } from "./lib/public-origin.js";
 
 const rawPort = process.env["PORT"];
 
@@ -17,17 +18,25 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
+async function startServer(): Promise<void> {
+  const publicOrigin = getCanonicalPublicOrigin();
+  await ensureAuthSchema();
+
+  const server = app.listen(port, () => {
+    logger.info({ port, publicOrigin }, "Server listening");
+    scheduleNightlySignalsEngine();
+    startBackgroundInitialization();
+  });
+
+  server.on("error", (err) => {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
-  }
+  });
+}
 
-  logger.info({ port }, "Server listening");
-
-  scheduleNightlySignalsEngine();
-
-  // Seed system task templates — deferred so startup migrations run first
+void startServer().catch((err) => {
+  logger.fatal({ err }, "Secure authentication startup failed");
+  process.exit(1);
 });
 
 // ─── Nightly signals engine ───────────────────────────────────────────────────

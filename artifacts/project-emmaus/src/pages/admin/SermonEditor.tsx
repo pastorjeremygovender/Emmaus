@@ -142,8 +142,6 @@ function CompanionDayEditor({
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            'X-User-Id': auth.userId,
-            'X-User-Role': auth.userRole,
           },
           body: JSON.stringify({ description: val }),
         });

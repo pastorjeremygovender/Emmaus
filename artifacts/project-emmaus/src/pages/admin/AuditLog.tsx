@@ -186,12 +186,6 @@ export default function AuditLog() {
 
       const res = await fetch(
         `${BASE}api/admin/audit-log${params.size > 0 ? '?' + params.toString() : ''}`,
-        {
-          headers: {
-            'X-User-Id': user?.id ?? '',
-            'X-User-Role': user?.role ?? 'admin',
-          },
-        },
       );
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json() as { entries: AuditEntry[] };

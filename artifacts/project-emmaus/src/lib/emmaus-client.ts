@@ -4,7 +4,7 @@
  * Typed fetch helpers for the Ask Emmaus conversation service.
  * Streaming uses the browser Fetch API and ReadableStream — never EventSource.
  *
- * Identity: passes X-User-Id header from the auth context (demo mode).
+ * Identity: derived server-side from the secure session cookie.
  * API base:  VITE_API_URL env var, defaulting to '' (empty string).
  *            Empty string means requests go to /api/emmaus/… — the shared
  *            Replit reverse proxy routes /api → API server on port 8080.
@@ -215,10 +215,9 @@ async function consumeStream(
 
 // ─── API Calls ────────────────────────────────────────────────────────────────
 
-function headers(userId: string): Record<string, string> {
+function headers(_userId: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    'X-User-Id': userId,
   };
 }
 

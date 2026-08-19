@@ -2,7 +2,7 @@
  * ONE-TIME production data sync route.
  *
  * POST /api/admin/prod-sync
- * Protected by x-migration-token header (must equal SESSION_SECRET).
+ * Protected by requireSuperAdmin — a verified DB Super Administrator session.
  *
  * Safe to call multiple times — all operations are idempotent.
  * Remove this file after the migration has been confirmed successful.
@@ -10,6 +10,7 @@
 import { Router, type Request, type Response } from "express";
 import { pool } from "@workspace/db";
 import { logger } from "../lib/logger.js";
+import { requireSuperAdmin } from "../emmaus/auth.js";
 import { createRequire } from "module";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -47,12 +48,9 @@ const OLD_JOURNEY_IDS = [
 router.post(
   "/admin/prod-sync",
   async (req: Request, res: Response): Promise<void> => {
-    // Auth: must supply SESSION_SECRET as migration token
-    const token = req.headers["x-migration-token"];
-    if (!token || token !== process.env.SESSION_SECRET) {
-      res.status(403).json({ error: "Forbidden — invalid migration token" });
-      return;
-    }
+    // Auth: verified Super Administrator only (req.user role from the DB
+    // profile, populated by authMiddleware — never a client-supplied header).
+    if (!requireSuperAdmin(req, res)) return;
 
     const report: Record<string, unknown> = {};
 

@@ -113,8 +113,8 @@ devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
     }
 
     // Members can only read Published series
-    const role = req.headers["x-user-role"];
-    const adminAccess = role === "admin" || role === "superAdmin";
+    const adminAccess =
+      req.user?.role === "admin" || req.user?.role === "superAdmin";
     if (!adminAccess && series.status !== "Published") {
       res.status(404).json({ error: "Series not found" });
       return;

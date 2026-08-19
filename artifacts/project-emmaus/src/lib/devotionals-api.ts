@@ -14,13 +14,11 @@ interface RequestOptions extends RequestInit {
 }
 
 async function request<T>(url: string, options?: RequestOptions): Promise<T> {
-  const { userId, userRole, ...fetchOptions } = options ?? {};
+  const { userId: _userId, userRole: _userRole, ...fetchOptions } = options ?? {};
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(fetchOptions.headers as Record<string, string> ?? {}),
   };
-  if (userId) headers["X-User-Id"] = userId;
-  if (userRole) headers["X-User-Role"] = userRole;
 
   const res = await fetch(url, {
     credentials: "include",
@@ -203,9 +201,8 @@ export function bulkGenerateEntryLabels(
 }
 
 // ─── Member auth bag ──────────────────────────────────────────────────────────
-// Member routes rely on session cookies (set at login). In demo / dev mode,
-// the caller's userId is forwarded as the X-User-Id header so requireAuth()
-// can identify the user without a cookie.
+// Member routes rely on the secure session cookie (set at login) for identity;
+// the server derives the user from that cookie via requireAuth().
 
 export interface MemberAuth {
   userId?: string;

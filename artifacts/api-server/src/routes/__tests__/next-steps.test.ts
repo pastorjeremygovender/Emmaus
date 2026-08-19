@@ -22,6 +22,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -34,18 +35,23 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  // Resolve a REAL opaque session (Authorization: Bearer <sid>) for the caller's
+  // logical userId. Members default to app_role "user"; admin setup identities
+  // pass an explicit role. No X-User-* headers are ever sent.
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...authHeaders,
     };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role) headers["X-User-Role"] = opts.role;
     if (payload) headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -249,24 +255,30 @@ before(async () => {
 // ─── After: permanent-delete the test series ─────────────────────────────────
 
 after(async () => {
-  await Promise.all([
-    testSeriesId
-      ? request({
-          method: "DELETE",
-          path: `/api/devotionals/${testSeriesId}/permanent`,
-          userId: ADMIN_USER_ID,
-          role: "superAdmin",
-        })
-      : Promise.resolve(),
-    sparseSeriesId
-      ? request({
-          method: "DELETE",
-          path: `/api/devotionals/${sparseSeriesId}/permanent`,
-          userId: ADMIN_USER_ID,
-          role: "superAdmin",
-        })
-      : Promise.resolve(),
-  ]);
+  try {
+    await Promise.all([
+      testSeriesId
+        ? request({
+            method: "DELETE",
+            path: `/api/devotionals/${testSeriesId}/permanent`,
+            userId: ADMIN_USER_ID,
+            role: "superAdmin",
+          })
+        : Promise.resolve(),
+      sparseSeriesId
+        ? request({
+            method: "DELETE",
+            path: `/api/devotionals/${sparseSeriesId}/permanent`,
+            userId: ADMIN_USER_ID,
+            role: "superAdmin",
+          })
+        : Promise.resolve(),
+    ]);
+  } finally {
+    // Remove helper-created auth rows + any server-persisted residue keyed by
+    // our verified ids (progress, created_by). Always runs.
+    await cleanupTestAuth();
+  }
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -296,7 +308,7 @@ type NextStepsResponse = {
 };
 
 async function fetchNextSteps(userId: string): Promise<NextStepsResponse> {
-  // Identity is resolved from X-User-Id header (accepted in dev/demo mode).
+  // Identity is resolved from the real opaque session (Authorization: Bearer).
   // The legacy ?userId query param is no longer trusted by the server.
   const res = await request({ path: `/api/next-steps`, userId });
   assert.equal(res.status, 200, `GET /next-steps failed (${res.status}): ${res.body}`);
@@ -691,6 +703,19 @@ describe("H — Badge lifecycle: NEW, UPDATED, dismiss, and opt-out", () => {
       body: { status: "Published", notifyMembers: true },
     });
     assert.equal(publishRes.status, 200, `Publish with notify failed: ${publishRes.body}`);
+  });
+
+  after(async () => {
+    // Permanent-delete the badge series so its created_by row and any member
+    // progress rows (cascade) do not linger in the dev database.
+    if (badgeSeriesId) {
+      await request({
+        method: "DELETE",
+        path: `/api/devotionals/${badgeSeriesId}/permanent`,
+        userId: ADMIN_USER_ID,
+        role: "superAdmin",
+      });
+    }
   });
 
   it("non-started member sees NEW badge", async () => {

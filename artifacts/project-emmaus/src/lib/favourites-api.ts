@@ -38,9 +38,7 @@ export interface AddFavouriteParams {
 const BASE = '/api/favourites';
 
 export async function fetchFavourites(): Promise<Favourite[]> {
-  const res = await fetch(BASE, {
-    headers: { 'x-user-id': 'demo', 'x-user-role': 'member' },
-  });
+  const res = await fetch(BASE);
   if (!res.ok) throw new Error('Failed to load favourites');
   const data = (await res.json()) as { favourites: Favourite[] };
   return data.favourites;
@@ -50,9 +48,7 @@ export async function checkFavourited(
   contentType: FavouriteContentType,
   contentId: string,
 ): Promise<boolean> {
-  const res = await fetch(`${BASE}/check/${contentType}/${contentId}`, {
-    headers: { 'x-user-id': 'demo', 'x-user-role': 'member' },
-  });
+  const res = await fetch(`${BASE}/check/${contentType}/${contentId}`);
   if (!res.ok) return false;
   const data = (await res.json()) as { favourited: boolean };
   return data.favourited;
@@ -63,8 +59,6 @@ export async function addFavourite(params: AddFavouriteParams): Promise<void> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': 'demo',
-      'x-user-role': 'member',
     },
     body: JSON.stringify({
       contentType: params.contentType,
@@ -83,7 +77,6 @@ export async function removeFavourite(
 ): Promise<void> {
   const res = await fetch(`${BASE}/${contentType}/${contentId}`, {
     method: 'DELETE',
-    headers: { 'x-user-id': 'demo', 'x-user-role': 'member' },
   });
   if (!res.ok) throw new Error('Failed to remove favourite');
 }

@@ -1076,11 +1076,11 @@ router.get("/:roomId/presence/stream", async (req, res) => {
 
 // ─── Chat — SSE stream (new messages pushed in real-time) ────────────────────
 //
-// EventSource cannot send custom request headers (e.g. X-User-Id), so we use
+// EventSource cannot send custom request headers, so we use
 // a two-step handshake:
 //
 //   1. POST /:roomId/messages/stream/token  — authenticated via requireAuth
-//      (session cookie or X-User-Id header); verifies membership; returns a
+//      (secure session cookie); verifies membership; returns a
 //      one-time, short-lived UUID token.
 //
 //   2. GET  /:roomId/messages/stream?token=<uuid>  — consumes the token (one

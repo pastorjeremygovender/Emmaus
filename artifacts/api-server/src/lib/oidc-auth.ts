@@ -1,0 +1,252 @@
+import crypto from "node:crypto";
+import { db, sessionsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import type { Request, Response } from "express";
+import * as oidc from "openid-client";
+
+export const ISSUER_URL = process.env.ISSUER_URL ?? "https://replit.com/oidc";
+export const SESSION_COOKIE = "sid";
+export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
+
+export type SessionUser = {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  profileImageUrl: string | null;
+};
+
+export type AuthenticatedUser = SessionUser & {
+  preferredName: string;
+  role: "user" | "admin" | "superAdmin";
+};
+
+export interface SessionData {
+  user: SessionUser;
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: number;
+}
+
+let oidcConfig: oidc.Configuration | null = null;
+
+export async function getOidcConfig(): Promise<oidc.Configuration> {
+  if (!oidcConfig) {
+    const clientId = process.env.REPL_ID;
+    if (!clientId) {
+      throw new Error("REPL_ID is required for Replit Auth");
+    }
+    oidcConfig = await oidc.discovery(new URL(ISSUER_URL), clientId);
+  }
+  return oidcConfig;
+}
+
+export async function createSession(data: SessionData): Promise<string> {
+  const sid = crypto.randomBytes(32).toString("hex");
+  await db.insert(sessionsTable).values({
+    sid,
+    sess: data as unknown as Record<string, unknown>,
+    expire: new Date(Date.now() + SESSION_TTL),
+  });
+  return sid;
+}
+
+export async function getSession(sid: string): Promise<SessionData | null> {
+  const [row] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.sid, sid));
+
+  if (!row || row.expire < new Date()) {
+    if (row) await deleteSession(sid);
+    return null;
+  }
+
+  return row.sess as unknown as SessionData;
+}
+
+export async function updateSession(
+  sid: string,
+  data: SessionData,
+): Promise<void> {
+  await db
+    .update(sessionsTable)
+    .set({
+      sess: data as unknown as Record<string, unknown>,
+      expire: new Date(Date.now() + SESSION_TTL),
+    })
+    .where(eq(sessionsTable.sid, sid));
+}
+
+export async function deleteSession(sid: string): Promise<void> {
+  await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
+}
+
+// ─── Concurrency-safe expired-token refresh ────────────────────────────────
+
+/**
+ * Result of attempting to obtain a currently-valid session for a request.
+ *
+ *   - "valid":   The session is (still or now) valid; `session` is the data to
+ *                use for this request. This covers three cases that are
+ *                indistinguishable to the caller and should all proceed:
+ *                the token was not expired, THIS request rotated it, or a
+ *                CONCURRENT request rotated it and we reloaded the fresh copy.
+ *   - "invalid": The refresh token was genuinely rejected by the provider (or
+ *                is missing) and no other request has produced a valid session.
+ *                The caller should clear the session.
+ */
+export type SessionRefreshResult =
+  | { status: "valid"; session: SessionData }
+  | { status: "invalid" };
+
+function isExpired(session: SessionData, nowSeconds: number): boolean {
+  return typeof session.expires_at === "number" && nowSeconds > session.expires_at;
+}
+
+/**
+ * Parse a raw stored session row (`sess` jsonb) into typed SessionData.
+ * Returns null when the shape is not a usable session (no user id).
+ * Extracted so the parsing/validation is unit-testable without a database.
+ */
+export function parseStoredSession(raw: unknown): SessionData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Partial<SessionData>;
+  if (!data.user || typeof data.user !== "object") return null;
+  if (typeof (data.user as SessionUser).id !== "string") return null;
+  if (typeof data.access_token !== "string") return null;
+  return data as SessionData;
+}
+
+/**
+ * Obtain a currently-valid session for `sid`, refreshing the OIDC tokens if the
+ * access token has expired.
+ *
+ * Concurrency contract (safe across multiple server instances sharing one
+ * PostgreSQL): the refresh is serialized per SID using a row-level lock
+ * (`SELECT ... FOR UPDATE`) inside a single transaction. Only one refresh-token
+ * rotation can occur at a time. A request that loses the race BLOCKS on the
+ * lock, then reloads the row inside the transaction:
+ *
+ *   - If a peer already rotated the token (row no longer expired), it uses that
+ *     freshly-refreshed session and does NOT touch the (now-consumed, stale)
+ *     refresh token.
+ *   - Otherwise it performs the rotation itself.
+ *
+ * A stale concurrent failure never deletes a freshly-updated session: on a
+ * refresh error we re-read the row; if a peer has since produced a valid
+ * session we return that valid session instead of reporting invalid.
+ */
+export async function refreshSessionIfExpired(
+  sid: string,
+  session: SessionData,
+): Promise<SessionRefreshResult> {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Fast path: not expired — no lock, no transaction.
+  if (!isExpired(session, now)) {
+    return { status: "valid", session };
+  }
+
+  // Expired with no refresh token → cannot refresh.
+  if (!session.refresh_token) {
+    return await reloadIfPeerRefreshed(sid);
+  }
+
+  return db.transaction(async (tx) => {
+    // Serialize per-SID: block until we hold the row lock. Peers attempting a
+    // concurrent refresh for the same SID wait here.
+    const [locked] = await tx
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.sid, sid))
+      .for("update");
+
+    if (!locked) {
+      // Session was deleted (e.g. logout) while we waited for the lock.
+      return { status: "invalid" };
+    }
+    if (locked.expire < new Date()) {
+      return { status: "invalid" };
+    }
+
+    const current = parseStoredSession(locked.sess);
+    if (!current?.user?.id) {
+      return { status: "invalid" };
+    }
+
+    const lockNow = Math.floor(Date.now() / 1000);
+
+    // A peer already rotated the token while we waited: use the fresh session,
+    // do NOT attempt the (now-consumed) refresh token from our stale copy.
+    if (!isExpired(current, lockNow)) {
+      return { status: "valid", session: current };
+    }
+
+    if (!current.refresh_token) {
+      return { status: "invalid" };
+    }
+
+    try {
+      const config = await getOidcConfig();
+      const tokens = await oidc.refreshTokenGrant(config, current.refresh_token);
+      const refreshed: SessionData = {
+        ...current,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token ?? current.refresh_token,
+        expires_at: tokens.expiresIn()
+          ? lockNow + tokens.expiresIn()!
+          : current.expires_at,
+      };
+      await tx
+        .update(sessionsTable)
+        .set({
+          sess: refreshed as unknown as Record<string, unknown>,
+          expire: new Date(Date.now() + SESSION_TTL),
+        })
+        .where(eq(sessionsTable.sid, sid));
+      return { status: "valid", session: refreshed };
+    } catch {
+      // The refresh token was rejected by the provider. Because we hold the row
+      // lock, no peer could have written a fresh session between our re-read and
+      // here, so this is a genuine invalidation for this SID.
+      return { status: "invalid" };
+    }
+  });
+}
+
+/**
+ * Re-read the session outside our own refresh attempt to see whether a peer
+ * (possibly on another server instance) has already produced a valid,
+ * non-expired session. Used to avoid clearing a session that a concurrent
+ * request freshly refreshed.
+ */
+async function reloadIfPeerRefreshed(sid: string): Promise<SessionRefreshResult> {
+  const [row] = await db
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.sid, sid));
+  if (!row || row.expire < new Date()) return { status: "invalid" };
+  const current = parseStoredSession(row.sess);
+  if (!current?.user?.id) return { status: "invalid" };
+  const now = Math.floor(Date.now() / 1000);
+  if (isExpired(current, now)) return { status: "invalid" };
+  return { status: "valid", session: current };
+}
+
+export async function clearSession(
+  res: Response,
+  sid?: string,
+): Promise<void> {
+  if (sid) await deleteSession(sid);
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
+}
+
+export function getSessionId(req: Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+  const sid = req.cookies?.[SESSION_COOKIE];
+  return typeof sid === "string" ? sid : undefined;
+}

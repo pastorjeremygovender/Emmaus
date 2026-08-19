@@ -33,10 +33,9 @@ async function apiFetch<T>(
   path: string,
   options?: RequestInit & { userId?: string }
 ): Promise<T> {
-  const { userId, ...fetchOptions } = options ?? {};
+  const { userId: _userId, ...fetchOptions } = options ?? {};
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(userId ? { 'X-User-Id': userId } : {}),
   };
   const res = await fetch(getApiUrl(path), {
     credentials: 'include',

@@ -1,8 +1,8 @@
 /**
  * admin-reset-api.ts — Frontend client for admin progress reset endpoints.
  *
- * All functions send X-User-Id and X-User-Role headers so the backend
- * can authenticate the caller and verify admin access.
+ * Identity and admin access are derived server-side from the secure session
+ * cookie; requests send credentials so the backend can authenticate the caller.
  */
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -16,15 +16,13 @@ interface AuthHeaders {
   userRole: string;
 }
 
-async function post(path: string, auth: AuthHeaders): Promise<void> {
+async function post(path: string, _auth: AuthHeaders): Promise<void> {
   const res = await fetch(apiUrl(path), {
     method: "POST",
     credentials: "include",
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
     },
   });
   if (!res.ok) {
@@ -45,14 +43,10 @@ export interface ResetContentList {
   companions: { id: string; title: string }[];
 }
 
-export async function fetchContentList(auth: AuthHeaders): Promise<ResetContentList> {
+export async function fetchContentList(_auth: AuthHeaders): Promise<ResetContentList> {
   const res = await fetch(apiUrl("/content-list"), {
     credentials: "include",
     cache: "no-store",
-    headers: {
-      "X-User-Id": auth.userId,
-      "X-User-Role": auth.userRole,
-    },
   });
   if (!res.ok) {
     const body = await res.text().catch(() => res.statusText);

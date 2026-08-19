@@ -59,3 +59,4 @@
 - [Publish pipeline](publish-pipeline.md) — data-safety workflow builds frontend before publish; .replit via verifyAndReplaceDotReplit; artifact.toml callback unavailable; prod DB read-only for agent; __TEST__ guard now in export-seed + integrity tests + startup migration.
 - [Completion card back navigation rule](completion-card-back-nav.md) — history.back() for all back buttons; setLocation only for forward "View Previous Steps →" links; wouter useLocation() is pathname-only (use window.location.search); ?from=walk means IMMEDIATE origin is Walk only.
 - [OLD_JOURNEY_IDS safety](old-journey-ids-safety.md) — deletes matching journeys+steps on every boot; admin-created walks with colliding IDs are wiped silently; audit log only has title/status not body content.
+- [Verified identity and role bootstrap](verified-identity-auth.md) — OIDC subject is immutable identity; roles stay DB-controlled; initial super-admin claim is one-time and non-repeatable.

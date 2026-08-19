@@ -27,6 +27,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -39,16 +40,20 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role)   headers["X-User-Role"] = opts.role;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload)     headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -90,7 +95,7 @@ async function pollUntil(
 
 const TAG        = Date.now();
 const ADMIN_ID   = `test-admin-implicit-${TAG}`;
-const ADMIN_ROLE = "admin";
+const ADMIN_ROLE = "admin" as const;
 
 // Use today's date dynamically so the test never contains a stale hardcoded value.
 const SESSION_DATE = new Date().toISOString().slice(0, 10);
@@ -205,6 +210,7 @@ before(async () => {
 // ─── Teardown ─────────────────────────────────────────────────────────────────
 
 after(async () => {
+  try {
   // Remove expectations so the meeting type can be cleanly deactivated.
   for (const personId of [personAId, personBId]) {
     if (personId && meetingTypeId) {
@@ -267,6 +273,13 @@ after(async () => {
       role: ADMIN_ROLE,
       body: { isActive: false },
     }).catch(() => {/* non-fatal */});
+  }
+  } finally {
+    // The pastoral HTTP API only supports soft-delete, so meeting_types /
+    // meeting_sessions / pastoral_persons rows keyed by our verified admin id
+    // (created_by) cannot be removed over HTTP. cleanupTestAuth() purges them
+    // (and their cascade children) by verified id, then removes auth rows.
+    await cleanupTestAuth();
   }
 });
 

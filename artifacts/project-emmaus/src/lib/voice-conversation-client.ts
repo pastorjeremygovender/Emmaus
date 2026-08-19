@@ -113,7 +113,7 @@ export function sendVoiceConversation(params: {
     try {
       const resp = await fetch(`${API_BASE}/api/voice/conversation`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': params.userId },
+        headers: { 'Content-Type': 'application/json' },
         signal:  controller.signal,
         body: JSON.stringify({
           message:         params.message,

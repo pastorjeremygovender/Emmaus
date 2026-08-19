@@ -197,8 +197,6 @@ function BookIntrosList() {
   const [error, setError] = useState<string | null>(null);
 
   const headers = {
-    'x-user-id': user?.id ?? '',
-    'x-user-role': (user as { role?: string })?.role ?? '',
     'Content-Type': 'application/json',
   };
 

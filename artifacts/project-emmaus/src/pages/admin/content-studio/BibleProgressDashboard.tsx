@@ -82,12 +82,7 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(getApiUrl('/api/bible/study-stats'), {
-        headers: {
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
-        },
-      });
+      const r = await fetch(getApiUrl('/api/bible/study-stats'));
       if (!r.ok) throw new Error('Failed to load stats');
       setStats(await r.json());
     } catch {
@@ -103,12 +98,8 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
     setPublishing(bookId);
     try {
       // Bulk publish all In Review passages
-      const notes = await fetch(getApiUrl(`/api/bible/study-notes/admin?bookId=${bookId}`), {
-        headers: {
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
-        },
-      }).then(r => r.json()) as { id: string; status: string }[];
+      const notes = await fetch(getApiUrl(`/api/bible/study-notes/admin?bookId=${bookId}`))
+        .then(r => r.json()) as { id: string; status: string }[];
 
       const inReviewIds = notes.filter(n => n.status === 'In Review').map(n => n.id);
       if (inReviewIds.length > 0) {
@@ -116,8 +107,6 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-id': user?.id ?? '',
-            'x-user-role': (user as { role?: string })?.role ?? '',
           },
           body: JSON.stringify({ ids: inReviewIds, status: 'Published' }),
         });
@@ -127,8 +116,6 @@ export default function BibleProgressDashboard({ onGenerate }: Props) {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user?.id ?? '',
-          'x-user-role': (user as { role?: string })?.role ?? '',
         },
         body: JSON.stringify({ bookId, status: 'Published' }),
       });

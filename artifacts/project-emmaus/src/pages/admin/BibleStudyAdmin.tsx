@@ -591,8 +591,6 @@ export default function BibleStudyAdmin({ defaultTab = 'notes' }: { defaultTab?:
 
   const headers = {
     'Content-Type': 'application/json',
-    'x-user-id': user?.id ?? 'admin',
-    'x-user-role': user?.role ?? 'admin',
   };
 
   async function load() {

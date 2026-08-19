@@ -10,11 +10,9 @@ export interface AuthHeaders {
   userRole: string;
 }
 
-function headers(auth: AuthHeaders): HeadersInit {
+function headers(_auth: AuthHeaders): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "X-User-Id":    auth.userId,
-    "X-User-Role":  auth.userRole,
   };
 }
 

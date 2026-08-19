@@ -38,6 +38,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
 
 const BASE_URL = process.env.TEST_SERVER_URL ?? "http://localhost:8080";
 const url = new URL(BASE_URL);
@@ -50,16 +51,20 @@ type ReqOpts = {
   method?: string;
   path: string;
   userId?: string;
-  role?: string;
+  role?: "user" | "admin" | "superAdmin";
   body?: object;
 };
 
-function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+async function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
+  const authHeaders = opts.userId
+    ? await authHeader(opts.userId, { role: opts.role ?? "user" })
+    : {};
   return new Promise((resolve, reject) => {
     const payload = opts.body ? JSON.stringify(opts.body) : undefined;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (opts.userId) headers["X-User-Id"] = opts.userId;
-    if (opts.role)   headers["X-User-Role"] = opts.role;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders,
+    };
     if (payload)     headers["Content-Length"] = String(Buffer.byteLength(payload));
 
     const req = transport.request(
@@ -86,11 +91,16 @@ function request(opts: ReqOpts): Promise<{ status: number; body: string }> {
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
-// Use the pre-seeded superAdmin to pass the server-side isAdmin() check
-// (user-role-store.ts seeds "demo-superadmin-1" as "superAdmin").
-const ADMIN_USER_ID  = "demo-superadmin-1";
+// Admin setup uses a real test session whose database app_role is superAdmin,
+// created via the shared test-auth harness — no demo-user ownership semantics.
 const RUN_TAG        = Date.now();
+const ADMIN_USER_ID  = `test-collection-admin-${RUN_TAG}`;
 const MEMBER_USER_ID = `test-collection-member-${RUN_TAG}`;
+
+/** Issue a request as the superAdmin setup identity. */
+function adminRequest(opts: Omit<ReqOpts, "userId" | "role">) {
+  return request({ ...opts, userId: ADMIN_USER_ID, role: "superAdmin" });
+}
 
 // Each walk has exactly 2 steps so the completion check is
 // completedDays.length (2) >= durationDays (2).
@@ -197,10 +207,9 @@ function deriveSubtitle(
 
 before(async () => {
   // 1. Create the collection.
-  const colRes = await request({
+  const colRes = await adminRequest({
     method: "POST",
     path: "/api/collections",
-    userId: ADMIN_USER_ID,
     body: {
       title: `__TEST__ Collection Completion [${RUN_TAG}]`,
       description: "Integration test collection — safe to delete",
@@ -212,10 +221,9 @@ before(async () => {
 
   // 2. Create two walks inside the collection.
   for (const [idx, varLabel] of [["1", "Alpha"], ["2", "Beta"]] as const) {
-    const jRes = await request({
+    const jRes = await adminRequest({
       method: "POST",
       path: "/api/journeys",
-      userId: ADMIN_USER_ID,
       body: {
         title: `__TEST__ Walk ${varLabel} [${RUN_TAG}]`,
         description: "Test walk — safe to delete",
@@ -234,10 +242,9 @@ before(async () => {
   // 3. Add STEPS_PER_WALK Published steps to each walk.
   for (const [walkId, varLabel] of [[walkId1, "Alpha"], [walkId2, "Beta"]] as const) {
     for (let day = 1; day <= STEPS_PER_WALK; day++) {
-      const sRes = await request({
+      const sRes = await adminRequest({
         method: "POST",
         path: `/api/journeys/${walkId}/steps`,
-        userId: ADMIN_USER_ID,
         body: {
           day,
           title: `${varLabel} Step ${day}`,
@@ -260,10 +267,9 @@ before(async () => {
 
   // 4. Publish both walks — publishing auto-publishes steps and updates durationDays.
   for (const [walkId, varLabel] of [[walkId1, "Alpha"], [walkId2, "Beta"]] as const) {
-    const pubRes = await request({
+    const pubRes = await adminRequest({
       method: "POST",
       path: `/api/journeys/${walkId}/publish`,
-      userId: ADMIN_USER_ID,
     });
     assert.equal(pubRes.status, 200, `Publish walk ${varLabel} failed (${pubRes.status}): ${pubRes.body}`);
     const published = JSON.parse(pubRes.body) as { durationDays: number };
@@ -285,31 +291,38 @@ before(async () => {
 after(async () => {
   const errors: string[] = [];
 
-  // Delete test walks (permanent — requires superAdmin userId in user-role-store).
-  for (const walkId of [walkId1, walkId2]) {
-    if (!walkId) continue;
-    const r = await request({
-      method: "DELETE",
-      path: `/api/journeys/${walkId}`,
-      userId: ADMIN_USER_ID,
-      body: { confirm: "PERMANENTLY_DELETE" },
-    });
-    // 200 = deleted; 404 = already gone — both are acceptable.
-    if (r.status !== 200 && r.status !== 404) {
-      errors.push(`DELETE walk ${walkId} returned ${r.status}: ${r.body.slice(0, 120)}`);
-    }
-  }
+  try {
+    // Delete domain fixtures FIRST (walks + collection), then let the finally
+    // block always remove helper-created auth rows + residue.
 
-  // Delete the collection (cascade-unlinks any walks first).
-  if (collectionId) {
-    const r = await request({
-      method: "DELETE",
-      path: `/api/collections/${collectionId}`,
-      userId: ADMIN_USER_ID,
-    });
-    if (r.status !== 200 && r.status !== 404) {
-      errors.push(`DELETE collection ${collectionId} returned ${r.status}: ${r.body.slice(0, 120)}`);
+    // Delete test walks (permanent — requires superAdmin).
+    for (const walkId of [walkId1, walkId2]) {
+      if (!walkId) continue;
+      const r = await adminRequest({
+        method: "DELETE",
+        path: `/api/journeys/${walkId}`,
+        body: { confirm: "PERMANENTLY_DELETE" },
+      });
+      // 200 = deleted; 404 = already gone — both are acceptable.
+      if (r.status !== 200 && r.status !== 404) {
+        errors.push(`DELETE walk ${walkId} returned ${r.status}: ${r.body.slice(0, 120)}`);
+      }
     }
+
+    // Delete the collection (cascade-unlinks any walks first).
+    if (collectionId) {
+      const r = await adminRequest({
+        method: "DELETE",
+        path: `/api/collections/${collectionId}`,
+      });
+      if (r.status !== 200 && r.status !== 404) {
+        errors.push(`DELETE collection ${collectionId} returned ${r.status}: ${r.body.slice(0, 120)}`);
+      }
+    }
+  } finally {
+    // Auth cleanup + domain residue purge ALWAYS runs, even if a delete above
+    // threw or the assertion below fails.
+    await cleanupTestAuth();
   }
 
   assert.equal(
