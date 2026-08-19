@@ -19,6 +19,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
 import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary, PresentationState } from '@/lib/rooms-types';
+import { roomSessionAckKey } from '@/lib/account-storage';
 
 export interface NavigatePayload {
   stepId?: string;
@@ -234,7 +235,7 @@ export function useFollowLeader({
         const sessionId = String(event.payload.sessionId ?? '');
         // If this specific session's completion has already been acknowledged
         // (user pressed Done or X), do not re-show the modal on reconnect.
-        if (sessionId && localStorage.getItem(`emmaus_ack_session_${sessionId}`)) {
+        if (sessionId && userId && localStorage.getItem(roomSessionAckKey(userId, sessionId))) {
           sessionExplicitlyEndedRef.current = true;
           setActiveSession(null);
           break;

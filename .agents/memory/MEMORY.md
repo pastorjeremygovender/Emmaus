@@ -60,5 +60,5 @@
 - [Completion card back navigation rule](completion-card-back-nav.md) — history.back() for all back buttons; setLocation only for forward "View Previous Steps →" links; wouter useLocation() is pathname-only (use window.location.search); ?from=walk means IMMEDIATE origin is Walk only.
 - [OLD_JOURNEY_IDS safety](old-journey-ids-safety.md) — deletes matching journeys+steps on every boot; admin-created walks with colliding IDs are wiped silently; audit log only has title/status not body content.
 - [Verified identity and role bootstrap](verified-identity-auth.md) — OIDC subject is immutable identity; roles stay DB-controlled; initial super-admin claim is one-time and non-repeatable.
-- [Supabase server-mediated authentication](supabase-server-auth.md) — Provider tokens stay server-side; email TokenHash callbacks create opaque Emmaus sessions; recovery authorization is one-use.
+- [Supabase server-mediated authentication](supabase-server-auth.md) — Opaque sessions; per-tab subject assertions reject stale cross-tab requests; recovery authorization is one-use.
 - [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.

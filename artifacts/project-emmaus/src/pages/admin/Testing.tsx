@@ -147,7 +147,7 @@ export default function Testing() {
     setRhythmError(undefined);
     try {
       await resetDailyRhythm(auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       setRhythmState('done');
     } catch (err) {
       setRhythmError(err instanceof Error ? err.message : 'Reset failed');
@@ -173,7 +173,7 @@ export default function Testing() {
     setJourneyErrors(prev => { const n = { ...prev }; delete n[id]; return n; });
     try {
       await resetJourney(id, kind, auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       setJourneyState(id, 'done');
     } catch (err) {
       setJourneyError(id, err instanceof Error ? err.message : 'Reset failed');
@@ -193,7 +193,7 @@ export default function Testing() {
     setEverythingError(undefined);
     try {
       await resetEverything(auth);
-      clearLocalProgressCache();
+      clearLocalProgressCache(auth.userId);
       // Also reset section states so the page reflects the clean slate
       setRhythmState('idle');
       setJourneyStates({});

@@ -72,12 +72,10 @@ router.get("/journeys/progress", async (req: Request, res: Response) => {
   res.json({ progress });
 });
 
-router.post("/journeys/progress/import", async (req: Request, res: Response) => {
-  const userId = resolveUserId(req);
-  if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
-  const { progress } = req.body as { progress: Record<string, { currentDay: number; completedDays: number[]; startedAt: string; lastCompletedAt: string | null }> };
-  await store.upsertProgressFromLocal(userId, progress ?? {});
-  res.json({ ok: true });
+router.post("/journeys/progress/import", (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "Legacy progress import has been removed. Browser progress cannot be imported into an authenticated account.",
+  });
 });
 
 // ─── Intro-step check (public) ────────────────────────────────────────────────

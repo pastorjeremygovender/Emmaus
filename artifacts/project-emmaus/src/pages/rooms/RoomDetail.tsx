@@ -25,6 +25,7 @@ import { SharedAskEmmausPanel } from '@/components/SharedAskEmmausPanel';
 import { PollCard } from '@/components/PollCard';
 import { SessionCompleteCard } from '@/components/SessionCompleteCard';
 import { useFollowLeader } from '@/hooks/useFollowLeader';
+import { roomSessionAckKey } from '@/lib/account-storage';
 import {
   apiGetJourneyProgress, apiLinkJourney, apiRenameRoom,
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
@@ -212,7 +213,9 @@ export default function RoomDetail() {
     const sid = sessionComplete?.sessionId;
     if (sid) {
       // Fast-path: localStorage prevents a flash before the server responds.
-      localStorage.setItem(`emmaus_ack_session_${sid}`, '1');
+      if (user?.id) {
+        localStorage.setItem(roomSessionAckKey(user.id, sid), '1');
+      }
       // Authoritative: server-side record prevents re-appearance on any device.
       apiAcknowledgeSessionCompletion(user?.id ?? '', String(roomId), sid).catch(() => {
         // Non-fatal — localStorage is the fallback for the current device.

@@ -8,6 +8,14 @@ import {
 } from "../lib/oidc-auth.js";
 import { getUserProfileBySubject } from "../lib/user-role-store.js";
 
+const EXPECTED_SUBJECT_HEADER = "x-emmaus-expected-subject";
+const SUBJECT_ASSERTION_EXEMPT_PATHS = new Set([
+  "/api/auth/user",
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/recover",
+]);
+
 declare global {
   namespace Express {
     interface User extends AuthenticatedUser {}
@@ -64,5 +72,18 @@ export async function authMiddleware(
       "",
     role: profile?.appRole ?? "user",
   };
+
+  const expectedSubject = req.get(EXPECTED_SUBJECT_HEADER)?.trim();
+  if (
+    expectedSubject &&
+    expectedSubject !== req.user.id &&
+    !SUBJECT_ASSERTION_EXEMPT_PATHS.has(req.path)
+  ) {
+    res.status(409).json({
+      error: "Your signed-in account changed. Please try again.",
+      code: "AUTH_SUBJECT_MISMATCH",
+    });
+    return;
+  }
   next();
 }

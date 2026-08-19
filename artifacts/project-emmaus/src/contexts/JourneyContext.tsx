@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import * as api from '@/lib/journeys-api';
+import { accountStorageKey } from '@/lib/account-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -161,11 +162,27 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const [reflections, setReflections] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const activeSubjectRef = useRef<string | null>(null);
 
   // ─── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false;
+    const subject = user?.id ?? null;
+    activeSubjectRef.current = subject;
+
+    // Never render one account's in-memory state while another account loads.
+    setJourneys([]);
+    setSteps([]);
+    setProgress({});
+    setReflections({});
+
+    if (!subject) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     async function init() {
       setLoading(true);
@@ -181,6 +198,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         // Fetch steps for all journeys
         const allSteps: Step[] = [];
         for (const j of jList) {
+          if (cancelled || activeSubjectRef.current !== subject) return;
           try {
             const jSteps = await api.listSteps(j.id);
             allSteps.push(...jSteps);
@@ -188,7 +206,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
             // ignore per-journey step errors
           }
         }
-        if (cancelled) return;
+        if (cancelled || activeSubjectRef.current !== subject) return;
         // Admins and super-admins see all steps (Draft + Published).
         // Members see only Published steps. Step status is now kept in sync with the parent
         // journey by the server (createStep inherits parent status), so this simple filter
@@ -197,28 +215,17 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
 
         // Fetch progress for logged-in users
-        if (user?.id) {
-          // One-time migration from localStorage
-          const localProg = localStorage.getItem('emmaus_progress');
-          if (localProg) {
-            try {
-              await api.importLocalProgress(user.id, JSON.parse(localProg));
-              localStorage.removeItem('emmaus_progress');
-            } catch {
-              // keep in localStorage so it can be retried
-            }
-          }
-
+        if (subject) {
           try {
-            const prog = await api.getAllProgress(user.id);
-            if (!cancelled) setProgress(prog);
+            const prog = await api.getAllProgress();
+            if (!cancelled && activeSubjectRef.current === subject) setProgress(prog);
           } catch {
             // ignore progress fetch errors
           }
 
           // Load reflections from localStorage (local cache)
-          const localRef = localStorage.getItem('emmaus_reflections');
-          if (localRef && !cancelled) {
+          const localRef = localStorage.getItem(accountStorageKey('emmaus_reflections', subject));
+          if (localRef && !cancelled && activeSubjectRef.current === subject) {
             try {
               setReflections(JSON.parse(localRef));
             } catch {
@@ -229,7 +236,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error('Failed to load journeys:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && activeSubjectRef.current === subject) setLoading(false);
       }
     }
 
@@ -261,6 +268,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const startJourney = useCallback(
     async (journeyId: string): Promise<void> => {
       if (!user?.id) throw new Error('Not signed in');
+      const subject = user.id;
       if (progress[journeyId]) return; // already started — no-op, not an error
       const optimistic: Progress = {
         journeyId,
@@ -271,9 +279,11 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       };
       setProgress(p => ({ ...p, [journeyId]: optimistic }));
       try {
-        const prog = await api.startJourney(journeyId, user.id);
+        const prog = await api.startJourney(journeyId);
+        if (activeSubjectRef.current !== subject) return;
         setProgress(p => ({ ...p, [journeyId]: prog }));
       } catch (err) {
+        if (activeSubjectRef.current !== subject) return;
         // Roll back the optimistic update so the user can retry cleanly.
         setProgress(p => {
           const next = { ...p };
@@ -289,6 +299,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const completeStep = useCallback(
     (journeyId: string, day: number, reflectionText: string) => {
       if (!user?.id) return;
+      const subject = user.id;
 
       // Optimistic update
       setProgress(p => {
@@ -311,14 +322,21 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         const key = `${journeyId}-${day}`;
         setReflections(r => {
           const updated = { ...r, [key]: reflectionText };
-          localStorage.setItem('emmaus_reflections', JSON.stringify(updated));
+          localStorage.setItem(
+            accountStorageKey('emmaus_reflections', subject),
+            JSON.stringify(updated),
+          );
           return updated;
         });
       }
 
       // Sync to API — P2-3: log failures instead of silently swallowing them
-      api.completeStep(journeyId, user.id, day, reflectionText)
-        .then(prog => setProgress(p => ({ ...p, [journeyId]: prog })))
+      api.completeStep(journeyId, day, reflectionText)
+        .then(prog => {
+          if (activeSubjectRef.current === subject) {
+            setProgress(p => ({ ...p, [journeyId]: prog }));
+          }
+        })
         .catch((err) => console.error('[Emmaus] completeStep server sync failed:', err));
     },
     [user?.id]
@@ -423,7 +441,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const resetProgress = useCallback(
     async (journeyId: string): Promise<void> => {
       if (!user?.id) return;
-      const prog = await api.resetProgress(journeyId, user.id);
+      const subject = user.id;
+      const prog = await api.resetProgress(journeyId);
+      if (activeSubjectRef.current !== subject) return;
       setProgress(p => ({ ...p, [journeyId]: prog }));
     },
     [user?.id]
@@ -432,7 +452,9 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const markStepIncomplete = useCallback(
     async (journeyId: string, day: number): Promise<void> => {
       if (!user?.id) return;
-      const prog = await api.markStepIncomplete(journeyId, user.id, day);
+      const subject = user.id;
+      const prog = await api.markStepIncomplete(journeyId, day);
+      if (activeSubjectRef.current !== subject) return;
       setProgress(p => ({ ...p, [journeyId]: prog }));
     },
     [user?.id]
@@ -441,39 +463,48 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   // ─── Refresh helpers ───────────────────────────────────────────────────────
 
   const refreshJourneys = useCallback(async () => {
+    const subject = user?.id ?? null;
+    if (!subject) return;
     try {
       const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
       const jList = isAdmin
         ? await api.listJourneys()
         : await api.listPublishedJourneys();
+      if (activeSubjectRef.current !== subject) return;
       setJourneys(jList);
     } catch {
       // ignore
     }
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
 
   const refreshSteps = useCallback(async (journeyId: string) => {
+    const subject = user?.id ?? null;
+    if (!subject) return;
     try {
       const jSteps = await api.listSteps(journeyId);
       const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
       const visible = isAdmin ? jSteps : jSteps.filter(s => s.status === 'Published');
+      if (activeSubjectRef.current !== subject) return;
       setSteps(s => [...s.filter(x => x.journeyId !== journeyId), ...visible]);
     } catch {
       // ignore
     }
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
+
+  const ownsVisibleState = Boolean(user?.id && activeSubjectRef.current === user.id);
+  const visibleLoading = user?.id ? loading || !ownsVisibleState : false;
 
   return (
     <JourneyContext.Provider
       value={{
-        journeys,
-        steps,
-        progress,
-        reflections,
-        loading,
-        getJourney,
-        getStep,
-        getStepsForJourney,
+        journeys: ownsVisibleState ? journeys : [],
+        steps: ownsVisibleState ? steps : [],
+        progress: ownsVisibleState ? progress : {},
+        reflections: ownsVisibleState ? reflections : {},
+        loading: visibleLoading,
+        getJourney: ownsVisibleState ? getJourney : () => undefined,
+        getStep: ownsVisibleState ? getStep : () => undefined,
+        getStepsForJourney: ownsVisibleState ? getStepsForJourney : () => [],
         completeStep,
         startJourney,
         updateJourney,

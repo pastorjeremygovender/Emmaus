@@ -21,3 +21,17 @@ updates; normal sign-in sessions must not use the recovery password endpoint.
 Legacy email-only profiles remain unclaimed except for the exact configured
 initial-owner mailbox, which may bind one profile only when it atomically
 claims the previously unclaimed bootstrap marker.
+
+Browser requests also carry the tab's last server-verified subject as a
+consistency assertion. The server compares it with the opaque-session subject
+and rejects a mismatch; it never uses the assertion to authenticate or choose
+an identity.
+
+**Why:** Session cookies are shared across tabs. Without a separate per-tab
+assertion, stale Account A UI can act through Account B's newly replaced cookie
+during the brief interval before cross-tab coordination invalidates Account A.
+
+**How to apply:** Keep session discovery and intentional sign-in endpoints able
+to discover/replace the session, but attach the assertion to ordinary API reads
+and mutations. A mismatch must fail before route handling. Continue to treat the
+cookie session and database role lookup as the only authorization authorities.

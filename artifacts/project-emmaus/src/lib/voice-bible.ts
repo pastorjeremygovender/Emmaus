@@ -1,8 +1,8 @@
 /**
  * voice-bible.ts — Bible translation resolution for Emmaus Voice reading.
  *
- * SINGLE SOURCE OF TRUTH: This module reads the same localStorage key that
- * BibleContext uses ('emmaus_bible_translation') so Voice and the visual
+ * SINGLE SOURCE OF TRUTH: This module reads the same account-scoped key that
+ * BibleContext uses so Voice and the visual
  * Bible reader always start from the same user preference.
  *
  * TTS LICENSING POLICY:
@@ -21,6 +21,8 @@
  *
  * This policy must be revisited if/when TTS licences are obtained.
  */
+
+import { accountStorageKey } from '@/lib/account-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,9 +97,10 @@ export const SPOKEN_TRANSLATION_MAP: Record<string, string> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Read the user's stored Bible translation preference from localStorage. */
-export function getUserBibleTranslation(): string {
+export function getUserBibleTranslation(subject: string | null): string {
+  if (!subject) return DEFAULT_TTS_TRANSLATION_ID;
   try {
-    const raw = localStorage.getItem(TRANSLATION_LS_KEY);
+    const raw = localStorage.getItem(accountStorageKey(TRANSLATION_LS_KEY, subject));
     return raw ? (JSON.parse(raw) as string) : DEFAULT_TTS_TRANSLATION_ID;
   } catch {
     return DEFAULT_TTS_TRANSLATION_ID;
@@ -115,8 +118,11 @@ export function getUserBibleTranslation(): string {
  * If the resolved translation is not TTS-safe, falls back to BSB and sets
  * `substituted: true` so the caller can explain before reading.
  */
-export function resolveVoiceTranslation(explicitId: string | null): VoiceTranslationResult {
-  const userPrefId = getUserBibleTranslation();
+export function resolveVoiceTranslation(
+  explicitId: string | null,
+  subject: string | null,
+): VoiceTranslationResult {
+  const userPrefId = getUserBibleTranslation(subject);
   // What was asked for (explicit > user pref > default)
   const requestedId = explicitId ?? userPrefId ?? DEFAULT_TTS_TRANSLATION_ID;
 

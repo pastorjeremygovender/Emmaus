@@ -1181,7 +1181,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         if (!resolvedRef) return false;
 
-        const translation = resolveVoiceTranslation(resolvedRef.translationId ?? null);
+        const translation = resolveVoiceTranslation(resolvedRef.translationId ?? null, user?.id ?? null);
         let chapterData: Awaited<ReturnType<typeof remoteBibleProvider.getChapter>> = null;
         try {
           chapterData = await remoteBibleProvider.getChapter(resolvedRef.bookId, resolvedRef.chapter, translation.resolvedId);
@@ -2113,6 +2113,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     appContextRef.current       = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const voiceOwnerRef = useRef<string | null>(user?.id ?? null);
+  useEffect(() => {
+    const nextSubject = user?.id ?? null;
+    if (voiceOwnerRef.current && voiceOwnerRef.current !== nextSubject) {
+      endSession();
+    }
+    voiceOwnerRef.current = nextSubject;
+  }, [user?.id, endSession]);
 
   const pauseSession = useCallback(() => {
     if (!isActive) return;

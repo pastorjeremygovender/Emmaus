@@ -93,7 +93,8 @@ function supabaseClaims(user: SupabaseUser): Record<string, unknown> {
   };
 }
 
-async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
+/** @internal Exported only for focused unit tests — not a runtime endpoint. */
+export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   const subject = claimString(claims, "sub");
   if (!subject) throw new Error("Verified identity did not contain a subject");
 
@@ -373,7 +374,7 @@ authRouter.get(
       await establishSession(req, res, session, {
         passwordRecovery: type === "recovery",
       });
-      res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : "/walk");
+      res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : getCanonicalPublicOrigin());
     } catch (error) {
       req.log.warn({ err: error }, "Supabase account-link verification failed");
       res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=expired-link`);

@@ -53,10 +53,10 @@ export default function Welcome() {
       }
       if (user.role === 'admin' || user.role === 'superAdmin') {
         setLocation('/admin');
-      } else if (!isOnboarded() && !user.preferredName?.trim()) {
+      } else if (!isOnboarded(user.id) && !user.preferredName?.trim()) {
         setLocation('/onboarding');
       } else {
-        if (!isOnboarded()) markOnboarded();
+        if (!isOnboarded(user.id)) markOnboarded(user.id);
         console.debug('[Emmaus routing] Route selected:', resolveEntryRoute(journeys, progress, getStepsForJourney));
         setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
       }
@@ -89,11 +89,11 @@ export default function Welcome() {
         return `/join/${pendingJoin}`;
       }
       if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
-      if (!isOnboarded() && !user.preferredName?.trim()) return '/onboarding';
-      if (!isOnboarded()) markOnboarded();
+      if (!isOnboarded(user.id) && !user.preferredName?.trim()) return '/onboarding';
+      if (!isOnboarded(user.id)) markOnboarded(user.id);
       // First open of the day → land on the member's current Daily Rhythm step.
       // Subsequent same-day opens → Today's Walk (/walk).
-      const dailyRoute = resolveDailyOpenRoute(journeys, progress, getStepsForJourney);
+      const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
       const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
       console.debug('[Emmaus routing] Route selected (splash):', dest);
       return dest;

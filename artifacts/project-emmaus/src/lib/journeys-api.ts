@@ -501,72 +501,54 @@ export async function checkJourneysHaveIntro(ids: string[]): Promise<Set<string>
 
 // ─── Progress endpoints ───────────────────────────────────────────────────────
 
-export async function getAllProgress(userId: string): Promise<Record<string, Progress>> {
+export async function getAllProgress(): Promise<Record<string, Progress>> {
   const data = await apiFetch<{ progress: Record<string, Progress> }>(
-    `/api/journeys/progress?userId=${encodeURIComponent(userId)}`
+    '/api/journeys/progress'
   );
   return data.progress;
 }
 
-export async function startJourney(journeyId: string, userId: string): Promise<Progress> {
+export async function startJourney(journeyId: string): Promise<Progress> {
   return apiFetch<Progress>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/start`,
-    { method: 'POST', body: JSON.stringify({ userId }) }
+    { method: 'POST' }
   );
 }
 
 export async function completeStep(
   journeyId: string,
-  userId: string,
   day: number,
   reflectionText?: string
 ): Promise<Progress> {
   return apiFetch<Progress>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/complete-step`,
-    { method: 'POST', body: JSON.stringify({ userId, day, reflectionText }) }
+    { method: 'POST', body: JSON.stringify({ day, reflectionText }) }
   );
 }
 
-export async function getReflections(
-  journeyId: string,
-  userId: string
-): Promise<Record<string, string>> {
+export async function getReflections(journeyId: string): Promise<Record<string, string>> {
   const data = await apiFetch<{ reflections: Record<string, string> }>(
-    `/api/journeys/${encodeURIComponent(journeyId)}/progress/reflections?userId=${encodeURIComponent(userId)}`
+    `/api/journeys/${encodeURIComponent(journeyId)}/progress/reflections`
   );
   return data.reflections;
-}
-
-export async function importLocalProgress(
-  userId: string,
-  progress: Record<string, Progress>
-): Promise<void> {
-  await apiFetch<void>('/api/journeys/progress/import', {
-    method: 'POST',
-    body: JSON.stringify({ userId, progress }),
-  });
 }
 
 // ─── Development-mode progress tools ─────────────────────────────────────────
 // These functions affect only the requesting user's own progress.
 
-export async function resetProgress(
-  journeyId: string,
-  userId: string
-): Promise<Progress> {
+export async function resetProgress(journeyId: string): Promise<Progress> {
   return apiFetch<Progress>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/reset`,
-    { method: 'POST', body: JSON.stringify({ userId }) }
+    { method: 'POST' }
   );
 }
 
 export async function markStepIncomplete(
   journeyId: string,
-  userId: string,
   day: number
 ): Promise<Progress> {
   return apiFetch<Progress>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/mark-step-incomplete`,
-    { method: 'POST', body: JSON.stringify({ userId, day }) }
+    { method: 'POST', body: JSON.stringify({ day }) }
   );
 }

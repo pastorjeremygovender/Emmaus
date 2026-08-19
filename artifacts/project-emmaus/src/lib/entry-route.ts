@@ -39,6 +39,8 @@
  *   – Ask Emmaus              : in-memory (conversations are ephemeral by design).
  */
 
+import { accountStorageKey } from '@/lib/account-storage';
+
 /**
  * localStorage key that stores the ISO date (YYYY-MM-DD) of the last
  * successful Daily Rhythm auto-open.
@@ -68,13 +70,15 @@ type StepLike     = { day: number };
  * @param getStepsForJourney - Returns published steps for a given journey ID
  */
 export function resolveDailyOpenRoute(
+  subject: string,
   journeys: JourneyLike[],
   progress: Record<string, ProgressLike>,
   getStepsForJourney: (id: string) => StepLike[],
 ): string | null {
   // Local date as YYYY-MM-DD (respects the member's timezone)
   const today = new Date().toLocaleDateString('en-CA');
-  const lastOpened = localStorage.getItem(LAST_OPENED_KEY);
+  const subjectKey = accountStorageKey(LAST_OPENED_KEY, subject);
+  const lastOpened = localStorage.getItem(subjectKey);
 
   // If this is NOT the first open today, defer to the standard entry route.
   // NOTE: we only write the key on success, so a failed navigation never
@@ -123,7 +127,7 @@ export function resolveDailyOpenRoute(
 
   // Mark today ONLY on a successful navigation so a failed attempt
   // (missing data, journey complete, etc.) never blocks the next open.
-  localStorage.setItem(LAST_OPENED_KEY, today);
+  localStorage.setItem(subjectKey, today);
   console.debug('[DailyOpen] navigating to /daily-rhythm/day/' + currentDay);
 
   return `/daily-rhythm/day/${currentDay}`;

@@ -540,7 +540,7 @@ export default function Walk() {
     if (dailyOpenCheckedRef.current) return;      // only run once per mount
     dailyOpenCheckedRef.current = true;
 
-    const route = resolveDailyOpenRoute(journeys, progress, getStepsForJourney);
+    const route = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
     if (route) setLocation(route);
   }, [loading, user, journeys, progress, getStepsForJourney, setLocation]);
 

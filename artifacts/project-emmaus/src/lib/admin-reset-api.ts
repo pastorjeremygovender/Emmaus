@@ -87,20 +87,16 @@ export function resetEverything(auth: AuthHeaders): Promise<void> {
 // ─── Local cache clear ────────────────────────────────────────────────────────
 // After a reset, progress-related emmaus_* keys in localStorage are cleared so
 // the UI reflects the new state without a stale optimistic layer on top.
-//
-// emmaus_demo_user is intentionally preserved — it holds the auth session and
-// the user's preferred name. Removing it would sign the user out entirely,
-// which violates the "do not delete user account / login" contract.
 
-const PRESERVED_CACHE_KEYS = new Set([
-  'emmaus_demo_user', // auth session + preferred name — must never be cleared
-]);
-
-export function clearLocalProgressCache(): void {
+export function clearLocalProgressCache(subject: string): void {
   const keysToRemove: string[] = [];
+  const accountPrefix = `emmaus_account:${subject}:`;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith("emmaus_") && !PRESERVED_CACHE_KEYS.has(key)) {
+    if (
+      key &&
+      (key.startsWith(accountPrefix) || key === `emmaus_member_state:${subject}`)
+    ) {
       keysToRemove.push(key);
     }
   }

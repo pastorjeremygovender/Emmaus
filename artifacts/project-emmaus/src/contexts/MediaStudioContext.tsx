@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { MediaKit, MediaAsset, MediaAssetStatus, AssetVersion } from '@/lib/media-studio-types';
+import { useAuth } from '@/contexts/AuthContext';
+import { accountStorageKey } from '@/lib/account-storage';
 
 type MediaStudioContextType = {
   kits: MediaKit[];
@@ -28,26 +30,37 @@ const KIT_KEY   = 'emmaus_media_kits';
 const ASSET_KEY = 'emmaus_media_assets';
 
 export function MediaStudioProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [kits, setKits]     = useState<MediaKit[]>([]);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [loadedSubject, setLoadedSubject] = useState<string | null>(null);
+  const kitKey = user?.id ? accountStorageKey(KIT_KEY, user.id) : null;
+  const assetKey = user?.id ? accountStorageKey(ASSET_KEY, user.id) : null;
 
   // Start from whatever is stored; if nothing, start empty (no seeded demo data).
   useEffect(() => {
-    const sk = localStorage.getItem(KIT_KEY);
+    if (!kitKey || !assetKey) {
+      setKits([]);
+      setAssets([]);
+      setLoadedSubject(null);
+      return;
+    }
+    const sk = localStorage.getItem(kitKey);
     setKits(sk ? JSON.parse(sk) : []);
 
-    const sa = localStorage.getItem(ASSET_KEY);
+    const sa = localStorage.getItem(assetKey);
     setAssets(sa ? JSON.parse(sa) : []);
-  }, []);
+    setLoadedSubject(user?.id ?? null);
+  }, [kitKey, assetKey, user?.id]);
 
   const saveKits = (next: MediaKit[]) => {
     setKits(next);
-    localStorage.setItem(KIT_KEY, JSON.stringify(next));
+    if (kitKey) localStorage.setItem(kitKey, JSON.stringify(next));
   };
 
   const saveAssets = (next: MediaAsset[]) => {
     setAssets(next);
-    localStorage.setItem(ASSET_KEY, JSON.stringify(next));
+    if (assetKey) localStorage.setItem(assetKey, JSON.stringify(next));
   };
 
   const getKit       = (id: string) => kits.find(k => k.id === id);
@@ -110,9 +123,17 @@ export function MediaStudioProvider({ children }: { children: React.ReactNode })
     saveAssets([]);
   };
 
+  const ownsVisibleState = Boolean(user?.id && loadedSubject === user.id);
+  const visibleKits = ownsVisibleState ? kits : [];
+  const visibleAssets = ownsVisibleState ? assets : [];
+
   return (
     <MediaStudioContext.Provider value={{
-      kits, assets, getKit, getAsset, getAssetsForKit,
+      kits: visibleKits,
+      assets: visibleAssets,
+      getKit: ownsVisibleState ? getKit : () => undefined,
+      getAsset: ownsVisibleState ? getAsset : () => undefined,
+      getAssetsForKit: ownsVisibleState ? getAssetsForKit : () => [],
       addKit, updateKit, deleteKit,
       addAsset, addAssets, updateAsset,
       advanceAssetStatus, regenerateAsset, restoreVersion,

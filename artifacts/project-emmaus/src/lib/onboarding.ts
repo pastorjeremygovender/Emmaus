@@ -4,12 +4,22 @@
  * which allows Vite Fast Refresh to work without full-page reloads.
  */
 
+import { accountStorageKey } from '@/lib/account-storage';
+
 const ONBOARDED_KEY = 'emmaus_onboarded';
 
-export function markOnboarded() {
-  try { localStorage.setItem(ONBOARDED_KEY, 'true'); } catch { /* ignore */ }
+export function markOnboarded(subject: string) {
+  try {
+    localStorage.setItem(accountStorageKey(ONBOARDED_KEY, subject), 'true');
+  } catch {
+    /* ignore */
+  }
 }
 
-export function isOnboarded(): boolean {
-  try { return localStorage.getItem(ONBOARDED_KEY) === 'true'; } catch { return false; }
+export function isOnboarded(subject: string): boolean {
+  try {
+    return localStorage.getItem(accountStorageKey(ONBOARDED_KEY, subject)) === 'true';
+  } catch {
+    return false;
+  }
 }
