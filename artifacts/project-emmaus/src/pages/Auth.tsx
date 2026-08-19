@@ -92,7 +92,8 @@ export default function Auth() {
     <div className="min-h-[100dvh] flex flex-col bg-background px-6 py-6 relative">
       <button
         onClick={() => {
-          if (window.history.length > 1) window.history.back();
+          if (mode !== "signin") changeMode("signin");
+          else if (window.history.length > 1) window.history.back();
           else setLocation("/");
         }}
         className="absolute top-6 left-6 p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"

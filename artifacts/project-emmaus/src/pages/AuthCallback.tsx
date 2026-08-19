@@ -51,6 +51,14 @@ export default function AuthCallback() {
               Use at least 8 characters to secure your Emmaus account.
             </p>
             <form className="mt-6 space-y-4 text-left" onSubmit={submitPassword}>
+              <input
+                type="email"
+                name="username"
+                autoComplete="username"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
               <label htmlFor="new-password" className="text-sm font-medium">
                 New password
               </label>

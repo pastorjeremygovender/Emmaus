@@ -6,6 +6,7 @@ import { refreshSupabaseSession } from "./supabase-auth.js";
 
 export const SESSION_COOKIE = "sid";
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
+export const PASSWORD_RECOVERY_TTL_SECONDS = 15 * 60;
 
 export type SessionUser = {
   id: string;
@@ -25,6 +26,7 @@ export interface SessionData {
   access_token: string;
   refresh_token?: string;
   expires_at?: number;
+  password_recovery_authorized_until?: number;
 }
 
 export async function createSession(data: SessionData): Promise<string> {
@@ -66,6 +68,45 @@ export async function updateSession(
 
 export async function deleteSession(sid: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
+}
+
+/**
+ * Consume the one-use, short-lived capability granted only after Supabase
+ * verifies a password-recovery link. A routine sign-in cannot change a
+ * password through the recovery endpoint.
+ */
+export async function consumePasswordRecoveryAuthorization(
+  sid: string,
+): Promise<SessionData | null> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.sid, sid))
+      .for("update");
+    if (!locked || locked.expire < new Date()) return null;
+
+    const session = parseStoredSession(locked.sess);
+    const now = Math.floor(Date.now() / 1000);
+    if (
+      !session ||
+      typeof session.password_recovery_authorized_until !== "number" ||
+      session.password_recovery_authorized_until < now
+    ) {
+      return null;
+    }
+
+    const { password_recovery_authorized_until: _consumed, ...consumed } =
+      session;
+    await tx
+      .update(sessionsTable)
+      .set({
+        sess: consumed as unknown as Record<string, unknown>,
+        expire: new Date(Date.now() + SESSION_TTL),
+      })
+      .where(eq(sessionsTable.sid, sid));
+    return consumed;
+  });
 }
 
 // ─── Concurrency-safe expired-token refresh ────────────────────────────────
@@ -119,9 +160,8 @@ export function parseStoredSession(raw: unknown): SessionData | null {
  *     refresh token.
  *   - Otherwise it performs the rotation itself.
  *
- * A stale concurrent failure never deletes a freshly-updated session: on a
- * refresh error we re-read the row; if a peer has since produced a valid
- * session we return that valid session instead of reporting invalid.
+ * A rejected refresh deletes the expired row while its lock is still held, so
+ * middleware cannot later erase a session that another request refreshed.
  */
 export async function refreshSessionIfExpired(
   sid: string,

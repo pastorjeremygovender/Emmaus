@@ -9,9 +9,11 @@ import { eq } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import {
   clearSession,
+  consumePasswordRecoveryAuthorization,
   createSession,
   getSession,
   getSessionId,
+  PASSWORD_RECOVERY_TTL_SECONDS,
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
@@ -139,6 +141,40 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
       })
       .returning();
 
+    const bootstrapKey = "initial-superadmin";
+    let initialOwnerClaimed = false;
+    if (isConfiguredInitialOwner) {
+      const [bootstrapState] = await tx
+        .select()
+        .from(authBootstrapStateTable)
+        .where(eq(authBootstrapStateTable.key, bootstrapKey));
+
+      if (!bootstrapState) {
+        const [existingSuperAdmin] = await tx
+          .select({ authSubject: userProfilesTable.authSubject })
+          .from(userProfilesTable)
+          .where(eq(userProfilesTable.appRole, "superAdmin"))
+          .limit(1);
+
+        if (existingSuperAdmin?.authSubject) {
+          await tx
+            .insert(authBootstrapStateTable)
+            .values({
+              key: bootstrapKey,
+              claimedBy: existingSuperAdmin.authSubject,
+            })
+            .onConflictDoNothing();
+        } else {
+          const [claim] = await tx
+            .insert(authBootstrapStateTable)
+            .values({ key: bootstrapKey, claimedBy: subject })
+            .onConflictDoNothing()
+            .returning();
+          initialOwnerClaimed = Boolean(claim);
+        }
+      }
+    }
+
     let [profile] = await tx
       .select()
       .from(userProfilesTable)
@@ -154,14 +190,14 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
         throw new IdentityConflictError();
       }
 
-      if (emailProfile && !isConfiguredInitialOwner) {
+      if (emailProfile && !initialOwnerClaimed) {
         // An email-only record may belong to an unverified legacy identity.
-        // Never claim it automatically from an email match.
+        // Only the atomically claimed initial owner may bind one.
         throw new IdentityConflictError();
       }
       if (emailProfile) {
-        // The configured initial owner is the narrow exception: the matching
-        // mailbox was verified by Supabase and can claim the profile only once.
+        // This exact verified mailbox has atomically claimed the one-time owner
+        // bootstrap state in this transaction.
         [profile] = await tx
           .update(userProfilesTable)
           .set({ authSubject: subject, updatedAt: new Date() })
@@ -179,49 +215,16 @@ async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
       }
     }
 
-    const bootstrapKey = "initial-superadmin";
-    const [bootstrapState] = await tx
-      .select()
-      .from(authBootstrapStateTable)
-      .where(eq(authBootstrapStateTable.key, bootstrapKey));
-
-    if (!bootstrapState && bootstrapEmail) {
-      const [existingSuperAdmin] = await tx
-        .select({ authSubject: userProfilesTable.authSubject })
-        .from(userProfilesTable)
-        .where(eq(userProfilesTable.appRole, "superAdmin"))
-        .limit(1);
-
-      if (existingSuperAdmin?.authSubject) {
-        await tx
-          .insert(authBootstrapStateTable)
-          .values({
-            key: bootstrapKey,
-            claimedBy: existingSuperAdmin.authSubject,
-          })
-          .onConflictDoNothing();
-      } else if (
-        verifiedEmail === bootstrapEmail &&
-        profile.authSubject === subject
-      ) {
-        const [claim] = await tx
-          .insert(authBootstrapStateTable)
-          .values({ key: bootstrapKey, claimedBy: subject })
-          .onConflictDoNothing()
-          .returning();
-
-        if (claim) {
-          [profile] = await tx
-            .update(userProfilesTable)
-            .set({
-              appRole: "superAdmin" satisfies UserRole,
-              roleAssignedAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .where(eq(userProfilesTable.authSubject, subject))
-            .returning();
-        }
-      }
+    if (initialOwnerClaimed) {
+      [profile] = await tx
+        .update(userProfilesTable)
+        .set({
+          appRole: "superAdmin" satisfies UserRole,
+          roleAssignedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfilesTable.authSubject, subject))
+        .returning();
     }
 
     return { user, profile };
@@ -232,6 +235,7 @@ async function establishSession(
   req: Request,
   res: Response,
   session: SupabaseSession,
+  options: { passwordRecovery?: boolean } = {},
 ): Promise<void> {
   if (!session.access_token) {
     throw new Error("The account service did not return an access token");
@@ -252,6 +256,9 @@ async function establishSession(
       typeof session.expires_in === "number"
         ? Math.floor(Date.now() / 1000) + session.expires_in
         : undefined,
+    password_recovery_authorized_until: options.passwordRecovery
+      ? Math.floor(Date.now() / 1000) + PASSWORD_RECOVERY_TTL_SECONDS
+      : undefined,
   };
 
   const priorSid = getSessionId(req);
@@ -363,7 +370,9 @@ authRouter.get(
         tokenHash,
         type,
       });
-      await establishSession(req, res, session);
+      await establishSession(req, res, session, {
+        passwordRecovery: type === "recovery",
+      });
       res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : "/walk");
     } catch (error) {
       req.log.warn({ err: error }, "Supabase account-link verification failed");
@@ -401,7 +410,9 @@ authRouter.post(
   async (req: Request, res: Response): Promise<void> => {
     const password = readPassword(req.body?.password);
     const sid = getSessionId(req);
-    const session = sid ? await getSession(sid) : null;
+    const session = sid
+      ? await consumePasswordRecoveryAuthorization(sid)
+      : null;
     if (!session?.access_token || !password) {
       res.status(400).json({
         error: "Open a valid password reset link, then choose a password between 8 and 128 characters.",

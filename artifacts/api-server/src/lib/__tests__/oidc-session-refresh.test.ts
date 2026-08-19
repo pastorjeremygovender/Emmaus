@@ -25,6 +25,9 @@ const validUser = {
 
 let parseStoredSession: (raw: unknown) => SessionData | null;
 let getSession: (sid: string) => Promise<SessionData | null>;
+let consumePasswordRecoveryAuthorization: (
+  sid: string,
+) => Promise<SessionData | null>;
 let testServer: http.Server;
 
 let providerServer: http.Server;
@@ -109,6 +112,8 @@ before(async () => {
   const sessionAuth = await import("../oidc-auth.ts");
   parseStoredSession = sessionAuth.parseStoredSession;
   getSession = sessionAuth.getSession;
+  consumePasswordRecoveryAuthorization =
+    sessionAuth.consumePasswordRecoveryAuthorization;
   const { authMiddleware } = await import("../../middlewares/authMiddleware.ts");
   const { default: express } = await import("express");
   const app = express();
@@ -231,5 +236,41 @@ describe("expired Supabase sessions", () => {
     assert.equal(rejectedResponse.status, 401);
     assert.equal(await getSession(rejectedSid), null);
     assert.equal((await getSession(healthySid))?.access_token, "fresh-access-token");
+  });
+});
+
+describe("password recovery authorization", () => {
+  it("is unavailable to ordinary sessions and consumable exactly once", async () => {
+    const ordinaryHeaders = await authHeader("ordinary-password-session");
+    const ordinarySid = ordinaryHeaders.Authorization.slice("Bearer ".length);
+    assert.equal(
+      await consumePasswordRecoveryAuthorization(ordinarySid),
+      null,
+      "a routine sign-in session must not reset a password",
+    );
+
+    const recoveryHeaders = await authHeader("recovery-password-session");
+    const recoverySid = recoveryHeaders.Authorization.slice("Bearer ".length);
+    const current = await getSession(recoverySid);
+    assert.ok(current);
+    await db
+      .update(sessionsTable)
+      .set({
+        sess: {
+          ...current,
+          password_recovery_authorized_until:
+            Math.floor(Date.now() / 1000) + 60,
+        },
+      })
+      .where(eq(sessionsTable.sid, recoverySid));
+
+    const authorized = await consumePasswordRecoveryAuthorization(recoverySid);
+    assert.ok(authorized);
+    assert.equal(authorized.password_recovery_authorized_until, undefined);
+    assert.equal(
+      await consumePasswordRecoveryAuthorization(recoverySid),
+      null,
+      "the recovery capability must be consumed after one password update",
+    );
   });
 });
