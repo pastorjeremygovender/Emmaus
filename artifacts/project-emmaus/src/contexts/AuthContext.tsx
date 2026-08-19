@@ -18,6 +18,7 @@ export type User = {
   email: string;
   preferredName: string;
   role: "user" | "admin" | "superAdmin";
+  passwordRecovery?: boolean;
   currentFeeling?: string | null;
   feelingUpdatedAt?: string | null;
   streak?: number;
@@ -124,8 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signal: controller.signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const { user: serverUser } = (await response.json()) as {
+      const { user: serverUser, passwordRecovery = false } = (await response.json()) as {
         user: ServerAuthUser | null;
+        passwordRecovery?: boolean;
       };
       if (requestGenerationRef.current !== generation) return;
 
@@ -153,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: serverUser.email ?? "",
         preferredName: serverUser.preferredName || serverUser.firstName || "",
         role: serverUser.role,
+        passwordRecovery,
         ...localState,
       });
     } catch (error) {

@@ -7,7 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 type CallbackState = "recovery" | "error";
 
 function parseCallback(): CallbackState {
-  return new URLSearchParams(window.location.search).get("mode") === "recovery"
+  const params = new URLSearchParams(window.location.search);
+  return (params.get("mode") === "recovery" || params.get("recovery") === "1")
     ? "recovery"
     : "error";
 }

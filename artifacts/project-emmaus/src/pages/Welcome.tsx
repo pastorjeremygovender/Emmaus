@@ -45,6 +45,10 @@ export default function Welcome() {
     if (!alreadyShown) return;
     if (authLoading || loadingProfile) return;
     if (user) {
+      if (user.passwordRecovery) {
+        setLocation('/auth/callback?mode=recovery');
+        return;
+      }
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
       if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
         sessionStorage.removeItem('pendingInviteToken');
@@ -83,6 +87,7 @@ export default function Welcome() {
 
     function resolveDestination(): string {
       if (!user) return '/auth';
+      if (user.passwordRecovery) return '/auth/callback?mode=recovery';
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
       if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
         sessionStorage.removeItem('pendingInviteToken');

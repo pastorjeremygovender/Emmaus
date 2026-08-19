@@ -35,3 +35,15 @@ during the brief interval before cross-tab coordination invalidates Account A.
 to discover/replace the session, but attach the assertion to ordinary API reads
 and mutations. A mismatch must fail before route handling. Continue to treat the
 cookie session and database role lookup as the only authorization authorities.
+
+An active recovery capability is also a routing signal: if a mail client drops
+or rewrites the recovery callback query, the authenticated app entry must route
+that session to the password form before normal member routing runs.
+
+**Why:** The one-use capability is the authoritative proof that this session
+arrived through a verified recovery link; relying only on a browser URL marker
+can silently send a recovery session into the app instead of the reset screen.
+
+**How to apply:** Surface only a boolean recovery status to the current session,
+never provider tokens or capability values. Clear/consume the capability on the
+password update, and let normal routing resume only after it is gone.

@@ -298,10 +298,23 @@ function writeAuthError(res: Response, error: unknown): void {
   res.status(400).json({ error: "We could not complete that account request." });
 }
 
-authRouter.get("/auth/user", (req: Request, res: Response): void => {
-  res.setHeader("Cache-Control", "no-store");
-  res.json({ user: req.isAuthenticated() ? req.user : null });
-});
+authRouter.get(
+  "/auth/user",
+  async (req: Request, res: Response): Promise<void> => {
+    res.setHeader("Cache-Control", "no-store");
+    const sid = getSessionId(req);
+    const session = sid ? await getSession(sid) : null;
+    const passwordRecovery =
+      req.isAuthenticated() &&
+      session?.user.id === req.user.id &&
+      typeof session.password_recovery_authorized_until === "number" &&
+      session.password_recovery_authorized_until >= Math.floor(Date.now() / 1000);
+    res.json({
+      user: req.isAuthenticated() ? req.user : null,
+      passwordRecovery,
+    });
+  },
+);
 
 authRouter.post(
   "/auth/signup",
