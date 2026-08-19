@@ -22,6 +22,19 @@ Legacy email-only profiles remain unclaimed except for the exact configured
 initial-owner mailbox, which may bind one profile only when it atomically
 claims the previously unclaimed bootstrap marker.
 
+**Why:** A new provider identity for an unmigrated legacy email must not look
+like a successful but empty Emmaus account. Sign-up, sign-in, recovery-email
+issuance, and verified email-link callbacks must all block that profile before
+they can establish a session.
+
+**How to apply:** Preflight all email/password entry points for an unbound
+legacy profile and return a clear migration-required message. Configure
+Supabase Auth itself with the exact public server callback URL and a recovery
+email action link using `token_hash` plus `type=recovery`; a provider redirect
+that opens the web app directly skips the server verification step. Emit only
+sanitized callback telemetry (path, type, and token-presence), never tokens,
+passwords, or provider credentials.
+
 Browser requests also carry the tab's last server-verified subject as a
 consistency assertion. The server compares it with the opaque-session subject
 and rejects a mismatch; it never uses the assertion to authenticate or choose
