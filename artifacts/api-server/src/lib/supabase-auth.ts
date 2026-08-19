@@ -127,6 +127,19 @@ export async function refreshSupabaseSession(
   );
 }
 
+export async function verifySupabaseOtp(input: {
+  tokenHash: string;
+  type: "email" | "recovery";
+}): Promise<SupabaseSession> {
+  return callSupabase<SupabaseSession>("/auth/v1/verify", {
+    method: "POST",
+    body: {
+      token_hash: input.tokenHash,
+      type: input.type,
+    },
+  });
+}
+
 export async function getVerifiedSupabaseUser(
   accessToken: string,
 ): Promise<SupabaseUser> {

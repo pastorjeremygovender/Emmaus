@@ -27,6 +27,7 @@ import {
   type SupabaseSession,
   type SupabaseUser,
   updateSupabasePassword,
+  verifySupabaseOtp,
 } from "../lib/supabase-auth.js";
 
 export const authRouter = Router();
@@ -64,7 +65,11 @@ function readPassword(value: unknown): string | null {
 }
 
 function getAuthRedirectUrl(): string {
-  return `${getCanonicalPublicOrigin()}/auth/callback`;
+  return `${getCanonicalPublicOrigin()}/api/auth/callback`;
+}
+
+function getRecoveryPageUrl(): string {
+  return `${getCanonicalPublicOrigin()}/auth/callback?mode=recovery`;
 }
 
 class IdentityConflictError extends Error {
@@ -339,28 +344,30 @@ authRouter.post(
   },
 );
 
-authRouter.post(
-  "/auth/complete",
+authRouter.get(
+  "/auth/callback",
   async (req: Request, res: Response): Promise<void> => {
-    const accessToken =
-      typeof req.body?.accessToken === "string" ? req.body.accessToken : "";
-    const refreshToken =
-      typeof req.body?.refreshToken === "string"
-        ? req.body.refreshToken
-        : undefined;
-    if (!accessToken) {
-      res.status(400).json({ error: "This account link is incomplete." });
+    const tokenHash =
+      typeof req.query.token_hash === "string" ? req.query.token_hash : "";
+    const type =
+      req.query.type === "email" || req.query.type === "recovery"
+        ? req.query.type
+        : null;
+    if (!tokenHash || !type) {
+      res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=invalid-link`);
       return;
     }
 
     try {
-      await establishSession(req, res, {
-        access_token: accessToken,
-        refresh_token: refreshToken,
+      const session = await verifySupabaseOtp({
+        tokenHash,
+        type,
       });
-      res.status(200).json({ ok: true });
+      await establishSession(req, res, session);
+      res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : "/walk");
     } catch (error) {
-      writeAuthError(res, error);
+      req.log.warn({ err: error }, "Supabase account-link verification failed");
+      res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=expired-link`);
     }
   },
 );
@@ -392,19 +399,19 @@ authRouter.post(
 authRouter.post(
   "/auth/password",
   async (req: Request, res: Response): Promise<void> => {
-    const accessToken =
-      typeof req.body?.accessToken === "string" ? req.body.accessToken : "";
     const password = readPassword(req.body?.password);
-    if (!accessToken || !password) {
+    const sid = getSessionId(req);
+    const session = sid ? await getSession(sid) : null;
+    if (!session?.access_token || !password) {
       res.status(400).json({
-        error: "Choose a password between 8 and 128 characters.",
+        error: "Open a valid password reset link, then choose a password between 8 and 128 characters.",
       });
       return;
     }
 
     try {
-      await getVerifiedSupabaseUser(accessToken);
-      await updateSupabasePassword({ accessToken, password });
+      await getVerifiedSupabaseUser(session.access_token);
+      await updateSupabasePassword({ accessToken: session.access_token, password });
       res.status(200).json({ ok: true });
     } catch (error) {
       writeAuthError(res, error);

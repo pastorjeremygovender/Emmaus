@@ -28,10 +28,8 @@ let getSession: (sid: string) => Promise<SessionData | null>;
 let testServer: http.Server;
 
 let providerServer: http.Server;
-let providerServer: http.Server;
 let baseUrl: string;
 
-let providerUrl: string;
 let providerUrl: string;
 let refreshGrantCount = 0;
 let releaseRefresh: (() => void) | undefined;
@@ -121,7 +119,10 @@ before(async () => {
   });
   app.use(authMiddleware);
   app.get("/whoami", async (req, res) => {
-    const sid = headers.Authorization.slice("Bearer ".length);
+    const authorization = req.headers.authorization ?? "";
+    const sid = authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : "";
     const session = sid ? await sessionAuth.getSession(sid) : null;
     res.status(req.isAuthenticated() ? 200 : 401).json({
       userId: req.user?.id ?? null,
@@ -232,5 +233,3 @@ describe("expired Supabase sessions", () => {
     assert.equal((await getSession(healthySid))?.access_token, "fresh-access-token");
   });
 });
-
-  const sessionAuth = await import("../oidc-auth.ts");

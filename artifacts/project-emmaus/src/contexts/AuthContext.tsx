@@ -26,15 +26,7 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
-  completeAuthSession: (
-    accessToken: string,
-    refreshToken?: string,
-  ) => Promise<void>;
-  resetPassword: (
-    accessToken: string,
-    refreshToken: string | undefined,
-    password: string,
-  ) => Promise<void>;
+  resetPassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateFeeling: (feeling: string) => void;
   updateName: (name: string) => Promise<void>;
@@ -162,36 +154,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) throw new Error(await readApiError(response));
   }, []);
 
-  const completeAuthSession = useCallback(
-    async (accessToken: string, refreshToken?: string): Promise<void> => {
-      const response = await fetch(getApiUrl("/api/auth/complete"), {
+  const resetPassword = useCallback(
+    async (password: string): Promise<void> => {
+      const response = await fetch(getApiUrl("/api/auth/password"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken, refreshToken }),
+        body: JSON.stringify({ password }),
       });
       if (!response.ok) throw new Error(await readApiError(response));
       await refreshAuthenticatedUser();
     },
     [refreshAuthenticatedUser],
-  );
-
-  const resetPassword = useCallback(
-    async (
-      accessToken: string,
-      refreshToken: string | undefined,
-      password: string,
-    ): Promise<void> => {
-      const response = await fetch(getApiUrl("/api/auth/password"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken, password }),
-      });
-      if (!response.ok) throw new Error(await readApiError(response));
-      await completeAuthSession(accessToken, refreshToken);
-    },
-    [completeAuthSession],
   );
 
   const signOut = useCallback(async (): Promise<void> => {
@@ -258,7 +232,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         sendPasswordReset,
-        completeAuthSession,
         resetPassword,
         signOut,
         updateFeeling,

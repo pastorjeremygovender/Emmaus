@@ -79,8 +79,8 @@ export async function deleteSession(sid: string): Promise<void> {
  *                the token was not expired, THIS request rotated it, or a
  *                CONCURRENT request rotated it and we reloaded the fresh copy.
  *   - "invalid": The refresh token was genuinely rejected by the provider (or
- *                is missing) and no other request has produced a valid session.
- *                The caller should clear the session.
+ *                is missing), and this function removed the locked session row.
+ *                The caller should only clear its cookie.
  */
 export type SessionRefreshResult =
   | { status: "valid"; session: SessionData }
@@ -134,11 +134,6 @@ export async function refreshSessionIfExpired(
     return { status: "valid", session };
   }
 
-  // Expired with no refresh token → cannot refresh.
-  if (!session.refresh_token) {
-    return await reloadIfPeerRefreshed(sid);
-  }
-
   return db.transaction(async (tx) => {
     // Serialize per-SID: block until we hold the row lock. Peers attempting a
     // concurrent refresh for the same SID wait here.
@@ -153,11 +148,13 @@ export async function refreshSessionIfExpired(
       return { status: "invalid" };
     }
     if (locked.expire < new Date()) {
+      await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
       return { status: "invalid" };
     }
 
     const current = parseStoredSession(locked.sess);
     if (!current?.user?.id) {
+      await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
       return { status: "invalid" };
     }
 
@@ -170,6 +167,7 @@ export async function refreshSessionIfExpired(
     }
 
     if (!current.refresh_token) {
+      await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
       return { status: "invalid" };
     }
 
@@ -196,31 +194,12 @@ export async function refreshSessionIfExpired(
         .where(eq(sessionsTable.sid, sid));
       return { status: "valid", session: refreshed };
     } catch {
-      // The refresh token was rejected by the provider. Because we hold the row
-      // lock, no peer could have written a fresh session between our re-read and
-      // here, so this is a genuine invalidation for this SID.
+      // Delete while retaining the row lock. A stale middleware request can no
+      // longer delete a session that a concurrent request just refreshed.
+      await tx.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
       return { status: "invalid" };
     }
   });
-}
-
-/**
- * Re-read the session outside our own refresh attempt to see whether a peer
- * (possibly on another server instance) has already produced a valid,
- * non-expired session. Used to avoid clearing a session that a concurrent
- * request freshly refreshed.
- */
-async function reloadIfPeerRefreshed(sid: string): Promise<SessionRefreshResult> {
-  const [row] = await db
-    .select()
-    .from(sessionsTable)
-    .where(eq(sessionsTable.sid, sid));
-  if (!row || row.expire < new Date()) return { status: "invalid" };
-  const current = parseStoredSession(row.sess);
-  if (!current?.user?.id) return { status: "invalid" };
-  const now = Math.floor(Date.now() / 1000);
-  if (isExpired(current, now)) return { status: "invalid" };
-  return { status: "valid", session: current };
 }
 
 export async function clearSession(
