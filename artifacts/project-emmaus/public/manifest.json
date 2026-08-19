@@ -2,11 +2,15 @@
   "name": "Emmaus",
   "short_name": "Emmaus",
   "description": "A discipleship ministry of Isipingo Community Church",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#0A5738",
   "orientation": "portrait-primary",
+  "lang": "en",
+  "prefer_related_applications": false,
   "version": "2",
   "icons": [
     {

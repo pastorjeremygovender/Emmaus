@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
+import { shouldShowPrivilegedDemoShortcuts } from '@/lib/production-visibility';
 
 export default function Auth() {
   const [, setLocation] = useLocation();
   const { signIn, signUp, signInDemo, isDemoMode, user } = useAuth();
+  const showPrivilegedDemoShortcuts = shouldShowPrivilegedDemoShortcuts(isDemoMode);
 
   const searchParams = new URLSearchParams(window.location.search);
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
@@ -197,22 +199,26 @@ export default function Auth() {
                 >
                   Continue with Demo
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleDemoAdmin}
-                  className="w-full h-12 text-base rounded-xl"
-                  data-testid="button-demo-admin"
-                >
-                  Continue as Demo Admin
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleDemoSuperAdmin}
-                  className="w-full h-12 text-base rounded-xl border-red-200 text-red-700 hover:bg-red-50"
-                  data-testid="button-demo-super-admin"
-                >
-                  Continue as Super Admin
-                </Button>
+                {showPrivilegedDemoShortcuts && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleDemoAdmin}
+                      className="w-full h-12 text-base rounded-xl"
+                      data-testid="button-demo-admin"
+                    >
+                      Continue as Demo Admin
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleDemoSuperAdmin}
+                      className="w-full h-12 text-base rounded-xl border-red-200 text-red-700 hover:bg-red-50"
+                      data-testid="button-demo-super-admin"
+                    >
+                      Continue as Super Admin
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}
