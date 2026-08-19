@@ -41,7 +41,8 @@ if (process.env.ALLOW_TEST_AUTH_HARNESS !== "1" || nodeEnv !== "test") {
 // ── subject under test ────────────────────────────────────────────────────────
 
 // Imported after env guard; routes/auth.ts exports this helper for testing.
-const { upsertVerifiedIdentity } = await import("../../routes/auth.ts");
+const { requireMigratedProfileForEmail, upsertVerifiedIdentity } =
+  await import("../../routes/auth.ts");
 
 // ── identity naming helpers ───────────────────────────────────────────────────
 
@@ -181,6 +182,24 @@ describe("upsertVerifiedIdentity", () => {
       .from(usersTable)
       .where(eq(usersTable.id, legacy.sub));
     assert.equal(user, undefined, "user row must not persist after conflict");
+  });
+
+  it("blocks sign-in, sign-up, and password-reset entry points before a legacy profile can look like a new account", async () => {
+    const legacy = makeIdentity("legacy-entry-guard");
+    track(legacy.sub, legacy.email);
+    await db.insert(userProfilesTable).values({
+      email: legacy.email,
+      preferredName: "Legacy User",
+    });
+
+    await assert.rejects(
+      () => requireMigratedProfileForEmail(legacy.email),
+      (err: Error) => {
+        assert.equal(err.name, "LegacyProfileMigrationRequiredError");
+        assert.match(err.message, /secure account migration/i);
+        return true;
+      },
+    );
   });
 
   it("rejects claims with email_verified: false", async () => {

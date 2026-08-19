@@ -81,6 +81,40 @@ class IdentityConflictError extends Error {
   }
 }
 
+class LegacyProfileMigrationRequiredError extends Error {
+  constructor() {
+    super(
+      "This Emmaus profile needs a secure account migration before it can be used with email and password.",
+    );
+    this.name = "LegacyProfileMigrationRequiredError";
+  }
+}
+
+function isConfiguredInitialOwner(email: string): boolean {
+  return (
+    process.env.EMMAUS_INITIAL_SUPERADMIN_EMAIL?.trim().toLowerCase() === email
+  );
+}
+
+/**
+ * Do not let an email-only profile silently enter a new identity. Without a
+ * reviewed link to the legacy owner ID, the new account would correctly see an
+ * empty private progress area and make existing data appear lost.
+ */
+/** @internal Exported only for focused identity-safety tests. */
+export async function requireMigratedProfileForEmail(
+  email: string,
+): Promise<void> {
+  if (isConfiguredInitialOwner(email)) return;
+  const [profile] = await db
+    .select({ authSubject: userProfilesTable.authSubject })
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.email, email));
+  if (profile && !profile.authSubject) {
+    throw new LegacyProfileMigrationRequiredError();
+  }
+}
+
 function supabaseClaims(user: SupabaseUser): Record<string, unknown> {
   const metadata = user.user_metadata ?? {};
   return {
@@ -104,9 +138,7 @@ export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   const firstName = claimString(claims, "first_name", "given_name");
   const lastName = claimString(claims, "last_name", "family_name");
   const profileImageUrl = claimString(claims, "profile_image_url", "picture");
-  const bootstrapEmail =
-    process.env.EMMAUS_INITIAL_SUPERADMIN_EMAIL?.trim().toLowerCase();
-  const isConfiguredInitialOwner = bootstrapEmail === verifiedEmail;
+  const isInitialOwner = isConfiguredInitialOwner(verifiedEmail);
 
   if (!verifiedEmail) {
     throw new Error("The identity provider did not return a verified email");
@@ -144,7 +176,7 @@ export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
 
     const bootstrapKey = "initial-superadmin";
     let initialOwnerClaimed = false;
-    if (isConfiguredInitialOwner) {
+    if (isInitialOwner) {
       const [bootstrapState] = await tx
         .select()
         .from(authBootstrapStateTable)
@@ -242,6 +274,11 @@ async function establishSession(
     throw new Error("The account service did not return an access token");
   }
   const providerUser = await getVerifiedSupabaseUser(session.access_token);
+  const providerEmail = readEmail(providerUser.email);
+  if (!providerEmail) {
+    throw new Error("The identity provider did not return a valid email");
+  }
+  await requireMigratedProfileForEmail(providerEmail);
   const { user } = await upsertVerifiedIdentity(supabaseClaims(providerUser));
   const sessionData: SessionData = {
     user: {
@@ -274,6 +311,14 @@ function writeAuthError(res: Response, error: unknown): void {
     res.status(409).json({
       error:
         "This email is already connected to a different Emmaus account. Please contact support.",
+    });
+    return;
+  }
+  if (error instanceof LegacyProfileMigrationRequiredError) {
+    res.status(409).json({
+      code: "LEGACY_PROFILE_MIGRATION_REQUIRED",
+      error:
+        "This Emmaus profile needs a secure migration before email and password can be used. Please contact your Emmaus administrator.",
     });
     return;
   }
@@ -329,6 +374,7 @@ authRouter.post(
     }
 
     try {
+      await requireMigratedProfileForEmail(email);
       await signUpWithPassword({
         email,
         password,
@@ -356,6 +402,7 @@ authRouter.post(
     }
 
     try {
+      await requireMigratedProfileForEmail(email);
       const session = await signInWithPassword({ email, password });
       await establishSession(req, res, session);
       res.status(200).json({ ok: true });
@@ -374,6 +421,14 @@ authRouter.get(
       req.query.type === "email" || req.query.type === "recovery"
         ? req.query.type
         : null;
+    req.log.info(
+      {
+        callbackPath: req.path,
+        type: type ?? "invalid",
+        hasTokenHash: Boolean(tokenHash),
+      },
+      "Supabase account-link callback received",
+    );
     if (!tokenHash || !type) {
       res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=invalid-link`);
       return;
@@ -389,6 +444,13 @@ authRouter.get(
       });
       res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : getCanonicalPublicOrigin());
     } catch (error) {
+      if (error instanceof LegacyProfileMigrationRequiredError) {
+        res.redirect(
+          303,
+          `${getCanonicalPublicOrigin()}/auth?error=legacy-account-migration`,
+        );
+        return;
+      }
       req.log.warn({ err: error }, "Supabase account-link verification failed");
       res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=expired-link`);
     }
@@ -405,6 +467,7 @@ authRouter.post(
     }
 
     try {
+      await requireMigratedProfileForEmail(email);
       await sendPasswordRecoveryEmail({
         email,
         redirectTo: getAuthRedirectUrl(),

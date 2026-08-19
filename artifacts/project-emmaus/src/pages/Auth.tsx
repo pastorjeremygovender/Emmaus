@@ -13,6 +13,13 @@ function getMode(): AuthMode {
   return "signin";
 }
 
+function getInitialError(): string {
+  return new URLSearchParams(window.location.search).get("error") ===
+    "legacy-account-migration"
+    ? "This Emmaus profile needs a secure migration before email and password can be used. Please contact your Emmaus administrator."
+    : "";
+}
+
 export default function Auth() {
   const [, setLocation] = useLocation();
   const {
@@ -25,7 +32,7 @@ export default function Auth() {
   const [mode, setMode] = useState<AuthMode>(getMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(getInitialError);
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
