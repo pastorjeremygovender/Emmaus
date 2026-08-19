@@ -20,7 +20,6 @@ import {
 } from "../lib/oidc-auth.js";
 import { getCanonicalPublicOrigin } from "../lib/public-origin.js";
 import {
-  getVerifiedSupabaseUser,
   revokeSupabaseSession,
   sendPasswordRecoveryEmail,
   signInWithPassword,
@@ -273,7 +272,7 @@ async function establishSession(
   if (!session.access_token) {
     throw new Error("The account service did not return an access token");
   }
-  const providerUser = await getVerifiedSupabaseUser(session.access_token);
+  const providerUser = requireVerifiedSessionUser(session);
   const providerEmail = readEmail(providerUser.email);
   if (!providerEmail) {
     throw new Error("The identity provider did not return a valid email");
@@ -304,6 +303,27 @@ async function establishSession(
   const sid = await createSession(sessionData);
   setSessionCookie(res, sid);
   req.log.info({ userId: user.id }, "Verified Supabase session created");
+}
+
+/**
+ * Password sign-in and one-time OTP verification already return the verified
+ * Supabase user. Use that identity instead of replaying the session bearer
+ * token through the connector proxy, which authenticates proxy calls using the
+ * project's credential rather than the end-user session.
+ */
+export function requireVerifiedSessionUser(
+  session: SupabaseSession,
+): SupabaseUser {
+  const providerUser = session.user;
+  const email = readEmail(providerUser?.email);
+  if (
+    !providerUser?.id ||
+    !email ||
+    !(providerUser.email_confirmed_at || providerUser.confirmed_at)
+  ) {
+    throw new Error("The account service did not return a verified user");
+  }
+  return { ...providerUser, email };
 }
 
 function writeAuthError(res: Response, error: unknown): void {
@@ -490,7 +510,7 @@ authRouter.post(
     const session = sid
       ? await consumePasswordRecoveryAuthorization(sid)
       : null;
-    if (!session?.access_token || !password) {
+    if (!session?.user.id || !password) {
       res.status(400).json({
         error: "Open a valid password reset link, then choose a password between 8 and 128 characters.",
       });
@@ -498,8 +518,11 @@ authRouter.post(
     }
 
     try {
-      await getVerifiedSupabaseUser(session.access_token);
-      await updateSupabasePassword({ accessToken: session.access_token, password });
+      // A one-use recovery capability exists only after a verified Supabase
+      // recovery link. Use the connector's server credential for this
+      // administrative update so browser/provider session tokens are never
+      // replayed through the proxy.
+      await updateSupabasePassword({ userId: session.user.id, password });
       res.status(200).json({ ok: true });
     } catch (error) {
       writeAuthError(res, error);

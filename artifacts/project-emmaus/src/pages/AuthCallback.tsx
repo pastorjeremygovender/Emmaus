@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,19 +6,51 @@ import { useAuth } from "@/contexts/AuthContext";
 
 type CallbackState = "recovery" | "error";
 
-function parseCallback(): CallbackState {
+type CallbackParams = {
+  state: CallbackState;
+  tokenHash: string | null;
+  tokenType: "email" | "recovery" | null;
+};
+
+function parseCallback(): CallbackParams {
   const params = new URLSearchParams(window.location.search);
-  return (params.get("mode") === "recovery" || params.get("recovery") === "1")
-    ? "recovery"
-    : "error";
+  const tokenType =
+    params.get("type") === "email" || params.get("type") === "recovery"
+      ? (params.get("type") as "email" | "recovery")
+      : null;
+  const tokenHash = params.get("token_hash");
+  if (tokenHash && tokenType) {
+    return { state: "error", tokenHash, tokenType };
+  }
+  return {
+    state:
+      params.get("mode") === "recovery" || params.get("recovery") === "1"
+        ? "recovery"
+        : "error",
+    tokenHash: null,
+    tokenType: null,
+  };
 }
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation();
   const { resetPassword } = useAuth();
-  const [state, setState] = useState<CallbackState>(parseCallback);
+  const initialCallback = parseCallback();
+  const [state, setState] = useState<CallbackState>(initialCallback.state);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!initialCallback.tokenHash || !initialCallback.tokenType) return;
+    const query = new URLSearchParams({
+      token_hash: initialCallback.tokenHash,
+      type: initialCallback.tokenType,
+    });
+    // Some Supabase templates redirect to the SPA route instead of the API
+    // route. Forward only the one-time token hash immediately; the API
+    // exchanges it and sets the opaque HttpOnly recovery session.
+    window.location.replace(`/api/auth/callback?${query.toString()}`);
+  }, [initialCallback.tokenHash, initialCallback.tokenType]);
 
   const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

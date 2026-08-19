@@ -35,6 +35,18 @@ that opens the web app directly skips the server verification step. Emit only
 sanitized callback telemetry (path, type, and token-presence), never tokens,
 passwords, or provider credentials.
 
+The Supabase connector proxy authenticates requests with the project
+credential, not a caller's end-user bearer token.
+
+**Why:** Replaying a Supabase recovery/session token through `/auth/v1/user`
+causes a missing-subject JWT failure even after OTP verification succeeds.
+
+**How to apply:** Use the verified `user` returned by password sign-in or OTP
+verification to establish the Emmaus session. After the one-use recovery
+capability is consumed, change the password through the connector's
+server-authorized admin user endpoint; do not send provider tokens to the
+browser or depend on the proxy to forward user bearer tokens.
+
 Browser requests also carry the tab's last server-verified subject as a
 consistency assertion. The server compares it with the opaque-session subject
 and rejects a mismatch; it never uses the assertion to authenticate or choose

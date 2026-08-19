@@ -174,12 +174,11 @@ export async function sendPasswordRecoveryEmail(input: {
 }
 
 export async function updateSupabasePassword(input: {
-  accessToken: string;
+  userId: string;
   password: string;
 }): Promise<void> {
-  await callSupabase("/auth/v1/user", {
+  await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(input.userId)}`, {
     method: "PUT",
-    headers: bearer(input.accessToken),
     body: { password: input.password },
   });
 }

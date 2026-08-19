@@ -41,7 +41,11 @@ if (process.env.ALLOW_TEST_AUTH_HARNESS !== "1" || nodeEnv !== "test") {
 // ── subject under test ────────────────────────────────────────────────────────
 
 // Imported after env guard; routes/auth.ts exports this helper for testing.
-const { requireMigratedProfileForEmail, upsertVerifiedIdentity } =
+const {
+  requireMigratedProfileForEmail,
+  requireVerifiedSessionUser,
+  upsertVerifiedIdentity,
+} =
   await import("../../routes/auth.ts");
 
 // ── identity naming helpers ───────────────────────────────────────────────────
@@ -199,6 +203,31 @@ describe("upsertVerifiedIdentity", () => {
         assert.match(err.message, /secure account migration/i);
         return true;
       },
+    );
+  });
+
+  it("accepts only the verified user returned with a provider session", () => {
+    const verified = requireVerifiedSessionUser({
+      access_token: "test-token",
+      user: {
+        id: `__TEST__-auth-id-${NONCE}-session`,
+        email: `${PREFIX}-session@${DOMAIN}`,
+        email_confirmed_at: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    assert.equal(verified.id, `__TEST__-auth-id-${NONCE}-session`);
+    assert.equal(verified.email, `${PREFIX}-session@${DOMAIN}`);
+
+    assert.throws(
+      () =>
+        requireVerifiedSessionUser({
+          access_token: "test-token",
+          user: {
+            id: `__TEST__-auth-id-${NONCE}-unverified`,
+            email: `${PREFIX}-unverified@${DOMAIN}`,
+          },
+        }),
+      /verified user/i,
     );
   });
 
