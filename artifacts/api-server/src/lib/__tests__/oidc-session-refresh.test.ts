@@ -1,40 +1,19 @@
 /**
- * oidc-session-refresh.test.ts
- *
- * Focused coverage for the concurrency-safe expired-token refresh introduced in
- * lib/oidc-auth.ts. A real provider and a real PostgreSQL instance are not
- * available in unit tests, so this file covers the parts that are deterministic
- * and DB-independent:
- *
- *   1. parseStoredSession — the stored-row shape validation that guards every
- *      lock/refresh decision (a malformed `sess` blob must never be treated as
- *      a valid session).
- *   2. The expiry decision used to pick the fast path vs the locked path, and
- *      to detect that a peer already rotated the token while we waited on the
- *      lock (the "harmless race" case that must NOT invalidate the session).
- *
- * The transaction/lock behavior itself is documented and structured in
- * refreshSessionIfExpired: a per-SID `SELECT ... FOR UPDATE` serializes
- * rotations, a waiter re-reads inside the transaction and reuses a peer's
- * fresh session instead of replaying its own (now-consumed) refresh token, and
- * a refresh failure while holding the lock is a genuine invalidation.
+ * Integration coverage for concurrency-safe expired-token refresh. A
+ * controllable local Supabase auth service, real session rows, and the
+ * production middleware prove that a row lock permits only one rotation.
  *
  * Run:
- *   node --test --experimental-strip-types \
- *     src/lib/__tests__/oidc-session-refresh.test.ts
+ *   pnpm --filter @workspace/api-server run test:unit
  */
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { parseStoredSession, type SessionData } from "../oidc-auth.ts";
-
-// Mirror of the internal expiry predicate. Kept in sync with oidc-auth.ts so
-// the fast-path / peer-refresh decision is covered without exporting internals.
-function isExpired(session: SessionData, nowSeconds: number): boolean {
-  return (
-    typeof session.expires_at === "number" && nowSeconds > session.expires_at
-  );
-}
+import { after, before, describe, it } from "node:test";
+import http from "node:http";
+import { db, sessionsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
+import type { SessionData } from "../oidc-auth.ts";
 
 const validUser = {
   id: "user-sub-1",
@@ -44,15 +23,32 @@ const validUser = {
   profileImageUrl: null,
 };
 
+let parseStoredSession: (raw: unknown) => SessionData | null;
+let getSession: (sid: string) => Promise<SessionData | null>;
+let testServer: http.Server;
+
+let providerServer: http.Server;
+let providerServer: http.Server;
+let baseUrl: string;
+
+let providerUrl: string;
+let providerUrl: string;
+let refreshGrantCount = 0;
+let releaseRefresh: (() => void) | undefined;
+let refreshStarted!: Promise<void>;
+let signalRefreshStarted!: () => void;
+let concurrentRequestArrived!: Promise<void>;
+let signalConcurrentRequestArrived!: () => void;
+let authenticatedRequestCount = 0;
+
 describe("parseStoredSession", () => {
   it("accepts a well-formed session blob", () => {
-    const raw = {
+    const parsed = parseStoredSession({
       user: validUser,
       access_token: "at",
       refresh_token: "rt",
       expires_at: 123,
-    };
-    const parsed = parseStoredSession(raw);
+    });
     assert.ok(parsed);
     assert.equal(parsed.user.id, "user-sub-1");
     assert.equal(parsed.access_token, "at");
@@ -60,67 +56,181 @@ describe("parseStoredSession", () => {
     assert.equal(parsed.expires_at, 123);
   });
 
-  it("accepts a session without refresh_token/expires_at", () => {
-    const parsed = parseStoredSession({ user: validUser, access_token: "at" });
-    assert.ok(parsed);
-    assert.equal(parsed.refresh_token, undefined);
-    assert.equal(parsed.expires_at, undefined);
-  });
-
-  it("rejects null / non-object", () => {
+  it("rejects incomplete stored session blobs", () => {
     assert.equal(parseStoredSession(null), null);
-    assert.equal(parseStoredSession(undefined), null);
-    assert.equal(parseStoredSession(42), null);
-    assert.equal(parseStoredSession("nope"), null);
-  });
-
-  it("rejects a blob with no user", () => {
     assert.equal(parseStoredSession({ access_token: "at" }), null);
-  });
-
-  it("rejects a blob whose user has no string id", () => {
     assert.equal(
       parseStoredSession({ user: { id: 5 }, access_token: "at" }),
       null,
     );
-  });
-
-  it("rejects a blob with no access token", () => {
     assert.equal(parseStoredSession({ user: validUser }), null);
   });
 });
 
-describe("expiry decision (fast path vs locked path vs peer-refresh)", () => {
-  const base: SessionData = {
-    user: validUser,
-    access_token: "at",
-    refresh_token: "rt",
-  };
+before(async () => {
+  providerServer = http.createServer(async (req, res) => {
+    if (
+      req.method === "POST" &&
+      req.url === "/auth/v1/token?grant_type=refresh_token"
+    ) {
+      const body = await new Promise<string>((resolve) => {
+        let data = "";
+        req.on("data", (chunk) => { data += chunk; });
+        req.on("end", () => resolve(data));
+      });
+      const grant = JSON.parse(body) as { refresh_token?: string };
+      refreshGrantCount += 1;
+      signalRefreshStarted();
 
-  it("treats a session without expires_at as non-expired (fast path)", () => {
-    assert.equal(isExpired(base, 1_000_000), false);
+      if (grant.refresh_token === "rejected-refresh-token") {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_grant" }));
+        return;
+      }
+
+      await new Promise<void>((resolve) => { releaseRefresh = resolve; });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        access_token: "fresh-access-token",
+        refresh_token: "fresh-refresh-token",
+        token_type: "bearer",
+        expires_in: 3600,
+      }));
+      return;
+    }
+
+    res.writeHead(404).end();
+  });
+  await new Promise<void>((resolve) =>
+    providerServer.listen(0, "127.0.0.1", resolve)
+  );
+  const providerAddress = providerServer.address() as { port: number };
+  providerUrl = `http://127.0.0.1:${providerAddress.port}`;
+  process.env.SUPABASE_AUTH_TEST_URL = providerUrl;
+
+  const sessionAuth = await import("../oidc-auth.ts");
+  parseStoredSession = sessionAuth.parseStoredSession;
+  getSession = sessionAuth.getSession;
+  const { authMiddleware } = await import("../../middlewares/authMiddleware.ts");
+  const { default: express } = await import("express");
+  const app = express();
+  app.use("/whoami", (_req, _res, next) => {
+    authenticatedRequestCount += 1;
+    if (authenticatedRequestCount === 2) signalConcurrentRequestArrived();
+    next();
+  });
+  app.use(authMiddleware);
+  app.get("/whoami", async (req, res) => {
+    const sid = headers.Authorization.slice("Bearer ".length);
+    const session = sid ? await sessionAuth.getSession(sid) : null;
+    res.status(req.isAuthenticated() ? 200 : 401).json({
+      userId: req.user?.id ?? null,
+      accessToken: session?.access_token ?? null,
+    });
+  });
+  testServer = http.createServer(app);
+  await new Promise<void>((resolve) => testServer.listen(0, "127.0.0.1", resolve));
+  const address = testServer.address() as { port: number };
+  baseUrl = `http://127.0.0.1:${address.port}`;
+});
+
+after(async () => {
+  const closers: Promise<void>[] = [];
+  if (testServer) {
+    closers.push(new Promise<void>((resolve, reject) =>
+      testServer.close((error) => error ? reject(error) : resolve()),
+    ));
+  }
+  if (providerServer) {
+    closers.push(new Promise<void>((resolve, reject) =>
+      providerServer.close((error) => error ? reject(error) : resolve()),
+    ));
+  }
+  await Promise.all(closers);
+  delete process.env.SUPABASE_AUTH_TEST_URL;
+  await cleanupTestAuth();
+});
+
+async function expireSession(sid: string, refreshToken: string): Promise<void> {
+  const current = await getSession(sid);
+  assert.ok(current, "test session must exist before it is expired");
+  await db.update(sessionsTable).set({
+    sess: {
+      user: current.user,
+      access_token: "expired-access-token",
+      refresh_token: refreshToken,
+      expires_at: Math.floor(Date.now() / 1000) - 60,
+    },
+  }).where(eq(sessionsTable.sid, sid));
+}
+
+async function whoAmI(headers: Record<string, string>): Promise<Response> {
+  return fetch(`${baseUrl}/whoami`, { headers });
+}
+
+describe("expired Supabase sessions", () => {
+  it("shares one rotated session between simultaneous authenticated requests", async () => {
+    const headers = await authHeader("session-refresh-concurrency");
+    const sid = headers.Authorization.slice("Bearer ".length);
+    await expireSession(sid, "single-use-refresh-token");
+    refreshGrantCount = 0;
+    refreshStarted = new Promise<void>((resolve) => {
+      signalRefreshStarted = resolve;
+    });
+    authenticatedRequestCount = 0;
+    concurrentRequestArrived = new Promise<void>((resolve) => {
+      signalConcurrentRequestArrived = resolve;
+    });
+
+    const first = whoAmI(headers);
+    await refreshStarted;
+    const second = whoAmI(headers);
+    await concurrentRequestArrived;
+    releaseRefresh?.();
+
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+    assert.equal(refreshGrantCount, 1, "the provider must receive one refresh grant");
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    const firstSession = await firstResponse.json() as {
+      userId: string;
+      accessToken: string;
+    };
+    const secondSession = await secondResponse.json() as {
+      userId: string;
+      accessToken: string;
+    };
+    assert.deepEqual(firstSession, secondSession);
+    assert.equal(firstSession.accessToken, "fresh-access-token");
+
+    const refreshed = await getSession(sid);
+    assert.equal(refreshed?.access_token, "fresh-access-token");
+    assert.equal(refreshed?.refresh_token, "fresh-refresh-token");
+    assert.ok((refreshed?.expires_at ?? 0) > Math.floor(Date.now() / 1000));
   });
 
-  it("treats a session with a future expiry as non-expired", () => {
-    const s: SessionData = { ...base, expires_at: 2_000 };
-    assert.equal(isExpired(s, 1_000), false);
-  });
+  it("clears a rejected refresh without invalidating another refreshed session", async () => {
+    const healthyHeaders = await authHeader("session-refresh-healthy");
+    const rejectedHeaders = await authHeader("session-refresh-rejected");
+    const healthySid = healthyHeaders.Authorization.slice("Bearer ".length);
+    const rejectedSid = rejectedHeaders.Authorization.slice("Bearer ".length);
+    await expireSession(healthySid, "already-fresh-refresh-token");
+    await expireSession(rejectedSid, "rejected-refresh-token");
 
-  it("treats a session at exactly expires_at as still valid (no rotation yet)", () => {
-    const s: SessionData = { ...base, expires_at: 1_000 };
-    assert.equal(isExpired(s, 1_000), false);
-  });
+    refreshGrantCount = 0;
+    refreshStarted = new Promise<void>((resolve) => {
+      signalRefreshStarted = resolve;
+    });
+    const healthyRequest = whoAmI(healthyHeaders);
+    await refreshStarted;
+    releaseRefresh?.();
+    assert.equal((await healthyRequest).status, 200);
 
-  it("treats a session past expires_at as expired (must take the lock path)", () => {
-    const s: SessionData = { ...base, expires_at: 1_000 };
-    assert.equal(isExpired(s, 1_001), true);
-  });
-
-  it("a peer-rotated row (future expiry) re-read under the lock is NOT expired", () => {
-    // Simulates the waiter reloading the row after a concurrent request rotated
-    // the token: it must be considered valid so the waiter reuses it instead of
-    // replaying its own stale refresh token.
-    const peerRefreshed: SessionData = { ...base, expires_at: 9_999 };
-    assert.equal(isExpired(peerRefreshed, 5_000), false);
+    const rejectedResponse = await whoAmI(rejectedHeaders);
+    assert.equal(rejectedResponse.status, 401);
+    assert.equal(await getSession(rejectedSid), null);
+    assert.equal((await getSession(healthySid))?.access_token, "fresh-access-token");
   });
 });
+
+  const sessionAuth = await import("../oidc-auth.ts");

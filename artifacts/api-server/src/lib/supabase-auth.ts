@@ -46,7 +46,22 @@ async function callSupabase<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await connectors.proxy(SUPABASE_CONNECTOR, path, options);
+    const testBaseUrl =
+      process.env.NODE_ENV === "test"
+        ? process.env.SUPABASE_AUTH_TEST_URL
+        : undefined;
+    if (testBaseUrl) {
+      response = await fetch(new URL(path, testBaseUrl), {
+        method: options.method,
+        headers: {
+          ...(options.body == null ? {} : { "content-type": "application/json" }),
+          ...options.headers,
+        },
+        body: options.body == null ? undefined : JSON.stringify(options.body),
+      });
+    } else {
+      response = await connectors.proxy(SUPABASE_CONNECTOR, path, options);
+    }
   } catch {
     throw new SupabaseAuthError(
       503,
