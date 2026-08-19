@@ -1,0 +1,183 @@
+The Supabase Auth migration is functioning and confirmation emails are being delivered successfully through Resend.
+
+However, real-device/account testing has exposed two issues that MUST be fixed before publishing.
+
+DO NOT PUBLISH.
+
+ISSUE 1 — NEW USER IS INHERITING EXISTING USER DATA
+
+I created a completely new Supabase Auth account using a new email address.
+
+After confirming the email and entering Emmaus, the new user received existing Today's Steps/progress/content state that had already been used during testing.
+
+This is incorrect and is a serious user-data isolation issue.
+
+A brand-new verified Supabase account must NEVER inherit:
+
+* another user's Today’s Steps state
+* Walk/Journey progress
+* active Walks/Journeys
+* Daily Rhythm completion history
+* devotional progress
+* sermon progress
+* Bible notes/progress
+* Groups state
+* pastoral/member data
+* preferences
+* saved content
+* testing/demo data
+* any other user-scoped information
+
+INVESTIGATE FIRST
+
+Trace exactly how a newly authenticated Supabase auth_user_id is mapped to user_profiles and all user-scoped application data.
+
+Specifically investigate whether:
+
+* new Supabase users are being attached to one of the two legacy user_profiles rows
+* a demo/default user ID is still being used anywhere
+* progress queries still fall back to demo-user-1 or another shared identity
+* new profile creation clones/defaults from an existing profile
+* email is being used incorrectly to select an existing profile
+* missing profile IDs cause queries to return global/shared test data
+
+Do not fix this by clearing the existing production/testing data.
+
+Fix the identity boundary.
+
+REQUIRED NEW-USER BEHAVIOUR
+
+For every genuinely new verified Supabase account:
+
+1. Create a new unique Emmaus user_profile associated with that exact verified Supabase auth_user_id.
+2. Default app_role to `user`.
+3. Do not associate the account with either legacy profile automatically.
+4. Do not copy progress/state from another user.
+5. All user-scoped queries and writes must use the verified authenticated user's mapped profile/person identity.
+6. No fallback to a shared/demo identity may occur in production.
+
+A new user should begin Emmaus in the intended clean starting state.
+
+For Today's Steps specifically, a new user should initially receive only the standard default starting experience:
+
+* Daily Rhythm available
+* other standard default cards displayed in their fresh/unstarted state where applicable
+* no previously completed days
+* no previously started Walks or Journeys
+* no inherited progress or activity
+
+Do not remove the legitimate default-content rules. The problem is inherited user state, not the existence of default content.
+
+USER ISOLATION TEST
+
+Create two genuinely separate Supabase users A and B.
+
+Verify:
+
+* A and B receive different Supabase auth_user_id values
+* A and B receive different Emmaus user_profile IDs
+* activity performed by A does not appear for B
+* activity performed by B does not appear for A
+* creating User C produces a completely clean account
+* no request without a verified identity can fall back to another user's state
+
+Also review all existing endpoints dealing with:
+
+* Today’s Steps
+* Daily Rhythm
+* Walk/Journey progress
+* devotionals
+* sermons
+* Bible/user notes
+* favorites
+* Groups
+* user preferences
+* pastoral/member state
+
+Confirm that every user-specific query is scoped to the authenticated verified identity/profile.
+
+ISSUE 2 — EMAIL CONFIRMATION REDIRECT IS INCONSISTENT
+
+The confirmation email successfully sends.
+
+However, confirmation behaviour was inconsistent:
+
+* one confirmation link simply opened Emmaus
+* another reached the Welcome Back/sign-in flow
+
+Inspect the Supabase confirmation callback and redirect handling.
+
+The desired behaviour is deterministic:
+
+Sign up
+→ receive confirmation email
+→ click Confirm email
+→ `/api/auth/callback` verifies the token
+→ account becomes verified
+→ user returns to a clear Emmaus success/sign-in/onboarding state
+
+Do not allow confirmation links to land unpredictably on arbitrary existing app routes.
+
+The behaviour must work from:
+
+* desktop browser
+* mobile browser
+* installed PWA
+
+PRESERVE
+
+Do not alter or remove:
+
+* Supabase Auth
+* Resend SMTP
+* existing Emmaus production database
+* PWA functionality
+* existing user/admin/superAdmin authorization design
+* existing content
+* existing legitimate production/test data
+
+Do not reset the production database.
+
+Do not automatically link the two legacy user_profiles to new Supabase accounts.
+
+If those legacy profiles require deliberate account migration later, report the safest migration method separately.
+
+SECURITY
+
+Continue deriving identity exclusively from the verified Supabase session/token.
+
+Never trust caller-supplied:
+
+* user ID
+* email
+* profile ID
+* role
+
+Do not add a fallback identity in order to make queries work.
+
+TEST AND REPORT
+
+Before completion:
+
+1. Create/test multiple isolated accounts.
+2. Confirm no cross-user data leakage.
+3. Confirm a brand-new account receives clean starting state.
+4. Confirm confirmation links consistently return to the intended Emmaus flow.
+5. Confirm admin authorization remains protected.
+6. Confirm existing production data was not deleted or overwritten.
+7. Run a production build.
+
+Create a checkpoint before changes and another after successful testing.
+
+DO NOT PUBLISH.
+
+Report:
+
+* root cause of the inherited state
+* exact files changed
+* exact database/schema changes, if any
+* how new profiles are now provisioned
+* how user-scoped queries are now isolated
+* confirmation redirect fix
+* multi-user isolation test results
+* any legacy-profile migration still required
