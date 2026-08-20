@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   accountStorageKey,
   clearSessionAccountState,
@@ -12,8 +12,14 @@ const SUBJECT_A = 'subject-a';
 const SUBJECT_B = 'subject-b';
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-08-20T09:00:00'));
   localStorage.clear();
   sessionStorage.clear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('verified-account browser storage isolation', () => {
@@ -47,6 +53,25 @@ describe('verified-account browser storage isolation', () => {
       .toBeNull();
     expect(resolveDailyOpenRoute(SUBJECT_B, journeys, progress, getSteps))
       .toBe('/daily-rhythm/day/4');
+  });
+
+  it('opens Daily Rhythm again on the first open of a new local calendar day', () => {
+    const journeys = [{ id: 'daily', journeyType: 'daily-rhythm' }];
+    const progress = { daily: { currentDay: 4, completedDays: [1, 2, 3] } };
+    const getSteps = () => [1, 2, 3, 4, 5].map(day => ({ day }));
+    const dailyOpenKey = accountStorageKey('emmaus_last_opened_v2', SUBJECT_A);
+
+    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
+      .toBe('/daily-rhythm/day/4');
+    expect(localStorage.getItem(dailyOpenKey)).toBe('2026-08-20');
+    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
+      .toBeNull();
+
+    vi.setSystemTime(new Date('2026-08-21T09:00:00'));
+
+    expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
+      .toBe('/daily-rhythm/day/4');
+    expect(localStorage.getItem(dailyOpenKey)).toBe('2026-08-21');
   });
 
   it('retires unowned legacy personal state without deleting owned caches', () => {

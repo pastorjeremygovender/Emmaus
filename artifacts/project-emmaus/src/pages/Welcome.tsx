@@ -41,9 +41,11 @@ export default function Welcome() {
   const navigatedRef               = useRef(false);
 
   // ── Fast path: splash already shown this session ──────────────────────────
+  // The splash marker only controls the animation. It must never bypass the
+  // first-open-of-the-day rule: a PWA/browser session can remain alive overnight.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (authLoading || loadingProfile) return;
+    if (authLoading || loadingProfile || journeyLoading) return;
     if (user) {
       if (user.passwordRecovery) {
         setLocation('/auth/callback?mode=recovery');
@@ -61,13 +63,15 @@ export default function Welcome() {
         setLocation('/onboarding');
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
-        console.debug('[Emmaus routing] Route selected:', resolveEntryRoute(journeys, progress, getStepsForJourney));
-        setLocation(resolveEntryRoute(journeys, progress, getStepsForJourney));
+        const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
+        const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
+        console.debug('[Emmaus routing] Route selected (fast path):', dest);
+        setLocation(dest);
       }
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, authLoading, loadingProfile, user, journeys, progress, getStepsForJourney]);
+  }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, setLocation]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {

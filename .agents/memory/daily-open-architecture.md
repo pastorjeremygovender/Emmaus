@@ -7,7 +7,8 @@ description: How the first-daily-open auto-route to Daily Rhythm works, and the 
 On the first app open each day, members should land on their current Daily Rhythm step. Subsequent same-day opens go to /walk.
 
 `resolveDailyOpenRoute(journeys, progress, getStepsForJourney)` in `lib/entry-route.ts` encapsulates this. Key guards:
-- Reads/writes `emmaus_last_opened_v2` in localStorage (versioned to avoid poisoning from old buggy builds)
+- Reads/writes account-scoped `emmaus_last_opened_v2` in localStorage (versioned to avoid poisoning from old buggy builds)
+- Uses `localDateKey()` for an explicit local `YYYY-MM-DD` calendar boundary; never rely on locale-formatted date strings
 - Returns null if: no DR journey found, no DR progress, steps not loaded, or already completed
 - Writes the key ONLY on successful navigation (not on failure)
 
@@ -15,9 +16,10 @@ On the first app open each day, members should land on their current Daily Rhyth
 
 Two call sites for `resolveDailyOpenRoute`:
 
-### 1. Welcome.tsx splash path (`alreadyShown = false`)
-- Fires on fresh browser sessions (new tab, full reload, first install)
-- Waits for `timerDone + !authLoading + !loadingProfile + !journeyLoading`
+### 1. Welcome.tsx root-entry paths (both splash and fast path)
+- Fires on fresh browser sessions (new tab, full reload, first install) and when a retained browser/PWA session re-enters `/`
+- Both paths wait for `!authLoading + !loadingProfile + !journeyLoading`; the splash path also waits for its display timer
+- The session splash marker controls animation only, never the destination. This prevents an overnight retained session from bypassing Daily Rhythm.
 - Handles: user already logged in, opens app fresh → lands on DR step directly
 
 ### 2. Walk.tsx `dailyOpenCheckedRef` effect
@@ -26,15 +28,25 @@ Two call sites for `resolveDailyOpenRoute`:
 - `dailyOpenCheckedRef` prevents re-firing on subsequent effect runs
 - `emmaus_last_opened_v2` guard in `resolveDailyOpenRoute` prevents firing on second daily visit
 
-## Why Walk.tsx (not Welcome.tsx fast path)
+## Why Welcome needs journey loading and Walk remains a fallback
 
-Putting the check in Welcome.tsx fast path creates a race condition:
+Putting the check in Welcome.tsx fast path **without** waiting for journey loading creates a race condition:
 - When Auth.tsx redirects to `/`, JourneyContext hasn't set `journeyLoading = true` yet for the newly-authenticated user
 - Fast path fires with stale `progress = {}` from the unauthenticated load
 - `resolveDailyOpenRoute` returns null (no DR progress) → navigates to /walk
-- Any guard (navigatedFastRef) then locks out the subsequent correct firing
+- A direct fallback to `/walk` makes the behavior dependent on a second component mounting correctly
 
-Walk.tsx mounts AFTER auth is established and journeys+progress are fully loaded → no race condition possible.
+Welcome's fast path now waits for the full JourneyContext load before invoking the resolver. Walk still applies the same resolver for routes that deliberately arrive directly at `/walk` (such as a completed auth flow).
+
+## Required regression coverage
+
+Use fake system time to test the only-once-per-day contract; manual testing cannot reliably catch it:
+- first daily open routes to the current Daily Rhythm step and records the local date;
+- a second open on that date routes to `/walk`;
+- advancing the local date routes to Daily Rhythm again;
+- a retained `emmaus_splash_shown` session marker from yesterday must still route to Daily Rhythm after JourneyContext finishes loading.
+
+**Why:** browser/PWA session storage can survive overnight even when the user experiences the next interaction as opening the app.
 
 ## Auth.tsx
 - Members are sent to `/walk` (not `/`) after login — Auth.tsx is correct as-is

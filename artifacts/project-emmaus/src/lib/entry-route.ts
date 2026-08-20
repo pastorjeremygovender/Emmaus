@@ -40,6 +40,7 @@
  */
 
 import { accountStorageKey } from '@/lib/account-storage';
+import { localDateKey } from '@/lib/daily-lock';
 
 /**
  * localStorage key that stores the ISO date (YYYY-MM-DD) of the last
@@ -76,7 +77,7 @@ export function resolveDailyOpenRoute(
   getStepsForJourney: (id: string) => StepLike[],
 ): string | null {
   // Local date as YYYY-MM-DD (respects the member's timezone)
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = localDateKey();
   const subjectKey = accountStorageKey(LAST_OPENED_KEY, subject);
   const lastOpened = localStorage.getItem(subjectKey);
 
