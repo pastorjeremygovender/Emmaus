@@ -827,6 +827,14 @@ export default function Journeys() {
     handleJourneyAction(item);
   }
 
+  // Standalone Walks use the same overview/list design as Walks opened from a
+  // Journey collection. The overview owns Continue/start behavior and the
+  // member can choose any published step from the list.
+  function handleWalkAction(item: NextStepsItem) {
+    void dismissBadge('journey', item.id);
+    setLocation(`/journeys/${item.id}?source=nextStepsWalks`);
+  }
+
   // ── Journey action handler ────────────────────────────────────────────────
 
   function handleJourneyAction(item: NextStepsItem) {
@@ -986,7 +994,7 @@ export default function Journeys() {
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
               <SectionWrapper color="emerald" label="Walks" headerAction={<SortBySelect value={discoverSort} onChange={setDiscoverSort} />}>
-                <WalksPanel standalone={data.standaloneJourneys} sort={discoverSort} onAction={handleJourneyAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
+                <WalksPanel standalone={data.standaloneJourneys} sort={discoverSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (

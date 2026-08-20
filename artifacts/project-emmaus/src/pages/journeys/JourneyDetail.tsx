@@ -245,6 +245,7 @@ export default function JourneyDetail() {
                                  'Continue';
 
   const backDest = resolveReturn(source, sourceId, '/journeys?tab=journeys');
+  const backLabel = backDest.label === 'Collection' ? 'Journeys' : backDest.label;
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
@@ -260,7 +261,7 @@ export default function JourneyDetail() {
           aria-label="Back"
         >
           <ChevronLeft size={17} />
-          {backDest.label}
+          {backLabel}
         </button>
 
         {/* ── Page heading: collection name as h1, walk title secondary ─ */}
