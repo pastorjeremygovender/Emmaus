@@ -677,7 +677,8 @@ export default function Walk() {
   function goToJourney(journeyId: string, _prog: { currentDay: number }) {
     // progress[journeyId] is always present here — goToJourney is only called from
     // "Your Journeys" cards which filter on progress[j.id] existence.
-    setLocation(`/journey/${journeyId}/navigate`);
+    // All Walk entry points must use the same overview/list experience.
+    setLocation(`/journeys/${journeyId}?source=today`);
   }
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
