@@ -9,11 +9,14 @@
  */
 
 import { useParams, useLocation } from 'wouter';
+import { useEffect, useState } from 'react';
 import { useJourney } from '@/contexts/JourneyContext';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, FolderOpen } from 'lucide-react';
 import { getStepLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 import { ContentStepList } from '@/components/ContentStepList';
+import { BrowseModeToggle } from '@/components/BrowseModeToggle';
+import { listDailyRhythmGroups, type DailyRhythmGroup } from '@/lib/journeys-api';
 import type { Journey } from '@/contexts/JourneyContext';
 
 interface Props {
@@ -30,6 +33,9 @@ export function StepNavigatorPage({ mode }: Props) {
   const params = useParams<{ journeyId?: string }>();
   const [, setLocation] = useLocation();
   const { journeys, progress, getStepsForJourney } = useJourney();
+  const [groups, setGroups] = useState<DailyRhythmGroup[]>([]);
+  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('groups');
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const journey =
     mode === 'daily-rhythm'
@@ -48,9 +54,12 @@ export function StepNavigatorPage({ mode }: Props) {
 
   // Current = first uncompleted step; if all done, pin to last
   const currentDay = (() => {
-    const next = allSteps.find(s => !completedSet.has(s.day));
+    const visibleSteps = selectedGroupId
+      ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
+      : allSteps;
+    const next = visibleSteps.find(s => !completedSet.has(s.day));
     if (next) return next.day;
-    return allSteps.length > 0 ? allSteps[allSteps.length - 1].day : null;
+    return visibleSteps.length > 0 ? visibleSteps[visibleSteps.length - 1].day : null;
   })();
 
   const stepPrefix =
@@ -59,9 +68,18 @@ export function StepNavigatorPage({ mode }: Props) {
       : (journey?.stepLabelPrefix?.trim() || 'Step');
 
   function goBack() {
+    if (selectedGroupId) {
+      setSelectedGroupId(null);
+      return;
+    }
     if (window.history.length > 1) window.history.back();
     else setLocation('/walk');
   }
+
+  useEffect(() => {
+    if (mode !== 'daily-rhythm' || !journey) return;
+    listDailyRhythmGroups(journey.id).then(setGroups).catch(() => setGroups([]));
+  }, [mode, journey?.id]);
 
   if (!journey) {
     return (
@@ -80,7 +98,7 @@ export function StepNavigatorPage({ mode }: Props) {
           aria-label="Back"
         >
           <ChevronLeft size={17} />
-          Today's Steps
+          {selectedGroupId ? journey.title : "Today's Steps"}
         </button>
 
         <div className="space-y-0.5">
@@ -88,19 +106,60 @@ export function StepNavigatorPage({ mode }: Props) {
             {journey.title}
           </h1>
           <p className="text-[13px] text-muted-foreground">
-            Choose a {stepPrefix.toLowerCase()} to read
+            {selectedGroupId
+              ? groups.find(group => group.id === selectedGroupId)?.title ?? 'Choose a day to read'
+              : `Choose a ${stepPrefix.toLowerCase()} to read`}
           </p>
         </div>
 
         <section className="space-y-3">
-          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-            {stepPrefix === 'Day' ? 'Days' : 'Steps'}
-          </h2>
-          {allSteps.length === 0 ? (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+              {selectedGroupId ? 'Days' : browseMode === 'groups' && mode === 'daily-rhythm' ? 'Groups' : stepPrefix === 'Day' ? 'Days' : 'Steps'}
+            </h2>
+            {mode === 'daily-rhythm' && !selectedGroupId && (
+              <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />
+            )}
+          </div>
+          {!selectedGroupId && browseMode === 'groups' && mode === 'daily-rhythm' ? (
+            groups.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center">
+                <FolderOpen size={20} className="mx-auto text-muted-foreground/60" />
+                <p className="mt-3 text-sm text-muted-foreground">No Daily Rhythm groups are available yet.</p>
+                <button type="button" className="mt-3 text-sm font-medium text-primary hover:underline" onClick={() => setBrowseMode('all')}>
+                  View all days
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {groups.map(group => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => setSelectedGroupId(group.id)}
+                    className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3.5 text-left hover:border-primary/25 hover:bg-muted/40 transition-colors"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0"><FolderOpen size={17} /></span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[14px] font-semibold truncate">{group.title}</span>
+                      <span className="block text-[11px] text-muted-foreground mt-0.5">{group.items.length} {group.items.length === 1 ? 'day' : 'days'}</span>
+                    </span>
+                    <span className="text-[11px] font-medium text-primary">Open →</span>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : (selectedGroupId
+            ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
+            : allSteps
+          ).length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No steps available yet.</p>
           ) : (
             <ContentStepList
-              items={allSteps.map(step => {
+              items={(selectedGroupId
+                ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
+                : allSteps
+              ).map(step => {
                 const done = completedSet.has(step.day);
                 const isCurrent = step.day === currentDay && !done;
                 const label = getStepLabel(step, journey);

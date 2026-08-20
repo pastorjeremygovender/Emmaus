@@ -204,6 +204,38 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: devotional tables failed (non-fatal)");
   }
 
+  // ── Daily Rhythm day groups (2026-08) ─────────────────────────────────────────
+  // Schema-only migration. It never creates or changes authored memberships.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS daily_rhythm_groups (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        journey_id text NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+        title text NOT NULL,
+        description text DEFAULT '',
+        status text NOT NULL DEFAULT 'Draft',
+        display_order integer NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS daily_rhythm_group_items (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        group_id uuid NOT NULL REFERENCES daily_rhythm_groups(id) ON DELETE CASCADE,
+        step_id uuid NOT NULL REFERENCES journey_steps(id) ON DELETE CASCADE,
+        display_order integer NOT NULL DEFAULT 0,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (group_id, step_id)
+      );
+      CREATE INDEX IF NOT EXISTS daily_rhythm_groups_journey_idx
+        ON daily_rhythm_groups(journey_id, display_order);
+      CREATE INDEX IF NOT EXISTS daily_rhythm_group_items_group_idx
+        ON daily_rhythm_group_items(group_id, display_order);
+    `);
+    logger.info("Startup migration: daily rhythm group tables created (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: daily rhythm group tables failed (non-fatal)");
+  }
+
   // ── Active Engagement Platform Rule: status columns (2026-07) ───────────────
   try {
     await pool.query(`

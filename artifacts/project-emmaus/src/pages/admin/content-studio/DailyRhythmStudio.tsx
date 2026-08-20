@@ -16,6 +16,7 @@ import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioL
 import NewDayModal from './NewDayModal';
 import GenerateLabelsModal from './GenerateLabelsModal';
 import GroupMembershipBadge from './GroupMembershipBadge';
+import DailyRhythmGroupsPanel from './DailyRhythmGroupsPanel';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -169,6 +170,8 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
         />
       ))}
     </ContentStudioListPage>
+
+    {journey && <DailyRhythmGroupsPanel journeyId={journey.id} steps={days} />}
 
     {showNewModal && journey && (
       <NewDayModal

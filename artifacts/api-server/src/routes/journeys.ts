@@ -16,6 +16,7 @@ import { parseImportCsv, exportJourneysToCsv } from "../lib/journey-csv.js";
 import { generateJourney, generateStructuredJourney, generateWalkIntroduction, aiBlockAction, type BuilderPayload } from "../lib/journey-ai.js";
 import { logAuditEvent } from "../lib/audit-log.js";
 import { isAdmin, getUserRole } from "../lib/user-role-store.js";
+import * as dailyRhythmGroups from "../lib/daily-rhythm-groups-store.js";
 
 const router = Router();
 
@@ -748,6 +749,101 @@ router.post("/journeys/:id/duplicate", async (req: Request, res: Response) => {
     newState: { id: copy.id, title: copy.title, status: copy.status, source: "duplicate", sourceJourneyId: String(req.params["id"]) },
   });
   res.status(201).json(copy);
+});
+
+// ─── Daily Rhythm day groups ─────────────────────────────────────────────────
+router.get("/journeys/:id/daily-rhythm-groups", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  try {
+    const journey = await store.getJourney(String(req.params["id"]));
+    if (!journey || journey.journeyType !== "daily-rhythm") {
+      res.status(404).json({ error: "Daily Rhythm journey not found" });
+      return;
+    }
+    const adminAccess = await isAdmin(callerId);
+    if (!adminAccess && journey.status !== "Published") {
+      res.status(404).json({ error: "Daily Rhythm journey not found" });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(await dailyRhythmGroups.listGroups(journey.id, !adminAccess));
+  } catch (err) {
+    console.error("GET daily rhythm groups failed", err);
+    res.status(500).json({ error: "Failed to fetch Daily Rhythm groups" });
+  }
+});
+
+router.post("/journeys/:id/daily-rhythm-groups", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!title) { res.status(400).json({ error: "title is required" }); return; }
+  try {
+    const group = await dailyRhythmGroups.createGroup(String(req.params["id"]), {
+      title,
+      description: typeof req.body.description === "string" ? req.body.description : "",
+      displayOrder: Number.isFinite(req.body.displayOrder) ? Number(req.body.displayOrder) : 0,
+    });
+    if (!group) { res.status(404).json({ error: "Daily Rhythm journey not found" }); return; }
+    res.status(201).json(group);
+  } catch (err) {
+    console.error("POST daily rhythm group failed", err);
+    res.status(500).json({ error: "Failed to create Daily Rhythm group" });
+  }
+});
+
+router.patch("/journeys/:id/daily-rhythm-groups/:groupId", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const data: Record<string, unknown> = {};
+  for (const key of ["title", "description", "status"]) {
+    if (req.body?.[key] !== undefined) data[key] = String(req.body[key]);
+  }
+  if (req.body?.displayOrder !== undefined && Number.isFinite(req.body.displayOrder)) {
+    data.display_order = Number(req.body.displayOrder);
+  }
+  if (data.status && !["Draft", "Published", "Archived"].includes(String(data.status))) {
+    res.status(400).json({ error: "Invalid group status" });
+    return;
+  }
+  try {
+    const group = await dailyRhythmGroups.updateGroup(String(req.params["id"]), String(req.params["groupId"]), data);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    console.error("PATCH daily rhythm group failed", err);
+    res.status(500).json({ error: "Failed to update Daily Rhythm group" });
+  }
+});
+
+router.delete("/journeys/:id/daily-rhythm-groups/:groupId", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const deleted = await dailyRhythmGroups.deleteGroup(String(req.params["id"]), String(req.params["groupId"]));
+  if (!deleted) { res.status(404).json({ error: "Group not found" }); return; }
+  res.json({ ok: true });
+});
+
+router.put("/journeys/:id/daily-rhythm-groups/:groupId/items", async (req: Request, res: Response) => {
+  const callerId = requireAuth(req, res);
+  if (!callerId) return;
+  if (!(await isAdmin(callerId))) { res.status(403).json({ error: "Admin access required" }); return; }
+  const stepIds = Array.isArray(req.body?.stepIds)
+    ? req.body.stepIds.filter((id: unknown): id is string => typeof id === "string")
+    : null;
+  if (!stepIds) { res.status(400).json({ error: "stepIds must be an array" }); return; }
+  try {
+    const group = await dailyRhythmGroups.replaceGroupItems(String(req.params["id"]), String(req.params["groupId"]), stepIds);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    res.status(message.includes("grouped day") ? 400 : 500).json({ error: message });
+  }
 });
 
 // ─── Steps (admin mutations require auth) ─────────────────────────────────────

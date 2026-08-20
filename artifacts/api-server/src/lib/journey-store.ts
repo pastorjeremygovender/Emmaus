@@ -42,6 +42,7 @@ export interface SermonRef {
 // Field names are kept stable for backward compatibility.
 
 export interface FrontendStep {
+  id: string;
   journeyId: string;
   day: number;          // step number
   title: string;
@@ -233,6 +234,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
   const lookingAhead = (legacy.lookingAhead as string | undefined);
 
   return {
+    id: row.id,
     journeyId: row.journeyId,
     day: row.day,
     title: row.title,

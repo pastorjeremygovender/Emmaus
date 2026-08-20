@@ -63,3 +63,4 @@
 - [Supabase server-mediated authentication](supabase-server-auth.md) — Opaque sessions; per-tab subject assertions reject stale cross-tab requests; recovery authorization is one-use.
 - [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.
 - [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.
+- [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual grouped browsing; first-open direct-to-day routing stays unchanged.
