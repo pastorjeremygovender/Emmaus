@@ -86,6 +86,8 @@ export type UpdateSermonData = Partial<Omit<CanonicalSermon, "id" | "createdAt">
 // ─── Row → Domain ─────────────────────────────────────────────────────────────
 
 function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
+  const publishedAt = row.published_at;
+
   return {
     id:                  String(row.id),
     legacyJsonId:        row.legacy_json_id != null ? String(row.legacy_json_id) : null,
@@ -113,7 +115,11 @@ function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
     detectionConfidence: Number(row.detection_confidence ?? 0),
     detectionMethod:     (row.detection_method as CanonicalSermon["detectionMethod"]) ?? "none",
     status:              (row.status as CanonicalSermon["status"]) ?? "Draft",
-    publishedAt:         row.published_at != null ? new Date(row.published_at).toISOString() : null,
+    publishedAt:         publishedAt instanceof Date ||
+                        typeof publishedAt === "string" ||
+                        typeof publishedAt === "number"
+      ? new Date(publishedAt).toISOString()
+      : null,
     processingStage:     String(row.processing_stage ?? "idle"),
     processingError:     String(row.processing_error ?? ""),
     createdAt:           String(row.created_at),

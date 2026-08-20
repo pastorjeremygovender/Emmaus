@@ -285,9 +285,9 @@ router.get("/voice/context", async (req: Request, res: Response) => {
           totalDays:    maxDay,
           stepTitle:     step.title ?? "",
           stepScripture: step.scripture ?? "",
-          stepTeaching:  step.teachingContent ?? "",
+          stepTeaching:  step.devotional ?? "",
           stepReflection: step.reflectionQuestion ?? "",
-          stepPrayer:    step.prayer ?? "",
+          stepPrayer:    step.prayerPrompt ?? "",
         };
       }
     }
@@ -370,9 +370,9 @@ router.get("/voice/context", async (req: Request, res: Response) => {
           totalDays:  j.durationDays ?? 0,
           stepTitle:      step?.title           ?? undefined,
           stepScripture:  step?.scripture       ?? undefined,
-          stepTeaching:   step?.teachingContent ?? undefined,
+          stepTeaching:   step?.devotional ?? undefined,
           stepReflection: step?.reflectionQuestion ?? undefined,
-          stepPrayer:     step?.prayer          ?? undefined,
+          stepPrayer:     step?.prayerPrompt     ?? undefined,
         };
       })
     );
