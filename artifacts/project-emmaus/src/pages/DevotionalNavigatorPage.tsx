@@ -30,27 +30,7 @@ import {
 } from '@/lib/devotionals-api';
 import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
-
-function BrowseModeToggle({
-  value,
-  onChange,
-}: {
-  value: 'groups' | 'all';
-  onChange: (value: 'groups' | 'all') => void;
-}) {
-  return (
-    <div className="inline-flex items-center rounded-xl border border-border bg-muted/30 p-1" role="group" aria-label="Browse mode">
-      <button type="button" onClick={() => onChange('groups')} aria-pressed={value === 'groups'}
-        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${value === 'groups' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
-        View Groups
-      </button>
-      <button type="button" onClick={() => onChange('all')} aria-pressed={value === 'all'}
-        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${value === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
-        View All
-      </button>
-    </div>
-  );
-}
+import { BrowseModeToggle } from '@/components/BrowseModeToggle';
 
 function resolveCurrentDayNumber(
   sorted: SeriesWithEntries['entries'],
