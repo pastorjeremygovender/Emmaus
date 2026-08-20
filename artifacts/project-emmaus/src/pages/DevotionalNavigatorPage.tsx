@@ -31,6 +31,27 @@ import {
 import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 
+function BrowseModeToggle({
+  value,
+  onChange,
+}: {
+  value: 'groups' | 'all';
+  onChange: (value: 'groups' | 'all') => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-xl border border-border bg-muted/30 p-1" role="group" aria-label="Browse mode">
+      <button type="button" onClick={() => onChange('groups')} aria-pressed={value === 'groups'}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${value === 'groups' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
+        View Groups
+      </button>
+      <button type="button" onClick={() => onChange('all')} aria-pressed={value === 'all'}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium ${value === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
+        View All
+      </button>
+    </div>
+  );
+}
+
 function resolveCurrentDayNumber(
   sorted: SeriesWithEntries['entries'],
   completedSet: Set<number>,
@@ -50,6 +71,7 @@ export function DevotionalNavigatorPage() {
   const [series, setSeries] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
   const [groups, setGroups] = useState<DevotionalEntryGroup[]>([]);
+  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('groups');
   const [loading, setLoading] = useState(true);
   const selectedGroup = groups.find(group => group.id === groupId) ?? null;
 
@@ -111,12 +133,13 @@ export function DevotionalNavigatorPage() {
             <p className="text-xs text-muted-foreground truncate">{series.title}</p>
             <p className="text-sm font-semibold text-foreground">{selectedGroup?.title ?? 'Choose a reading'}</p>
           </div>
+          {!groupId && <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />}
         </div>
       </div>
 
       {/* Entry list */}
       <main className="flex-1 px-4 pt-5 pb-4">
-        {!groupId && groups.length > 0 ? (
+        {!groupId && browseMode === 'groups' && groups.length > 0 ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Choose a group to browse its devotional days.</p>
             <div className="grid grid-cols-1 gap-3">

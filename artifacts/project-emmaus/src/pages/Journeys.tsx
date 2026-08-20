@@ -590,7 +590,7 @@ function ContentGroupsPanel({
     .map(group => ({
       group,
       count: group.items.filter(item =>
-        type === 'daily-devotional'
+          type === 'daily-devotional'
           ? item.contentType === 'daily-devotional'
           : type === 'daily-rhythm'
             ? item.contentType === 'daily-rhythm'
@@ -615,6 +615,39 @@ function ContentGroupsPanel({
           onGate={onGate}
         />
       ))}
+    </div>
+  );
+}
+
+function BrowseModeToggle({
+  value,
+  onChange,
+}: {
+  value: 'groups' | 'all';
+  onChange: (value: 'groups' | 'all') => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-xl border border-border bg-muted/30 p-1" role="group" aria-label="Browse mode">
+      <button
+        type="button"
+        onClick={() => onChange('groups')}
+        aria-pressed={value === 'groups'}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+          value === 'groups' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        View Groups
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('all')}
+        aria-pressed={value === 'all'}
+        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+          value === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        View All
+      </button>
     </div>
   );
 }
@@ -698,6 +731,7 @@ export default function Journeys() {
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
+  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('groups');
   function handleTabChange(id: TabId) { setActiveTab(id); saveTab(id); }
 
   // ── API data ─────────────────────────────────────────────────────────────
@@ -914,62 +948,74 @@ export default function Journeys() {
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
               <SectionWrapper color="emerald" label="Walks">
-                <ContentGroupsPanel
-                  groups={data.contentGroups}
-                  type="journey"
-                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                />
-                <WalksPanel
-                  standalone={data.standaloneJourneys}
-                  onAction={handleJourneyAction}
-                  onPause={(id) => setPauseTargetId(id)}
-                  onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
-                  isGated={isItemGated}
-                  onGate={() => setLocation('/walk')}
-                  getEnrollmentState={(id) => getState(id)}
-                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                  onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)}
-                />
+                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
+                {browseMode === 'groups' ? (
+                  <ContentGroupsPanel
+                    groups={data.contentGroups}
+                    type="journey"
+                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                    isGated={!gateClear}
+                    onGate={() => setLocation('/walk')}
+                  />
+                ) : (
+                  <WalksPanel
+                    standalone={data.standaloneJourneys}
+                    onAction={handleJourneyAction}
+                    onPause={(id) => setPauseTargetId(id)}
+                    onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
+                    isGated={isItemGated}
+                    onGate={() => setLocation('/walk')}
+                    getEnrollmentState={(id) => getState(id)}
+                    getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                    onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)}
+                  />
+                )}
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
               <SectionWrapper color="amber" label="Journeys">
-                <ContentGroupsPanel
-                  groups={data.contentGroups}
-                  type="journey"
-                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                />
-                <JourneysPanel
-                  collections={data.journeyCollections}
-                  onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                  progress={progress}
-                />
+                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
+                {browseMode === 'groups' ? (
+                  <ContentGroupsPanel
+                    groups={data.contentGroups}
+                    type="journey"
+                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                    isGated={!gateClear}
+                    onGate={() => setLocation('/walk')}
+                  />
+                ) : (
+                  <JourneysPanel
+                    collections={data.journeyCollections}
+                    onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
+                    isGated={!gateClear}
+                    onGate={() => setLocation('/walk')}
+                    progress={progress}
+                  />
+                )}
               </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
               <SectionWrapper color="violet" label="Daily Devotionals">
-                <ContentGroupsPanel
-                  groups={data.contentGroups}
-                  type="daily-devotional"
-                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                />
-                <DevotionalsPanel
-                  items={data.dailyDevotionals}
-                  onAction={handleDevotionalAction}
-                  startingId={startingDevId}
-                  onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
-                  getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                />
+                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
+                {browseMode === 'groups' ? (
+                  <ContentGroupsPanel
+                    groups={data.contentGroups}
+                    type="daily-devotional"
+                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
+                    isGated={!gateClear}
+                    onGate={() => setLocation('/walk')}
+                  />
+                ) : (
+                  <DevotionalsPanel
+                    items={data.dailyDevotionals}
+                    onAction={handleDevotionalAction}
+                    startingId={startingDevId}
+                    onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)}
+                    isGated={!gateClear}
+                    onGate={() => setLocation('/walk')}
+                    getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                  />
+                )}
               </SectionWrapper>
             )}
             {activeTab === 'sermons' && (

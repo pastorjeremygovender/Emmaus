@@ -121,6 +121,7 @@ export default function ContentGroupPage() {
         return;
       }
 
+
       if (item.memberProgressState === 'completed') {
         setLocation(`/journeys/${item.id}?source=contentGroup`);
         return;
