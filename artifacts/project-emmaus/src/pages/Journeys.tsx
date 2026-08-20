@@ -51,6 +51,7 @@ import { dismissBadge } from '@/lib/badge-api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabId = 'walks' | 'journeys' | 'devotionals' | 'sermons';
+type DiscoverSort = 'alphabetical' | 'newest' | 'oldest' | 'topic';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,36 @@ const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 function dayLabel(n?: number): string | null {
   if (!n) return null;
   return `${n} ${n === 1 ? 'Day' : 'Days'}`;
+}
+
+function sortItemKey(item: NextStepsItem): string {
+  return (
+    item.metadata.topic ??
+    item.metadata.scriptureReference ??
+    item.metadata.subtitle ??
+    item.description ??
+    item.title
+  ).trim().toLocaleLowerCase();
+}
+
+function sortItemDate(item: NextStepsItem): number {
+  const timestamp = item.metadata.publishedAt ? Date.parse(item.metadata.publishedAt) : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortItems(items: NextStepsItem[], sort: DiscoverSort): NextStepsItem[] {
+  return [...items].sort((a, b) => {
+    if (sort === 'newest' || sort === 'oldest') {
+      const difference = sortItemDate(a) - sortItemDate(b);
+      if (difference !== 0) return sort === 'newest' ? -difference : difference;
+    } else {
+      const aKey = sort === 'topic' ? sortItemKey(a) : a.title.toLocaleLowerCase();
+      const bKey = sort === 'topic' ? sortItemKey(b) : b.title.toLocaleLowerCase();
+      const difference = aKey.localeCompare(bKey);
+      if (difference !== 0) return difference;
+    }
+    return a.title.localeCompare(b.title);
+  });
 }
 
 // ─── Tab persistence ──────────────────────────────────────────────────────────
@@ -418,7 +449,7 @@ function DevotionalCard({
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
 function DevotionalsPanel({
-  items, onAction, startingId, onViewPreviousDays, isGated, onGate, getProgressDay,
+  items, onAction, startingId, onViewPreviousDays, isGated, onGate, getProgressDay, sort,
 }: {
   items: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
@@ -427,11 +458,12 @@ function DevotionalsPanel({
   isGated: boolean;
   onGate: () => void;
   getProgressDay: (id: string) => number;
+  sort: DiscoverSort;
 }) {
   if (items.length === 0) return <EmptyState message="No Daily Devotionals are available yet." />;
   return (
     <div className="space-y-3">
-      {items.map(item => (
+      {sortItems(items, sort).map(item => (
         <DevotionalCard
           key={item.id}
           item={item}
@@ -490,7 +522,7 @@ function journeyItemCards(
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
 export function JourneysPanel({
-  collections, onOpenJourney, isGated, onGate, progress,
+  collections, onOpenJourney, isGated, onGate, progress, sort,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
@@ -499,12 +531,17 @@ export function JourneysPanel({
   /** Client-side progress map from JourneyContext — always reflects the latest
    *  completed steps, even before the next-steps API cache refreshes. */
   progress: Record<string, { completedDays: number[] }>;
+  sort: DiscoverSort;
 }) {
   if (collections.length === 0) return <EmptyState message="No Journeys available yet." />;
 
   return (
     <div className="space-y-3">
-      {collections.map(col => {
+      {[...collections].sort((a, b) => {
+        const aKey = sort === 'topic' ? (a.description ?? a.title) : a.title;
+        const bKey = sort === 'topic' ? (b.description ?? b.title) : b.title;
+        return aKey.localeCompare(bKey);
+      }).map(col => {
         const walkCount = col.journeys.length;
 
         // Use client-side progress for accurate, always-current counts.
@@ -556,7 +593,7 @@ export function JourneysPanel({
 // Walks tab — shows standalone walks that are not assigned to any Journey.
 function WalksPanel({
   standalone, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
-  getProgressDay, onViewPreviousSteps,
+  getProgressDay, onViewPreviousSteps, sort,
 }: {
   standalone: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
@@ -567,12 +604,13 @@ function WalksPanel({
   getEnrollmentState: (id: string) => string | null;
   getProgressDay: (id: string) => number;
   onViewPreviousSteps: (id: string) => void;
+  sort: DiscoverSort;
 }) {
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
   const cardProps = { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
   return (
     <div className="space-y-3">
-      {journeyItemCards(standalone, cardProps)}
+      {journeyItemCards(sortItems(standalone, sort), cardProps)}
     </div>
   );
 }
