@@ -162,6 +162,32 @@ export const insertJourneyStepSchema = createInsertSchema(journeyStepsTable).omi
   createdAt: true,
   updatedAt: true,
 });
+
+// Manual groups inside the Daily Rhythm journey. A step may appear in more
+// than one group; membership order is independent from the canonical day.
+export const dailyRhythmGroupsTable = pgTable("daily_rhythm_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  journeyId: text("journey_id").notNull().references(() => journeysTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").default(""),
+  status: text("status").notNull().default("Draft"),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const dailyRhythmGroupItemsTable = pgTable("daily_rhythm_group_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").notNull().references(() => dailyRhythmGroupsTable.id, { onDelete: "cascade" }),
+  stepId: uuid("step_id").notNull().references(() => journeyStepsTable.id, { onDelete: "cascade" }),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("daily_rhythm_group_items_group_step_unique").on(table.groupId, table.stepId),
+]);
+
+export type DailyRhythmGroup = typeof dailyRhythmGroupsTable.$inferSelect;
+export type DailyRhythmGroupItem = typeof dailyRhythmGroupItemsTable.$inferSelect;
 export type InsertJourneyStep = z.infer<typeof insertJourneyStepSchema>;
 export type JourneyStep = typeof journeyStepsTable.$inferSelect;
 
