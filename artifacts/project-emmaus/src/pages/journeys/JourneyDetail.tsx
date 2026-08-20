@@ -21,6 +21,7 @@ import { apiStartShared } from '@/lib/rooms-api';
 import { getCollection } from '@/lib/collections-api';
 import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2, Users } from 'lucide-react';
 import { FavouriteButton } from '@/components/FavouriteButton';
+import { ContentStepRow } from '@/components/ContentStepList';
 import { resolveReturn } from '@/lib/return-context';
 import { getStepLabel, resolveStepPrefix } from '@/lib/step-label';
 import { apiLinkJourney } from '@/lib/rooms-api';
@@ -442,26 +443,15 @@ export default function JourneyDetail() {
                 // Show "Up next" only when the journey is in progress (started but not fully completed)
                 const isUpNext = isStarted && !isCompleted && s.day === nextUnfinishedDay;
                 return (
-                  <button
+                  <ContentStepRow
                     key={s.day}
-                    className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
-                      isUpNext
-                        ? 'bg-primary/5 hover:bg-primary/10 active:bg-primary/15'
-                        : 'bg-card hover:bg-muted/40 active:bg-muted/60'
-                    }`}
+                    index={s.day}
+                    title={s.title || getStepLabel(s, journey)}
+                    completed={done}
+                    current={isUpNext}
                     onClick={() => setLocation(`/journey/${journey.id}/day/${s.day}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`)}
-                    aria-label={isUpNext ? `Up next: step ${s.day}: ${s.title || `Step ${s.day}`}` : done ? `Review step ${s.day}: ${s.title || `Step ${s.day}`}` : `Go to step ${s.day}: ${s.title || `Step ${s.day}`}`}
-                  >
-                    <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done || isUpNext ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {s.day}
-                    </span>
-                    <span className={`text-[14px] leading-snug flex-1 ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
-                      {s.title || getStepLabel(s, journey)}
-                    </span>
-                    <span className={`ml-auto text-[11px] font-medium shrink-0 ${isUpNext ? 'text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {isUpNext ? 'Up next →' : done ? 'Review →' : '→'}
-                    </span>
-                  </button>
+                    ariaLabel={isUpNext ? `Up next: step ${s.day}: ${s.title || `Step ${s.day}`}` : done ? `Review step ${s.day}: ${s.title || `Step ${s.day}`}` : `Go to step ${s.day}: ${s.title || `Step ${s.day}`}`}
+                  />
                 );
               })}
               {/* Walk Complete row — always shown; only navigable once all steps are done */}

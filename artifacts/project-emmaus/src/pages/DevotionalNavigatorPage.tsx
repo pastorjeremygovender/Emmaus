@@ -19,7 +19,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft, FolderOpen } from 'lucide-react';
+import { ChevronLeft, FolderOpen } from 'lucide-react';
 import {
   getSeriesWithEntries,
   getAllProgress,
@@ -31,6 +31,7 @@ import {
 import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 import { BrowseModeToggle } from '@/components/BrowseModeToggle';
+import { ContentStepList } from '@/components/ContentStepList';
 
 function resolveCurrentDayNumber(
   sorted: SeriesWithEntries['entries'],
@@ -98,30 +99,34 @@ export function DevotionalNavigatorPage() {
   const currentDayNumber = resolveCurrentDayNumber(sorted, completedSet);
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-page-safe flex flex-col">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={goBack}
-            className="p-1.5 -ml-1.5 rounded-full hover:bg-muted transition-colors"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{series.title}</p>
-            <p className="text-sm font-semibold text-foreground">{selectedGroup?.title ?? 'Choose a reading'}</p>
-          </div>
-          {!groupId && <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />}
-        </div>
-      </div>
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
+      <main className="px-5 pt-6 pb-4 max-w-[480px] mx-auto space-y-6">
+        <button
+          onClick={goBack}
+          className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
+          aria-label="Back"
+        >
+          <ChevronLeft size={17} />
+          {groupId ? series.title : 'Back'}
+        </button>
 
-      {/* Entry list */}
-      <main className="flex-1 px-4 pt-5 pb-4">
+        <div className="space-y-0.5">
+          <h1 className="text-[26px] font-sans font-medium tracking-tight text-foreground leading-snug">
+            {series.title}
+          </h1>
+          <p className="text-[13px] text-muted-foreground">
+            {selectedGroup?.title ?? 'Choose a reading'}
+          </p>
+        </div>
+
         {!groupId && browseMode === 'groups' ? (
           groups.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center">
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Groups</h2>
+                <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />
+              </div>
+              <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center">
               <FolderOpen size={20} className="mx-auto text-muted-foreground/60" />
               <p className="mt-3 text-sm text-muted-foreground">No devotional groups are available yet.</p>
               <button
@@ -131,10 +136,14 @@ export function DevotionalNavigatorPage() {
               >
                 View all devotional days
               </button>
+              </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Choose a group to browse its devotional days.</p>
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Groups</h2>
+                <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />
+              </div>
               <div className="grid grid-cols-1 gap-3">
                 {groups.map(group => (
                   <button
@@ -154,54 +163,46 @@ export function DevotionalNavigatorPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </section>
           )
         ) : sorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No entries available yet.</p>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Days</h2>
+              {!groupId && <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />}
+            </div>
+            <p className="text-sm text-muted-foreground text-center py-8">No entries available yet.</p>
+          </section>
         ) : (
-          <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
-            {sorted.map((entry, idx) => {
-              const done     = completedSet.has(entry.dayNumber);
-              const isCurrent = entry.dayNumber === currentDayNumber;
-              const label    = getDevotionalLabel({ dayNumber: entry.dayNumber, displayLabel: entry.displayLabel });
-
-              return (
-                <button
-                  key={entry.dayNumber}
-                  className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
-                    isCurrent && !done
-                      ? 'bg-primary/5 hover:bg-primary/10 active:bg-primary/15'
-                      : 'bg-card hover:bg-muted/40 active:bg-muted/60'
-                  }`}
-                  onClick={() => setLocation(`/devotional/${seriesId}/day/${entry.dayNumber}?source=navigate`)}
-                  aria-label={
-                    isCurrent && !done
-                      ? `Up next: ${label}${entry.title ? ` — ${entry.title}` : ''}`
-                      : done
-                        ? `Review: ${label}${entry.title ? ` — ${entry.title}` : ''}`
-                        : `${label}${entry.title ? ` — ${entry.title}` : ''}`
-                  }
-                >
-                  <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done || (isCurrent && !done) ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {idx + 1}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className={`text-[14px] leading-snug block ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
-                      {label}
-                    </span>
-                    {entry.title && (
-                      <span className={`text-[12px] leading-snug block mt-0.5 ${done ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
-                        {entry.title}
-                      </span>
-                    )}
-                  </span>
-                  <span className={`ml-auto text-[11px] font-medium shrink-0 mt-0.5 ${isCurrent && !done ? 'text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {isCurrent && !done ? 'Up next →' : done ? 'Review →' : '→'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+                {groupId ? 'Days' : 'All days'}
+              </h2>
+              {!groupId && <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />}
+            </div>
+            <ContentStepList
+              items={sorted.map((entry, idx) => {
+                const done = completedSet.has(entry.dayNumber);
+                const isCurrent = entry.dayNumber === currentDayNumber;
+                const label = getDevotionalLabel({ dayNumber: entry.dayNumber, displayLabel: entry.displayLabel });
+                return {
+                  key: entry.dayNumber,
+                  index: idx + 1,
+                  title: label,
+                  subtitle: entry.title,
+                  completed: done,
+                  current: isCurrent && !done,
+                  ariaLabel: isCurrent && !done
+                    ? `Up next: ${label}${entry.title ? ` — ${entry.title}` : ''}`
+                    : done
+                      ? `Review: ${label}${entry.title ? ` — ${entry.title}` : ''}`
+                      : `${label}${entry.title ? ` — ${entry.title}` : ''}`,
+                  onClick: () => setLocation(`/devotional/${seriesId}/day/${entry.dayNumber}?source=navigate`),
+                };
+              })}
+            />
+          </section>
         )}
       </main>
 
