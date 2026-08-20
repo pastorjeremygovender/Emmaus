@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft, Plus, BookHeart, ChevronRight, Loader2, Check,
-  Eye, EyeOff, Pencil, Trash2, Tag,
+  Eye, EyeOff, Pencil, Trash2, Tag, Settings, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -48,6 +48,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [showLabelsModal, setShowLabelsModal] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   // Smart Content Indicators: notify members on publish. Defaults ON; admin can uncheck.
   const [notifyMembers, setNotifyMembers] = useState(true);
 
@@ -145,17 +146,34 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
   const publishedCount = data.entries.filter(e => e.status === 'Published').length;
 
   return (
-    <div className="flex h-full min-h-0 bg-gray-50">
+    <div className="relative flex h-full min-h-0 bg-gray-50">
+
+      {mobileSettingsOpen && (
+        <button
+          type="button"
+          aria-label="Close series settings"
+          onClick={() => setMobileSettingsOpen(false)}
+          className="md:hidden fixed inset-0 z-30 bg-black/30"
+        />
+      )}
 
       {/* ── Settings panel ────────────────────────────────────────────────────── */}
-      <div className="w-72 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+      <div className={`${mobileSettingsOpen ? 'fixed inset-y-0 left-0 z-40 w-[min(100%,22rem)] shadow-2xl flex' : 'hidden'} md:relative md:inset-auto md:z-auto md:w-72 md:shadow-none md:flex flex-shrink-0 bg-white border-r border-gray-200 flex-col`}>
         {/* Back */}
-        <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 border-b border-gray-100">
           <button
             onClick={onBack}
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
           >
             <ArrowLeft size={13} /> Back to Devotionals
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileSettingsOpen(false)}
+            className="md:hidden min-w-10 min-h-10 inline-flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100"
+            aria-label="Close settings"
+          >
+            <X size={17} />
           </button>
         </div>
 
@@ -204,7 +222,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="w-full min-h-10 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             {saving ? <><Loader2 size={12} className="animate-spin" /> Saving…</> :
              saveStatus === 'saved' ? <><Check size={12} /> Saved</> :
@@ -224,7 +242,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
               </div>
               <button
                 onClick={handleToggleStatus}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                className={`min-h-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                   status === 'Published'
                     ? 'bg-teal-50 text-teal-700 hover:bg-teal-100'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -249,19 +267,35 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
       </div>
 
       {/* ── Entries list ───────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="md:hidden flex items-center justify-between gap-2 mb-4">
+          <button
+            type="button"
+            onClick={onBack}
+            className="min-h-10 inline-flex items-center gap-1.5 px-2 text-sm font-medium text-gray-600"
+          >
+            <ArrowLeft size={15} /> Devotionals
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileSettingsOpen(true)}
+            className="min-h-10 inline-flex items-center gap-1.5 px-3 rounded-xl border border-gray-200 text-[13px] font-medium text-gray-700"
+          >
+            <Settings size={15} /> Series settings
+          </button>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <h3 className="text-base font-semibold text-gray-900">
             Entries
             <span className="ml-2 text-sm font-normal text-gray-400">
               {data.entries.length} day{data.entries.length !== 1 ? 's' : ''}
             </span>
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {data.entries.length > 0 && (
               <button
                 onClick={() => setShowLabelsModal(true)}
-                className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                className="min-h-10 flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
                 title="Bulk-generate display labels"
               >
                 <Tag size={13} /> Generate Labels
@@ -269,7 +303,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
             )}
             <button
               onClick={handleAddEntry}
-              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700"
+              className="min-h-10 flex items-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700"
             >
               <Plus size={13} /> Add Day
             </button>
@@ -285,7 +319,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
             {data.entries.map(entry => (
               <div
                 key={entry.id}
-                className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-gray-300 transition-colors cursor-pointer"
+                className="flex items-start sm:items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-gray-300 transition-colors cursor-pointer"
                 onClick={() => onEditEntry(seriesId, entry.dayNumber)}
               >
                 <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 text-[12px] font-semibold text-gray-500 border border-gray-100">
@@ -302,13 +336,13 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
                 <StatusBadge status={entry.status} />
                 <button
                   onClick={e => { e.stopPropagation(); onEditEntry(seriesId, entry.dayNumber); }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="min-w-10 min-h-10 inline-flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
                 >
                   <Pencil size={13} />
                 </button>
                 <button
                   onClick={e => { e.stopPropagation(); setDeleteTarget(entry.dayNumber); }}
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                  className="min-w-10 min-h-10 inline-flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -334,8 +368,8 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
 
       {/* Delete confirm */}
       {deleteTarget !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6">
             <h3 className="text-base font-semibold text-gray-900 mb-2">Delete Day {deleteTarget}?</h3>
             <p className="text-sm text-gray-500 mb-4">This entry and its content will be permanently removed.</p>
             <div className="flex gap-2">

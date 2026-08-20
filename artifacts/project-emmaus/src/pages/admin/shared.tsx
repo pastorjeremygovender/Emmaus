@@ -356,9 +356,9 @@ export function ContentStudioToolbar({
 
   return (
     <>
-      <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 bg-white border-b border-gray-100 gap-4">
+      <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-5 py-3 bg-white border-b border-gray-100 gap-2">
         {/* Left: back + title */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
           <button
             onClick={onBack}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
@@ -373,14 +373,14 @@ export function ContentStudioToolbar({
         </div>
 
         {/* Right: message + actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
           {successMessage && (
-            <span className="text-[12px] font-medium text-emerald-600 flex items-center gap-1">
+            <span className="basis-full sm:basis-auto text-[12px] font-medium text-emerald-600 flex items-center gap-1">
               <CheckCircle2 size={11} /> {successMessage}
             </span>
           )}
           {!successMessage && errorMessage && (
-            <span className="text-[12px] text-red-500">{errorMessage}</span>
+            <span className="basis-full sm:basis-auto text-[12px] text-red-500">{errorMessage}</span>
           )}
 
           {extraActions}
@@ -389,7 +389,7 @@ export function ContentStudioToolbar({
           <button
             onClick={onSaveDraft}
             disabled={isDisabled}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex-1 sm:flex-none min-h-10 justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-[13px] text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
             Save Draft
@@ -401,7 +401,7 @@ export function ContentStudioToolbar({
               <button
                 onClick={() => setShowUnpublishDialog(true)}
                 disabled={isDisabled}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 text-[13px] hover:bg-amber-50 transition-colors disabled:opacity-50"
+                className="flex-1 sm:flex-none min-h-10 justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 text-[13px] hover:bg-amber-50 transition-colors disabled:opacity-50"
               >
                 {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <EyeOff size={12} />}
                 Unpublish
@@ -410,7 +410,7 @@ export function ContentStudioToolbar({
               <button
                 onClick={onPublish}
                 disabled={isDisabled || !onPublish}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
+                className="flex-1 sm:flex-none min-h-10 justify-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[13px] font-medium hover:bg-teal-700 transition-colors disabled:opacity-50"
               >
                 {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                 Publish
@@ -424,7 +424,7 @@ export function ContentStudioToolbar({
               onClick={onDelete}
               title="Delete"
               disabled={isDisabled}
-              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                className="min-w-10 min-h-10 inline-flex items-center justify-center p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
             >
               <Trash2 size={15} />
             </button>

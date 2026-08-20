@@ -107,8 +107,8 @@ export default function CollectionDetailView({
   return (
     <div className="flex flex-col h-full">
       {/* Collection header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-6 py-5">
-        <div className="flex items-start justify-between gap-4 max-w-4xl">
+      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 sm:px-6 py-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 max-w-4xl">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
               <FolderOpen size={20} className="text-purple-600" />
@@ -137,10 +137,10 @@ export default function CollectionDetailView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
             <button
               onClick={() => onEditCollection(collectionId)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              className="flex-1 sm:flex-none min-h-10 justify-center flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
             >
               <Pencil size={13} /> Edit
             </button>
@@ -168,14 +168,14 @@ export default function CollectionDetailView({
             </button>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto px-6 py-5 space-y-3">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-3">
             {journeys.map(j => {
               const typeCfg = TYPE_CONFIG[j.journeyType ?? 'core'] ?? TYPE_CONFIG.core;
               return (
                 <button
                   key={j.id}
                   onClick={() => onOpenJourney(j.id, j.title, collection.title)}
-                  className="w-full flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-5 py-4
+                  className="w-full flex items-start gap-3 sm:gap-4 bg-white border border-gray-200 rounded-xl px-4 sm:px-5 py-4
                     hover:shadow-sm hover:border-teal-200 transition-all text-left group"
                 >
                   {/* Type icon */}
@@ -218,7 +218,7 @@ export default function CollectionDetailView({
 
                   <StatusBadge status={j.status ?? 'Draft'} />
 
-                  <span className="text-xs text-teal-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  <span className="text-xs text-teal-600 font-medium opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                     Open →
                   </span>
                 </button>

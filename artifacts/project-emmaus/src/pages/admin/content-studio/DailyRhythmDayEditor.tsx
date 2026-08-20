@@ -222,20 +222,20 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
           type="button"
           onClick={() => setOpen(o => !o)}
           disabled={!value.trim()}
-          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-teal-600 disabled:opacity-30 transition-colors py-0.5"
+          className="min-h-10 flex items-center gap-1 text-[12px] text-gray-400 hover:text-teal-600 disabled:opacity-30 transition-colors py-0.5"
         >
           <Wand2 size={11} />
           AI
           <ChevronDown size={10} />
         </button>
         {open && (
-          <div className="absolute left-0 top-6 z-30 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden py-1">
+          <div className="fixed inset-x-3 bottom-3 z-50 max-h-[60dvh] overflow-y-auto bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden py-1 md:absolute md:inset-x-auto md:bottom-auto md:left-0 md:top-10 md:w-52 md:max-h-80 md:rounded-xl md:shadow-lg">
             {actions.map(({ action, label }) => (
               <button
                 key={action}
                 type="button"
                 onClick={() => handleAction(action)}
-                className="w-full text-left px-3 py-2 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full min-h-11 text-left px-4 md:px-3 py-2 text-sm md:text-[12px] text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 {label}
               </button>
@@ -260,23 +260,24 @@ function FieldRefiner({ field, fieldLabel, value, onApply, scripture, dayTitle, 
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">AI Suggestion</span>
             <button type="button" onClick={() => { setSuggestion(''); setActiveAction(null); }}
-              className="text-teal-400 hover:text-teal-600 transition-colors">
+              className="min-w-10 min-h-10 inline-flex items-center justify-center text-teal-400 hover:text-teal-600 transition-colors"
+              aria-label="Dismiss AI suggestion">
               <X size={12} />
             </button>
           </div>
           <p className="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{suggestion}</p>
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
               onClick={() => { onApply(suggestion, 'replace'); setSuggestion(''); setActiveAction(null); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-[12px] bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              className="min-h-10 flex items-center gap-1 px-3 py-1.5 text-[12px] bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
             >
               <CornerDownLeft size={10} /> Replace
             </button>
             <button
               type="button"
               onClick={() => { onApply(suggestion, 'append'); setSuggestion(''); setActiveAction(null); }}
-              className="px-3 py-1.5 text-[12px] border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
+              className="min-h-10 px-3 py-1.5 text-[12px] border border-teal-200 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors"
             >
               Insert Below
             </button>
@@ -313,9 +314,9 @@ function DeleteConfirmDialog({ dayNum, onConfirm, onCancel }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-start gap-3 px-6 pt-6 pb-4 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+        <div className="flex items-start gap-3 px-4 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-gray-100">
           <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={18} className="text-red-600" />
           </div>

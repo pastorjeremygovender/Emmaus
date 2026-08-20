@@ -1210,8 +1210,21 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
   // Defaults ON for first publish; admin can uncheck for silent updates.
   const [notifyMembers, setNotifyMembers] = useState(true);
   const [confirmDeleteJourney, setConfirmDeleteJourney] = useState(false);
-  const [leftOpen, setLeftOpen] = useState(true);
+  // On phones, panels open as drawers so the writing canvas always owns the viewport.
+  // Desktop keeps the existing expanded navigation as its default.
+  const [leftOpen, setLeftOpen] = useState(() => window.innerWidth >= 768);
   const [rightOpen, setRightOpen] = useState(false); // Closed by default — editor gets the full width
+
+  useEffect(() => {
+    const closeDesktopPanelsOnPhone = () => {
+      if (window.innerWidth < 768) {
+        setLeftOpen(false);
+        setRightOpen(false);
+      }
+    };
+    window.addEventListener('resize', closeDesktopPanelsOnPhone);
+    return () => window.removeEventListener('resize', closeDesktopPanelsOnPhone);
+  }, []);
   const [aiBannerDismissed, setAiBannerDismissed] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -1626,10 +1639,23 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
         }
       />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden bg-gray-50">
+      <div className="relative flex flex-1 min-h-0 overflow-hidden bg-gray-50">
+
+      {leftOpen && (
+        <button
+          type="button"
+          aria-label="Close Walk navigation"
+          onClick={() => setLeftOpen(false)}
+          className="md:hidden fixed inset-0 z-30 bg-black/30"
+        />
+      )}
 
       {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
-      <div className={`flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-0 transition-all duration-200 ${leftOpen ? 'w-60' : 'w-10'}`}>
+      <div className={`flex-shrink-0 bg-white border-r border-gray-200 flex flex-col min-h-0 transition-all duration-200 ${
+        leftOpen
+          ? 'fixed inset-y-0 left-0 z-40 w-[min(100%,18rem)] shadow-2xl md:relative md:inset-auto md:z-auto md:w-60 md:shadow-none'
+          : 'hidden md:flex md:w-10'
+      }`}>
         {leftOpen ? (
           <>
             {/* Collapse button */}
@@ -1731,7 +1757,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
                       {isRemovableDay && (
                         <button
                           onClick={e => { e.stopPropagation(); setRemoveTarget(section.day); }}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover/row:opacity-100 hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 min-w-8 min-h-8 inline-flex items-center justify-center rounded opacity-100 md:opacity-0 md:group-hover/row:opacity-100 hover:bg-red-50 text-gray-300 hover:text-red-400 transition-all"
                           title="Remove this day"
                         >
                           <Trash2 size={12} />
@@ -1950,7 +1976,15 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
 
       {/* ── RIGHT PANEL ─────────────────────────────────────────────────────── */}
       {rightOpen && (
-        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col min-h-0">
+        <button
+          type="button"
+          aria-label="Close preview and settings"
+          onClick={() => setRightOpen(false)}
+          className="md:hidden fixed inset-0 z-30 bg-black/30"
+        />
+      )}
+      {rightOpen && (
+        <div className="fixed inset-y-0 right-0 z-40 w-[min(100%,22rem)] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col min-h-0 shadow-2xl md:relative md:inset-auto md:z-auto md:w-72 md:shadow-none">
           {/* Tabs + collapse */}
           <div className="flex-shrink-0 flex items-center border-b border-gray-100">
             <div className="flex flex-1">

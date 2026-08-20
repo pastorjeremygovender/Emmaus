@@ -88,8 +88,8 @@ export default function DevotionalSeriesDetailView({
   return (
     <div className="flex flex-col h-full">
       {/* Series header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
+      <div className="flex-shrink-0 bg-white border-b border-gray-100 px-4 sm:px-6 py-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-4 min-w-0">
             <div className="w-12 h-12 rounded-xl bg-teal-50 flex items-center justify-center flex-shrink-0 mt-0.5">
               <BookHeart size={20} className="text-teal-600" />
@@ -121,10 +121,10 @@ export default function DevotionalSeriesDetailView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
             <button
               onClick={() => onEditSeries(seriesId)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              className="flex-1 sm:flex-none min-h-10 justify-center flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
             >
               <Pencil size={13} /> Edit
             </button>
@@ -152,12 +152,12 @@ export default function DevotionalSeriesDetailView({
             </button>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto px-6 py-5 space-y-2">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-2">
             {data.entries.map((entry: DevotionalEntry) => (
               <button
                 key={entry.id}
                 onClick={() => onEditEntry(seriesId, entry.dayNumber)}
-                className="w-full flex items-center gap-4 bg-white border border-gray-200 rounded-xl px-5 py-4
+                  className="w-full flex items-center gap-3 sm:gap-4 bg-white border border-gray-200 rounded-xl px-4 sm:px-5 py-4
                   hover:shadow-sm hover:border-teal-200 transition-all text-left group"
               >
                 {/* Day number badge */}
@@ -177,7 +177,7 @@ export default function DevotionalSeriesDetailView({
 
                 <StatusBadge status={entry.status} />
 
-                <ChevronRight size={14} className="text-teal-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                <ChevronRight size={14} className="text-teal-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0" />
               </button>
             ))}
           </div>

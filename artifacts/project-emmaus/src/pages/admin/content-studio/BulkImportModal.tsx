@@ -444,18 +444,18 @@ export default function BulkImportModal({ onClose }: Props) {
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[calc(100dvh-2rem)] transition-all ${
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
+      <div className={`bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full flex flex-col max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] transition-all ${
         screen === 'preview' || screen === 'conflicts' || screen === 'mapping' ? 'max-w-3xl' : 'max-w-lg'
       }`}>
 
         {/* ── Header ──────────────────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 flex items-center px-5 pt-5 pb-4 border-b border-gray-100">
+        <div className="flex-shrink-0 flex items-center px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-gray-100">
           <button
             onClick={handleBack}
             disabled={isTransition}
             aria-label="Back"
-            className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-20 flex-shrink-0 disabled:opacity-30"
+            className="min-h-10 flex items-center gap-1.5 text-[13px] font-medium text-gray-500 hover:text-gray-900 transition-colors w-auto sm:w-20 flex-shrink-0 disabled:opacity-30"
           >
             <ArrowLeft size={14} />
             {screen === 'destination' || screen === 'results' ? 'Close' : 'Back'}
@@ -463,7 +463,7 @@ export default function BulkImportModal({ onClose }: Props) {
           <h2 className="flex-1 text-[15px] font-semibold text-gray-900 text-center truncate px-2">
             {SCREEN_LABEL[screen]}
           </h2>
-          <div className="w-20 flex-shrink-0 flex justify-end">
+          <div className="w-10 sm:w-20 flex-shrink-0 flex justify-end">
             <button
               onClick={onClose}
               disabled={isTransition}
@@ -493,7 +493,7 @@ export default function BulkImportModal({ onClose }: Props) {
         )}
 
         {/* ── Scrollable content ───────────────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4">
 
           {/* ══════════════════════════════════════════════════════════════════════
               Screen 1 — Destination
@@ -623,7 +623,7 @@ export default function BulkImportModal({ onClose }: Props) {
               </p>
 
               {/* Method selector */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {([
                   { id: 'csv',    label: 'CSV File',       Icon: FileSpreadsheet },
                   { id: 'xlsx',   label: 'XLSX File',      Icon: FileSpreadsheet },
@@ -697,7 +697,7 @@ export default function BulkImportModal({ onClose }: Props) {
                   {/* Format hint */}
                   <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl space-y-1">
                     <p className="text-[11px] font-semibold text-teal-700">Emmaus format — canonical field labels</p>
-                    <div className="grid grid-cols-2 gap-x-4 text-[11px] text-teal-600 leading-relaxed font-mono">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 text-[11px] text-teal-600 leading-relaxed font-mono">
                       <div>
                         <span className="font-bold">DAY:</span> day number<br />
                         <span className="font-bold">TITLE:</span> step title<br />
@@ -757,7 +757,7 @@ export default function BulkImportModal({ onClose }: Props) {
               ══════════════════════════════════════════════════════════════════════ */}
           {screen === 'mapping' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <p className="text-[13px] text-gray-500">
                   {mappings.filter(m => m.canonicalField).length} of {mappings.length} column{mappings.length !== 1 ? 's' : ''} auto-detected.
                   Adjust any that are wrong.
@@ -775,8 +775,8 @@ export default function BulkImportModal({ onClose }: Props) {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-[12px]">
+              <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                <table className="w-full min-w-[620px] text-[12px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-[30%]">CSV Column</th>
@@ -866,8 +866,8 @@ export default function BulkImportModal({ onClose }: Props) {
                 )}
               </div>
 
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-[12px]">
+              <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                <table className="w-full min-w-[540px] text-[12px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="text-left px-3 py-2.5 font-semibold text-gray-600 w-12">Day</th>
@@ -919,7 +919,7 @@ export default function BulkImportModal({ onClose }: Props) {
                         {expandedRow === i && (
                           <tr className="bg-gray-50/80 border-b border-gray-100">
                             <td colSpan={5} className="px-4 py-3">
-                              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                                 {[
                                   ['Welcome',          row.mapped.mentorIntro],
                                   ['Consider This',    row.mapped.devotional],
@@ -972,9 +972,9 @@ export default function BulkImportModal({ onClose }: Props) {
               </div>
 
               {/* Apply to all */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <span className="text-[12px] font-semibold text-gray-700 whitespace-nowrap">Apply to all conflicts:</span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {([
                     { id: 'skip',     label: 'Skip',              Icon: SkipForward },
                     { id: 'replace',  label: 'Replace',           Icon: RefreshCw   },
@@ -1005,7 +1005,7 @@ export default function BulkImportModal({ onClose }: Props) {
                     key={row.index}
                     className="p-3 border border-red-200 rounded-xl bg-red-50/40"
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
                       <p className="text-[13px] font-semibold text-gray-800">
                         Day {row.mapped.day} — {row.mapped.title || 'Untitled'}
                       </p>
@@ -1013,7 +1013,7 @@ export default function BulkImportModal({ onClose }: Props) {
                         <span className="text-[11px] text-gray-500">{row.mapped.scripture}</span>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       {([
                         { id: 'skip',     label: 'Skip existing',        desc: 'Don\'t import this row', Icon: SkipForward },
                         { id: 'replace',  label: 'Replace',              desc: 'Overwrite with new data', Icon: RefreshCw },
@@ -1128,7 +1128,7 @@ export default function BulkImportModal({ onClose }: Props) {
 
         {/* ── Footer ──────────────────────────────────────────────────────────── */}
         {!isTransition && screen !== 'results' && (
-          <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
+          <div className="flex-shrink-0 px-3 sm:px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 border-t border-gray-100">
             <button
               onClick={handlePrimary}
               disabled={primaryDisabled}
@@ -1140,7 +1140,7 @@ export default function BulkImportModal({ onClose }: Props) {
         )}
 
         {screen === 'results' && (
-          <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100">
+          <div className="flex-shrink-0 px-3 sm:px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 border-t border-gray-100">
             <button
               onClick={onClose}
               className="w-full h-12 rounded-2xl text-[15px] font-semibold bg-gray-900 hover:bg-gray-800 text-white transition-all"

@@ -604,11 +604,11 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
 
         {/* Primary tab bar — 5 tabs + Bulk Import action */}
         <div
-          className="flex items-center gap-1 px-6 pt-4 pb-0"
+          className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1 px-3 sm:px-6 pt-3 sm:pt-4 pb-0"
           role="tablist"
           aria-label="Content Studio sections"
         >
-          <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1 w-full flex-1 overflow-x-auto scrollbar-none">
             {TOP_NAV.map(({ id, label, Icon }) => {
               const active = activeTabId === id;
               return (
@@ -617,7 +617,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
                   role="tab"
                   aria-selected={active}
                   onClick={() => navigate(TAB_DEFAULT_VIEW[id] ?? { id: 'daily-rhythm' })}
-                  className={`flex items-center gap-2 px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                  className={`flex-shrink-0 min-h-10 flex items-center gap-2 px-3 sm:px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                     active
                       ? 'border-teal-600 text-teal-700'
                       : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
@@ -633,7 +633,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
           {/* Bulk Import — always visible, right-aligned */}
           <button
             onClick={() => setShowBulkImport(true)}
-            className="flex-shrink-0 flex items-center gap-1.5 ml-3 mb-1 px-3 py-1.5 text-[12px] font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
+            className="w-full sm:w-auto justify-center flex-shrink-0 flex items-center gap-1.5 sm:ml-3 sm:mb-1 min-h-10 px-3 py-1.5 text-[12px] font-medium text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap"
           >
             <Upload size={12} />
             Bulk Import
@@ -642,7 +642,7 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
 
         {/* Breadcrumb */}
         {crumbs.length > 1 && (
-          <div className="flex items-center gap-1.5 px-6 py-2 text-[12px] text-gray-500">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none whitespace-nowrap px-3 sm:px-6 py-2 text-[12px] text-gray-500">
             {crumbs.map((c, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <ChevronRight size={12} className="text-gray-300" />}
@@ -675,9 +675,9 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onClick={() => setPanelSeriesId(null)}
           />
           {/* Drawer */}
-          <div className="w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
+          <div className="w-full sm:w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
             {/* Panel chrome header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
               <span className="text-[13px] font-semibold text-gray-600 uppercase tracking-wide">Series Details</span>
               <button
                 onClick={() => setPanelSeriesId(null)}
@@ -719,9 +719,9 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onClick={() => setPanelCollectionId(null)}
           />
           {/* Drawer */}
-          <div className="w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
+          <div className="w-full sm:w-[520px] max-w-full bg-white border-l border-gray-200 shadow-2xl flex flex-col pointer-events-auto">
             {/* Panel chrome header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
               <span className="text-[13px] font-semibold text-gray-600 uppercase tracking-wide">Journey Details</span>
               <button
                 onClick={() => setPanelCollectionId(null)}
