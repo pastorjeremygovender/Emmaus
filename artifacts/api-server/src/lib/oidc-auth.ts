@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { db, sessionsTable } from "@workspace/db";
+import { db, pool, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { refreshSupabaseSession } from "./supabase-auth.js";
@@ -68,6 +68,14 @@ export async function updateSession(
 
 export async function deleteSession(sid: string): Promise<void> {
   await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
+}
+
+/** Revoke every opaque Emmaus session belonging to one verified subject. */
+export async function deleteSessionsForUser(userId: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM sessions WHERE sess -> 'user' ->> 'id' = $1`,
+    [userId],
+  );
 }
 
 /**

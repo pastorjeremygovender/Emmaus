@@ -36,6 +36,21 @@ import { getUserRole } from "../lib/user-role-store.js";
 import { pool } from "@workspace/db";
 import { requireAuth } from "../emmaus/auth.js";
 import { logger } from "../lib/logger.js";
+import {
+  AccountLifecycleError,
+  assertPermanentPurgeAvailable,
+  getAccountLifecycleCandidate,
+  getPermanentlyDeletedAccount,
+  listAccountLifecycleEvents,
+  permanentlyDeleteRemovedAccount,
+  reinstateAccount,
+  removeAccountRetainingData,
+} from "../lib/account-lifecycle-store.js";
+import {
+  deleteSupabaseUser,
+  reinstateSupabaseUser,
+  suspendSupabaseUser,
+} from "../lib/supabase-auth.js";
 
 export const pastoralRouter = Router();
 
@@ -103,6 +118,17 @@ async function requirePastorAccess(req: Request, res: Response): Promise<string 
   return null;
 }
 
+/** Account removal is intentionally narrower than general pastoral access. */
+async function requireSuperAdminAccess(req: Request, res: Response): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  if (await getUserRole(userId) !== "superAdmin") {
+    res.status(403).json({ error: "Only a super administrator can manage member access." });
+    return null;
+  }
+  return userId;
+}
+
 // ─── Person key helpers ───────────────────────────────────────────────────────
 
 function parsePersonKey(key: string): { personId: string; personType: store.PersonType } | null {
@@ -118,13 +144,138 @@ function parsePersonKey(key: string): { personId: string; personType: store.Pers
 // ─── People ──────────────────────────────────────────────────────────────────
 
 pastoralRouter.get("/accounts", async (req: Request, res: Response) => {
-  const userId = await requirePastorAccess(req, res);
+  const status = req.query.status === "removed" ? "removed" : "active";
+  const userId = status === "removed"
+    ? await requireSuperAdminAccess(req, res)
+    : await requirePastorAccess(req, res);
   if (!userId) return;
   try {
-    res.json(await store.listEmmausAccounts());
+    res.json(await store.listEmmausAccounts(status));
   } catch (err) {
     logger.error({ err }, "pastoral: listEmmausAccounts failed");
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+pastoralRouter.get("/accounts/:id/lifecycle", async (req: Request, res: Response) => {
+  const userId = await requireSuperAdminAccess(req, res);
+  if (!userId) return;
+  try {
+    res.json(await listAccountLifecycleEvents(String(req.params.id)));
+  } catch (err) {
+    logger.error({ err }, "pastoral: list account lifecycle events failed");
+    res.status(500).json({ error: "Could not load the member action history." });
+  }
+});
+
+pastoralRouter.post("/accounts/:id/remove", async (req: Request, res: Response) => {
+  const actorId = await requireSuperAdminAccess(req, res);
+  if (!actorId) return;
+  const accountId = String(req.params.id);
+  const mode = req.body?.mode === "permanent" ? "permanent" : "retain";
+
+  try {
+    const confirmationEmail = typeof req.body?.confirmationEmail === "string"
+      ? req.body.confirmationEmail
+      : "";
+
+    // A previous request may have completed the local purge but failed while
+    // deleting the provider identity. The durable tombstone keeps sign-in
+    // blocked and lets this exact request safely finish provider cleanup.
+    const priorPermanentDeletion = mode === "permanent"
+      ? await getPermanentlyDeletedAccount(accountId)
+      : null;
+    if (priorPermanentDeletion) {
+      if (priorPermanentDeletion.email.toLowerCase() !== confirmationEmail.trim().toLowerCase()) {
+        res.status(400).json({ error: "Enter the member's email address to confirm permanent deletion." });
+        return;
+      }
+      await deleteSupabaseUser(accountId, { ignoreNotFound: true });
+      res.json({ ok: true, account: priorPermanentDeletion, dataRetained: false, resumed: true });
+      return;
+    }
+
+    if (mode === "permanent") {
+      if (!confirmationEmail.trim()) {
+        res.status(400).json({ error: "Enter the member's email address to confirm permanent deletion." });
+        return;
+      }
+      const candidate = await getAccountLifecycleCandidate(accountId);
+      if (!candidate) {
+        res.status(404).json({ error: "This member account no longer exists." });
+        return;
+      }
+      if (candidate.email.toLowerCase() !== confirmationEmail.trim().toLowerCase()) {
+        res.status(400).json({ error: "Enter the member's email address to confirm permanent deletion." });
+        return;
+      }
+      await assertPermanentPurgeAvailable();
+    }
+
+    // First lock the Emmaus account and revoke all opaque sessions. If the
+    // provider call is temporarily unavailable, the account is still safely
+    // removed from Emmaus and cannot establish a new session.
+    const account = await removeAccountRetainingData({ accountId, actorId });
+    try {
+      await suspendSupabaseUser(account.id);
+    } catch (err) {
+      logger.error({ err, accountId }, "pastoral: provider suspension delayed after Emmaus removal");
+      res.status(503).json({
+        error: "The member has been removed from Emmaus, but the identity provider could not be locked yet. Access remains blocked in Emmaus.",
+      });
+      return;
+    }
+
+    if (mode === "retain") {
+      res.json({ ok: true, account, dataRetained: true });
+      return;
+    }
+
+    // Provider deletion comes before the database purge. If the provider
+    // rejects the request, the account stays removed and all preserved data
+    // remains available to an authorised administrator for review.
+    const deleted = await permanentlyDeleteRemovedAccount({
+      accountId,
+      actorId,
+      confirmationEmail,
+    });
+    try {
+      await deleteSupabaseUser(account.id);
+    } catch (err) {
+      logger.error({ err, accountId }, "pastoral: provider deletion delayed after permanent Emmaus purge");
+      res.status(503).json({
+        error: "Personal Emmaus data has been permanently deleted. The identity-provider deletion will be completed when this request is retried.",
+      });
+      return;
+    }
+    res.json({ ok: true, account: deleted, dataRetained: false });
+  } catch (err) {
+    if (err instanceof AccountLifecycleError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    logger.error({ err, accountId, mode }, "pastoral: remove account failed");
+    res.status(500).json({ error: "Could not remove this member account." });
+  }
+});
+
+pastoralRouter.post("/accounts/:id/reinstate", async (req: Request, res: Response) => {
+  const actorId = await requireSuperAdminAccess(req, res);
+  if (!actorId) return;
+  const accountId = String(req.params.id);
+  try {
+    // Re-enable the provider first. If that operation fails, the database
+    // account remains removed and cannot regain access accidentally.
+    await reinstateSupabaseUser(accountId);
+    const account = await reinstateAccount({ accountId, actorId });
+    res.json({ ok: true, account });
+  } catch (err) {
+    if (err instanceof AccountLifecycleError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    logger.error({ err, accountId }, "pastoral: reinstate account failed");
+    res.status(500).json({ error: "Could not reinstate this member account." });
   }
 });
 

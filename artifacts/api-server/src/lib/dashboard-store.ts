@@ -119,6 +119,7 @@ export async function getTodayStats(): Promise<TodayStats> {
         FROM user_profiles up
         INNER JOIN users u ON u.id = up.auth_subject
         WHERE u.created_at >= CURRENT_DATE - INTERVAL '7 days'
+          AND up.account_status = 'active'
       `),
 
       // Open follow-up / significant signals

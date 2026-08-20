@@ -132,6 +132,8 @@ export interface EmmausAccount {
   email: string;
   preferredName: string;
   role: "user" | "admin" | "superAdmin";
+  accountStatus: "active" | "removed";
+  removedAt: string | null;
   joinedAt: string;
   lastActiveAt: string;
   currentJourneyId: string | null;
@@ -381,12 +383,16 @@ export async function linkPersonToUser(
  * Only profiles bound to an immutable, verified provider subject are visible.
  * Member-owned data is joined by that subject rather than by mutable email.
  */
-export async function listEmmausAccounts(): Promise<EmmausAccount[]> {
+export async function listEmmausAccounts(
+  accountStatus: "active" | "removed" = "active",
+): Promise<EmmausAccount[]> {
   const { rows } = await pool.query<{
     id: string;
     email: string;
     preferred_name: string;
     app_role: "user" | "admin" | "superAdmin";
+    account_status: "active" | "removed";
+    removed_at: Date | null;
     joined_at: Date;
     last_active_at: Date;
     current_journey_id: string | null;
@@ -405,6 +411,8 @@ export async function listEmmausAccounts(): Promise<EmmausAccount[]> {
         SPLIT_PART(u.email, '@', 1)
       ) AS preferred_name,
       up.app_role,
+      up.account_status,
+      up.removed_at,
       u.created_at AS joined_at,
       GREATEST(
         u.updated_at,
@@ -453,14 +461,17 @@ export async function listEmmausAccounts(): Promise<EmmausAccount[]> {
         (SELECT MAX(updated_at) FROM sermon_companion_progress WHERE user_id = u.id) AS last_companion_at
     ) activity ON true
     WHERE u.email IS NOT NULL
+      AND up.account_status = $1
     ORDER BY last_active_at DESC, preferred_name ASC
-  `);
+  `, [accountStatus]);
 
   return rows.map((row) => ({
     id: row.id,
     email: row.email,
     preferredName: row.preferred_name,
     role: row.app_role,
+    accountStatus: row.account_status,
+    removedAt: row.removed_at?.toISOString() ?? null,
     joinedAt: row.joined_at.toISOString(),
     lastActiveAt: row.last_active_at.toISOString(),
     currentJourneyId: row.current_journey_id,
@@ -509,6 +520,7 @@ export async function listUnifiedPeople(): Promise<UnifiedPerson[]> {
          AND cs.auto_dismissed = false
      ) sig ON true
       WHERE u.email IS NOT NULL
+        AND up.account_status = 'active'
       ORDER BY COALESCE(
         NULLIF(up.preferred_name, ''),
         NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''),

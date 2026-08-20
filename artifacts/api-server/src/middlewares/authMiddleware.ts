@@ -6,6 +6,7 @@ import {
   refreshSessionIfExpired,
   type AuthenticatedUser,
 } from "../lib/oidc-auth.js";
+import { isPermanentlyDeletedAccount } from "../lib/account-lifecycle-store.js";
 import { getUserProfileBySubject } from "../lib/user-role-store.js";
 
 const EXPECTED_SUBJECT_HEADER = "x-emmaus-expected-subject";
@@ -64,6 +65,18 @@ export async function authMiddleware(
   // Role is always resolved from the database on every request (never trusted
   // from the session blob).
   const profile = await getUserProfileBySubject(refreshed.user.id);
+  // A session is never sufficient evidence of a current account. This blocks
+  // both removed profiles and a rare login-vs-permanent-purge race where a
+  // late opaque session could otherwise outlive its deleted profile.
+  if (
+    !profile ||
+    profile.accountStatus === "removed" ||
+    await isPermanentlyDeletedAccount(refreshed.user.id)
+  ) {
+    await clearSession(res, sid);
+    next();
+    return;
+  }
   req.user = {
     ...refreshed.user,
     preferredName:

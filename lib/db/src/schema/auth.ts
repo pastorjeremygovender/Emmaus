@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export type UserRole = "user" | "admin" | "superAdmin";
+export type AccountStatus = "active" | "removed";
 
 // Emmaus session storage. Session identifiers are random, opaque values;
 // provider access tokens never reach browser JavaScript.
@@ -70,6 +71,12 @@ export const userProfilesTable = pgTable(
       .references(() => usersTable.id, { onDelete: "restrict" }),
     appRole: text("app_role").$type<UserRole>().notNull().default("user"),
     roleAssignedAt: timestamp("role_assigned_at", { withTimezone: true }),
+    accountStatus: text("account_status")
+      .$type<AccountStatus>()
+      .notNull()
+      .default("active"),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: varchar("removed_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow()
@@ -81,6 +88,20 @@ export const userProfilesTable = pgTable(
       sql`${table.appRole} in ('user', 'admin', 'superAdmin')`,
     ),
   ],
+);
+
+// A subject-level block retained after permanent account deletion. It prevents
+// a delayed or retried provider response from recreating the local identity.
+export const permanentlyDeletedAccountsTable = pgTable(
+  "permanently_deleted_accounts",
+  {
+    accountId: varchar("account_id").primaryKey(),
+    email: text("email").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedBy: varchar("deleted_by").notNull(),
+  },
 );
 
 export type UpsertUser = typeof usersTable.$inferInsert;

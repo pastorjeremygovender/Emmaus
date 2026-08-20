@@ -1,11 +1,12 @@
 import {
   authBootstrapStateTable,
   db,
+  permanentlyDeletedAccountsTable,
   userProfilesTable,
   usersTable,
   type UserRole,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import {
   clearSession,
@@ -30,6 +31,7 @@ import {
   updateSupabasePassword,
   verifySupabaseOtp,
 } from "../lib/supabase-auth.js";
+import { isPermanentlyDeletedAccount } from "../lib/account-lifecycle-store.js";
 
 export const authRouter = Router();
 
@@ -89,6 +91,20 @@ class LegacyProfileMigrationRequiredError extends Error {
   }
 }
 
+class RemovedAccountError extends Error {
+  constructor() {
+    super("This Emmaus account has been removed. Please contact your administrator.");
+    this.name = "RemovedAccountError";
+  }
+}
+
+class PermanentlyDeletedAccountError extends Error {
+  constructor() {
+    super("This Emmaus account was permanently deleted. Please contact your administrator.");
+    this.name = "PermanentlyDeletedAccountError";
+  }
+}
+
 function isConfiguredInitialOwner(email: string): boolean {
   return (
     process.env.EMMAUS_INITIAL_SUPERADMIN_EMAIL?.trim().toLowerCase() === email
@@ -144,6 +160,20 @@ export async function upsertVerifiedIdentity(claims: Record<string, unknown>) {
   const isInitialOwner = isConfiguredInitialOwner(verifiedEmail);
 
   return db.transaction(async (tx) => {
+    // Share the exact subject lock used by permanent deletion. The tombstone
+    // check must happen inside this transaction before any identity upsert,
+    // otherwise a login can recreate a profile just after it was purged.
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${subject}))`,
+    );
+    const [tombstone] = await tx
+      .select({ accountId: permanentlyDeletedAccountsTable.accountId })
+      .from(permanentlyDeletedAccountsTable)
+      .where(eq(permanentlyDeletedAccountsTable.accountId, subject));
+    if (tombstone) {
+      throw new PermanentlyDeletedAccountError();
+    }
+
     const [emailOwner] = await tx
       .select({ id: usersTable.id })
       .from(usersTable)
@@ -288,8 +318,17 @@ async function establishSession(
   if (!providerEmail) {
     throw new Error("The identity provider did not return a valid email");
   }
+  if (await isPermanentlyDeletedAccount(providerUser.id)) {
+    throw new PermanentlyDeletedAccountError();
+  }
   await requireMigratedProfileForEmail(providerEmail);
-  const { user } = await upsertVerifiedIdentity(supabaseClaims(providerUser));
+  const { user, profile } = await upsertVerifiedIdentity(supabaseClaims(providerUser));
+  // Re-check after the identity upsert. A lifecycle purge may have started
+  // between the first tombstone check and this point; middleware has the same
+  // fail-closed guard for the final createSession race window.
+  if (profile.accountStatus === "removed" || await isPermanentlyDeletedAccount(providerUser.id)) {
+    throw new RemovedAccountError();
+  }
   const sessionData: SessionData = {
     user: {
       id: user.id,
@@ -351,6 +390,10 @@ function writeAuthError(res: Response, error: unknown): void {
       error:
         "This Emmaus profile needs a secure migration before email and password can be used. Please contact your Emmaus administrator.",
     });
+    return;
+  }
+  if (error instanceof RemovedAccountError || error instanceof PermanentlyDeletedAccountError) {
+    res.status(403).json({ error: error.message });
     return;
   }
   if (error instanceof SupabaseAuthError) {

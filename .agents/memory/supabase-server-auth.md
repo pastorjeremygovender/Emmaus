@@ -99,3 +99,20 @@ transaction lock, write a durable receipt even when skipped/not found, and
 refuse verified, privileged, configured-owner, or data-bearing profiles.
 Browser-cache cleanup must match a complete known fixture signature rather than
 an ID alone.
+
+Account removal is an application lifecycle state, not an email workaround.
+Removed members retain their immutable provider subject and all member-owned
+data until reinstated; permanent deletion writes a durable subject tombstone
+before purging local identity data.
+
+**Why:** Provider suspension or deletion can fail after a local change, and
+sign-in can race with account deletion. Without a tombstone and fail-closed
+profile checks, an opaque session or a late provider response could recreate
+access after a deletion.
+
+**How to apply:** Resolve an active profile and reject tombstoned subjects on
+every authenticated request. Permanent-delete retries must be idempotent:
+retain the tombstone, allow only an already-deleted provider 404 to count as
+completion, and never recreate a profile for that subject. Shared room records
+must be anonymized field-by-field rather than deleting the room for other
+members.

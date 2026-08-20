@@ -66,6 +66,8 @@ export interface EmmausAccount {
   email: string;
   preferredName: string;
   role: "user" | "admin" | "superAdmin";
+  accountStatus: "active" | "removed";
+  removedAt: string | null;
   joinedAt: string;
   lastActiveAt: string;
   currentJourneyId: string | null;
@@ -194,8 +196,41 @@ export const STATUS_COLOURS: Record<AttendanceStatus, string> = {
 
 // ─── People ──────────────────────────────────────────────────────────────────
 
-export const listEmmausAccounts = (auth: AuthHeaders) =>
-  apiFetch<EmmausAccount[]>("/accounts", "GET", auth);
+export interface AccountLifecycleEvent {
+  id: string;
+  action: "removed" | "reinstated" | "permanently_deleted";
+  actorId: string;
+  occurredAt: string;
+  detail: Record<string, unknown>;
+}
+
+export const listEmmausAccounts = (
+  auth: AuthHeaders,
+  status: "active" | "removed" = "active",
+) =>
+  apiFetch<EmmausAccount[]>(`/accounts${status === "removed" ? "?status=removed" : ""}`, "GET", auth);
+
+export const getAccountLifecycle = (auth: AuthHeaders, accountId: string) =>
+  apiFetch<AccountLifecycleEvent[]>(`/accounts/${encodeURIComponent(accountId)}/lifecycle`, "GET", auth);
+
+export const removeEmmausAccount = (
+  auth: AuthHeaders,
+  accountId: string,
+  options: { mode: "retain" | "permanent"; confirmationEmail?: string },
+) =>
+  apiFetch<{ ok: true; account: { id: string; email: string }; dataRetained: boolean }>(
+    `/accounts/${encodeURIComponent(accountId)}/remove`,
+    "POST",
+    auth,
+    options,
+  );
+
+export const reinstateEmmausAccount = (auth: AuthHeaders, accountId: string) =>
+  apiFetch<{ ok: true; account: { id: string; email: string } }>(
+    `/accounts/${encodeURIComponent(accountId)}/reinstate`,
+    "POST",
+    auth,
+  );
 
 export const listPeople = (auth: AuthHeaders) =>
   apiFetch<UnifiedPerson[]>("/people", "GET", auth);

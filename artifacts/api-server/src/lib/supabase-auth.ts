@@ -39,7 +39,7 @@ export class SupabaseAuthError extends Error {
 async function callSupabase<T>(
   path: string,
   options: {
-    method?: "GET" | "POST" | "PUT";
+    method?: "GET" | "POST" | "PUT" | "DELETE";
     body?: unknown;
     headers?: Record<string, string>;
   } = {},
@@ -181,6 +181,48 @@ export async function updateSupabasePassword(input: {
     method: "PUT",
     body: { password: input.password },
   });
+}
+
+/**
+ * Keep the identity-provider account locked as a defence in depth measure.
+ * Emmaus also enforces this server-side, so a provider outage never restores
+ * access to an account removed from the application.
+ */
+export async function suspendSupabaseUser(userId: string): Promise<void> {
+  await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: { ban_duration: "876000h" },
+  });
+}
+
+export async function reinstateSupabaseUser(userId: string): Promise<void> {
+  await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: { ban_duration: "none" },
+  });
+}
+
+export async function deleteSupabaseUser(
+  userId: string,
+  options: { ignoreNotFound?: boolean } = {},
+): Promise<void> {
+  try {
+    await callSupabase(`/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    // This is safe only after the caller has established a durable local
+    // permanent-deletion tombstone. A repeated provider delete may return 404
+    // when the first delete succeeded but its response was lost.
+    if (
+      options.ignoreNotFound &&
+      error instanceof SupabaseAuthError &&
+      error.status === 404
+    ) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function revokeSupabaseSession(
