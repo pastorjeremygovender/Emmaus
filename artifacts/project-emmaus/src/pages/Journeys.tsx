@@ -405,7 +405,7 @@ function DevotionalCard({
       state={state}
       isGated={isGated}
       onGate={onGate}
-      secondaryLabel={onViewPreviousDays ? 'View Devotional Contents' : undefined}
+      secondaryLabel={undefined}
       onSecondary={onViewPreviousDays}
     />
   );
