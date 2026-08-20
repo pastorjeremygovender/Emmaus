@@ -9,13 +9,11 @@
  */
 
 import { useParams, useLocation } from 'wouter';
-import { useState } from 'react';
 import { useJourney } from '@/contexts/JourneyContext';
 import { ArrowLeft } from 'lucide-react';
 import { getStepLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 import type { Journey } from '@/contexts/JourneyContext';
-import { BrowseModeToggle, type BrowseMode } from '@/components/BrowseModeToggle';
 
 interface Props {
   mode: 'daily-rhythm' | 'journey';
@@ -31,7 +29,6 @@ export function StepNavigatorPage({ mode }: Props) {
   const params = useParams<{ journeyId?: string }>();
   const [, setLocation] = useLocation();
   const { journeys, progress, getStepsForJourney } = useJourney();
-  const [browseMode, setBrowseMode] = useState<BrowseMode>('groups');
 
   const journey =
     mode === 'daily-rhythm'
@@ -89,20 +86,12 @@ export function StepNavigatorPage({ mode }: Props) {
             <p className="text-xs text-muted-foreground truncate">{journey.title}</p>
             <p className="text-sm font-semibold text-foreground">Choose a {stepPrefix.toLowerCase()} to read</p>
           </div>
-          <BrowseModeToggle value={browseMode} onChange={setBrowseMode} />
         </div>
       </div>
 
       {/* Full step list */}
       <main className="flex-1 px-4 pt-5 pb-4">
-        {browseMode === 'groups' ? (
-          <div className="rounded-2xl border border-dashed border-border p-8 text-center">
-            <p className="text-sm text-muted-foreground">No step groups are available yet.</p>
-            <button type="button" className="mt-3 text-sm font-medium text-primary" onClick={() => setBrowseMode('all')}>
-              View all {stepPrefix.toLowerCase()}s
-            </button>
-          </div>
-        ) : allSteps.length === 0 ? (
+        {allSteps.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No steps available yet.</p>
         ) : (
           <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
