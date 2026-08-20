@@ -137,7 +137,7 @@ export function DevotionalNavigatorPage() {
                 View all devotional days
               </button>
               </div>
-            </div>
+            </section>
           ) : (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -187,7 +187,7 @@ export function DevotionalNavigatorPage() {
                 const isCurrent = entry.dayNumber === currentDayNumber;
                 const label = getDevotionalLabel({ dayNumber: entry.dayNumber, displayLabel: entry.displayLabel });
                 return {
-                  key: entry.dayNumber,
+                  id: entry.dayNumber,
                   index: idx + 1,
                   title: label,
                   subtitle: entry.title,

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 export interface ContentStepListItem {
-  key: string | number;
+  id: string | number;
   index: ReactNode;
   title: ReactNode;
   subtitle?: ReactNode;
@@ -15,7 +15,7 @@ export interface ContentStepListItem {
 export function ContentStepRow(item: ContentStepListItem) {
   return (
     <button
-      key={item.key}
+      key={item.id}
       type="button"
       disabled={item.disabled}
       className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
@@ -59,7 +59,7 @@ export function ContentStepRow(item: ContentStepListItem) {
 export function ContentStepList({ items }: { items: ContentStepListItem[] }) {
   return (
     <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
-      {items.map(item => <ContentStepRow key={item.key} {...item} />)}
+      {items.map(item => <ContentStepRow key={item.id} {...item} />)}
     </div>
   );
 }
