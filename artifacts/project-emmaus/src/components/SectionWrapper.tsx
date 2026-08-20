@@ -13,20 +13,25 @@ export type SectionColor = keyof typeof SECTION_COLORS;
 export function SectionWrapper({
   color,
   label,
+  headerAction,
   children,
 }: {
   color: SectionColor;
   label: string;
+  headerAction?: ReactNode;
   children: ReactNode;
 }) {
   const c = SECTION_COLORS[color];
   return (
     <section className={cn('rounded-2xl border px-4 pt-3 pb-3.5 space-y-2', c.bg)}>
-      <div className="flex items-center gap-1.5">
-        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', c.dot)} aria-hidden="true" />
-        <h2 className={cn('text-[10px] font-bold uppercase tracking-[0.14em]', c.title)}>
-          {label}
-        </h2>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', c.dot)} aria-hidden="true" />
+          <h2 className={cn('text-[10px] font-bold uppercase tracking-[0.14em]', c.title)}>
+            {label}
+          </h2>
+        </div>
+        {headerAction}
       </div>
       {children}
     </section>
