@@ -13,6 +13,7 @@ import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
 import NewJourneyModal from './NewJourneyModal';
 import DeleteJourneyDialog from './DeleteJourneyDialog';
+import GroupMembershipBadge from './GroupMembershipBadge';
 
 interface Props {
   collectionId?: string;
@@ -257,7 +258,12 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
                   )}
                 </span>
               }
-              status={<StatusBadge status={j.status} />}
+              status={
+                <span className="flex items-center gap-1.5 flex-wrap">
+                  <StatusBadge status={j.status} />
+                  <GroupMembershipBadge targetType="journey" targetId={j.id} compact />
+                </span>
+              }
               onClick={() => onEdit(j.id)}
               actions={
                 <>

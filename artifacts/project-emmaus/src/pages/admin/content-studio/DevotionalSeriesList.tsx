@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
 import NewSeriesModal from './NewSeriesModal';
+import GroupMembershipBadge from './GroupMembershipBadge';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
 
@@ -100,7 +101,7 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
               <>
                 <p className="text-xs text-gray-400 mt-1">Create your first series to get started.</p>
                 <button
-                  onClick={() => setShowNew(true)}
+                  onClick={() => setShowNewModal(true)}
                   className="mt-5 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors"
                 >
                   Create a Series
@@ -117,7 +118,12 @@ export default function DevotionalSeriesList({ onEdit }: Props) {
             iconContent={<BookHeart size={16} className="text-teal-600" />}
             title={s.title}
             meta={TYPE_LABELS[s.seriesType] ?? s.seriesType}
-            status={<StatusBadge status={s.status} />}
+            status={
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <StatusBadge status={s.status} />
+                <GroupMembershipBadge targetType="daily-devotional" targetId={s.id} compact />
+              </span>
+            }
             onClick={() => onEdit(s.id)}
             actions={
               <>

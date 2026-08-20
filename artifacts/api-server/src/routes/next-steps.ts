@@ -20,6 +20,14 @@ import * as journeyStore from "../lib/journey-store.js";
 import * as devStore from "../lib/devotional-store.js";
 import * as collectionsStore from "../lib/collections-store.js";
 import * as sermonCompanionStore from "../lib/sermon-companion-store.js";
+import {
+  listPublishedGroups,
+} from "../lib/content-groups-store.js";
+import { db } from "@workspace/db";
+import {
+  contentGroupItemsTable,
+} from "@workspace/db/schema";
+import { inArray } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { computeBadge, type Badge } from "../lib/badge.js";
 import { extractUserId } from "../emmaus/auth.js";
@@ -31,6 +39,7 @@ const router = Router();
 export type MemberProgressState = "not-started" | "in-progress" | "completed" | "paused";
 export type ContentType =
   | "journey"
+  | "daily-rhythm"
   | "bible-study"
   | "sermon-devotional"
   | "daily-devotional";
@@ -70,12 +79,24 @@ export interface JourneyCollectionGroup {
   journeys: NextStepsItem[];
 }
 
+/** A content group entry in the Next Steps response — personalised, eligibility-checked. */
+export interface ContentGroupEntry {
+  id: string;
+  title: string;
+  description?: string;
+  coverImageUrl?: string;
+  displayOrder: number;
+  items: NextStepsItem[];
+}
+
 export interface NextStepsResponse {
   dailyDevotionals: NextStepsItem[];
   journeyCollections: JourneyCollectionGroup[];
   standaloneJourneys: NextStepsItem[];
   currentSermonCompanion: NextStepsItem | null;
   previousSermonCompanions: NextStepsItem[];
+  /** Content groups (Task #614): published groups with eligible, personalised items. */
+  contentGroups: ContentGroupEntry[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,7 +196,9 @@ function buildJourneyItem(
       publishedAt: j.publishedAt || undefined,
       subtitle: j.subtitle || undefined,
     },
-    route: `/journey/${j.id}/day/${currentDay}`,
+    route: contentType === "daily-rhythm"
+      ? `/daily-rhythm/day/${currentDay}`
+      : `/journey/${j.id}/day/${currentDay}`,
     primaryActionLabel: primaryActionLabel(contentType, state),
     badge: computeBadge(j.notifyPublishedAt, p?.lastOpenedAt, !!p),
   };
@@ -262,12 +285,14 @@ router.get("/next-steps", async (req: Request, res: Response) => {
 
     // ── Fetch catalog + progress in parallel ────────────────────────────────
 
-    const [publishedJourneys, devSeries, allCollections, scTableCompanions] = await Promise.all([
+    const [publishedJourneys, devSeries, allCollections, scTableCompanions, publishedContentGroups] = await Promise.all([
       journeyStore.listPublishedJourneys(),
       devStore.listPublishedSeries(),
       collectionsStore.listCollections(),
       // Sermon companions from the sermon_companion table (AI-generated pipeline)
       sermonCompanionStore.listPublishedSermonCompanions(),
+      // Content groups (Task #614)
+      listPublishedGroups(),
     ]);
 
     // Batch-check which published journeys have a Walk Introduction step (day=0).
@@ -452,6 +477,94 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
     );
 
+    // ── Content Groups (Task #614) ────────────────────────────────────────────
+    // Build personalised NextStepsItem arrays for each published content group.
+    // Each group's items are drawn from eligible, published targets only.
+    // Daily Rhythm journeys are allowed here (excluded from the legacy lists above).
+    // Uses the same buildJourneyItem / buildDevotionalItem builders for consistency.
+
+    const contentGroups: ContentGroupEntry[] = [];
+
+    if (publishedContentGroups.length > 0) {
+      // publishedJourneys already includes all journey types (including daily-rhythm).
+      // The JOURNEY_EXCLUDE set above only filters the legacy standaloneJourneys / journeyCollections
+      // grouping — daily-rhythm IS in publishedJourneys and can appear in content groups.
+      const fullJourneyMap = new Map(publishedJourneys.map(j => [j.id, j]));
+
+      // Fetch all group items in one batch query, then index by groupId
+      const groupIds = publishedContentGroups.map(g => g.id);
+      const allGroupItems = await db
+        .select()
+        .from(contentGroupItemsTable)
+        .where(inArray(contentGroupItemsTable.groupId, groupIds));
+
+      const itemsByGroup = new Map<string, typeof allGroupItems>();
+      for (const item of allGroupItems) {
+        if (!itemsByGroup.has(item.groupId)) itemsByGroup.set(item.groupId, []);
+        itemsByGroup.get(item.groupId)!.push(item);
+      }
+
+      // Ensure seriesEntriesMap covers any devotionals referenced by groups but not
+      // already in the published series list (edge case: group holds a series that
+      // was recently unpublished but membership row is still present).
+      const groupDevotionalIds = allGroupItems
+        .filter(i => i.targetType === "daily-devotional")
+        .map(i => i.targetId);
+      const missingDevotionalIds = groupDevotionalIds.filter(id => !seriesEntriesMap.has(id));
+
+      await Promise.all(
+        missingDevotionalIds.map(async (seriesId) => {
+          const full = await devStore.getSeriesById(seriesId);
+          if (full) {
+            const published = full.entries.filter(
+              (e: devStore.DevotionalEntry) => e.status === "Published",
+            );
+            seriesEntriesMap.set(seriesId, published);
+          }
+        }),
+      );
+
+      for (const group of publishedContentGroups) {
+        const rawItems = (itemsByGroup.get(group.id) ?? [])
+          .sort((a, b) => a.displayOrder - b.displayOrder);
+
+        const builtItems: NextStepsItem[] = [];
+
+        for (const item of rawItems) {
+          if (item.targetType === "journey" || item.targetType === "daily-rhythm") {
+            const j = fullJourneyMap.get(item.targetId);
+            if (!j) continue; // journey not published or not found
+            const contentType: ContentType =
+              item.targetType === "daily-rhythm"
+                ? "daily-rhythm"
+                : j.journeyType === "bible-study"
+                  ? "bible-study"
+                  : "journey";
+            builtItems.push(
+              buildJourneyItem(j, contentType, journeyProgress, journeyIdsWithIntro),
+            );
+          } else if (item.targetType === "daily-devotional") {
+            const entries = seriesEntriesMap.get(item.targetId);
+            if (!entries || entries.length === 0) continue; // no published entries
+            const series = devSeries.find(s => s.id === item.targetId);
+            if (!series) continue;
+            builtItems.push(buildDevotionalItem(series, entries, devProgressMap));
+          }
+        }
+
+        if (builtItems.length > 0) {
+          contentGroups.push({
+            id: group.id,
+            title: group.title,
+            description: group.description || undefined,
+            coverImageUrl: group.coverImageUrl ?? undefined,
+            displayOrder: group.displayOrder,
+            items: builtItems,
+          });
+        }
+      }
+    }
+
     // ── Respond ──────────────────────────────────────────────────────────────
 
     const response: NextStepsResponse = {
@@ -460,6 +573,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
       standaloneJourneys,
       currentSermonCompanion,
       previousSermonCompanions,
+      contentGroups,
     };
 
     res.set("Cache-Control", "no-store");

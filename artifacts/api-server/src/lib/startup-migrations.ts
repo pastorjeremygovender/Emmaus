@@ -2188,6 +2188,45 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: is_completion_step integrity scan failed (non-fatal)");
   }
 
+  // ── Content Groups (Task #614) ───────────────────────────────────────────────
+  // A separate grouping layer for journeys, daily-rhythms, and devotional series.
+  // Does NOT touch or replace the existing Journey Collections (collections table).
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS content_groups (
+        id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        title         text NOT NULL,
+        description   text NOT NULL DEFAULT '',
+        cover_image_url text,
+        status        text NOT NULL DEFAULT 'Draft',
+        display_order integer NOT NULL DEFAULT 0,
+        created_at    timestamp NOT NULL DEFAULT NOW(),
+        updated_at    timestamp NOT NULL DEFAULT NOW(),
+        created_by    text,
+        updated_by    text
+      );
+
+      CREATE TABLE IF NOT EXISTS content_group_items (
+        id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        group_id      uuid NOT NULL REFERENCES content_groups(id) ON DELETE CASCADE,
+        target_type   text NOT NULL,
+        target_id     text NOT NULL,
+        display_order integer NOT NULL DEFAULT 0,
+        created_at    timestamp NOT NULL DEFAULT NOW(),
+        UNIQUE (group_id, target_type, target_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS content_group_items_group_idx
+        ON content_group_items(group_id, display_order);
+
+      CREATE INDEX IF NOT EXISTS content_group_items_target_idx
+        ON content_group_items(target_type, target_id);
+    `);
+    logger.info("Startup migration: content_groups + content_group_items tables created (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: content_groups tables failed (non-fatal)");
+  }
+
   // ── Partial unique index: at most one completion step per journey (2026-08) ──
   // This index is the DB-level safety net for the application-layer invariant:
   // only one step per journey may have is_completion_step = true AND deleted_at IS NULL.

@@ -42,6 +42,7 @@ import {
   type NextStepsData,
   type NextStepsItem,
   type ContentType,
+  type ContentGroupEntry,
   type JourneyCollectionGroup,
 } from '@/lib/next-steps-api';
 import { navigatorRoute } from '@/lib/content-navigation';
@@ -55,6 +56,7 @@ type TabId = 'walks' | 'journeys' | 'devotionals' | 'sermons';
 
 const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   journey:             'Walk',
+  'daily-rhythm':      'Daily Rhythm',
   'bible-study':       'Bible Study',
   'sermon-devotional': 'Sermon Companion',
   'daily-devotional':  'Daily Devotional',
@@ -575,6 +577,48 @@ function WalksPanel({
   );
 }
 
+function ContentGroupsPanel({
+  groups, type, onOpen, isGated, onGate,
+}: {
+  groups: ContentGroupEntry[];
+  type: 'journey' | 'daily-rhythm' | 'daily-devotional';
+  onOpen: (group: ContentGroupEntry) => void;
+  isGated: boolean;
+  onGate: () => void;
+}) {
+  const matching = groups
+    .map(group => ({
+      group,
+      count: group.items.filter(item =>
+        type === 'daily-devotional'
+          ? item.contentType === 'daily-devotional'
+          : type === 'daily-rhythm'
+            ? item.contentType === 'daily-rhythm'
+            : item.contentType === 'journey' || item.contentType === 'bible-study' || item.contentType === 'daily-rhythm',
+      ).length,
+    }))
+    .filter(entry => entry.count > 0);
+
+  if (matching.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className="pt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Browse by group</p>
+      {matching.map(({ group, count }) => (
+        <DiscoverCompactCard
+          key={group.id}
+          title={group.title}
+          subtitle={group.description || `${count} ${count === 1 ? 'item' : 'items'}`}
+          ctaLabel={isGated ? undefined : 'Open'}
+          onAction={() => onOpen(group)}
+          isGated={isGated}
+          onGate={onGate}
+        />
+      ))}
+    </div>
+  );
+}
+
 function SermonCompanionsPanel({
   current, previous, onAction: _onAction, isGated, onGate, getProgressDay,
 }: {
@@ -870,6 +914,13 @@ export default function Journeys() {
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
               <SectionWrapper color="emerald" label="Walks">
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
                 <WalksPanel
                   standalone={data.standaloneJourneys}
                   onAction={handleJourneyAction}
@@ -885,6 +936,13 @@ export default function Journeys() {
             )}
             {activeTab === 'journeys' && (
               <SectionWrapper color="amber" label="Journeys">
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
                 <JourneysPanel
                   collections={data.journeyCollections}
                   onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
@@ -896,6 +954,13 @@ export default function Journeys() {
             )}
             {activeTab === 'devotionals' && (
               <SectionWrapper color="violet" label="Daily Devotionals">
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="daily-devotional"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                />
                 <DevotionalsPanel
                   items={data.dailyDevotionals}
                   onAction={handleDevotionalAction}

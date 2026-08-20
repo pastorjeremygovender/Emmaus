@@ -29,6 +29,7 @@ import { historyRouter } from "./history";
 import { searchRouter } from "./search";
 import voiceRouter from "./voice";
 import shareImageRouter from "./share-image";
+import contentGroupsRouter from "./content-groups";
 
 const router: IRouter = Router();
 
@@ -39,6 +40,9 @@ router.use(emmausRouter);
 router.use(bibleRouter);
 router.use(bibleAiRouter);
 router.use(youtubeArchiveRouter);
+// Must be mounted before journeysRouter: its /:id matcher would otherwise
+// consume the "content-groups" path and return a journey 404.
+router.use("/content-groups", contentGroupsRouter);
 router.use(journeysRouter);
 router.use(collectionsRouter);
 router.use(writingAssistantRouter);

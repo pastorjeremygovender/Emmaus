@@ -12,6 +12,7 @@ export type MemberProgressState = 'not-started' | 'in-progress' | 'completed' | 
 
 export type ContentType =
   | 'journey'
+  | 'daily-rhythm'
   | 'bible-study'
   | 'sermon-devotional'
   | 'daily-devotional';
@@ -53,12 +54,23 @@ export interface JourneyCollectionGroup {
   journeys: NextStepsItem[];
 }
 
+/** A published, member-visible manual group with personalised content items. */
+export interface ContentGroupEntry {
+  id: string;
+  title: string;
+  description?: string;
+  coverImageUrl?: string;
+  displayOrder: number;
+  items: NextStepsItem[];
+}
+
 export interface NextStepsData {
   dailyDevotionals: NextStepsItem[];
   journeyCollections: JourneyCollectionGroup[];
   standaloneJourneys: NextStepsItem[];
   currentSermonCompanion: NextStepsItem | null;
   previousSermonCompanions: NextStepsItem[];
+  contentGroups: ContentGroupEntry[];
 }
 
 export async function resumeEngagement(

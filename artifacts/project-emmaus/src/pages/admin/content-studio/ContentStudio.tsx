@@ -21,7 +21,7 @@
 import React, { useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2,
-  FolderOpen, BookOpen,
+  FolderOpen, BookOpen, Layers2,
   ChevronRight, X, Upload,
 } from 'lucide-react';
 import BulkImportModal from './BulkImportModal';
@@ -48,6 +48,8 @@ import MediaKitEditor from '../media-studio/MediaKitEditor';
 import JourneyEditor from '../JourneyEditor';
 import DayEditor from '../DayEditor';
 import DayPreview from '../DayPreview';
+import ContentGroupsList from './ContentGroupsList';
+import ContentGroupEditor from './ContentGroupEditor';
 
 // ─── View types ───────────────────────────────────────────────────────────────
 
@@ -86,7 +88,10 @@ type StudioView =
   // ── Bible Study ───────────────────────────────────────────────────────────
   | { id: 'bible-progress' }
   | { id: 'bible-generator'; bookId?: string }
-  | { id: 'bible-book-intros' };
+  | { id: 'bible-book-intros' }
+  // ── Groupings ─────────────────────────────────────────────────────────────
+  | { id: 'groupings' }
+  | { id: 'group-editor'; groupId?: string };
 
 // ─── Top-level navigation ─────────────────────────────────────────────────────
 
@@ -97,6 +102,7 @@ const TOP_NAV: TopTab[] = [
   { id: 'devotionals',  label: 'Daily Devotionals', Icon: BookHeart  },
   { id: 'walks',        label: 'Walks',             Icon: BookOpen   },
   { id: 'journeys',     label: 'Journeys',          Icon: FolderOpen },
+  { id: 'groupings',    label: 'Groupings',         Icon: Layers2    },
   { id: 'sermons',      label: 'Sermons',           Icon: Mic2       },
 ];
 
@@ -123,6 +129,9 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'journey-day-editor':         'journeys',
   'sermons':                    'sermons',
   'sermon-editor':              'sermons',
+  // Groupings tab
+  'groupings':                  'groupings',
+  'group-editor':               'groupings',
 };
 
 // Default view when a top tab is clicked
@@ -132,6 +141,7 @@ const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   'walks':        { id: 'journeys-library' },
   'journeys':     { id: 'journeys-collections' },
   'sermons':      { id: 'sermons' },
+  'groupings':    { id: 'groupings' },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -292,6 +302,15 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
       case 'sermon-editor':
         crumbs.push({ label: 'Sermons', onClick: () => navigate({ id: 'sermons' }) });
         crumbs.push({ label: view.sermonId ? 'Review Sermon' : 'New Sermon' });
+        break;
+
+      // Groupings
+      case 'groupings':
+        crumbs.push({ label: 'Groupings' });
+        break;
+      case 'group-editor':
+        crumbs.push({ label: 'Groupings', onClick: () => navigate({ id: 'groupings' }) });
+        crumbs.push({ label: view.groupId ? 'Edit Group' : 'New Group' });
         break;
 
       // Media Studio
@@ -563,6 +582,23 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         return (
           <BibleContentStudio
             initialSubView="book-intros"
+          />
+        );
+
+      // ── Groupings ─────────────────────────────────────────────────────────
+      case 'groupings':
+        return (
+          <ContentGroupsList
+            onNew={() => navigate({ id: 'group-editor' })}
+            onEdit={(groupId) => navigate({ id: 'group-editor', groupId })}
+          />
+        );
+      case 'group-editor':
+        return (
+          <ContentGroupEditor
+            groupId={view.groupId}
+            onBack={() => navigate({ id: 'groupings' })}
+            onSaved={() => navigate({ id: 'groupings' })}
           />
         );
 
