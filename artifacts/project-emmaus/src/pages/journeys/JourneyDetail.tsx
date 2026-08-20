@@ -444,6 +444,7 @@ export default function JourneyDetail() {
                 const isUpNext = isStarted && !isCompleted && s.day === nextUnfinishedDay;
                 return (
                   <ContentStepRow
+                    key={s.id}
                     id={s.day}
                     index={s.day}
                     title={s.title || getStepLabel(s, journey)}
