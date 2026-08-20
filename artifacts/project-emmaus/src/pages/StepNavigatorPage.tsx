@@ -10,9 +10,10 @@
 
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
-import { ArrowLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { getStepLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
+import { ContentStepList } from '@/components/ContentStepList';
 import type { Journey } from '@/contexts/JourneyContext';
 
 interface Props {
@@ -71,71 +72,56 @@ export function StepNavigatorPage({ mode }: Props) {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background pb-page-safe flex flex-col">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={goBack}
-            className="p-1.5 -ml-1.5 rounded-full hover:bg-muted transition-colors"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{journey.title}</p>
-            <p className="text-sm font-semibold text-foreground">Choose a {stepPrefix.toLowerCase()} to read</p>
-          </div>
+    <div className="min-h-[100dvh] bg-background pb-page-safe">
+      <main className="px-5 pt-6 pb-4 max-w-[480px] mx-auto space-y-6">
+        <button
+          onClick={goBack}
+          className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
+          aria-label="Back"
+        >
+          <ChevronLeft size={17} />
+          Today's Steps
+        </button>
+
+        <div className="space-y-0.5">
+          <h1 className="text-[26px] font-sans font-medium tracking-tight text-foreground leading-snug">
+            {journey.title}
+          </h1>
+          <p className="text-[13px] text-muted-foreground">
+            Choose a {stepPrefix.toLowerCase()} to read
+          </p>
         </div>
-      </div>
 
-      {/* Full step list */}
-      <main className="flex-1 px-4 pt-5 pb-4">
-        {allSteps.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No steps available yet.</p>
-        ) : (
-          <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">
-            {allSteps.map(step => {
-              const done      = completedSet.has(step.day);
-              const isCurrent = step.day === currentDay && !done;
-              const label     = getStepLabel(step, journey);
-
-              return (
-                <button
-                  key={step.id}
-                  className={`w-full flex items-start gap-3 px-4 py-3.5 transition-colors text-left ${
-                    isCurrent
-                      ? 'bg-primary/5 hover:bg-primary/10 active:bg-primary/15'
-                      : 'bg-card hover:bg-muted/40 active:bg-muted/60'
-                  }`}
-                  onClick={() => setLocation(readingPath(mode, journey, step.day))}
-                  aria-label={
-                    isCurrent
-                      ? `Up next: ${label}${step.title ? ` — ${step.title}` : ''}`
-                      : done
-                        ? `Review: ${label}${step.title ? ` — ${step.title}` : ''}`
-                        : `${label}${step.title ? ` — ${step.title}` : ''}`
-                  }
-                >
-                  <span className={`text-[12px] font-medium w-6 shrink-0 mt-0.5 ${done || isCurrent ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {step.day}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className={`text-[14px] leading-snug block ${done ? 'text-muted-foreground' : 'text-foreground'}`}>
-                      {step.title || label}
-                    </span>
-                    {step.scripture && (
-                      <span className="text-[12px] text-muted-foreground block mt-0.5">{step.scripture}</span>
-                    )}
-                  </span>
-                  <span className={`ml-auto text-[11px] font-medium shrink-0 mt-0.5 ${isCurrent ? 'text-primary' : done ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {isCurrent ? 'Up next →' : done ? 'Review →' : '→'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
+            {stepPrefix === 'Day' ? 'Days' : 'Steps'}
+          </h2>
+          {allSteps.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No steps available yet.</p>
+          ) : (
+            <ContentStepList
+              items={allSteps.map(step => {
+                const done = completedSet.has(step.day);
+                const isCurrent = step.day === currentDay && !done;
+                const label = getStepLabel(step, journey);
+                return {
+                  id: step.id,
+                  index: step.day,
+                  title: step.title || label,
+                  subtitle: step.scripture,
+                  completed: done,
+                  current: isCurrent,
+                  ariaLabel: isCurrent
+                    ? `Up next: ${label}${step.title ? ` — ${step.title}` : ''}`
+                    : done
+                      ? `Review: ${label}${step.title ? ` — ${step.title}` : ''}`
+                      : `${label}${step.title ? ` — ${step.title}` : ''}`,
+                  onClick: () => setLocation(readingPath(mode, journey, step.day)),
+                };
+              })}
+            />
+          )}
+        </section>
       </main>
 
       <BottomNav />
