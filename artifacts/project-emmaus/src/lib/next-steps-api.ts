@@ -33,6 +33,7 @@ export interface NextStepsItem {
     collectionId?: string;
     publishedAt?: string;
     subtitle?: string;
+    topic?: string;
     /** For daily-devotional items: the member's current day (next to complete). */
     currentDay?: number;
   };

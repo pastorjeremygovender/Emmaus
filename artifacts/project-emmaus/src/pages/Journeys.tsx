@@ -616,13 +616,14 @@ function WalksPanel({
 }
 
 function ContentGroupsPanel({
-  groups, type, onOpen, isGated, onGate,
+  groups, type, onOpen, isGated, onGate, sort,
 }: {
   groups: ContentGroupEntry[];
   type: 'journey' | 'daily-rhythm' | 'daily-devotional';
   onOpen: (group: ContentGroupEntry) => void;
   isGated: boolean;
   onGate: () => void;
+  sort: DiscoverSort;
 }) {
   const matching = groups
     .map(group => ({
@@ -639,10 +640,21 @@ function ContentGroupsPanel({
 
   if (matching.length === 0) return null;
 
+  const ordered = [...matching].sort((a, b) => {
+    if (sort === 'newest' || sort === 'oldest') {
+      const aDate = Math.max(...a.group.items.map(sortItemDate), 0);
+      const bDate = Math.max(...b.group.items.map(sortItemDate), 0);
+      return sort === 'newest' ? bDate - aDate : aDate - bDate;
+    }
+    const aKey = sort === 'topic' ? (a.group.description || a.group.title) : a.group.title;
+    const bKey = sort === 'topic' ? (b.group.description || b.group.title) : b.group.title;
+    return aKey.localeCompare(bKey);
+  });
+
   return (
     <div className="space-y-2">
       <p className="pt-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Browse by group</p>
-      {matching.map(({ group, count }) => (
+      {ordered.map(({ group, count }) => (
         <DiscoverCompactCard
           key={group.id}
           title={group.title}
@@ -657,41 +669,27 @@ function ContentGroupsPanel({
   );
 }
 
-function BrowseModeToggle({
-  value,
-  onChange,
-}: {
-  value: 'groups' | 'all';
-  onChange: (value: 'groups' | 'all') => void;
-}) {
+function SortBySelect({ value, onChange }: { value: DiscoverSort; onChange: (value: DiscoverSort) => void }) {
   return (
-    <div className="inline-flex items-center rounded-xl border border-border bg-muted/30 p-1" role="group" aria-label="Browse mode">
-      <button
-        type="button"
-        onClick={() => onChange('groups')}
-        aria-pressed={value === 'groups'}
-        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-          value === 'groups' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-        }`}
+    <label className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+      <span className="font-medium uppercase tracking-wide">Sort by</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as DiscoverSort)}
+        className="h-9 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground shadow-sm outline-none focus:ring-2 focus:ring-primary/30"
+        aria-label="Sort Discover content"
       >
-        View Groups
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('all')}
-        aria-pressed={value === 'all'}
-        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-          value === 'all' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        View All
-      </button>
-    </div>
+        <option value="alphabetical">Alphabetically</option>
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="topic">Topic</option>
+      </select>
+    </label>
   );
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction: _onAction, isGated, onGate, getProgressDay,
+  current, previous, onAction: _onAction, isGated, onGate, getProgressDay, sort,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
@@ -699,6 +697,7 @@ function SermonCompanionsPanel({
   isGated: boolean;
   onGate: () => void;
   getProgressDay: (id: string) => number;
+  sort: DiscoverSort;
 }) {
   const [, setLocation] = useLocation();
 
@@ -745,11 +744,12 @@ function SermonCompanionsPanel({
     );
   }
 
+  const ordered = sortItems([...(current ? [current] : []), ...previous], sort);
+
   return (
     <div className="space-y-4">
-      {current && companionCard(current, true)}
-      {previous.map(item => (
-        <div key={item.id}>{companionCard(item, false)}</div>
+      {ordered.map(item => (
+        <div key={item.id}>{companionCard(item, item.id === current?.id)}</div>
       ))}
     </div>
   );
@@ -769,7 +769,7 @@ export default function Journeys() {
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
-  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('groups');
+  const [discoverSort, setDiscoverSort] = useState<DiscoverSort>('alphabetical');
   function handleTabChange(id: TabId) { setActiveTab(id); saveTab(id); }
 
   // ── API data ─────────────────────────────────────────────────────────────
@@ -986,78 +986,25 @@ export default function Journeys() {
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
               <SectionWrapper color="emerald" label="Walks">
-                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
-                {browseMode === 'groups' ? (
-                  <ContentGroupsPanel
-                    groups={data.contentGroups}
-                    type="journey"
-                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                    isGated={!gateClear}
-                    onGate={() => setLocation('/walk')}
-                  />
-                ) : (
-                  <WalksPanel
-                    standalone={data.standaloneJourneys}
-                    onAction={handleJourneyAction}
-                    onPause={(id) => setPauseTargetId(id)}
-                    onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)}
-                    isGated={isItemGated}
-                    onGate={() => setLocation('/walk')}
-                    getEnrollmentState={(id) => getState(id)}
-                    getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                    onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)}
-                  />
-                )}
+                <SortBySelect value={discoverSort} onChange={setDiscoverSort} />
+                <WalksPanel standalone={data.standaloneJourneys} sort={discoverSort} onAction={handleJourneyAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
               <SectionWrapper color="amber" label="Journeys">
-                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
-                {browseMode === 'groups' ? (
-                  <ContentGroupsPanel
-                    groups={data.contentGroups}
-                    type="journey"
-                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                    isGated={!gateClear}
-                    onGate={() => setLocation('/walk')}
-                  />
-                ) : (
-                  <JourneysPanel
-                    collections={data.journeyCollections}
-                    onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)}
-                    isGated={!gateClear}
-                    onGate={() => setLocation('/walk')}
-                    progress={progress}
-                  />
-                )}
+                <SortBySelect value={discoverSort} onChange={setDiscoverSort} />
+                <JourneysPanel collections={data.journeyCollections} sort={discoverSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
               </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
               <SectionWrapper color="violet" label="Daily Devotionals">
-                <div className="flex justify-end"><BrowseModeToggle value={browseMode} onChange={setBrowseMode} /></div>
-                {browseMode === 'groups' ? (
-                  <ContentGroupsPanel
-                    groups={data.contentGroups}
-                    type="daily-devotional"
-                    onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
-                    isGated={!gateClear}
-                    onGate={() => setLocation('/walk')}
-                  />
-                ) : (
-                  <DevotionalsPanel
-                    items={data.dailyDevotionals}
-                    onAction={handleDevotionalAction}
-                    startingId={startingDevId}
-                    onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)}
-                    isGated={!gateClear}
-                    onGate={() => setLocation('/walk')}
-                    getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                  />
-                )}
+                <SortBySelect value={discoverSort} onChange={setDiscoverSort} />
+                <DevotionalsPanel items={data.dailyDevotionals} sort={discoverSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} isGated={!gateClear} onGate={() => setLocation('/walk')} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}
             {activeTab === 'sermons' && (
               <SectionWrapper color="blue" label="Sermon Companions">
+                <SortBySelect value={discoverSort} onChange={setDiscoverSort} />
                 <SermonCompanionsPanel
                   current={data.currentSermonCompanion}
                   previous={data.previousSermonCompanions}
@@ -1065,6 +1012,7 @@ export default function Journeys() {
                   isGated={!gateClear}
                   onGate={() => setLocation('/walk')}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
+                  sort={discoverSort}
                 />
               </SectionWrapper>
             )}
