@@ -15,7 +15,6 @@ import ContentStudioListItem from './ContentStudioListItem';
 import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioListPage';
 import NewDayModal from './NewDayModal';
 import GenerateLabelsModal from './GenerateLabelsModal';
-import GroupMembershipBadge from './GroupMembershipBadge';
 import DailyRhythmGroupsPanel from './DailyRhythmGroupsPanel';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
@@ -54,14 +53,6 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
     ? `10 Minutes with Jesus · ${days.length} day${days.length !== 1 ? 's' : ''} authored`
     : 'A daily walk with Jesus for every member.';
 
-  // Group membership badge shown in the page header area for the Daily Rhythm journey
-  const groupBadge = journey ? (
-    <div className="flex items-center gap-2 mt-1">
-      <span className="text-[11px] text-gray-400">Groups:</span>
-      <GroupMembershipBadge targetType="daily-rhythm" targetId={journey.id} />
-    </div>
-  ) : null;
-
   return (
     <>
     <ContentStudioListPage
@@ -69,9 +60,9 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
       description={
         <span>
           {description}
-          {groupBadge}
         </span>
       }
+      beforeList={journey ? <DailyRhythmGroupsPanel journeyId={journey.id} steps={days} /> : null}
       newButton={
         <div className="flex items-center gap-2">
           {journey && days.length > 0 && (
@@ -170,8 +161,6 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
         />
       ))}
     </ContentStudioListPage>
-
-    {journey && <DailyRhythmGroupsPanel journeyId={journey.id} steps={days} />}
 
     {showNewModal && journey && (
       <NewDayModal

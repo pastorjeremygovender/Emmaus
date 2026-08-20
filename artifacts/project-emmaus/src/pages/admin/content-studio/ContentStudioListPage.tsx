@@ -38,6 +38,8 @@ export interface ContentStudioListPageProps {
   /** When true and not loading, show emptyState instead of children */
   isEmpty?: boolean;
   emptyState?: React.ReactNode;
+  /** Optional content section rendered immediately before the list rows. */
+  beforeList?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -51,6 +53,7 @@ export default function ContentStudioListPage({
   loadingText = 'Loading…',
   isEmpty,
   emptyState,
+  beforeList,
   children,
 }: ContentStudioListPageProps) {
   return (
@@ -102,8 +105,11 @@ export default function ContentStudioListPage({
       ) : isEmpty ? (
         <>{emptyState}</>
       ) : (
-        <div className="space-y-3">
-          {children}
+        <div>
+          {beforeList}
+          <div className="space-y-3">
+            {children}
+          </div>
         </div>
       )}
     </div>
