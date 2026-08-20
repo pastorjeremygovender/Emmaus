@@ -24,6 +24,7 @@ import {
 import { StatusBadge, Field } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
 import GenerateLabelsModal from './GenerateLabelsModal';
+import DevotionalEntryGroupsPanel from './DevotionalEntryGroupsPanel';
 
 interface Props {
   seriesId: string;
@@ -308,6 +309,14 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
               <Plus size={13} /> Add Day
             </button>
           </div>
+        </div>
+
+        <div className="mb-5">
+          <DevotionalEntryGroupsPanel
+            seriesId={seriesId}
+            entries={data.entries}
+            auth={auth}
+          />
         </div>
 
         {data.entries.length === 0 ? (

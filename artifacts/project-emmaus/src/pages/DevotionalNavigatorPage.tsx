@@ -19,12 +19,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FolderOpen } from 'lucide-react';
 import {
   getSeriesWithEntries,
   getAllProgress,
+  listDevotionalEntryGroups,
   type DevotionalProgress,
   type SeriesWithEntries,
+  type DevotionalEntryGroup,
 } from '@/lib/devotionals-api';
 import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
@@ -41,12 +43,15 @@ function resolveCurrentDayNumber(
 
 export function DevotionalNavigatorPage() {
   const { seriesId } = useParams<{ seriesId: string }>();
+  const { groupId } = useParams<{ seriesId: string; groupId?: string }>();
   const [, setLocation] = useLocation();
   const { user } = useAuth();
 
   const [series, setSeries] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
+  const [groups, setGroups] = useState<DevotionalEntryGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const selectedGroup = groups.find(group => group.id === groupId) ?? null;
 
   useEffect(() => {
     if (!seriesId || !user?.id) return;
@@ -55,16 +60,22 @@ export function DevotionalNavigatorPage() {
     Promise.all([
       getSeriesWithEntries(seriesId, auth),
       getAllProgress(auth),
+      listDevotionalEntryGroups(seriesId, auth).catch(() => [] as DevotionalEntryGroup[]),
     ])
-      .then(([s, allProg]) => {
+      .then(([s, allProg, entryGroups]) => {
         setSeries(s);
         setProgress(allProg.find(p => p.seriesId === seriesId) ?? null);
+        setGroups(entryGroups);
       })
       .catch(() => {/* non-fatal */})
       .finally(() => setLoading(false));
   }, [seriesId, user?.id]);
 
   function goBack() {
+    if (groupId) {
+      setLocation(`/devotional/${seriesId}/navigate`);
+      return;
+    }
     if (window.history.length > 1) window.history.back();
     else setLocation('/walk');
   }
@@ -77,7 +88,7 @@ export function DevotionalNavigatorPage() {
     );
   }
 
-  const sorted = series.entries
+  const sorted = (selectedGroup?.items ?? series.entries)
     .filter(e => e.status === 'Published')
     .sort((a, b) => a.dayNumber - b.dayNumber);
 
@@ -98,14 +109,44 @@ export function DevotionalNavigatorPage() {
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground truncate">{series.title}</p>
-            <p className="text-sm font-semibold text-foreground">Choose a reading</p>
+            <p className="text-sm font-semibold text-foreground">{selectedGroup?.title ?? 'Choose a reading'}</p>
           </div>
         </div>
       </div>
 
       {/* Entry list */}
       <main className="flex-1 px-4 pt-5 pb-4">
-        {sorted.length === 0 ? (
+        {!groupId && groups.length > 0 ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Choose a group to browse its devotional days.</p>
+            <div className="grid grid-cols-1 gap-3">
+              {groups.map(group => (
+                <button
+                  key={group.id}
+                  onClick={() => setLocation(`/devotional/${seriesId}/navigate/group/${encodeURIComponent(group.id)}`)}
+                  className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 text-left hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <FolderOpen size={18} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-semibold text-foreground truncate">{group.title}</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">{group.items.length} devotional {group.items.length === 1 ? 'day' : 'days'}</span>
+                    {group.description && <span className="block text-xs text-muted-foreground mt-1 truncate">{group.description}</span>}
+                  </span>
+                  <span className="text-xs text-primary">Open →</span>
+                </button>
+              ))}
+              <button
+                onClick={() => setLocation(`/devotional/${seriesId}/navigate`)}
+                className="w-full flex items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
+              >
+                <span className="flex-1 text-sm text-muted-foreground">Browse all devotional days</span>
+                <span className="text-xs text-primary">Open →</span>
+              </button>
+            </div>
+          </div>
+        ) : sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No entries available yet.</p>
         ) : (
           <div className="border border-border rounded-2xl overflow-hidden divide-y divide-border">

@@ -96,6 +96,18 @@ export interface SeriesWithEntries extends DevotionalSeries {
   entries: DevotionalEntry[];
 }
 
+export interface DevotionalEntryGroup {
+  id: string;
+  seriesId: string;
+  title: string;
+  description: string | null;
+  status: string;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  items: DevotionalEntry[];
+}
+
 // ─── Admin: Series ────────────────────────────────────────────────────────────
 
 // ─── Auth context helper ──────────────────────────────────────────────────────
@@ -195,6 +207,72 @@ export function bulkGenerateEntryLabels(
   return request<BulkLabelsResult>(apiUrl(`/${seriesId}/entries/bulk-labels`), {
     method: "POST",
     body: JSON.stringify(opts),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+// ─── Entry groups ─────────────────────────────────────────────────────────────
+
+export function listDevotionalEntryGroups(
+  seriesId: string,
+  auth?: AdminAuth | MemberAuth,
+): Promise<DevotionalEntryGroup[]> {
+  const userRole = auth && 'userRole' in auth ? auth.userRole : undefined;
+  return request<DevotionalEntryGroup[]>(apiUrl(`/${seriesId}/groups`), {
+    userId: auth?.userId,
+    userRole,
+  });
+}
+
+export function createDevotionalEntryGroup(
+  seriesId: string,
+  data: { title: string; description?: string; status?: string; displayOrder?: number },
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups`), {
+    method: "POST",
+    body: JSON.stringify(data),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function updateDevotionalEntryGroup(
+  seriesId: string,
+  groupId: string,
+  data: Partial<Pick<DevotionalEntryGroup, "title" | "description" | "status" | "displayOrder">>,
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups/${groupId}`), {
+    method: "PATCH",
+    body: JSON.stringify(data),
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function deleteDevotionalEntryGroup(
+  seriesId: string,
+  groupId: string,
+  auth?: AdminAuth,
+): Promise<void> {
+  return request<void>(apiUrl(`/${seriesId}/groups/${groupId}`), {
+    method: "DELETE",
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
+}
+
+export function saveDevotionalEntryGroupItems(
+  seriesId: string,
+  groupId: string,
+  entryIds: string[],
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup> {
+  return request<DevotionalEntryGroup>(apiUrl(`/${seriesId}/groups/${groupId}/items`), {
+    method: "PUT",
+    body: JSON.stringify({ entryIds }),
     userId: auth?.userId,
     userRole: auth?.userRole,
   });

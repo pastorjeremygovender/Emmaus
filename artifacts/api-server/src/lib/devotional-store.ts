@@ -6,17 +6,20 @@
  * it is loaded dynamically by the client from the member's chosen translation.
  */
 
-import { eq, and, asc, desc, sql, isNotNull } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNotNull, inArray } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
   devotionalSeriesTable,
   devotionalEntriesTable,
   devotionalProgressTable,
+  devotionalEntryGroupsTable,
+  devotionalEntryGroupItemsTable,
 } from "@workspace/db/schema";
 import type {
   DevotionalSeries,
   DevotionalEntry,
   DevotionalProgress,
+  DevotionalEntryGroup,
 } from "@workspace/db/schema";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,6 +32,10 @@ export interface SeriesWithEntries extends DevotionalSeries {
 
 export interface SeriesWithProgress extends DevotionalSeries {
   progress: DevotionalProgress | null;
+}
+
+export interface DevotionalEntryGroupWithItems extends DevotionalEntryGroup {
+  items: DevotionalEntry[];
 }
 
 // ─── Series CRUD ─────────────────────────────────────────────────────────────
@@ -63,6 +70,141 @@ export async function getSeriesById(id: string): Promise<SeriesWithEntries | nul
     .orderBy(asc(devotionalEntriesTable.dayNumber));
 
   return { ...series, entries };
+}
+
+export async function getEntryGroupsForSeries(
+  seriesId: string,
+  publishedOnly = false,
+): Promise<DevotionalEntryGroupWithItems[]> {
+  const groups = await db
+    .select()
+    .from(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+      ...(publishedOnly ? [eq(devotionalEntryGroupsTable.status, "Published")] : []),
+    ))
+    .orderBy(asc(devotionalEntryGroupsTable.displayOrder), asc(devotionalEntryGroupsTable.title));
+
+  if (groups.length === 0) return [];
+  const groupIds = groups.map(group => group.id);
+  const rows = await db
+    .select({
+      groupId: devotionalEntryGroupItemsTable.groupId,
+      entry: devotionalEntriesTable,
+      itemOrder: devotionalEntryGroupItemsTable.displayOrder,
+    })
+    .from(devotionalEntryGroupItemsTable)
+    .innerJoin(
+      devotionalEntriesTable,
+      eq(devotionalEntriesTable.id, devotionalEntryGroupItemsTable.entryId),
+    )
+    .where(and(
+      inArray(devotionalEntryGroupItemsTable.groupId, groupIds),
+      ...(publishedOnly ? [eq(devotionalEntriesTable.status, "Published")] : []),
+    ))
+    .orderBy(
+      asc(devotionalEntryGroupItemsTable.displayOrder),
+      asc(devotionalEntriesTable.dayNumber),
+    );
+
+  const byGroup = new Map<string, DevotionalEntry[]>();
+  for (const row of rows) {
+    const items = byGroup.get(row.groupId) ?? [];
+    items.push(row.entry);
+    byGroup.set(row.groupId, items);
+  }
+  return groups.map(group => ({ ...group, items: byGroup.get(group.id) ?? [] }));
+}
+
+export async function createEntryGroup(
+  seriesId: string,
+  data: { title: string; description?: string; status?: string; displayOrder?: number },
+): Promise<DevotionalEntryGroup> {
+  const [row] = await db
+    .insert(devotionalEntryGroupsTable)
+    .values({
+      seriesId,
+      title: data.title,
+      description: data.description ?? "",
+      status: data.status ?? "Draft",
+      displayOrder: data.displayOrder ?? 0,
+    })
+    .returning();
+  return row;
+}
+
+export async function updateEntryGroup(
+  seriesId: string,
+  groupId: string,
+  data: Partial<Pick<DevotionalEntryGroup, "title" | "description" | "status" | "displayOrder">>,
+): Promise<DevotionalEntryGroup | null> {
+  const [row] = await db
+    .update(devotionalEntryGroupsTable)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ))
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteEntryGroup(seriesId: string, groupId: string): Promise<boolean> {
+  const deleted = await db
+    .delete(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ))
+    .returning({ id: devotionalEntryGroupsTable.id });
+  return deleted.length > 0;
+}
+
+export async function replaceEntryGroupItems(
+  seriesId: string,
+  groupId: string,
+  entryIds: string[],
+): Promise<DevotionalEntryGroupWithItems | null> {
+  const [group] = await db
+    .select()
+    .from(devotionalEntryGroupsTable)
+    .where(and(
+      eq(devotionalEntryGroupsTable.id, groupId),
+      eq(devotionalEntryGroupsTable.seriesId, seriesId),
+    ));
+  if (!group) return null;
+
+  const uniqueEntryIds = [...new Set(entryIds)];
+  if (uniqueEntryIds.length > 0) {
+    const valid = await db
+      .select({ id: devotionalEntriesTable.id })
+      .from(devotionalEntriesTable)
+      .where(and(
+        eq(devotionalEntriesTable.seriesId, seriesId),
+        inArray(devotionalEntriesTable.id, uniqueEntryIds),
+      ));
+    if (valid.length !== uniqueEntryIds.length) {
+      throw new Error("Every grouped entry must belong to the selected series");
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(devotionalEntryGroupItemsTable)
+      .where(eq(devotionalEntryGroupItemsTable.groupId, groupId));
+    if (uniqueEntryIds.length > 0) {
+      await tx.insert(devotionalEntryGroupItemsTable).values(
+        uniqueEntryIds.map((entryId, index) => ({
+          groupId,
+          entryId,
+          displayOrder: index,
+        })),
+      );
+    }
+  });
+
+  const [updated] = await getEntryGroupsForSeries(seriesId);
+  return updated?.id === groupId ? updated : null;
 }
 
 export async function createSeries(

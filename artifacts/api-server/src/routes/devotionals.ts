@@ -100,6 +100,112 @@ devotionalsRouter.post("/", async (req: Request, res: Response) => {
   }
 });
 
+// ─── Devotional entry groups ─────────────────────────────────────────────────
+// These are separate from the cross-content Content Groups feature. They group
+// individual entries inside one devotional series (for example, January).
+
+devotionalsRouter.get("/:id/groups", async (req: Request, res: Response) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  try {
+    const seriesId = String(req.params.id);
+    const series = await store.getSeriesById(seriesId);
+    if (!series) { res.status(404).json({ error: "Series not found" }); return; }
+    const adminAccess = req.user?.role === "admin" || req.user?.role === "superAdmin";
+    if (!adminAccess && series.status !== "Published") {
+      res.status(404).json({ error: "Series not found" });
+      return;
+    }
+    const groups = await store.getEntryGroupsForSeries(seriesId, !adminAccess);
+    res.set("Cache-Control", "no-store");
+    res.json(groups);
+  } catch (err) {
+    logger.error({ err }, "get devotional entry groups failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+devotionalsRouter.post("/:id/groups", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!title) { res.status(400).json({ error: "title is required" }); return; }
+  try {
+    const group = await store.createEntryGroup(String(req.params.id), {
+      title,
+      description: typeof req.body.description === "string" ? req.body.description : "",
+      status: req.body.status === "Published" ? "Published" : "Draft",
+      displayOrder: Number.isFinite(req.body.displayOrder) ? Number(req.body.displayOrder) : 0,
+    });
+    res.status(201).json(group);
+  } catch (err) {
+    logger.error({ err }, "create devotional entry group failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+devotionalsRouter.patch("/:id/groups/:groupId", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const updateData: Parameters<typeof store.updateEntryGroup>[2] = {};
+  if (req.body?.title !== undefined) updateData.title = String(req.body.title).trim();
+  if (req.body?.description !== undefined) updateData.description = String(req.body.description);
+  if (req.body?.status !== undefined && ["Draft", "Published", "Archived"].includes(req.body.status)) {
+    updateData.status = req.body.status;
+  }
+  if (req.body?.displayOrder !== undefined && Number.isFinite(req.body.displayOrder)) {
+    updateData.displayOrder = Number(req.body.displayOrder);
+  }
+  if (updateData.title === "") { res.status(400).json({ error: "title cannot be empty" }); return; }
+  try {
+    const group = await store.updateEntryGroup(String(req.params.id), String(req.params.groupId), updateData);
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    logger.error({ err }, "update devotional entry group failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+devotionalsRouter.delete("/:id/groups/:groupId", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const deleted = await store.deleteEntryGroup(String(req.params.id), String(req.params.groupId));
+    if (!deleted) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "delete devotional entry group failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+devotionalsRouter.put("/:id/groups/:groupId/items", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  const entryIds = Array.isArray(req.body?.entryIds)
+    ? req.body.entryIds.filter((id: unknown): id is string => typeof id === "string")
+    : null;
+  if (!entryIds) { res.status(400).json({ error: "entryIds must be an array" }); return; }
+  try {
+    const group = await store.replaceEntryGroupItems(
+      String(req.params.id),
+      String(req.params.groupId),
+      entryIds,
+    );
+    if (!group) { res.status(404).json({ error: "Group not found" }); return; }
+    res.json(group);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Server error";
+    if (message.includes("belong to the selected series")) {
+      res.status(400).json({ error: message });
+      return;
+    }
+    logger.error({ err }, "replace devotional entry group items failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ─── Get single series (with entries) ─────────────────────────────────────
 
 devotionalsRouter.get("/:id", async (req: Request, res: Response) => {

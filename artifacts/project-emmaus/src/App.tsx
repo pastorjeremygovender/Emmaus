@@ -150,6 +150,7 @@ function Router() {
       <Route path="/daily-rhythm/day/:dayNumber" component={DailyRhythmDay} />
       {/* Daily Devotionals */}
       <Route path="/devotional/:seriesId/navigate" component={DevotionalNavigatorPage} />
+      <Route path="/devotional/:seriesId/navigate/group/:groupId" component={DevotionalNavigatorPage} />
       <Route path="/devotional/:seriesId/previous" component={DevotionalPreviousDays} />
       <Route path="/devotional/:seriesId/day/:day" component={DevotionalDay} />
       {/* Legacy redirect — /journey/15-minutes-with-jesus/day/:day → canonical */}

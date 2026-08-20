@@ -63,6 +63,40 @@ export const devotionalEntriesTable = pgTable("devotional_entries", {
 
 export type DevotionalEntry = typeof devotionalEntriesTable.$inferSelect;
 
+// ─── Devotional Entry Groups ───────────────────────────────────────────────────
+// Manual groups inside one series, such as January or February. Entries are
+// many-to-many so an entry may remain ungrouped or appear in several groups.
+
+export const devotionalEntryGroupsTable = pgTable("devotional_entry_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  seriesId: uuid("series_id")
+    .notNull()
+    .references(() => devotionalSeriesTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").default(""),
+  status: text("status").notNull().default("Draft"),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const devotionalEntryGroupItemsTable = pgTable("devotional_entry_group_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id")
+    .notNull()
+    .references(() => devotionalEntryGroupsTable.id, { onDelete: "cascade" }),
+  entryId: uuid("entry_id")
+    .notNull()
+    .references(() => devotionalEntriesTable.id, { onDelete: "cascade" }),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("devotional_entry_group_items_group_entry_unique").on(table.groupId, table.entryId),
+]);
+
+export type DevotionalEntryGroup = typeof devotionalEntryGroupsTable.$inferSelect;
+export type DevotionalEntryGroupItem = typeof devotionalEntryGroupItemsTable.$inferSelect;
+
 // ─── Devotional Progress ───────────────────────────────────────────────────────
 // Per-user progress within a devotional series.
 // Completely separate from Journey progress — no shared data or logic.
