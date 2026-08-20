@@ -1,5 +1,3 @@
-import { Button } from '@/components/ui/button';
-
 export type BrowseMode = 'groups' | 'all';
 
 interface Props {
@@ -9,27 +7,35 @@ interface Props {
 
 export function BrowseModeToggle({ value, onChange }: Props) {
   return (
-    <div className="inline-flex items-center rounded-xl border border-border bg-muted/30 p-1" role="group" aria-label="Browse mode">
-      <Button
+    <div
+      className="inline-flex items-center rounded-lg border border-border/70 bg-muted/30 p-0.5"
+      role="group"
+      aria-label="Browse mode"
+    >
+      <button
         type="button"
-        size="sm"
-        variant={value === 'groups' ? 'secondary' : 'ghost'}
         aria-pressed={value === 'groups'}
-        className="h-8 rounded-lg px-3 text-xs"
+        className={`h-7 rounded-md px-2.5 text-[11px] font-medium transition-all ${
+          value === 'groups'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
         onClick={() => onChange('groups')}
       >
         View Groups
-      </Button>
-      <Button
+      </button>
+      <button
         type="button"
-        size="sm"
-        variant={value === 'all' ? 'secondary' : 'ghost'}
         aria-pressed={value === 'all'}
-        className="h-8 rounded-lg px-3 text-xs"
+        className={`h-7 rounded-md px-2.5 text-[11px] font-medium transition-all ${
+          value === 'all'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
         onClick={() => onChange('all')}
       >
         View All
-      </Button>
+      </button>
     </div>
   );
 }

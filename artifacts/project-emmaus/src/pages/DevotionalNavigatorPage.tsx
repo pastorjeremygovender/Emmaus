@@ -119,36 +119,43 @@ export function DevotionalNavigatorPage() {
 
       {/* Entry list */}
       <main className="flex-1 px-4 pt-5 pb-4">
-        {!groupId && browseMode === 'groups' && groups.length > 0 ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Choose a group to browse its devotional days.</p>
-            <div className="grid grid-cols-1 gap-3">
-              {groups.map(group => (
-                <button
-                  key={group.id}
-                  onClick={() => setLocation(`/devotional/${seriesId}/navigate/group/${encodeURIComponent(group.id)}`)}
-                  className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-4 text-left hover:bg-muted/40 active:bg-muted/60 transition-colors"
-                >
-                  <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <FolderOpen size={18} />
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-[15px] font-semibold text-foreground truncate">{group.title}</span>
-                    <span className="block text-xs text-muted-foreground mt-0.5">{group.items.length} devotional {group.items.length === 1 ? 'day' : 'days'}</span>
-                    {group.description && <span className="block text-xs text-muted-foreground mt-1 truncate">{group.description}</span>}
-                  </span>
-                  <span className="text-xs text-primary">Open →</span>
-                </button>
-              ))}
+        {!groupId && browseMode === 'groups' ? (
+          groups.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center">
+              <FolderOpen size={20} className="mx-auto text-muted-foreground/60" />
+              <p className="mt-3 text-sm text-muted-foreground">No devotional groups are available yet.</p>
               <button
-                onClick={() => setLocation(`/devotional/${seriesId}/navigate`)}
-                className="w-full flex items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
+                type="button"
+                className="mt-3 text-sm font-medium text-primary hover:underline"
+                onClick={() => setBrowseMode('all')}
               >
-                <span className="flex-1 text-sm text-muted-foreground">Browse all devotional days</span>
-                <span className="text-xs text-primary">Open →</span>
+                View all devotional days
               </button>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">Choose a group to browse its devotional days.</p>
+              <div className="grid grid-cols-1 gap-3">
+                {groups.map(group => (
+                  <button
+                    key={group.id}
+                    onClick={() => setLocation(`/devotional/${seriesId}/navigate/group/${encodeURIComponent(group.id)}`)}
+                    className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3.5 text-left hover:border-primary/25 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <FolderOpen size={17} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[14px] font-semibold text-foreground truncate">{group.title}</span>
+                      <span className="block text-[11px] text-muted-foreground mt-0.5">{group.items.length} devotional {group.items.length === 1 ? 'day' : 'days'}</span>
+                      {group.description && <span className="block text-[11px] text-muted-foreground mt-1 truncate">{group.description}</span>}
+                    </span>
+                    <span className="text-[11px] font-medium text-primary shrink-0">Open →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
         ) : sorted.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">No entries available yet.</p>
         ) : (
