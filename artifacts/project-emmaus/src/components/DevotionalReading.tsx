@@ -135,6 +135,18 @@ export function DevotionalReading({
         </h1>
       </section>
 
+      {/* ── Share image and sharing action — directly under the title ────────── */}
+      {shareImageUrl && (
+        <div className="mb-4">
+          <ShareImageCard shareImageUrl={shareImageUrl} />
+        </div>
+      )}
+      {sharePayload && !previewMode && (
+        <div className="mb-7">
+          <ShareButton payload={sharePayload} />
+        </div>
+      )}
+
       {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {(greeting || previewMode) && (
         <section className="mb-3.5">
@@ -243,17 +255,6 @@ export function DevotionalReading({
             className="!text-[16px] !text-muted-foreground"
           />
         </section>
-      )}
-
-      {/* ── Share (text) — above the image card so it's clearly about the content ── */}
-      {sharePayload && !previewMode && (
-        <ShareButton payload={sharePayload} />
-      )}
-
-      {/* ── Share image ─────────────────────────────────────────────────────── */}
-      {/* Share image shown even in previewMode so admins can verify what they generated. */}
-      {shareImageUrl && (
-        <ShareImageCard shareImageUrl={shareImageUrl} />
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}
