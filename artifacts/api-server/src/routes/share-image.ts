@@ -71,8 +71,8 @@ c) Closing / supporting text — if there is a second sentence or paragraph, ren
 d) Typography must feel designed — not uniformly bold, not all the same size. Hierarchy is what separates premium from generic.
 
 ──────────────────────────────────────────────────────────
-4. COLOUR PALETTE — default to WARM tones
-Unless the text's mood is clearly cool or solemn (grief, reverence, night), choose a warm palette: amber, golden-hour orange, terracotta, warm cream, burnt sienna, soft wheat. Name 3–4 specific colors: the scene's dominant tone, the main text color, and the typographic accent color. Avoid cold greens, flat grey-blues, or generic nature palettes unless the text genuinely demands them.
+4. COLOUR PALETTE
+Choose a colour palette that naturally matches the devotional text, mood, subject, and lighting. Use warm amber, terracotta, cream, and wheat only when they genuinely support the message. For other themes, use appropriate cool, neutral, fresh, dramatic, or subdued palettes. Avoid defaulting to sunsets or earth tones. Name 3–4 specific colours: the scene's dominant tone, the main text colour, and the typographic accent colour.
 
 ──────────────────────────────────────────────────────────
 ABSOLUTE CONSTRAINTS:
