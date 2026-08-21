@@ -57,7 +57,40 @@ type GenerationMethod = "existing" | "new";
 type ComparisonImages = {
   existing?: string;
   newMethod?: string;
+  newMethodDetails?: NewMethodDetails;
 };
+
+type NewMethodReasoning = {
+  emotionalCentre: string;
+  visualMetaphor: string;
+  composition: string;
+  heroText: string;
+  mood: string;
+  avoid: string[];
+};
+
+type NewMethodDetails = {
+  reasoningModel: string;
+  model: string;
+  quality: string;
+  size: string;
+  reasoning: NewMethodReasoning;
+  prompt: string;
+};
+
+const NEW_METHOD_TEST_QUOTE = `There will be moments when you don't understand everything.
+
+Questions will arise.
+
+Difficulties will come.
+
+Yet faith continues to say,
+
+"I trust Jesus."
+
+Not because every question has been answered.
+
+But because He has proven Himself faithful.`;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -256,7 +289,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
   const { user } = useAuth();
 
   // Stable inputs — survive state machine transitions
-  const [text, setText] = useState("");
+  const [text, setText] = useState(NEW_METHOD_TEST_QUOTE);
   const [attribution, setAttribution] = useState<Attribution>("emmaus");
   const [editInstruction, setEditInstruction] = useState("");
 
@@ -300,7 +333,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     return imageBase64;
   }
 
-  async function callNewMethod(): Promise<string> {
+  async function callNewMethod(): Promise<{ imageBase64: string; details: NewMethodDetails }> {
     const res = await fetch(getApiUrl("/api/share-images/generate-new-method"), {
       method: "POST",
       credentials: "include",
@@ -315,8 +348,11 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       throw new Error(errBody.error ?? "New Method generation failed");
     }
 
-    const { imageBase64 } = await res.json() as { imageBase64: string };
-    return imageBase64;
+    const { imageBase64, experiment } = await res.json() as {
+      imageBase64: string;
+      experiment: NewMethodDetails;
+    };
+    return { imageBase64, details: experiment };
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -328,11 +364,13 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setGenError("");
     setState({ phase: "generating" });
     try {
-      const b64 = method === "new"
+      const generated: { imageBase64: string; details?: NewMethodDetails } = method === "new"
         ? await callNewMethod()
-        : await callGenerate("generate");
-      setComparison(current => ({ ...current, [method === "new" ? "newMethod" : "existing"]: b64 }));
-      setState({ phase: "preview", imageBase64: b64, method });
+        : { imageBase64: await callGenerate("generate") };
+      setComparison(current => method === "new"
+        ? { ...current, newMethod: generated.imageBase64, newMethodDetails: generated.details }
+        : { ...current, existing: generated.imageBase64 });
+      setState({ phase: "preview", imageBase64: generated.imageBase64, method });
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : `${method === "new" ? "New Method g" : "G"}eneration failed. Please try again.`);
       setState({ phase: "idle" });
@@ -348,11 +386,13 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setState({ phase: "generating" });
     try {
       const method = state.phase === "preview" ? state.method : "existing";
-      const b64 = method === "new"
+      const generated: { imageBase64: string; details?: NewMethodDetails } = method === "new"
         ? await callNewMethod()
-        : await callGenerate("generate");
-      setComparison(current => ({ ...current, [method === "new" ? "newMethod" : "existing"]: b64 }));
-      setState({ phase: "preview", imageBase64: b64, method });
+        : { imageBase64: await callGenerate("generate") };
+      setComparison(current => method === "new"
+        ? { ...current, newMethod: generated.imageBase64, newMethodDetails: generated.details }
+        : { ...current, existing: generated.imageBase64 });
+      setState({ phase: "preview", imageBase64: generated.imageBase64, method });
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : "Regeneration failed. Please try again.");
       // Restore preview with previous image if we had one
@@ -485,6 +525,27 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
                 alt="New Method comparison"
                 className="w-full aspect-square object-cover rounded-lg border border-teal-300"
               />
+              {comparison.newMethodDetails && (
+                <details className="pt-1 text-[11px] text-gray-500">
+                  <summary className="cursor-pointer font-medium text-teal-700">Generation Details</summary>
+                  <div className="mt-2 space-y-2 rounded-lg bg-gray-50 p-2">
+                    <p><strong>Reasoning Model:</strong> {comparison.newMethodDetails.reasoningModel}</p>
+                    <p><strong>Image Model:</strong> {comparison.newMethodDetails.model}</p>
+                    <p><strong>Image Quality:</strong> {comparison.newMethodDetails.quality}</p>
+                    <p><strong>Image Size:</strong> {comparison.newMethodDetails.size}</p>
+                    <p><strong>Emotional Centre:</strong> {comparison.newMethodDetails.reasoning.emotionalCentre}</p>
+                    <p><strong>Visual Metaphor:</strong> {comparison.newMethodDetails.reasoning.visualMetaphor}</p>
+                    <p><strong>Composition:</strong> {comparison.newMethodDetails.reasoning.composition}</p>
+                    <p><strong>Hero Text:</strong> {comparison.newMethodDetails.reasoning.heroText}</p>
+                    <p><strong>Mood:</strong> {comparison.newMethodDetails.reasoning.mood}</p>
+                    <p><strong>Avoid:</strong> {comparison.newMethodDetails.reasoning.avoid.join(", ")}</p>
+                    <div>
+                      <strong>Final Image Prompt:</strong>
+                      <pre className="mt-1 whitespace-pre-wrap font-sans">{comparison.newMethodDetails.prompt}</pre>
+                    </div>
+                  </div>
+                </details>
+              )}
             </div>
           </div>
         </div>
