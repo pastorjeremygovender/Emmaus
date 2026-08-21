@@ -206,11 +206,12 @@ devotionalsRouter.put("/:id/groups/:groupId/items", async (req: Request, res: Re
   }
 });
 
-// ─── Get single series (with entries) ─────────────────────────────────────
+// ─── Get single published series (with entries) ────────────────────────────
+// This is intentionally public so a devotional shared through WhatsApp or
+// another messaging app can be read before the recipient creates an account.
+// Progress and all mutations remain authenticated below.
 
 devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
-  const userId = requireAuth(req, res);
-  if (!userId) return;
   try {
     const series = await store.getSeriesById(String(req.params.id));
     if (!series) {

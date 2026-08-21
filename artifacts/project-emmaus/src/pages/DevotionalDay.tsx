@@ -88,13 +88,12 @@ export default function DevotionalDay() {
     if (!seriesId) return;
     const auth = user?.id ? { userId: user.id } : undefined;
     try {
-      const [d, p] = await Promise.all([
-        getSeriesWithEntries(seriesId, auth),
-        getProgress(seriesId, auth),
-      ]);
+      // Shared devotional links must work before sign-in. The published
+      // content is public; progress is intentionally only loaded for members.
+      const d = await getSeriesWithEntries(seriesId, auth);
       setSeriesData(d);
       // Record history view (fire-and-forget)
-      if (d?.title) {
+      if (d?.title && user?.id) {
         const { recordView } = await import('@/lib/history-api');
         recordView({
           contentType: 'devotional',
@@ -104,15 +103,20 @@ export default function DevotionalDay() {
         });
       }
 
-      // Auto-start as a fallback if the member navigated here directly
-      if (!p) {
-        const started = await startSeries(seriesId, auth);
-        setProgress(started);
+      if (user?.id) {
+        const p = await getProgress(seriesId, auth);
+        // Auto-start as a fallback if the member navigated here directly
+        if (!p) {
+          const started = await startSeries(seriesId, auth);
+          setProgress(started);
+        } else {
+          setProgress(p);
+        }
       } else {
-        setProgress(p);
+        setProgress(null);
       }
       // Clear UPDATED badge — member has opened the content (fire-and-forget).
-      void dismissBadge('devotional', seriesId);
+      if (user?.id) void dismissBadge('devotional', seriesId);
     } catch {
       // ignore — loading errors shown via empty state below
     } finally {
