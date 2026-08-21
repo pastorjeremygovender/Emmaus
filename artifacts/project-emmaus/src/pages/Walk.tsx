@@ -541,6 +541,10 @@ export default function Walk() {
     dailyOpenCheckedRef.current = true;
 
     const route = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
+    const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
+    if (route && dailyJourney && !progress[dailyJourney.id]) {
+      void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
+    }
     if (route) setLocation(route);
   }, [loading, user, journeys, progress, getStepsForJourney, setLocation]);
 

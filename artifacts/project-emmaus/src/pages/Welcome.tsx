@@ -31,7 +31,7 @@ const FADE_OUT_MS  = 220;  // ms — fade-out before navigate; total ≤ 1.22 s
 
 export default function Welcome() {
   const { user, loading: authLoading, loadingProfile } = useAuth();
-  const { journeys, progress, loading: journeyLoading, getStepsForJourney } = useJourney();
+  const { journeys, progress, loading: journeyLoading, getStepsForJourney, startJourney } = useJourney();
   const [, setLocation] = useLocation();
 
   const alreadyShown = sessionStorage.getItem(SPLASH_KEY) === 'true';
@@ -64,6 +64,10 @@ export default function Welcome() {
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
         const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
+        const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
+        if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
+          void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
+        }
         const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
         console.debug('[Emmaus routing] Route selected (fast path):', dest);
         setLocation(dest);
@@ -71,7 +75,7 @@ export default function Welcome() {
     } else {
       setLocation('/auth');
     }
-  }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, setLocation]);
+  }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney, setLocation]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
@@ -103,6 +107,10 @@ export default function Welcome() {
       // First open of the day → land on the member's current Daily Rhythm step.
       // Subsequent same-day opens → Today's Walk (/walk).
       const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
+      const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
+      if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
+        void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
+      }
       const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
       console.debug('[Emmaus routing] Route selected (splash):', dest);
       return dest;
@@ -112,7 +120,7 @@ export default function Welcome() {
     // Fade out, then navigate.
     setFading(true);
     setTimeout(() => setLocation(dest), FADE_OUT_MS);
-  }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney]);
+  }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney]);
 
   // ── Already shown — render nothing while redirecting ─────────────────────
   if (alreadyShown) return null;

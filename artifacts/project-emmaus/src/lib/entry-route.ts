@@ -102,12 +102,14 @@ export function resolveDailyOpenRoute(
 
   // First open today — try to resume the member's Daily Rhythm step.
   const drProgress = progress[drJourney.id];
+  // Daily Rhythm is the member's universal daily practice. A reset, a
+  // recovered account, or an older account without a progress row must still
+  // be able to enter Day 1 on the first open; the caller starts the journey
+  // idempotently before navigating.
+  const currentDay = drProgress?.currentDay ?? 1;
   if (!drProgress) {
-    console.debug('[DailyOpen] no progress for DR journey — keys:', Object.keys(progress));
-    return null; // journey not yet started
+    console.debug('[DailyOpen] no progress for DR journey — starting at Day 1');
   }
-
-  const currentDay = drProgress.currentDay ?? 1;
   console.debug('[DailyOpen] currentDay:', currentDay);
   if (currentDay < 1) return null;
 
