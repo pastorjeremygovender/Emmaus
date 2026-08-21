@@ -107,16 +107,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoadingProfile(true);
   }, []);
 
-  const refreshAuthenticatedUser = useCallback(async (): Promise<void> => {
+  const refreshAuthenticatedUser = useCallback(async (
+    options: { preserveUi?: boolean } = {},
+  ): Promise<void> => {
+    const preserveUi = options.preserveUi === true;
     const generation = requestGenerationRef.current + 1;
     requestGenerationRef.current = generation;
     activeRequestRef.current?.abort();
     const controller = new AbortController();
     activeRequestRef.current = controller;
-    setSessionEpoch(current => current + 1);
-    setUser(null);
-    setLoading(true);
-    setLoadingProfile(true);
+    if (!preserveUi) {
+      setSessionEpoch(current => current + 1);
+      setUser(null);
+      setLoading(true);
+      setLoadingProfile(true);
+    }
 
     try {
       const response = await fetch(getApiUrl("/api/auth/user"), {
@@ -165,10 +170,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
-      setUser(null);
+      if (!preserveUi) setUser(null);
       throw error;
     } finally {
-      if (requestGenerationRef.current === generation) {
+      if (requestGenerationRef.current === generation && !preserveUi) {
         activeRequestRef.current = null;
         setLoading(false);
         setLoadingProfile(false);
@@ -186,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         invalidateAuthView();
         return;
       }
-      void refreshAuthenticatedUser().catch(() => {
+      void refreshAuthenticatedUser({ preserveUi: true }).catch(() => {
         // The accepted validation request already moved the UI to signed out.
       });
     };
