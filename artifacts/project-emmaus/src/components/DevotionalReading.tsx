@@ -143,7 +143,7 @@ export function DevotionalReading({
       )}
       {sharePayload && !previewMode && (
         <div className="mb-7">
-          <ShareButton payload={sharePayload} />
+          <ShareButton payload={sharePayload} shareImageUrl={shareImageUrl} />
         </div>
       )}
 
