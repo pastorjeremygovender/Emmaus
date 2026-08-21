@@ -22,6 +22,14 @@ function isAppleMobileDevice(): boolean {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+function isEmbeddedBrowser(): boolean {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  return /whatsapp|fbav|fban|instagram| line\//i.test(userAgent) ||
+    // Android WebViews identify themselves with "; wv" or a missing Chrome
+    // token. They cannot install a PWA reliably and should not be interrupted.
+    (/android/i.test(userAgent) && (/;\s*wv\)/i.test(userAgent) || !/chrome\//i.test(userAgent)));
+}
+
 function readFlag(key: string): boolean {
   try {
     return window.localStorage.getItem(key) === '1';
@@ -44,6 +52,11 @@ function writeFlag(key: string): void {
  * Chromium supplies the native install event. iOS Safari does not, so it gets
  * concise Add to Home Screen instructions instead. The component is mounted
  * above the router so deep links receive the same first-visit treatment.
+ *
+ * Embedded browsers (especially WhatsApp) intentionally do not get this
+ * prompt. They are excellent for opening shared links, but cannot reliably
+ * complete PWA installation; interrupting them can also make link handoff
+ * feel like a failed navigation.
  */
 export function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -52,7 +65,7 @@ export function InstallPrompt() {
   const [isApple, setIsApple] = useState(false);
 
   useEffect(() => {
-    if (isStandalone() || readFlag(DISMISSED_KEY) || readFlag(INSTALLED_KEY)) return;
+    if (isStandalone() || isEmbeddedBrowser() || readFlag(DISMISSED_KEY) || readFlag(INSTALLED_KEY)) return;
 
     setIsApple(isAppleMobileDevice());
 
