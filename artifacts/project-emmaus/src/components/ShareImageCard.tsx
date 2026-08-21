@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { Download, Share2, Facebook, Instagram, X, Check } from 'lucide-react';
+import { Download, Share2, X, Check } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
 interface ShareImageCardProps {
@@ -18,9 +18,9 @@ interface ShareImageCardProps {
 export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
   const [imgError, setImgError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saved'>('idle');
   const imageBlobRef = React.useRef<Blob | null>(null);
+  const shareFallbackSavedRef = React.useRef(false);
 
   if (!shareImageUrl) return null;
 
@@ -42,7 +42,12 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
     return blob;
   }
 
-  async function handleSave(blob?: Blob) {
+  async function handleSave(blob?: Blob, allowRepeat = true) {
+    if (!allowRepeat && shareFallbackSavedRef.current) {
+      setStatus('saved');
+      window.setTimeout(() => setStatus('idle'), 4000);
+      return;
+    }
     try {
       const imageBlob = blob ?? await getImageBlob();
       const objectUrl = URL.createObjectURL(imageBlob);
@@ -54,14 +59,14 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
+      if (!allowRepeat) shareFallbackSavedRef.current = true;
       showSaved();
     } catch {
       window.open(imageUrl, '_blank');
     }
   }
 
-  async function handleShareImage() {
-    setMenuOpen(false);
+  async function handleShare() {
     try {
       const blob = await getImageBlob();
       const ext = blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : '.jpg';
@@ -74,9 +79,9 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
         await navigator.share({ files: [file] });
         return;
       }
-      await handleSave(blob);
+      await handleSave(blob, false);
     } catch {
-      await handleSave();
+      await handleSave(undefined, false);
     }
   }
 
@@ -109,33 +114,13 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
             Save Image
           </button>
            <button
-             onClick={() => setMenuOpen(open => !open)}
+             onClick={handleShare}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all"
           >
              {status === 'saved' ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
              {status === 'saved' ? 'Image Saved' : 'Share Image'}
           </button>
         </div>
-         {menuOpen && (
-           <div className="mt-2 rounded-2xl border border-border bg-background shadow-lg p-1.5" role="menu">
-             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
-               <Share2 className="w-4 h-4 shrink-0" />
-               <span>Share image from device</span>
-             </button>
-             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
-               <Facebook className="w-4 h-4 shrink-0" />
-               <span>Share image to Facebook</span>
-             </button>
-             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
-               <Instagram className="w-4 h-4 shrink-0" />
-               <span>Share image to Instagram</span>
-             </button>
-             <button onClick={() => { setMenuOpen(false); void handleSave(); }} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
-               <Download className="w-4 h-4 shrink-0" />
-               <span>Save image</span>
-             </button>
-           </div>
-         )}
       </section>
 
       {/* Lightbox */}
