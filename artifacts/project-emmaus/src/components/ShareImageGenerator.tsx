@@ -376,6 +376,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
     try {
       const b64 = await callGenerate("edit", prevImage);
+      setComparison(current => ({ ...current, existing: b64 }));
       setState({ phase: "preview", imageBase64: b64, method: "existing" });
       setEditInstruction("");
     } catch (e: unknown) {
@@ -441,6 +442,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     state.phase === "preview" || state.phase === "editing"
       ? state.imageBase64
       : null;
+  const hasComparison = Boolean(comparison.existing && comparison.newMethod);
 
   return (
     <div className="space-y-4">
@@ -460,6 +462,33 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
           className="w-full px-3 py-2.5 text-[13px] text-gray-800 bg-gray-50 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-transparent disabled:opacity-60 placeholder:text-gray-300"
         />
       </div>
+
+      {hasComparison && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-semibold text-gray-700">A/B comparison</p>
+            <span className="text-[11px] text-gray-400">Neither image has been saved</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-gray-500">Existing method</p>
+              <img
+                src={`data:image/png;base64,${comparison.existing}`}
+                alt="Existing method comparison"
+                className="w-full aspect-square object-cover rounded-lg border border-gray-200"
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-teal-700">New Method</p>
+              <img
+                src={`data:image/png;base64,${comparison.newMethod}`}
+                alt="New Method comparison"
+                className="w-full aspect-square object-cover rounded-lg border border-teal-300"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Attribution selector ─────────────────────────────────────────── */}
       <div>
@@ -622,15 +651,26 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
       {/* ── Action buttons ───────────────────────────────────────────────── */}
       {state.phase === "idle" && (
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={!text.trim()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold bg-teal-600 text-white hover:bg-teal-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Sparkles className="w-4 h-4" />
-          Generate Image
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => handleGenerate("existing")}
+            disabled={!text.trim()}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold bg-teal-600 text-white hover:bg-teal-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Sparkles className="w-4 h-4" />
+            Generate Image
+          </button>
+          <button
+            type="button"
+            onClick={() => handleGenerate("new")}
+            disabled={!text.trim()}
+            className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold border border-teal-600 text-teal-700 hover:bg-teal-50 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Sparkles className="w-4 h-4" />
+            Generate with New Method
+          </button>
+        </div>
       )}
 
       {state.phase === "preview" && (
@@ -658,6 +698,15 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
           </button>
           <button
             type="button"
+            onClick={() => handleGenerate(state.method === "existing" ? "new" : "existing")}
+            disabled={saving}
+            className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[13px] font-medium border border-teal-200 text-teal-700 hover:bg-teal-50 active:scale-[0.97] transition-all disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {state.method === "existing" ? "Generate New Method" : "Generate Existing Method"}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setEditInstruction("");
               setState({ phase: "editing", imageBase64: state.imageBase64, applying: false });
@@ -672,6 +721,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
             type="button"
             onClick={() => {
               setGenError("");
+              setComparison({});
               setState({ phase: "idle" });
             }}
             disabled={saving}
@@ -700,7 +750,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
           <button
             type="button"
             onClick={() => {
-              setState({ phase: "preview", imageBase64: state.imageBase64 });
+              setState({ phase: "preview", imageBase64: state.imageBase64, method: "existing" });
               setEditInstruction("");
             }}
             disabled={state.applying}
