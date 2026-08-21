@@ -144,5 +144,5 @@ export async function getJourneysInCollection(collectionId: string) {
     .select()
     .from(journeysTable)
     .where(and(eq(journeysTable.collectionId, collectionId), isNull(journeysTable.deletedAt)))
-    .orderBy(asc(journeysTable.createdAt));
+    .orderBy(asc(journeysTable.displayOrder), asc(journeysTable.createdAt));
 }

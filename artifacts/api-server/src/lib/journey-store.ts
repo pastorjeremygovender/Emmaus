@@ -78,6 +78,7 @@ export interface FrontendStep {
   sermonContextualSentence?: string;
 
   order?: number;
+  displayOrder?: number;
 
   // Block-based content (stored in content.blocks JSONB)
   // null = not yet edited in block editor; undefined = not loaded
@@ -123,6 +124,7 @@ export interface FrontendJourney {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  displayOrder?: number;
   // Branding & versioning
   themeColor?: string;   // hex colour, e.g. '#3B82F6' — nullable
   version?: number;      // incremented on each publish; defaults to 1
@@ -188,6 +190,7 @@ function toFrontendJourney(row: DbJourney): FrontendJourney {
     updatedAt: row.updatedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     collectionId: row.collectionId ?? undefined,
+    displayOrder: row.displayOrder ?? 0,
     themeColor: row.themeColor ?? undefined,
     version: row.version ?? 1,
     notifyPublishedAt: row.notifyPublishedAt?.toISOString(),
@@ -257,6 +260,7 @@ function toFrontendStep(row: DbJourneyStep): FrontendStep {
     sermonLink,
     sermonContextualSentence,
     order: row.day,
+    displayOrder: row.displayOrder ?? 0,
     blocks,
     closingText,
     lookingAhead,
@@ -482,6 +486,7 @@ export async function updateJourney(
   if (data.overloadExempt !== undefined)   updateFields.overloadExempt   = data.overloadExempt;
   if (data.pastorEdited !== undefined)     updateFields.pastorEdited     = data.pastorEdited;
   if (data.collectionId !== undefined)     updateFields.collectionId     = data.collectionId ?? null;
+  if (data.displayOrder !== undefined)     updateFields.displayOrder     = data.displayOrder;
   if (data.themeColor !== undefined)       updateFields.themeColor       = data.themeColor || null;
   if (data.stepLabelPrefix !== undefined)  updateFields.stepLabelPrefix  = data.stepLabelPrefix || null;
 
@@ -649,7 +654,7 @@ export async function listSteps(journeyId: string): Promise<FrontendStep[]> {
     .select()
     .from(journeyStepsTable)
     .where(and(eq(journeyStepsTable.journeyId, journeyId), isNull(journeyStepsTable.deletedAt)))
-    .orderBy(asc(journeyStepsTable.day));
+    .orderBy(asc(journeyStepsTable.displayOrder), asc(journeyStepsTable.day));
   return rows.map(toFrontendStep);
 }
 

@@ -8,11 +8,11 @@ import React, { useMemo, useState } from 'react';
 import { Sun, Plus, Clock, FileText, AlertTriangle, Tag } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type { Journey, Step } from '@/lib/journeys-api';
-import { bulkGenerateStepLabels } from '@/lib/journeys-api';
+import { bulkGenerateStepLabels, updateStep } from '@/lib/journeys-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewDayModal from './NewDayModal';
 import GenerateLabelsModal from './GenerateLabelsModal';
 import DailyRhythmGroupsPanel from './DailyRhythmGroupsPanel';
@@ -39,7 +39,7 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
   const days = useMemo(() => {
     if (!journey) return [];
     return [...(steps as Step[]).filter(s => s.journeyId === journey.id)]
-      .sort((a, b) => a.day - b.day);
+       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.day - b.day);
   }, [steps, journey]);
 
   const filtered = useMemo(() =>
@@ -128,7 +128,7 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
         )
       }
     >
-      {filtered.map(step => (
+       {filtered.map((step, index) => (
         <ContentStudioListItem
           key={step.day}
           iconBg="bg-teal-50"
@@ -150,12 +150,28 @@ export default function DailyRhythmStudio({ onNewDay, onEditDay }: Props) {
           }
           status={<StatusBadge status={(step as any).status ?? 'Draft'} />}
           actions={
-            <button
-              onClick={() => onEditDay(journey!.id, step.day)}
-              className={actionBtnCls}
-            >
-              Edit
-            </button>
+             <>
+               <ReorderButtons
+                 canMoveUp={index > 0}
+                 canMoveDown={index < filtered.length - 1}
+                 onMoveUp={() => {
+                   const other = filtered[index - 1];
+                   if (other) void Promise.all([
+                     updateStep(journey!.id, step.day, { displayOrder: other.displayOrder ?? index - 1 }, user?.id),
+                     updateStep(journey!.id, other.day, { displayOrder: step.displayOrder ?? index }, user?.id),
+                   ]).then(() => refreshSteps(journey!.id));
+                 }}
+                 onMoveDown={() => {
+                   const other = filtered[index + 1];
+                   if (other) void Promise.all([
+                     updateStep(journey!.id, step.day, { displayOrder: other.displayOrder ?? index + 1 }, user?.id),
+                     updateStep(journey!.id, other.day, { displayOrder: step.displayOrder ?? index }, user?.id),
+                   ]).then(() => refreshSteps(journey!.id));
+                 }}
+                 label={step.title || `Day ${step.day}`}
+               />
+               <button onClick={() => onEditDay(journey!.id, step.day)} className={actionBtnCls}>Edit</button>
+             </>
           }
           onClick={() => onEditDay(journey!.id, step.day)}
         />

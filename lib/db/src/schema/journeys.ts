@@ -57,6 +57,8 @@ export const journeysTable = pgTable("journeys", {
 
   // Content Studio grouping (nullable — uncollected journeys still work)
   collectionId: text("collection_id"),
+  // Admin-controlled presentation order. Never changes day/progress semantics.
+  displayOrder: integer("display_order").notNull().default(0),
 
   // Display label prefix for steps. null = auto-derive from journeyType:
   //   'daily-rhythm' → "Day"; all other types → "Step".
@@ -94,6 +96,8 @@ export const journeyStepsTable = pgTable("journey_steps", {
     .notNull()
     .references(() => journeysTable.id, { onDelete: "cascade" }),
   day: integer("day").notNull(),  // step number; unique within journey
+  // Presentation order only; `day` remains the canonical progress key.
+  displayOrder: integer("display_order").notNull().default(0),
 
   // Core display
   title: text("title").notNull().default(""),

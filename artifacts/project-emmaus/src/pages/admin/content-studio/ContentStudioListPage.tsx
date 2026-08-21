@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface FilterConfig {
   tabs: readonly string[];
@@ -127,3 +127,34 @@ export const menuBtnCls =
 
 export const newBtnCls =
   'flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40';
+
+/** Accessible, compact controls for persisted list ordering. */
+export function ReorderButtons({
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  label = 'Reorder item',
+}: {
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  label?: string;
+}) {
+  return (
+    <span className="inline-flex items-center rounded-lg border border-gray-200 bg-white">
+      <button type="button" disabled={!canMoveUp} onClick={onMoveUp}
+        className="p-1.5 text-gray-500 hover:text-teal-700 hover:bg-teal-50 disabled:opacity-25 disabled:cursor-not-allowed"
+        aria-label={`${label}: move up`} title="Move up">
+        <ChevronUp size={13} />
+      </button>
+      <span className="h-4 border-l border-gray-200" />
+      <button type="button" disabled={!canMoveDown} onClick={onMoveDown}
+        className="p-1.5 text-gray-500 hover:text-teal-700 hover:bg-teal-50 disabled:opacity-25 disabled:cursor-not-allowed"
+        aria-label={`${label}: move down`} title="Move down">
+        <ChevronDown size={13} />
+      </button>
+    </span>
+  );
+}

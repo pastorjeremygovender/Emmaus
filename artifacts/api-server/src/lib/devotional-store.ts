@@ -45,7 +45,7 @@ export async function listSeries(): Promise<DevotionalSeries[]> {
     .select()
     .from(devotionalSeriesTable)
     .where(and())
-    .orderBy(desc(devotionalSeriesTable.createdAt));
+    .orderBy(asc(devotionalSeriesTable.displayOrder), asc(devotionalSeriesTable.createdAt));
 }
 
 export async function listPublishedSeries(): Promise<DevotionalSeries[]> {
@@ -53,7 +53,7 @@ export async function listPublishedSeries(): Promise<DevotionalSeries[]> {
     .select()
     .from(devotionalSeriesTable)
     .where(eq(devotionalSeriesTable.status, "Published"))
-    .orderBy(asc(devotionalSeriesTable.title));
+    .orderBy(asc(devotionalSeriesTable.displayOrder), asc(devotionalSeriesTable.title), asc(devotionalSeriesTable.createdAt));
 }
 
 export async function getSeriesById(id: string): Promise<SeriesWithEntries | null> {
@@ -67,7 +67,7 @@ export async function getSeriesById(id: string): Promise<SeriesWithEntries | nul
     .select()
     .from(devotionalEntriesTable)
     .where(eq(devotionalEntriesTable.seriesId, id))
-    .orderBy(asc(devotionalEntriesTable.dayNumber));
+    .orderBy(asc(devotionalEntriesTable.displayOrder), asc(devotionalEntriesTable.dayNumber));
 
   return { ...series, entries };
 }

@@ -35,6 +35,20 @@ import { verifySermonStore } from "./sermon-store.js";
 import { FFMPEG_BIN, FFMPEG_AVAILABLE } from "./audio-transcription.js";
 
 export async function runStartupMigrations(): Promise<void> {
+  // Presentation ordering columns are additive and intentionally have no data
+  // mutations here. Legacy rows remain stable via created_at/day fallbacks.
+  for (const statement of [
+    `ALTER TABLE journeys ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE journey_steps ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE devotional_series ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE devotional_entries ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `ALTER TABLE sermon_companion ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+  ]) {
+    try { await pool.query(statement); } catch (err) {
+      logger.warn({ err, statement }, "Startup migration: display order column failed (non-fatal)");
+    }
+  }
   // ── Sermon store diagnostic (runs every boot — confirms data is reachable) ──
   await verifySermonStore().catch((err) =>
     logger.warn({ err }, "Sermon store diagnostic failed (non-fatal)")

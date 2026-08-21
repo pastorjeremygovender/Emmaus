@@ -23,6 +23,8 @@ export const devotionalSeriesTable = pgTable("devotional_series", {
   publishedAt: timestamp("published_at"),
   // Smart content indicators — set when admin opts-in to notifying members on publish.
   notifyPublishedAt: timestamp("notify_published_at"),
+  // Admin-controlled order in member-facing lists.
+  displayOrder: integer("display_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdBy: text("created_by"),
@@ -41,6 +43,8 @@ export const devotionalEntriesTable = pgTable("devotional_entries", {
     .notNull()
     .references(() => devotionalSeriesTable.id, { onDelete: "cascade" }),
   dayNumber: integer("day_number").notNull(),
+  // Presentation order only; dayNumber remains the progress key.
+  displayOrder: integer("display_order").notNull().default(0),
   title: text("title").notNull().default(""),
   scriptureReference: text("scripture_reference").default(""),
   greeting: text("greeting").default(""),

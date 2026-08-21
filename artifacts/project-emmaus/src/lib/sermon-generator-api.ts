@@ -124,6 +124,7 @@ export interface CompanionEntry {
   shareImageUrl?: string | null;
   status: string;
   createdAt: string;
+  displayOrder?: number;
   updatedAt: string;
 }
 

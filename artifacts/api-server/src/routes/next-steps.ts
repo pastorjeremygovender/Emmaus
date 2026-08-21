@@ -195,6 +195,7 @@ function buildJourneyItem(
       coverImageUrl: j.coverImageUrl || undefined,
       collectionId: j.collectionId || undefined,
       publishedAt: j.publishedAt || undefined,
+      displayOrder: j.displayOrder ?? 0,
       subtitle: j.subtitle || undefined,
     },
     route: contentType === "daily-rhythm"
@@ -268,6 +269,7 @@ function buildDevotionalItem(
     metadata: {
       durationDays: publishedEntryCount || undefined,
       publishedAt: s.publishedAt?.toISOString?.() ?? (s.publishedAt as unknown as string) ?? undefined,
+      displayOrder: s.displayOrder ?? 0,
       currentDay: nextEntryIdx, // positional (1-based) for display; route uses raw dayNumber
     },
     route: `/devotional/${s.id}/day/${currentDay}`,
@@ -468,6 +470,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         id: c.id,
         title: c.title,
         description: c.description || undefined,
+        displayOrder: c.displayOrder ?? 0,
         journeys: (byCollection.get(c.id) ?? []).map(j =>
           buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
         ),

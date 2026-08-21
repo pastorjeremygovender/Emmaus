@@ -22,10 +22,11 @@ import {
   requestAudioUploadUrl,
   setCurrentWeekSermon,
   processSermon,
+  updateAdminSermon,
 } from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './content-studio/ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './content-studio/ContentStudioListPage';
 
 
 type Props = {
@@ -146,9 +147,22 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   // ── Status filter ────────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
-    if (statusTab === 'All') return sermons;
-    return sermons.filter(s => s.status === statusTab);
+    const list = statusTab === 'All' ? sermons : sermons.filter(s => s.status === statusTab);
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || b.createdAt.localeCompare(a.createdAt));
   }, [sermons, statusTab]);
+
+  const moveSermon = async (index: number, direction: -1 | 1) => {
+    const target = filtered[index];
+    const other = filtered[index + direction];
+    if (!target || !other) return;
+    const targetId = editId(target);
+    const otherId = editId(other);
+    await Promise.all([
+      updateAdminSermon(targetId, { displayOrder: other.displayOrder ?? index + direction }),
+      updateAdminSermon(otherId, { displayOrder: target.displayOrder ?? index }),
+    ]);
+    await load();
+  };
 
   // ── New canonical sermon ──────────────────────────────────────────────────────
 
@@ -434,7 +448,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           </div>
         )}
 
-        {filtered.map(s => {
+        {filtered.map((s, index) => {
           const isPublished          = s.status === 'Published';
           const isPublishingThis     = !!publishing[s.id];
           const isMenuOpen           = openMenuId === s.id;
@@ -493,6 +507,8 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
               }
               actions={
                 <>
+                  <ReorderButtons canMoveUp={index > 0} canMoveDown={index < filtered.length - 1}
+                    onMoveUp={() => void moveSermon(index, -1)} onMoveDown={() => void moveSermon(index, 1)} label={s.title} />
                   {/* Edit */}
                   <button onClick={() => onEdit(editId(s))} className={actionBtnCls}>
                     Edit

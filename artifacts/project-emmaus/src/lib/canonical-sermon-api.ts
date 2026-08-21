@@ -43,6 +43,7 @@ export interface CanonicalSermon {
   processingError: string;
   createdAt: string;
   updatedAt: string;
+  displayOrder: number;
   // Companion linkage (included in list responses)
   companionId?: string | null;
   // Set when this sermon's companion is the current week's sermon

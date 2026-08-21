@@ -51,6 +51,7 @@ export interface DevotionalSeries {
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
+  displayOrder: number;
 }
 
 export interface DevotionalEntry {
@@ -72,6 +73,7 @@ export interface DevotionalEntry {
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  displayOrder: number;
 }
 
 export interface DevotionalProgress {
@@ -145,7 +147,7 @@ export function createSeries(
 
 export function updateSeries(
   id: string,
-  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status">> & { notifyMembers?: boolean },
+  data: Partial<Pick<DevotionalSeries, "title" | "description" | "seriesType" | "status" | "displayOrder">> & { notifyMembers?: boolean },
   auth?: AdminAuth
 ): Promise<DevotionalSeries> {
   return request<DevotionalSeries>(apiUrl(`/${id}`), {

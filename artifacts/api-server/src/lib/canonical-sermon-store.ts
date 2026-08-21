@@ -60,6 +60,7 @@ export interface CanonicalSermon {
   processingError: string;
   createdAt: string;
   updatedAt: string;
+  displayOrder: number;
 }
 
 export interface SermonSection {
@@ -124,6 +125,7 @@ function rowToSermon(row: Record<string, unknown>): CanonicalSermon {
     processingError:     String(row.processing_error ?? ""),
     createdAt:           String(row.created_at),
     updatedAt:           String(row.updated_at),
+    displayOrder:        Number(row.display_order ?? 0),
   };
 }
 
@@ -159,7 +161,7 @@ export async function getAllSermons(): Promise<CanonicalSermonWithCompanion[]> {
        s.transcript_status, s.summary, s.themes, s.sections, s.keywords,
        s.main_theme, s.sermon_start_time, s.sermon_end_time,
        s.detection_confidence, s.detection_method,
-       s.status, s.published_at, s.created_at, s.updated_at,
+       s.status, s.published_at, s.created_at, s.updated_at, s.display_order,
        s.processing_stage, s.processing_error,
        '' AS transcript,
        '' AS full_transcript,
@@ -167,7 +169,7 @@ export async function getAllSermons(): Promise<CanonicalSermonWithCompanion[]> {
        COALESCE(sc.is_current_week, false) AS is_current_week
      FROM sermons s
      LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
-     ORDER BY s.created_at DESC`
+      ORDER BY s.display_order ASC, s.created_at DESC`
   );
   return result.rows.map(rowToSermonWithCompanion);
 }
@@ -203,7 +205,7 @@ export async function listPublishedSermons(): Promise<CanonicalSermonWithCompani
        s.transcript_status, s.summary, s.themes, s.sections, s.keywords,
        s.main_theme, s.sermon_start_time, s.sermon_end_time,
        s.detection_confidence, s.detection_method,
-       s.status, s.published_at, s.created_at, s.updated_at,
+       s.status, s.published_at, s.created_at, s.updated_at, s.display_order,
        s.processing_stage, s.processing_error,
        '' AS transcript,
        '' AS full_transcript,
@@ -212,7 +214,7 @@ export async function listPublishedSermons(): Promise<CanonicalSermonWithCompani
      FROM sermons s
      LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
      WHERE s.status = 'Published'
-     ORDER BY s.published_at DESC NULLS LAST`
+      ORDER BY s.display_order ASC, s.published_at DESC NULLS LAST`
   );
   return result.rows.map(rowToSermonWithCompanion);
 }
@@ -324,6 +326,7 @@ export async function updateSermon(
     publishedAt:         "published_at",
     processingStage:     "processing_stage",
     processingError:     "processing_error",
+    displayOrder:        "display_order",
   };
 
   const jsonbCols = new Set(["scripture_book_ids", "scripture_chapters", "themes", "sections", "keywords"]);

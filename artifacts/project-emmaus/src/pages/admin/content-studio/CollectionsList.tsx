@@ -8,12 +8,12 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, FolderOpen, BookOpen, Trash2, MoreHorizontal, Pencil } from 'lucide-react';
-import { listCollections, deleteCollection } from '@/lib/collections-api';
+import { listCollections, deleteCollection, updateCollection } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConfirmDialog } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewCollectionModal from './NewCollectionModal';
 
 const STATUS_TABS = ['All', 'Draft', 'Published', 'Archived'] as const;
@@ -55,6 +55,18 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
     c => statusTab === 'All' || c.status === statusTab,
   );
 
+  const ordered = [...filtered].sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt));
+  const moveCollection = async (index: number, direction: -1 | 1) => {
+    const target = ordered[index];
+    const other = ordered[index + direction];
+    if (!target || !other) return;
+    await Promise.all([
+      updateCollection(target.id, { displayOrder: other.displayOrder }, user?.id),
+      updateCollection(other.id, { displayOrder: target.displayOrder }, user?.id),
+    ]);
+    await load();
+  };
+
   return (
     <>
       <ContentStudioListPage
@@ -93,7 +105,7 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
           </div>
         }
       >
-        {filtered.map(c => {
+        {ordered.map((c, index) => {
           const isMenuOpen = openMenu === c.id;
           const metaText = [
             `${c.journeyCount} walk${c.journeyCount !== 1 ? 's' : ''}`,
@@ -119,6 +131,8 @@ export default function CollectionsList({ onNew: _onNew, onEdit, onViewJourneys 
               onClick={() => onEdit(c.id)}
               actions={
                 <>
+                  <ReorderButtons canMoveUp={index > 0} canMoveDown={index < ordered.length - 1}
+                    onMoveUp={() => void moveCollection(index, -1)} onMoveDown={() => void moveCollection(index, 1)} label={c.title} />
                   <button onClick={() => onEdit(c.id)} className={actionBtnCls}>
                     Edit
                   </button>

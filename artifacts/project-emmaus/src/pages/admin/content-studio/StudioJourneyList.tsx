@@ -10,7 +10,7 @@ import type { Journey } from '@/lib/journeys-api';
 import { listCollections } from '@/lib/collections-api';
 import { StatusBadge } from '../shared';
 import ContentStudioListItem from './ContentStudioListItem';
-import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls } from './ContentStudioListPage';
+import ContentStudioListPage, { actionBtnCls, menuBtnCls, newBtnCls, ReorderButtons } from './ContentStudioListPage';
 import NewJourneyModal from './NewJourneyModal';
 import DeleteJourneyDialog from './DeleteJourneyDialog';
 import GroupMembershipBadge from './GroupMembershipBadge';
@@ -85,8 +85,19 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
         j.tags?.some(t => t.toLowerCase().includes(q))
       );
     }
-    return [...list].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+    return [...list].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
   }, [journeys, query, statusTab, typeFilter, collectionId, standaloneOnly]);
+
+  const moveJourney = async (index: number, direction: -1 | 1) => {
+    const target = filtered[index];
+    const other = filtered[index + direction];
+    if (!target || !other) return;
+    await Promise.all([
+      updateJourney({ ...target, displayOrder: other.displayOrder ?? index + direction } as any),
+      updateJourney({ ...other, displayOrder: target.displayOrder ?? index } as any),
+    ]);
+    await refreshJourneys?.();
+  };
 
   const handleCreated = useCallback((id: string) => {
     setShowNew(false);
@@ -209,7 +220,7 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
           </div>
         )}
 
-        {filtered.map(j => {
+        {filtered.map((j, index) => {
           const cfg = TYPE_CONFIG[j.journeyType] ?? TYPE_CONFIG.core;
           const isMenuOpen = openMenuId === j.id;
           const metaParts: string[] = [];
@@ -267,6 +278,13 @@ export default function StudioJourneyList({ collectionId, standaloneOnly, autoOp
               onClick={() => onEdit(j.id)}
               actions={
                 <>
+                    <ReorderButtons
+                      canMoveUp={index > 0}
+                      canMoveDown={index < filtered.length - 1}
+                      onMoveUp={() => void moveJourney(index, -1)}
+                      onMoveDown={() => void moveJourney(index, 1)}
+                      label={j.title}
+                    />
                   <button
                     onClick={() => onEdit(j.id)}
                     className={`${actionBtnCls} flex items-center gap-1`}

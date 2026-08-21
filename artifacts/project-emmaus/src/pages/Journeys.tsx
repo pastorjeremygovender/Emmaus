@@ -51,7 +51,7 @@ import { dismissBadge } from '@/lib/badge-api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabId = 'walks' | 'journeys' | 'devotionals' | 'sermons';
-type DiscoverSort = 'alphabetical' | 'newest' | 'oldest' | 'topic';
+type DiscoverSort = 'default' | 'alphabetical' | 'newest' | 'oldest' | 'topic';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +84,12 @@ function sortItemDate(item: NextStepsItem): number {
 }
 
 function sortItems(items: NextStepsItem[], sort: DiscoverSort): NextStepsItem[] {
+  if (sort === 'default') {
+    return [...items].sort((a, b) =>
+      (a.metadata.displayOrder ?? 0) - (b.metadata.displayOrder ?? 0) ||
+      a.title.localeCompare(b.title),
+    );
+  }
   return [...items].sort((a, b) => {
     if (sort === 'newest' || sort === 'oldest') {
       const difference = sortItemDate(a) - sortItemDate(b);
@@ -538,6 +544,9 @@ export function JourneysPanel({
   return (
     <div className="space-y-3">
       {[...collections].sort((a, b) => {
+        if (sort === 'default') {
+          return (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.title.localeCompare(b.title);
+        }
         const aKey = sort === 'topic' ? (a.description ?? a.title) : a.title;
         const bKey = sort === 'topic' ? (b.description ?? b.title) : b.title;
         return aKey.localeCompare(bKey);
@@ -641,6 +650,10 @@ function ContentGroupsPanel({
   if (matching.length === 0) return null;
 
   const ordered = [...matching].sort((a, b) => {
+    if (sort === 'default') {
+      return (a.group.displayOrder ?? 0) - (b.group.displayOrder ?? 0) ||
+        a.group.title.localeCompare(b.group.title);
+    }
     if (sort === 'newest' || sort === 'oldest') {
       const aDate = Math.max(...a.group.items.map(sortItemDate), 0);
       const bDate = Math.max(...b.group.items.map(sortItemDate), 0);
@@ -679,7 +692,8 @@ function SortBySelect({ value, onChange }: { value: DiscoverSort; onChange: (val
         className="h-7 max-w-[112px] rounded-md border border-foreground/10 bg-background/70 px-2 text-[11px] font-medium text-foreground shadow-none outline-none focus:ring-2 focus:ring-primary/25"
         aria-label="Sort Discover content"
       >
-        <option value="alphabetical">Alphabetically</option>
+         <option value="default">Default</option>
+         <option value="alphabetical">Alphabetically</option>
         <option value="newest">Newest First</option>
         <option value="oldest">Oldest First</option>
         <option value="topic">Topic</option>
@@ -769,7 +783,10 @@ export default function Journeys() {
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabId>(sessionTab);
-  const [discoverSort, setDiscoverSort] = useState<DiscoverSort>('alphabetical');
+  const [walksSort, setWalksSort] = useState<DiscoverSort>('default');
+  const [journeysSort, setJourneysSort] = useState<DiscoverSort>('default');
+  const [devotionalsSort, setDevotionalsSort] = useState<DiscoverSort>('default');
+  const [sermonsSort, setSermonsSort] = useState<DiscoverSort>('default');
   function handleTabChange(id: TabId) { setActiveTab(id); saveTab(id); }
 
   // ── API data ─────────────────────────────────────────────────────────────
@@ -993,22 +1010,22 @@ export default function Journeys() {
         {!discoverActive && !apiLoading && data && (
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
-              <SectionWrapper color="emerald" label="Walks" headerAction={<SortBySelect value={discoverSort} onChange={setDiscoverSort} />}>
-                <WalksPanel standalone={data.standaloneJourneys} sort={discoverSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
+              <SectionWrapper color="emerald" label="Walks" headerAction={<SortBySelect value={walksSort} onChange={setWalksSort} />}>
+                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
-              <SectionWrapper color="amber" label="Journeys" headerAction={<SortBySelect value={discoverSort} onChange={setDiscoverSort} />}>
-                <JourneysPanel collections={data.journeyCollections} sort={discoverSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
+              <SectionWrapper color="amber" label="Journeys" headerAction={<SortBySelect value={journeysSort} onChange={setJourneysSort} />}>
+                <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
               </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
-              <SectionWrapper color="violet" label="Daily Devotionals" headerAction={<SortBySelect value={discoverSort} onChange={setDiscoverSort} />}>
-                <DevotionalsPanel items={data.dailyDevotionals} sort={discoverSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} isGated={!gateClear} onGate={() => setLocation('/walk')} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
+              <SectionWrapper color="violet" label="Daily Devotionals" headerAction={<SortBySelect value={devotionalsSort} onChange={setDevotionalsSort} />}>
+                <DevotionalsPanel items={data.dailyDevotionals} sort={devotionalsSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} isGated={!gateClear} onGate={() => setLocation('/walk')} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}
             {activeTab === 'sermons' && (
-              <SectionWrapper color="blue" label="Sermon Companions" headerAction={<SortBySelect value={discoverSort} onChange={setDiscoverSort} />}>
+              <SectionWrapper color="blue" label="Sermon Companions" headerAction={<SortBySelect value={sermonsSort} onChange={setSermonsSort} />}>
                 <SermonCompanionsPanel
                   current={data.currentSermonCompanion}
                   previous={data.previousSermonCompanions}
@@ -1016,7 +1033,7 @@ export default function Journeys() {
                   isGated={!gateClear}
                   onGate={() => setLocation('/walk')}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
-                  sort={discoverSort}
+                   sort={sermonsSort}
                 />
               </SectionWrapper>
             )}

@@ -36,6 +36,7 @@ export interface NextStepsItem {
     topic?: string;
     /** For daily-devotional items: the member's current day (next to complete). */
     currentDay?: number;
+      displayOrder?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
@@ -52,6 +53,7 @@ export interface JourneyCollectionGroup {
   id: string;
   title: string;
   description?: string;
+  displayOrder?: number;
   journeys: NextStepsItem[];
 }
 

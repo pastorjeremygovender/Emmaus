@@ -43,6 +43,7 @@ export type Journey = {
   updatedAt?: string;
   createdAt?: string;
   collectionId?: string;
+  displayOrder?: number;
   themeColor?: string;   // hex colour, e.g. '#3B82F6'
   version?: number;      // incremented on each publish; 1-based
   scriptureReference?: string;
@@ -94,6 +95,7 @@ export type Step = {
   sermonContextualSentence?: string;
 
   order?: number;
+  displayOrder?: number;
 
   // Daily Rhythm closing text (stored in content.closingText JSONB)
   closingText?: string;
