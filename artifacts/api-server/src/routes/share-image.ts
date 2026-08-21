@@ -26,6 +26,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const IMAGE_MODEL = "gpt-image-2";
 // 1024×1024 square (1:1). gpt-image-1 supports this natively.
 const IMAGE_SIZE = "1024x1024";
+const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v1";
 
 // ─── Stage 1: Art-direction pre-pass ─────────────────────────────────────────
 
@@ -122,6 +123,31 @@ NON-NEGOTIABLE RULES:
 - The bottom 20% of the canvas must be completely clear — no text, no key visual elements there (a footer is composited programmatically and must not be obscured)
 - No logos, watermarks, app names, church names, or branding of any kind
 - No generic stock-photo clichés, no overlapping religious symbols (rays + cross + dove), no soft-focus blur with no subject`;
+}
+
+/**
+ * Temporary A/B-test prompt. This deliberately bypasses artDirectImage() and
+ * lets GPT Image 2 interpret the quote, scene, and typography as one design.
+ */
+function buildNewMethodPrompt(text: string): string {
+  return `Create a premium square shareable image for the exact devotional quote below.
+
+EXACT QUOTE — the wording must appear in the artwork exactly as supplied:
+"""
+${text}
+"""
+
+First understand the spiritual meaning and emotional centre of the quote. Then identify ONE strong visual metaphor or scene that communicates that meaning. Make the image and typography work together as one professionally art-directed composition.
+
+Allow substantial creative freedom. Do not force a fixed layout, fixed text position, fixed hero phrase, fixed font hierarchy, landscape, cross, sunlight, mountains, paths, hands, people, or any recurring Christian visual cliché. Use those elements only when they genuinely communicate this specific quote.
+
+Typography is part of the design: preserve the exact wording, but determine the emphasis, font scale, line breaks, placement, contrast, and hierarchy that best serve the quote. Prioritise excellent typography, strong visual hierarchy, emotional resonance, sophisticated composition, phone readability, premium editorial quality, meaningful imagery, generous negative space, and restraint.
+
+Avoid a generic motivational poster, excessive decorative flourishes, clutter, random Christian symbols, repetitive backgrounds, stock-photo appearance, automatic crosses, and automatic golden-hour landscapes.
+
+Choose a colour palette that naturally matches the text, mood, subject, and lighting. Do not default to sunsets or earth tones.
+
+Use a square 1:1 canvas at 1024×1024. Keep the bottom 20% clear for a footer that will be added programmatically. Do not generate any logo, watermark, Emmaus branding, church name, or attribution. Do not omit, paraphrase, repeat, or invent any words from the exact quote.`;
 }
 
 // ─── Edit prompt — no art-direction pass, preserve existing composition ───────
@@ -221,6 +247,55 @@ router.post("/share-images/auto-generate", async (req: Request, res: Response) =
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Auto-generation failed";
     req.log.error({ userId, error: message }, "Share image auto-generation failed");
+    return res.status(500).json({ error: message });
+  }
+});
+
+// ─── Temporary A/B-test method ────────────────────────────────────────────────
+// This route intentionally bypasses the existing GPT-4o art-direction pass.
+router.post("/share-images/generate-new-method", async (req: Request, res: Response) => {
+  const userId = requireAdmin(req, res);
+  if (!userId) return;
+
+  const { text } = req.body as { text?: string };
+  if (!text?.trim()) {
+    return res.status(400).json({ error: "Text is required" });
+  }
+
+  try {
+    const prompt = buildNewMethodPrompt(text.trim());
+    const genRes = await openai.images.generate({
+      model: IMAGE_MODEL,
+      prompt,
+      size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
+      n: 1,
+    });
+    const imageBase64 = genRes.data?.[0]?.b64_json;
+    if (!imageBase64) throw new Error("No image returned from New Method generation");
+
+    req.log.info({
+      userId,
+      method: NEW_METHOD_PROMPT_VERSION,
+      model: IMAGE_MODEL,
+      size: IMAGE_SIZE,
+      quality: "not specified",
+      reasoningStep: "No separate reasoning call; GPT Image 2 interprets the quote directly from the New Method prompt",
+    }, "Share image New Method generated");
+
+    return res.json({
+      imageBase64,
+      experiment: {
+        method: NEW_METHOD_PROMPT_VERSION,
+        model: IMAGE_MODEL,
+        size: IMAGE_SIZE,
+        quality: null,
+        reasoningStep: "No separate reasoning call; GPT Image 2 interprets the quote directly from the New Method prompt",
+        prompt,
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "New Method image generation failed";
+    req.log.error({ userId, error: message }, "Share image New Method failed");
     return res.status(500).json({ error: message });
   }
 });

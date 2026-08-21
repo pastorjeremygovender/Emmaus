@@ -49,8 +49,15 @@ const ATTRIBUTION_OPTIONS: Array<{ value: Attribution; label: string; sub?: stri
 type GenPhase =
   | { phase: "idle" }
   | { phase: "generating" }
-  | { phase: "preview"; imageBase64: string }
+  | { phase: "preview"; imageBase64: string; method: GenerationMethod }
   | { phase: "editing"; imageBase64: string; applying: boolean };
+
+type GenerationMethod = "existing" | "new";
+
+type ComparisonImages = {
+  existing?: string;
+  newMethod?: string;
+};
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -258,6 +265,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
   const [genError, setGenError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [comparison, setComparison] = useState<ComparisonImages>({});
 
   // Duplicate-request guard
   const generatingRef = useRef(false);
@@ -292,19 +300,41 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     return imageBase64;
   }
 
+  async function callNewMethod(): Promise<string> {
+    const res = await fetch(getApiUrl("/api/share-images/generate-new-method"), {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: text.trim() }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({})) as { error?: string };
+      throw new Error(errBody.error ?? "New Method generation failed");
+    }
+
+    const { imageBase64 } = await res.json() as { imageBase64: string };
+    return imageBase64;
+  }
+
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  async function handleGenerate() {
+  async function handleGenerate(method: GenerationMethod = "existing") {
     if (!text.trim()) { setGenError("Please enter some text first."); return; }
     if (generatingRef.current) return;
     generatingRef.current = true;
     setGenError("");
     setState({ phase: "generating" });
     try {
-      const b64 = await callGenerate("generate");
-      setState({ phase: "preview", imageBase64: b64 });
+      const b64 = method === "new"
+        ? await callNewMethod()
+        : await callGenerate("generate");
+      setComparison(current => ({ ...current, [method === "new" ? "newMethod" : "existing"]: b64 }));
+      setState({ phase: "preview", imageBase64: b64, method });
     } catch (e: unknown) {
-      setGenError(e instanceof Error ? e.message : "Generation failed. Please try again.");
+      setGenError(e instanceof Error ? e.message : `${method === "new" ? "New Method g" : "G"}eneration failed. Please try again.`);
       setState({ phase: "idle" });
     } finally {
       generatingRef.current = false;
@@ -317,8 +347,12 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setGenError("");
     setState({ phase: "generating" });
     try {
-      const b64 = await callGenerate("generate");
-      setState({ phase: "preview", imageBase64: b64 });
+      const method = state.phase === "preview" ? state.method : "existing";
+      const b64 = method === "new"
+        ? await callNewMethod()
+        : await callGenerate("generate");
+      setComparison(current => ({ ...current, [method === "new" ? "newMethod" : "existing"]: b64 }));
+      setState({ phase: "preview", imageBase64: b64, method });
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : "Regeneration failed. Please try again.");
       // Restore preview with previous image if we had one
@@ -342,7 +376,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
     try {
       const b64 = await callGenerate("edit", prevImage);
-      setState({ phase: "preview", imageBase64: b64 });
+      setState({ phase: "preview", imageBase64: b64, method: "existing" });
       setEditInstruction("");
     } catch (e: unknown) {
       // Retain previous image on failure
