@@ -26,7 +26,9 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
       const result = await listDailyRhythmGroups(journeyId);
       setGroups(result);
       if (selectedId && !result.some(group => group.id === selectedId)) setSelectedId(null);
-    } catch { toast.error('Could not load Daily Rhythm groups'); }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load Daily Rhythm groups');
+    }
   }, [journeyId, selectedId]);
 
   useEffect(() => { void load(); }, [load]);
@@ -50,7 +52,9 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
       await load();
       choose({ ...group, items: [] });
       toast.success('Group created');
-    } catch { toast.error('Could not create group'); }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create group');
+    }
     finally { setSaving(false); }
   }
 
@@ -62,7 +66,9 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
       await saveDailyRhythmGroupItems(journeyId, selected.id, selectedStepIds);
       await load();
       toast.success('Group saved');
-    } catch { toast.error('Could not save group'); }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save group');
+    }
     finally { setSaving(false); }
   }
 
@@ -74,7 +80,9 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
       setSelectedId(null);
       await load();
       toast.success('Group deleted');
-    } catch { toast.error('Could not delete group'); }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete group');
+    }
     finally { setSaving(false); }
   }
 
@@ -86,8 +94,30 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
           <p className="text-xs text-gray-500 mt-0.5">Assign individual days to Bible-book groups. Days keep their canonical Day number.</p>
         </div>
         <div className="flex gap-2">
-          <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="New group name" className="min-h-10 w-40 border border-gray-200 rounded-xl bg-white px-3 text-sm" />
-          <button onClick={() => void create()} disabled={saving || !newTitle.trim()} className="min-h-10 px-3 rounded-xl bg-teal-600 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5"><FolderPlus size={14} /> Add</button>
+           <input
+             value={newTitle}
+             onChange={e => setNewTitle(e.target.value)}
+             onKeyDown={e => {
+               if (e.key === 'Enter') {
+                 e.preventDefault();
+                 void create();
+               }
+             }}
+             placeholder="New group name"
+             className="min-h-10 w-40 border border-gray-200 rounded-xl bg-white px-3 text-sm"
+           />
+           <button
+             type="button"
+             onClick={e => {
+               e.preventDefault();
+               void create();
+             }}
+             disabled={saving || !newTitle.trim()}
+             className="min-h-10 px-3 rounded-xl bg-teal-600 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-1.5"
+           >
+             {saving ? <Loader2 size={14} className="animate-spin" /> : <FolderPlus size={14} />}
+             Add
+           </button>
         </div>
       </div>
       {groups.length === 0 ? (
