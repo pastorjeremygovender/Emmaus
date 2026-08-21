@@ -24,9 +24,11 @@ const router = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const IMAGE_MODEL = "gpt-image-2";
-// 1024×1024 square (1:1). gpt-image-1 supports this natively.
+const NEW_REASONING_MODEL = "gpt-5.6-sol";
+const IMAGE_QUALITY = "high";
+// 1024×1024 square (1:1).
 const IMAGE_SIZE = "1024x1024";
-const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v1";
+const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v2";
 
 // ─── Stage 1: Art-direction pre-pass ─────────────────────────────────────────
 
@@ -125,29 +127,65 @@ NON-NEGOTIABLE RULES:
 - No generic stock-photo clichés, no overlapping religious symbols (rays + cross + dove), no soft-focus blur with no subject`;
 }
 
-/**
- * Temporary A/B-test prompt. This deliberately bypasses artDirectImage() and
- * lets GPT Image 2 interpret the quote, scene, and typography as one design.
- */
-function buildNewMethodPrompt(text: string): string {
-  return `Create a premium square shareable image for the exact devotional quote below.
+type NewMethodReasoning = {
+  emotionalCentre: string;
+  visualMetaphor: string;
+  composition: string;
+  heroText: string;
+  mood: string;
+  avoid: string[];
+};
 
-EXACT QUOTE — the wording must appear in the artwork exactly as supplied:
-"""
-${text}
-"""
+function parseNewMethodReasoning(raw: string): NewMethodReasoning {
+  const parsed = JSON.parse(raw) as Partial<NewMethodReasoning>;
+  if (
+    typeof parsed.emotionalCentre !== "string" ||
+    typeof parsed.visualMetaphor !== "string" ||
+    typeof parsed.composition !== "string" ||
+    typeof parsed.heroText !== "string" ||
+    typeof parsed.mood !== "string" ||
+    !Array.isArray(parsed.avoid) ||
+    !parsed.avoid.every(item => typeof item === "string")
+  ) {
+    throw new Error("New Method reasoning returned invalid structured data");
+  }
+  return parsed as NewMethodReasoning;
+}
 
-First understand the spiritual meaning and emotional centre of the quote. Then identify ONE strong visual metaphor or scene that communicates that meaning. Make the image and typography work together as one professionally art-directed composition.
+async function reasonAboutNewMethod(text: string): Promise<NewMethodReasoning> {
+  const response = await openai.chat.completions.create({
+    model: NEW_REASONING_MODEL,
+    max_completion_tokens: 1200,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You are an exceptional visual art director for premium Christian devotional share images.
+Interpret each devotional independently. Return JSON only with exactly these keys:
+{
+  "emotionalCentre": "the deepest spiritual idea",
+  "visualMetaphor": "one specific scene or metaphor that adds meaning",
+  "composition": "the relationship between image, negative space, typography, focal point, light and balance",
+  "heroText": "the exact phrase from the quote that deserves the most emphasis",
+  "mood": "the emotional atmosphere",
+  "avoid": ["specific clichés or generic choices to avoid for this quote"]
+}
 
-Allow substantial creative freedom. Do not force a fixed layout, fixed text position, fixed hero phrase, fixed font hierarchy, landscape, cross, sunlight, mountains, paths, hands, people, or any recurring Christian visual cliché. Use those elements only when they genuinely communicate this specific quote.
+Do not write an image-generation prompt. Do not rewrite the quote. Do not automatically choose sunsets, crosses, paths, lanterns, mountains, open Bibles, praying hands, horizons, or golden-hour landscapes. Choose one meaningful visual language for this quote and explain the typography hierarchy without prescribing a rigid template.`,
+      },
+      {
+        role: "user",
+        content: `Interpret this exact devotional quote:\n\n"""\n${text}\n"""`,
+      },
+    ],
+  });
+  const raw = response.choices[0]?.message?.content?.trim();
+  if (!raw) throw new Error("New Method reasoning returned an empty response");
+  return parseNewMethodReasoning(raw);
+}
 
-Typography is part of the design: preserve the exact wording, but determine the emphasis, font scale, line breaks, placement, contrast, and hierarchy that best serve the quote. Prioritise excellent typography, strong visual hierarchy, emotional resonance, sophisticated composition, phone readability, premium editorial quality, meaningful imagery, generous negative space, and restraint.
-
-Avoid a generic motivational poster, excessive decorative flourishes, clutter, random Christian symbols, repetitive backgrounds, stock-photo appearance, automatic crosses, and automatic golden-hour landscapes.
-
-Choose a colour palette that naturally matches the text, mood, subject, and lighting. Do not default to sunsets or earth tones.
-
-Use a square 1:1 canvas at 1024×1024. Keep the bottom 20% clear for a footer that will be added programmatically. Do not generate any logo, watermark, Emmaus branding, church name, or attribution. Do not omit, paraphrase, repeat, or invent any words from the exact quote.`;
+function buildNewMethodPrompt(text: string, reasoning: NewMethodReasoning): string {
+  return `Create a premium editorial Christian devotional share image in a square 1:1 format. Visualise this concept: ${reasoning.visualMetaphor}; the emotional atmosphere is ${reasoning.mood}, with ${reasoning.composition}. Give intelligent typographic emphasis to the exact phrase "${reasoning.heroText}" while preserving every word of the complete quote exactly as supplied, using meaningful hierarchy, contrast and negative space rather than a fixed template. Render this exact devotional text verbatim: """${text}""". Use sophisticated, restrained, cinematic visual storytelling and leave the bottom 20% clear for an Emmaus footer; generate no logos, watermarks, church names, signatures or attribution. Avoid: ${reasoning.avoid.join("; ")}.`;
 }
 
 // ─── Edit prompt — no art-direction pass, preserve existing composition ───────
@@ -263,10 +301,12 @@ router.post("/share-images/generate-new-method", async (req: Request, res: Respo
   }
 
   try {
-    const prompt = buildNewMethodPrompt(text.trim());
+    const reasoning = await reasonAboutNewMethod(text.trim());
+    const prompt = buildNewMethodPrompt(text.trim(), reasoning);
     const genRes = await openai.images.generate({
       model: IMAGE_MODEL,
       prompt,
+      quality: IMAGE_QUALITY,
       size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
       n: 1,
     });
@@ -276,20 +316,21 @@ router.post("/share-images/generate-new-method", async (req: Request, res: Respo
     req.log.info({
       userId,
       method: NEW_METHOD_PROMPT_VERSION,
+      reasoningModel: NEW_REASONING_MODEL,
       model: IMAGE_MODEL,
       size: IMAGE_SIZE,
-      quality: "not specified",
-      reasoningStep: "No separate reasoning call; GPT Image 2 interprets the quote directly from the New Method prompt",
+      quality: IMAGE_QUALITY,
     }, "Share image New Method generated");
 
     return res.json({
       imageBase64,
       experiment: {
         method: NEW_METHOD_PROMPT_VERSION,
+        reasoningModel: NEW_REASONING_MODEL,
         model: IMAGE_MODEL,
         size: IMAGE_SIZE,
-        quality: null,
-        reasoningStep: "No separate reasoning call; GPT Image 2 interprets the quote directly from the New Method prompt",
+        quality: IMAGE_QUALITY,
+        reasoning,
         prompt,
       },
     });
