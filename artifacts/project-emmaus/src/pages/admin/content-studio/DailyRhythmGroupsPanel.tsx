@@ -43,6 +43,26 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
     setSelectedStepIds(group.items.map(step => step.id).filter((id): id is string => Boolean(id)));
   }
 
+  async function changeStatus(nextStatus: string) {
+    if (!selected || nextStatus === selected.status) {
+      setStatus(nextStatus);
+      return;
+    }
+    const previousStatus = selected.status;
+    setStatus(nextStatus);
+    setSaving(true);
+    try {
+      const updated = await updateDailyRhythmGroup(journeyId, selected.id, { status: nextStatus });
+      setGroups(current => current.map(group => group.id === updated.id ? { ...group, status: updated.status } : group));
+      toast.success(`Group ${nextStatus.toLowerCase()}`);
+    } catch (error) {
+      setStatus(previousStatus);
+      toast.error(error instanceof Error ? error.message : 'Could not update group visibility');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function create() {
     if (!newTitle.trim()) return;
     setSaving(true);
@@ -142,7 +162,7 @@ export default function DailyRhythmGroupsPanel({ journeyId, steps }: { journeyId
                 <button onClick={() => void remove()} disabled={saving} className="text-xs text-red-600 flex items-center gap-1"><Trash2 size={13} /> Delete</button>
               </div>
               <label className="text-xs text-gray-500 flex items-center gap-2 mb-3">Visibility
-                <select value={status} onChange={e => setStatus(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-xs">
+                 <select value={status} onChange={e => void changeStatus(e.target.value)} disabled={saving} className="border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-xs disabled:opacity-60">
                   <option>Draft</option><option>Published</option><option>Archived</option>
                 </select>
               </label>

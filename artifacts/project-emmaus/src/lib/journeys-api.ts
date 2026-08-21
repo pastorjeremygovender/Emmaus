@@ -134,7 +134,10 @@ export async function updateDailyRhythmGroup(journeyId: string, groupId: string,
     method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...data, displayOrder: data.displayOrder }),
   });
-  if (!res.ok) throw new Error('Could not update Daily Rhythm group');
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(body || `Could not update Daily Rhythm group (${res.status})`);
+  }
   return res.json() as Promise<DailyRhythmGroup>;
 }
 

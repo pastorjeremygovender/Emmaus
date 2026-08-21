@@ -83,6 +83,26 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
     );
   }
 
+  async function changeStatus(nextStatus: string) {
+    if (!selected || nextStatus === selected.status) {
+      setDraftStatus(nextStatus);
+      return;
+    }
+    const previousStatus = selected.status;
+    setDraftStatus(nextStatus);
+    setSaving(true);
+    try {
+      const updated = await updateDevotionalEntryGroup(seriesId, selected.id, { status: nextStatus }, auth);
+      setGroups(current => current.map(group => group.id === updated.id ? { ...group, status: updated.status } : group));
+      toast.success(`Group ${nextStatus.toLowerCase()}`);
+    } catch (error) {
+      setDraftStatus(previousStatus);
+      toast.error(error instanceof Error ? error.message : 'Could not update group visibility');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function moveEntry(index: number, direction: -1 | 1) {
     const next = index + direction;
     if (next < 0 || next >= selectedEntryIds.length) return;
@@ -197,7 +217,7 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
               <div className="flex items-center justify-between gap-2 mb-3">
                 <label className="text-xs text-gray-500 flex items-center gap-2">
                   Visibility
-                  <select value={draftStatus} onChange={e => setDraftStatus(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-xs">
+          <select value={draftStatus} onChange={e => void changeStatus(e.target.value)} disabled={saving} className="border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-xs disabled:opacity-60">
                     <option value="Draft">Draft</option>
                     <option value="Published">Published</option>
                     <option value="Archived">Archived</option>
