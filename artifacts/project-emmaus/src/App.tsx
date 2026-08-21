@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { FloatingEmmausButton } from '@/components/FloatingEmmausButton';
 import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
 import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
+import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
 
 // Pages
@@ -229,6 +230,7 @@ function App() {
                   </VoiceSessionProvider>
                 </WouterRouter>
                 <Toaster />
+                <InstallPrompt />
               </TooltipProvider>
             </BibleProvider>
           </RoomsProvider>
