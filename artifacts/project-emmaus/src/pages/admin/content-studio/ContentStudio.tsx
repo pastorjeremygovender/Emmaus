@@ -18,7 +18,7 @@
  *   - No more "Standalone" tab — every journey is just a Journey
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2,
   FolderOpen, BookOpen, Layers2,
@@ -144,6 +144,32 @@ const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   'groupings':    { id: 'groupings' },
 };
 
+const CONTENT_STUDIO_VIEW_KEY = 'emmaus_admin_content_studio_view';
+const STUDIO_VIEW_IDS = new Set<StudioView['id']>([
+  'daily-rhythm', 'daily-rhythm-editor', 'daily-rhythm-day-editor',
+  'devotionals', 'devotional-editor', 'devotional-entry-editor',
+  'journeys-library', 'journeys-collections', 'collection-editor',
+  'collection-detail', 'journey-detail', 'journey-day-editor',
+  'journeys-standalone', 'journey-editor', 'legacy-journey-editor',
+  'legacy-day-editor', 'legacy-day-preview', 'sermons', 'sermon-editor',
+  'youtube-archive', 'media', 'kit-wizard', 'kit-editor',
+  'bible-progress', 'bible-generator', 'bible-book-intros',
+  'groupings', 'group-editor',
+]);
+
+function readStoredStudioView(): StudioView | null {
+  try {
+    const raw = window.sessionStorage.getItem(CONTENT_STUDIO_VIEW_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StudioView>;
+    return typeof parsed.id === 'string' && STUDIO_VIEW_IDS.has(parsed.id as StudioView['id'])
+      ? parsed as StudioView
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -163,6 +189,8 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     if (initialSubView === 'studio-editor' && initialJourneyId) {
       return { id: 'journey-editor', journeyId: initialJourneyId };
     }
+    const storedView = readStoredStudioView();
+    if (storedView) return storedView;
     // Legacy: old 'overview' default → land on Daily Rhythm
     return { id: 'daily-rhythm' };
   });
@@ -171,6 +199,17 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
     setView(v);
     window.scrollTo(0, 0);
   };
+
+  // Keep the current working page across Content Studio remounts, reloads, and
+  // leaving/returning to the admin area. sessionStorage intentionally scopes
+  // this to the current browser tab, so separate tabs do not fight over state.
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(CONTENT_STUDIO_VIEW_KEY, JSON.stringify(view));
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+  }, [view]);
 
   // journey-editor active tab depends on how it was opened
   const activeTabId = (() => {
