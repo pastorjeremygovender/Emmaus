@@ -116,13 +116,13 @@ export type DailyRhythmGroup = {
 };
 
 export async function listDailyRhythmGroups(journeyId: string): Promise<DailyRhythmGroup[]> {
-  const res = await fetch(getApiUrl(`/journeys/${journeyId}/daily-rhythm-groups`), { credentials: 'include', cache: 'no-store' });
+  const res = await fetch(getApiUrl(`/api/journeys/${journeyId}/daily-rhythm-groups`), { credentials: 'include', cache: 'no-store' });
   if (!res.ok) throw new Error('Could not load Daily Rhythm groups');
   return res.json();
 }
 
 export async function createDailyRhythmGroup(journeyId: string, data: { title: string; description?: string; displayOrder?: number }) {
-  const res = await fetch(getApiUrl(`/journeys/${journeyId}/daily-rhythm-groups`), {
+  const res = await fetch(getApiUrl(`/api/journeys/${journeyId}/daily-rhythm-groups`), {
     method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Could not create Daily Rhythm group');
@@ -130,7 +130,7 @@ export async function createDailyRhythmGroup(journeyId: string, data: { title: s
 }
 
 export async function updateDailyRhythmGroup(journeyId: string, groupId: string, data: Partial<Pick<DailyRhythmGroup, 'title' | 'description' | 'status' | 'displayOrder'>>) {
-  const res = await fetch(getApiUrl(`/journeys/${journeyId}/daily-rhythm-groups/${groupId}`), {
+  const res = await fetch(getApiUrl(`/api/journeys/${journeyId}/daily-rhythm-groups/${groupId}`), {
     method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...data, displayOrder: data.displayOrder }),
   });
@@ -139,12 +139,12 @@ export async function updateDailyRhythmGroup(journeyId: string, groupId: string,
 }
 
 export async function deleteDailyRhythmGroup(journeyId: string, groupId: string) {
-  const res = await fetch(getApiUrl(`/journeys/${journeyId}/daily-rhythm-groups/${groupId}`), { method: 'DELETE', credentials: 'include' });
+  const res = await fetch(getApiUrl(`/api/journeys/${journeyId}/daily-rhythm-groups/${groupId}`), { method: 'DELETE', credentials: 'include' });
   if (!res.ok) throw new Error('Could not delete Daily Rhythm group');
 }
 
 export async function saveDailyRhythmGroupItems(journeyId: string, groupId: string, stepIds: string[]) {
-  const res = await fetch(getApiUrl(`/journeys/${journeyId}/daily-rhythm-groups/${groupId}/items`), {
+  const res = await fetch(getApiUrl(`/api/journeys/${journeyId}/daily-rhythm-groups/${groupId}/items`), {
     method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stepIds }),
   });
   if (!res.ok) throw new Error('Could not save Daily Rhythm group days');
