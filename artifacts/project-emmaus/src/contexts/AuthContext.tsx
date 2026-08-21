@@ -173,10 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!preserveUi) setUser(null);
       throw error;
     } finally {
-      if (requestGenerationRef.current === generation && !preserveUi) {
+      if (requestGenerationRef.current === generation) {
         activeRequestRef.current = null;
-        setLoading(false);
-        setLoadingProfile(false);
+        if (!preserveUi) {
+          setLoading(false);
+          setLoadingProfile(false);
+        }
       }
     }
   }, []);
@@ -186,21 +188,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("emmaus_demo_user");
     retireUnownedPersonalStorage();
 
-    const revalidate = () => {
+    const revalidate = (preserveUi = false) => {
       if (authMutationRef.current) {
         invalidateAuthView();
         return;
       }
-      void refreshAuthenticatedUser({ preserveUi: true }).catch(() => {
+      void refreshAuthenticatedUser({ preserveUi }).catch(() => {
         // The accepted validation request already moved the UI to signed out.
       });
     };
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === AUTH_SYNC_KEY && event.newValue) revalidate();
+      if (event.key === AUTH_SYNC_KEY && event.newValue) revalidate(false);
     };
-    const handleFocus = () => revalidate();
+    const handleFocus = () => revalidate(true);
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") revalidate();
+      if (document.visibilityState === "visible") revalidate(true);
     };
 
     revalidate();
