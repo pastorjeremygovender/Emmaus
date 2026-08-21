@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { Download, Share2, X } from 'lucide-react';
+import { Download, Share2, Facebook, Instagram, X, Check } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
 interface ShareImageCardProps {
@@ -18,6 +18,9 @@ interface ShareImageCardProps {
 export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
   const [imgError, setImgError] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'saved'>('idle');
+  const imageBlobRef = React.useRef<Blob | null>(null);
 
   if (!shareImageUrl) return null;
 
@@ -25,28 +28,42 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
 
   if (imgError) return null;
 
-  async function handleSave() {
+  function showSaved() {
+    setStatus('saved');
+    window.setTimeout(() => setStatus('idle'), 4000);
+  }
+
+  async function getImageBlob() {
+    if (imageBlobRef.current) return imageBlobRef.current;
+    const res = await fetch(imageUrl, { credentials: 'include' });
+    if (!res.ok) throw new Error('Unable to load share image');
+    const blob = await res.blob();
+    imageBlobRef.current = blob;
+    return blob;
+  }
+
+  async function handleSave(blob?: Blob) {
     try {
-      const res = await fetch(imageUrl, { credentials: 'include' });
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
+      const imageBlob = blob ?? await getImageBlob();
+      const objectUrl = URL.createObjectURL(imageBlob);
       const a = document.createElement('a');
       a.href = objectUrl;
-      const ext = blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : '.jpg';
+      const ext = imageBlob.type === 'image/png' ? '.png' : imageBlob.type === 'image/webp' ? '.webp' : '.jpg';
       a.download = `emmaus-share${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
+      showSaved();
     } catch {
       window.open(imageUrl, '_blank');
     }
   }
 
-  async function handleShare() {
+  async function handleShareImage() {
+    setMenuOpen(false);
     try {
-      const res = await fetch(imageUrl, { credentials: 'include' });
-      const blob = await res.blob();
+      const blob = await getImageBlob();
       const ext = blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : '.jpg';
       const file = new File([blob], `emmaus-share${ext}`, { type: blob.type || 'image/jpeg' });
       if (
@@ -57,10 +74,10 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
         await navigator.share({ files: [file] });
         return;
       }
+      await handleSave(blob);
     } catch {
-      // fall through
+      await handleSave();
     }
-    await handleSave();
   }
 
   return (
@@ -84,21 +101,41 @@ export function ShareImageCard({ shareImageUrl }: ShareImageCardProps) {
 
         {/* Actions */}
         <div className="flex gap-3 mt-3">
-          <button
-            onClick={handleSave}
+           <button
+             onClick={() => handleSave()}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium border border-border text-foreground hover:bg-muted/60 active:scale-[0.97] transition-all"
           >
             <Download className="w-4 h-4" />
             Save Image
           </button>
-          <button
-            onClick={handleShare}
+           <button
+             onClick={() => setMenuOpen(open => !open)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all"
           >
-            <Share2 className="w-4 h-4" />
-            Share Image
+             {status === 'saved' ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+             {status === 'saved' ? 'Image Saved' : 'Share Image'}
           </button>
         </div>
+         {menuOpen && (
+           <div className="mt-2 rounded-2xl border border-border bg-background shadow-lg p-1.5" role="menu">
+             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
+               <Share2 className="w-4 h-4 shrink-0" />
+               <span>Share image from device</span>
+             </button>
+             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
+               <Facebook className="w-4 h-4 shrink-0" />
+               <span>Share image to Facebook</span>
+             </button>
+             <button onClick={handleShareImage} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
+               <Instagram className="w-4 h-4 shrink-0" />
+               <span>Share image to Instagram</span>
+             </button>
+             <button onClick={() => { setMenuOpen(false); void handleSave(); }} role="menuitem" className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] hover:bg-muted/60">
+               <Download className="w-4 h-4 shrink-0" />
+               <span>Save image</span>
+             </button>
+           </div>
+         )}
       </section>
 
       {/* Lightbox */}

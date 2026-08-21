@@ -141,12 +141,6 @@ export function DevotionalReading({
           <ShareImageCard shareImageUrl={shareImageUrl} />
         </div>
       )}
-      {sharePayload && !previewMode && (
-        <div className="mb-7">
-          <ShareButton payload={sharePayload} shareImageUrl={shareImageUrl} />
-        </div>
-      )}
-
       {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {(greeting || previewMode) && (
         <section className="mb-3.5">
@@ -258,6 +252,11 @@ export function DevotionalReading({
       )}
 
       {/* ── Action button slot ───────────────────────────────────────────────── */}
+      {sharePayload && !previewMode && (
+        <div className="mb-3">
+          <ShareButton payload={sharePayload} />
+        </div>
+      )}
       <div className="pt-2 pb-8">
         {actionButton}
       </div>

@@ -166,8 +166,12 @@ export default function DevotionalDay() {
   const handleFinished = async () => {
     if (!seriesId || completing) return;
     setSaveError(false);
+    if (!user?.id) {
+      setSaveError(true);
+      return;
+    }
     setCompleting(true);
-    const auth = user?.id ? { userId: user.id } : undefined;
+    const auth = { userId: user.id };
     try {
       const updated = await markDayComplete(seriesId, day, auth);
       setProgress(updated);
@@ -232,16 +236,20 @@ export default function DevotionalDay() {
     actionButton = (
       <div className="space-y-2">
         {saveError && (
-          <p className="text-center text-sm text-destructive">
-            Something went wrong. Please try again.
+          <p className="text-center text-sm text-muted-foreground">
+            {user
+              ? 'Something went wrong. Please try again.'
+              : 'Sign in or create an account to save your progress.'}
           </p>
         )}
         <Button
           className="w-full h-14 text-[17px] font-semibold rounded-2xl"
-          onClick={handleFinished}
+          onClick={() => user ? void handleFinished() : setLocation('/auth')}
           disabled={completing}
         >
-          {completing ? <Loader2 size={18} className="animate-spin" /> : 'Finished'}
+          {completing
+            ? <Loader2 size={18} className="animate-spin" />
+            : user ? 'Finished' : 'Sign in to finish'}
         </Button>
       </div>
     );
