@@ -23,7 +23,7 @@ import { requireAdmin } from "../emmaus/auth.js";
 const router = Router();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const IMAGE_MODEL = "gpt-image-1";
+const IMAGE_MODEL = "gpt-image-2";
 // 1024×1024 square (1:1). gpt-image-1 supports this natively.
 const IMAGE_SIZE = "1024x1024";
 
