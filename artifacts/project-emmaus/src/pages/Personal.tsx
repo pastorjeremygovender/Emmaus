@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
+import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
-  LogOut, Pencil, Check, X, ChevronRight,
+  LogOut, Pencil, Check, X, ChevronRight, Moon, Sun,
   Star, Clock, BookOpen, Headphones, Map, Users,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -120,6 +121,7 @@ export default function Personal() {
   const { progress, reflections, journeys } = useJourney();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { theme, fontSize, setTheme, setFontSize } = useAppearance();
 
   // ── Profile editing ────────────────────────────────────────────────────────
   const [notifs, setNotifs] = useState(true);
@@ -314,6 +316,56 @@ export default function Personal() {
               onCheckedChange={setNotifs}
               data-testid="toggle-notifications"
             />
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 flex justify-between items-center">
+            <div className="flex items-center gap-2.5">
+              {theme === 'dark' ? <Moon size={17} className="text-primary" /> : <Sun size={17} className="text-amber-600" />}
+              <div>
+                <Label htmlFor="dark-mode-toggle" className="text-[14px] font-semibold cursor-pointer block">
+                  Dark mode
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Use a darker, gentler colour palette</p>
+              </div>
+            </div>
+            <Switch
+              id="dark-mode-toggle"
+              checked={theme === 'dark'}
+              onCheckedChange={checked => setTheme(checked ? 'dark' : 'light')}
+              data-testid="toggle-dark-mode"
+            />
+          </div>
+          <div className="bg-card rounded-xl border border-border/50 px-3.5 py-3">
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <div>
+                <p className="text-[14px] font-semibold">Text size</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Make reading more comfortable</p>
+              </div>
+              <span className="text-xs text-muted-foreground" aria-live="polite">
+                {fontSize === 'standard' ? 'Standard' : fontSize === 'large' ? 'Large' : 'Extra large'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Text size">
+              {([
+                ['standard', 'Standard', 'A'],
+                ['large', 'Large', 'A+'],
+                ['extra-large', 'Extra large', 'A++'],
+              ] as [AppearanceFontSize, string, string][]).map(([value, label, sample]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={fontSize === value}
+                  onClick={() => setFontSize(value)}
+                  className={`rounded-lg border px-2 py-2 text-center transition-colors ${
+                    fontSize === value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{sample}</span>
+                  <span className="block text-[10px] mt-0.5">{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </SectionWrapper>
 

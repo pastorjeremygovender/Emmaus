@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { FloatingEmmausButton } from '@/components/FloatingEmmausButton';
 import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
 import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
+import { AppearanceProvider } from '@/contexts/AppearanceContext';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -214,23 +215,25 @@ function Router() {
 function App() {
   return (
     <AuthProvider>
-      <JourneyProvider>
-        <RoomsProvider>
-          <BibleProvider>
-            <TooltipProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-                <VoiceSessionProvider>
-                  <ScrollToTop />
-                  <Router />
-                  <FloatingEmmausButton />
-                  <GlobalVoiceIndicator />
-                </VoiceSessionProvider>
-              </WouterRouter>
-              <Toaster />
-            </TooltipProvider>
-          </BibleProvider>
-        </RoomsProvider>
-      </JourneyProvider>
+      <AppearanceProvider>
+        <JourneyProvider>
+          <RoomsProvider>
+            <BibleProvider>
+              <TooltipProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+                  <VoiceSessionProvider>
+                    <ScrollToTop />
+                    <Router />
+                    <FloatingEmmausButton />
+                    <GlobalVoiceIndicator />
+                  </VoiceSessionProvider>
+                </WouterRouter>
+                <Toaster />
+              </TooltipProvider>
+            </BibleProvider>
+          </RoomsProvider>
+        </JourneyProvider>
+      </AppearanceProvider>
     </AuthProvider>
   );
 }

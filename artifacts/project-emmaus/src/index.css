@@ -274,39 +274,38 @@
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  /* Dark mode is disabled by design for this app. We'll use light mode values for now to avoid accidental red flashing */
-  --background: 35 25% 97%;
-  --foreground: 222 20% 18%;
-  --border: 35 15% 85%;
-  --card: 35 20% 94%;
-  --card-foreground: 222 20% 18%;
-  --card-border: 35 15% 85%;
+  --background: 222 20% 10%;
+  --foreground: 35 20% 92%;
+  --border: 222 14% 27%;
+  --card: 222 18% 15%;
+  --card-foreground: 35 20% 92%;
+  --card-border: 222 14% 27%;
   
-  --sidebar: 35 25% 97%;
-  --sidebar-foreground: 222 20% 18%;
-  --sidebar-border: 35 15% 85%;
-  --sidebar-primary: 168 38% 35%;
-  --sidebar-primary-foreground: 35 25% 97%;
-  --sidebar-accent: 35 15% 85%;
-  --sidebar-accent-foreground: 222 20% 18%;
+  --sidebar: 222 20% 10%;
+  --sidebar-foreground: 35 20% 92%;
+  --sidebar-border: 222 14% 27%;
+  --sidebar-primary: 168 42% 50%;
+  --sidebar-primary-foreground: 222 20% 10%;
+  --sidebar-accent: 222 14% 27%;
+  --sidebar-accent-foreground: 35 20% 92%;
   --sidebar-ring: 168 38% 35%;
   
-  --popover: 35 20% 94%;
-  --popover-foreground: 222 20% 18%;
-  --popover-border: 35 15% 85%;
+  --popover: 222 18% 15%;
+  --popover-foreground: 35 20% 92%;
+  --popover-border: 222 14% 27%;
   
-  --primary: 168 38% 35%; /* Muted Teal */
-  --primary-foreground: 35 25% 97%;
-  --secondary: 35 15% 85%;
-  --secondary-foreground: 222 20% 18%;
-  --muted: 35 15% 85%;
-  --muted-foreground: 222 10% 48%;
-  --accent: 44 40% 42%; /* Warm amber-gold accent */
-  --accent-foreground: 35 25% 97%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 35 25% 97%;
-  --input: 35 15% 85%;
-  --ring: 168 38% 35%;
+  --primary: 168 42% 50%;
+  --primary-foreground: 222 20% 10%;
+  --secondary: 222 14% 27%;
+  --secondary-foreground: 35 20% 92%;
+  --muted: 222 14% 27%;
+  --muted-foreground: 35 12% 66%;
+  --accent: 44 50% 55%;
+  --accent-foreground: 222 20% 10%;
+  --destructive: 0 70% 65%;
+  --destructive-foreground: 222 20% 10%;
+  --input: 222 14% 27%;
+  --ring: 168 42% 50%;
 
   --chart-1: 168 38% 35%;
   --chart-2: 44 40% 42%;
@@ -332,6 +331,14 @@
     0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
     0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0);
   --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+}
+
+html[data-font-size="large"] {
+  font-size: 112.5%;
+}
+
+html[data-font-size="extra-large"] {
+  font-size: 125%;
 }
 
 @layer base {
