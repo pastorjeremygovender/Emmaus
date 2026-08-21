@@ -12,9 +12,10 @@ import {
   Plus, BookOpen, Pencil, Layers, Clock,
   Tag, Loader2, FolderOpen, CheckCircle2, FileText,
 } from 'lucide-react';
-import { getCollection, listCollectionJourneys } from '@/lib/collections-api';
+import { getCollection, listCollectionJourneys, updateCollectionJourney } from '@/lib/collections-api';
 import type { Collection, CollectionJourney } from '@/lib/collections-api';
 import { StatusBadge, AdminBtn } from '../shared';
+import { ReorderButtons } from './ContentStudioListPage';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,17 @@ export default function CollectionDetailView({
     () => journeys.filter(j => j.status !== 'Published').length,
     [journeys],
   );
+
+  const moveJourney = async (index: number, direction: -1 | 1) => {
+    const target = journeys[index];
+    const other = journeys[index + direction];
+    if (!target || !other) return;
+    await Promise.all([
+      updateCollectionJourney(target.id, { displayOrder: other.displayOrder ?? index + direction }),
+      updateCollectionJourney(other.id, { displayOrder: target.displayOrder ?? index }),
+    ]);
+    await load();
+  };
 
   if (loading) {
     return (
@@ -169,12 +181,20 @@ export default function CollectionDetailView({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-3">
-            {journeys.map(j => {
+            {journeys.map((j, index) => {
               const typeCfg = TYPE_CONFIG[j.journeyType ?? 'core'] ?? TYPE_CONFIG.core;
               return (
-                <button
+                <div
                   key={j.id}
                   onClick={() => onOpenJourney(j.id, j.title, collection.title)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onOpenJourney(j.id, j.title, collection.title);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   className="w-full flex items-start gap-3 sm:gap-4 bg-white border border-gray-200 rounded-xl px-4 sm:px-5 py-4
                     hover:shadow-sm hover:border-teal-200 transition-all text-left group"
                 >
@@ -218,10 +238,17 @@ export default function CollectionDetailView({
 
                   <StatusBadge status={j.status ?? 'Draft'} />
 
+                  <ReorderButtons
+                    canMoveUp={index > 0}
+                    canMoveDown={index < journeys.length - 1}
+                    onMoveUp={() => void moveJourney(index, -1)}
+                    onMoveDown={() => void moveJourney(index, 1)}
+                    label={j.title}
+                  />
                   <span className="text-xs text-teal-600 font-medium opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
                     Open →
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>

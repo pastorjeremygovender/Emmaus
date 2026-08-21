@@ -361,6 +361,7 @@ export async function upsertEntry(
       | "displayLabel"
       | "shareImageUrl"
       | "status"
+       | "displayOrder"
     >
   >
 ): Promise<DevotionalEntry> {
@@ -394,6 +395,7 @@ export async function upsertEntry(
       ...(data.displayLabel !== undefined ? { displayLabel: data.displayLabel || null } : {}),
       ...(data.shareImageUrl !== undefined ? { shareImageUrl: data.shareImageUrl || null } : {}),
       status: data.status ?? "Draft",
+      ...(data.displayOrder !== undefined ? { displayOrder: data.displayOrder } : {}),
       ...(publishedAt !== undefined ? { publishedAt } : {}),
     })
     .onConflictDoUpdate({

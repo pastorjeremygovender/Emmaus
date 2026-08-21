@@ -10,10 +10,12 @@ import {
 } from 'lucide-react';
 import {
   getSeriesWithEntries,
+  saveEntry,
   type SeriesWithEntries,
   type DevotionalEntry,
 } from '@/lib/devotionals-api';
 import { StatusBadge, AdminBtn } from '../shared';
+import { ReorderButtons } from './ContentStudioListPage';
 import { useAuth } from '@/contexts/AuthContext';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -85,6 +87,17 @@ export default function DevotionalSeriesDetailView({
   const draftCount = data.entries.filter((e: DevotionalEntry) => e.status !== 'Published').length;
   const typeLabel = TYPE_LABELS[data.seriesType] ?? data.seriesType;
 
+  const moveEntry = async (index: number, direction: -1 | 1) => {
+    const target = data.entries[index];
+    const other = data.entries[index + direction];
+    if (!target || !other) return;
+    await Promise.all([
+      saveEntry(seriesId, target.dayNumber, { displayOrder: other.displayOrder ?? index + direction }, auth),
+      saveEntry(seriesId, other.dayNumber, { displayOrder: target.displayOrder ?? index }, auth),
+    ]);
+    await load();
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Series header */}
@@ -153,10 +166,18 @@ export default function DevotionalSeriesDetailView({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5 space-y-2">
-            {data.entries.map((entry: DevotionalEntry) => (
-              <button
+            {data.entries.map((entry: DevotionalEntry, index: number) => (
+              <div
                 key={entry.id}
                 onClick={() => onEditEntry(seriesId, entry.dayNumber)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onEditEntry(seriesId, entry.dayNumber);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
                   className="w-full flex items-center gap-3 sm:gap-4 bg-white border border-gray-200 rounded-xl px-4 sm:px-5 py-4
                   hover:shadow-sm hover:border-teal-200 transition-all text-left group"
               >
@@ -177,8 +198,15 @@ export default function DevotionalSeriesDetailView({
 
                 <StatusBadge status={entry.status} />
 
+                <ReorderButtons
+                  canMoveUp={index > 0}
+                  canMoveDown={index < data.entries.length - 1}
+                  onMoveUp={() => void moveEntry(index, -1)}
+                  onMoveDown={() => void moveEntry(index, 1)}
+                  label={entry.title || `Day ${entry.dayNumber}`}
+                />
                 <ChevronRight size={14} className="text-teal-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0" />
-              </button>
+              </div>
             ))}
           </div>
         )}

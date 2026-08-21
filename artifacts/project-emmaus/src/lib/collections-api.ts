@@ -107,6 +107,21 @@ export interface CollectionJourney {
   difficulty?: string;
   tags?: string[];
   collectionId?: string;
+  displayOrder?: number;
+}
+
+/** Update only the ordering (or other supported journey fields) from admin views. */
+export async function updateCollectionJourney(
+  journeyId: string,
+  payload: { displayOrder: number },
+  userId?: string,
+): Promise<CollectionJourney> {
+  const data = await apiFetch<CollectionJourney>(`/api/journeys/${journeyId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+    userId,
+  });
+  return data;
 }
 
 // ─── Write (admin only) ───────────────────────────────────────────────────────

@@ -176,7 +176,7 @@ export function permanentDeleteSeries(id: string, auth?: AdminAuth): Promise<voi
 export function saveEntry(
   seriesId: string,
   dayNumber: number,
-  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "displayLabel" | "shareImageUrl" | "status">>,
+  data: Partial<Pick<DevotionalEntry, "title" | "scriptureReference" | "greeting" | "considerThis" | "prayer" | "nextStep" | "closing" | "displayLabel" | "shareImageUrl" | "status" | "displayOrder">>,
   auth?: AdminAuth
 ): Promise<DevotionalEntry> {
   return request<DevotionalEntry>(apiUrl(`/${seriesId}/entries/${dayNumber}`), {
