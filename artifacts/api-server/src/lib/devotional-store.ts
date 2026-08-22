@@ -307,8 +307,8 @@ function parseDateLabel(label: string): Date | null {
   const day  = parseInt(parts[0], 10);
   const mIdx = MONTHS.indexOf(parts[1]);
   if (isNaN(day) || mIdx === -1) return null;
-  // Year doesn't matter for offset arithmetic — use a fixed leap year.
-  return new Date(2000, mIdx, day);
+  // Use a non-leap year so date labels always treat February as 28 days.
+  return new Date(2001, mIdx, day);
 }
 
 /** Format a Date as "D Month" (e.g. "16 January"). */
