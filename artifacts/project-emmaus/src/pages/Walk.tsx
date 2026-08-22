@@ -22,7 +22,7 @@ import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, ChevronRight, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
-import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
+import { useEnrollment } from '@/lib/enrollment';
 import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
@@ -620,15 +620,23 @@ export default function Walk() {
     coreSteps.some(s => s.day < effectiveCoreDay);
 
   // 3. Your Journeys — journeys the member has already started.
-  //    Includes: active growth journeys + started daily devotional.
+  //    Includes: every published journey progress record that is not owned by
+  //    one of the dedicated sections below, plus the started legacy devotional.
   //    Excludes: Daily Rhythm (shown above), Companion (shown below).
   //    Excludes: hidden journeys (optimistic local set OR server flag).
   //    Status check: prefer server-backed progress[j.id]?.status; fall back to
   //    localStorage (enrollment.ts optimistic cache) for instant UI updates.
-  const activeGrowthJourneys = publishedJourneys
+  //    IMPORTANT: overloadExempt only controls the active-enrollment limit. It
+  //    must never make started content disappear from Today's Steps.
+  const activeMemberJourneys = publishedJourneys
     .filter(j => {
       if (!progress[j.id]) return false;
-      if (isExemptJourney(j)) return false;
+      // These content types have their own canonical Today's Steps sections.
+      // Do not use isExemptJourney here: it also includes the independent
+      // overloadExempt flag, which is not a visibility decision.
+      if (j.journeyType === 'daily-rhythm' || j.journeyType === 'companion' || j.journeyType === 'devotional') {
+        return false;
+      }
       // Hide: optimistic local set (instant) OR server flag (after page reload).
       if (hiddenJourneyIds.has(j.id)) return false;
       if (progress[j.id]?.hiddenFromToday) return false;
@@ -648,7 +656,7 @@ export default function Walk() {
 
   // Enrich each started journey with its current step title and total published
   // step count so YourJourneysSection can render a progress-aware description.
-  const startedJourneys = [...activeGrowthJourneys, ...devotionalEntry].map(
+  const startedJourneys = [...activeMemberJourneys, ...devotionalEntry].map(
     ({ journey, prog }) => {
       const steps = getStepsForJourney(journey.id).filter(
         s => s.status === 'Published' && !s.isCompletionStep,
