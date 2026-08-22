@@ -9,7 +9,7 @@
  * legacy `content` JSONB column so migrated data continues to work.
  */
 
-import { eq, and, asc, or, ilike, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, asc, desc, or, ilike, sql, inArray, isNull } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import { isStartSharedReady } from "./feature-flags.js";
 import {
@@ -969,10 +969,14 @@ export async function getAllProgress(userId: string): Promise<Record<string, Fro
   const rows = await db
     .select()
     .from(userJourneyProgressTable)
-    .where(eq(userJourneyProgressTable.userId, userId));
+    .where(eq(userJourneyProgressTable.userId, userId))
+    .orderBy(desc(userJourneyProgressTable.updatedAt));
   const result: Record<string, FrontendProgress> = {};
   for (const row of rows) {
-    result[row.journeyId] = toFrontendProgress(row);
+    // A legacy database can contain more than one row for the same journey.
+    // The newest row is authoritative; do not let an unspecified DB row order
+    // make the member's active/paused state change between reloads.
+    if (!result[row.journeyId]) result[row.journeyId] = toFrontendProgress(row);
   }
   return result;
 }
@@ -1040,7 +1044,9 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
     .where(and(
       eq(userJourneyProgressTable.userId, userId),
       eq(userJourneyProgressTable.journeyId, journeyId)
-    ));
+    ))
+    .orderBy(desc(userJourneyProgressTable.updatedAt))
+    .limit(1);
   return rows[0] ? toFrontendProgress(rows[0]) : null;
 }
 
@@ -1069,7 +1075,16 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
   // remain safe (they don't overwrite currentDay or completedDays).
   .onConflictDoUpdate({
     target: [userJourneyProgressTable.userId, userJourneyProgressTable.journeyId],
-    set: { lastOpenedAt: now, updatedAt: now },
+    // Starting/engaging from Discover is also the resume action for an
+    // existing paused journey. Restore visibility here as well; this keeps
+    // every entry point consistent instead of leaving the row paused after
+    // the member has explicitly chosen to engage again.
+    set: {
+      status: "active",
+      hiddenFromToday: false,
+      lastOpenedAt: now,
+      updatedAt: now,
+    },
   })
   .returning();
 

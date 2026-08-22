@@ -269,7 +269,28 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     async (journeyId: string): Promise<void> => {
       if (!user?.id) throw new Error('Not signed in');
       const subject = user.id;
-      if (progress[journeyId]) return; // already started — no-op, not an error
+      const existing = progress[journeyId];
+      // Starting an already-active journey is a no-op. Starting a paused
+      // journey is an explicit re-engagement and must reach the server so the
+      // lifecycle state is restored to active.
+      if (existing && existing.status !== 'paused') return;
+      if (existing) {
+        setProgress(p => ({
+          ...p,
+          [journeyId]: { ...existing, status: 'active', hiddenFromToday: false },
+        }));
+        try {
+          const prog = await api.startJourney(journeyId);
+          if (activeSubjectRef.current !== subject) return;
+          setProgress(p => ({ ...p, [journeyId]: prog }));
+        } catch (err) {
+          if (activeSubjectRef.current === subject) {
+            setProgress(p => ({ ...p, [journeyId]: existing }));
+          }
+          throw err;
+        }
+        return;
+      }
       const optimistic: Progress = {
         journeyId,
         currentDay: 1,

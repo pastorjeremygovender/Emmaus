@@ -98,16 +98,19 @@ export default function JourneyDetail() {
       .catch(() => {});
   }, [journey?.collectionId]);
 
-  // Auto-unhide — opening a Walk from Next Steps (or anywhere) restores it to
-  // Today's Steps. This is fire-and-forget; the member doesn't need to wait for it.
+  // Re-engage + auto-unhide — opening a Walk from Discover/Next Steps restores
+  // a paused or hidden item to Today's Steps. Both are fire-and-forget; the
+  // member does not need to wait for these lifecycle updates before reading.
   useEffect(() => {
     if (!journey || !prog || !user) return;
     const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-    fetch(
-      `${base}/api/engagements/journey/${encodeURIComponent(journey.id)}/unhide`,
+    const request = (action: 'resume' | 'unhide') => fetch(
+      `${base}/api/engagements/journey/${encodeURIComponent(journey.id)}/${action}`,
       { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
-    ).catch(() => { /* non-fatal */ });
-  }, [journey?.id, !!prog, !!user]);
+    );
+    if (prog.status === 'paused') void request('resume').catch(() => { /* non-fatal */ });
+    void request('unhide').catch(() => { /* non-fatal */ });
+  }, [journey?.id, prog?.status, !!prog, !!user]);
 
   // Pre-fetch room details so we can detect if this journey is already linked to a room.
   // Runs whenever the user's room list changes (e.g. after sign-in or room join).
