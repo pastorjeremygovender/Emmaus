@@ -30,7 +30,7 @@ const IMAGE_QUALITY = "high";
 const IMAGE_SIZE = "1024x1024";
 const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v3";
 
-type ShareImageStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
+export type ShareImageStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
 type ShareImagePipeline = "art-direction" | "visual-reasoning";
 
 const SHARE_IMAGE_STYLES: Array<{
@@ -59,8 +59,21 @@ const SHARE_IMAGE_STYLES: Array<{
   },
 ];
 
-function getShareImageStyle(value: unknown): typeof SHARE_IMAGE_STYLES[number] {
+export function getShareImageStyle(value: unknown): typeof SHARE_IMAGE_STYLES[number] {
   return SHARE_IMAGE_STYLES.find(style => style.id === value) ?? SHARE_IMAGE_STYLES[2];
+}
+
+export const SHARE_IMAGE_STYLE_DIRECTIONS: Record<ShareImageStyleId, string> = {
+  "dark-cinematic": `STYLE PRESET — DARK AND CINEMATIC:
+Create a moody, filmic visual language: deep charcoal, midnight blue, forest green, burgundy, smoke, bronze, or restrained amber; directional light, strong shadow, atmospheric depth, and a clear cinematic focal point. Prefer architecture, a solitary human moment, weather, water, objects, or dramatic landscape. Do not make the scene gloomy without purpose, and do not use a plant or growth metaphor unless the text explicitly requires it.`,
+  "light-floral": `STYLE PRESET — LIGHT AND FLORAL:
+Create a bright, airy, tender visual language: pale sky, cream, sage, powder blue, blush, lavender, soft yellow, or fresh green with luminous daylight and gentle depth. A flower, leaf, garden, or botanical detail may appear when it genuinely supports the text, but it must not be repeated mechanically; also consider bright interiors, water, objects, architecture, and human moments. Keep the result light and graceful, not childish or overly ornamental.`,
+  "in-the-middle": `STYLE PRESET — IN THE MIDDLE:
+Create a balanced contemporary editorial visual language. Keep the current improvements in colour range, emotional specificity, legible typography, and negative space, but choose the subject independently for this quote. Rotate between objects, architecture, rooms, doorways, water, human moments, weather, landscape, light and shadow, and material texture. Botanical or growth imagery is allowed only when the quote specifically calls for it and must never be the default.`,
+};
+
+export function getShareImageStyleDirection(styleId: ShareImageStyleId): string {
+  return SHARE_IMAGE_STYLE_DIRECTIONS[styleId];
 }
 
 router.get("/share-images/styles", (req: Request, res: Response) => {
@@ -82,14 +95,7 @@ router.get("/share-images/styles", (req: Request, res: Response) => {
  */
 async function artDirectImage(text: string, styleId: ShareImageStyleId = "in-the-middle"): Promise<string> {
   const style = getShareImageStyle(styleId);
-  const styleDirection = style.id === "dark-cinematic"
-    ? `STYLE PRESET — DARK AND CINEMATIC:
-Create a moody, filmic visual language: deep charcoal, midnight blue, forest green, burgundy, smoke, bronze, or restrained amber; directional light, strong shadow, atmospheric depth, and a clear cinematic focal point. Prefer architecture, a solitary human moment, weather, water, objects, or dramatic landscape. Do not make the scene gloomy without purpose, and do not use a plant or growth metaphor unless the text explicitly requires it.`
-    : style.id === "light-floral"
-      ? `STYLE PRESET — LIGHT AND FLORAL:
-Create a bright, airy, tender visual language: pale sky, cream, sage, powder blue, blush, lavender, soft yellow, or fresh green with luminous daylight and gentle depth. A flower, leaf, garden, or botanical detail may appear when it genuinely supports the text, but it must not be repeated mechanically; also consider bright interiors, water, objects, architecture, and human moments. Keep the result light and graceful, not childish or overly ornamental.`
-      : `STYLE PRESET — IN THE MIDDLE:
-Create a balanced contemporary editorial visual language. Keep the current improvements in colour range, emotional specificity, legible typography, and negative space, but choose the subject independently for this quote. Rotate between objects, architecture, rooms, doorways, water, human moments, weather, landscape, light and shadow, and material texture. Botanical or growth imagery is allowed only when the quote specifically calls for it and must never be the default.`;
+  const styleDirection = getShareImageStyleDirection(style.id);
 
   const response = await openai.chat.completions.create({
     model: process.env.ART_DIRECTION_MODEL ?? 'gpt-4o',
@@ -178,7 +184,7 @@ NON-NEGOTIABLE RULES:
 - No generic stock-photo clichés, no overlapping religious symbols (rays + cross + dove), no soft-focus blur with no subject`;
 }
 
-type NewMethodReasoning = {
+export type NewMethodReasoning = {
   emotionalCentre: string;
   visualMetaphor: string;
   composition: string;
@@ -223,11 +229,7 @@ Interpret each devotional independently. Return JSON only with exactly these key
   "avoid": ["specific clichés or generic choices to avoid for this quote"]
 }
 
-${style.id === "dark-cinematic"
-  ? "For this style, use moody cinematic light, richer shadows, atmospheric depth, and restrained dramatic colour; prefer non-botanical subjects unless growth is explicit."
-  : style.id === "light-floral"
-    ? "For this style, use bright airy daylight, soft fresh colour, and gentle grace; floral detail is welcome when meaningful but do not repeat it automatically."
-    : "For this style, use balanced contemporary editorial storytelling, varied subject categories, and no automatic plant or growth metaphor."}
+${getShareImageStyleDirection(style.id)}
 
 Do not write an image-generation prompt. Do not rewrite the quote. Do not automatically choose sunsets, crosses, paths, lanterns, mountains, open Bibles, praying hands, horizons, golden-hour landscapes, plants, seedlings, leaves, vines, or other growth imagery. Botanical or growth imagery is allowed only when the quote specifically and meaningfully calls for it; it must never be the default symbol for hope, renewal, faith, or change. Choose one meaningful visual language for this quote and explain the typography hierarchy without prescribing a rigid template. Deliberately vary the subject category between images: consider an object, architecture, a room or doorway, a body of water, a human moment, light and shadow, weather, landscape, or abstract material texture—not just living plants. Deliberately vary the tonal range between images: consider bright high-key daylight, airy pale backgrounds, fresh natural colour, soft pastel, clean neutral, and luminous sunlit treatments as seriously as subdued or dramatic ones. Do not default to dark, low-key, blue-black, stormy, or night lighting unless the quote clearly requires it.`,
       },
@@ -242,9 +244,9 @@ Do not write an image-generation prompt. Do not rewrite the quote. Do not automa
   return parseNewMethodReasoning(raw);
 }
 
-function buildNewMethodPrompt(text: string, reasoning: NewMethodReasoning, styleId: ShareImageStyleId = "in-the-middle"): string {
+export function buildNewMethodPrompt(text: string, reasoning: NewMethodReasoning, styleId: ShareImageStyleId = "in-the-middle"): string {
   const style = getShareImageStyle(styleId);
-  return `Create a premium editorial Christian devotional share image in a square 1:1 format. Visualise this concept: ${reasoning.visualMetaphor}; the emotional atmosphere is ${reasoning.mood}, with ${reasoning.composition}. Give intelligent typographic emphasis to the exact phrase "${reasoning.heroText}" while preserving every word of the complete quote exactly as supplied, using meaningful hierarchy, contrast and negative space rather than a fixed template. Use a distinctive, contemporary editorial type treatment chosen to suit this specific message — do not default to Times New Roman, generic book serif typography, or a repetitive traditional devotional look. Choose lighting and colour with range rather than habit: bright high-key daylight, airy pale backgrounds, fresh natural colour, soft pastel, clean neutral, or luminous sunlit treatments are welcome when they suit the message; do not default to dark, low-key, blue-black, stormy, or night imagery unless the quote clearly calls for it. Do not turn the concept into a generic plant, seedling, leaf, vine, garden, or “something growing” image unless the quote explicitly depends on that idea. Prefer a non-botanical subject when the text does not clearly require growth imagery. Render this exact devotional text verbatim: """${text}""". Use sophisticated editorial visual storytelling. Keep the bottom 20% visually quiet and free of text or important subject matter for the Emmaus footer, but continue the same scene, texture, lighting and colour treatment naturally through the entire canvas. Do not create a footer panel, blank strip, horizontal divider, border, hard edge, separate lower section, or solid colour block. Generate no logos, watermarks, church names, signatures or attribution. Avoid: ${reasoning.avoid.join("; ")}.`;
+  return `Create a premium editorial Christian devotional share image in a square 1:1 format. ${getShareImageStyleDirection(style.id)} Visualise this concept: ${reasoning.visualMetaphor}; the emotional atmosphere is ${reasoning.mood}, with ${reasoning.composition}. Give intelligent typographic emphasis to the exact phrase "${reasoning.heroText}" while preserving every word of the complete quote exactly as supplied, using meaningful hierarchy, contrast and negative space rather than a fixed template. Use a distinctive, contemporary editorial type treatment chosen to suit this specific message — do not default to Times New Roman, generic book serif typography, or a repetitive traditional devotional look. Choose lighting and colour with range rather than habit: bright high-key daylight, airy pale backgrounds, fresh natural colour, soft pastel, clean neutral, or luminous sunlit treatments are welcome when they suit the message; do not default to dark, low-key, blue-black, stormy, or night imagery unless the quote clearly calls for it. Do not turn the concept into a generic plant, seedling, leaf, vine, garden, or “something growing” image unless the quote explicitly depends on that idea. Prefer a non-botanical subject when the text does not clearly require growth imagery. Render this exact devotional text verbatim: """${text}""". Use sophisticated editorial visual storytelling. Keep the bottom 20% visually quiet and free of text or important subject matter for the Emmaus footer, but continue the same scene, texture, lighting and colour treatment naturally through the entire canvas. Do not create a footer panel, blank strip, horizontal divider, border, hard edge, separate lower section, or solid colour block. Generate no logos, watermarks, church names, signatures or attribution. Avoid: ${reasoning.avoid.join("; ")}.`;
 }
 
 // ─── Edit prompt — no art-direction pass, preserve existing composition ───────
