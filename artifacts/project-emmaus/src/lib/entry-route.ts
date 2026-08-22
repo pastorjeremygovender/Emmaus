@@ -136,32 +136,6 @@ export function resolveDailyOpenRoute(
   return `/daily-rhythm/day/${currentDay}`;
 }
 
-/**
- * Foundational member launch route.
- *
- * This is intentionally separate from the once-per-day convenience rule above.
- * A normal app launch must always begin in 10 Minutes With Jesus; a stale
- * daily-open marker must never send the member to Today's Steps instead.
- */
-export function resolveFoundationalEntryRoute(
-  journeys: JourneyLike[],
-  progress: Record<string, ProgressLike>,
-  getStepsForJourney: (id: string) => StepLike[],
-): string | null {
-  const drJourney = journeys.find(
-    j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
-  );
-  if (!drJourney) return null;
-
-  const steps = getStepsForJourney(drJourney.id);
-  if (steps.length === 0) return null;
-
-  const currentDay = progress[drJourney.id]?.currentDay ?? 1;
-  const maxDay = Math.max(...steps.map(step => step.day));
-  if (currentDay < 1 || currentDay > maxDay) return null;
-
-  return `/daily-rhythm/day/${currentDay}`;
-}
 
 // ─── resolveEntryRoute ────────────────────────────────────────────────────────
 

@@ -72,7 +72,7 @@ describe('Welcome — first daily open routing', () => {
     vi.useRealTimers();
   });
 
-  it('opens the foundational Daily Rhythm step after an overnight same-session reopen', () => {
+  it('opens the current Daily Rhythm step after an overnight same-session reopen', () => {
     const yesterdayKey = accountStorageKey('emmaus_last_opened_v2', 'daily-open-member');
     localStorage.setItem(yesterdayKey, '2026-08-20');
 
@@ -83,16 +83,16 @@ describe('Welcome — first daily open routing', () => {
     rerender(<Welcome />);
 
     expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/4');
-    expect(localStorage.getItem(yesterdayKey)).toBe('2026-08-20');
+    expect(localStorage.getItem(yesterdayKey)).toBe('2026-08-21');
   });
 
-  it('still opens the foundational Daily Rhythm step when the old daily marker is today', () => {
+  it('opens Today’s Steps after Daily Rhythm has already opened today', () => {
     const todayKey = accountStorageKey('emmaus_last_opened_v2', 'daily-open-member');
     localStorage.setItem(todayKey, '2026-08-21');
     journeyLoading = false;
 
     render(<Welcome />);
 
-    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/4');
+    expect(setLocation).toHaveBeenCalledWith('/walk');
   });
 });

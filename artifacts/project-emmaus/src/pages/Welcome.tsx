@@ -21,7 +21,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded, markOnboarded } from '@/lib/onboarding';
-import { resolveEntryRoute, resolveFoundationalEntryRoute } from '@/lib/entry-route';
+import { resolveEntryRoute, resolveDailyOpenRoute } from '@/lib/entry-route';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
@@ -63,7 +63,7 @@ export default function Welcome() {
         setLocation('/onboarding');
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
-        const dailyRoute = resolveFoundationalEntryRoute(journeys, progress, getStepsForJourney);
+        const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
         const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
         if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
           void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
@@ -104,9 +104,9 @@ export default function Welcome() {
       if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
       if (!isOnboarded(user.id) && !user.preferredName?.trim()) return '/onboarding';
       if (!isOnboarded(user.id)) markOnboarded(user.id);
-      // Every normal app launch begins in the foundational 10 Minutes With
-      // Jesus practice. A stale once-per-day marker must never override this.
-      const dailyRoute = resolveFoundationalEntryRoute(journeys, progress, getStepsForJourney);
+      // First opening of each day enters the foundational 10 Minutes With
+      // Jesus practice. Later openings go to Today's Steps.
+      const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
       const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
       if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
         void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
