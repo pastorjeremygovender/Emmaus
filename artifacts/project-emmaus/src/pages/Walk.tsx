@@ -621,7 +621,7 @@ export default function Walk() {
 
   // 3. Your Journeys — journeys the member has already started.
   //    Includes: every published journey progress record that is not owned by
-  //    one of the dedicated sections below, plus the started legacy devotional.
+  //    one of the dedicated sections below.
   //    Excludes: Daily Rhythm (shown above), Companion (shown below).
   //    Excludes: hidden journeys (optimistic local set OR server flag).
   //    Status check: prefer server-backed progress[j.id]?.status; fall back to
@@ -634,7 +634,7 @@ export default function Walk() {
       // These content types have their own canonical Today's Steps sections.
       // Do not use isExemptJourney here: it also includes the independent
       // overloadExempt flag, which is not a visibility decision.
-      if (j.journeyType === 'daily-rhythm' || j.journeyType === 'companion' || j.journeyType === 'devotional') {
+      if (j.journeyType === 'daily-rhythm' || j.journeyType === 'companion') {
         return false;
       }
       // Hide: optimistic local set (instant) OR server flag (after page reload).
@@ -647,16 +647,9 @@ export default function Walk() {
     })
     .map(j => ({ journey: j, prog: progress[j.id]! }));
 
-  const devotionalJourney = publishedJourneys.find(j => j.journeyType === 'devotional');
-  const devotionalProg    = devotionalJourney ? progress[devotionalJourney.id] : undefined;
-  const devotionalEntry   =
-    devotionalJourney && devotionalProg
-      ? [{ journey: devotionalJourney, prog: devotionalProg }]
-      : [];
-
   // Enrich each started journey with its current step title and total published
   // step count so YourJourneysSection can render a progress-aware description.
-  const startedJourneys = [...activeMemberJourneys, ...devotionalEntry].map(
+  const startedJourneys = activeMemberJourneys.map(
     ({ journey, prog }) => {
       const steps = getStepsForJourney(journey.id).filter(
         s => s.status === 'Published' && !s.isCompletionStep,
