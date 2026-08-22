@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { listJourneys, createStep, updateStep, listSteps } from '@/lib/journeys-api';
-import { listAllSeries, getSeriesWithEntries, saveEntry } from '@/lib/devotionals-api';
+import { listAllSeries, getSeriesWithEntriesForAdmin, saveEntry } from '@/lib/devotionals-api';
 import type { Journey } from '@/lib/journeys-api';
 import type { DevotionalSeries } from '@/lib/devotionals-api';
 import {
@@ -222,7 +222,7 @@ export default function BulkImportModal({ onClose }: Props) {
         return new Set(steps.map(s => s.day));
       }
       if (destType === 'devotional' && destId) {
-        const data = await getSeriesWithEntries(destId, { userId: user?.id, userRole: user?.role });
+        const data = await getSeriesWithEntriesForAdmin(destId, { userId: user?.id, userRole: user?.role });
         return new Set((data.entries ?? []).map((e: { dayNumber: number }) => e.dayNumber));
       }
     } catch { /* non-fatal */ }
