@@ -658,10 +658,12 @@ export default function Walk() {
     },
   );
 
-  // Split started journeys into walks (quick) vs longer studies
-  // Only standalone walks (no collectionId) appear in the Walks section.
-  // Walks that belong to a collection are accessed through their collection, not listed here.
-  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk' && !journey.collectionId);
+  // Split started journeys into walks (quick) vs longer studies.
+  // A walk remains visible in Today's Steps after it is started, regardless of
+  // whether it was discovered standalone or through a collection. Collection
+  // membership controls discovery/browsing, not whether the member's active
+  // progress is surfaced here.
+  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk');
   const startedLongerJourneys = startedJourneys.filter(({ journey }) => journey.journeyType !== 'walk');
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
