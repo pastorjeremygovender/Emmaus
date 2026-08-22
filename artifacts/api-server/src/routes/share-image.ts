@@ -30,6 +30,45 @@ const IMAGE_QUALITY = "high";
 const IMAGE_SIZE = "1024x1024";
 const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v3";
 
+type ShareImageStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
+type ShareImagePipeline = "art-direction" | "visual-reasoning";
+
+const SHARE_IMAGE_STYLES: Array<{
+  id: ShareImageStyleId;
+  label: string;
+  description: string;
+  pipeline: ShareImagePipeline;
+}> = [
+  {
+    id: "dark-cinematic",
+    label: "Dark and Cinematic",
+    description: "Moody, dramatic scenes with rich shadows and cinematic light.",
+    pipeline: "art-direction",
+  },
+  {
+    id: "light-floral",
+    label: "Light and Floral",
+    description: "Bright, gentle imagery with fresh colour and occasional botanical detail.",
+    pipeline: "art-direction",
+  },
+  {
+    id: "in-the-middle",
+    label: "In the Middle",
+    description: "Balanced editorial imagery with varied subjects, colour, and atmosphere.",
+    pipeline: "visual-reasoning",
+  },
+];
+
+function getShareImageStyle(value: unknown): typeof SHARE_IMAGE_STYLES[number] {
+  return SHARE_IMAGE_STYLES.find(style => style.id === value) ?? SHARE_IMAGE_STYLES[2];
+}
+
+router.get("/share-images/styles", (req: Request, res: Response) => {
+  const userId = requireAdmin(req, res);
+  if (!userId) return;
+  return res.json({ styles: SHARE_IMAGE_STYLES });
+});
+
 // ─── Stage 1: Art-direction pre-pass ─────────────────────────────────────────
 
 /**
@@ -41,7 +80,17 @@ const NEW_METHOD_PROMPT_VERSION = "share-image-ab-test-v3";
  * render — and it collapses under that load. With a dedicated art-direction
  * pass, the image model only has to execute a specific, well-reasoned brief.
  */
-async function artDirectImage(text: string): Promise<string> {
+async function artDirectImage(text: string, styleId: ShareImageStyleId = "in-the-middle"): Promise<string> {
+  const style = getShareImageStyle(styleId);
+  const styleDirection = style.id === "dark-cinematic"
+    ? `STYLE PRESET — DARK AND CINEMATIC:
+Create a moody, filmic visual language: deep charcoal, midnight blue, forest green, burgundy, smoke, bronze, or restrained amber; directional light, strong shadow, atmospheric depth, and a clear cinematic focal point. Prefer architecture, a solitary human moment, weather, water, objects, or dramatic landscape. Do not make the scene gloomy without purpose, and do not use a plant or growth metaphor unless the text explicitly requires it.`
+    : style.id === "light-floral"
+      ? `STYLE PRESET — LIGHT AND FLORAL:
+Create a bright, airy, tender visual language: pale sky, cream, sage, powder blue, blush, lavender, soft yellow, or fresh green with luminous daylight and gentle depth. A flower, leaf, garden, or botanical detail may appear when it genuinely supports the text, but it must not be repeated mechanically; also consider bright interiors, water, objects, architecture, and human moments. Keep the result light and graceful, not childish or overly ornamental.`
+      : `STYLE PRESET — IN THE MIDDLE:
+Create a balanced contemporary editorial visual language. Keep the current improvements in colour range, emotional specificity, legible typography, and negative space, but choose the subject independently for this quote. Rotate between objects, architecture, rooms, doorways, water, human moments, weather, landscape, light and shadow, and material texture. Botanical or growth imagery is allowed only when the quote specifically calls for it and must never be the default.`;
+
   const response = await openai.chat.completions.create({
     model: process.env.ART_DIRECTION_MODEL ?? 'gpt-4o',
     max_completion_tokens: 1200,
@@ -51,6 +100,8 @@ async function artDirectImage(text: string): Promise<string> {
         content: `You are a creative director specialising in premium devotional share images — the kind that stop people mid-scroll on Instagram and WhatsApp. Think the best Christian Instagram accounts: warm, human, premium, emotional.
 
 Your job: read the text and write a single vivid image generation brief. Coherent prose — NOT bullets, NOT JSON, NOT headings. Write it the way a great creative director briefs a photographer and typographer in one paragraph.
+
+${styleDirection}
 
 Cover all four areas, woven together:
 
@@ -152,7 +203,8 @@ function parseNewMethodReasoning(raw: string): NewMethodReasoning {
   return parsed as NewMethodReasoning;
 }
 
-async function reasonAboutNewMethod(text: string): Promise<NewMethodReasoning> {
+async function reasonAboutNewMethod(text: string, styleId: ShareImageStyleId = "in-the-middle"): Promise<NewMethodReasoning> {
+  const style = getShareImageStyle(styleId);
   const response = await openai.chat.completions.create({
     model: NEW_REASONING_MODEL,
     max_completion_tokens: 1200,
@@ -171,6 +223,12 @@ Interpret each devotional independently. Return JSON only with exactly these key
   "avoid": ["specific clichés or generic choices to avoid for this quote"]
 }
 
+${style.id === "dark-cinematic"
+  ? "For this style, use moody cinematic light, richer shadows, atmospheric depth, and restrained dramatic colour; prefer non-botanical subjects unless growth is explicit."
+  : style.id === "light-floral"
+    ? "For this style, use bright airy daylight, soft fresh colour, and gentle grace; floral detail is welcome when meaningful but do not repeat it automatically."
+    : "For this style, use balanced contemporary editorial storytelling, varied subject categories, and no automatic plant or growth metaphor."}
+
 Do not write an image-generation prompt. Do not rewrite the quote. Do not automatically choose sunsets, crosses, paths, lanterns, mountains, open Bibles, praying hands, horizons, golden-hour landscapes, plants, seedlings, leaves, vines, or other growth imagery. Botanical or growth imagery is allowed only when the quote specifically and meaningfully calls for it; it must never be the default symbol for hope, renewal, faith, or change. Choose one meaningful visual language for this quote and explain the typography hierarchy without prescribing a rigid template. Deliberately vary the subject category between images: consider an object, architecture, a room or doorway, a body of water, a human moment, light and shadow, weather, landscape, or abstract material texture—not just living plants. Deliberately vary the tonal range between images: consider bright high-key daylight, airy pale backgrounds, fresh natural colour, soft pastel, clean neutral, and luminous sunlit treatments as seriously as subdued or dramatic ones. Do not default to dark, low-key, blue-black, stormy, or night lighting unless the quote clearly requires it.`,
       },
       {
@@ -184,7 +242,8 @@ Do not write an image-generation prompt. Do not rewrite the quote. Do not automa
   return parseNewMethodReasoning(raw);
 }
 
-function buildNewMethodPrompt(text: string, reasoning: NewMethodReasoning): string {
+function buildNewMethodPrompt(text: string, reasoning: NewMethodReasoning, styleId: ShareImageStyleId = "in-the-middle"): string {
+  const style = getShareImageStyle(styleId);
   return `Create a premium editorial Christian devotional share image in a square 1:1 format. Visualise this concept: ${reasoning.visualMetaphor}; the emotional atmosphere is ${reasoning.mood}, with ${reasoning.composition}. Give intelligent typographic emphasis to the exact phrase "${reasoning.heroText}" while preserving every word of the complete quote exactly as supplied, using meaningful hierarchy, contrast and negative space rather than a fixed template. Use a distinctive, contemporary editorial type treatment chosen to suit this specific message — do not default to Times New Roman, generic book serif typography, or a repetitive traditional devotional look. Choose lighting and colour with range rather than habit: bright high-key daylight, airy pale backgrounds, fresh natural colour, soft pastel, clean neutral, or luminous sunlit treatments are welcome when they suit the message; do not default to dark, low-key, blue-black, stormy, or night imagery unless the quote clearly calls for it. Do not turn the concept into a generic plant, seedling, leaf, vine, garden, or “something growing” image unless the quote explicitly depends on that idea. Prefer a non-botanical subject when the text does not clearly require growth imagery. Render this exact devotional text verbatim: """${text}""". Use sophisticated editorial visual storytelling. Keep the bottom 20% visually quiet and free of text or important subject matter for the Emmaus footer, but continue the same scene, texture, lighting and colour treatment naturally through the entire canvas. Do not create a footer panel, blank strip, horizontal divider, border, hard edge, separate lower section, or solid colour block. Generate no logos, watermarks, church names, signatures or attribution. Avoid: ${reasoning.avoid.join("; ")}.`;
 }
 
@@ -295,14 +354,15 @@ router.post("/share-images/generate-new-method", async (req: Request, res: Respo
   const userId = requireAdmin(req, res);
   if (!userId) return;
 
-  const { text } = req.body as { text?: string };
+  const { text, styleId } = req.body as { text?: string; styleId?: ShareImageStyleId };
   if (!text?.trim()) {
     return res.status(400).json({ error: "Text is required" });
   }
 
   try {
-    const reasoning = await reasonAboutNewMethod(text.trim());
-    const prompt = buildNewMethodPrompt(text.trim(), reasoning);
+    const style = getShareImageStyle(styleId);
+    const reasoning = await reasonAboutNewMethod(text.trim(), style.id);
+    const prompt = buildNewMethodPrompt(text.trim(), reasoning, style.id);
     const genRes = await openai.images.generate({
       model: IMAGE_MODEL,
       prompt,
@@ -316,6 +376,7 @@ router.post("/share-images/generate-new-method", async (req: Request, res: Respo
     req.log.info({
       userId,
       method: NEW_METHOD_PROMPT_VERSION,
+      styleId: style.id,
       reasoningModel: NEW_REASONING_MODEL,
       model: IMAGE_MODEL,
       size: IMAGE_SIZE,
@@ -326,6 +387,8 @@ router.post("/share-images/generate-new-method", async (req: Request, res: Respo
       imageBase64,
       experiment: {
         method: NEW_METHOD_PROMPT_VERSION,
+        styleId: style.id,
+        styleLabel: style.label,
         reasoningModel: NEW_REASONING_MODEL,
         model: IMAGE_MODEL,
         size: IMAGE_SIZE,
@@ -347,10 +410,11 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res);
   if (!userId) return;
 
-  const { text, editInstruction, referenceImageBase64 } = req.body as {
+  const { text, editInstruction, referenceImageBase64, styleId } = req.body as {
     text?: string;
     editInstruction?: string;
     referenceImageBase64?: string;
+    styleId?: ShareImageStyleId;
   };
 
   if (!text?.trim()) {
@@ -358,7 +422,15 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
   }
 
   try {
+    const style = getShareImageStyle(styleId);
     let imageBase64: string;
+    let generationDetails: {
+      styleId: ShareImageStyleId;
+      styleLabel: string;
+      pipeline: ShareImagePipeline;
+      prompt?: string;
+      reasoning?: NewMethodReasoning;
+    } | undefined;
     const isEdit = !!(editInstruction?.trim() && referenceImageBase64);
 
     if (isEdit) {
@@ -383,7 +455,7 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
         imageBase64 = b64;
       } catch {
         // Graceful fallback: art-direct + regenerate with edit instruction folded in
-        const artDirection = await artDirectImage(text.trim());
+        const artDirection = await artDirectImage(text.trim(), style.id);
         const basePrompt = buildImagePrompt(text.trim(), artDirection);
         const augmented = `${basePrompt}\n\nAdditional change requested: ${editInstruction!.trim()}`;
         const genRes = await openai.images.generate({
@@ -397,26 +469,53 @@ router.post("/share-images/generate", async (req: Request, res: Response) => {
         imageBase64 = b64;
       }
     } else {
-      // ── Two-stage: art-direction → image generation ───────────────────────
-      // Stage 1: GPT-4o reads the text and produces a precise, specific brief.
-      // Stage 2: gpt-image-1 executes the brief alongside the exact text.
-      const artDirection = await artDirectImage(text.trim());
-      console.log('[share-image] art direction brief:', artDirection.slice(0, 400));
-
-      const finalPrompt = buildImagePrompt(text.trim(), artDirection);
-
-      const genRes = await openai.images.generate({
-        model: IMAGE_MODEL,
-        prompt: finalPrompt,
-        size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
-        n: 1,
-      });
-      const b64 = genRes.data?.[0]?.b64_json;
-      if (!b64) throw new Error("No b64_json in generation response");
-      imageBase64 = b64;
+      if (style.pipeline === "visual-reasoning") {
+        const reasoning = await reasonAboutNewMethod(text.trim(), style.id);
+        const prompt = buildNewMethodPrompt(text.trim(), reasoning, style.id);
+        generationDetails = {
+          styleId: style.id,
+          styleLabel: style.label,
+          pipeline: style.pipeline,
+          prompt,
+          reasoning,
+        };
+        const genRes = await openai.images.generate({
+          model: IMAGE_MODEL,
+          prompt,
+          quality: IMAGE_QUALITY,
+          size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
+          n: 1,
+        });
+        const b64 = genRes.data?.[0]?.b64_json;
+        if (!b64) throw new Error("No b64_json in generation response");
+        imageBase64 = b64;
+      } else {
+        const artDirection = await artDirectImage(text.trim(), style.id);
+        console.log('[share-image] art direction brief:', artDirection.slice(0, 400));
+        const finalPrompt = buildImagePrompt(text.trim(), artDirection);
+        generationDetails = {
+          styleId: style.id,
+          styleLabel: style.label,
+          pipeline: style.pipeline,
+          prompt: finalPrompt,
+        };
+        const genRes = await openai.images.generate({
+          model: IMAGE_MODEL,
+          prompt: finalPrompt,
+          size: IMAGE_SIZE as Parameters<typeof openai.images.generate>[0]["size"],
+          n: 1,
+        });
+        const b64 = genRes.data?.[0]?.b64_json;
+        if (!b64) throw new Error("No b64_json in generation response");
+        imageBase64 = b64;
+      }
     }
 
-    return res.json({ imageBase64 });
+    return res.json({
+      imageBase64,
+      style: { id: style.id, label: style.label, pipeline: style.pipeline },
+      generationDetails,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Image generation failed";
     console.error("[share-image] generation error:", message);

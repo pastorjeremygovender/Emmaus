@@ -49,15 +49,36 @@ const ATTRIBUTION_OPTIONS: Array<{ value: Attribution; label: string; sub?: stri
 type GenPhase =
   | { phase: "idle" }
   | { phase: "generating" }
-  | { phase: "preview"; imageBase64: string; method: GenerationMethod }
+  | { phase: "preview"; imageBase64: string; styleId: GenerationStyleId }
   | { phase: "editing"; imageBase64: string; applying: boolean };
 
-type GenerationMethod = "existing" | "new";
+type GenerationStyleId = "dark-cinematic" | "light-floral" | "in-the-middle";
+
+const STYLE_OPTIONS: Array<{
+  value: GenerationStyleId;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "dark-cinematic",
+    label: "Dark and Cinematic",
+    description: "Moody, dramatic scenes with rich shadows and cinematic light.",
+  },
+  {
+    value: "light-floral",
+    label: "Light and Floral",
+    description: "Bright, gentle imagery with fresh colour and occasional botanical detail.",
+  },
+  {
+    value: "in-the-middle",
+    label: "In the Middle",
+    description: "Balanced editorial imagery with varied subjects and atmosphere.",
+  },
+];
 
 type ComparisonImages = {
-  existing?: string;
-  newMethod?: string;
-  newMethodDetails?: NewMethodDetails;
+  first?: { imageBase64: string; styleId: GenerationStyleId; details?: GenerationDetails };
+  second?: { imageBase64: string; styleId: GenerationStyleId; details?: GenerationDetails };
 };
 
 type NewMethodReasoning = {
@@ -69,12 +90,15 @@ type NewMethodReasoning = {
   avoid: string[];
 };
 
-type NewMethodDetails = {
-  reasoningModel: string;
-  model: string;
-  quality: string;
-  size: string;
-  reasoning: NewMethodReasoning;
+type GenerationDetails = {
+  styleId?: GenerationStyleId;
+  styleLabel?: string;
+  pipeline?: string;
+  reasoningModel?: string;
+  model?: string;
+  quality?: string;
+  size?: string;
+  reasoning?: NewMethodReasoning;
   prompt: string;
 };
 
@@ -290,6 +314,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
   // Stable inputs — survive state machine transitions
   const [text, setText] = useState(NEW_METHOD_TEST_QUOTE);
+  const [selectedStyle, setSelectedStyle] = useState<GenerationStyleId>("in-the-middle");
   const [attribution, setAttribution] = useState<Attribution>("emmaus");
   const [editInstruction, setEditInstruction] = useState("");
 
@@ -307,9 +332,11 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
 
   async function callGenerate(
     mode: "generate" | "edit",
-    referenceImageBase64?: string
-  ): Promise<string> {
+    referenceImageBase64?: string,
+    styleId: GenerationStyleId = "in-the-middle"
+  ): Promise<{ imageBase64: string; details?: GenerationDetails }> {
     const body: Record<string, string> = { text: text.trim() };
+    if (mode === "generate") body.styleId = styleId;
     if (mode === "edit" && editInstruction.trim() && referenceImageBase64) {
       body.editInstruction = editInstruction.trim();
       body.referenceImageBase64 = referenceImageBase64;
@@ -329,50 +356,37 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       throw new Error(errBody.error ?? "Generation failed");
     }
 
-    const { imageBase64 } = await res.json() as { imageBase64: string };
-    return imageBase64;
-  }
-
-  async function callNewMethod(): Promise<{ imageBase64: string; details: NewMethodDetails }> {
-    const res = await fetch(getApiUrl("/api/share-images/generate-new-method"), {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: text.trim() }),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({})) as { error?: string };
-      throw new Error(errBody.error ?? "New Method generation failed");
-    }
-
-    const { imageBase64, experiment } = await res.json() as {
+    const { imageBase64, generationDetails } = await res.json() as {
       imageBase64: string;
-      experiment: NewMethodDetails;
+      generationDetails?: GenerationDetails;
     };
-    return { imageBase64, details: experiment };
+    return { imageBase64, details: generationDetails };
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  async function handleGenerate(method: GenerationMethod = "existing") {
+  function rememberComparison(current: ComparisonImages, imageBase64: string, styleId: GenerationStyleId, details?: GenerationDetails): ComparisonImages {
+    const item = { imageBase64, styleId, details };
+    if (current.first?.styleId === styleId) return { ...current, first: item };
+    if (current.second?.styleId === styleId) return { ...current, second: item };
+    if (!current.first) return { ...current, first: item };
+    if (!current.second) return { ...current, second: item };
+    return { ...current, second: item };
+  }
+
+  async function handleGenerate(styleId: GenerationStyleId = selectedStyle) {
     if (!text.trim()) { setGenError("Please enter some text first."); return; }
     if (generatingRef.current) return;
     generatingRef.current = true;
+    setSelectedStyle(styleId);
     setGenError("");
     setState({ phase: "generating" });
     try {
-      const generated: { imageBase64: string; details?: NewMethodDetails } = method === "new"
-        ? await callNewMethod()
-        : { imageBase64: await callGenerate("generate") };
-      setComparison(current => method === "new"
-        ? { ...current, newMethod: generated.imageBase64, newMethodDetails: generated.details }
-        : { ...current, existing: generated.imageBase64 });
-      setState({ phase: "preview", imageBase64: generated.imageBase64, method });
+      const generated = await callGenerate("generate", undefined, styleId);
+      setComparison(current => rememberComparison(current, generated.imageBase64, styleId, generated.details));
+      setState({ phase: "preview", imageBase64: generated.imageBase64, styleId });
     } catch (e: unknown) {
-      setGenError(e instanceof Error ? e.message : `${method === "new" ? "New Method g" : "G"}eneration failed. Please try again.`);
+      setGenError(e instanceof Error ? e.message : "Generation failed. Please try again.");
       setState({ phase: "idle" });
     } finally {
       generatingRef.current = false;
@@ -385,14 +399,10 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setGenError("");
     setState({ phase: "generating" });
     try {
-      const method = state.phase === "preview" ? state.method : "existing";
-      const generated: { imageBase64: string; details?: NewMethodDetails } = method === "new"
-        ? await callNewMethod()
-        : { imageBase64: await callGenerate("generate") };
-      setComparison(current => method === "new"
-        ? { ...current, newMethod: generated.imageBase64, newMethodDetails: generated.details }
-        : { ...current, existing: generated.imageBase64 });
-      setState({ phase: "preview", imageBase64: generated.imageBase64, method });
+      const styleId = state.phase === "preview" ? state.styleId : selectedStyle;
+      const generated = await callGenerate("generate", undefined, styleId);
+      setComparison(current => rememberComparison(current, generated.imageBase64, styleId, generated.details));
+      setState({ phase: "preview", imageBase64: generated.imageBase64, styleId });
     } catch (e: unknown) {
       setGenError(e instanceof Error ? e.message : "Regeneration failed. Please try again.");
       // Restore preview with previous image if we had one
@@ -415,9 +425,8 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     setGenError("");
 
     try {
-      const b64 = await callGenerate("edit", prevImage);
-      setComparison(current => ({ ...current, existing: b64 }));
-      setState({ phase: "preview", imageBase64: b64, method: "existing" });
+      const b64 = await callGenerate("edit", prevImage, selectedStyle);
+      setState({ phase: "preview", imageBase64: b64, styleId: state.phase === "preview" ? state.styleId : selectedStyle });
       setEditInstruction("");
     } catch (e: unknown) {
       // Retain previous image on failure
@@ -482,7 +491,9 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
     state.phase === "preview" || state.phase === "editing"
       ? state.imageBase64
       : null;
-  const hasComparison = Boolean(comparison.existing && comparison.newMethod);
+  const hasComparison = Boolean(comparison.first && comparison.second);
+  const styleLabel = (styleId: GenerationStyleId) =>
+    STYLE_OPTIONS.find(option => option.value === styleId)?.label ?? styleId;
 
   return (
     <div className="space-y-4">
@@ -506,42 +517,48 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
       {hasComparison && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold text-gray-700">A/B comparison</p>
+            <p className="text-[12px] font-semibold text-gray-700">Style comparison</p>
             <span className="text-[11px] text-gray-400">Neither image has been saved</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <p className="text-[11px] font-medium text-gray-500">Existing method</p>
+              <p className="text-[11px] font-medium text-gray-500">{styleLabel(comparison.first!.styleId)}</p>
               <img
-                src={`data:image/png;base64,${comparison.existing}`}
-                alt="Existing method comparison"
+                src={`data:image/png;base64,${comparison.first!.imageBase64}`}
+                alt={`${styleLabel(comparison.first!.styleId)} comparison`}
                 className="w-full aspect-square object-cover rounded-lg border border-gray-200"
               />
             </div>
             <div className="space-y-1">
-              <p className="text-[11px] font-medium text-teal-700">New Method</p>
+              <p className="text-[11px] font-medium text-teal-700">{styleLabel(comparison.second!.styleId)}</p>
               <img
-                src={`data:image/png;base64,${comparison.newMethod}`}
-                alt="New Method comparison"
+                src={`data:image/png;base64,${comparison.second!.imageBase64}`}
+                alt={`${styleLabel(comparison.second!.styleId)} comparison`}
                 className="w-full aspect-square object-cover rounded-lg border border-teal-300"
               />
-              {comparison.newMethodDetails && (
+              {(comparison.second!.details || comparison.first!.details) && (
                 <details className="pt-1 text-[11px] text-gray-500">
                   <summary className="cursor-pointer font-medium text-teal-700">Generation Details</summary>
                   <div className="mt-2 space-y-2 rounded-lg bg-gray-50 p-2">
-                    <p><strong>Reasoning Model:</strong> {comparison.newMethodDetails.reasoningModel}</p>
-                    <p><strong>Image Model:</strong> {comparison.newMethodDetails.model}</p>
-                    <p><strong>Image Quality:</strong> {comparison.newMethodDetails.quality}</p>
-                    <p><strong>Image Size:</strong> {comparison.newMethodDetails.size}</p>
-                    <p><strong>Emotional Centre:</strong> {comparison.newMethodDetails.reasoning.emotionalCentre}</p>
-                    <p><strong>Visual Metaphor:</strong> {comparison.newMethodDetails.reasoning.visualMetaphor}</p>
-                    <p><strong>Composition:</strong> {comparison.newMethodDetails.reasoning.composition}</p>
-                    <p><strong>Hero Text:</strong> {comparison.newMethodDetails.reasoning.heroText}</p>
-                    <p><strong>Mood:</strong> {comparison.newMethodDetails.reasoning.mood}</p>
-                    <p><strong>Avoid:</strong> {comparison.newMethodDetails.reasoning.avoid.join(", ")}</p>
+                    <p><strong>Style:</strong> {(comparison.second!.details || comparison.first!.details)?.styleLabel}</p>
+                    <p><strong>Pipeline:</strong> {(comparison.second!.details || comparison.first!.details)?.pipeline}</p>
+                    {(comparison.second!.details || comparison.first!.details)?.reasoning && (
+                      <>
+                        <p><strong>Reasoning Model:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoningModel}</p>
+                        <p><strong>Image Model:</strong> {(comparison.second!.details || comparison.first!.details)?.model}</p>
+                        <p><strong>Image Quality:</strong> {(comparison.second!.details || comparison.first!.details)?.quality}</p>
+                        <p><strong>Image Size:</strong> {(comparison.second!.details || comparison.first!.details)?.size}</p>
+                        <p><strong>Emotional Centre:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.emotionalCentre}</p>
+                        <p><strong>Visual Metaphor:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.visualMetaphor}</p>
+                        <p><strong>Composition:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.composition}</p>
+                        <p><strong>Hero Text:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.heroText}</p>
+                        <p><strong>Mood:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.mood}</p>
+                        <p><strong>Avoid:</strong> {(comparison.second!.details || comparison.first!.details)?.reasoning?.avoid.join(", ")}</p>
+                      </>
+                    )}
                     <div>
                       <strong>Final Image Prompt:</strong>
-                      <pre className="mt-1 whitespace-pre-wrap font-sans">{comparison.newMethodDetails.prompt}</pre>
+                      <pre className="mt-1 whitespace-pre-wrap font-sans">{(comparison.second!.details || comparison.first!.details)?.prompt}</pre>
                     </div>
                   </div>
                 </details>
@@ -572,6 +589,40 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
               {opt.sub && (
                 <span className="text-[11px] text-gray-400">{opt.sub}</span>
               )}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Visual style selector ─────────────────────────────────────────── */}
+      <div>
+        <p className="text-[12px] font-medium text-gray-700 mb-1">Visual style</p>
+        <p className="text-[11px] text-gray-400 mb-2">
+          Choose the image direction before generating.
+        </p>
+        <div className="grid gap-2">
+          {STYLE_OPTIONS.map(option => (
+            <label
+              key={option.value}
+              className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                selectedStyle === option.value
+                  ? "border-teal-500 bg-teal-50"
+                  : "border-gray-200 hover:border-teal-200"
+              }`}
+            >
+              <input
+                type="radio"
+                name="share-image-style"
+                value={option.value}
+                checked={selectedStyle === option.value}
+                onChange={() => setSelectedStyle(option.value)}
+                disabled={state.phase === "generating" || saving}
+                className="mt-0.5 accent-teal-600"
+              />
+              <span>
+                <span className="block text-[13px] font-medium text-gray-800">{option.label}</span>
+                <span className="block text-[11px] text-gray-500 mt-0.5">{option.description}</span>
+              </span>
             </label>
           ))}
         </div>
@@ -715,21 +766,12 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => handleGenerate("existing")}
+            onClick={() => handleGenerate(selectedStyle)}
             disabled={!text.trim()}
             className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold bg-teal-600 text-white hover:bg-teal-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Sparkles className="w-4 h-4" />
             Generate Image
-          </button>
-          <button
-            type="button"
-            onClick={() => handleGenerate("new")}
-            disabled={!text.trim()}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold border border-teal-600 text-teal-700 hover:bg-teal-50 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Sparkles className="w-4 h-4" />
-            Generate with New Method
           </button>
         </div>
       )}
@@ -759,12 +801,12 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
           </button>
           <button
             type="button"
-            onClick={() => handleGenerate(state.method === "existing" ? "new" : "existing")}
+            onClick={() => handleGenerate(selectedStyle)}
             disabled={saving}
             className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-[13px] font-medium border border-teal-200 text-teal-700 hover:bg-teal-50 active:scale-[0.97] transition-all disabled:opacity-50"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            {state.method === "existing" ? "Generate New Method" : "Generate Existing Method"}
+            Generate Another Style
           </button>
           <button
             type="button"
@@ -811,7 +853,7 @@ export function ShareImageGenerator({ onChange, onCancel }: Props) {
           <button
             type="button"
             onClick={() => {
-              setState({ phase: "preview", imageBase64: state.imageBase64, method: "existing" });
+               setState({ phase: "preview", imageBase64: state.imageBase64, styleId: selectedStyle });
               setEditInstruction("");
             }}
             disabled={state.applying}
