@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   createDevotionalEntryGroup,
   deleteDevotionalEntryGroup,
-  listDevotionalEntryGroups,
+  listDevotionalEntryGroupsForAdmin,
   saveDevotionalEntryGroupItems,
   updateDevotionalEntryGroup,
   type AdminAuth,
@@ -31,7 +31,7 @@ export default function DevotionalEntryGroupsPanel({ seriesId, entries, auth }: 
 
   const load = useCallback(async () => {
     try {
-      const result = await listDevotionalEntryGroups(seriesId, auth);
+      const result = await listDevotionalEntryGroupsForAdmin(seriesId, auth);
       setGroups(result);
       if (selectedId && !result.some(group => group.id === selectedId)) setSelectedId(null);
     } catch {

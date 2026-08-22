@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  getSeriesWithEntries,
+  getSeriesWithEntriesForAdmin,
   updateSeries,
   saveEntry,
   deleteEntry,
@@ -61,7 +61,7 @@ export default function DevotionalSeriesEditor({ seriesId, onBack, onEditEntry }
 
   const load = useCallback(async () => {
     try {
-      const d = await getSeriesWithEntries(seriesId, auth);
+      const d = await getSeriesWithEntriesForAdmin(seriesId, auth);
       setData(d);
       setTitle(d.title);
       setDescription(d.description ?? '');

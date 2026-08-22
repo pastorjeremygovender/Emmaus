@@ -9,7 +9,7 @@ import {
   BookHeart, CheckCircle2, FileText, Loader2, Pencil, Plus, ChevronRight,
 } from 'lucide-react';
 import {
-  getSeriesWithEntries,
+  getSeriesWithEntriesForAdmin,
   saveEntry,
   type SeriesWithEntries,
   type DevotionalEntry,
@@ -56,7 +56,7 @@ export default function DevotionalSeriesDetailView({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await getSeriesWithEntries(seriesId, auth);
+      const d = await getSeriesWithEntriesForAdmin(seriesId, auth);
       setData(d);
     } finally {
       setLoading(false);

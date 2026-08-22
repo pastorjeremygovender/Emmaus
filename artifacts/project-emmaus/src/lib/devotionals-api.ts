@@ -128,9 +128,16 @@ export function listAllSeries(auth?: AdminAuth): Promise<DevotionalSeries[]> {
 }
 
 export function getSeriesWithEntries(id: string, auth?: AdminAuth | MemberAuth): Promise<SeriesWithEntries> {
-  // Read-only route — only userId is needed for requireAuth; userRole is ignored.
-  const userRole = auth && 'userRole' in auth ? (auth as AdminAuth).userRole : undefined;
-  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId, userRole });
+  // This is always the member-facing read path, even when an admin is previewing
+  // the app. Draft content is available through the explicit admin helper below.
+  return request<SeriesWithEntries>(apiUrl(`/${id}`), { userId: auth?.userId });
+}
+
+export function getSeriesWithEntriesForAdmin(id: string, auth?: AdminAuth): Promise<SeriesWithEntries> {
+  return request<SeriesWithEntries>(apiUrl(`/admin/${id}`), {
+    userId: auth?.userId,
+    userRole: auth?.userRole,
+  });
 }
 
 export function createSeries(
@@ -220,10 +227,18 @@ export function listDevotionalEntryGroups(
   seriesId: string,
   auth?: AdminAuth | MemberAuth,
 ): Promise<DevotionalEntryGroup[]> {
-  const userRole = auth && 'userRole' in auth ? auth.userRole : undefined;
   return request<DevotionalEntryGroup[]>(apiUrl(`/${seriesId}/groups`), {
     userId: auth?.userId,
-    userRole,
+  });
+}
+
+export function listDevotionalEntryGroupsForAdmin(
+  seriesId: string,
+  auth?: AdminAuth,
+): Promise<DevotionalEntryGroup[]> {
+  return request<DevotionalEntryGroup[]>(apiUrl(`/admin/${seriesId}/groups`), {
+    userId: auth?.userId,
+    userRole: auth?.userRole,
   });
 }
 

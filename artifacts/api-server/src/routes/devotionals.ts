@@ -104,6 +104,21 @@ devotionalsRouter.post("/", async (req: Request, res: Response) => {
 // These are separate from the cross-content Content Groups feature. They group
 // individual entries inside one devotional series (for example, January).
 
+// ─── Admin: devotional entry groups ─────────────────────────────────────────
+// Content Studio uses this explicit admin path so an admin viewing the member
+// app cannot implicitly turn Draft content into member-visible content.
+devotionalsRouter.get("/admin/:id/groups", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const groups = await store.getEntryGroupsForSeries(String(req.params.id), false);
+    res.set("Cache-Control", "no-store");
+    res.json(groups);
+  } catch (err) {
+    logger.error({ err }, "admin get devotional entry groups failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 devotionalsRouter.get("/:id/groups", async (req: Request, res: Response) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
@@ -111,12 +126,11 @@ devotionalsRouter.get("/:id/groups", async (req: Request, res: Response) => {
     const seriesId = String(req.params.id);
     const series = await store.getSeriesById(seriesId);
     if (!series) { res.status(404).json({ error: "Series not found" }); return; }
-    const adminAccess = req.user?.role === "admin" || req.user?.role === "superAdmin";
-    if (!adminAccess && series.status !== "Published") {
+    if (series.status !== "Published") {
       res.status(404).json({ error: "Series not found" });
       return;
     }
-    const groups = await store.getEntryGroupsForSeries(seriesId, !adminAccess);
+    const groups = await store.getEntryGroupsForSeries(seriesId, true);
     res.set("Cache-Control", "no-store");
     res.json(groups);
   } catch (err) {
@@ -211,6 +225,23 @@ devotionalsRouter.put("/:id/groups/:groupId/items", async (req: Request, res: Re
 // another messaging app can be read before the recipient creates an account.
 // Progress and all mutations remain authenticated below.
 
+// ─── Admin: get full series (with Draft entries) ────────────────────────────
+devotionalsRouter.get("/admin/:id", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const series = await store.getSeriesById(String(req.params.id));
+    if (!series) {
+      res.status(404).json({ error: "Series not found" });
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.json(series);
+  } catch (err) {
+    logger.error({ err }, "admin getSeriesById failed");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
   try {
     const series = await store.getSeriesById(String(req.params.id));
@@ -220,19 +251,14 @@ devotionalsRouter.get("/:id", async (req: Request, res: Response) => {
     }
 
     // Members can only read Published series
-    const adminAccess =
-      req.user?.role === "admin" || req.user?.role === "superAdmin";
-    if (!adminAccess && series.status !== "Published") {
+    if (series.status !== "Published") {
       res.status(404).json({ error: "Series not found" });
       return;
     }
 
     // Defence-in-depth: strip Draft (and Archived) entries from member responses
     // so unpublished content is never transmitted to the browser.
-    // Admins receive the full entry list for authoring purposes.
-    if (!adminAccess) {
-      series.entries = series.entries.filter(e => e.status === "Published");
-    }
+    series.entries = series.entries.filter(e => e.status === "Published");
 
     res.json(series);
   } catch (err) {

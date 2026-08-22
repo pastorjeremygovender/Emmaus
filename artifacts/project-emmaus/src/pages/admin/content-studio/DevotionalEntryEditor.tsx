@@ -12,7 +12,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  getSeriesWithEntries,
+  getSeriesWithEntriesForAdmin,
   saveEntry,
   deleteEntry,
   type SeriesWithEntries,
@@ -64,7 +64,7 @@ export default function DevotionalEntryEditor({ seriesId, day, onBack }: Props) 
 
   const load = useCallback(async () => {
     try {
-      const d = await getSeriesWithEntries(seriesId, auth);
+      const d = await getSeriesWithEntriesForAdmin(seriesId, auth);
       setSeriesData(d);
       const entry = d.entries.find(e => e.dayNumber === day);
       if (entry) {
