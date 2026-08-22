@@ -39,7 +39,7 @@ export default function Auth() {
   useEffect(() => {
     if (!user) return;
     setLocation(
-      user.role === "admin" || user.role === "superAdmin" ? "/admin" : "/walk",
+      user.role === "admin" || user.role === "superAdmin" ? "/admin" : "/",
     );
   }, [setLocation, user]);
 

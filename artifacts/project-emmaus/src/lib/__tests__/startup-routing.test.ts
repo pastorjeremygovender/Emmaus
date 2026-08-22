@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { isTabPath } from '@/lib/tab-paths';
-import { resolveEntryRoute } from '@/lib/entry-route';
+import { resolveEntryRoute, resolveFoundationalEntryRoute } from '@/lib/entry-route';
 
 // ── isTabPath ────────────────────────────────────────────────────────────────
 
@@ -144,5 +144,32 @@ describe('resolveEntryRoute — always returns /walk', () => {
     expect(resolveEntryRoute()).toBe('/walk');
     expect(resolveEntryRoute()).toBe('/walk');
     expect(resolveEntryRoute()).toBe('/walk');
+  });
+});
+
+describe('resolveFoundationalEntryRoute — Daily Rhythm is the first destination', () => {
+  it('returns the member current Daily Rhythm day', () => {
+    expect(resolveFoundationalEntryRoute(
+      [{ id: 'daily', journeyType: 'daily-rhythm' }],
+      { daily: { currentDay: 4 } },
+      () => [{ day: 1 }, { day: 4 }, { day: 5 }],
+    )).toBe('/daily-rhythm/day/4');
+  });
+
+  it('ignores the once-per-day marker because launch is foundational', () => {
+    expect(resolveFoundationalEntryRoute(
+      [{ id: 'daily', journeyType: 'core' }],
+      {},
+      () => [{ day: 1 }],
+    )).toBe('/daily-rhythm/day/1');
+  });
+
+  it('returns null only when Daily Rhythm content is unavailable', () => {
+    expect(resolveFoundationalEntryRoute([], {}, () => [])).toBeNull();
+    expect(resolveFoundationalEntryRoute(
+      [{ id: 'daily', journeyType: 'daily-rhythm' }],
+      {},
+      () => [],
+    )).toBeNull();
   });
 });

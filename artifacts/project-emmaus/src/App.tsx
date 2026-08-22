@@ -71,7 +71,8 @@ import RoomChat from '@/pages/rooms/RoomChat';
 
 /**
  * Startup routing rule (locked):
- * Every FRESH LAUNCH must land on Today's Steps (/walk).
+ * Every FRESH LAUNCH for a member must enter the foundational Daily Rhythm
+ * practice (10 Minutes With Jesus). Admins land on /admin.
  * A RESUME (lock/unlock, app switch, incoming call) must NOT redirect —
  * the user returns to exactly the screen they left.
  *
@@ -128,7 +129,7 @@ function Router() {
       _startupChecked = true;
       // If the browser has loaded directly onto any tab path (root or deep),
       // redirect through Welcome so that auth, profile loading, onboarding
-      // and resolveEntryRoute() all run normally and land on /walk.
+      // and the foundational Daily Rhythm route runs normally.
       if (isTabPath(location)) {
         setLocation('/');
       }
