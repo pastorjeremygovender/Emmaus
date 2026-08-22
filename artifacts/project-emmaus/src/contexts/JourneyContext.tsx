@@ -270,10 +270,10 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       if (!user?.id) throw new Error('Not signed in');
       const subject = user.id;
       const existing = progress[journeyId];
-      // Starting an already-active journey is a no-op. Starting a paused
-      // journey is an explicit re-engagement and must reach the server so the
-      // lifecycle state is restored to active.
-      if (existing && existing.status !== 'paused') return;
+      // Starting an already-active journey is a no-op. Starting a paused or
+      // completed journey is explicit re-engagement and must reach the server
+      // so it becomes eligible for Today's Steps again.
+      if (existing && existing.status === 'active') return;
       if (existing) {
         setProgress(p => ({
           ...p,

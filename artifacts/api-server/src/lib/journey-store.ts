@@ -1076,9 +1076,8 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
   .onConflictDoUpdate({
     target: [userJourneyProgressTable.userId, userJourneyProgressTable.journeyId],
     // Starting/engaging from Discover is also the resume action for an
-    // existing paused journey. Restore visibility here as well; this keeps
-    // every entry point consistent instead of leaving the row paused after
-    // the member has explicitly chosen to engage again.
+    // existing paused or completed journey. Restore visibility here as well;
+    // meaningful re-engagement must make the item eligible for Today's Steps.
     set: {
       status: "active",
       hiddenFromToday: false,
@@ -1106,7 +1105,16 @@ export async function completeStep(
     const newCurrentDay = Math.max(existing.currentDay, day + 1);
     const rows = await db
       .update(userJourneyProgressTable)
-      .set({ completedDays, currentDay: newCurrentDay, lastCompletedAt: now, updatedAt: now })
+      .set({
+        completedDays,
+        currentDay: newCurrentDay,
+        lastCompletedAt: now,
+        // Completing/reviewing a step is meaningful engagement. It restores a
+        // previously hidden or completed item to the active Today's Steps list.
+        status: "active",
+        hiddenFromToday: false,
+        updatedAt: now,
+      })
       .where(and(
         eq(userJourneyProgressTable.userId, userId),
         eq(userJourneyProgressTable.journeyId, journeyId)

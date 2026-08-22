@@ -108,7 +108,7 @@ export default function JourneyDetail() {
       `${base}/api/engagements/journey/${encodeURIComponent(journey.id)}/${action}`,
       { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
     );
-    if (prog.status === 'paused') void request('resume').catch(() => { /* non-fatal */ });
+    if (prog.status !== 'active') void request('resume').catch(() => { /* non-fatal */ });
     void request('unhide').catch(() => { /* non-fatal */ });
   }, [journey?.id, prog?.status, !!prog, !!user]);
 
