@@ -397,6 +397,9 @@ export async function transcribeAudio(
     method:  "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
     body:    formData,
+    // Never leave the sermon permanently stuck in transcribing if the
+    // provider or network stops responding.
+    signal:  AbortSignal.timeout(10 * 60 * 1000),
   });
 
   if (!whisperResp.ok) {
