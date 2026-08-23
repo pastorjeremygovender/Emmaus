@@ -1776,6 +1776,9 @@ Return ONLY a valid JSON object (no markdown):
       "original_language_note": "Key Greek or Hebrew word if genuinely significant (leave empty string if not needed)",
       "jesus_connection": "How this passage connects to Jesus — direct, typological, or thematic. Be honest about the strength of the connection.",
       "apply_it": "2–3 questions or invitations for reflection. Invitational, not prescriptive. No checklists or guilt.",
+      "key_truth": "One concise sentence stating the central truth of this passage",
+      "reflection_question": "One thoughtful, open-ended question for personal reflection",
+      "related_scriptures": "2–4 related Scripture references with a short reason for each",
       "cross_references": [
         {"reference": "Book Chapter:Verse", "explanation": "why this is connected", "type": "Shared Theme"}
       ]
@@ -1835,8 +1838,9 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
             `INSERT INTO bible_study_notes
                (book_id, chapter, verse_start, verse_end, title, content,
                 context_note, historical_note, original_language_note,
-                jesus_connection, apply_it, cross_references, status, created_by, updated_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Draft',$13,$13)
+                jesus_connection, apply_it, key_truth, reflection_question,
+                related_scriptures, cross_references, status, created_by, updated_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Draft',$16,$16)
              ON CONFLICT DO NOTHING
              RETURNING *`,
             [
@@ -1845,7 +1849,8 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
               p.title ?? '', p.content ?? '',
               p.context_note ?? '', p.historical_note ?? '',
               p.original_language_note ?? '', p.jesus_connection ?? '',
-              p.apply_it ?? '', JSON.stringify(p.cross_references ?? []),
+              p.apply_it ?? '', p.key_truth ?? '', p.reflection_question ?? '',
+              p.related_scriptures ?? '', JSON.stringify(p.cross_references ?? []),
               userId,
             ]
           );
