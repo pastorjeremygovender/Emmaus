@@ -1831,7 +1831,7 @@ Keep content concise and mobile-friendly. Do not use academic jargon.`;
           JSON.stringify(ov.important_people ?? []), JSON.stringify(ov.important_locations ?? []),
           JSON.stringify(ov.passage_divisions ?? []), ov.key_verse ?? '',
           ov.book_connection ?? '', ov.jesus_connection ?? '',
-          userId, force,
+          userId,
         ]
       );
 
