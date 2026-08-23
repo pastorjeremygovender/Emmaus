@@ -64,6 +64,10 @@ const router = Router();
 const PUBLIC_ALLOWLIST: ReadonlyArray<{ method: string; path: string }> = [
   { method: "POST", path: "/youtube-archive/search" },
   { method: "GET", path: "/youtube-archive/preached-here" },
+  // The callback is protected by the one-time state created by the
+  // admin-authenticated /oauth/start route. The browser may return from
+  // Google without the original session cookie after a hostname transition.
+  { method: "GET", path: "/youtube-archive/oauth/callback" },
   // Audio streaming is matched by prefix below (path carries the :id param).
 ];
 

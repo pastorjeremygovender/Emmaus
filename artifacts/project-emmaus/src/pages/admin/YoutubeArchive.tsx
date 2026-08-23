@@ -154,7 +154,7 @@ function ConnectionPanel({
         <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
           <p className="text-[11px] font-medium text-gray-500 mb-1">Authorized redirect URI (must match Google Cloud Console exactly)</p>
           <code className="text-[11px] text-gray-700 break-all select-all">
-            {getPublicOrigin()}{getApiBase()}/api/youtube-archive/oauth/callback
+            {getPublicOrigin()}/api/youtube-archive/oauth/callback
           </code>
         </div>
       )}
