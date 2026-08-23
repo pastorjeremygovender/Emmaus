@@ -121,7 +121,7 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
 }
 
 // isTabPath and TAB_PREFIXES live in lib/tab-paths so they can be unit-tested.
-import { isTabPath } from '@/lib/tab-paths';
+import { isColdMemberLaunchPath } from '@/lib/tab-paths';
 
 function Router() {
   const [location, setLocation] = useLocation();
@@ -136,7 +136,7 @@ function Router() {
       // the daily-open route run with fully loaded context data. This matters
       // especially for a cold /walk load, where Walk can otherwise mount
       // before the authenticated journey list arrives.
-      if (isTabPath(location) || location === '/walk') {
+      if (isColdMemberLaunchPath(location)) {
         setLocation('/');
       }
     }
