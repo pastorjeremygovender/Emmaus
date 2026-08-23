@@ -44,6 +44,11 @@ export async function runStartupMigrations(): Promise<void> {
     `ALTER TABLE devotional_entries ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
     `ALTER TABLE sermons ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
     `ALTER TABLE sermon_companion ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
+    `CREATE TABLE IF NOT EXISTS youtube_archive_state (
+      state_key text PRIMARY KEY,
+      payload jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
   ]) {
     try { await pool.query(statement); } catch (err) {
       logger.warn({ err, statement }, "Startup migration: display order column failed (non-fatal)");

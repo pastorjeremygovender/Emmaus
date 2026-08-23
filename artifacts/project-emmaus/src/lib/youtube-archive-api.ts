@@ -89,7 +89,20 @@ export interface ImportJob {
   createdAt: string;
   updatedAt: string;
   targetVideoId?: string;
-  progress: { total: number; done: number; failed: number; currentItem?: string };
+  progress: {
+    total: number;
+    done: number;
+    failed: number;
+    skipped?: number;
+    currentItem?: string;
+    failures?: Array<{
+      itemId: string;
+      itemTitle?: string;
+      stage: string;
+      error: string;
+      at: string;
+    }>;
+  };
   error?: string;
 }
 

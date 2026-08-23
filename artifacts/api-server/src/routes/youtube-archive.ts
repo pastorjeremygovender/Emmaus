@@ -24,6 +24,7 @@ import {
   getAllJobs, createJob, updateJob,
   getArchiveStats, type YoutubeVideoRecord,
 } from "../lib/sermon-store.js";
+import { readArchiveState, writeArchiveState } from "../lib/archive-state-store.js";
 import {
   getYoutubeConfig, getChannelInfo, getPlaylistVideoIds,
   getVideoMetadata, listCaptionTracks, downloadCaptionTrack,
@@ -541,6 +542,7 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
       let done = 0;
       let failed = 0;
       let totalSegments = 0;
+      const failures: NonNullable<ImportJob["progress"]["failures"]> = [];
 
       for (const video of toProcess) {
         await updateJob(job.id, {
@@ -552,13 +554,25 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           },
         });
 
-        const result = await processVideoInternal(video.id);
+        let result: Awaited<ReturnType<typeof processVideoInternal>>;
+        try {
+          result = await processVideoInternal(video.id);
+        } catch (err) {
+          result = { success: false, segmentCount: 0, error: String(err) };
+        }
 
         if (result.success) {
           done++;
           totalSegments += result.segmentCount;
         } else {
           failed++;
+          failures.push({
+            itemId: video.id,
+            itemTitle: video.title,
+            stage: "process-video",
+            error: result.error ?? "Unknown processing failure",
+            at: new Date().toISOString(),
+          });
         }
 
         // Invalidate after each so partial index is queryable
@@ -574,7 +588,9 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
           total: toProcess.length,
           done,
           failed,
+          skipped: 0,
           currentItem: `${done} indexed · ${totalSegments} segments`,
+          failures,
         },
       });
 
@@ -870,8 +886,12 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
       // Load existing embeddings to support resumption
       let existing: Record<string, number[]> = {};
       try {
-        if (existsSync(EMBEDDINGS_FILE)) {
+        const durable = await readArchiveState<Record<string, number[]>>("embeddings");
+        if (durable) {
+          existing = durable;
+        } else if (existsSync(EMBEDDINGS_FILE)) {
           existing = JSON.parse(await readFile(EMBEDDINGS_FILE, "utf-8")) as Record<string, number[]>;
+          await writeArchiveState("embeddings", existing);
         }
       } catch { /* start fresh */ }
 
@@ -893,6 +913,7 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
 
       let done = 0;
       let failed = 0;
+      const failures: NonNullable<ImportJob["progress"]["failures"]> = [];
       const BATCH_SIZE = 10;
 
       for (let i = 0; i < todo.length; i += BATCH_SIZE) {
@@ -931,12 +952,29 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
               }
             }
           } else {
-            logger.warn({ status: response.status }, "Embedding API error");
+            const errorBody = await response.text().catch(() => "");
+            const error = `OpenAI embeddings HTTP ${response.status}${errorBody ? `: ${errorBody.slice(0, 240)}` : ""}`;
+            logger.warn({ status: response.status, error, batchSize: batch.length }, "Embedding API error");
             failed += batch.length;
+            failures.push(...batch.map((segment) => ({
+              itemId: segment.id,
+              itemTitle: `Segment ${segment.sequenceNumber}`,
+              stage: "embed",
+              error,
+              at: new Date().toISOString(),
+            })));
           }
         } catch (err) {
-          logger.warn({ err: String(err) }, "Embedding batch failed");
+          const error = String(err);
+          logger.warn({ err: error, batchSize: batch.length }, "Embedding batch failed");
           failed += batch.length;
+          failures.push(...batch.map((segment) => ({
+            itemId: segment.id,
+            itemTitle: `Segment ${segment.sequenceNumber}`,
+            stage: "embed",
+            error,
+            at: new Date().toISOString(),
+          })));
         }
 
         // Atomic write after each batch so progress survives interruption
@@ -944,15 +982,30 @@ router.post("/youtube-archive/pipeline/embed", async (_req: Request, res: Respon
         await writeFile(tmp, JSON.stringify(existing), "utf-8");
         const { rename } = await import("node:fs/promises");
         await rename(tmp, EMBEDDINGS_FILE);
+        await writeArchiveState("embeddings", existing);
 
         await updateJob(job.id, {
-          progress: { total: todo.length, done, failed },
+          progress: {
+            total: todo.length,
+            done,
+            failed,
+            skipped: segments.length - todo.length,
+            currentItem: `${done}/${todo.length} embeddings`,
+            failures,
+          },
         });
       }
 
       await updateJob(job.id, {
         status: failed > 0 && done === 0 ? "failed" : "completed",
-        progress: { total: todo.length, done, failed },
+        progress: {
+          total: todo.length,
+          done,
+          failed,
+          skipped: segments.length - todo.length,
+          currentItem: `${done} indexed · ${failed} failed`,
+          failures,
+        },
       });
 
       logger.info({ done, failed }, "Embedding job complete");

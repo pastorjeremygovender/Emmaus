@@ -1214,8 +1214,8 @@ export default function YoutubeArchive() {
         <div>
           <div className="font-semibold text-[14px] text-gray-800">Sermon Indexing Pipeline</div>
           <p className="text-[12px] text-gray-500 mt-1">
-            Auto-approves all sermon-classified videos by Pastor Jeremy Govender, downloads captions,
-            splits transcripts into timestamped segments, and builds the search index for Ask Emmaus.
+            Processes only videos you have approved, downloads captions, splits transcripts into
+            timestamped segments, and builds the search index for Ask Emmaus.
           </p>
         </div>
 
@@ -1228,6 +1228,7 @@ export default function YoutubeArchive() {
             </div>
             <div className="text-[12px] text-blue-700">
               {pipelineJob.progress.done} / {pipelineJob.progress.total} processed
+              {pipelineJob.progress.skipped ? ` · ${pipelineJob.progress.skipped} already complete` : ''}
               {pipelineJob.progress.failed ? ` · ${pipelineJob.progress.failed} failed` : ''}
             </div>
             {pipelineJob.progress.currentItem && (
@@ -1257,6 +1258,15 @@ export default function YoutubeArchive() {
             {pipelineJob.progress.currentItem && (
               <div className="text-[12px] text-green-700">{pipelineJob.progress.currentItem}</div>
             )}
+            {!!pipelineJob.progress.failures?.length && (
+              <div className="mt-2 space-y-1 text-[11px] text-red-700">
+                {pipelineJob.progress.failures.map((failure) => (
+                  <div key={`${failure.itemId}-${failure.at}`}>
+                    <strong>{failure.itemTitle || failure.itemId}:</strong> {failure.error}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1280,6 +1290,15 @@ export default function YoutubeArchive() {
               : <><Play size={14} /> Run Full Indexing Pipeline</>
             }
           </button>
+          {!pipelining && pipelineJob?.progress.failures?.length ? (
+            <button
+              onClick={handleRunPipeline}
+              disabled={enriching || !status?.oauth.connected}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg text-[13px] hover:bg-red-50 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={14} /> Retry Failed
+            </button>
+          ) : null}
           <button
             onClick={handleRunEnrichment}
             disabled={pipelining || enriching || !status?.oauth.connected}
@@ -1295,7 +1314,7 @@ export default function YoutubeArchive() {
           )}
           {status?.oauth.connected && !pipelining && !enriching && (
             <span className="text-[12px] text-gray-400">
-              {status.stats.pendingReview} pending · {status.stats.approvedSermons} approved · {status.stats.segmentsCreated} segments indexed
+              {status.stats.pendingReview} pending · {status.stats.approvedSermons} approved · {status.stats.segmentsCreated} persisted segments
             </span>
           )}
         </div>

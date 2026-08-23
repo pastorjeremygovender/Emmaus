@@ -15,6 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
+import { readArchiveState, writeArchiveState } from "./archive-state-store.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,7 +151,15 @@ export interface ImportJob {
     total: number;
     done: number;
     failed: number;
+    skipped?: number;
     currentItem?: string;
+    failures?: Array<{
+      itemId: string;
+      itemTitle?: string;
+      stage: string;
+      error: string;
+      at: string;
+    }>;
   };
   error?: string;
   options?: Record<string, unknown>;
@@ -206,21 +215,7 @@ async function readJsonFile<T>(filePath: string, defaultValue: T): Promise<T> {
 export async function verifySermonStore(): Promise<void> {
   const videosExist = existsSync(VIDEOS_FILE);
   const segmentsExist = existsSync(SEGMENTS_FILE);
-  let videoCount = 0;
-  let segmentCount = 0;
-  let approvedCount = 0;
-
-  if (videosExist) {
-    const videos = await readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
-    videoCount = videos.length;
-    approvedCount = videos.filter(
-      (v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved"
-    ).length;
-  }
-  if (segmentsExist) {
-    const segs = await readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
-    segmentCount = segs.length;
-  }
+  const [videos, segments] = await Promise.all([getAllVideos(), getAllSegments()]);
 
   logger.info(
     {
@@ -229,9 +224,12 @@ export async function verifySermonStore(): Promise<void> {
       segmentsFile: SEGMENTS_FILE,
       videosExist,
       segmentsExist,
-      totalVideos: videoCount,
-      approvedVideos: approvedCount,
-      totalSegments: segmentCount,
+      totalVideos: videos.length,
+      approvedVideos: videos.filter(
+        (v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved"
+      ).length,
+      totalSegments: segments.length,
+      source: "postgresql-with-file-migration-fallback",
     },
     "Sermon store diagnostic"
   );
@@ -240,7 +238,11 @@ export async function verifySermonStore(): Promise<void> {
 // ─── Video Records ────────────────────────────────────────────────────────────
 
 export async function getAllVideos(): Promise<YoutubeVideoRecord[]> {
-  return readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
+  const durable = await readArchiveState<YoutubeVideoRecord[]>("videos");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<YoutubeVideoRecord[]>(VIDEOS_FILE, []);
+  if (fromFile.length) await writeArchiveState("videos", fromFile);
+  return fromFile;
 }
 
 export async function getVideoById(id: string): Promise<YoutubeVideoRecord | null> {
@@ -297,6 +299,7 @@ export async function upsertVideo(
     };
     videos[idx] = merged;
     await atomicWrite(VIDEOS_FILE, videos);
+    await writeArchiveState("videos", videos);
     return merged;
   }
 
@@ -307,6 +310,7 @@ export async function upsertVideo(
   };
   videos.push(record);
   await atomicWrite(VIDEOS_FILE, videos);
+  await writeArchiveState("videos", videos);
   return record;
 }
 
@@ -321,13 +325,18 @@ export async function updateVideo(
   const updated = { ...videos[idx], ...patch } as YoutubeVideoRecord;
   videos[idx] = updated;
   await atomicWrite(VIDEOS_FILE, videos);
+  await writeArchiveState("videos", videos);
   return updated;
 }
 
 // ─── Segments ─────────────────────────────────────────────────────────────────
 
 export async function getAllSegments(): Promise<SermonSegment[]> {
-  return readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
+  const durable = await readArchiveState<SermonSegment[]>("segments");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<SermonSegment[]>(SEGMENTS_FILE, []);
+  if (fromFile.length) await writeArchiveState("segments", fromFile);
+  return fromFile;
 }
 
 export async function getSegmentsForVideo(videoId: string): Promise<SermonSegment[]> {
@@ -360,7 +369,9 @@ export async function replaceSegments(
     ...s,
     id: randomUUID(),
   }));
-  await atomicWrite(SEGMENTS_FILE, [...kept, ...created]);
+  const next = [...kept, ...created];
+  await atomicWrite(SEGMENTS_FILE, next);
+  await writeArchiveState("segments", next);
   return created;
 }
 
@@ -373,13 +384,18 @@ export async function updateSegment(
   if (idx >= 0) {
     segments[idx] = { ...segments[idx], ...patch } as SermonSegment;
     await atomicWrite(SEGMENTS_FILE, segments);
+    await writeArchiveState("segments", segments);
   }
 }
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
 
 export async function getAllJobs(): Promise<ImportJob[]> {
-  return readJsonFile<ImportJob[]>(JOBS_FILE, []);
+  const durable = await readArchiveState<ImportJob[]>("jobs");
+  if (durable) return durable;
+  const fromFile = await readJsonFile<ImportJob[]>(JOBS_FILE, []);
+  if (fromFile.length) await writeArchiveState("jobs", fromFile);
+  return fromFile;
 }
 
 export async function getJob(id: string): Promise<ImportJob | null> {
@@ -407,6 +423,7 @@ export async function createJob(
   // Prune old completed/failed jobs beyond 50
   const pruned = jobs.slice(-50);
   await atomicWrite(JOBS_FILE, pruned);
+  await writeArchiveState("jobs", pruned);
   return job;
 }
 
@@ -423,6 +440,7 @@ export async function updateJob(
       updatedAt: new Date().toISOString(),
     } as ImportJob;
     await atomicWrite(JOBS_FILE, jobs);
+    await writeArchiveState("jobs", jobs);
   }
 }
 
