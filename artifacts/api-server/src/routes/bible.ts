@@ -1512,7 +1512,7 @@ router.get("/bible/study-stats", async (req: Request, res: Response) => {
   const filterBook = String(req.query.bookId ?? "").trim().toLowerCase() || null;
   const targetBooks = filterBook
     ? [filterBook]
-    : ["luke","acts","romans","1corinthians","2corinthians","psalms"]; // default to 6 target books
+    : Object.keys(BOOK_CHAPTER_COUNTS); // report coverage for all 66 Bible books
 
   try {
     const [introRes, overviewRes, noteRes] = await Promise.all([

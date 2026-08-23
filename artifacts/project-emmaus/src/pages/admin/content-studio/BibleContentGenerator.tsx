@@ -6,8 +6,9 @@
  * (overview + all passage notes). Content enters as Draft, never auto-publishes.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '@/lib/api';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Sparkles, BookOpen, ChevronDown, Check,
@@ -28,14 +29,19 @@ type GenerationResult = {
   passages?: unknown[];
 };
 
-const BOOKS: { id: string; name: string; chapters: number }[] = [
-  { id: 'luke',         name: 'Luke',           chapters: 24  },
-  { id: 'acts',         name: 'Acts',           chapters: 28  },
-  { id: 'romans',       name: 'Romans',         chapters: 16  },
-  { id: '1corinthians', name: '1 Corinthians',  chapters: 16  },
-  { id: '2corinthians', name: '2 Corinthians',  chapters: 13  },
-  { id: 'psalms',       name: 'Psalms',         chapters: 150 },
-];
+type BookStats = {
+  bookId: string;
+  totalChapters: number;
+  bookIntroStatus: string | null;
+  chaptersWithOverview: number;
+  chaptersWithPassages: number;
+};
+
+const BOOKS = BIBLE_BOOKS.map(book => ({
+  id: book.id,
+  name: book.name,
+  chapters: book.chapters,
+}));
 
 const GEN_TYPES: { id: GenerateType; label: string; description: string }[] = [
   {
@@ -187,6 +193,49 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<BookStats[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(getApiUrl('/api/bible/study-stats'))
+      .then(response => response.ok ? response.json() : [])
+      .then(data => {
+        if (!cancelled) setStats(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        // The generator remains usable if coverage stats are temporarily unavailable.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const statByBook = useMemo(
+    () => new Map(stats.map(stat => [stat.bookId, stat])),
+    [stats],
+  );
+
+  function isComplete(book: typeof BOOKS[number]) {
+    const stat = statByBook.get(book.id);
+    if (!stat) return false;
+    if (genType === 'book-intro') return Boolean(stat.bookIntroStatus);
+    if (genType === 'chapter-overview') {
+      return stat.chaptersWithOverview >= book.chapters;
+    }
+    return stat.chaptersWithOverview >= book.chapters
+      && stat.chaptersWithPassages >= book.chapters;
+  }
+
+  const orderedBooks = useMemo(() => {
+    return [...BOOKS].sort((a, b) => Number(isComplete(a)) - Number(isComplete(b)));
+  }, [genType, statByBook]);
+
+  useEffect(() => {
+    if (initialBookId && BOOKS.some(book => book.id === initialBookId)) {
+      setBookId(initialBookId);
+      return;
+    }
+    const firstIncomplete = orderedBooks.find(book => !isComplete(book));
+    if (firstIncomplete) setBookId(firstIncomplete.id);
+  }, [initialBookId, orderedBooks, genType]);
 
   const selectedBook = BOOKS.find(b => b.id === bookId) ?? BOOKS[0];
   const chapterOptions = Array.from({ length: selectedBook.chapters }, (_, i) => ({
@@ -274,7 +323,10 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
             label="Book"
             value={bookId}
             onChange={v => { setBookId(v); setChapter(1); setResult(null); }}
-            options={BOOKS.map(b => ({ value: b.id, label: b.name }))}
+            options={orderedBooks.map(b => ({
+              value: b.id,
+              label: isComplete(b) ? `✓ ${b.name} — complete` : `${b.name} — needs work`,
+            }))}
             disabled={generating}
           />
           {needsChapter && (
