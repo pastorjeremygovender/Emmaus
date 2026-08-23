@@ -98,8 +98,33 @@ function Select({
 
 function ResultSummary({ result }: { result: GenerationResult }) {
   if (result.type === 'book-intro') {
-    type RecordShape = { genre?: string; testament?: string; date_range?: string; major_themes?: string[] };
+    type OutlineItem = { section?: string; chapters?: string; description?: string };
+    type RecordShape = {
+      book_name?: string;
+      testament?: string;
+      genre?: string;
+      author_attribution?: string;
+      date_range?: string;
+      original_audience?: string;
+      historical_setting?: string;
+      purpose?: string;
+      major_themes?: string[];
+      key_people?: string[];
+      key_places?: string[];
+      outline?: OutlineItem[];
+      key_passages?: string[];
+      points_to_jesus?: string;
+      interpretation_notes?: string;
+    };
     const rec = result.record as RecordShape | undefined;
+    const textFields: Array<[string, string | undefined]> = [
+      ['Author / Attribution', rec?.author_attribution],
+      ['Original Audience', rec?.original_audience],
+      ['Historical Setting', rec?.historical_setting],
+      ['Purpose', rec?.purpose],
+      ['How This Points to Jesus', rec?.points_to_jesus],
+      ['Interpretation Notes', rec?.interpretation_notes],
+    ];
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-green-700">
@@ -115,6 +140,59 @@ function ResultSummary({ result }: { result: GenerationResult }) {
               <p><span className="text-gray-500">Themes: </span>{rec.major_themes.slice(0, 4).join(', ')}</p>
             ) : null}
           </div>
+        )}
+        {rec && (
+          <details className="border border-gray-200 rounded-lg">
+            <summary className="cursor-pointer px-3 py-2.5 text-[12px] font-semibold text-gray-700">
+              View all populated fields
+            </summary>
+            <div className="border-t border-gray-100 px-3 py-3 space-y-3 text-[12px]">
+              {textFields.map(([label, value]) => value ? (
+                <div key={label}>
+                  <p className="font-medium text-gray-500 mb-0.5">{label}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{value}</p>
+                </div>
+              ) : null)}
+              {rec.major_themes?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Major Themes</p>
+                  <p className="text-gray-700">{rec.major_themes.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_people?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key People</p>
+                  <p className="text-gray-700">{rec.key_people.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_places?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key Places</p>
+                  <p className="text-gray-700">{rec.key_places.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.key_passages?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-0.5">Key Passages</p>
+                  <p className="text-gray-700">{rec.key_passages.join(', ')}</p>
+                </div>
+              ) : null}
+              {rec.outline?.length ? (
+                <div>
+                  <p className="font-medium text-gray-500 mb-1">Outline</p>
+                  <div className="space-y-1.5">
+                    {rec.outline.map((item, index) => (
+                      <div key={`${item.section ?? 'section'}-${index}`} className="text-gray-700">
+                        <span className="font-medium">{item.section}</span>
+                        {item.chapters ? ` (${item.chapters})` : ''}
+                        {item.description ? ` — ${item.description}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </details>
         )}
       </div>
     );
