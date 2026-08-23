@@ -544,7 +544,9 @@ function CrossRefAdmin({ headers }: { headers: Record<string, string> }) {
           <div className="py-12 text-center">
             <Link2 size={32} className="text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-[14px] text-muted-foreground">No cross references yet.</p>
-            <p className="text-[13px] text-muted-foreground mt-1">Add pairs to link related verses in the study panel.</p>
+            <p className="text-[13px] text-muted-foreground mt-1">
+              Add canonical passage links here. AI-generated suggestions remain attached to Draft passage notes until you review and add them.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">

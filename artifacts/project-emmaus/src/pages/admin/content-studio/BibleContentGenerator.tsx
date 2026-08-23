@@ -216,7 +216,8 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
   function isComplete(book: typeof BOOKS[number]) {
     const stat = statByBook.get(book.id);
     if (!stat) return false;
-    if (genType === 'book-intro') return Boolean(stat.bookIntroStatus);
+    // Draft content still needs review and must not be presented as complete.
+    if (genType === 'book-intro') return stat.bookIntroStatus === 'Published';
     if (genType === 'chapter-overview') {
       return stat.chaptersWithOverview >= book.chapters;
     }
@@ -325,7 +326,11 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
             onChange={v => { setBookId(v); setChapter(1); setResult(null); }}
             options={orderedBooks.map(b => ({
               value: b.id,
-              label: isComplete(b) ? `✓ ${b.name} — complete` : `${b.name} — needs work`,
+              label: isComplete(b)
+                ? `✓ ${b.name} — published`
+                : statByBook.get(b.id)?.bookIntroStatus === 'Draft' && genType === 'book-intro'
+                  ? `${b.name} — Draft to review`
+                  : `${b.name} — needs work`,
             }))}
             disabled={generating}
           />
@@ -418,7 +423,9 @@ export default function BibleContentGenerator({ initialBookId }: Props) {
         <p className="text-[12px] font-semibold text-amber-800 mb-1">Workflow reminder</p>
         <p className="text-[12px] text-amber-700 leading-[1.6]">
           All generated content starts as <strong>Draft</strong>. Review each record in Bible Study admin,
-          edit where needed, then publish. Never approve without reading — AI can occasionally misstate dates,
+          edit where needed, then publish. Book introductions appear in the <strong>Book Intros</strong> tab.
+          Full-chapter generation keeps suggested cross-references with each passage note; they do not appear
+          in the separate canonical <strong>Cross References</strong> table until added there. Never approve without reading — AI can occasionally misstate dates,
           people, or make forced connections.
         </p>
       </div>
