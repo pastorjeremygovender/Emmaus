@@ -165,7 +165,12 @@ export async function requestAudioUploadUrl(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(file),
   });
-  if (!res.ok) throw new Error(`Failed to get upload URL: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      (body as { error?: string }).error ?? `Failed to get upload URL: ${res.status}`,
+    );
+  }
   return res.json();
 }
 

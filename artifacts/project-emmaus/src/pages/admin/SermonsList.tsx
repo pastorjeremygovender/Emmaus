@@ -100,6 +100,56 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
     return `${(b / 1024 / 1024).toFixed(1)} MB`;
   }
 
+/**
+ * Upload directly to the presigned object-storage URL.
+ *
+ * Mobile connections can briefly drop while sending a large recording, so
+ * retry once before surfacing the error. Keep the status detail because a
+ * generic "upload failed" message makes storage/CORS/session problems
+ * impossible to diagnose from the admin UI.
+ */
+async function uploadAudioFile(
+  uploadURL: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  let lastError: Error = new Error('Audio upload failed');
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadURL);
+        xhr.timeout = 15 * 60 * 1000;
+        xhr.setRequestHeader('Content-Type', file.type || 'audio/mpeg');
+        xhr.upload.addEventListener('progress', e => {
+          if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+        });
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Storage upload failed (${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Storage upload could not reach object storage.'));
+        xhr.ontimeout = () => reject(new Error('Storage upload timed out.'));
+        xhr.onabort = () => reject(new Error('Storage upload was interrupted.'));
+        xhr.send(file);
+      });
+      return;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < 2) {
+        onProgress(0);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
   function handleNewAudioSelect(f: File) {
     setNewAudioError('');
     if (!ACCEPTED_MIMES.some(m => f.type === m) && !/\.(mp3|m4a|wav|mp4|mpeg|webm)$/i.test(f.name)) {
@@ -267,19 +317,11 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
           size:        newAudioFile.size,
           contentType: newAudioFile.type || 'audio/mpeg',
         });
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('PUT', uploadURL);
-          xhr.setRequestHeader('Content-Type', newAudioFile.type || 'audio/mpeg');
-          xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable) setNewUploadProgress(Math.round(e.loaded / e.total * 100));
-          });
-          xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`));
-          xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.send(newAudioFile);
-        });
+        await uploadAudioFile(uploadURL, newAudioFile, setNewUploadProgress);
       } catch (uploadErr) {
-        setNewError('Audio upload failed. Please try again.');
+        setNewError(uploadErr instanceof Error
+          ? `${uploadErr.message} Please try again.`
+          : 'Audio upload failed. Please try again.');
         setNewCreateStep('form');
         return;
       }
