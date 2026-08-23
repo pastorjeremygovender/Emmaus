@@ -102,3 +102,8 @@ export function clearLocalProgressCache(subject: string): void {
   }
   keysToRemove.forEach(k => localStorage.removeItem(k));
 }
+
+/** Allow an admin to replay the first-opening-of-the-day launch without changing progress. */
+export function clearDailyOpenMarker(subject: string): void {
+  localStorage.removeItem(`emmaus_account:${subject}:emmaus_last_opened_v2`);
+}

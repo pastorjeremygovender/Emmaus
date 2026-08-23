@@ -18,6 +18,7 @@ import {
   resetJourney,
   resetEverything,
   clearLocalProgressCache,
+  clearDailyOpenMarker,
   type ResetContentList,
 } from '@/lib/admin-reset-api';
 import {
@@ -140,6 +141,19 @@ export default function Testing() {
   const [rhythmState, setRhythmState] = useState<ActionState>('idle');
   const [rhythmError, setRhythmError] = useState<string | undefined>();
   const [rhythmConfirm, setRhythmConfirm] = useState(false);
+  const [dailyOpenState, setDailyOpenState] = useState<ActionState>('idle');
+  const [dailyOpenError, setDailyOpenError] = useState<string | undefined>();
+
+  const handleDailyOpenReset = () => {
+    try {
+      clearDailyOpenMarker(auth.userId);
+      setDailyOpenError(undefined);
+      setDailyOpenState('done');
+    } catch (err) {
+      setDailyOpenError(err instanceof Error ? err.message : 'Reset failed');
+      setDailyOpenState('error');
+    }
+  };
 
   const handleRhythmReset = async () => {
     setRhythmConfirm(false);
@@ -315,6 +329,26 @@ export default function Testing() {
                 </span>
               </ResetBtn>
               <StatusPill state={rhythmState} errorMsg={rhythmError} />
+            </div>
+          </SectionCard>
+
+          {/* ── Section 1b: Daily open marker ───────────────────────────────── */}
+          <SectionCard>
+            <SectionTitle
+              label="Replay First Opening Today"
+              sub="Clears only this account's automatic Daily Rhythm opening marker in this browser. Progress, enrollment, and completion history are not changed."
+            />
+            <div className="flex items-center gap-4 pt-1">
+              <ResetBtn
+                onClick={handleDailyOpenReset}
+                disabled={dailyOpenState === 'loading'}
+              >
+                <span className="flex items-center gap-1.5">
+                  <RotateCcw size={13} />
+                  Replay Today's First Open
+                </span>
+              </ResetBtn>
+              <StatusPill state={dailyOpenState} errorMsg={dailyOpenError} />
             </div>
           </SectionCard>
 
