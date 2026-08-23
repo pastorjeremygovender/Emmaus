@@ -20,7 +20,7 @@
 
 import React, { useEffect, useState } from 'react';
 import {
-  Sun, BookHeart, Map, Mic2,
+  Sun, BookHeart, Map, Mic2, Video,
   FolderOpen, BookOpen, Layers2,
   ChevronRight, X, Upload,
 } from 'lucide-react';
@@ -104,6 +104,7 @@ const TOP_NAV: TopTab[] = [
   { id: 'journeys',     label: 'Journeys',          Icon: FolderOpen },
   { id: 'groupings',    label: 'Groupings',         Icon: Layers2    },
   { id: 'sermons',      label: 'Sermons',           Icon: Mic2       },
+  { id: 'media',        label: 'Media Studio',      Icon: Video      },
 ];
 
 // Map view.id → top-tab id
@@ -129,6 +130,11 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   'journey-day-editor':         'journeys',
   'sermons':                    'sermons',
   'sermon-editor':              'sermons',
+  // Media Studio tab — YouTube Archive and media kit library
+  'youtube-archive':            'media',
+  'media':                      'media',
+  'kit-wizard':                 'media',
+  'kit-editor':                 'media',
   // Groupings tab
   'groupings':                  'groupings',
   'group-editor':               'groupings',
@@ -141,6 +147,7 @@ const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   'walks':        { id: 'journeys-library' },
   'journeys':     { id: 'journeys-collections' },
   'sermons':      { id: 'sermons' },
+  'media':        { id: 'youtube-archive' },
   'groupings':    { id: 'groupings' },
 };
 
