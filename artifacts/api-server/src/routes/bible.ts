@@ -205,8 +205,14 @@ function isValidTranslation(id: string): boolean {
 
 import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
 
-router.get("/bible/book-intro/:bookId", (req, res) => {
+router.get("/bible/book-intro/:bookId", (req, res, next) => {
   const bookId = String(req.params.bookId).toLowerCase().trim();
+  // Keep the literal admin collection route reachable below. Express treats
+  // /admin as a valid :bookId unless this dynamic route explicitly passes it on.
+  if (bookId === "admin") {
+    next();
+    return;
+  }
   const intro = BOOK_INTROS[bookId];
   if (!intro) {
     res.status(404).json({ error: "No intro available for this book" });

@@ -55,6 +55,10 @@ async function post(path: string, body: unknown, headers = adminHeaders) {
   });
 }
 
+async function get(path: string, headers = adminHeaders) {
+  return fetch(`${baseUrl}${path}`, { headers });
+}
+
 before(async () => {
   const [{ default: express }, { authMiddleware }, { default: bibleRouter }] =
     await Promise.all([
@@ -121,6 +125,13 @@ after(async () => {
 });
 
 describe("Bulk Bible Study Import API", () => {
+  it("keeps the admin book-intro collection route ahead of the dynamic member route", async () => {
+    const response = await get("/api/bible/book-intro/admin");
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as unknown;
+    assert.ok(Array.isArray(body));
+  });
+
   it("requires a real authenticated admin role", async () => {
     const anonymous = await post(
       "/api/bible/study-import/preview",

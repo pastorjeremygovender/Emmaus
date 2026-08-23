@@ -63,6 +63,7 @@ Returns a single text blob with inline `[N]` or `[N-M]` markers.
 
 ## Key Decisions
 - **`process.cwd()` not `import.meta.url`** for DATA_DIR in compiled bundle
+- **Literal admin routes must bypass dynamic member routes** — Express will otherwise treat `/book-intro/admin` as `bookId = "admin"` and return the member-route 404 before admin handlers run.
 - **Strict allowlist** for bookId (66 canonical IDs) and translationId before any filesystem access
 - **KJV local data kept** — `kjv-luke.ts` and `kjv-john.ts` still used for Walk journey chapter headings and reading-minute estimates (separate from the full KJV served via API)
 - **Search limited to local translations** — API.Bible search not implemented; search route returns 400 for licensed IDs
