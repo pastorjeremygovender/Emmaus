@@ -537,6 +537,10 @@ export default function Walk() {
   useEffect(() => {
     if (loading) return;                          // wait for real data
     if (!user || user.role === 'admin' || user.role === 'superAdmin') return;
+    // On a cold /walk load, auth can resolve before JourneyContext has begun
+    // its authenticated fetch. Do not consume the one-shot guard against the
+    // initial empty context; retry when the published journey list arrives.
+    if (journeys.length === 0) return;
     if (dailyOpenCheckedRef.current) return;      // only run once per mount
     dailyOpenCheckedRef.current = true;
 

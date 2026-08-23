@@ -64,5 +64,5 @@
 - [TypeScript source test runtime](typescript-source-test-runtime.md) — API source-graph tests need tsx/esm because Node type stripping does not remap emitted .js specifiers to .ts.
 - [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.
 - [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual grouped browsing; first-open direct-to-day routing stays unchanged.
-- [Overnight PWA launch](overnight-pwa-launch.md) — a retained PWA can cross midnight without remounting; date-aware re-entry must send normal home back through Daily Rhythm routing.
+- [Daily launch cold-start race](daily-launch-cold-start-race.md) — cold /walk loads can consume the one-shot check before authenticated journeys arrive; route through Welcome and retry only with real data.
 - [Bible Study coverage queue](bible-study-coverage-queue.md) — generation and progress views must use the canonical 66-book catalogue and prioritize unfinished coverage, not a seed-book shortlist.

@@ -131,10 +131,12 @@ function Router() {
   useEffect(() => {
     if (!_startupChecked) {
       _startupChecked = true;
-      // If the browser has loaded directly onto any tab path (root or deep),
-      // redirect through Welcome so that auth, profile loading, onboarding
-      // and the daily-open route runs normally.
-      if (isTabPath(location)) {
+      // If the browser has loaded directly onto a member tab or Today's Steps,
+      // redirect through Welcome so that auth, profile loading, onboarding and
+      // the daily-open route run with fully loaded context data. This matters
+      // especially for a cold /walk load, where Walk can otherwise mount
+      // before the authenticated journey list arrives.
+      if (isTabPath(location) || location === '/walk') {
         setLocation('/');
       }
     }
