@@ -7,7 +7,7 @@
  * Supported markers (case-insensitive):
  *   BOOK, CHAPTER, TITLE, CHAPTER_OVERVIEW, PASSAGE
  *
- * Supported study-field labels (aliases supported):
+ * Supported study-field labels (legacy aliases supported):
  *   EXPLANATION
  *   PASSAGE_CONTEXT  | CONTEXT
  *   HISTORICAL_BACKGROUND | HISTORICAL_NOTE
@@ -107,7 +107,7 @@ const BOOK_ALIASES: Record<string, string> = {
 
 // ─── Study field label → canonical DB column ──────────────────────────────────
 
-/** Maps every accepted label variant (uppercased) to the DB column name */
+/** Maps every accepted schema label and legacy alias (uppercased) to the DB column name. */
 const FIELD_LABEL_MAP: Record<string, string> = {
   "EXPLANATION": "content",
   "PASSAGE_CONTEXT": "context_note",
@@ -680,12 +680,13 @@ export async function parseBulkImport(
     // ── Detect study-field labels ─────────────────────────────────────────────
     // Pattern A:  LABEL: value on same line  (case-insensitive)
     // Pattern B:  LABEL  (alone on line, value follows on next lines)
-    const fieldColonMatch = trimmed.match(/^([A-Za-z][A-Za-z _-]*?)\s*:\s*(.*)/);
+    const fieldColonMatch = trimmed.match(/^([A-Za-z][A-Za-z0-9 _-]*?)\s*:\s*(.*)/);
     const fieldAloneMatch = !fieldColonMatch
-      ? trimmed.match(/^([A-Za-z][A-Za-z _-]+)\s*$/)
+      ? trimmed.match(/^([A-Za-z][A-Za-z0-9 _-]+)\s*$/)
       : null;
 
-    const rawLabel = (fieldColonMatch?.[1] ?? fieldAloneMatch?.[1] ?? "")
+    const rawLabelText = (fieldColonMatch?.[1] ?? fieldAloneMatch?.[1] ?? "").trim();
+    const rawLabel = rawLabelText
       .trim()
       .toUpperCase()
       .replace(/[\s-]+/g, "_");
@@ -693,9 +694,19 @@ export async function parseBulkImport(
     const standaloneLooksLikeLabel =
       Boolean(fieldAloneMatch) &&
       fieldAloneMatch![1].trim() === fieldAloneMatch![1].trim().toUpperCase();
+    // Preserve protection against obvious schema typos without interpreting
+    // normal prose such as "His message is urgent:" as a control marker.
+    const unknownTokenLooksLikeLabel =
+      Boolean(fieldColonMatch || fieldAloneMatch) &&
+      rawLabelText === rawLabelText.toUpperCase() &&
+      /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(rawLabel);
     const resolvedColumn = rawLabel ? resolveFieldLabel(rawLabel) : null;
 
-    if (rawLabel && (Boolean(fieldColonMatch) || resolvedColumn || standaloneLooksLikeLabel)) {
+    if (
+      rawLabel &&
+      (resolvedColumn || unknownTokenLooksLikeLabel ||
+        (Boolean(fieldAloneMatch) && standaloneLooksLikeLabel && resolvedColumn))
+    ) {
       // Check it isn't a structural marker (already handled above)
       if (!STRUCTURAL_MARKERS.has(rawLabel)) {
         const column = resolvedColumn;

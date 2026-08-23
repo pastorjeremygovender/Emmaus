@@ -705,7 +705,7 @@ EXPLANATION: This is before any passage marker.
 });
 
 describe("parseBulkImport — unknown label", () => {
-  it("reports UNKNOWN_LABEL warning for unrecognised uppercase label", async () => {
+  it("keeps ordinary unknown prose with a colon inside the active field", async () => {
     const text = `
 BOOK: John
 CHAPTER: 1
@@ -715,18 +715,14 @@ FOOBAR: This is an unknown label.
 `.trim();
 
     const result = await parseBulkImport(text);
-    // Unknown label → warning, not error
     const warnCodes = result.warnings.map((w) => w.code);
-    assert.ok(warnCodes.includes("UNKNOWN_LABEL"), `warnings: ${warnCodes.join(", ")}`);
-    // Content from unknown label must NOT appear in fields
+    assert.ok(!warnCodes.includes("UNKNOWN_LABEL"));
     const fields = result.books[0]?.chapters[0]?.passages[0]?.fields ?? {};
-    assert.ok(!("foobar" in fields));
-    assert.ok(
-      !Object.values(fields).some((v) => v.includes("unknown label")),
-    );
+    assert.match(fields["content"], /Known field\./);
+    assert.match(fields["content"], /FOOBAR: This is an unknown label\./);
   });
 
-  it("does not treat unknown label content as part of a known field", async () => {
+  it("warns for an obvious underscore-token schema typo", async () => {
     const text = `
 BOOK: John
 CHAPTER: 1
@@ -746,6 +742,44 @@ KEY_TRUTH: The truth.
     for (const v of Object.values(fields)) {
       assert.ok(!v.includes("Should be ignored"));
     }
+  });
+});
+
+describe("parseBulkImport — prose colons", () => {
+  it("preserves prose ending in colons and does not emit UNKNOWN_LABEL", async () => {
+    const text = `
+BOOK: Matthew
+CHAPTER: 4
+PASSAGE: Matthew 4:1-11
+EXPLANATION:
+His message is urgent:
+Repent, because the Kingdom of Heaven has come near.
+His message is clear:
+Jesus sees Simon Peter and Andrew fishing and says:
+"Follow Me."
+The tempter repeatedly challenges His identity:
+His instruction is simple:
+The disciples ask:
+Jesus sees Matthew sitting at his tax booth and says:
+"Follow Me."
+`.trim();
+
+    const result = await parseBulkImport(text);
+    assert.equal(result.valid, true);
+    assert.equal(result.warnings.filter(w => w.code === "UNKNOWN_LABEL").length, 0);
+    assert.equal(
+      result.books[0].chapters[0].passages[0].fields.content,
+      `His message is urgent:
+Repent, because the Kingdom of Heaven has come near.
+His message is clear:
+Jesus sees Simon Peter and Andrew fishing and says:
+"Follow Me."
+The tempter repeatedly challenges His identity:
+His instruction is simple:
+The disciples ask:
+Jesus sees Matthew sitting at his tax booth and says:
+"Follow Me."`,
+    );
   });
 });
 
