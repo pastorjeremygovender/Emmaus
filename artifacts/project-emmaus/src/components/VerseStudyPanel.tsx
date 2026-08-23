@@ -381,12 +381,6 @@ function PreachedHereSection({ sermons }: { sermons: PreachedHereSermon[] }) {
   );
 }
 
-// ─── Books that have study notes in the database ─────────────────────────────
-// Update this list whenever new books are seeded.
-const BOOKS_WITH_NOTES = new Set([
-  'luke', 'acts', 'romans', '1corinthians', '2corinthians', 'psalms',
-]);
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface VerseStudyPanelProps {
@@ -576,9 +570,7 @@ export function VerseStudyPanel({ verse, open, onClose }: VerseStudyPanelProps) 
                       No study notes yet for this passage
                     </p>
                     <p className="text-[13px] text-muted-foreground">
-                      {verse && BOOKS_WITH_NOTES.has(verse.bookId)
-                        ? `Notes are available for parts of ${verse.bookName} — this passage hasn't been covered yet.`
-                        : `We're working on adding notes for ${verse?.bookName ?? 'this book'}. Check back soon.`}
+                      Notes are available for some passages in {verse?.bookName ?? 'this book'} — this passage hasn't been covered yet.
                     </p>
                   </div>
                 )}
