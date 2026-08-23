@@ -1116,6 +1116,7 @@ router.post("/youtube-archive/videos/:id/generate-audio", async (req: Request, r
     try {
       await updateJob(job.id, { status: "running" });
       const sermonStart = video.finalSermonStartSeconds ?? 0;
+      const sermonEnd = video.manualSermonEndSeconds;
 
       // Always re-download when triggered from the admin — ensures a changed
       // sermon start (manualSermonStartSeconds) produces a fresh trim.
@@ -1124,6 +1125,7 @@ router.post("/youtube-archive/videos/:id/generate-audio", async (req: Request, r
         youtubeVideoId: video.youtubeVideoId,
         youtubeUrl: video.youtubeUrl,
         sermonStartSeconds: sermonStart,
+        sermonEndSeconds: sermonEnd,
         force: true,
         onProgress: (pct) => {
           updateJob(job.id, { progress: { total: 100, done: pct, failed: 0 } }).catch(() => {});

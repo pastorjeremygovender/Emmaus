@@ -52,6 +52,7 @@ export interface AudioGenerateOptions {
   youtubeVideoId: string;       // YouTube video id (e.g. "dQw4w9WgXcQ")
   youtubeUrl: string;           // full watch URL
   sermonStartSeconds: number;   // where to trim from
+  sermonEndSeconds?: number;    // optional absolute end point in the source video
   /** When true, delete any existing MP3 and re-download/re-trim. Use when sermon start timing changed. */
   force?: boolean;
   onProgress?: (percent: number) => void;
@@ -113,6 +114,7 @@ export async function generateSermonAudio(
     await downloadAndTrimAudio({
       youtubeUrl: options.youtubeUrl,
       sermonStartSeconds: options.sermonStartSeconds,
+      sermonEndSeconds: options.sermonEndSeconds,
       outputPath: tmpPath,
       onProgress: options.onProgress,
     });
@@ -147,6 +149,7 @@ export async function generateSermonAudio(
 interface DownloadOptions {
   youtubeUrl: string;
   sermonStartSeconds: number;
+  sermonEndSeconds?: number;
   outputPath: string;
   onProgress?: (percent: number) => void;
 }
@@ -182,6 +185,10 @@ function downloadAndTrimAudio(opts: DownloadOptions): Promise<void> {
       .audioFrequency(44100)
       .toFormat("mp3")
       .output(opts.outputPath);
+
+    if (opts.sermonEndSeconds !== undefined && opts.sermonEndSeconds > opts.sermonStartSeconds) {
+      ff.duration(opts.sermonEndSeconds - opts.sermonStartSeconds);
+    }
 
     if (opts.onProgress) {
       ff.on("progress", (progress) => {

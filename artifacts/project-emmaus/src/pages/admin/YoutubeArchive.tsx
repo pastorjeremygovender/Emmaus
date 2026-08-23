@@ -182,6 +182,7 @@ function VideoDetail({
   const [editDate, setEditDate] = useState('');
   const [editSeries, setEditSeries] = useState('');
   const [editSermonStart, setEditSermonStart] = useState('');
+  const [editSermonEnd, setEditSermonEnd] = useState('');
   const [savingSermonStart, setSavingSermonStart] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -195,6 +196,7 @@ function VideoDetail({
       setEditDate(v.sermonDate ?? '');
       setEditSeries(v.series ?? '');
       setEditSermonStart(v.manualSermonStartSeconds !== undefined ? String(v.manualSermonStartSeconds) : '');
+      setEditSermonEnd(v.manualSermonEndSeconds !== undefined ? String(v.manualSermonEndSeconds) : String(v.durationSeconds));
       const segs = await getSegments(videoId);
       setSegments(segs.segments);
     } catch (e) {
@@ -236,7 +238,11 @@ function VideoDetail({
     setSavingSermonStart(true);
     try {
       const seconds = editSermonStart ? parseInt(editSermonStart, 10) : undefined;
-      await updateVideo(video.id, { manualSermonStartSeconds: seconds, sermonStartVerified: true });
+      const end = editSermonEnd ? parseInt(editSermonEnd, 10) : undefined;
+      if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0 || (end !== undefined && (!Number.isFinite(end) || end <= seconds || end > video.durationSeconds))) {
+        throw new Error('Please set a valid range: start must be before the end and both must fit inside the video.');
+      }
+      await updateVideo(video.id, { manualSermonStartSeconds: seconds, manualSermonEndSeconds: end, sermonStartVerified: true });
       await load();
       onUpdated();
     } catch (e) {
@@ -501,6 +507,50 @@ function VideoDetail({
           </div>
         )}
 
+        <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[12px] font-medium text-gray-700">Mark the sermon section</div>
+              <div className="text-[11px] text-gray-500">Drag the handles to set where the sermon starts and ends in the service.</div>
+            </div>
+            <div className="text-[12px] font-mono text-violet-700 whitespace-nowrap">
+              {formatTimestamp(parseInt(editSermonStart || '0', 10))} – {formatTimestamp(parseInt(editSermonEnd || String(video.durationSeconds), 10))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="flex justify-between text-[11px] text-gray-500 mb-1">
+              <span>Start · {formatTimestamp(parseInt(editSermonStart || '0', 10))}</span>
+              <span>0:00 – {formatDuration(video.durationSeconds)}</span>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max={video.durationSeconds}
+              step="1"
+              value={Math.min(video.durationSeconds, Math.max(0, parseInt(editSermonStart || '0', 10)))}
+              onChange={(e) => setEditSermonStart(e.target.value)}
+              className="w-full accent-violet-600"
+              aria-label="Sermon start"
+            />
+          </label>
+          <label className="block">
+            <span className="flex justify-between text-[11px] text-gray-500 mb-1">
+              <span>End · {formatTimestamp(parseInt(editSermonEnd || String(video.durationSeconds), 10))}</span>
+              <span>{formatDuration(video.durationSeconds)}</span>
+            </span>
+            <input
+              type="range"
+              min="1"
+              max={video.durationSeconds}
+              step="1"
+              value={Math.min(video.durationSeconds, Math.max(1, parseInt(editSermonEnd || String(video.durationSeconds), 10)))}
+              onChange={(e) => setEditSermonEnd(e.target.value)}
+              className="w-full accent-violet-600"
+              aria-label="Sermon end"
+            />
+          </label>
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="number"
@@ -510,6 +560,17 @@ function VideoDetail({
             placeholder="Seconds"
             value={editSermonStart}
             onChange={(e) => setEditSermonStart(e.target.value)}
+          />
+          <input
+            type="number"
+            min="1"
+            max={video.durationSeconds}
+            step="1"
+            className="border border-gray-200 rounded px-2 py-1.5 text-[13px] w-28 focus:outline-none focus:ring-1 focus:ring-teal-400"
+            placeholder="End seconds"
+            value={editSermonEnd}
+            onChange={(e) => setEditSermonEnd(e.target.value)}
+            aria-label="Sermon end seconds"
           />
           <button
             onClick={handleSaveSermonStart}
@@ -813,6 +874,16 @@ export default function YoutubeArchive() {
     }
   };
 
+  const handleReviewStatus = async (video: VideoRecord, reviewStatus: 'approved' | 'rejected') => {
+    try {
+      await updateVideo(video.id, { reviewStatus });
+      setVideos((current) => current.map((item) => item.id === video.id ? { ...item, reviewStatus } : item));
+      await loadStatus();
+    } catch (e) {
+      setStatusError(String(e));
+    }
+  };
+
   // Poll while pipeline is running
   useEffect(() => {
     if (!pipelineJobId || !pipelining) return;
@@ -995,15 +1066,35 @@ export default function YoutubeArchive() {
                       <Pill label={v.transcriptStatus} color={transcriptColor(v.transcriptStatus)} />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <a
-                        href={v.youtubeUrl}
-                        target="_blank"
-                        rel="noopener"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-gray-400 hover:text-gray-700 inline-flex"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
+                      <div className="inline-flex items-center gap-2">
+                        {v.reviewStatus === 'pending' && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleReviewStatus(v, 'approved'); }}
+                              className="text-green-600 hover:text-green-800 text-[11px] font-medium"
+                              title="Approve as sermon"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleReviewStatus(v, 'rejected'); }}
+                              className="text-red-500 hover:text-red-700 text-[11px] font-medium"
+                              title="Reject video"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        <a
+                          href={v.youtubeUrl}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-gray-400 hover:text-gray-700 inline-flex"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
