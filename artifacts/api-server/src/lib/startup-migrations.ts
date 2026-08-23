@@ -659,6 +659,48 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: bible_study_notes unique index failed (non-fatal)");
   }
 
+  // ── Bible: resumable AI generation queue (2026-08) ─────────────────────────
+  // These tables contain job state only. Generated Bible content continues to
+  // be written by the authenticated generation service as Draft.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bible_generation_jobs (
+        id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        scope       text NOT NULL CHECK (scope IN ('book-intros','study-sheets','both')),
+        force       boolean NOT NULL DEFAULT false,
+        status      text NOT NULL DEFAULT 'queued'
+          CHECK (status IN ('queued','running','paused','completed','failed')),
+        total       int NOT NULL DEFAULT 0,
+        completed   int NOT NULL DEFAULT 0,
+        skipped     int NOT NULL DEFAULT 0,
+        failed      int NOT NULL DEFAULT 0,
+        created_by  text NOT NULL DEFAULT '',
+        created_at  timestamp NOT NULL DEFAULT now(),
+        updated_at  timestamp NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS bible_generation_items (
+        id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id      uuid NOT NULL REFERENCES bible_generation_jobs(id) ON DELETE CASCADE,
+        item_type   text NOT NULL CHECK (item_type IN ('book-intro','chapter-batch')),
+        book_id     text NOT NULL,
+        chapter     int,
+        status      text NOT NULL DEFAULT 'queued'
+          CHECK (status IN ('queued','running','completed','skipped','failed')),
+        attempts    int NOT NULL DEFAULT 0,
+        last_error  text NOT NULL DEFAULT '',
+        locked_at   timestamp,
+        completed_at timestamp,
+        created_at  timestamp NOT NULL DEFAULT now(),
+        UNIQUE (job_id, item_type, book_id, chapter)
+      );
+      CREATE INDEX IF NOT EXISTS bible_generation_items_job_status_idx
+        ON bible_generation_items(job_id, status);
+    `);
+    logger.info("Startup migration: Bible generation queue ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: Bible generation queue failed (non-fatal)");
+  }
+
   // ── Bible: book introductions (2026-07) ────────────────────────────────────
   try {
     await pool.query(`
