@@ -1,7 +1,7 @@
 /**
  * BibleProgressDashboard
  *
- * Shows coverage stats per book for the 6 target books.
+ * Shows coverage stats for all 66 Bible books.
  * Provides a quick view of how much content has been generated,
  * reviewed, and published.
  */
@@ -14,6 +14,7 @@ import {
   TrendingUp, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BIBLE_BOOKS } from '@/lib/bible-data';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,14 +34,9 @@ type BookStats = {
   chaptersWithPassages: number;
 };
 
-const BOOK_NAMES: Record<string, string> = {
-  luke: 'Luke',
-  acts: 'Acts',
-  romans: 'Romans',
-  '1corinthians': '1 Corinthians',
-  '2corinthians': '2 Corinthians',
-  psalms: 'Psalms',
-};
+const BOOK_NAMES: Record<string, string> = Object.fromEntries(
+  BIBLE_BOOKS.map(book => [book.id, book.name]),
+);
 
 const STATUS_DOT: Record<string, string> = {
   Published:  'bg-green-500',

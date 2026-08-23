@@ -1488,7 +1488,7 @@ router.post("/bible/chapter-overview/admin/bulk-publish", async (req: Request, r
 // GET /api/bible/study-stats?bookId=   → admin: coverage stats per book (or single book)
 
 const BOOK_CHAPTER_COUNTS: Record<string, number> = {
-  genesis:49, exodus:40, leviticus:27, numbers:36, deuteronomy:34,
+  genesis:50, exodus:40, leviticus:27, numbers:36, deuteronomy:34,
   joshua:24, judges:21, ruth:4, "1samuel":31, "2samuel":24,
   "1kings":22, "2kings":25, "1chronicles":29, "2chronicles":36,
   ezra:10, nehemiah:13, esther:10, job:42, psalms:150, proverbs:31,
