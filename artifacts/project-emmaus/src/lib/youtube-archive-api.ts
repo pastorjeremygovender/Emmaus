@@ -56,6 +56,7 @@ export interface VideoRecord {
   sermonStartConfidence?: number;
   sermonStartMethod?: string;
   manualSermonStartSeconds?: number;
+  manualSermonEndSeconds?: number;
   sermonStartVerified?: boolean;
   finalSermonStartSeconds?: number;
   // Audio asset

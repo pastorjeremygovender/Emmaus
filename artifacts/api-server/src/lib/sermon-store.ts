@@ -82,6 +82,7 @@ export interface YoutubeVideoRecord {
   sermonStartConfidence?: number;
   sermonStartMethod?: "phrase" | "music-gap" | "duration-estimate";
   manualSermonStartSeconds?: number;
+  manualSermonEndSeconds?: number;
   sermonStartVerified?: boolean;
   finalSermonStartSeconds?: number; // = manualSermonStartSeconds ?? detectedSermonStartSeconds ?? 0
 

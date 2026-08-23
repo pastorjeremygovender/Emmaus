@@ -266,6 +266,7 @@ router.patch("/youtube-archive/videos/:id", async (req: Request, res: Response) 
     "scriptureReferences", "scriptureBookIds", "scriptureChapters",
     "topics", "keywords", "summary", "contentType",
     "manualSermonStartSeconds", "sermonStartVerified",
+    "manualSermonEndSeconds",
   ] as const;
   type AllowedKey = typeof allowed[number];
 
