@@ -18,7 +18,7 @@ import {
   resetJourney,
   resetEverything,
   clearLocalProgressCache,
-  clearDailyOpenMarker,
+  clearDailyOpenMarkers,
   type ResetContentList,
 } from '@/lib/admin-reset-api';
 import {
@@ -146,7 +146,7 @@ export default function Testing() {
 
   const handleDailyOpenReset = () => {
     try {
-      clearDailyOpenMarker(auth.userId);
+      clearDailyOpenMarkers();
       setDailyOpenError(undefined);
       setDailyOpenState('done');
     } catch (err) {
@@ -335,8 +335,8 @@ export default function Testing() {
           {/* ── Section 1b: Daily open marker ───────────────────────────────── */}
           <SectionCard>
             <SectionTitle
-              label="Replay First Opening Today"
-              sub="Clears only this account's automatic Daily Rhythm opening marker in this browser. Progress, enrollment, and completion history are not changed."
+              label="Prepare Next Member Launch"
+              sub="Clears automatic Daily Rhythm opening markers and the splash-session flag in this browser. Use this before switching to a member account to replay today's first-open route. Progress and completion history are not changed."
             />
             <div className="flex items-center gap-4 pt-1">
               <ResetBtn
@@ -345,7 +345,7 @@ export default function Testing() {
               >
                 <span className="flex items-center gap-1.5">
                   <RotateCcw size={13} />
-                  Replay Today's First Open
+                  Prepare First Open Test
                 </span>
               </ResetBtn>
               <StatusPill state={dailyOpenState} errorMsg={dailyOpenError} />

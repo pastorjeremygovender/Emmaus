@@ -103,7 +103,20 @@ export function clearLocalProgressCache(subject: string): void {
   keysToRemove.forEach(k => localStorage.removeItem(k));
 }
 
-/** Allow an admin to replay the first-opening-of-the-day launch without changing progress. */
-export function clearDailyOpenMarker(subject: string): void {
-  localStorage.removeItem(`emmaus_account:${subject}:emmaus_last_opened_v2`);
+/**
+ * Allow an admin to replay the first-opening-of-the-day launch without changing
+ * progress. The marker is browser-local and account-scoped, so clear every
+ * marker in this browser to support testing after switching from an admin
+ * account to a member account.
+ */
+export function clearDailyOpenMarkers(): void {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.endsWith(':emmaus_last_opened_v2')) keysToRemove.push(key);
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+
+  // Force the next root launch through the Welcome resolver in this browser.
+  sessionStorage.removeItem('emmaus_splash_shown');
 }
