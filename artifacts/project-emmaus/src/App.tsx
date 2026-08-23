@@ -11,6 +11,7 @@ import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
 import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
+import { localDateKey } from '@/lib/daily-lock';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -124,6 +125,8 @@ import { isTabPath } from '@/lib/tab-paths';
 
 function Router() {
   const [location, setLocation] = useLocation();
+  const lastVisibleDateRef = React.useRef(localDateKey());
+  const hiddenAtRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     if (!_startupChecked) {
@@ -137,6 +140,38 @@ function Router() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A PWA can remain mounted overnight, so the module-level startup guard
+  // does not run again when the user opens it the next morning. Re-enter
+  // through Welcome only after a genuine overnight gap; ordinary app
+  // switching, screen locking, and notification shade use must preserve the
+  // exact page the member was reading.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+
+      const today = localDateKey();
+      const hiddenFor = hiddenAtRef.current === null
+        ? 0
+        : Date.now() - hiddenAtRef.current;
+      const overnightGap = hiddenFor >= 60 * 60 * 1000;
+      const normalHome = location === '/' || location === '/walk';
+
+      if (today !== lastVisibleDateRef.current && overnightGap && normalHome) {
+        console.debug('[Emmaus routing] overnight re-entry → welcome');
+        setLocation('/');
+      }
+
+      lastVisibleDateRef.current = today;
+      hiddenAtRef.current = null;
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [location, setLocation]);
 
   return (
     <Switch>
