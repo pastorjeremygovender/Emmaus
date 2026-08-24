@@ -46,10 +46,10 @@ import { localDateKey } from '@/lib/daily-lock';
  * localStorage key that stores the ISO date (YYYY-MM-DD) of the last
  * successful Daily Rhythm auto-open.
  *
- * Key is versioned (_v2) so a stale value from an earlier buggy build
+ * Key is versioned (_v3) so a stale value from an earlier buggy build
  * (which wrote the date even when navigation failed) is never consulted.
  */
-const LAST_OPENED_KEY = 'emmaus_last_opened_v2';
+const LAST_OPENED_KEY = 'emmaus_last_opened_v3';
 
 // ─── Types (minimal duck-typed to avoid circular imports) ─────────────────────
 

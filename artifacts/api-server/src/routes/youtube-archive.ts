@@ -526,7 +526,7 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
       const allVideos = await getAllVideos();
       const toProcess = allVideos.filter(
         (v) =>
-          v.reviewStatus === "approved" &&
+          (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
           (v.transcriptStatus === "none" || v.transcriptStatus === "failed")
       );
 

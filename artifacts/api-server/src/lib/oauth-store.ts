@@ -11,10 +11,14 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { refreshAccessToken, getOAuthConfig } from "./youtube-client.js";
 import { readArchiveState, writeArchiveState } from "./archive-state-store.js";
 
-const DATA_DIR = join(process.cwd(), "data", "sermons");
+// Resolve beside the compiled server instead of process.cwd(). Autoscale
+// instances may start from different working directories.
+const DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "sermons");
 const OAUTH_FILE = join(DATA_DIR, "oauth.json");
 const STATES_FILE = join(DATA_DIR, "oauth-states.json");
 
@@ -33,11 +37,13 @@ async function ensureDir(): Promise<void> {
 
 async function readOAuthData(): Promise<OAuthData | null> {
   const durable = await readArchiveState<OAuthData>("oauth");
-  if (durable) return durable;
+  // A partially-written/legacy durable record must not mask a valid token file.
+  // This also lets an instance recover after a transient database write failure.
+  if (durable?.refreshToken) return durable;
   try {
     const raw = await readFile(OAUTH_FILE, "utf-8");
     const data = JSON.parse(raw) as OAuthData;
-    await writeArchiveState("oauth", data);
+    if (data?.refreshToken) await writeArchiveState("oauth", data);
     return data;
   } catch {
     return null;

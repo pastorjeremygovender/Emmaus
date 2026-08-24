@@ -26,12 +26,12 @@ describe('Daily Rhythm launch contract', () => {
     );
 
     expect(route).toBe('/daily-rhythm/day/3');
-    expect(localStorage.getItem(accountStorageKey('emmaus_last_opened_v2', 'member-a')))
+    expect(localStorage.getItem(accountStorageKey('emmaus_last_opened_v3', 'member-a')))
       .toBe('2026-08-23');
   });
 
   it('falls back to Today’s Steps on later same-day openings', () => {
-    const key = accountStorageKey('emmaus_last_opened_v2', 'member-a');
+    const key = accountStorageKey('emmaus_last_opened_v3', 'member-a');
     localStorage.setItem(key, '2026-08-23');
 
     expect(resolveDailyOpenRoute('member-a', journeys, {}, () => steps)).toBeNull();
@@ -57,7 +57,7 @@ describe('Daily Rhythm launch contract', () => {
 
   it('keeps the opening marker isolated per member', () => {
     localStorage.setItem(
-      accountStorageKey('emmaus_last_opened_v2', 'member-a'),
+      accountStorageKey('emmaus_last_opened_v3', 'member-a'),
       '2026-08-23',
     );
 

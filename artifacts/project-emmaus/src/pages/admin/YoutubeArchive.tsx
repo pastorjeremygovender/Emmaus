@@ -431,7 +431,11 @@ function VideoDetail({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white rounded text-[13px] hover:bg-teal-700 transition-colors disabled:opacity-50 ml-auto"
           >
             {processing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-            {processing ? 'Processing…' : 'Import Captions & Segment'}
+            {processing
+              ? 'Processing…'
+              : video.transcriptStatus === 'failed'
+                ? 'Retry Caption Import'
+                : 'Import Captions & Segment'}
           </button>
         </div>
 
@@ -715,6 +719,7 @@ export default function YoutubeArchive() {
   const [videosLoading, setVideosLoading] = useState(false);
   const [filterReview, setFilterReview] = useState<string>('');
   const [filterContent, setFilterContent] = useState<string>('');
+  const [showFailedOnly, setShowFailedOnly] = useState(false);
   const [filterTimingReview, setFilterTimingReview] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -738,6 +743,7 @@ export default function YoutubeArchive() {
       const result = await listVideos({
         reviewStatus: filterReview as VideoRecord['reviewStatus'] || undefined,
         contentType: filterContent as VideoRecord['contentType'] || undefined,
+        transcriptStatus: showFailedOnly ? 'failed' : undefined,
       });
       setVideos(result.videos);
       setVideosTotal(result.total);
@@ -746,7 +752,7 @@ export default function YoutubeArchive() {
     } finally {
       setVideosLoading(false);
     }
-  }, [filterReview, filterContent]);
+  }, [filterReview, filterContent, showFailedOnly]);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -926,6 +932,7 @@ export default function YoutubeArchive() {
   }, [enrichJobId, enriching, loadStatus, loadJobs]);
 
   const filteredVideos = videos.filter((v) => {
+    if (showFailedOnly && v.transcriptStatus !== 'failed') return false;
     if (filterTimingReview) {
       // Needs review = approved/transcribed but no detection, OR low confidence and unverified
       const isApproved = v.reviewStatus === 'approved' || v.reviewStatus === 'auto-approved';
@@ -1290,7 +1297,7 @@ export default function YoutubeArchive() {
               : <><Play size={14} /> Run Full Indexing Pipeline</>
             }
           </button>
-          {!pipelining && pipelineJob?.progress.failures?.length ? (
+          {!pipelining && (pipelineJob?.progress.failures?.length || (status?.stats.failedImports ?? 0) > 0) ? (
             <button
               onClick={handleRunPipeline}
               disabled={enriching || !status?.oauth.connected}
@@ -1299,6 +1306,14 @@ export default function YoutubeArchive() {
               <RefreshCw size={14} /> Retry Failed
             </button>
           ) : null}
+          {(status?.stats.failedImports ?? 0) > 0 && (
+            <button
+              onClick={() => { setShowFailedOnly(true); setView('videos'); }}
+              className="flex items-center gap-2 px-4 py-2 border border-amber-300 text-amber-800 rounded-lg text-[13px] hover:bg-amber-50 transition-colors"
+            >
+              <AlertCircle size={14} /> View Failed Items ({status.stats.failedImports})
+            </button>
+          )}
           <button
             onClick={handleRunEnrichment}
             disabled={pipelining || enriching || !status?.oauth.connected}
