@@ -117,11 +117,10 @@ describe("buildSystemPrompt — userName personalisation", () => {
     assert.match(prompt, /When the Pressure Builds/);
   });
 
-  it("equips Emmaus to use the full published resource library", () => {
+  it("equips Emmaus to use the published resource library excluding locked Daily Rhythm", () => {
     const prompt = buildSystemPrompt(CONTEXT_BLOCK);
 
     for (const resource of [
-      "Daily Rhythm",
       "Walks",
       "Journeys",
       "Bible Studies",
@@ -133,6 +132,7 @@ describe("buildSystemPrompt — userName personalisation", () => {
     assert.match(prompt, /approved excerpts/i);
     assert.match(prompt, /exact title and route|title,\s+route, and supplied content/i);
     assert.match(prompt, /Scripture remains the centre/i);
+    assert.match(prompt, /Daily Rhythm is locked and unavailable/i);
   });
 });
 

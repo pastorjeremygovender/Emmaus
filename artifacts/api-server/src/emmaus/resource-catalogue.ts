@@ -14,7 +14,6 @@ import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
 import { logger } from "../lib/logger.js";
 
 export type EmmausResourceType =
-  | "daily-rhythm"
   | "journey"
   | "bible-study"
   | "devotional"
@@ -69,10 +68,8 @@ function makeResource(
 }
 
 function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query: string, bookId?: string, chapter?: number): EmmausResource[] {
-  const type: EmmausResourceType = journey.journeyType === "daily-rhythm" || journey.journeyType === "core"
-    ? "daily-rhythm"
-    : journey.journeyType === "bible-study" ? "bible-study" : "journey";
-  const route = type === "daily-rhythm" ? "/walk" : `/journeys/${journey.id}`;
+  const type: EmmausResourceType = journey.journeyType === "bible-study" ? "bible-study" : "journey";
+  const route = `/journeys/${journey.id}`;
   const stepResources = steps
     .filter(s => s.status === "Published" && !s.isCompletionStep)
     .map(s => ({
@@ -82,7 +79,7 @@ function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query
       scripture: s.scripture || s.scriptureReferences?.map(r => r.reference).join(", ") || undefined,
       description: clean(s.mentorIntro || s.devotional) || undefined,
       excerpts: [s.devotional, s.reflectionQuestion, s.prayerPrompt, s.actionStep, s.memoryVerse].filter(Boolean).map(v => clean(v)),
-      provenance: `Published ${type === "daily-rhythm" ? "Daily Rhythm" : type === "bible-study" ? "Bible Study" : "Journey"} step`,
+       provenance: `Published ${type === "bible-study" ? "Bible Study" : "Journey"} step`,
     }))
     .map(r => makeResource(r, query, bookId, chapter));
 
@@ -94,7 +91,7 @@ function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query
       scripture: journey.scriptureReference,
       description: journey.description || journey.introductionContent,
       excerpts: [journey.description, journey.introductionContent, journey.subtitle].filter(Boolean).map(v => clean(v)),
-      provenance: `Published ${type === "daily-rhythm" ? "Daily Rhythm" : type === "bible-study" ? "Bible Study" : "Journey"}`,
+       provenance: `Published ${type === "bible-study" ? "Bible Study" : "Journey"}`,
     }, query, bookId, chapter),
     ...stepResources,
   ];
@@ -200,7 +197,11 @@ export async function buildEmmausResourceCatalogue(
   ]);
 
   const resources: EmmausResource[] = [...notes];
-  for (const journey of journeys.filter(j => j.journeyType !== "companion")) {
+  // Daily Rhythm is deliberately excluded: its locked calendar days must not
+  // be used as answer context or recommended as an available next step.
+  for (const journey of journeys.filter(
+    j => j.journeyType !== "companion" && j.journeyType !== "daily-rhythm" && j.journeyType !== "core",
+  )) {
     const steps = await listSteps(journey.id).catch(err => {
       sourceFailures.push(`journey:${journey.id}`);
       logger.warn({ err: String(err), journeyId: journey.id }, "Ask Emmaus journey steps unavailable");

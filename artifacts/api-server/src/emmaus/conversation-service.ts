@@ -256,6 +256,14 @@ function defaultMetadata(): EmmausResponseMetadata {
   };
 }
 
+function isLockedDailyRhythmRecommendation(item: { type?: string; title?: string; path?: string }): boolean {
+  const title = String(item.title ?? "").toLowerCase();
+  const path = String(item.path ?? "").toLowerCase();
+  return item.type === "daily-rhythm"
+    || title === "10 minutes with jesus"
+    || path.includes("/15-minutes-with-jesus");
+}
+
 // ─── SSE Helpers ──────────────────────────────────────────────────────────────
 
 function sseWrite(res: Response, type: SseEventType, payload: unknown) {
@@ -595,7 +603,10 @@ export async function handleConversation(
   // The LLM is instructed not to include sermon recommendations in metadata,
   // but strip any that appear anyway to prevent fabricated data reaching the UI.
   finalMeta.recommendations = (finalMeta.recommendations ?? []).filter(
-    (r) => r.type !== "sermon"
+    (r) => r.type !== "sermon" && !isLockedDailyRhythmRecommendation(r)
+  );
+  finalMeta.nextSteps = (finalMeta.nextSteps ?? []).filter(
+    (s) => !isLockedDailyRhythmRecommendation(s)
   );
 
   // Ensure nextSteps is always an array (LLM may omit it)

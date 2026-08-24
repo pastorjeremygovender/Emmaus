@@ -1021,12 +1021,12 @@ export default function Journeys() {
         {!discoverActive && !apiLoading && data && (
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
-              <SectionWrapper color="emerald" label="Walks" headerAction={<SortBySelect value={walksSort} onChange={setWalksSort} />}>
+              <SectionWrapper color="emerald" label="Walks (Quick Studies)" headerAction={<SortBySelect value={walksSort} onChange={setWalksSort} />}>
                 <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
-              <SectionWrapper color="amber" label="Journeys" headerAction={<SortBySelect value={journeysSort} onChange={setJourneysSort} />}>
+              <SectionWrapper color="amber" label="Journeys (Longer Studies)" headerAction={<SortBySelect value={journeysSort} onChange={setJourneysSort} />}>
                 <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
               </SectionWrapper>
             )}
