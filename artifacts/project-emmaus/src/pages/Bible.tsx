@@ -12,9 +12,23 @@ type Tab = 'home' | 'library';
 
 export default function Bible() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { lastRead, favourites, bookmarks, notes, prayers, highlights } = useBible();
-  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [activeTab, setActiveTab] = useState<Tab>(() => (
+    new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'home'
+  ));
+
+  // Keep the selected Bible tab addressable. This also makes a library link
+  // survive remounts and gives members a reliable deep link to their saved
+  // notes, highlights, bookmarks, and prayers.
+  useEffect(() => {
+    setActiveTab(new URLSearchParams(window.location.search).get('tab') === 'library' ? 'library' : 'home');
+  }, [location]);
+
+  function openTab(tab: Tab) {
+    setActiveTab(tab);
+    setLocation(tab === 'library' ? '/bible?tab=library' : '/bible');
+  }
 
   const libraryCount = notes.length + prayers.length + favourites.length + bookmarks.length + highlights.length;
 
@@ -37,7 +51,8 @@ export default function Bible() {
         {/* Tab switcher */}
         <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
           <button
-            onClick={() => setActiveTab('home')}
+            type="button"
+            onClick={() => openTab('home')}
             className={[
               'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'home'
@@ -49,7 +64,8 @@ export default function Bible() {
             Home
           </button>
           <button
-            onClick={() => setActiveTab('library')}
+            type="button"
+            onClick={() => openTab('library')}
             className={[
               'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'library'
