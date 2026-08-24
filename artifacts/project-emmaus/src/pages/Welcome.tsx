@@ -122,10 +122,10 @@ export default function Welcome() {
     setTimeout(() => setLocation(dest), FADE_OUT_MS);
   }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney]);
 
-  // ── Already shown — render nothing while redirecting ─────────────────────
-  if (alreadyShown) return null;
-
-  // ── Splash ────────────────────────────────────────────────────────────────
+  // ── Splash / redirect loading state ───────────────────────────────────────
+  // Keep the splash visible while the fast-path redirect resolves. Returning
+  // null here made a direct /bible, /journeys, or /personal launch look like a
+  // blank page when auth or journey data took longer than the first render.
   //
   // Animation layer reference (logo is 110 × 110 px):
   //   Cross centre  ≈ left 27 %, top 16 %  → (30 px, 18 px)
