@@ -67,3 +67,4 @@
 - [Daily launch cold-start race](daily-launch-cold-start-race.md) — cold /walk loads can consume the one-shot check before authenticated journeys arrive; route through Welcome and retry only with real data.
 - [Bible Study coverage queue](bible-study-coverage-queue.md) — generation and progress views must use the canonical 66-book catalogue and prioritize unfinished coverage, not a seed-book shortlist.
 - [YouTube OAuth production origin](youtube-oauth-production-origin.md) — production callback must use emmaus.co.za and one-time state, not the returning browser session cookie.
+- [YouTube Whisper pending state](youtube-whisper-pending.md) — caption-miss markers need an explicit retry path; the bulk pipeline must not leave them stranded.
