@@ -31,6 +31,8 @@ export interface NextStepsItem {
     scriptureReference?: string;
     coverImageUrl?: string;
     collectionId?: string;
+    /** Stable creation timestamp used by the default Discover sort. */
+    createdAt?: string;
     publishedAt?: string;
     subtitle?: string;
     topic?: string;

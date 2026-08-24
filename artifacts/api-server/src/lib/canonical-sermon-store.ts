@@ -167,8 +167,11 @@ export async function getAllSermons(): Promise<CanonicalSermonWithCompanion[]> {
        '' AS full_transcript,
        sc.id AS companion_id,
        COALESCE(sc.is_current_week, false) AS is_current_week
-     FROM sermons s
-     LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
+      FROM sermons s
+      LEFT JOIN sermon_companion sc
+        ON sc.sermon_uuid = s.id
+        OR sc.sermon_id = s.id::text
+        OR sc.sermon_id = s.legacy_json_id
       ORDER BY s.display_order ASC, s.created_at DESC`
   );
   return result.rows.map(rowToSermonWithCompanion);
@@ -211,8 +214,11 @@ export async function listPublishedSermons(): Promise<CanonicalSermonWithCompani
        '' AS full_transcript,
        sc.id AS companion_id,
        COALESCE(sc.is_current_week, false) AS is_current_week
-     FROM sermons s
-     LEFT JOIN sermon_companion sc ON sc.sermon_uuid = s.id
+      FROM sermons s
+      LEFT JOIN sermon_companion sc
+        ON sc.sermon_uuid = s.id
+        OR sc.sermon_id = s.id::text
+        OR sc.sermon_id = s.legacy_json_id
      WHERE s.status = 'Published'
       ORDER BY s.display_order ASC, s.published_at DESC NULLS LAST`
   );

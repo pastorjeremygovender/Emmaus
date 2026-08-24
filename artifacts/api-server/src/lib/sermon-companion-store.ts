@@ -488,7 +488,9 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     isCurrentWeek: row.is_current_week === true || row.is_current_week === 'true',
     publishedAt: row.published_at ? String(row.published_at) : null,
     notifyPublishedAt: row.notify_published_at ? String(row.notify_published_at) : null,
-    createdAt: String(row.created_at ?? ''),
+    // Use the canonical sermon timestamp when this row came from the ordered
+    // member-discovery query, matching Content Studio's default tie-breaker.
+    createdAt: String(row.canonical_created_at ?? row.created_at ?? ''),
     updatedAt: String(row.updated_at ?? ''),
   };
 }
@@ -554,17 +556,21 @@ export async function listPublishedSermonCompanions(): Promise<
   Array<Companion & { publishedEntryCount: number }>
 > {
   const res = await pool.query(`
-    SELECT sc.*,
-           COALESCE(s.display_order, sc.display_order, 0) AS canonical_display_order,
-           COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
+     SELECT sc.*,
+            COALESCE(s.display_order, sc.display_order, 0) AS canonical_display_order,
+            COALESCE(s.created_at, sc.created_at) AS canonical_created_at,
+            COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
     FROM   sermon_companion sc
-    LEFT JOIN sermons s ON s.id = sc.sermon_uuid
+     LEFT JOIN sermons s
+       ON s.id = sc.sermon_uuid
+       OR sc.sermon_id = s.id::text
+       OR sc.sermon_id = s.legacy_json_id
     LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
     WHERE  sc.status = 'Published'
      GROUP  BY sc.id, s.display_order, s.created_at
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
-    ORDER  BY COALESCE(s.display_order, sc.display_order, 0) ASC,
-              COALESCE(s.created_at, sc.published_at, sc.updated_at) DESC
+     ORDER  BY COALESCE(s.display_order, sc.display_order, 0) ASC,
+               COALESCE(s.created_at, sc.created_at, sc.published_at, sc.updated_at) DESC
   `);
   return res.rows.map(row => ({
     ...rowToCompanion(row),

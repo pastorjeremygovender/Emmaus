@@ -56,6 +56,8 @@ export interface NextStepsItem {
     scriptureReference?: string;
     coverImageUrl?: string;
     collectionId?: string;
+    /** Stable creation timestamp used to match Content Studio's default tie-breaker. */
+    createdAt?: string;
     publishedAt?: string;
     subtitle?: string;
       topic?: string;
@@ -430,6 +432,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         memberProgressState: state,
         metadata: {
           durationDays: c.numberOfDays,
+          createdAt: c.createdAt || undefined,
           publishedAt: c.publishedAt ?? undefined,
           displayOrder: c.displayOrder ?? 0,
           // subtitle lets the Next Steps discovery card show "5 Days of Intentional Living"

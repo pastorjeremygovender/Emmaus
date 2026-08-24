@@ -84,10 +84,16 @@ function sortItemDate(item: NextStepsItem): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function sortItemCreatedAt(item: NextStepsItem): number {
+  const timestamp = item.metadata.createdAt ? Date.parse(item.metadata.createdAt) : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function sortItems(items: NextStepsItem[], sort: DiscoverSort): NextStepsItem[] {
   if (sort === 'default') {
     return [...items].sort((a, b) =>
       (a.metadata.displayOrder ?? 0) - (b.metadata.displayOrder ?? 0) ||
+      sortItemCreatedAt(b) - sortItemCreatedAt(a) ||
       a.title.localeCompare(b.title),
     );
   }
