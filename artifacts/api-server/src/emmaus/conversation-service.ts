@@ -485,9 +485,9 @@ export async function handleConversation(
     }
   }
 
-  // Inject verified sermon context — do NOT include the timestamped URL in the
-  // prose (the Preached Here card handles that); just let the model know the
-  // sermon exists so it can reference the insight naturally.
+  // Inject verified sermon context. The timestamped URL is intentionally kept out
+  // of prose because the Preached Here card handles it, but the model must still
+  // name the sermon connection and weave its verified insight into the answer.
   if (sermonResult) {
     contextBlock +=
       `\n\nVerified ICC sermon matching this conversation:\n` +
@@ -496,9 +496,9 @@ export async function handleConversation(
       `  Scripture: ${sermonResult.scriptureReference}\n` +
       `  Preached: ${sermonResult.sermonDate}\n` +
       `  Summary: ${sermonResult.summary}\n` +
-      `\nYou may weave this sermon's insight naturally into your prose` +
-      ` (e.g. "Pastor ${sermonResult.speaker.split(" ").at(-1)} preached on this — …").` +
-      ` Do not fabricate any detail. The Preached Here card and listen step are added` +
+      `\nYou must weave this sermon's insight naturally into the pastoral prose` +
+      ` (e.g. "Pastor ${sermonResult.speaker.split(" ").at(-1)} preached on this — …"),` +
+      ` not only provide the link/card. Do not fabricate any detail. The Preached Here card and listen step are added` +
       ` automatically — do NOT generate a "listen" nextStep or a sermon recommendation in metadata.`;
   }
 

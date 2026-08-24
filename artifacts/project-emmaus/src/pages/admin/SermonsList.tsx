@@ -202,16 +202,27 @@ async function uploadAudioFile(
   }, [sermons, statusTab]);
 
   const moveSermon = async (index: number, direction: -1 | 1) => {
+    // Reordering is a canonical list operation. Normalising every row avoids
+    // no-op swaps when legacy sermons share the default displayOrder of 0.
+    // Keep this available from the All tab so status-filtered rows cannot
+    // accidentally collide with hidden sermons' order values.
+    if (statusTab !== 'All') return;
     const target = filtered[index];
     const other = filtered[index + direction];
     if (!target || !other) return;
-    const targetId = editId(target);
-    const otherId = editId(other);
-    await Promise.all([
-      updateAdminSermon(targetId, { displayOrder: other.displayOrder ?? index + direction }),
-      updateAdminSermon(otherId, { displayOrder: target.displayOrder ?? index }),
-    ]);
-    await load();
+    const reordered = [...filtered];
+    [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
+    try {
+      await Promise.all(reordered.map((sermon, order) =>
+        updateAdminSermon(editId(sermon), { displayOrder: order }),
+      ));
+      setSuccessMessage('Sermon order saved.');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      await load();
+    } catch {
+      setErrorMessage("We couldn't save the sermon order. Please try again.");
+      setTimeout(() => setErrorMessage(''), 5000);
+    }
   };
 
   // ── New canonical sermon ──────────────────────────────────────────────────────
@@ -466,6 +477,18 @@ async function uploadAudioFile(
           </button>
         }
         filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
+        beforeList={
+          filtered.length > 0 && statusTab === 'All' ? (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/60 px-3.5 py-2.5 text-[12px] text-teal-800">
+              <span className="font-semibold">Display order</span>
+              <span className="text-teal-700/80">Use the ↑ and ↓ controls on each row to choose the order members see in Discover.</span>
+            </div>
+          ) : statusTab !== 'All' && filtered.length > 0 ? (
+            <div className="mb-3 rounded-xl border border-gray-100 bg-gray-50 px-3.5 py-2.5 text-[12px] text-gray-500">
+              Reordering is available from the <strong>All</strong> tab so every sermon keeps one consistent display order.
+            </div>
+          ) : null
+        }
         isEmpty={filtered.length === 0}
         emptyState={
           <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center">
@@ -549,8 +572,8 @@ async function uploadAudioFile(
               }
               actions={
                 <>
-                  <ReorderButtons canMoveUp={index > 0} canMoveDown={index < filtered.length - 1}
-                    onMoveUp={() => void moveSermon(index, -1)} onMoveDown={() => void moveSermon(index, 1)} label={s.title} />
+                  <ReorderButtons canMoveUp={statusTab === 'All' && index > 0} canMoveDown={statusTab === 'All' && index < filtered.length - 1}
+                    onMoveUp={() => void moveSermon(index, -1)} onMoveDown={() => void moveSermon(index, 1)} label={`Display order for ${s.title}`} />
                   {/* Edit */}
                   <button onClick={() => onEdit(editId(s))} className={actionBtnCls}>
                     Edit

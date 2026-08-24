@@ -106,6 +106,16 @@ describe("buildSystemPrompt — userName personalisation", () => {
       "Context block must appear when a name is provided"
     );
   });
+
+  it("requires verified sermon context to be referenced in the written response", () => {
+    const prompt = buildSystemPrompt(
+      `${CONTEXT_BLOCK}\n\nVerified ICC sermon matching this conversation:\n  Title: "When the Pressure Builds"\n  Speaker: Pastor Jeremy`,
+    );
+
+    assert.match(prompt, /MUST include at least one\s+natural sentence/i);
+    assert.match(prompt, /not merely leave the sermon for the link\/card/i);
+    assert.match(prompt, /When the Pressure Builds/);
+  });
 });
 
 // ─── conversation-service wiring note ────────────────────────────────────────

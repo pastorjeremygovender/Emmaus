@@ -61,6 +61,7 @@ export interface NextStepsItem {
       topic?: string;
     /** For daily-devotional items: the member's current day (next to complete). */
     currentDay?: number;
+    displayOrder?: number;
   };
   /** Member-facing route, e.g. /journey/:id/day/:n or /devotional/:id/day/:n */
   route: string;
@@ -430,6 +431,7 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         metadata: {
           durationDays: c.numberOfDays,
           publishedAt: c.publishedAt ?? undefined,
+          displayOrder: c.displayOrder ?? 0,
           // subtitle lets the Next Steps discovery card show "5 Days of Intentional Living"
           // instead of the progress-based description.
           subtitle: subtitle || undefined,

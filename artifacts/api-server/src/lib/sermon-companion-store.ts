@@ -37,6 +37,8 @@ export interface Companion {
   sermonId: string;
   /** Canonical sermon UUID (sermons.id) — null when companion was created before the sermons table existed. */
   sermonUuid?: string | null;
+  /** Canonical order inherited from sermons.display_order for member discovery. */
+  displayOrder?: number;
   title: string;
   /** Admin-authored companion-level introduction shown at the top of the member overview. */
   description: string;
@@ -478,6 +480,7 @@ function rowToCompanion(row: Record<string, unknown>): Companion {
     id: String(row.id),
     sermonId: String(row.sermon_id),
     sermonUuid: row.sermon_uuid != null ? String(row.sermon_uuid) : null,
+    displayOrder: Number(row.canonical_display_order ?? row.display_order ?? 0),
     title: String(row.title ?? ''),
     description: String(row.description ?? ''),
     numberOfDays: Number(row.number_of_days ?? 5),
@@ -552,6 +555,7 @@ export async function listPublishedSermonCompanions(): Promise<
 > {
   const res = await pool.query(`
     SELECT sc.*,
+           COALESCE(s.display_order, sc.display_order, 0) AS canonical_display_order,
            COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
     FROM   sermon_companion sc
     LEFT JOIN sermons s ON s.id = sc.sermon_uuid

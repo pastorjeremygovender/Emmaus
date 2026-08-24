@@ -44,12 +44,28 @@ const companion = {
   primaryActionLabel: 'Continue',
 };
 
+const earlierCompanion = {
+  ...companion,
+  id: 'companion-2',
+  title: 'Made Free',
+  route: '/sermon-companion/companion-2/overview',
+  metadata: { durationDays: 5, displayOrder: 1 },
+};
+
+const laterCompanion = {
+  ...companion,
+  id: 'companion-3',
+  title: 'When the Pressure Builds',
+  route: '/sermon-companion/companion-3/overview',
+  metadata: { durationDays: 5, displayOrder: 0 },
+};
+
 const data = {
   dailyDevotionals: [devotional],
   journeyCollections: [],
   standaloneJourneys: [walk],
   currentSermonCompanion: companion,
-  previousSermonCompanions: [],
+  previousSermonCompanions: [earlierCompanion, laterCompanion],
   contentGroups: [],
 };
 
@@ -166,5 +182,14 @@ describe('Discovery content activation contract', () => {
     expect(setLocation).toHaveBeenCalledWith(
       '/sermon-companion/companion-1/overview?source=nextStepsSermons',
     );
+  });
+
+  it('keeps the member Default sermon order from the API display order', async () => {
+    render(<Journeys />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sermons' }));
+
+    const first = await screen.findByText(laterCompanion.title);
+    const second = await screen.findByText(earlierCompanion.title);
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
