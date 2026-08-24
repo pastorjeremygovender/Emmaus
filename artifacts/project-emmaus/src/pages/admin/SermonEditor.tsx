@@ -1446,8 +1446,10 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
         try {
           await publishSermonCompanion(companionData.id, auth, companionNotifyMembers);
           setCompanionStatusLocal('Published');
-        } catch {
-          // Non-fatal — companion can be published separately from the Companion tab
+        } catch (err) {
+          // The sermon and companion are separate records. Do not report an
+          // apparently successful publish when the companion failed.
+          setPublishError(err instanceof Error ? err.message : 'The sermon published, but the companion could not be published.');
         }
       }
       setForm(f => ({ ...f, status: 'published' }));
@@ -1461,7 +1463,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
     } finally {
       setPublishing(false);
     }
-  }, [form, sermonId_, auth, validate, addSermon, updateSermon]);
+  }, [
+    form,
+    sermonId_,
+    auth,
+    validate,
+    addSermon,
+    updateSermon,
+    companionData?.id,
+    companionStatusLocal,
+    companionNotifyMembers,
+  ]);
 
   const handleUnpublishConfirm = useCallback(async () => {
     if (!auth || !sermonId_) return;

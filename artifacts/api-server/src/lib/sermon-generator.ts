@@ -1511,7 +1511,10 @@ export async function generateSermonContentFromTranscript(
     sermonEndSecs:      detectionEndSecs ?? undefined,
   });
 
-  // 5. Update existing sermon record with generated content
+  // 5. Update existing sermon record with generated content. Keep the
+  // processing stage non-terminal until the companion is persisted below:
+  // the editor polls READY_FOR_REVIEW and immediately hydrates the companion,
+  // so publishing that stage before the insert creates a reload race.
   await updateCanonicalSermon(sermonId, {
     transcript:          sermonTranscript,
     fullTranscript:      fullTranscript,
@@ -1525,7 +1528,7 @@ export async function generateSermonContentFromTranscript(
     detectionConfidence,
     detectionMethod,
     scriptureReference:  draftFields.scriptureReference,
-    processingStage:     "READY_FOR_REVIEW",
+    processingStage:     "companion",
     processingError:     "",
   });
 
@@ -1542,6 +1545,13 @@ export async function generateSermonContentFromTranscript(
     title:       companionDraft.companionTitle,
     numberOfDays: companionDraft.days.length,
     entries:     companionDraft.days,
+  });
+
+  // Only expose the terminal stage after both the sermon fields and its
+  // companion (including all entries) are durable.
+  await updateCanonicalSermon(sermonId, {
+    processingStage: "READY_FOR_REVIEW",
+    processingError: "",
   });
 
   logger.info({ sermonId, days: companionDraft.days.length }, "sermon-generator: audio-first pipeline complete");
