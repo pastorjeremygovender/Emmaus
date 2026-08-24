@@ -1,0 +1,34 @@
+The recipient has confirmed that the email address is correct and has checked Spam, Junk, Promotions and filtered folders. Nothing was received.
+
+Do not republish the app and do not repeat user-side troubleshooting.
+
+Supabase documentation confirms that its default SMTP service is not suitable for production:
+- it only delivers to pre-authorized project team addresses
+- it is limited to approximately two messages per hour
+- normal public users require custom SMTP
+
+Investigate and fix the actual production email delivery configuration.
+
+1. Determine whether the production Supabase project is using Supabase default SMTP or custom SMTP.
+2. Inspect the Supabase Auth logs for this exact signup attempt and report the actual error message and status.
+3. Confirm whether Resend SMTP is configured in Supabase Authentication email settings.
+4. If Resend is not configured, tell me exactly which Resend SMTP values and Supabase settings I must enter. Do not expose or print any secret password or API key.
+5. Verify that the sender domain and From address are verified in Resend.
+6. Confirm that emmaus.co.za is allowed as the production Site URL and that this callback is allowed:
+   https://emmaus.co.za/api/auth/callback
+7. Add a visible “Resend confirmation email” button to the Emmaus login/signup screen.
+8. The resend action must display an honest success or failure message. Do not say the email was sent if Supabase returned an error.
+9. Add safe server-side logging for:
+   - confirmation requested
+   - accepted or rejected by Supabase
+   - SMTP handoff result
+   - provider error code
+   Never log passwords, tokens, API keys or confirmation links.
+10. Do not mark the user as confirmed manually and do not disable email verification.
+11. Do not publish until the root cause has been identified and the SMTP configuration requirements have been reported to me.
+
+First report:
+- whether custom SMTP is enabled
+- the exact Auth log error
+- whether Resend accepted or rejected the email
+- the specific corrective action required
