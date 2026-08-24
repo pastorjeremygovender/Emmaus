@@ -23,7 +23,7 @@ import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, ChevronRight, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
 import { useEnrollment } from '@/lib/enrollment';
-import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
+import { isCompletedToday } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
@@ -545,14 +545,19 @@ export default function Walk() {
   const rawCoreCurrentDay   = coreProg?.currentDay ?? 1;
   // "Caught up" = the member's progress has advanced past all published content.
   const coreCaughtUp        = coreMaxPublishedDay > 0 && rawCoreCurrentDay > coreMaxPublishedDay;
+  // Calendar-day gating keeps the next day closed until tomorrow.
+  const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
   // The day we actually show and route to — clamped to real published content.
-  const effectiveCoreDay    = coreCaughtUp ? coreMaxPublishedDay : rawCoreCurrentDay;
+  const lastCompletedCoreDay = coreProg?.completedDays?.length
+    ? Math.max(...coreProg.completedDays)
+    : 0;
+  const effectiveCoreDay = coreCompletedToday
+    ? Math.max(1, lastCompletedCoreDay || rawCoreCurrentDay - 1)
+    : coreCaughtUp
+      ? coreMaxPublishedDay
+      : rawCoreCurrentDay;
   // The concrete published entry for effectiveCoreDay (null if no entries loaded yet).
   const coreCurrentEntry    = coreSteps.find(s => s.day === effectiveCoreDay) ?? null;
-
-  // In dev mode the calendar lock is lifted, so "completed today" is always false —
-  // the card advances freely without waiting for tomorrow.
-  const coreCompletedToday  = !devMode && isCompletedToday(coreProg?.lastCompletedAt);
 
   // True when the member has nothing left to act on today — used to suppress
   // the heartbeat animation so it only pulses when there is something to open.
@@ -658,7 +663,7 @@ export default function Walk() {
   const drStarted = !!coreProg;
   let drState: DrState;
   if (!drStarted)    drState = 'start';
-  else if (coreCaughtUp) drState = 'uptodate';
+  else if (coreCompletedToday || coreCaughtUp) drState = 'uptodate';
   else               drState = 'ready';
 
   const drSubtitle = (() => {

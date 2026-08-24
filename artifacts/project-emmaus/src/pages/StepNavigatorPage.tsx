@@ -17,6 +17,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { ContentStepList } from '@/components/ContentStepList';
 import { BrowseModeToggle } from '@/components/BrowseModeToggle';
 import { listDailyRhythmGroups, type DailyRhythmGroup } from '@/lib/journeys-api';
+import { isCompletedToday } from '@/lib/daily-lock';
 import type { Journey } from '@/contexts/JourneyContext';
 
 interface Props {
@@ -44,6 +45,11 @@ export function StepNavigatorPage({ mode }: Props) {
 
   const prog = journey ? progress[journey.id] : undefined;
   const completedSet = new Set(prog?.completedDays ?? []);
+  const dailyRhythmLockedToday =
+    mode === 'daily-rhythm' && isCompletedToday(prog?.lastCompletedAt);
+  const availableThroughDay = dailyRhythmLockedToday
+    ? Math.max(1, (prog?.currentDay ?? 1) - 1)
+    : (prog?.currentDay ?? 1);
 
   // All published non-completion steps — every one is accessible
   const allSteps = journey
@@ -51,15 +57,21 @@ export function StepNavigatorPage({ mode }: Props) {
         s => s.status === 'Published' && !s.isCompletionStep,
       )
     : [];
+  const visibleSteps = allSteps.filter(
+    step => mode !== 'daily-rhythm' || step.day <= availableThroughDay,
+  );
 
   // Current = first uncompleted step; if all done, pin to last
   const currentDay = (() => {
-    const visibleSteps = selectedGroupId
+    const groupSteps = selectedGroupId
       ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
       : allSteps;
-    const next = visibleSteps.find(s => !completedSet.has(s.day));
+    const navigableSteps = groupSteps.filter(
+      step => mode !== 'daily-rhythm' || step.day <= availableThroughDay,
+    );
+    const next = navigableSteps.find(s => !completedSet.has(s.day));
     if (next) return next.day;
-    return visibleSteps.length > 0 ? visibleSteps[visibleSteps.length - 1].day : null;
+    return navigableSteps.length > 0 ? navigableSteps[navigableSteps.length - 1].day : null;
   })();
 
   const stepPrefix =
@@ -157,8 +169,9 @@ export function StepNavigatorPage({ mode }: Props) {
           ) : (
             <ContentStepList
               items={(selectedGroupId
-                ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
-                : allSteps
+             ? (groups.find(group => group.id === selectedGroupId)?.items ?? [])
+                 .filter(step => step.day <= availableThroughDay)
+             : visibleSteps
               ).map(step => {
                 const done = completedSet.has(step.day);
                 const isCurrent = step.day === currentDay && !done;

@@ -27,13 +27,9 @@ export function isCompletedToday(lastCompletedAt: string | null | undefined): bo
   return completedKey === localDateKey();
 }
 
-/**
- * Always returns true — the next day is always available regardless of when
- * the last step was completed. Calendar-day gating has been removed.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function isNextDayAvailable(_lastCompletedAt: string | null | undefined): boolean {
-  return true;
+/** Returns true when the next Daily Rhythm day is available on a later calendar day. */
+export function isNextDayAvailable(lastCompletedAt: string | null | undefined): boolean {
+  return !isCompletedToday(lastCompletedAt);
 }
 
 /** Friendly "available tomorrow" label. */
