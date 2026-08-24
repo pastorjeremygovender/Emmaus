@@ -2046,15 +2046,17 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: reseed_tombstones table ensured (idempotent)");
   }
 
-  // ─── Fix walk journey_type — any journey created from the Walks tab with a
-  // legacy sub-type value ('core', 'companion', 'series', 'course') should be
-  // 'walk' so it appears in the Walks (Quick Studies) section on Today's Steps.
+  // ─── Fix walk journey_type — journeys created from the Walks tab with a
+  // legacy sub-type value ('core', 'series', 'course') should be 'walk' so
+  // they appear in the Walks (Quick Studies) section on Today's Steps.
+  // Sermon companions are intentionally excluded: they have their own
+  // sermon_companion model and must never be treated as Walks.
   // Safe to re-run: only touches rows that are NOT already the correct type.
   {
     const { rowCount } = await pool.query(`
       UPDATE journeys
       SET    journey_type = 'walk'
-      WHERE  journey_type IN ('core', 'companion', 'series', 'course')
+      WHERE  journey_type IN ('core', 'series', 'course')
     `);
     if (rowCount && rowCount > 0) {
       logger.info(`Startup migration: ${rowCount} journey(s) with legacy type corrected to 'walk'`);

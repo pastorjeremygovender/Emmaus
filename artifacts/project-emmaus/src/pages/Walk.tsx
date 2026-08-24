@@ -608,7 +608,14 @@ export default function Walk() {
   // whether it was discovered standalone or through a collection. Collection
   // membership controls discovery/browsing, not whether the member's active
   // progress is surfaced here.
-  const startedWalks          = startedJourneys.filter(({ journey }) => journey.journeyType === 'walk');
+  const startedWalks          = startedJourneys.filter(({ journey }) => {
+    if (journey.journeyType !== 'walk') return false;
+    // Older Sermon Companion journeys were incorrectly migrated to "walk".
+    // Keep them out of Walks even if the stored journey type is still wrong.
+    const category = journey.category?.trim().toLowerCase();
+    const tags = (journey.tags ?? []).map(tag => tag.trim().toLowerCase());
+    return category !== 'companion' && !tags.includes('companion');
+  });
   const startedLongerJourneys = startedJourneys.filter(({ journey }) => journey.journeyType !== 'walk');
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
