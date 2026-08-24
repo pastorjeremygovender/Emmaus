@@ -41,10 +41,8 @@ import {
   type SermonRetrievalResult,
 } from "./sermon-retrieval.js";
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
-import { listPublishedJourneys, type FrontendJourney } from "../lib/journey-store.js";
-import { listPublishedSeries, type DevotionalSeries } from "../lib/devotional-store.js";
-import { getCurrentWeekPublicCompanion } from "../lib/sermon-companion-store.js";
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
+import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
 import { logger } from "../lib/logger.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -321,15 +319,13 @@ export async function handleConversation(
   // AE-1: resolve userId early so we can fetch memories in this parallel step.
   const preUserId = contextInput.userId ?? "anonymous";
 
-  const [biblePassages, sermonResult, userMemories, publishedJourneys, publishedSeries, currentCompanion, userRooms] = await Promise.all([
+  const [biblePassages, sermonResult, userMemories, resourceCatalogue, userRooms] = await Promise.all([
     Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
     retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
-    listPublishedJourneys().catch((): FrontendJourney[] => []),
-    listPublishedSeries().catch((): DevotionalSeries[] => []),
-    getCurrentWeekPublicCompanion().catch(() => null),
+    buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter),
     preUserId !== "anonymous"
       ? getRoomsForUser(preUserId).catch((): RoomSummary[] => [])
       : Promise.resolve([] as RoomSummary[]),
@@ -337,7 +333,10 @@ export async function handleConversation(
 
   logger.info(
     `[emmaus:${reqId}] parallel_search ms=${Date.now() - tSearch} ` +
-    `bible=${biblePassages.length} sermon=${!!sermonResult}` +
+    `bible=${biblePassages.length} sermon=${!!sermonResult} resources=${resourceCatalogue.resources.length}` +
+    (resourceCatalogue.sourceFailures.length > 0
+      ? ` resource_failures=${resourceCatalogue.sourceFailures.join(",")}`
+      : "") +
     (sermonResult ? ` sermon_id=${sermonResult.sermonId} src=${sermonResult.source}` : "")
   );
 
@@ -440,34 +439,23 @@ export async function handleConversation(
     }
   }
 
-  // Inject published Emmaus content — gives the LLM real, correct paths so it can
-  // recommend specific content rather than generic placeholders.
+  // Inject the live, publication-safe Emmaus catalogue. Each resource includes
+  // bounded authored excerpts so Emmaus can explain and quote content accurately,
+  // while exact routes prevent fabricated recommendations.
   {
     const resourceLines: string[] = [];
 
-    const contentJourneys = publishedJourneys.filter((j) => j.journeyType !== "companion");
-    if (contentJourneys.length > 0) {
-      resourceLines.push("WALKS & JOURNEYS (recommend only from this list — use the exact paths):");
-      for (const j of contentJourneys) {
-        const path =
-          j.journeyType === "daily-rhythm" ? "/walk" : `/journeys/${j.id}`;
-        const typeLabel = j.journeyType === "daily-rhythm" ? "Daily Rhythm" : "Journey";
-        resourceLines.push(`  - "${j.title}" [${typeLabel}] → ${path}`);
-      }
-    }
-
-    if (publishedSeries.length > 0) {
-      resourceLines.push("DEVOTIONAL SERIES:");
-      for (const s of publishedSeries) {
-        resourceLines.push(`  - "${s.title}" → /devotional/${s.id}/day/1`);
-      }
-    }
-
-    if (currentCompanion) {
-      resourceLines.push("CURRENT SERMON COMPANION:");
-      resourceLines.push(
-        `  - "${currentCompanion.title}" → /sermon-companion/${currentCompanion.id}/day/1`
-      );
+    resourceLines.push(
+      "LIVE PUBLISHED EMMAUS RESOURCES (use these exact titles and paths; quoted material is approved authored content):",
+    );
+    for (const resource of resourceCatalogue.resources) {
+      const details = [
+        resource.scripture ? `Scripture: ${resource.scripture}` : "",
+        resource.description ? `About: ${resource.description}` : "",
+        resource.excerpts.length > 0 ? `Approved excerpts: ${resource.excerpts.map(e => `"${e}"`).join(" | ")}` : "",
+        `Source: ${resource.provenance}`,
+      ].filter(Boolean).join(" — ");
+      resourceLines.push(`  - [${resource.type}] "${resource.title}" → ${resource.route}${details ? ` — ${details}` : ""}`);
     }
 
     if (userRooms.length > 0) {
@@ -480,8 +468,13 @@ export async function handleConversation(
 
     if (resourceLines.length > 0) {
       contextBlock +=
-        "\n\nAvailable published Emmaus content for recommendations (use ONLY these — never invent a resource or path):\n" +
+        "\n\n" +
         resourceLines.join("\n");
+    }
+    if (resourceCatalogue.sourceFailures.length > 0) {
+      contextBlock +=
+        `\n\nRESOURCE CATALOGUE NOTICE: These sources were unavailable for this request: ${resourceCatalogue.sourceFailures.join(", ")}. ` +
+        "Do not imply that unavailable sources were searched or complete.";
     }
   }
 
