@@ -595,12 +595,9 @@ export async function setCurrentWeekCompanion(id: string): Promise<void> {
  * Return the single Published companion marked as This Week's Sermon,
  * with only its Published entries.
  *
- * Falls back to the most-recently-published companion when:
- *   • no companion has is_current_week = true (flag not yet set), OR
- *   • the is_current_week column does not yet exist in the DB (PostgreSQL
- *     error 42703: undefined_column — occurs before the startup migration runs).
- *
- * Returns null only when no Published companion exists at all.
+ * Returns null when no Published companion has been explicitly assigned to
+ * the current week. Publishing a companion alone must not put it in Today's
+ * Steps; an admin must choose "Set as This Week's Sermon".
  */
 export async function getCurrentWeekPublicCompanion(): Promise<
   (Companion & { entries: CompanionEntry[] }) | null
@@ -622,29 +619,16 @@ export async function getCurrentWeekPublicCompanion(): Promise<
       );
       return { ...companion, entries: eRes.rows.map(rowToEntry) };
     }
-    // No companion explicitly flagged — fall through to most-recently-published.
+     // No companion explicitly flagged — this is intentionally empty.
   } catch (err: unknown) {
     const pg = err as { code?: string };
     if (pg?.code !== '42703') throw err; // unexpected error — re-throw
-    // 42703 = undefined_column: is_current_week not yet added — fall through.
+    // 42703 = undefined_column. Startup migration has not completed, so do
+    // not guess by selecting the newest companion.
+    return null;
   }
 
-  // Fallback: return the most recently published companion.
-  const cRes = await pool.query(
-    `SELECT * FROM sermon_companion
-     WHERE status = 'Published'
-     ORDER BY COALESCE(published_at, updated_at) DESC
-     LIMIT 1`,
-  );
-  if (!cRes.rows[0]) return null;
-  const companion = rowToCompanion(cRes.rows[0]);
-  const eRes = await pool.query(
-    `SELECT * FROM sermon_companion_entry
-     WHERE companion_id = $1 AND status = 'Published'
-     ORDER BY day_number ASC`,
-    [companion.id],
-  );
-  return { ...companion, entries: eRes.rows.map(rowToEntry) };
+  return null;
 }
 
 /**

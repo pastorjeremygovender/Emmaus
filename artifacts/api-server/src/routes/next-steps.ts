@@ -8,7 +8,7 @@
  *   dailyDevotionals       – all published devotional series (at least 1 published entry)
  *   journeyCollections     – published collections with their published journeys
  *   standaloneJourneys     – published journeys with no collection
- *   currentSermonCompanion – companion marked as This Week's (or most-recent)
+ *   currentSermonCompanion – companion explicitly marked as This Week's
  *   previousSermonCompanions – all other published companions, newest first
  *
  * Query params:
@@ -360,9 +360,10 @@ router.get("/next-steps", async (req: Request, res: Response) => {
     // listPublishedSermonCompanions() enforces Published status and at least one
     // published entry. Results are already sorted newest-published first.
 
-    // Current = companion explicitly marked is_current_week = true.
-    // Falls back to the most-recently-published companion when the flag is not set.
-    const currentCompanion = scTableCompanions.find(c => c.isCurrentWeek) ?? scTableCompanions[0] ?? null;
+    // Current means explicitly marked is_current_week = true. A published
+    // companion must never become Today's Steps content merely because it is
+    // the newest record; admins choose the highlighted sermon intentionally.
+    const currentCompanion = scTableCompanions.find(c => c.isCurrentWeek) ?? null;
     const previousCompanions = scTableCompanions.filter(c => c.id !== currentCompanion?.id);
 
     // Build a NextStepsItem from a sermon_companion table record.
