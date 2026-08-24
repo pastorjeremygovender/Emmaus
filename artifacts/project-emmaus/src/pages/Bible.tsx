@@ -2,6 +2,7 @@ import { useLocation } from 'wouter';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { SectionWrapper } from '@/components/SectionWrapper';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
 import { useState, useEffect } from 'react';

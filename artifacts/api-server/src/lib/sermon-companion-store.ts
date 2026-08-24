@@ -557,7 +557,7 @@ export async function listPublishedSermonCompanions(): Promise<
     LEFT JOIN sermons s ON s.id = sc.sermon_uuid
     LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
     WHERE  sc.status = 'Published'
-    GROUP  BY sc.id
+     GROUP  BY sc.id, s.display_order, s.created_at
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
     ORDER  BY COALESCE(s.display_order, sc.display_order, 0) ASC,
               COALESCE(s.created_at, sc.published_at, sc.updated_at) DESC
