@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const source = readFileSync(
-  new URL('../DailyRhythmDay.tsx', import.meta.url),
+  resolve(process.cwd(), 'src/pages/DailyRhythmDay.tsx'),
   'utf8',
 );
 
