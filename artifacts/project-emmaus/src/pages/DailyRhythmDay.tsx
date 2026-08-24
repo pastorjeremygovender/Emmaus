@@ -124,7 +124,14 @@ export default function DailyRhythmDay() {
     setJustCompleted(false); // reset on day change
   }, [day]);
 
-  // No auto-return — navigation back to Today's Steps is always click-driven.
+  // Daily Rhythm is a slow, one-day-at-a-time practice. Completing a day must
+  // never offer a route into tomorrow's content. Give the completion message a
+  // brief moment to land, then return to Today's Steps automatically.
+  useEffect(() => {
+    if (!justCompleted) return;
+    const timer = window.setTimeout(() => setLocation('/walk'), 1200);
+    return () => window.clearTimeout(timer);
+  }, [justCompleted, setLocation]);
 
   // Preserve scroll position for EmbeddedScripture deep-links
   useEffect(() => {
@@ -197,14 +204,10 @@ export default function DailyRhythmDay() {
   let actionButton: React.ReactNode;
 
   if (justCompleted) {
-    const nextStep = steps.find(s => s.day === day + 1 && s.status === 'Published');
-    const hasNextStep = !!nextStep;
     actionButton = (
       <EmmausCompletionCard
         heading={`${getStepLabel(step, journey)} complete.`}
-        subMessage={hasNextStep ? 'Continue when you\'re ready.' : 'May the Lord continue His work in your heart today.'}
-        onContinue={hasNextStep ? () => setLocation(`/daily-rhythm/day/${day + 1}?from=walk`) : undefined}
-        continueLabel={hasNextStep ? `Continue to ${getStepLabel(nextStep, journey)}` : undefined}
+        subMessage="Returning to Today's Steps…"
         returnLabel="Back to Today's Steps"
         onReturn={goBack}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
