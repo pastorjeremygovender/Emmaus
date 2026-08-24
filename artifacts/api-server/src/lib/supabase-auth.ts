@@ -105,6 +105,21 @@ export async function signUpWithPassword(input: {
   });
 }
 
+export async function resendConfirmationEmail(input: {
+  email: string;
+  redirectTo: string;
+}): Promise<void> {
+  await callSupabase("/auth/v1/resend", {
+    method: "POST",
+    body: {
+      type: "signup",
+      email: input.email,
+      gotrue_meta_security: {},
+      redirect_to: input.redirectTo,
+    },
+  });
+}
+
 export async function signInWithPassword(input: {
   email: string;
   password: string;

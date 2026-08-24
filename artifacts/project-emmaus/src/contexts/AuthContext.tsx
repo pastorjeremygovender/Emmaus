@@ -33,6 +33,7 @@ type AuthContextType = {
   isDemoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  resendConfirmationEmail: (email: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   resetPassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -258,6 +259,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const resendConfirmationEmail = useCallback(async (email: string): Promise<void> => {
+    const response = await fetch(getApiUrl("/api/auth/resend-confirmation"), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!response.ok) throw new Error(await readApiError(response));
+  }, []);
+
   const sendPasswordReset = useCallback(async (email: string): Promise<void> => {
     const response = await fetch(getApiUrl("/api/auth/recover"), {
       method: "POST",
@@ -371,6 +382,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isDemoMode: false,
         signIn,
         signUp,
+        resendConfirmationEmail,
         sendPasswordReset,
         resetPassword,
         signOut,

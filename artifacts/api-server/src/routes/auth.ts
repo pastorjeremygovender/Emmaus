@@ -22,6 +22,7 @@ import {
 import { getCanonicalPublicOrigin } from "../lib/public-origin.js";
 import {
   revokeSupabaseSession,
+  resendConfirmationEmail,
   sendPasswordRecoveryEmail,
   signInWithPassword,
   signUpWithPassword,
@@ -32,6 +33,7 @@ import {
   verifySupabaseOtp,
 } from "../lib/supabase-auth.js";
 import { isPermanentlyDeletedAccount } from "../lib/account-lifecycle-store.js";
+import { logger } from "../lib/logger.js";
 
 export const authRouter = Router();
 
@@ -454,12 +456,56 @@ authRouter.post(
         password,
         redirectTo: getAuthRedirectUrl(),
       });
+      logger.info({ event: "confirmation_requested", emailDomain: email.split("@")[1] }, "Auth confirmation requested");
       // Deliberately generic: do not expose whether this email already exists.
       res.status(202).json({
         message:
           "If this address can create an account, we have sent a verification email.",
       });
     } catch (error) {
+      const authError = error instanceof SupabaseAuthError ? {
+        providerStatus: error.status,
+        providerCode: error.code,
+      } : {};
+      logger.warn(
+        { event: "confirmation_rejected", emailDomain: email.split("@")[1], ...authError },
+        "Auth confirmation request rejected by Supabase",
+      );
+      writeAuthError(res, error);
+    }
+  },
+);
+
+authRouter.post(
+  "/auth/resend-confirmation",
+  async (req: Request, res: Response): Promise<void> => {
+    const email = readEmail(req.body?.email);
+    if (!email) {
+      res.status(400).json({ error: "Enter a valid email address." });
+      return;
+    }
+
+    try {
+      await resendConfirmationEmail({
+        email,
+        redirectTo: getAuthRedirectUrl(),
+      });
+      logger.info(
+        { event: "confirmation_accepted", emailDomain: email.split("@")[1] },
+        "Auth confirmation resend accepted by Supabase",
+      );
+      res.status(202).json({
+        message: "If this address has an unverified Emmaus account, a verification email has been requested.",
+      });
+    } catch (error) {
+      const authError = error instanceof SupabaseAuthError ? {
+        providerStatus: error.status,
+        providerCode: error.code,
+      } : {};
+      logger.warn(
+        { event: "confirmation_rejected", emailDomain: email.split("@")[1], ...authError },
+        "Auth confirmation resend rejected by Supabase",
+      );
       writeAuthError(res, error);
     }
   },

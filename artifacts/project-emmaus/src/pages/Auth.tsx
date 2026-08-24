@@ -25,6 +25,7 @@ export default function Auth() {
   const {
     signIn,
     signUp,
+    resendConfirmationEmail,
     sendPasswordReset,
     user,
     loading,
@@ -35,6 +36,7 @@ export default function Auth() {
   const [error, setError] = useState(getInitialError);
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -145,6 +147,33 @@ export default function Auth() {
             >
               {notice}
             </div>
+          )}
+
+          {mode === "register" && notice && (
+            <button
+              type="button"
+              disabled={resending || submitting}
+              onClick={async () => {
+                setError("");
+                setResending(true);
+                try {
+                  await resendConfirmationEmail(email);
+                  setNotice("A new verification email was requested. If it does not arrive, the email provider may be blocking delivery.");
+                } catch (reason) {
+                  setError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "We could not request another verification email.",
+                  );
+                } finally {
+                  setResending(false);
+                }
+              }}
+              className="mt-3 w-full text-sm text-foreground/70 hover:text-foreground underline underline-offset-2 min-h-[44px] disabled:opacity-50"
+              data-testid="button-resend-confirmation"
+            >
+              {resending ? "Requesting another email…" : "Resend confirmation email"}
+            </button>
           )}
 
           <form className="space-y-4" onSubmit={submit}>
