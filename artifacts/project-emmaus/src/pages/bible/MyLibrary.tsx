@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Search, Heart, Bookmark, FileText, HandIcon, Highlighter,
-  ChevronRight, Trash2, Pencil, Check, X, BookOpen,
+  ChevronRight, Trash2, Pencil, Check, X, BookOpen, Clock,
 } from 'lucide-react';
 import { useBible } from '@/contexts/BibleContext';
 import {
@@ -108,10 +108,12 @@ export default function MyLibrary() {
     favourites, removeFavourite,
     bookmarks, removeBookmark,
     highlights, removeHighlight,
+    readingHistory,
   } = useBible();
 
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingPrayerId, setEditingPrayerId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -267,6 +269,62 @@ export default function MyLibrary() {
           </button>
         ))}
       </div>
+
+      {/* Reading History */}
+      <section className="rounded-2xl bg-violet-50/70 dark:bg-violet-950/20 p-3">
+        <div className="flex items-center gap-2 px-1 pb-2">
+          <Clock size={13} className="text-violet-600 dark:text-violet-300" />
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-violet-700 dark:text-violet-300">
+            Reading History
+          </span>
+        </div>
+        {readingHistory.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-violet-200 dark:border-violet-800 p-4 text-[13px] text-muted-foreground">
+            <Clock size={16} className="shrink-0" />
+            <span>Chapters you read will appear here.</span>
+          </div>
+        ) : (
+          <>
+            <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border">
+              {(showAllHistory ? readingHistory : readingHistory.slice(0, 5)).map((entry, i) => (
+                <div
+                  key={`${entry.bookId}-${entry.chapter}-${entry.openedAt}`}
+                  onClick={() => setLocation(`/bible/read/${entry.bookId}/${entry.chapter}`)}
+                  className="flex cursor-pointer items-center gap-3 bg-card px-3.5 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    {i === 0 ? (
+                      <BookOpen size={15} className="text-primary" />
+                    ) : (
+                      <span className="text-[11px] font-semibold text-muted-foreground">{i + 1}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                      {entry.bookName} {entry.chapter}
+                    </div>
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {entry.chapterHeading}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-[10px] text-muted-foreground">
+                    {formatRelativeDate(entry.openedAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {readingHistory.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory(value => !value)}
+                className="mt-2 w-full rounded-xl py-2 text-[12px] font-medium text-violet-700 transition-colors hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-900/30"
+              >
+                {showAllHistory ? 'Show less' : `View more (${readingHistory.length - 5})`}
+              </button>
+            )}
+          </>
+        )}
+      </section>
 
       {/* Empty state */}
       {totalCount === 0 && (
