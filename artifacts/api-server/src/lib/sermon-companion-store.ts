@@ -305,13 +305,25 @@ export async function deleteSermonCompanionContent({
 }
 
 export async function getCompanionBySermonId(sermonId: string): Promise<(Companion & { entries: CompanionEntry[] }) | null> {
-  const res = await pool.query(
-    `SELECT * FROM sermon_companion
-      WHERE sermon_id = $1 OR sermon_uuid = $1
-      ORDER BY created_at DESC
-      LIMIT 1`,
-    [sermonId]
-  );
+  // sermon_id is the legacy text key while sermon_uuid is a real UUID FK.
+  // Do not compare both columns to one parameter: PostgreSQL cannot resolve
+  // `uuid = text`, and canonical sermon IDs are UUIDs while old IDs are not.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sermonId);
+  const res = isUuid
+    ? await pool.query(
+        `SELECT * FROM sermon_companion
+          WHERE sermon_id = $1 OR sermon_uuid = $1::uuid
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [sermonId]
+      )
+    : await pool.query(
+        `SELECT * FROM sermon_companion
+          WHERE sermon_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [sermonId]
+      );
   if (!res.rows[0]) return null;
   const companion = rowToCompanion(res.rows[0]);
   const entries = await getEntriesForCompanion(companion.id);
