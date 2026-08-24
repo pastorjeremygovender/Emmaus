@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback } from '@/lib/return-context';
 import { apiLinkJourney } from '@/lib/rooms-api';
 import { Users } from 'lucide-react';
 
@@ -42,7 +42,7 @@ export default function WalkCompletePage() {
   const walkReturnLabel = 'View Walk Contents';
 
   // Suppress unused-variable warnings — source/sourceId were used previously.
-  void source; void sourceId; void resolveReturn;
+  void source; void sourceId;
 
   // Rooms — show "Add to Room" CTA when user has rooms and walk isn't already linked
   const myRooms = user ? getMyRooms() : [];
@@ -86,7 +86,7 @@ export default function WalkCompletePage() {
               "You've completed this Walk."
             }
             returnLabel={walkReturnLabel}
-            onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+            onReturn={() => goBackOrFallback(returnPath, setLocation)}
             {...(showNextWalk && nextJourney
               ? {
                   continueLabel: `Start ${nextJourney.title}`,

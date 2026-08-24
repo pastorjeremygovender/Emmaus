@@ -37,3 +37,10 @@ Daily Rhythm content (DailyRhythmDay, PreviousDays) always defaults to `/walk` �
 **Why:** Every page previously had a hardcoded `/walk` back arrow. Opening a Journey from Next Steps → Back → `/walk` was disorienting. Tab-specific sources allow returning to the exact tab without sessionStorage guesswork.
 
 **How to apply:** When navigating to any content page, always call `encodeSource('nextStepsX')` and append it. When adding new content types, add their SourceKey to return-context.ts and update callers.
+
+## History fallback rule
+Back actions use the shared `goBackOrFallback()` helper. It only pops history when there is both a prior entry and non-null SPA history state; otherwise it navigates to the resolved parent.
+
+**Why:** Webviews and test/browser environments can report a history length greater than one without a usable in-app entry, which can otherwise send a member to an unrelated page or recreate a return loop.
+
+**How to apply:** Use `goBackOrFallback(parentPath, setLocation)` for member back arrows, completion-card returns, and Previous Days back actions. Keep `setLocation()` for explicit forward links only.

@@ -16,7 +16,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { getStepLabel } from '@/lib/step-label';
 
 export default function PreviousDays() {
@@ -58,7 +58,7 @@ export default function PreviousDays() {
       contentTitle="10 Minutes with Jesus"
       entries={entries}
       loading={loading}
-      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+      onBack={() => goBackOrFallback(backPath, setLocation)}
       onReviewDay={(day) => setLocation(`/daily-rhythm/day/${day}?source=dailyRhythmPrevious`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."

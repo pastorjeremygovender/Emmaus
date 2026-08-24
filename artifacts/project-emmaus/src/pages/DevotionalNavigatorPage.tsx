@@ -198,7 +198,7 @@ export function DevotionalNavigatorPage() {
                     : done
                       ? `Review: ${label}${entry.title ? ` — ${entry.title}` : ''}`
                       : `${label}${entry.title ? ` — ${entry.title}` : ''}`,
-                  onClick: () => setLocation(`/devotional/${seriesId}/day/${entry.dayNumber}?source=navigate`),
+                onClick: () => setLocation(`/devotional/${seriesId}/day/${entry.dayNumber}?source=nextStepsDevotionals`),
                 };
               })}
             />

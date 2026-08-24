@@ -3,6 +3,7 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Share2, Loader2 } from 'lucide-react';
 import type { RoomDetail } from '@/lib/rooms-types';
@@ -80,7 +81,7 @@ export default function InviteMembers() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(`/rooms/${roomId}`); }}
+            onClick={() => goBackOrFallback(`/rooms/${roomId}`, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />

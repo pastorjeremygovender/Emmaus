@@ -41,6 +41,7 @@ import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { BottomNav } from '@/components/BottomNav';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
+import { goBackOrFallback } from '@/lib/return-context';
 
 // ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
 // Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
@@ -131,10 +132,10 @@ export default function DailyRhythmDay() {
     sessionStorage.removeItem(key);
   }, [day]);
 
-  const goBack = () => { if (window.history.length > 1) window.history.back(); else setLocation('/walk'); };
+  const goBack = () => goBackOrFallback('/walk', setLocation);
   // Back to Previous Days — pops history so the Previous Days page itself can still
   // go back naturally. Falls back to forward navigation only when there is no history.
-  const goToPreviousDays = () => { if (window.history.length > 1) window.history.back(); else setLocation('/daily-rhythm/previous?source=walk'); };
+  const goToPreviousDays = () => goBackOrFallback('/daily-rhythm/previous?source=walk', setLocation);
   // Forward navigation to Previous Days — used for the "See Previous Days →" secondary
   // link when the user arrived from Today's Steps (not from Previous Days).
   const openPreviousDays = () => setLocation('/daily-rhythm/previous?source=walk');

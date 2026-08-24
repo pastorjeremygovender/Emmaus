@@ -25,8 +25,8 @@ interface Props {
 
 function readingPath(mode: Props['mode'], journey: Journey, day: number) {
   return mode === 'daily-rhythm'
-    ? `/daily-rhythm/day/${day}?from=navigate`
-    : `/journey/${journey.id}/day/${day}?source=navigate`;
+    ? `/daily-rhythm/day/${day}?source=today`
+    : `/journey/${journey.id}/day/${day}?source=today`;
 }
 
 export function StepNavigatorPage({ mode }: Props) {

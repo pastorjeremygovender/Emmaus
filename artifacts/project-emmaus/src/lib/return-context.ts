@@ -62,6 +62,23 @@ const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   myJourney:            { path: '/my-journey',               label: 'My Journey'     },
 };
 
+/**
+ * Pop only a real in-app history entry. Browser history can contain an
+ * unrelated external page, and test/webview environments can report a
+ * length greater than one without a usable SPA state. Falling back to the
+ * resolved parent keeps a deep link from becoming a dead end or loop.
+ */
+export function goBackOrFallback(
+  fallback: string,
+  setLocation: (path: string, options?: { replace?: boolean }) => void,
+): void {
+  if (window.history.length > 1 && window.history.state !== null) {
+    window.history.back();
+  } else {
+    setLocation(fallback);
+  }
+}
+
 /** Infer a short label from a route path for the fallback case. */
 function pathLabel(path: string): string {
   if (path === '/walk')              return "Today's Steps";
@@ -89,56 +106,81 @@ export function resolveReturn(
   source: string | null | undefined,
   sourceId?: string | null,
   fallback = '/walk',
+  content?: 'devotional' | 'sermon',
 ): { path: string; label: string } {
+  const normalizeLabel = (result: { path: string; label: string }) => {
+    if (content && (source === 'walk' || source === 'today') && result.path === '/walk') {
+      return { ...result, label: "Back to Today's Steps" };
+    }
+    if (content === 'sermon' && result.path.startsWith('/journeys?tab=')) {
+      return { ...result, label: 'Back to Discover' };
+    }
+    if (content === 'devotional' &&
+        (source == null || source === 'nextStepsJourneys' || source === 'nextStepsSermons')) {
+      return result.path.startsWith('/journeys')
+        ? { ...result, label: 'Back to Discover' }
+        : result;
+    }
+    return result;
+  };
+
   if (!source) {
-    return { path: fallback, label: pathLabel(fallback) };
+    return normalizeLabel({ path: fallback, label: pathLabel(fallback) });
   }
 
   if (source === 'journeyDetail') {
-    if (sourceId) return { path: `/journeys/${sourceId}`, label: 'Journey' };
-    return { path: '/journeys?tab=journeys', label: 'Discover' };
+    if (sourceId) return normalizeLabel({ path: `/journeys/${sourceId}`, label: 'Journey' });
+    return normalizeLabel({ path: '/journeys?tab=journeys', label: 'Discover' });
   }
 
   if (source === 'collectionDetail') {
-    if (sourceId) return { path: `/journeys/collections/${sourceId}`, label: 'Collection' };
-    return { path: '/journeys?tab=journeys', label: 'Discover' };
+    if (sourceId) return normalizeLabel({ path: `/journeys/collections/${sourceId}`, label: 'Collection' });
+    return normalizeLabel({ path: '/journeys?tab=journeys', label: 'Discover' });
   }
 
   // Journey Previous Steps — back returns to that journey's previous-steps list.
   if (source === 'journeyPrevious') {
-    if (sourceId) return { path: `/journey/${sourceId}/previous`, label: 'Previous Steps' };
-    return { path: '/journeys?tab=journeys', label: 'Discover' };
+    if (sourceId) return normalizeLabel({ path: `/journey/${sourceId}/previous`, label: 'Previous Steps' });
+    return normalizeLabel({ path: '/journeys?tab=journeys', label: 'Discover' });
   }
 
   // Devotional Previous Days — back returns to that devotional series' previous-days list.
   if (source === 'devotionalPrevious') {
-    if (sourceId) return { path: `/devotional/${sourceId}/previous`, label: 'Previous Steps' };
-    return { path: '/journeys?tab=devotionals', label: 'Discover' };
+    if (sourceId) return normalizeLabel({ path: `/devotional/${sourceId}/previous`, label: 'Previous Steps' });
+    return normalizeLabel({ path: '/journeys?tab=devotionals', label: 'Discover' });
   }
 
   // Sermon Companion Previous Steps — back returns to that companion's previous-steps list.
   if (source === 'sermonCompanionPrevious') {
-    if (sourceId) return { path: `/sermon-companion/${sourceId}/previous`, label: 'Previous Steps' };
-    return { path: '/journeys?tab=sermons', label: 'Discover' };
+    if (sourceId) return normalizeLabel({ path: `/sermon-companion/${sourceId}/previous`, label: 'Previous Steps' });
+    return normalizeLabel({ path: '/journeys?tab=sermons', label: 'Discover' });
   }
 
   // Daily Rhythm Previous Days — back returns to the daily rhythm previous-days list.
   if (source === 'dailyRhythmPrevious') {
-    return { path: '/daily-rhythm/previous', label: 'Previous Steps' };
+    return normalizeLabel({ path: '/daily-rhythm/previous', label: 'Previous Steps' });
   }
 
   // Group context — content opened via a Group's "Today's Study" card.
   // Back returns to that specific Group, never to personal Next Steps.
   if (source === 'room') {
-    if (sourceId) return { path: `/rooms/${sourceId}`, label: 'Group' };
-    return { path: '/rooms', label: 'My Groups' };
+    if (sourceId) return normalizeLabel({ path: `/rooms/${sourceId}`, label: 'Group' });
+    return normalizeLabel({ path: '/rooms', label: 'My Groups' });
+  }
+
+  // Sermon companion opened from the Sermon Home page. Keep this distinct
+  // from the Sermons discovery tab so the member returns to the sermon they
+  // were actually viewing.
+  if (source === 'sermonHome') {
+    if (sourceId) return normalizeLabel({ path: `/sermon/${sourceId}`, label: "This Week's Sermon" });
+    return normalizeLabel({ path: '/journeys?tab=sermons', label: 'Discover' });
   }
 
   const mapped = SOURCE_MAP[source];
-  if (mapped) return mapped;
+  if (mapped) return normalizeLabel(mapped);
 
   // Unrecognised source — use fallback
-  return { path: fallback, label: pathLabel(fallback) };
+  return normalizeLabel({ path: fallback, label: pathLabel(fallback) });
 }
 
 /**

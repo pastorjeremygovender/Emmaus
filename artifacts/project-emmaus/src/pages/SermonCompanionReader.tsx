@@ -27,28 +27,9 @@ import { dismissBadge } from '@/lib/badge-api';
 import { setActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
 import { recordView } from '@/lib/history-api';
 import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
+import { encodeSource, goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-
-// ─── Source-aware return helpers ──────────────────────────────────────────────
-
-function resolveReturn(source: string | null, sourceId?: string | null): { path: string; label: string } {
-  // Previous-steps review — back returns to that companion's previous-steps list
-  if (source === 'sermonCompanionPrevious') {
-    if (sourceId) return { path: `/sermon-companion/${sourceId}/previous`, label: 'Previous Steps' };
-    return { path: '/journeys?tab=sermons', label: 'Discover' };
-  }
-  if (source === 'sermonHome' && sourceId)
-    return { path: `/sermon/${sourceId}`, label: "This Week's Sermon" };
-  if (source === 'today' || source === 'walk')
-    return { path: '/walk', label: "Back to Today's Steps" };
-  if (source === 'nextStepsDevotionals')
-    return { path: '/journeys?tab=devotionals', label: 'Back to Discover' };
-  if (source === 'nextStepsJourneys')
-    return { path: '/journeys?tab=journeys', label: 'Back to Discover' };
-  // nextStepsSermons, nextSteps (legacy), or unknown → Sermon Companions tab
-  return { path: '/journeys?tab=sermons', label: 'Back to Discover' };
-}
 
 // ─── API types ────────────────────────────────────────────────────────────────
 
@@ -177,7 +158,13 @@ export default function SermonCompanionReader() {
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
 
-  const { path: returnDest, label: returnLabel } = resolveReturn(source, sourceId);
+  const legacyAwareSource = source === 'nextSteps' ? 'nextStepsSermons' : source;
+  const { path: returnDest, label: returnLabel } = resolveReturn(
+    legacyAwareSource,
+    sourceId,
+    '/journeys?tab=sermons',
+    'sermon',
+  );
 
   const [companion, setCompanion]       = useState<MemberCompanion | null>(null);
   const [progress, setProgress]         = useState<SCProgress | null>(null);
@@ -354,7 +341,8 @@ export default function SermonCompanionReader() {
   // ── Main reading view ──
 
   // Previous days URL — encode back destination so the list knows where to return.
-  const prevDaysUrl = `/sermon-companion/${companionId}/previous?source=${source ?? 'nextStepsSermons'}${sourceId ? `&sourceId=${sourceId}` : ''}`;
+  const previousSource = source ?? 'nextStepsSermons';
+  const prevDaysUrl = `/sermon-companion/${companionId}/previous${encodeSource(previousSource, sourceId ?? undefined)}`;
   const hasPreviousDays = day > 1;
 
   // Primary action button shown inside DevotionalReading
@@ -365,7 +353,7 @@ export default function SermonCompanionReader() {
     const nextEntry = resolveNextEntry(companion.entries, day);
     const hasNextEntry = !!nextEntry;
     const nextUrl = hasNextEntry
-      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsSermons'}${sourceId ? `&sourceId=${sourceId}` : ''}`
+      ? `/sermon-companion/${companionId}/day/${nextEntry.dayNumber}${encodeSource(previousSource, sourceId ?? undefined)}`
       : '';
     actionButton = (
       <EmmausCompletionCard
@@ -378,7 +366,7 @@ export default function SermonCompanionReader() {
         onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
         continueLabel={hasNextEntry ? 'Continue to Next Reflection' : undefined}
         returnLabel={returnLabel}
-        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
+        onReturn={() => goBackOrFallback(returnDest, setLocation)}
         previousDaysLabel="View Previous Reflections →"
         onPreviousDays={hasPreviousDays ? () => setLocation(prevDaysUrl) : undefined}
       />
@@ -390,7 +378,7 @@ export default function SermonCompanionReader() {
         heading={`Step ${day} complete.`}
         subMessage="May the Lord continue His work in your heart today."
         returnLabel={returnLabel}
-        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
+        onReturn={() => goBackOrFallback(returnDest, setLocation)}
       />
     );
   } else {
@@ -414,7 +402,7 @@ export default function SermonCompanionReader() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/40">
         <div className="max-w-[480px] mx-auto px-4 h-12 flex items-center gap-2">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnDest); }}
+            onClick={() => goBackOrFallback(returnDest, setLocation)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors -ml-1 shrink-0"
           >
             <ChevronLeft size={16} />

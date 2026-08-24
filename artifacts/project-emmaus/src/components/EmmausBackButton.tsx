@@ -21,7 +21,7 @@
 import React, { useRef } from 'react';
 import { useLocation } from 'wouter';
 import { ArrowLeft } from 'lucide-react';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 export interface EmmausBackButtonProps {
   /** Value of ?source= URL param on the current page. */
@@ -66,11 +66,7 @@ export function EmmausBackButton({
     // PRIMARY: unwind the history stack — never push a new forward entry.
     // FALLBACK: only navigate to the resolved path when this page was opened
     //           directly (no in-app history to go back to).
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      setLocation(path);
-    }
+    goBackOrFallback(path, setLocation);
 
     // Reset so the button works again if SPA navigation doesn't unmount it.
     setTimeout(() => { firedRef.current = false; }, 500);

@@ -14,7 +14,7 @@
 
 import { useParams, useLocation } from 'wouter';
 import { useJourney } from '@/contexts/JourneyContext';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
 import { getStepLabel } from '@/lib/step-label';
 
@@ -38,8 +38,8 @@ export default function JourneyPreviousDays() {
   // Show ALL published steps — nothing locked or restricted.
   // Members can access any step at any time.
   const entries: PreviousDayEntry[] = journey
-    ? getStepsForJourney(journey.id)
-        .filter(s => s.status === 'Published' && !s.isCompletionStep)
+      ? getStepsForJourney(journey.id)
+        .filter(s => s.status === 'Published' && !s.isCompletionStep && s.day < currentDay)
         .sort((a, b) => a.day - b.day)
         .map(s => ({
           dayNumber: s.day,
@@ -55,7 +55,7 @@ export default function JourneyPreviousDays() {
       contentTitle={journey?.title ?? 'Walk'}
       entries={entries}
       loading={loading}
-      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+      onBack={() => goBackOrFallback(backPath, setLocation)}
       onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?source=journeyPrevious&sourceId=${journeyId}`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."

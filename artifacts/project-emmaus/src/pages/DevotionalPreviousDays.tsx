@@ -14,7 +14,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import {
   getSeriesWithEntries,
   getProgress,
@@ -83,7 +83,7 @@ export default function DevotionalPreviousDays() {
       screenTitle="All Devotionals"
       entries={entries}
       loading={loading}
-      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+      onBack={() => goBackOrFallback(backPath, setLocation)}
       onReviewDay={openEntry}
       onContinueDay={openEntry}
       backLabel={backLabel}

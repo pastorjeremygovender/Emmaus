@@ -15,7 +15,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { PreviousDaysScreen, type PreviousDayEntry } from '@/components/PreviousDaysScreen';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -74,8 +74,9 @@ export default function SermonCompanionPreviousDays() {
   const completedSet = new Set(companion?.progress?.completedDays ?? []);
 
   // All published entries are accessible — members can open any step freely.
+  const currentDay = companion?.progress?.currentDay ?? 1;
   const entries: PreviousDayEntry[] = (companion?.entries ?? [])
-    .filter(e => e.status === 'Published')
+    .filter(e => e.status === 'Published' && e.dayNumber < currentDay)
     .sort((a, b) => b.dayNumber - a.dayNumber)
     .map(e => ({
       dayNumber: e.dayNumber,
@@ -93,12 +94,12 @@ export default function SermonCompanionPreviousDays() {
       contentTitle={companion?.title ?? 'Sermon Companion'}
       entries={entries}
       loading={loading}
-      onBack={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+      onBack={() => goBackOrFallback(backPath, setLocation)}
       onReviewDay={openDay}
       onContinueDay={openDay}
       backLabel={backLabel}
       screenTitle="All Steps"
-      emptyMessage="No companion steps are available yet."
+      emptyMessage="No previous companion steps are available yet."
     />
   );
 }

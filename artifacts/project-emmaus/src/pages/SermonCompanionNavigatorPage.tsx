@@ -111,7 +111,7 @@ export function SermonCompanionNavigatorPage() {
                       ? 'bg-primary/5 hover:bg-primary/10 active:bg-primary/15'
                       : 'bg-card hover:bg-muted/40 active:bg-muted/60'
                   }`}
-                  onClick={() => setLocation(`/sermon-companion/${id}/day/${entry.dayNumber}?source=navigate`)}
+                  onClick={() => setLocation(`/sermon-companion/${id}/day/${entry.dayNumber}?source=nextStepsSermons`)}
                   aria-label={
                     isCurrent
                       ? `Up next: Step ${entry.dayNumber}${entry.title ? ` — ${entry.title}` : ''}`

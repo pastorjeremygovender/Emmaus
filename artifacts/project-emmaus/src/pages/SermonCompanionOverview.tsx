@@ -27,6 +27,7 @@ import {
 import { BottomNav } from '@/components/BottomNav';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { useAuth } from '@/contexts/AuthContext';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import {
   setActiveSermonCompanionContext,
 } from '@/lib/sermon-companion-context';
@@ -98,12 +99,6 @@ function formatDate(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-function resolveBack(source: string | null): { path: string; label: string } {
-  if (source === 'today' || source === 'walk')
-    return { path: '/walk', label: "Today's Steps" };
-  return { path: '/journeys?tab=sermons', label: 'Sermon Companions' };
 }
 
 /** Extract display label from a sermonLink value (YouTube URL with ?t= or plain MM:SS). */
@@ -310,7 +305,11 @@ export default function SermonCompanionOverview() {
 
   const companionId   = params.id ?? '';
   const source        = new URLSearchParams(window.location.search).get('source') ?? 'nextStepsSermons';
-  const { path: backPath, label: backLabel } = resolveBack(source);
+  const { path: backPath, label: backLabel } = resolveReturn(
+    source,
+    new URLSearchParams(window.location.search).get('sourceId'),
+    '/journeys?tab=sermons',
+  );
 
   const [companion, setCompanion] = useState<MemberCompanion | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -465,7 +464,7 @@ export default function SermonCompanionOverview() {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
-          <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
+          <button onClick={() => goBackOrFallback(backPath, setLocation)} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
             <ArrowLeft size={18} />
           </button>
           <p className="text-[11px] font-semibold tracking-widest text-primary uppercase">
@@ -486,7 +485,7 @@ export default function SermonCompanionOverview() {
     return (
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
-          <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
+          <button onClick={() => goBackOrFallback(backPath, setLocation)} className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 text-muted-foreground" aria-label="Go back">
             <ArrowLeft size={18} />
           </button>
           <p className="text-[11px] font-semibold tracking-widest text-primary uppercase">
@@ -498,7 +497,7 @@ export default function SermonCompanionOverview() {
             <AlertCircle size={28} className="text-muted-foreground/30" />
             <p className="text-[15px] font-medium text-foreground">{error || 'Companion not found.'}</p>
             <div className="flex gap-3">
-              <button onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }} className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-[13px] text-muted-foreground hover:bg-muted/60">
+              <button onClick={() => goBackOrFallback(backPath, setLocation)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-[13px] text-muted-foreground hover:bg-muted/60">
                 <ArrowLeft size={13} /> {backLabel}
               </button>
               <button onClick={load} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] hover:bg-primary/90">
@@ -525,7 +524,7 @@ export default function SermonCompanionOverview() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
         <button
-          onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backPath); }}
+          onClick={() => goBackOrFallback(backPath, setLocation)}
           className="p-1.5 -ml-1 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground"
           aria-label={`Back to ${backLabel}`}
         >

@@ -73,7 +73,7 @@ describe('Welcome — first daily open routing', () => {
   });
 
   it('opens the current Daily Rhythm step after an overnight same-session reopen', () => {
-    const yesterdayKey = accountStorageKey('emmaus_last_opened_v2', 'daily-open-member');
+    const yesterdayKey = accountStorageKey('emmaus_last_opened_v3', 'daily-open-member');
     localStorage.setItem(yesterdayKey, '2026-08-20');
 
     const { rerender } = render(<Welcome />);
@@ -87,7 +87,7 @@ describe('Welcome — first daily open routing', () => {
   });
 
   it('opens Today’s Steps after Daily Rhythm has already opened today', () => {
-    const todayKey = accountStorageKey('emmaus_last_opened_v2', 'daily-open-member');
+    const todayKey = accountStorageKey('emmaus_last_opened_v3', 'daily-open-member');
     localStorage.setItem(todayKey, '2026-08-21');
     journeyLoading = false;
 

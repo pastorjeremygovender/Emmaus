@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, Search, BookOpen, Loader2 } from 'lucide-react';
 import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 
 type SearchResult = {
   bookId: string;
@@ -85,7 +86,7 @@ export default function BibleSearch() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto gap-3">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/bible'); }}
+            onClick={() => goBackOrFallback('/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
             aria-label="Back"
           >

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Check, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { motion } from 'framer-motion';
 import { DailyRhythmReading, resolveDisplayName } from '@/components/DailyRhythmReading';
 import { getStepLabel } from '@/lib/step-label';
@@ -363,7 +363,7 @@ export default function JourneyDay() {
           heading={`${getStepLabel({ day, displayLabel: (step as any)?.displayLabel ?? null }, journey)} complete.`}
           subMessage={`You've completed this Step. There ${remainingCount === 1 ? 'is still 1 part' : `are still ${remainingCount} parts`} of this Walk waiting for you.`}
           returnLabel={backLabel}
-          onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+           onReturn={() => goBackOrFallback(returnPath, setLocation)}
           onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
           previousDaysLabel="View Previous Steps →"
         />
@@ -378,7 +378,7 @@ export default function JourneyDay() {
         onContinue={nextStepUrl ? () => setLocation(nextStepUrl) : undefined}
         continueLabel={nextStepUrl ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day') : undefined}
         returnLabel={backLabel}
-        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+         onReturn={() => goBackOrFallback(returnPath, setLocation)}
         onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
         previousDaysLabel="View Previous Steps →"
       />
@@ -392,7 +392,7 @@ export default function JourneyDay() {
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           {/* Back button — returns to the source context (Next Steps, Walk overview, etc.) */}
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path); }}
+             onClick={() => goBackOrFallback(isDailyRhythmJourney ? '/walk' : resolveReturn(source, sourceId, '/journeys?tab=journeys').path, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >

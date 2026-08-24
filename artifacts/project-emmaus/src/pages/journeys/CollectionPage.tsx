@@ -16,6 +16,7 @@ import { getCollection, getCollectionJourneys } from '@/lib/collections-api';
 import type { Collection } from '@/lib/collections-api';
 import { ChevronLeft } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
+import { goBackOrFallback } from '@/lib/return-context';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -231,7 +232,7 @@ export default function CollectionPage() {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(backDestination); }}
+            onClick={() => goBackOrFallback(backDestination, setLocation)}
             className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors shrink-0"
             aria-label="Back"
           >

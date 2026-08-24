@@ -39,27 +39,7 @@ import { resolveDisplayName } from '@/components/DailyRhythmReading';
 import { resolveNextEntry } from '@/lib/resolve-next-entry';
 import { dismissBadge } from '@/lib/badge-api';
 import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
-
-// ─── Source-aware return helpers ──────────────────────────────────────────────
-
-function resolveReturn(source: string | null, sourceId?: string | null): { path: string; label: string } {
-  // Previous-days review — back returns to that series' previous-days list
-  if (source === 'devotionalPrevious') {
-    if (sourceId) return { path: `/devotional/${sourceId}/previous`, label: 'Previous Steps' };
-    return { path: '/journeys?tab=devotionals', label: 'Discover' };
-  }
-  if (source === 'nextStepsDevotionals' || source === 'nextSteps')
-    return { path: '/journeys?tab=devotionals', label: 'Discover' };
-  if (source === 'nextStepsJourneys')
-    return { path: '/journeys?tab=journeys', label: 'Back to Discover' };
-  if (source === 'nextStepsSermons')
-    return { path: '/journeys?tab=sermons', label: 'Back to Discover' };
-  if (source === 'today' || source === 'walk')
-    return { path: '/walk', label: "Back to Today's Steps" };
-  // Fallback for deep links with no source — default to devotionals tab
-  if (!source) return { path: '/journeys?tab=devotionals', label: 'Back to Discover' };
-  return { path: '/walk', label: "Back to Today's Steps" };
-}
+import { encodeSource, goBackOrFallback, resolveReturn } from '@/lib/return-context';
 
 export default function DevotionalDay() {
   const params = useParams<{ seriesId: string; day: string }>();
@@ -72,7 +52,13 @@ export default function DevotionalDay() {
   // Read source/sourceId once on mount — query string doesn't change during the page lifetime
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
-  const { path: returnPath, label: returnLabel } = resolveReturn(source, sourceId);
+  const devotionalSource = source === 'nextSteps' ? 'nextStepsDevotionals' : source;
+  const { path: returnPath, label: returnLabel } = resolveReturn(
+    devotionalSource,
+    sourceId,
+    '/journeys?tab=devotionals',
+    'devotional',
+  );
 
   const [seriesData, setSeriesData] = useState<SeriesWithEntries | null>(null);
   const [progress, setProgress] = useState<DevotionalProgress | null>(null);
@@ -211,9 +197,10 @@ export default function DevotionalDay() {
     const nextEntry = resolveNextEntry(seriesData.entries, day);
     const hasNextEntry = !!nextEntry;
     // Previous entries navigation — encode the back destination.
-    const prevDaysUrl = `/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`;
+      const previousSource = source ?? 'nextStepsDevotionals';
+      const prevDaysUrl = `/devotional/${seriesId}/previous${encodeSource(previousSource, sourceId ?? undefined)}`;
     const nextUrl = hasNextEntry
-      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`
+      ? `/devotional/${seriesId}/day/${nextEntry.dayNumber}${encodeSource(previousSource, sourceId ?? undefined)}`
       : '';
     actionButton = (
       <EmmausCompletionCard
@@ -226,7 +213,7 @@ export default function DevotionalDay() {
         onContinue={hasNextEntry ? () => setLocation(nextUrl) : undefined}
         continueLabel={hasNextEntry ? 'Continue to Next Devotional' : undefined}
         returnLabel={returnLabel}
-        onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+        onReturn={() => goBackOrFallback(returnPath, setLocation)}
         previousDaysLabel="View Devotional Contents"
         onPreviousDays={justCompleted || alreadyCompleted ? () => setLocation(prevDaysUrl) : undefined}
       />
@@ -264,7 +251,7 @@ export default function DevotionalDay() {
 
           {/* Back — arrow only, no text label */}
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+            onClick={() => goBackOrFallback(returnPath, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >
@@ -288,7 +275,7 @@ export default function DevotionalDay() {
             />
             {totalEntries > 1 && (
               <button
-                onClick={() => setLocation(`/devotional/${seriesId}/previous?source=${source ?? 'nextStepsDevotionals'}${sourceId ? `&sourceId=${sourceId}` : ''}`)}
+                onClick={() => setLocation(`/devotional/${seriesId}/previous${encodeSource(source ?? 'nextStepsDevotionals', sourceId ?? undefined)}`)}
                 className="p-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="All Devotionals"
                 title="All Devotionals"
