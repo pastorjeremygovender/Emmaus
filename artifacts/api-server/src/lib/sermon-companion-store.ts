@@ -543,7 +543,8 @@ export async function publishCompanionAtomic(id: string, notifyMembers = false):
 
 /**
  * Returns all Published companions that have at least one Published entry,
- * ordered by publication date descending (most-recent first).
+ * ordered by the canonical sermon display order used by Content Studio,
+ * with publication date as the fallback for older records.
  * Used by the member Next Steps endpoint.
  */
 export async function listPublishedSermonCompanions(): Promise<
@@ -553,11 +554,13 @@ export async function listPublishedSermonCompanions(): Promise<
     SELECT sc.*,
            COUNT(sce.id) FILTER (WHERE sce.status = 'Published') AS published_entry_count
     FROM   sermon_companion sc
+    LEFT JOIN sermons s ON s.id = sc.sermon_uuid
     LEFT JOIN sermon_companion_entry sce ON sce.companion_id = sc.id
     WHERE  sc.status = 'Published'
     GROUP  BY sc.id
     HAVING COUNT(sce.id) FILTER (WHERE sce.status = 'Published') > 0
-    ORDER  BY COALESCE(sc.published_at, sc.updated_at) DESC
+    ORDER  BY COALESCE(s.display_order, sc.display_order, 0) ASC,
+              COALESCE(s.created_at, sc.published_at, sc.updated_at) DESC
   `);
   return res.rows.map(row => ({
     ...rowToCompanion(row),
