@@ -44,3 +44,10 @@ Prompt update: `SPEAKER RULE` in `COMPANION_SYSTEM` — never "the pastor"/"the 
 
 **Why:**
 Spec required Content Studio → Sermons to be the single authoritative source. The legacy journey-companion merge was the structural root cause of the discrepancy between admin view and member view.
+
+## Publish-to-member hand-off
+Publishing with member notification now also assigns the companion as `is_current_week` in the same transaction, clearing the previous current companion. Quiet publishes do not replace the current week.
+
+**Why:** A production companion was fully Published with all five entries Published but had never been assigned current-week, so the member “This Week’s Sermon” surface depended on fallback behavior and could appear empty on older deployed clients.
+
+**How to apply:** Use the normal publish + notify action for the sermon intended for members. Use the explicit “Set as This Week’s Sermon” control for already-published records or quiet/archive publishes.
