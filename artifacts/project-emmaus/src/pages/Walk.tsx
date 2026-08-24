@@ -378,7 +378,6 @@ export default function Walk() {
   const [pauseTarget, setPauseTarget] = useState<
     { type: 'journey'; id: string; title: string }
     | { type: 'devotional'; id: string; title: string }
-    | { type: 'sermon-companion'; id: string; title: string }
     | null
   >(null);
 
@@ -434,73 +433,15 @@ export default function Walk() {
     void userId;
   }, []);
 
-  // ── Sermon Companions — in-progress (section 5) ──────────────────────────────
-  // All started, non-paused companions EXCEPT the current-week one (shown in section 2).
-  const [scCompanions, setScCompanions] = useState<Array<{
-    id: string;
-    title: string;
-    numberOfDays: number;
-    currentDay: number;
-    completedDays: number[];
-    /** Title of the entry at currentDay, if available. */
-    nextEntryTitle?: string;
-    isCurrentWeek: boolean;
-    /** Smart Content Indicator — UPDATED only on Today's Steps */
-    badge?: 'UPDATED' | null;
-  }>>([]);
-
-  const reloadScCompanions = useCallback((userId: string) => {
-    fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Array<{
-        id: string;
-        title: string;
-        numberOfDays: number;
-        isCurrentWeek: boolean;
-        entries: { dayNumber: number; title: string }[];
-        progress: { currentDay: number; completedDays: number[]; status: string } | null;
-        badge?: 'NEW' | 'UPDATED' | null;
-      }>) => {
-        // Show only companions the member has started, not paused, not hidden,
-        // and NOT the current-week companion (shown in the permanent section 2 card).
-        const started = data
-          .filter(c =>
-            c.progress !== null &&
-            c.progress.status !== 'paused' &&
-            !(c.progress as { hiddenFromToday?: boolean }).hiddenFromToday &&
-            !c.isCurrentWeek,          // current-week lives in the permanent card
-          )
-          .sort((a, b) => (b.isCurrentWeek ? 1 : 0) - (a.isCurrentWeek ? 1 : 0));
-        setScCompanions(started.map(c => {
-          const currentDay = c.progress!.currentDay;
-          const nextEntryTitle = c.entries.find(e => e.dayNumber === currentDay)?.title;
-          return {
-            id: c.id,
-            title: c.title,
-            numberOfDays: c.numberOfDays,
-            currentDay,
-            completedDays: c.progress!.completedDays,
-            nextEntryTitle,
-            isCurrentWeek: c.isCurrentWeek,
-            // Today's Steps only shows UPDATED — never NEW
-            badge: c.badge === 'UPDATED' ? 'UPDATED' : null,
-          };
-        }));
-      })
-      .catch(() => setScCompanions([]));
-    void userId;
-  }, []);
-
   // Initial fetch — runs once when the user is known.
   useEffect(() => {
     if (!user?.id) return;
     reloadThisWeekCompanion(user.id);
-    reloadScCompanions(user.id);
     loadRooms().catch(() => {/* rooms are supplementary */});
-  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions, loadRooms]);
+  }, [user?.id, reloadThisWeekCompanion, loadRooms]);
 
-  // Visibility-change refresh — refreshes the This Week's Sermon card (and the
-  // in-progress companions list) whenever the member returns to this tab.
+  // Visibility-change refresh — refreshes the This Week's Sermon card whenever
+  // the member returns to this tab.
   // Critical for Sunday mornings: admin marks a new companion as This Week's
   // Sermon while the member has Today's Steps open; when they switch back to the
   // app the card updates immediately without requiring a manual reload.
@@ -515,13 +456,12 @@ export default function Walk() {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
         reloadThisWeekCompanion(userId);
-        reloadScCompanions(userId);
         reloadDevotionals(userId).catch(() => {/* non-fatal */});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [user?.id, reloadThisWeekCompanion, reloadScCompanions, reloadDevotionals]);
+  }, [user?.id, reloadThisWeekCompanion, reloadDevotionals]);
 
   // ── First-daily-open redirect ─────────────────────────────────────────────
   // On the first app open each day, navigate the member directly to their
@@ -909,47 +849,6 @@ export default function Walk() {
               />
             );
           })}
-          {scCompanions.map(sc => {
-            const completedCount = sc.completedDays.length;
-            const total          = sc.numberOfDays;
-            const isComplete     = total > 0 && sc.currentDay > total;
-            const allComplete    = total > 0 && completedCount >= total;
-            const scDesc         = allComplete
-              ? 'Complete'
-              : sc.nextEntryTitle || undefined;
-            const destination    = isComplete
-              ? `/sermon-companion/${sc.id}/overview?source=today`
-              : `/sermon-companion/${sc.id}/day/${sc.currentDay}?source=today`;
-            return (
-              <CompactCard
-                key={sc.id}
-                title={sc.title}
-                subtitle={`Sermon companion · ${scDesc}`}
-                ctaLabel={isComplete ? 'Review' : 'Continue'}
-                onAction={() => {
-                  void dismissBadge('companion', sc.id);
-                  // Complete companions go to the overview summary; in-progress
-                  // ones show the Previous / Current / Next navigator.
-                  if (isComplete) {
-                    setLocation(`/sermon-companion/${sc.id}/overview?source=today`);
-                  } else {
-                    setLocation(`/sermon-companion/${sc.id}/navigate`);
-                  }
-                }}
-                done={isComplete}
-                badge={sc.badge ?? null}
-                trailing={
-                  <WalkMoreMenu
-                    onPause={() => setPauseTarget({ type: 'sermon-companion', id: sc.id, title: sc.title })}
-                    onHide={() => {
-                      setScCompanions(prev => prev.filter(c => c.id !== sc.id));
-                      void callEngagementAction('sermon-companion', sc.id, 'hide', user?.id);
-                    }}
-                  />
-                }
-              />
-            );
-          })}
           <AddMoreRow label="Add a Walk" onClick={() => navigateToDiscover('walks')} />
         </SectionWrapper>
 
@@ -1059,9 +958,6 @@ export default function Walk() {
             } else if (target.type === 'devotional') {
               setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
               void callEngagementAction('devotional', target.id, 'pause', user?.id);
-            } else {
-              setScCompanions(prev => prev.filter(c => c.id !== target.id));
-              void callEngagementAction('sermon-companion', target.id, 'pause', user?.id);
             }
           }}
         />
