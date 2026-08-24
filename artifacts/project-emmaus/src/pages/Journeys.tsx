@@ -974,17 +974,18 @@ export default function Journeys() {
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-10 max-w-[480px] mx-auto">
 
-        {/* Header */}
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-              Discover
-            </h1>
-            <p className="text-[14px] text-muted-foreground leading-relaxed">
-              What would you like to explore?
-            </p>
-          </div>
+        <div className="-mt-3 flex justify-end">
           <ShareEmmausButton />
+        </div>
+
+        {/* Header */}
+        <header className="space-y-1">
+          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+            Discover
+          </h1>
+          <p className="text-[14px] text-muted-foreground leading-relaxed">
+            What would you like to explore?
+          </p>
         </header>
 
         {/* Unified Ask Emmaus / Search input */}

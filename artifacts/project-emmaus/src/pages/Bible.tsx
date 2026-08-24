@@ -39,10 +39,13 @@ export default function Bible() {
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-12 max-w-[520px] mx-auto space-y-6">
 
-        {/* Header */}
-        <header className="flex items-start justify-between gap-3">
-          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
+        <div className="-mt-3 flex justify-end">
           <ShareEmmausButton />
+        </div>
+
+        {/* Header */}
+        <header className="space-y-1">
+          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
         </header>
 
         {/* Ask Emmaus */}
