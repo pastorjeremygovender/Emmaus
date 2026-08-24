@@ -252,6 +252,10 @@ export async function runProdDataSync(): Promise<void> {
     // never an empty string (which fails Postgres JSONB parsing).
     let stepsInserted = 0;
     for (const s of steps) {
+      // A tombstoned journey is intentionally not restored above. Its seed
+      // steps must be skipped as well, otherwise the FK rejects them on every
+      // boot and can keep the API unhealthy while startup is still settling.
+      if (tombstones.has(s.journey_id)) continue;
       try {
         const contentVal = s.content != null
           ? (typeof s.content === "string" ? s.content : JSON.stringify(s.content))

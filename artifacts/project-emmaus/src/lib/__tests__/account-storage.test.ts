@@ -59,7 +59,7 @@ describe('verified-account browser storage isolation', () => {
     const journeys = [{ id: 'daily', journeyType: 'daily-rhythm' }];
     const progress = { daily: { currentDay: 4, completedDays: [1, 2, 3] } };
     const getSteps = () => [1, 2, 3, 4, 5].map(day => ({ day }));
-    const dailyOpenKey = accountStorageKey('emmaus_last_opened_v2', SUBJECT_A);
+    const dailyOpenKey = accountStorageKey('emmaus_last_opened_v3', SUBJECT_A);
 
     expect(resolveDailyOpenRoute(SUBJECT_A, journeys, progress, getSteps))
       .toBe('/daily-rhythm/day/4');

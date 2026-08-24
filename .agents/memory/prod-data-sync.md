@@ -40,3 +40,10 @@ The export-seed reads the **dev** database. Content written in the production ad
 - `the-road-to-emmaus` — "The Road to Emmaus", 3 steps, all with content
 - `coming-to-jesus` — "Who Is God?", 5 steps + completion, all currently empty
 - `15-minutes-with-jesus` — "10 Minutes with Jesus", 7 steps, all with content
+
+## Tombstoned journey steps
+When a seed journey is skipped because its ID is in `reseed_tombstones`, its seed steps must be skipped too.
+
+**Why:** The journey tombstone intentionally prevents recreation; attempting its steps afterward violates the `journey_steps.journey_id` foreign key on every production boot.
+
+**How to apply:** Keep the tombstone check before every step upsert, not only before the parent journey upsert.

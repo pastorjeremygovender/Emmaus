@@ -21,6 +21,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 vi.mock('@/lib/devotionals-api', () => ({
   getSeriesWithEntries: mocks.getSeriesWithEntries,
+  getSeriesWithEntriesForAdmin: mocks.getSeriesWithEntries,
   updateSeries: mocks.updateSeries,
   saveEntry: mocks.saveEntry,
   deleteEntry: mocks.deleteEntry,
