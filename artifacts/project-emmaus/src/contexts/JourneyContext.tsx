@@ -322,7 +322,11 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       if (!user?.id) return;
       const subject = user.id;
 
-      // Optimistic update
+      const isDailyRhythm = journeys.find(j => j.id === journeyId)?.journeyType === 'daily-rhythm'
+        || journeys.find(j => j.id === journeyId)?.journeyType === 'core';
+
+      // Optimistically record completion only. Daily Rhythm's current step is
+      // server-owned and must never be advanced by client state or navigation.
       setProgress(p => {
         const existing = p[journeyId];
         if (!existing) return p;
@@ -332,7 +336,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
           [journeyId]: {
             ...existing,
             completedDays,
-            currentDay: Math.max(existing.currentDay, day + 1),
+            currentDay: isDailyRhythm ? existing.currentDay : Math.max(existing.currentDay, day + 1),
             lastCompletedAt: new Date().toISOString(),
           },
         };
@@ -360,7 +364,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         })
         .catch((err) => console.error('[Emmaus] completeStep server sync failed:', err));
     },
-    [user?.id]
+    [user?.id, journeys]
   );
 
   // ─── Admin mutations — await API, then update local state ──────────────────

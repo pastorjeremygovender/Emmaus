@@ -65,6 +65,7 @@
 - [Bulk Bible Study imports](bulk-bible-study-imports.md) — server-reparsed previews; chapter-atomic Skip/Replace/Merge; authored Study data and member metadata stay protected.
 - [Daily Rhythm day groups](daily-rhythm-day-groups.md) — day-level memberships power manual grouped browsing; first-open direct-to-day routing stays unchanged.
 - [Daily launch cold-start race](daily-launch-cold-start-race.md) — cold /walk loads can consume the one-shot check before authenticated journeys arrive; route through Welcome and retry only with real data.
+- [Daily Rhythm server authority](daily-rhythm-server-authority.md) — completion stays on the current day; a locked server decision unlocks one next step on a later local calendar date.
 - [Bible Study coverage queue](bible-study-coverage-queue.md) — generation and progress views must use the canonical 66-book catalogue and prioritize unfinished coverage, not a seed-book shortlist.
 - [YouTube OAuth production origin](youtube-oauth-production-origin.md) — production callback must use emmaus.co.za and one-time state, not the returning browser session cookie.
 - [YouTube Whisper pending state](youtube-whisper-pending.md) — caption-miss markers need an explicit retry path; the bulk pipeline must not leave them stranded.

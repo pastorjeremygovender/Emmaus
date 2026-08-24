@@ -204,9 +204,12 @@ export const userJourneyProgressTable = pgTable("user_journey_progress", {
     .notNull()
     .references(() => journeysTable.id, { onDelete: "cascade" }),
   currentDay: integer("current_day").notNull().default(1),
+  dailyRhythmUnlockAt: timestamp("daily_rhythm_unlock_at"),
   completedDays: jsonb("completed_days").$type<number[]>().notNull().default([]),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   lastCompletedAt: timestamp("last_completed_at"),
+  dailyRhythmTimezone: text("daily_rhythm_timezone").notNull().default("Africa/Johannesburg"),
+  lastDailyOpenDate: text("last_daily_open_date"),
   status: text("status").notNull().default("active"),  // active|completed|paused|dropped
   // Set to NOW() when the member opens/views the content — used by badge computation.
   lastOpenedAt: timestamp("last_opened_at"),

@@ -73,6 +73,18 @@ router.get("/journeys/progress", async (req: Request, res: Response) => {
   res.json({ progress });
 });
 
+router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response) => {
+  const userId = resolveUserId(req);
+  if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
+  try {
+    res.set("Cache-Control", "no-store");
+    res.json(await store.getDailyRhythmStartup(userId));
+  } catch (err) {
+    console.error("GET /journeys/daily-rhythm/startup failed", err);
+    res.status(500).json({ error: "Could not resolve Daily Rhythm startup" });
+  }
+});
+
 router.post("/journeys/progress/import", (_req: Request, res: Response) => {
   res.status(410).json({
     error: "Legacy progress import has been removed. Browser progress cannot be imported into an authenticated account.",
@@ -850,7 +862,18 @@ router.put("/journeys/:id/daily-rhythm-groups/:groupId/items", async (req: Reque
 
 router.get("/journeys/:id/steps", async (req: Request, res: Response) => {
   res.set("Cache-Control", "no-store");
-  const steps = await store.listSteps(String(req.params["id"]));
+  const journeyId = String(req.params["id"]);
+  const steps = await store.listSteps(journeyId);
+  const userId = resolveUserId(req);
+  const journey = await store.getJourney(journeyId);
+  const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
+  if (isDailyRhythm && userId) {
+    const progress = await store.getProgress(userId, journeyId);
+    const currentDay = progress?.currentDay ?? 1;
+    const completed = new Set(progress?.completedDays ?? []);
+    res.json({ steps: steps.filter(step => step.day <= currentDay && (step.day === currentDay || completed.has(step.day))) });
+    return;
+  }
   res.json({ steps });
 });
 
@@ -1053,8 +1076,17 @@ router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Re
     res.status(400).json({ error: "day is required" });
     return;
   }
-  const prog = await store.completeStep(userId, String(req.params["id"]), day, reflectionText);
-  res.json(prog);
+  try {
+    const prog = await store.completeStep(userId, String(req.params["id"]), day, reflectionText);
+    res.json(prog);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not complete step";
+    if (message.includes("Daily Rhythm step is locked")) {
+      res.status(409).json({ error: message, code: "DAILY_RHYTHM_STEP_LOCKED" });
+      return;
+    }
+    res.status(500).json({ error: message });
+  }
 });
 
 // ─── Development-mode progress tools (self-only) ──────────────────────────────

@@ -160,9 +160,28 @@ export type Progress = {
   completedDays: number[];
   startedAt: string;
   lastCompletedAt: string | null;
+  dailyRhythmUnlockAt?: string | null;
+  dailyRhythmTimezone?: string;
+  lastDailyOpenDate?: string | null;
   /** Set when member opens the content — clears UPDATED badge */
   lastOpenedAt?: string | null;
 };
+
+export type DailyRhythmStartup = {
+  firstOpen: boolean;
+  journeyId: string | null;
+  currentDay: number | null;
+  progress: Progress | null;
+};
+
+export async function getDailyRhythmStartup(): Promise<DailyRhythmStartup> {
+  const res = await fetch(getApiUrl('/api/journeys/daily-rhythm/startup'), {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error('Could not resolve Daily Rhythm startup');
+  return res.json() as Promise<DailyRhythmStartup>;
+}
 
 export type SearchResult = {
   journeys: Journey[];

@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import Welcome from '../Welcome';
 import { accountStorageKey } from '@/lib/account-storage';
 
 const onboardingMocks = vi.hoisted(() => ({
   markOnboarded: vi.fn(),
   isOnboarded: vi.fn(() => true),
+  getDailyRhythmStartup: vi.fn(),
 }));
 const setLocation = vi.fn();
+const { getDailyRhythmStartup } = onboardingMocks;
 
 let authState = {
   user: {
@@ -47,6 +49,10 @@ vi.mock('@/lib/onboarding', () => ({
   markOnboarded: onboardingMocks.markOnboarded,
 }));
 
+vi.mock('@/lib/journeys-api', () => ({
+  getDailyRhythmStartup: onboardingMocks.getDailyRhythmStartup,
+}));
+
 describe('Welcome — first daily open routing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -66,13 +72,19 @@ describe('Welcome — first daily open routing', () => {
       loadingProfile: false,
     };
     journeyLoading = true;
+    getDailyRhythmStartup.mockResolvedValue({
+      firstOpen: true,
+      journeyId: 'daily',
+      currentDay: 4,
+      progress: progress.daily,
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('opens the current Daily Rhythm step after an overnight same-session reopen', () => {
+  it('opens the current Daily Rhythm step after an overnight same-session reopen', async () => {
     const yesterdayKey = accountStorageKey('emmaus_last_opened_v3', 'daily-open-member');
     localStorage.setItem(yesterdayKey, '2026-08-20');
 
@@ -82,17 +94,23 @@ describe('Welcome — first daily open routing', () => {
     journeyLoading = false;
     rerender(<Welcome />);
 
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/4');
-    expect(localStorage.getItem(yesterdayKey)).toBe('2026-08-21');
+    expect(localStorage.getItem(yesterdayKey)).toBe('2026-08-20');
   });
 
-  it('opens Today’s Steps after Daily Rhythm has already opened today', () => {
+  it('opens Today’s Steps after Daily Rhythm has already opened today', async () => {
     const todayKey = accountStorageKey('emmaus_last_opened_v3', 'daily-open-member');
     localStorage.setItem(todayKey, '2026-08-21');
     journeyLoading = false;
-
+    getDailyRhythmStartup.mockResolvedValue({
+      firstOpen: false,
+      journeyId: 'daily',
+      currentDay: 4,
+      progress: progress.daily,
+    });
     render(<Welcome />);
-
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(setLocation).toHaveBeenCalledWith('/walk');
   });
 });

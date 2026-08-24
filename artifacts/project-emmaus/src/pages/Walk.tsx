@@ -28,7 +28,7 @@ import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
-import { resolveDailyOpenRoute } from '@/lib/entry-route';
+import { getDailyRhythmStartup } from '@/lib/journeys-api';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
@@ -293,7 +293,7 @@ function AddMoreRow({ label, onClick }: { label: string; onClick: () => void }) 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Walk() {
   const { user } = useAuth();
-  const { journeys, progress, loading, startJourney, getStepsForJourney } = useJourney();
+  const { journeys, progress, loading, getStepsForJourney } = useJourney();
   const { getState } = useEnrollment();
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
@@ -465,15 +465,7 @@ export default function Walk() {
   }, [user?.id, reloadThisWeekCompanion, reloadDevotionals]);
 
   // ── First-daily-open redirect ─────────────────────────────────────────────
-  // On the first app open each day, navigate the member directly to their
-  // current Daily Rhythm step instead of landing on Today's Steps.
-  //
-  // Walk.tsx is the correct place for this check: by the time it mounts,
-  // JourneyContext has finished loading journeys + progress for the
-  // authenticated user, so resolveDailyOpenRoute has real data to work with.
-  // Welcome.tsx only calls this during the full splash path (first cold start
-  // where the splash screen is shown). When the user arrives via the login
-  // flow (Auth.tsx → /walk), the check lives here so it fires reliably.
+  // This is a server decision, not a browser-date/localStorage decision.
   const dailyOpenCheckedRef = useRef(false);
   useEffect(() => {
     if (loading) return;                          // wait for real data
@@ -485,13 +477,14 @@ export default function Walk() {
     if (dailyOpenCheckedRef.current) return;      // only run once per mount
     dailyOpenCheckedRef.current = true;
 
-    const route = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
-    const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
-    if (route && dailyJourney && !progress[dailyJourney.id]) {
-      void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
-    }
-    if (route) setLocation(route);
-  }, [loading, user, journeys, progress, getStepsForJourney, setLocation]);
+    void getDailyRhythmStartup()
+      .then(startup => {
+        if (startup.firstOpen && startup.currentDay) {
+          setLocation(`/daily-rhythm/day/${startup.currentDay}`);
+        }
+      })
+      .catch(err => console.error('[DailyOpen] server startup decision failed:', err));
+  }, [loading, user, journeys, setLocation]);
 
   if (!user) return null;
 

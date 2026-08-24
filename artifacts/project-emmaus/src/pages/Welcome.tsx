@@ -21,7 +21,8 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded, markOnboarded } from '@/lib/onboarding';
-import { resolveEntryRoute, resolveDailyOpenRoute } from '@/lib/entry-route';
+import { resolveEntryRoute } from '@/lib/entry-route';
+import { getDailyRhythmStartup } from '@/lib/journeys-api';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
@@ -46,6 +47,8 @@ export default function Welcome() {
   useEffect(() => {
     if (!alreadyShown) return;
     if (authLoading || loadingProfile || journeyLoading) return;
+    let cancelled = false;
+    const routeMember = async () => {
     if (user) {
       if (user.passwordRecovery) {
         setLocation('/auth/callback?mode=recovery');
@@ -63,18 +66,23 @@ export default function Welcome() {
         setLocation('/onboarding');
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
-        const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
-        const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
-        if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
-          void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
+        try {
+          const startup = await getDailyRhythmStartup();
+          const dest = startup.firstOpen && startup.journeyId && startup.currentDay
+            ? `/daily-rhythm/day/${startup.currentDay}`
+            : '/walk';
+          if (!cancelled) setLocation(dest);
+        } catch (err) {
+          console.error('[DailyOpen] server startup decision failed:', err);
+          if (!cancelled) setLocation(resolveEntryRoute());
         }
-        const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
-        console.debug('[Emmaus routing] Route selected (fast path):', dest);
-        setLocation(dest);
       }
     } else {
       setLocation('/auth');
     }
+    };
+    void routeMember();
+    return () => { cancelled = true; };
   }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney, setLocation]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
@@ -93,7 +101,7 @@ export default function Welcome() {
 
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
-    function resolveDestination(): string {
+    async function resolveDestination(): Promise<string> {
       if (!user) return '/auth';
       if (user.passwordRecovery) return '/auth/callback?mode=recovery';
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
@@ -104,22 +112,24 @@ export default function Welcome() {
       if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
       if (!isOnboarded(user.id) && !user.preferredName?.trim()) return '/onboarding';
       if (!isOnboarded(user.id)) markOnboarded(user.id);
-      // First opening of each day enters the foundational 10 Minutes With
-      // Jesus practice. Later openings go to Today's Steps.
-      const dailyRoute = resolveDailyOpenRoute(user.id, journeys, progress, getStepsForJourney);
-      const dailyJourney = journeys.find(j => j.journeyType === 'daily-rhythm' || j.journeyType === 'core');
-      if (dailyRoute && dailyJourney && !progress[dailyJourney.id]) {
-        void startJourney(dailyJourney.id).catch(err => console.error('[DailyOpen] could not start Daily Rhythm:', err));
+      try {
+        const startup = await getDailyRhythmStartup();
+        const dest = startup.firstOpen && startup.journeyId && startup.currentDay
+          ? `/daily-rhythm/day/${startup.currentDay}`
+          : '/walk';
+        console.debug('[Emmaus routing] Route selected (server):', dest);
+        return dest;
+      } catch (err) {
+        console.error('[DailyOpen] server startup decision failed:', err);
+        return resolveEntryRoute();
       }
-      const dest = dailyRoute ?? resolveEntryRoute(journeys, progress, getStepsForJourney);
-      console.debug('[Emmaus routing] Route selected (splash):', dest);
-      return dest;
     }
 
-    const dest = resolveDestination();
-    // Fade out, then navigate.
-    setFading(true);
-    setTimeout(() => setLocation(dest), FADE_OUT_MS);
+    void resolveDestination().then(dest => {
+      // Fade out, then navigate.
+      setFading(true);
+      setTimeout(() => setLocation(dest), FADE_OUT_MS);
+    });
   }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney]);
 
   // ── Splash / redirect loading state ───────────────────────────────────────

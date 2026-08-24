@@ -482,6 +482,19 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: user_journey_progress.hidden_from_today column failed (non-fatal)");
   }
 
+  // ── Daily Rhythm server-authoritative progression (2026-08) ────────────────
+  try {
+    await pool.query(`
+      ALTER TABLE user_journey_progress
+        ADD COLUMN IF NOT EXISTS daily_rhythm_unlock_at timestamptz,
+        ADD COLUMN IF NOT EXISTS daily_rhythm_timezone text NOT NULL DEFAULT 'Africa/Johannesburg',
+        ADD COLUMN IF NOT EXISTS last_daily_open_date text;
+    `);
+    logger.info("Startup migration: Daily Rhythm authority columns ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: Daily Rhythm authority columns failed (non-fatal)");
+  }
+
   // ── Smart Content Indicators — notify_published_at + last_opened_at (2026-07) ──
   // IMPORTANT: must run before repairStepStatuses which queries the journeys table
   // via Drizzle (which now includes notify_published_at in the SELECT).

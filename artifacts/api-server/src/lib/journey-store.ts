@@ -153,12 +153,40 @@ export interface FrontendProgress {
   completedDays: number[];
   startedAt: string;
   lastCompletedAt: string | null;
+  dailyRhythmUnlockAt?: string | null;
+  dailyRhythmTimezone?: string;
+  lastDailyOpenDate?: string | null;
   /** Engagement lifecycle status — active | paused | completed | dropped */
   status: string;
   /** Set when the member opens the content — used for UPDATED badge computation. */
   lastOpenedAt?: string | null;
   /** Non-destructive hide: card removed from Today's Steps, progress preserved. */
   hiddenFromToday?: boolean;
+}
+
+export interface DailyRhythmStartup {
+  firstOpen: boolean;
+  journeyId: string | null;
+  currentDay: number | null;
+  progress: FrontendProgress | null;
+}
+
+function calendarDateInTimezone(date: Date, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone || "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
 }
 
 // ─── Converters ───────────────────────────────────────────────────────────────
@@ -277,6 +305,9 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
     completedDays: (row.completedDays as number[]) ?? [],
     startedAt: row.startedAt.toISOString(),
     lastCompletedAt: row.lastCompletedAt?.toISOString() ?? null,
+    dailyRhythmUnlockAt: row.dailyRhythmUnlockAt?.toISOString() ?? null,
+    dailyRhythmTimezone: row.dailyRhythmTimezone ?? "Africa/Johannesburg",
+    lastDailyOpenDate: row.lastDailyOpenDate ?? null,
     status: row.status ?? "active",
     lastOpenedAt: row.lastOpenedAt?.toISOString() ?? null,
     hiddenFromToday: (row as { hiddenFromToday?: boolean }).hiddenFromToday ?? false,
@@ -1050,6 +1081,129 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
   return rows[0] ? toFrontendProgress(rows[0]) : null;
 }
 
+/**
+ * Atomically resolves the member's Daily Rhythm position and records whether
+ * this is their first Emmaus opening for the server calendar date.
+ */
+export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythmStartup> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const journeyResult = await client.query(
+      `SELECT id FROM journeys
+       WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
+       ORDER BY display_order ASC, created_at DESC LIMIT 1`,
+    );
+    const journeyId = journeyResult.rows[0]?.id ? String(journeyResult.rows[0].id) : null;
+    if (!journeyId) {
+      await client.query("COMMIT");
+      return { firstOpen: false, journeyId: null, currentDay: null, progress: null };
+    }
+
+    let progressResult = await client.query(
+      `SELECT * FROM user_journey_progress
+       WHERE user_id = $1 AND journey_id = $2
+       ORDER BY updated_at DESC LIMIT 1 FOR UPDATE`,
+      [userId, journeyId],
+    );
+    const now = new Date();
+    if (progressResult.rows.length === 0) {
+      await client.query(
+        `INSERT INTO user_journey_progress
+          (user_id, journey_id, current_day, completed_days, started_at,
+           daily_rhythm_unlock_at, daily_rhythm_timezone, status, created_at, updated_at)
+         VALUES ($1, $2, 1, '[]'::jsonb, $3, $3, 'Africa/Johannesburg', 'active', $3, $3)`,
+        [userId, journeyId, now],
+      );
+      progressResult = await client.query(
+        `SELECT * FROM user_journey_progress
+         WHERE user_id = $1 AND journey_id = $2
+         ORDER BY updated_at DESC LIMIT 1 FOR UPDATE`,
+        [userId, journeyId],
+      );
+    }
+
+    let row = progressResult.rows[0];
+    // Repair rows written by the former client/server contract, where
+    // current_day meant "next day" and completion immediately advanced it.
+    // The durable contract keeps the completed step current until the next
+    // server calendar day.
+    if (!row.daily_rhythm_unlock_at) {
+      const legacyCompleted = Array.isArray(row.completed_days)
+        ? row.completed_days.map(Number).filter(Number.isFinite)
+        : [];
+      const repairedCurrentDay = legacyCompleted.length > 0
+        ? Math.max(1, Math.max(...legacyCompleted))
+        : 1;
+      await client.query(
+        `UPDATE user_journey_progress
+         SET current_day = $1,
+             daily_rhythm_unlock_at = COALESCE(last_completed_at, started_at),
+             daily_rhythm_timezone = COALESCE(NULLIF(daily_rhythm_timezone, ''), 'Africa/Johannesburg'),
+             updated_at = $2
+         WHERE id = $3`,
+        [repairedCurrentDay, now, row.id],
+      );
+      row = (await client.query(
+        `SELECT * FROM user_journey_progress WHERE id = $1`,
+        [row.id],
+      )).rows[0];
+    }
+    const timezone = String(row.daily_rhythm_timezone || "Africa/Johannesburg");
+    const today = calendarDateInTimezone(now, timezone);
+    const unlockDate = row.daily_rhythm_unlock_at
+      ? calendarDateInTimezone(new Date(row.daily_rhythm_unlock_at), timezone)
+      : today;
+    const completedDays = Array.isArray(row.completed_days) ? row.completed_days.map(Number) : [];
+    const currentDay = Number(row.current_day || 1);
+
+    // Only one advancement can happen per server calendar date. The row lock
+    // makes simultaneous tabs/devices serialize on this check.
+    if (completedDays.includes(currentDay) && today > unlockDate) {
+      const next = await client.query(
+        `SELECT day FROM journey_steps
+         WHERE journey_id = $1 AND status = 'Published'
+           AND COALESCE(is_completion_step, false) = false AND day > $2
+         ORDER BY day ASC LIMIT 1`,
+        [journeyId, currentDay],
+      );
+      if (next.rows[0]) {
+        await client.query(
+          `UPDATE user_journey_progress
+           SET current_day = $1, daily_rhythm_unlock_at = $2, updated_at = $2
+           WHERE id = $3`,
+          [Number(next.rows[0].day), now, row.id],
+        );
+        row = (await client.query(
+          `SELECT * FROM user_journey_progress WHERE id = $1`,
+          [row.id],
+        )).rows[0];
+      }
+    }
+
+    const firstOpen = row.last_daily_open_date !== today;
+    if (firstOpen) {
+      await client.query(
+        `UPDATE user_journey_progress SET last_daily_open_date = $1, updated_at = $2 WHERE id = $3`,
+        [today, now, row.id],
+      );
+      row.last_daily_open_date = today;
+    }
+    await client.query("COMMIT");
+    return {
+      firstOpen,
+      journeyId,
+      currentDay: Number(row.current_day || 1),
+      progress: toFrontendProgress(row as DbProgress),
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function startJourney(userId: string, journeyId: string): Promise<FrontendProgress> {
   const now = new Date();
   // Use onConflictDoNothing so concurrent calls (e.g. from the shared-start
@@ -1066,6 +1220,7 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
     // Set lastOpenedAt on creation so the badge is immediately cleared —
     // a member who starts a NEW journey should not see UPDATED on reload.
     lastOpenedAt: now,
+    dailyRhythmUnlockAt: now,
     createdAt: now,
     updatedAt: now,
   })
@@ -1097,18 +1252,26 @@ export async function completeStep(
   reflectionText?: string
 ): Promise<FrontendProgress> {
   const now = new Date();
+  const journey = await getJourney(journeyId);
+  const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
   const existing = await getProgress(userId, journeyId);
 
   let prog: FrontendProgress;
   if (existing) {
+    if (isDailyRhythm && day !== existing.currentDay) {
+      throw new Error("That Daily Rhythm step is locked");
+    }
     const completedDays = [...new Set([...existing.completedDays, day])];
-    const newCurrentDay = Math.max(existing.currentDay, day + 1);
+    const newCurrentDay = isDailyRhythm
+      ? existing.currentDay
+      : Math.max(existing.currentDay, day + 1);
     const rows = await db
       .update(userJourneyProgressTable)
       .set({
         completedDays,
         currentDay: newCurrentDay,
         lastCompletedAt: now,
+        ...(isDailyRhythm ? { dailyRhythmUnlockAt: existing.dailyRhythmUnlockAt ? new Date(existing.dailyRhythmUnlockAt) : now } : {}),
         // Completing/reviewing a step is meaningful engagement. It restores a
         // previously hidden or completed item to the active Today's Steps list.
         status: "active",
