@@ -27,6 +27,7 @@ import { isCompletedToday, isNextDayAvailable } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
+import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { resolveDailyOpenRoute } from '@/lib/entry-route';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
@@ -700,17 +701,20 @@ export default function Walk() {
       <main className="px-4 pt-8 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
-        <header className="px-1 pb-0.5">
-          <motion.h1
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
-            data-testid="text-greeting"
-          >
-            {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
-          </motion.h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
+        <header className="flex items-start justify-between gap-3 px-1 pb-0.5">
+          <div className="min-w-0">
+            <motion.h1
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
+              data-testid="text-greeting"
+            >
+              {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
+            </motion.h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
+          </div>
+          <ShareEmmausButton />
         </header>
 
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}

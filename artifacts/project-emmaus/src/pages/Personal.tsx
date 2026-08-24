@@ -5,6 +5,7 @@ import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceCon
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
+import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -194,14 +195,14 @@ export default function Personal() {
       <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
-        <header className="flex items-center gap-5">
+        <header className="flex items-start gap-3">
           <div
             className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
             aria-hidden="true"
           >
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 pt-1">
             {editingName ? (
               <div className="flex items-center gap-2">
                 <input
@@ -238,6 +239,7 @@ export default function Personal() {
               {streakLabel(streak)}
             </p>
           </div>
+          <ShareEmmausButton />
         </header>
 
         {/* Unified Ask Emmaus / Search bar */}

@@ -3,6 +3,7 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
+import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library, Clock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -39,8 +40,9 @@ export default function Bible() {
       <main className="px-5 pt-12 max-w-[520px] mx-auto space-y-6">
 
         {/* Header */}
-        <header className="space-y-1">
+        <header className="flex items-start justify-between gap-3">
           <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
+          <ShareEmmausButton />
         </header>
 
         {/* Ask Emmaus */}

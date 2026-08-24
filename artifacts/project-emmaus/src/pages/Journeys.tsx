@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
+import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
@@ -974,13 +975,16 @@ export default function Journeys() {
       <main className="px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
-        <header className="space-y-1">
-          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-            Discover
-          </h1>
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            What would you like to explore?
-          </p>
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+              Discover
+            </h1>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              What would you like to explore?
+            </p>
+          </div>
+          <ShareEmmausButton />
         </header>
 
         {/* Unified Ask Emmaus / Search input */}
