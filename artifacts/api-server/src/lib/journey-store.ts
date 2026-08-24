@@ -189,6 +189,28 @@ function calendarDateInTimezone(date: Date, timezone: string): string {
   }
 }
 
+function frontendProgressFromRaw(row: Record<string, unknown>): FrontendProgress {
+  return toFrontendProgress({
+    journeyId: String(row.journey_id ?? row.journeyId),
+    currentDay: Number(row.current_day ?? row.currentDay ?? 1),
+    completedDays: (row.completed_days ?? row.completedDays ?? []) as number[],
+    startedAt: new Date(String(row.started_at ?? row.startedAt)),
+    lastCompletedAt: row.last_completed_at ?? row.lastCompletedAt
+      ? new Date(String(row.last_completed_at ?? row.lastCompletedAt))
+      : null,
+    dailyRhythmUnlockAt: row.daily_rhythm_unlock_at ?? row.dailyRhythmUnlockAt
+      ? new Date(String(row.daily_rhythm_unlock_at ?? row.dailyRhythmUnlockAt))
+      : null,
+    dailyRhythmTimezone: String(row.daily_rhythm_timezone ?? row.dailyRhythmTimezone ?? "Africa/Johannesburg"),
+    lastDailyOpenDate: (row.last_daily_open_date ?? row.lastDailyOpenDate ?? null) as string | null,
+    status: String(row.status ?? "active"),
+    lastOpenedAt: row.last_opened_at ?? row.lastOpenedAt
+      ? new Date(String(row.last_opened_at ?? row.lastOpenedAt))
+      : null,
+    hiddenFromToday: Boolean(row.hidden_from_today ?? row.hiddenFromToday ?? false),
+  } as DbProgress);
+}
+
 // ─── Converters ───────────────────────────────────────────────────────────────
 
 function toFrontendJourney(row: DbJourney): FrontendJourney {
@@ -1112,8 +1134,10 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
         `INSERT INTO user_journey_progress
           (user_id, journey_id, current_day, completed_days, started_at,
            daily_rhythm_unlock_at, daily_rhythm_timezone, status, created_at, updated_at)
-         VALUES ($1, $2, 1, '[]'::jsonb, $3, $3, 'Africa/Johannesburg', 'active', $3, $3)`,
-        [userId, journeyId, now],
+         VALUES ($1, $2, 1, '[]'::jsonb, $3::timestamp, $4::timestamptz,
+                 'Africa/Johannesburg', 'active', $3::timestamp, $3::timestamp)
+         ON CONFLICT (user_id, journey_id) DO NOTHING`,
+        [userId, journeyId, now, now],
       );
       progressResult = await client.query(
         `SELECT * FROM user_journey_progress
@@ -1170,9 +1194,10 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
       if (next.rows[0]) {
         await client.query(
           `UPDATE user_journey_progress
-           SET current_day = $1, daily_rhythm_unlock_at = $2, updated_at = $2
-           WHERE id = $3`,
-          [Number(next.rows[0].day), now, row.id],
+           SET current_day = $1, daily_rhythm_unlock_at = $2::timestamptz,
+               updated_at = $3::timestamp
+           WHERE id = $4`,
+          [Number(next.rows[0].day), now, now, row.id],
         );
         row = (await client.query(
           `SELECT * FROM user_journey_progress WHERE id = $1`,
@@ -1194,7 +1219,7 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
       firstOpen,
       journeyId,
       currentDay: Number(row.current_day || 1),
-      progress: toFrontendProgress(row as DbProgress),
+      progress: frontendProgressFromRaw(row),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

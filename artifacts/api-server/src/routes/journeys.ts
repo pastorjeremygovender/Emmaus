@@ -1064,6 +1064,11 @@ router.delete("/journeys/:id/steps/:day", async (req: Request, res: Response) =>
 router.post("/journeys/:id/progress/start", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  const journey = await store.getJourney(String(req.params["id"]));
+  if (!journey || journey.status !== "Published") {
+    res.status(404).json({ error: "Published journey not found" });
+    return;
+  }
   const prog = await store.startJourney(userId, String(req.params["id"]));
   res.json(prog);
 });
@@ -1072,7 +1077,7 @@ router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Re
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
   const { day, reflectionText } = req.body as { day: number; reflectionText?: string };
-  if (!day || typeof day !== "number") {
+  if (!Number.isInteger(day) || day < 0) {
     res.status(400).json({ error: "day is required" });
     return;
   }
