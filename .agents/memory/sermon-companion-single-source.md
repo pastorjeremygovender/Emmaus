@@ -1,3 +1,9 @@
+Publishing a companion and notifying members must never assign it as the current-week sermon; current-week visibility requires the separate explicit admin selection.
+
+**Why:** The publish form's default notification option previously promoted every newly published companion into Today's Steps, overriding intentional sermon selection.
+
+**How to apply:** Keep publication, member notification/badges, and current-week assignment as separate operations. Editor reloads must hydrate companions from the server even when the in-memory sermon list is empty.
+
 ---
 name: Sermon Companion Single Source of Truth
 description: Root cause and fix for stale sermon companions appearing in member UI; permanent Today's Steps card; 5-day generation; speaker attribution.

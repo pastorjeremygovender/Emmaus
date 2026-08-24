@@ -334,7 +334,9 @@ sermonCompanionsRouter.post("/:companionId/progress/complete-day", async (req: R
 // ─── POST /:companionId/publish ───────────────────────────────────────────────
 // Admin only. Publishes the companion header AND all its entries atomically
 // so members always see a fully readable companion without a gap between
-// companion status and entry status.
+// companion status and entry status. Publishing does not assign the
+// companion as This Week's Sermon; that requires the explicit set-current-week
+// action.
 
 sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: Response) => {
   const adminId = await guardAdmin(req, res);

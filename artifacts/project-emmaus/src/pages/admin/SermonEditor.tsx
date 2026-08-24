@@ -26,6 +26,7 @@ import {
   publishSermonCompanion,
   unpublishSermonCompanion,
   setCurrentWeekCompanion,
+  getCompanionBySermon,
   suggestAlternativeTheme,
   regenerateSermonTheme,
   getServerSermon,
@@ -1270,13 +1271,17 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
   // When opening an existing sermon whose companionJourneyId is a UUID (new-style
   // companion saved in DB), fetch the full companion so the Companion tab works.
   useEffect(() => {
-    const cid = existing?.companionJourneyId;
-    if (!cid || !UUID_RE.test(cid) || !auth) return;
+    if (!sermonId || !auth) return;
     // Only fetch if we don't already have data (avoids duplicate fetches when
     // either sermonId or user?.id change independently).
     if (companionData) return;
 
-    getCompanion(cid, auth).then(c => {
+    const cid = existing?.companionJourneyId || form.companionJourneyId;
+    const loadCompanion = cid && UUID_RE.test(cid)
+      ? getCompanion(cid, auth)
+      : getCompanionBySermon(sermonId, auth);
+
+    loadCompanion.then(c => {
       setCompanionData({
         id: c.id,
         title: c.title,
@@ -1289,7 +1294,7 @@ export default function SermonEditor({ sermonId, onBack, onOpenCompanion }: Prop
       // without breaking the sermon editing flow.
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sermonId, user?.id]);  // re-runs when auth hydrates (null → userId) after mount
+  }, [sermonId, user?.id, form.companionJourneyId]);  // re-runs after DB form hydration/auth
 
   // Keep companionStatusLocal in sync when companionData arrives from generation result
   useEffect(() => {

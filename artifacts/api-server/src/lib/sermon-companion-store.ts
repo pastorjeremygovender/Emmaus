@@ -306,7 +306,10 @@ export async function deleteSermonCompanionContent({
 
 export async function getCompanionBySermonId(sermonId: string): Promise<(Companion & { entries: CompanionEntry[] }) | null> {
   const res = await pool.query(
-    `SELECT * FROM sermon_companion WHERE sermon_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    `SELECT * FROM sermon_companion
+      WHERE sermon_id = $1 OR sermon_uuid = $1
+      ORDER BY created_at DESC
+      LIMIT 1`,
     [sermonId]
   );
   if (!res.rows[0]) return null;
@@ -500,25 +503,11 @@ export async function publishCompanionAtomic(id: string, notifyMembers = false):
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // A publish with member notification is the editorial hand-off for the
-    // current sermon. Make that hand-off visible on Today's Steps in the same
-    // transaction as the companion and entry publication. Quiet publishes
-    // remain available for preparing/archive content without replacing the
-    // current week.
-    if (notifyMembers) {
-      await client.query(
-        `UPDATE sermon_companion
-         SET is_current_week = false, updated_at = NOW()
-         WHERE is_current_week = true AND id != $1`,
-        [id],
-      );
-    }
     await client.query(
       `UPDATE sermon_companion
        SET status = 'Published',
            published_at = COALESCE(published_at, NOW()),
            notify_published_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
-           is_current_week = CASE WHEN $2 THEN true ELSE is_current_week END,
            updated_at = NOW()
        WHERE id = $1`,
       [id, notifyMembers],
