@@ -24,6 +24,7 @@
  */
 
 import type { Response } from "express";
+import { pool } from "@workspace/db";
 import { buildSystemPrompt, PROMPT_VERSION } from "./system-instructions.js";
 import { buildContext, type EmmausContextInput } from "./context-builder.js";
 import { isOwner } from "./auth.js";
@@ -55,6 +56,29 @@ export interface ConversationRequest {
 }
 
 export type SseEventType = "text" | "done" | "error";
+
+async function getTrustedDisplayName(userId: string): Promise<string | undefined> {
+  if (!userId || userId === "anonymous") return undefined;
+  try {
+    const result = await pool.query<{ preferred_name: string | null; app_role: string | null }>(
+      `SELECT preferred_name, app_role FROM user_profiles WHERE auth_subject = $1 LIMIT 1`,
+      [userId],
+    );
+    const profile = result.rows[0];
+    const preferred = profile?.preferred_name?.trim();
+    if (profile?.app_role === "admin" || profile?.app_role === "superAdmin") {
+      // ICC's administrator account is addressed by the ministry name, not the
+      // account's legal/display identity.
+      return preferred && !/^(pastor govender|jeremy govender|the pastor|the user)$/i.test(preferred)
+        ? preferred
+        : "Pastor Jeremy";
+    }
+    return preferred || undefined;
+  } catch (err) {
+    logger.warn({ err: String(err) }, "emmaus: trusted display name unavailable");
+    return undefined;
+  }
+}
 
 export interface SseDonePayload {
   conversationId: string;
@@ -509,7 +533,8 @@ export async function handleConversation(
 
   // When the user just asked for a name change, use the new name in this
   // response's prompt so Emmaus immediately addresses them correctly.
-  const effectiveUserName = detectedNameUpdate ?? (contextInput.userName?.trim() || undefined);
+  const trustedUserName = await getTrustedDisplayName(userId);
+  const effectiveUserName = detectedNameUpdate ?? trustedUserName;
   const systemPrompt = buildSystemPrompt(contextBlock, effectiveUserName, detectedNameUpdate ?? undefined);
 
   const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];

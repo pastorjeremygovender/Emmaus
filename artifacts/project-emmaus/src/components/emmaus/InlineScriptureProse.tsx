@@ -67,6 +67,10 @@ export function InlineScriptureProse({
 }) {
   const paragraphs = text.split(/\n{2,}/).filter(Boolean);
   const validRefs = references.filter((ref) => !!routeFor(ref));
+  const proseContainsReference = validRefs.some((ref) => {
+    const label = ref.displayText || ref.reference;
+    return text.toLowerCase().includes(label.toLowerCase());
+  });
   return (
     <div className={paragraphs.length > 1 ? 'space-y-4' : undefined}>
       {paragraphs.map((paragraph, index) => (
@@ -75,8 +79,7 @@ export function InlineScriptureProse({
             <InlineParagraph text={paragraph} references={validRefs} />
           </p>
           {index === paragraphs.length - 1 && validRefs.length > 0 &&
-            !validRefs.some((ref) => (ref.displayText || ref.reference) &&
-              paragraph.toLowerCase().includes((ref.displayText || ref.reference).toLowerCase())) && (
+            !proseContainsReference && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {validRefs.map((ref) => (
                   <Citation key={ref.reference} ref={ref} text={ref.displayText || ref.reference} />
