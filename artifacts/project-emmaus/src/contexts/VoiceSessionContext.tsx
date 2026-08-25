@@ -1913,12 +1913,24 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         if (tc.tool === 'search_sermons') {
           // Server resolved the search against published canonical records.
-          const args = tc.args as { spokenText: string; sermonResults?: SermonRecommendation[] };
+          const args = tc.args as {
+            spokenText: string;
+            sermonResults?: SermonRecommendation[];
+            selectedSermonPath?: string;
+          };
           setSermonResults(Array.isArray(args.sermonResults) ? args.sermonResults : []);
           setResponse(args.spokenText);
           setStreamingResponse('');
           await playTTS(args.spokenText, false);
           if (cancelledRef.current) return;
+          if (args.selectedSermonPath && isSafeVoiceRoute(args.selectedSermonPath)) {
+            const navFn = navigateRef.current ?? providerNavigateRef.current;
+            if (navFn) navFn(args.selectedSermonPath);
+            else {
+              window.history.pushState({}, '', args.selectedSermonPath);
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+          }
           // playTTS onended will restart listening automatically
           return;
         }

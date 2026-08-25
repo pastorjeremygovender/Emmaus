@@ -558,6 +558,7 @@ async function resolveSearchSermons(
     excerpt: string; reason: string; openPath: string; watchUrl: string;
     watchTimestampSeconds?: number; listenAvailable: boolean; listenPath?: string;
   }>;
+  selectedSermonPath?: string;
 }> {
   try {
     const ordinal = query.trim().match(/^(?:the\s+)?(first|second|third|1st|2nd|3rd)\b/i);
@@ -593,9 +594,7 @@ async function resolveSearchSermons(
       };
     }
 
-    const selected = ordinal
-      ? sermonResults[{ first: 0, second: 1, third: 2, "1st": 0, "2nd": 1, "3rd": 2 }[ordinal[1].toLowerCase()] ?? 0]
-      : sermonResults[0];
+    const selected = selectSermonResult(sermonResults, query);
     const dateStr = selected?.sermonDate
       ? ` from ${new Date(selected.sermonDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}`
       : '';
@@ -606,6 +605,7 @@ async function resolveSearchSermons(
           ? `I found "${selected.title}"${dateStr}.`
           : `I found ${sermonResults.length} published sermons. The closest is "${selected.title}"${dateStr}.`,
       sermonResults,
+      ...(ordinal && selected ? { selectedSermonPath: selected.openPath } : {}),
     };
   } catch {
     return {
@@ -613,6 +613,19 @@ async function resolveSearchSermons(
       sermonResults: [],
     };
   }
+}
+
+/** Selects a verified card for an ordinal follow-up without inventing a route. */
+export function selectSermonResult<T extends { openPath: string }>(
+  results: T[],
+  query: string,
+): T | undefined {
+  const ordinal = query.trim().match(/^(?:the\s+)?(first|second|third|1st|2nd|3rd)\b/i);
+  if (!ordinal) return results[0];
+  const index = { first: 0, second: 1, third: 2, "1st": 0, "2nd": 1, "3rd": 2 }[
+    ordinal[1].toLowerCase()
+  ];
+  return index == null ? undefined : results[index];
 }
 
 // ─── continue_walk server-side resolver ──────────────────────────────────────
