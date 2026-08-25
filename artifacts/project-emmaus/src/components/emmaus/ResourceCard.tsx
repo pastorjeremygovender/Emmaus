@@ -6,7 +6,7 @@
  * card layout with speaker, summary excerpt, and a Watch button.
  */
 
-import { Map, Mic2, HandIcon, Users, User, Play } from 'lucide-react';
+import { Map, Mic2, HandIcon, Users, User, Play, BookOpen } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { Recommendation } from '@/lib/emmaus-client';
@@ -49,6 +49,26 @@ const TYPE_CONFIG: Record<
     icon: <User size={15} />,
     color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
   },
+  'daily-rhythm': {
+    label: 'Daily Rhythm',
+    icon: <Map size={15} />,
+    color: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+  },
+  devotional: {
+    label: 'Devotional',
+    icon: <BookOpen size={15} />,
+    color: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  },
+  'bible-study': {
+    label: 'Bible Study',
+    icon: <BookOpen size={15} />,
+    color: 'bg-primary/10 text-primary',
+  },
+  'sermon-companion': {
+    label: 'Sermon Companion',
+    icon: <Mic2 size={15} />,
+    color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  },
 };
 
 function formatTimestamp(seconds: number): string {
@@ -64,9 +84,9 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
 
   function handleClick() {
     if (!recommendation.path) return;
-    if (recommendation.path.startsWith('http')) {
+    if (/^https?:\/\//i.test(recommendation.path)) {
       window.open(recommendation.path, '_blank', 'noopener noreferrer');
-    } else {
+    } else if (recommendation.path.startsWith('/') && !recommendation.path.startsWith('//')) {
       setLocation(recommendation.path);
     }
   }

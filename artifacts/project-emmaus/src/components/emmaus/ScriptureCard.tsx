@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { ScriptureRef } from '@/lib/emmaus-client';
-import { bibleProvider } from '@/lib/bible-provider';
+import { parseScriptureRef } from '@/lib/scripture-ref';
 
 interface ScriptureCardProps {
   scripture: ScriptureRef;
@@ -23,12 +23,14 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
   const [unavailable, setUnavailable] = useState(false);
 
   function handleOpen() {
-    const bookId = scripture.book.toLowerCase().replace(/\s+/g, '-');
-    if (!bibleProvider.supportsBook(bookId)) {
+    const parsed = parseScriptureRef(scripture.reference) ??
+      parseScriptureRef(`${scripture.book} ${scripture.chapter}`);
+    if (!parsed) {
       setUnavailable(true);
       return;
     }
-    setLocation(`/bible/read/${bookId}/${scripture.chapter}`);
+    const verse = parsed.startVerse ? `?startVerse=${parsed.startVerse}` : '';
+    setLocation(`/bible/read/${parsed.bookId}/${parsed.chapter}${verse}`);
   }
 
   return (

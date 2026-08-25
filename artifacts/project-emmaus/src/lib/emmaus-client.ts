@@ -76,7 +76,7 @@ export interface NextStepItem {
 }
 
 export interface Recommendation {
-  type: 'journey' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor';
+  type: 'journey' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor' | 'daily-rhythm' | 'devotional' | 'bible-study' | 'sermon-companion';
   title: string;
   description?: string;
   path?: string;

@@ -12,16 +12,20 @@ import { listPublishedSermonCompanions, getEntriesForCompanion, type Companion, 
 import { listPublishedSermons, type CanonicalSermon } from "../lib/canonical-sermon-store.js";
 import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
 import { logger } from "../lib/logger.js";
+import { getDailyRhythmState } from "../lib/journey-store.js";
 
 export type EmmausResourceType =
   | "journey"
   | "bible-study"
   | "devotional"
   | "sermon-companion"
-  | "sermon";
+  | "sermon"
+  | "daily-rhythm";
 
 export interface EmmausResource {
   type: EmmausResourceType;
+  resourceId?: string;
+  parentId?: string;
   title: string;
   route: string;
   scripture?: string;
@@ -67,15 +71,17 @@ function makeResource(
   return { ...data, relevance: relevance(data as EmmausResource, query, bookId, chapter) };
 }
 
-function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query: string, bookId?: string, chapter?: number): EmmausResource[] {
+function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query: string, bookId?: string, chapter?: number, dailyRhythm = false): EmmausResource[] {
   const type: EmmausResourceType = journey.journeyType === "bible-study" ? "bible-study" : "journey";
   const route = `/journeys/${journey.id}`;
   const stepResources = steps
     .filter(s => s.status === "Published" && !s.isCompletionStep)
-    .map(s => ({
-      type,
+    .map((s: FrontendStep): Omit<EmmausResource, "relevance"> => ({
+       type: dailyRhythm ? "daily-rhythm" : type,
+       resourceId: s.id,
+       parentId: journey.id,
       title: `${journey.title} — ${s.title}`,
-      route: `${route}/${s.day}`,
+       route: `/journey/${journey.id}/day/${s.day}`,
       scripture: s.scripture || s.scriptureReferences?.map(r => r.reference).join(", ") || undefined,
       description: clean(s.mentorIntro || s.devotional) || undefined,
       excerpts: [s.devotional, s.reflectionQuestion, s.prayerPrompt, s.actionStep, s.memoryVerse].filter(Boolean).map(v => clean(v)),
@@ -85,7 +91,8 @@ function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query
 
   return [
     makeResource({
-      type,
+      type: dailyRhythm ? "daily-rhythm" : type,
+      resourceId: journey.id,
       title: journey.title,
       route,
       scripture: journey.scriptureReference,
@@ -186,6 +193,7 @@ export async function buildEmmausResourceCatalogue(
   query: string,
   bibleBookId?: string,
   bibleChapter?: number,
+  userId?: string,
 ): Promise<{ resources: EmmausResource[]; sourceFailures: string[] }> {
   const sourceFailures: string[] = [];
   const [journeys, series, companions, sermons, notes] = await Promise.all([
@@ -197,8 +205,6 @@ export async function buildEmmausResourceCatalogue(
   ]);
 
   const resources: EmmausResource[] = [...notes];
-  // Daily Rhythm is deliberately excluded: its locked calendar days must not
-  // be used as answer context or recommended as an available next step.
   for (const journey of journeys.filter(
     j => j.journeyType !== "companion" && j.journeyType !== "daily-rhythm" && j.journeyType !== "core",
   )) {
@@ -208,6 +214,32 @@ export async function buildEmmausResourceCatalogue(
       return [];
     });
     resources.push(...journeyResources(journey, steps, query, bibleBookId, bibleChapter));
+  }
+  // Daily Rhythm is user-scoped: only completed/reviewable/current content is
+  // allowed into the model context. Future and locked steps never enter here.
+  if (userId && userId !== "anonymous") {
+    const rhythm = await getDailyRhythmState(userId).catch(err => {
+      sourceFailures.push("daily-rhythm");
+      logger.warn({ err: String(err) }, "Ask Emmaus Daily Rhythm eligibility unavailable");
+      return null;
+    });
+    const rhythmJourney = journeys.find(j => j.id === rhythm?.journeyId);
+    if (rhythm && rhythmJourney) {
+      const allowedIds = new Set([
+        ...rhythm.completedStepIds,
+        ...rhythm.reviewableStepIds,
+        ...(rhythm.currentStepId ? [rhythm.currentStepId] : []),
+      ]);
+      const steps = await listSteps(rhythm.journeyId).catch(() => []);
+      resources.push(...journeyResources(
+        rhythmJourney,
+        steps.filter(s => allowedIds.has(s.id)),
+        query,
+        bibleBookId,
+        bibleChapter,
+        true,
+      ));
+    }
   }
   for (const s of series) {
     const full = await getSeriesById(s.id).catch(() => null);

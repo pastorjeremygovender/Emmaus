@@ -44,6 +44,7 @@ import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
 import { logger } from "../lib/logger.js";
+import { validateCitations } from "./citation-validation.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -259,8 +260,7 @@ function defaultMetadata(): EmmausResponseMetadata {
 function isLockedDailyRhythmRecommendation(item: { type?: string; title?: string; path?: string }): boolean {
   const title = String(item.title ?? "").toLowerCase();
   const path = String(item.path ?? "").toLowerCase();
-  return item.type === "daily-rhythm"
-    || title === "10 minutes with jesus"
+  return title === "10 minutes with jesus"
     || path.includes("/15-minutes-with-jesus");
 }
 
@@ -333,7 +333,7 @@ export async function handleConversation(
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
-    buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter),
+     buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter, preUserId),
     preUserId !== "anonymous"
       ? getRoomsForUser(preUserId).catch((): RoomSummary[] => [])
       : Promise.resolve([] as RoomSummary[]),
@@ -611,6 +611,13 @@ export async function handleConversation(
 
   // Ensure nextSteps is always an array (LLM may omit it)
   if (!finalMeta.nextSteps) finalMeta.nextSteps = [];
+
+  // Model metadata is advisory. Only catalogue-backed resources and valid
+  // Scripture references are allowed to reach the client.
+  const validatedMeta = validateCitations(finalMeta, resourceCatalogue.resources);
+  finalMeta.scripture = validatedMeta.scripture;
+  finalMeta.nextStep = validatedMeta.nextStep;
+  finalMeta.recommendations = validatedMeta.recommendations;
 
   if (sermonResult) {
     // ── Preached Here card ──────────────────────────────────────────────────
