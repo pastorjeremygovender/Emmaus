@@ -22,6 +22,7 @@ import {
   getAllVideos, getVideoById, upsertVideo, updateVideo,
   getAllSegments, getSegmentsForVideo, replaceSegments, updateSegment,
   getAllJobs, createJob, updateJob,
+  getJob,
   getIndexingCheckpoint, saveIndexingCheckpoint, clearIndexingCheckpoint,
   type IndexingCheckpoint, type ImportJob,
   getArchiveStats, type YoutubeVideoRecord,
@@ -85,6 +86,11 @@ function isPublicArchiveRoute(method: string, path: string): boolean {
   return PUBLIC_ALLOWLIST.some(
     (r) => r.method === method && r.path === path.replace(/\/$/, ""),
   );
+}
+
+async function isJobCancelled(jobId: string): Promise<boolean> {
+  const job = await getJob(jobId);
+  return job?.status === "cancelled";
 }
 
 router.use((req: Request, res: Response, next) => {
@@ -554,6 +560,11 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
           await saveIndexingCheckpoint(current);
           continue;
         }
+        if (await isJobCancelled(job.id)) {
+          current = pauseCheckpoint({ ...current, position: i }, "Stopped by an administrator.");
+          await saveIndexingCheckpoint(current);
+          return;
+        }
         await updateJob(job.id, { progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: i - current.completedCount, currentItem: currentVideo.title } });
         const result = await processVideoInternal(currentVideo.id);
         if (result.error && isQuotaExhaustion(result.error)) {
@@ -599,6 +610,34 @@ router.post("/youtube-archive/pipeline/safe-batch", async (_req: Request, res: R
 
 router.post("/youtube-archive/pipeline/resume", async (_req: Request, res: Response) => {
   await startSafeBatch(res, true);
+});
+
+router.post("/youtube-archive/jobs/:id/cancel", async (req: Request, res: Response) => {
+  const job = await getJob(String(req.params.id));
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+  if (job.status !== "queued" && job.status !== "running") {
+    res.status(409).json({ error: `Job is already ${job.status}`, job });
+    return;
+  }
+
+  await updateJob(job.id, {
+    status: "cancelled",
+    error: "Stopped by an administrator.",
+  });
+
+  if (job.options?.mode === "safe-batch") {
+    const checkpoint = await getIndexingCheckpoint();
+    if (checkpoint?.jobId === job.id) {
+      await saveIndexingCheckpoint(
+        pauseCheckpoint(checkpoint, "Stopped by an administrator."),
+      );
+    }
+  }
+
+  res.json({ job: await getJob(job.id) });
 });
 
 /**
@@ -649,6 +688,7 @@ router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response
       const failures: NonNullable<ImportJob["progress"]["failures"]> = [];
 
       for (const video of toProcess) {
+        if (await isJobCancelled(job.id)) return;
         await updateJob(job.id, {
           progress: {
             total: toProcess.length,

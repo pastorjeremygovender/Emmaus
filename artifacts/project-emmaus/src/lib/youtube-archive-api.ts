@@ -258,6 +258,10 @@ export async function getPipelineJob(jobId: string): Promise<ImportJob | null> {
   return result.jobs.find(j => j.id === jobId) ?? null;
 }
 
+export async function cancelArchiveJob(jobId: string): Promise<{ job: ImportJob }> {
+  return apiFetch(`/api/youtube-archive/jobs/${jobId}/cancel`, { method: 'POST' });
+}
+
 export async function runEnrichment(): Promise<PipelineResult> {
   return apiFetch('/api/youtube-archive/pipeline/enrich', { method: 'POST' });
 }

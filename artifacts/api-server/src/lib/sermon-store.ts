@@ -138,7 +138,7 @@ export type JobType =
   | "generate-audio"
   | "repair-timestamps"
   | "detect-sermon-starts";
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "paused";
+export type JobStatus = "queued" | "running" | "completed" | "failed" | "paused" | "cancelled";
 
 export interface ImportJob {
   id: string;

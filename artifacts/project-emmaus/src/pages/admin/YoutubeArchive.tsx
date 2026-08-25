@@ -8,7 +8,7 @@ import {
   getArchiveStatus, syncChannel, listVideos, getVideo, updateVideo,
   processVideo, getSegments, listJobs, startOAuthFlow, disconnectOAuth,
   runPipeline, startSafeIndexingBatch, resumeSafeIndexing, getIndexingCheckpoint,
-  runEnrichment, formatDuration, formatTimestamp,
+  runEnrichment, cancelArchiveJob, formatDuration, formatTimestamp,
   detectSermonStarts, repairTimestamps, generateAudio, getAudioStreamUrl,
   type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob, type IndexingCheckpoint,
 } from '@/lib/youtube-archive-api';
@@ -707,6 +707,7 @@ export default function YoutubeArchive() {
   const [pipelining, setPipelining] = useState(false);
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null);
   const [pipelineJob, setPipelineJob] = useState<ImportJob | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [checkpoint, setCheckpoint] = useState<IndexingCheckpoint | null>(null);
   const [showFullRebuild, setShowFullRebuild] = useState(false);
   const [enriching, setEnriching] = useState(false);
@@ -864,6 +865,21 @@ export default function YoutubeArchive() {
     } catch (e) {
       setPipelining(false);
       setStatusError(String(e));
+    }
+  };
+
+  const handleCancelJob = async (job: ImportJob) => {
+    if (!confirm('Stop this pipeline? The current video may finish, then the job will stop. Completed videos will be kept and safe indexing can be resumed later.')) return;
+    setCancellingJobId(job.id);
+    try {
+      const result = await cancelArchiveJob(job.id);
+      setPipelineJob(result.job);
+      setPipelining(false);
+      await Promise.all([loadJobs(), loadCheckpoint(), loadStatus()]);
+    } catch (e) {
+      setStatusError(String(e));
+    } finally {
+      setCancellingJobId(null);
     }
   };
 
@@ -1138,6 +1154,9 @@ export default function YoutubeArchive() {
   // ── Dashboard view ────────────────────────────────────────────────────────
 
   const activeJob = jobs.find((j) => j.status === 'running' || j.status === 'queued');
+  const activePipelineJob = jobs.find((j) =>
+    (j.status === 'running' || j.status === 'queued') && j.type === 'pipeline-run'
+  );
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl space-y-6">
@@ -1272,9 +1291,21 @@ export default function YoutubeArchive() {
         )}
         {pipelining && pipelineJob && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
-            <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
-              <Loader2 size={14} className="animate-spin" />
-              Indexing sermons…
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
+                <Loader2 size={14} className="animate-spin" />
+                Indexing sermons…
+              </div>
+              {(pipelineJob.status === 'running' || pipelineJob.status === 'queued') && (
+                <button
+                  onClick={() => handleCancelJob(pipelineJob)}
+                  disabled={cancellingJobId === pipelineJob.id}
+                  className="flex items-center gap-1.5 px-2.5 py-1 border border-red-300 text-red-700 rounded-md text-[12px] font-medium hover:bg-red-50 disabled:opacity-50"
+                >
+                  {cancellingJobId === pipelineJob.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                  Stop
+                </button>
+              )}
             </div>
             <div className="text-[12px] text-blue-700">
               {pipelineJob.progress.done} / {pipelineJob.progress.total} processed
@@ -1286,6 +1317,22 @@ export default function YoutubeArchive() {
                 {pipelineJob.progress.currentItem}
               </div>
             )}
+          </div>
+        )}
+        {!pipelining && activePipelineJob && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
+              <Loader2 size={14} className="animate-spin" />
+              Indexing pipeline is still running ({activePipelineJob.progress.done}/{activePipelineJob.progress.total})
+            </div>
+            <button
+              onClick={() => handleCancelJob(activePipelineJob)}
+              disabled={cancellingJobId === activePipelineJob.id}
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-red-300 text-red-700 rounded-md text-[12px] font-medium hover:bg-red-50 disabled:opacity-50"
+            >
+              {cancellingJobId === activePipelineJob.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+              Stop
+            </button>
           </div>
         )}
 
