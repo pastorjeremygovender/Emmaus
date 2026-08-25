@@ -73,9 +73,12 @@ export default function JourneyDetail() {
     ? getStepsForJourney(journey.id).find(s => s.isCompletionStep && s.status === 'Published')
     : undefined;
 
+  // Older progress records can predate the completedDays field. Treat those
+  // records as having no completed steps rather than crashing the detail page.
+  const completedDays = Array.isArray(prog?.completedDays) ? prog.completedDays : [];
   const enrollState = journey ? getState(journey.id) : 'active';
   const isStarted   = !!prog;
-  const isCompleted = prog && journey ? prog.completedDays.length >= journey.durationDays : false;
+  const isCompleted = prog && journey ? completedDays.length >= journey.durationDays : false;
   const isSaved     = enrollState === 'saved';
   const isPaused    = enrollState === 'paused' && isStarted;
   const isActive    = enrollState === 'active' && isStarted && !isCompleted;
@@ -87,7 +90,7 @@ export default function JourneyDetail() {
   const firstStepDay = steps[0]?.day ?? 1;
   /** Next unfinished published step day. Falls back to firstStepDay when all are done. */
   const nextUnfinishedDay = prog
-    ? (steps.find(s => !prog.completedDays.includes(s.day))?.day ?? firstStepDay)
+    ? (steps.find(s => !completedDays.includes(s.day))?.day ?? firstStepDay)
     : firstStepDay;
 
   // Fetch collection name for the page heading (h1 = collection, secondary = walk title)
@@ -302,7 +305,7 @@ export default function JourneyDetail() {
           );
         })()}
         {isCompleted && (() => {
-          const maxCompletedDay = prog ? Math.max(...prog.completedDays) : null;
+          const maxCompletedDay = completedDays.length > 0 ? Math.max(...completedDays) : null;
           const lastStep = maxCompletedDay !== null ? steps.find(s => s.day === maxCompletedDay) : null;
           return (
             <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2.5">
@@ -442,7 +445,7 @@ export default function JourneyDetail() {
                 </>
               )}
               {steps.map(s => {
-                const done = prog?.completedDays.includes(s.day);
+                const done = completedDays.includes(s.day);
                 // Show "Up next" only when the journey is in progress (started but not fully completed)
                 const isUpNext = isStarted && !isCompleted && s.day === nextUnfinishedDay;
                 return (
