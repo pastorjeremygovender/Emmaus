@@ -1,0 +1,174 @@
+Before I approve or republish this checkpoint, give me a precise implementation and verification report.
+
+Do not make further changes yet.
+
+Your report must clearly separate:
+
+A. FULLY IMPLEMENTED
+B. PARTIALLY IMPLEMENTED
+C. NOT IMPLEMENTED
+D. EXISTING SYSTEM ALREADY SATISFIED THE REQUIREMENT
+
+Verify and report on every area below:
+
+1. SCRIPTURE-FIRST RETRIEVAL
+
+- Confirm that Scripture is retrieved before other Emmaus resources.
+- Identify the exact files and functions controlling retrieval priority.
+- Confirm that sermons, devotionals, Bible Studies, Walks, Journeys, Sermon Companions and eligible Daily Rhythm content can all be retrieved.
+- Confirm whether this was runtime-tested or only code-reviewed.
+
+2. DAILY RHYTHM USER ELIGIBILITY
+
+Test with actual user-state fixtures:
+
+- a new user
+- a user with today’s Daily Rhythm available but incomplete
+- a user who completed today’s Daily Rhythm
+- a user with previous completed days
+- a user attempting to access tomorrow’s/future content
+
+Confirm that Ask Emmaus can use:
+
+- today’s unlocked Daily Rhythm
+- previously completed Daily Rhythms
+
+Confirm that it cannot retrieve, reveal, cite or recommend future locked Daily Rhythm content.
+
+Show where this is enforced server-side before model context is assembled.
+
+3. SCRIPTURE LINKS
+
+Test every one of these through the same endpoint and UI used by Ask Emmaus:
+
+- John 3:16
+- John 4:13–14
+- Psalm 23
+- 1 Corinthians 13
+- 2 Corinthians 5:17
+- 1 Thessalonians 5:16–18
+- 1 John 1:9
+
+For each test, report:
+
+- generated canonical route
+- whether the correct book opened
+- whether the correct chapter opened
+- whether the verse or range was highlighted/scrolled into view
+- whether it survives page refresh
+- whether it preserves its destination through authentication
+
+Do not count a passing HTTP response as sufficient. The final displayed destination must be correct.
+
+4. RESOURCE LINKS
+
+Test Ask Emmaus links to:
+
+- one published sermon
+- one Daily Devotional
+- one Bible Study chapter
+- one Walk
+- one specific Walk step
+- one Journey
+- one Sermon Companion step
+- today’s eligible Daily Rhythm
+- one previously completed Daily Rhythm
+
+Also test and confirm rejection of:
+
+- unpublished content
+- deleted content
+- another tenant’s content
+- future Daily Rhythm content
+
+Report the canonical route produced for every valid test.
+
+5. STRUCTURED RESPONSE CONTRACT
+
+Confirm whether Ask Emmaus now returns structured:
+
+- answer text
+- Scripture references
+- resource IDs
+- recommendation reasons
+- optional prayer
+- optional Next Step
+
+Confirm that the model is not allowed to generate raw URLs.
+
+Show where Scripture references and resource IDs are validated before links are rendered.
+
+6. AUTOMATIC KNOWLEDGE-BASE UPDATES
+
+Confirm exactly what happens when an administrator:
+
+- publishes new content
+- edits and republishes content
+- unpublishes content
+- deletes content
+- restores content
+
+Identify the event or function that triggers indexing.
+
+Confirm whether a reconciliation job exists.
+
+If no scheduled reconciliation job was implemented, state that clearly.
+
+Confirm how duplicate index entries are prevented.
+
+7. ADMIN INDEXING VISIBILITY
+
+Confirm whether the administration interface now shows:
+
+- total published resources
+- total indexed resources
+- pending resources
+- failed resources
+- last successful reconciliation
+- retry individual failure
+- safe resource reindex
+- full reconciliation
+
+If these were not implemented, state that clearly. Do not claim that backend logging is the same as an admin interface.
+
+8. SEARCH AND ASK EMMAUS
+
+Confirm whether Search and Ask Emmaus genuinely share:
+
+- the same canonical content index
+- metadata
+- authorization rules
+- Daily Rhythm eligibility logic
+
+Identify any remaining separate or legacy search paths.
+
+9. TEST RESULTS
+
+List every new or modified test file.
+
+Give:
+
+- total tests run
+- tests passed
+- tests failed
+- tests skipped
+- exact commands used
+
+You reported 34 targeted tests passing. List what those 34 tests actually cover.
+
+Also list any pre-existing TypeScript errors or failures that remain. Explain whether they can affect Ask Emmaus, indexing or publication.
+
+10. REQUIREMENT MATRIX
+
+Create a concise table covering every major requirement from the assigned task with:
+
+- requirement
+- implementation status
+- file/function
+- automated test
+- runtime verification
+- remaining work
+
+Do not modify code while producing this report.
+
+Do not mark the implementation production-ready merely because the build and unit tests pass. Clearly identify anything that still requires manual testing in the published PWA.
