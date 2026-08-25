@@ -30,6 +30,7 @@ import { searchRouter } from "./search";
 import voiceRouter from "./voice";
 import shareImageRouter from "./share-image";
 import contentGroupsRouter from "./content-groups";
+import illustrationsRouter from "./illustrations";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(historyRouter);
 router.use(searchRouter);
 router.use(voiceRouter);
 router.use(shareImageRouter);
+router.use(illustrationsRouter);
 
 export default router;

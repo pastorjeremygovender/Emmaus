@@ -17,6 +17,7 @@ import { ShareImageCard } from '@/components/ShareImageCard';
 import { BottomNav } from '@/components/BottomNav';
 import { dismissBadge } from '@/lib/badge-api';
 import { recordView } from '@/lib/history-api';
+import ApprovedIllustration from '@/components/ApprovedIllustration';
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -499,6 +500,7 @@ export default function JourneyDay() {
               </div>
             </section>
           ) : null}
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="below-welcome" />
 
           {/* Scripture */}
           {step.scripture && (
@@ -515,6 +517,7 @@ export default function JourneyDay() {
               </div>
             </section>
           )}
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="below-scripture" />
 
           {/* Devotional reflection — labelled "Congratulations" on Walk Complete steps */}
           <section className="mb-3.5">
@@ -526,10 +529,13 @@ export default function JourneyDay() {
                 </h2>
               </div>
               <p className="text-[18px] leading-[1.8] text-foreground">
+                <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="within-reflection" />
                 {step.devotional}
               </p>
             </div>
           </section>
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="after-reflection" />
+          <ApprovedIllustration contentType={journey.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={stepId} placement="before-consider-this" />
 
           {/* Sermon moment */}
           {hasSermon && (

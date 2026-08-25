@@ -22,7 +22,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Sun, BookHeart, Map, Mic2, Video,
   FolderOpen, BookOpen, Layers2,
-  ChevronRight, X, Upload,
+  ChevronRight, X, Upload, ImagePlus,
 } from 'lucide-react';
 import BulkImportModal from './BulkImportModal';
 
@@ -50,6 +50,7 @@ import DayEditor from '../DayEditor';
 import DayPreview from '../DayPreview';
 import ContentGroupsList from './ContentGroupsList';
 import ContentGroupEditor from './ContentGroupEditor';
+import IllustrationStudio from './IllustrationStudio';
 
 // ─── View types ───────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ type StudioView =
   // ── Media Studio ──────────────────────────────────────────────────────────
   | { id: 'youtube-archive' }
   | { id: 'media' }
+  | { id: 'illustrations' }
   | { id: 'kit-wizard' }
   | { id: 'kit-editor'; kitId: string | null }
   // ── Bible Study ───────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ const TOP_NAV: TopTab[] = [
   { id: 'groupings',    label: 'Groupings',         Icon: Layers2    },
   { id: 'sermons',      label: 'Sermons',           Icon: Mic2       },
   { id: 'media',        label: 'Media Studio',      Icon: Video      },
+  { id: 'illustrations', label: 'Illustrations',    Icon: ImagePlus  },
 ];
 
 // Map view.id → top-tab id
@@ -133,6 +136,7 @@ const VIEW_TO_TAB: Partial<Record<StudioView['id'], string>> = {
   // Media Studio tab — YouTube Archive and media kit library
   'youtube-archive':            'media',
   'media':                      'media',
+  'illustrations':              'illustrations',
   'kit-wizard':                 'media',
   'kit-editor':                 'media',
   // Groupings tab
@@ -148,6 +152,7 @@ const TAB_DEFAULT_VIEW: Record<string, StudioView> = {
   'journeys':     { id: 'journeys-collections' },
   'sermons':      { id: 'sermons' },
   'media':        { id: 'youtube-archive' },
+  'illustrations': { id: 'illustrations' },
   'groupings':    { id: 'groupings' },
 };
 
@@ -160,6 +165,7 @@ const STUDIO_VIEW_IDS = new Set<StudioView['id']>([
   'journeys-standalone', 'journey-editor', 'legacy-journey-editor',
   'legacy-day-editor', 'legacy-day-preview', 'sermons', 'sermon-editor',
   'youtube-archive', 'media', 'kit-wizard', 'kit-editor',
+  'illustrations',
   'bible-progress', 'bible-generator', 'bible-book-intros',
   'groupings', 'group-editor',
 ]);
@@ -377,6 +383,9 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
         crumbs.push({ label: 'Media Studio', onClick: () => navigate({ id: 'media' }) });
         crumbs.push({ label: 'Media Library', onClick: () => navigate({ id: 'media' }) });
         crumbs.push({ label: 'Media Kit' });
+        break;
+      case 'illustrations':
+        crumbs.push({ label: 'Illustration Studio' });
         break;
 
       // Bible Study
@@ -674,6 +683,8 @@ export default function ContentStudio({ initialSubView, initialJourneyId }: Prop
             onBack={() => navigate({ id: 'media' })}
           />
         );
+      case 'illustrations':
+        return <IllustrationStudio />;
     }
   };
 

@@ -2383,4 +2383,43 @@ export async function runStartupMigrations(): Promise<void> {
   } catch (err) {
     logger.warn({ err }, "Startup migration: uidx_journey_one_completion_step index failed (non-fatal)");
   }
+
+  // ── Illustrations ─────────────────────────────────────────────────────────
+  // Optional media layer; existing content remains valid when no illustration
+  // exists. Asset bytes stay in App Storage; source SVG is retained for editing.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS illustrations (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        content_type text NOT NULL,
+        content_id text NOT NULL,
+        step_id text,
+        illustration_type text NOT NULL,
+        template_type text,
+        source_svg text,
+        display_object_path text,
+        thumbnail_object_path text,
+        generation_instruction text,
+        structured_data jsonb NOT NULL DEFAULT '{}',
+        caption text,
+        alternative_text text NOT NULL DEFAULT '',
+        admin_note text,
+        placement text NOT NULL DEFAULT 'after-reflection',
+        paragraph_position integer,
+        status text NOT NULL DEFAULT 'Draft',
+        approved_by text,
+        approved_at timestamp,
+        created_by text NOT NULL,
+        created_at timestamp NOT NULL DEFAULT NOW(),
+        updated_at timestamp NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS illustrations_content_idx
+        ON illustrations(content_type, content_id, step_id);
+      CREATE INDEX IF NOT EXISTS illustrations_status_idx
+        ON illustrations(status);
+    `);
+    logger.info("Startup migration: illustrations table ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: illustrations table failed (non-fatal)");
+  }
 }
