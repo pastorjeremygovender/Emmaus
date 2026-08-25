@@ -15,24 +15,7 @@ import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
-
-function renderProse(text: string) {
-  const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-  if (paragraphs.length <= 1) {
-    return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-sans">{text}</p>
-    );
-  }
-  return (
-    <div className="space-y-4">
-      {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
-          {p}
-        </p>
-      ))}
-    </div>
-  );
-}
+import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 
 export default function AskEmmausHistory() {
   const { user } = useAuth();
@@ -91,7 +74,10 @@ export default function AskEmmausHistory() {
               </div>
             ) : (
               <div className="space-y-5">
-                {renderProse(msg.content)}
+                <InlineScriptureProse
+                  text={msg.content}
+                  references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                />
                 {msg.metadata && (
                   <div className="space-y-3">
                     {msg.metadata.scripture && (

@@ -33,6 +33,7 @@ import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
+import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 import { SafetyHandoverCard } from '@/components/emmaus/SafetyHandoverCard';
 import { MemoryConsentBar } from '@/components/emmaus/MemoryConsentBar';
 
@@ -121,26 +122,6 @@ function useVisualViewportHeight(ref: RefObject<HTMLElement | null>) {
 }
 
 // ─── Helper: parse paragraphs ─────────────────────────────────────────────────
-
-function renderProse(text: string) {
-  const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-  if (paragraphs.length <= 1) {
-    return (
-      <p className="text-[16px] text-foreground leading-[1.75] font-sans">
-        {text}
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-4">
-      {paragraphs.map((p, i) => (
-        <p key={i} className="text-[16px] text-foreground leading-[1.75] font-sans">
-          {p}
-        </p>
-      ))}
-    </div>
-  );
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -462,7 +443,12 @@ export default function AskEmmausConversation() {
                 >
                   {msg.isStreaming && !msg.content
                     ? <ThinkingBubble slow={thinkingPhase === 'slow'} />
-                    : msg.content ? renderProse(msg.content) : null}
+                    : msg.content ? (
+                      <InlineScriptureProse
+                        text={msg.content}
+                        references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                      />
+                    ) : null}
                 </div>
 
                 {/* Hear Emmaus — read completed response aloud */}
