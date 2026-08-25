@@ -13,6 +13,7 @@ import { listPublishedSermons, type CanonicalSermon } from "../lib/canonical-ser
 import { BOOK_INTROS, CHAPTER_OVERVIEWS } from "../bible/book-intros.js";
 import { logger } from "../lib/logger.js";
 import { getDailyRhythmState } from "../lib/journey-store.js";
+import { buildScriptureRoute, canonicalBibleBookName } from "./citation-validation.js";
 
 export type EmmausResourceType =
   | "journey"
@@ -179,12 +180,18 @@ async function studyNoteResources(query: string, bookId?: string, chapter?: numb
         LIMIT 500`,
     );
     return result.rows.map((row: Record<string, unknown>) => {
-      const ref = `${row.book_id} ${row.chapter}:${row.verse_start}${row.verse_end ? `-${row.verse_end}` : ""}`;
+      const book = canonicalBibleBookName(String(row.book_id));
+      const ref = `${book} ${row.chapter}:${row.verse_start}${row.verse_end ? `-${row.verse_end}` : ""}`;
       return makeResource({
         type: "bible-study",
         resourceId: `bible-study-note:${String(row.book_id)}:${String(row.chapter)}:${String(row.verse_start)}`,
         title: clean(row.title) || `Bible Study — ${ref}`,
-        route: `/bible/read/${row.book_id}/${row.chapter}`,
+        route: buildScriptureRoute({
+          book,
+          chapter: Number(row.chapter),
+          verseStart: Number(row.verse_start),
+          verseEnd: row.verse_end == null ? undefined : Number(row.verse_end),
+        }) ?? `/bible/read/${row.book_id}/${row.chapter}`,
         scripture: ref,
         description: clean(row.key_truth || row.context_note),
         excerpts: [row.content, row.context_note, row.jesus_connection, row.apply_it, row.reflection_question, row.related_scriptures]

@@ -77,6 +77,7 @@ export default function AskEmmausHistory() {
                 <InlineScriptureProse
                   text={msg.content}
                   references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                  resources={msg.metadata?.recommendations ?? []}
                 />
                 {msg.metadata && (
                   <div className="space-y-3">

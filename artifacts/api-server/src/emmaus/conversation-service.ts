@@ -45,7 +45,11 @@ import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
 import { logger } from "../lib/logger.js";
-import { validateCitations, validateModelResponse } from "./citation-validation.js";
+import {
+  extractValidatedScriptureReferences,
+  validateCitations,
+  validateModelResponse,
+} from "./citation-validation.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -690,16 +694,18 @@ export async function handleConversation(
   // repeating them in scriptureReferences. Promote any exact BSB references
   // it actually named into the trusted citation set so every quoted passage
   // can still be rendered as a clickable citation.
-  const proseScriptures = biblePassages.filter((passage) =>
-    new RegExp(`\\b${passage.reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(safeCleanText)
-  ).map((passage) => ({
-    reference: passage.reference,
-    book: passage.reference.replace(/\s+\d+:.*$/, ""),
-    chapter: passage.chapter,
-    verseStart: passage.verse,
-    verseEnd: passage.verse,
-    displayText: passage.reference,
-  }));
+  const proseScriptures = extractValidatedScriptureReferences(safeCleanText);
+  const modelScriptureKeys = new Set(
+    (finalMeta.scriptureReferences ?? []).map(ref => ref.reference.toLowerCase()),
+  );
+  const missingProseScriptures = proseScriptures.filter(
+    ref => !modelScriptureKeys.has(ref.reference.toLowerCase()),
+  );
+  if (missingProseScriptures.length > 0) {
+    logger.info({
+      references: missingProseScriptures.map(ref => ref.reference),
+    }, "emmaus: validated Scripture references recovered from prose");
+  }
   finalMeta.scriptureReferences = Array.from(
     new Map(
       [...(finalMeta.scriptureReferences ?? []), ...proseScriptures]

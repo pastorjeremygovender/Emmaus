@@ -447,6 +447,7 @@ export default function AskEmmausConversation() {
                       <InlineScriptureProse
                         text={msg.content}
                         references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
+                        resources={msg.metadata?.recommendations ?? []}
                       />
                     ) : null}
                 </div>
@@ -551,7 +552,7 @@ export default function AskEmmausConversation() {
       {!isStreaming && messages.length > 0 && (
         <div
           className="flex-shrink-0 border-t border-border/50 bg-background/95 backdrop-blur-sm"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          style={{ paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
         >
           <div className="px-4 py-3 max-w-[560px] mx-auto">
             <label htmlFor="follow-up-input" className="sr-only">

@@ -32,3 +32,14 @@ silently disappear.
 
 **How to apply:** Treat catalogue IDs as the model's only recommendation keys;
 the server resolves the final route from the live publication-safe catalogue.
+
+Final Ask Emmaus prose must be independently scanned for Bible references after
+model metadata validation.
+
+**Why:** Models can mention valid passages in natural prose without copying
+them into `scriptureReferences`, which otherwise leaves visible references
+unclickable.
+
+**How to apply:** Extract book-qualified references, validate chapter/range
+against the canonical Bible structure, merge deduplicated refs, and generate
+links only in trusted application code.

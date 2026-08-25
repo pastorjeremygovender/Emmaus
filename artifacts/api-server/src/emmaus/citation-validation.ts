@@ -18,6 +18,24 @@ export function normalizeBibleBook(book: string): string | null {
   return Object.prototype.hasOwnProperty.call(BOOK_INTROS, id) ? id : null;
 }
 
+const CANONICAL_BIBLE_BOOK_NAMES: Record<string, string> = {
+  ...Object.fromEntries(Object.keys(BOOK_INTROS).map(id => [id, id])),
+  psalms: "Psalms", songofsolomon: "Song of Solomon", revelation: "Revelation",
+};
+
+// Display names are application data, never generic title-casing.
+export function canonicalBibleBookName(book: string): string {
+  const id = normalizeBibleBook(book);
+  if (!id) return book;
+  const numbered = id.match(/^([123])(.*)$/);
+  if (numbered) {
+    const base = numbered[2].charAt(0).toUpperCase() + numbered[2].slice(1);
+    return `${numbered[1]} ${base}`;
+  }
+  return CANONICAL_BIBLE_BOOK_NAMES[id] ??
+    id.replace(/(^|[a-z])([a-z]+)/g, (_, prefix, word) => `${prefix}${word.charAt(0).toUpperCase()}${word.slice(1)}`);
+}
+
 export function buildScriptureRoute(ref: Partial<ScriptureRef> & { verseStart?: number; verseEnd?: number }): string | null {
   const book = normalizeBibleBook(String(ref.book ?? ""));
   const chapter = Number(ref.chapter);
@@ -72,6 +90,55 @@ function stripModelUrls(text: string): string {
     .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+const PROSE_BOOK_NAMES = [
+  "First Corinthians", "Second Corinthians", "First Thessalonians",
+  "Second Thessalonians", "First Timothy", "Second Timothy", "First Peter",
+  "Second Peter", "First John", "Second John", "Third John",
+  "Song of Solomon", "Song of Songs", "1 Corinthians", "2 Corinthians",
+  "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "1 Peter",
+  "2 Peter", "1 John", "2 John", "3 John", "Genesis", "Exodus", "Leviticus",
+  "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "Samuel", "Kings",
+  "Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalm", "Psalms",
+  "Proverbs", "Ecclesiastes", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel",
+  "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum",
+  "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", "Matthew",
+  "Mark", "Luke", "John", "Acts", "Romans", "Galatians", "Ephesians",
+  "Philippians", "Colossians", "Titus", "Philemon", "Hebrews", "James",
+  "Jude", "Revelation",
+].sort((a, b) => b.length - a.length);
+
+function proseBookPattern(): string {
+  return PROSE_BOOK_NAMES.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+}
+
+/** Extract and validate Bible references named in final prose, independently
+ * of the model's structured metadata. */
+export function extractValidatedScriptureReferences(text: string): ScriptureRef[] {
+  const pattern = new RegExp(
+    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?(?:\\s*,\\s*\\d{1,3})?)?\\b`,
+    "gi",
+  );
+  const found: ScriptureRef[] = [];
+  for (const match of text.matchAll(pattern)) {
+    const book = match[1].replace(/^First /i, "1 ").replace(/^Second /i, "2 ").replace(/^Third /i, "3 ");
+    const chapter = Number(match[2]);
+    const verseStart = match[3] == null ? undefined : Number(match[3]);
+    const verseEnd = match[4] == null ? verseStart : Number(match[4]);
+    const ref = validateScripture({
+      book,
+      chapter,
+      verseStart,
+      verseEnd,
+      reference: match[0],
+      displayText: match[0],
+    });
+    if (ref && !found.some(existing => existing.reference.toLowerCase() === ref.reference.toLowerCase())) {
+      found.push(ref);
+    }
+  }
+  return found;
 }
 
 /** Validate the complete model response while retaining the existing metadata shape. */
@@ -164,7 +231,7 @@ function validateScripture(value: unknown): ScriptureRef | null {
   const verseEnd = ref.verseEnd == null ? undefined : Number(ref.verseEnd);
   if (!book || !Number.isInteger(chapter) || !buildScriptureRoute({ book, chapter, verseStart, verseEnd })) return null;
   return {
-    reference: typeof ref.reference === "string" ? stripModelUrls(ref.reference) : `${book} ${chapter}`,
+    reference: typeof ref.reference === "string" ? stripModelUrls(ref.reference) : `${canonicalBibleBookName(book)} ${chapter}`,
     book,
     chapter,
     ...(verseStart !== undefined ? { verseStart } : {}),

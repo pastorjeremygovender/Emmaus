@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { ScriptureRef } from '@/lib/emmaus-client';
-import { parseScriptureRef } from '@/lib/scripture-ref';
+import { formatScriptureReference, parseScriptureRef } from '@/lib/scripture-ref';
 
 interface ScriptureCardProps {
   scripture: ScriptureRef;
@@ -37,6 +37,8 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
     setLocation(`/bible/read/${parsed.bookId}/${parsed.chapter}${verse}`);
   }
 
+  const displayReference = formatScriptureReference(scripture);
+
   return (
     <Card className="border-primary/20 bg-primary/5">
       <CardContent className="p-4 flex items-start gap-3">
@@ -51,7 +53,7 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
             Scripture
           </p>
           <p className="text-[16px] font-sans font-medium text-foreground">
-            {scripture.reference}
+            {displayReference}
           </p>
           {scripture.displayText && (
             <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed">

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildScriptureRoute, normalizeBibleBook, validateCitations } from "../citation-validation.js";
+import {
+  buildScriptureRoute,
+  extractValidatedScriptureReferences,
+  normalizeBibleBook,
+  validateCitations,
+} from "../citation-validation.js";
 import type { EmmausResponseMetadata } from "../firestore-model.js";
 
 describe("Ask Emmaus citation validation", () => {
@@ -34,5 +39,23 @@ describe("Ask Emmaus citation validation", () => {
     assert.equal(result.scripture, null);
     assert.equal(result.recommendations.length, 1);
     assert.equal(result.recommendations[0].path, "/journey/j1/day/1");
+  });
+
+  it("recovers valid references from prose and ignores numeric false positives", () => {
+    const refs = extractValidatedScriptureReferences(
+      "Faith is described in Hebrews 11:1. Read John 4:43–54 and Psalm 23. " +
+      "This happened on 29 March 2026 at 46:56; see Day 3 and Step 5.",
+    );
+    assert.deepEqual(refs.map(ref => ref.reference), [
+      "Hebrews 11:1",
+      "John 4:43–54",
+      "Psalm 23",
+    ]);
+    assert.equal(buildScriptureRoute(refs[1]), "/bible/read/john/4?startVerse=43&endVerse=54");
+  });
+
+  it("accepts first-book aliases while producing canonical internal IDs", () => {
+    const refs = extractValidatedScriptureReferences("First Corinthians 13 and First John 1:9.");
+    assert.deepEqual(refs.map(ref => ref.book), ["1corinthians", "1john"]);
   });
 });
