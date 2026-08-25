@@ -1,5 +1,6 @@
 import type { IndexingCheckpoint } from "./sermon-store.js";
 import type { YoutubeVideoRecord } from "./sermon-store.js";
+import type { ImportJob } from "./sermon-store.js";
 
 export function isSafeBatchCandidate(video: YoutubeVideoRecord): boolean {
   return (
@@ -11,6 +12,14 @@ export function isSafeBatchCandidate(video: YoutubeVideoRecord): boolean {
 
 export function isQuotaExhaustion(error: string): boolean {
   return /quota|daily.?limit|rate.?limit|too many requests|403.*youtube|exceeded/i.test(error);
+}
+
+export function hasActiveSafeBatch(jobs: ImportJob[]): boolean {
+  return jobs.some(
+    job =>
+      (job.status === "running" || job.status === "queued") &&
+      job.options?.mode === "safe-batch",
+  );
 }
 
 export function advanceCheckpoint(

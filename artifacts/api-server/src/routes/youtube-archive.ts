@@ -26,7 +26,7 @@ import {
   type IndexingCheckpoint, type ImportJob,
   getArchiveStats, type YoutubeVideoRecord,
 } from "../lib/sermon-store.js";
-import { isQuotaExhaustion, isSafeBatchCandidate, advanceCheckpoint, pauseCheckpoint } from "../lib/safe-indexing-policy.js";
+import { isQuotaExhaustion, isSafeBatchCandidate, hasActiveSafeBatch, advanceCheckpoint, pauseCheckpoint } from "../lib/safe-indexing-policy.js";
 import { readArchiveState, writeArchiveState } from "../lib/archive-state-store.js";
 import {
   getYoutubeConfig, getChannelInfo, getPlaylistVideoIds,
@@ -510,11 +510,12 @@ async function processVideoInternal(
 
 async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
   const existing = await getIndexingCheckpoint();
-  const activeJob = (await getAllJobs()).find(job =>
-    (job.status === "running" || job.status === "queued") &&
-    job.options?.mode === "safe-batch"
-  );
-  if (activeJob) {
+  const activeJobs = await getAllJobs();
+  if (hasActiveSafeBatch(activeJobs)) {
+    const activeJob = activeJobs.find(job =>
+      (job.status === "running" || job.status === "queued") &&
+      job.options?.mode === "safe-batch"
+    );
     res.status(409).json({ error: "A safe indexing batch is already running.", jobId: activeJob.id });
     return;
   }
