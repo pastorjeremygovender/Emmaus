@@ -22,6 +22,8 @@ import {
   getAllVideos, getVideoById, upsertVideo, updateVideo,
   getAllSegments, getSegmentsForVideo, replaceSegments, updateSegment,
   getAllJobs, createJob, updateJob,
+  getIndexingCheckpoint, saveIndexingCheckpoint, clearIndexingCheckpoint,
+  type IndexingCheckpoint, type ImportJob,
   getArchiveStats, type YoutubeVideoRecord,
 } from "../lib/sermon-store.js";
 import { readArchiveState, writeArchiveState } from "../lib/archive-state-store.js";
@@ -361,6 +363,7 @@ async function processVideoInternal(
     // ── Step 1: Import captions ──────────────────────────────────────────────
     let captionContent: string | null = null;
     let captionKind = "unknown";
+    let captionFailure: string | null = null;
 
     const accessToken = await getValidAccessToken();
 
@@ -380,12 +383,15 @@ async function processVideoInternal(
           });
         }
       } catch (err) {
+        captionFailure = String(err);
         logger.warn({ videoId: video.youtubeVideoId, err: String(err) }, "Caption download failed");
       }
     }
 
     if (!captionContent) {
-      const reason = accessToken
+      const reason = captionFailure && isQuotaExhaustion(captionFailure)
+        ? `YouTube quota exhausted: ${captionFailure}`
+        : accessToken
         ? "No usable caption track found"
         : "OAuth not connected — cannot access captions";
       await updateVideo(videoId, {
@@ -501,6 +507,113 @@ async function processVideoInternal(
 
 // ─── Bulk pipeline (process approved only) ─────────────────────────────────────
 
+function isQuotaExhaustion(error: string): boolean {
+  return /quota|daily.?limit|rate.?limit|too many requests|403.*youtube|exceeded/i.test(error);
+}
+
+async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
+  const existing = await getIndexingCheckpoint();
+  const activeJob = (await getAllJobs()).find(job =>
+    (job.status === "running" || job.status === "queued") &&
+    job.options?.mode === "safe-batch"
+  );
+  if (activeJob) {
+    res.status(409).json({ error: "A safe indexing batch is already running.", jobId: activeJob.id });
+    return;
+  }
+  if (resume && !existing) {
+    res.status(404).json({ error: "No resumable checkpoint exists. Start Safe Indexing Batch." });
+    return;
+  }
+  if (!resume && existing?.status === "paused") {
+    res.status(409).json({ error: "A paused indexing checkpoint exists. Resume it before starting another batch." });
+    return;
+  }
+
+  const videos = await getAllVideos();
+  const approved = (v: YoutubeVideoRecord) =>
+    (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
+    v.aiIndexStatus !== "indexed" &&
+    (v.transcriptStatus === "none" || v.transcriptStatus === "failed");
+  const videoIds = resume
+    ? existing!.videoIds
+    : videos.filter(approved).map(v => v.id);
+  const job = await createJob("pipeline-run", { mode: "safe-batch", resume });
+  const checkpoint: IndexingCheckpoint = resume
+    ? { ...existing!, jobId: job.id, status: "running", pauseReason: undefined, updatedAt: new Date().toISOString() }
+    : {
+        version: 1, jobId: job.id, videoIds, position: 0, completedVideoIds: [],
+        completedCount: 0, remainingCount: videoIds.length, status: "running",
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+  await saveIndexingCheckpoint(checkpoint);
+  res.json({ jobId: job.id, message: resume ? "Safe indexing resumed" : "Safe indexing batch started", checkpoint });
+
+  setImmediate(async () => {
+    await updateJob(job.id, { status: "running" });
+    let current = checkpoint;
+    try {
+      for (let i = current.position; i < current.videoIds.length; i++) {
+        const currentVideo = (await getAllVideos()).find(v => v.id === current.videoIds[i]);
+        if (!currentVideo || !approved(currentVideo)) {
+          current = { ...current, position: i + 1, remainingCount: Math.max(0, current.videoIds.length - i - 1), updatedAt: new Date().toISOString() };
+          await saveIndexingCheckpoint(current);
+          continue;
+        }
+        await updateJob(job.id, { progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: i - current.completedCount, currentItem: currentVideo.title } });
+        const result = await processVideoInternal(currentVideo.id);
+        if (result.error && isQuotaExhaustion(result.error)) {
+          current = { ...current, position: i, remainingCount: current.videoIds.length - i, status: "paused", pauseReason: result.error, updatedAt: new Date().toISOString() };
+          await saveIndexingCheckpoint(current);
+          await updateJob(job.id, { status: "paused", error: result.error });
+          return;
+        }
+        current = {
+          ...current,
+          position: i + 1,
+          completedVideoIds: result.success ? [...current.completedVideoIds, currentVideo.id] : current.completedVideoIds,
+          completedCount: current.completedCount + (result.success ? 1 : 0),
+          remainingCount: Math.max(0, current.videoIds.length - i - 1),
+          updatedAt: new Date().toISOString(),
+        };
+        await saveIndexingCheckpoint(current);
+        invalidateIndex();
+      }
+      await updateJob(job.id, { status: "completed", progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: 0, currentItem: `${current.completedCount} indexed` } });
+      await clearIndexingCheckpoint();
+    } catch (err) {
+      const reason = String(err);
+      current = { ...current, status: "paused", pauseReason: reason, updatedAt: new Date().toISOString() };
+      await saveIndexingCheckpoint(current);
+      await updateJob(job.id, { status: isQuotaExhaustion(reason) ? "paused" : "failed", error: reason });
+    }
+  });
+}
+
+router.get("/youtube-archive/pipeline/checkpoint", async (_req: Request, res: Response) => {
+  const checkpoint = await getIndexingCheckpoint();
+  const activeJob = (await getAllJobs()).find(job =>
+    job.id === checkpoint?.jobId && (job.status === "running" || job.status === "queued")
+  );
+  // A process restart can leave a durable cursor marked running. If there is
+  // no live job, expose it as paused so the admin can safely resume it.
+  if (checkpoint?.status === "running" && !activeJob) {
+    const paused = { ...checkpoint, status: "paused" as const, pauseReason: "The previous indexing process stopped before completion." };
+    await saveIndexingCheckpoint(paused);
+    res.json({ checkpoint: paused });
+    return;
+  }
+  res.json({ checkpoint });
+});
+
+router.post("/youtube-archive/pipeline/safe-batch", async (_req: Request, res: Response) => {
+  await startSafeBatch(res, false);
+});
+
+router.post("/youtube-archive/pipeline/resume", async (_req: Request, res: Response) => {
+  await startSafeBatch(res, true);
+});
+
 /**
  * POST /api/youtube-archive/pipeline/run
  *
@@ -513,6 +626,10 @@ async function processVideoInternal(
  * PATCH /youtube-archive/videos/:id — pending items are left untouched.
  */
 router.post("/youtube-archive/pipeline/run", async (_req: Request, res: Response) => {
+  if (_req.body?.confirmFullRebuild !== true) {
+    res.status(400).json({ error: "Full rebuild is an advanced action. Explicit confirmation is required." });
+    return;
+  }
   const job = await createJob("pipeline-run", {});
   res.json({ jobId: job.id, message: "Pipeline started" });
 

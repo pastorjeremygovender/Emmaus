@@ -165,6 +165,20 @@ export interface ImportJob {
   options?: Record<string, unknown>;
 }
 
+export interface IndexingCheckpoint {
+  version: 1;
+  jobId: string;
+  videoIds: string[];
+  position: number;
+  completedVideoIds: string[];
+  completedCount: number;
+  remainingCount: number;
+  status: "running" | "paused";
+  pauseReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Storage paths ────────────────────────────────────────────────────────────
 
 // Resolve relative to this source file so the path is correct regardless of
@@ -442,6 +456,18 @@ export async function updateJob(
     await atomicWrite(JOBS_FILE, jobs);
     await writeArchiveState("jobs", jobs);
   }
+}
+
+export async function getIndexingCheckpoint(): Promise<IndexingCheckpoint | null> {
+  return readArchiveState<IndexingCheckpoint>("indexing-checkpoint");
+}
+
+export async function saveIndexingCheckpoint(checkpoint: IndexingCheckpoint): Promise<void> {
+  await writeArchiveState("indexing-checkpoint", checkpoint);
+}
+
+export async function clearIndexingCheckpoint(): Promise<void> {
+  await writeArchiveState("indexing-checkpoint", null);
 }
 
 // ─── Stats ────────────────────────────────────────────────────────────────────

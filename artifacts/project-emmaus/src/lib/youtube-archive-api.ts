@@ -137,6 +137,20 @@ export interface ArchiveStatus {
   activeJob: ImportJob | null;
 }
 
+export interface IndexingCheckpoint {
+  version: 1;
+  jobId: string;
+  videoIds: string[];
+  position: number;
+  completedVideoIds: string[];
+  completedCount: number;
+  remainingCount: number;
+  status: 'running' | 'paused';
+  pauseReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -220,8 +234,23 @@ export interface PipelineStatus {
   error?: string;
 }
 
-export async function runPipeline(): Promise<PipelineResult> {
-  return apiFetch('/api/youtube-archive/pipeline/run', { method: 'POST' });
+export async function runPipeline(confirmFullRebuild = false): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/run', {
+    method: 'POST',
+    body: JSON.stringify({ confirmFullRebuild }),
+  });
+}
+
+export async function getIndexingCheckpoint(): Promise<{ checkpoint: IndexingCheckpoint | null }> {
+  return apiFetch('/api/youtube-archive/pipeline/checkpoint');
+}
+
+export async function startSafeIndexingBatch(): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/safe-batch', { method: 'POST' });
+}
+
+export async function resumeSafeIndexing(): Promise<PipelineResult> {
+  return apiFetch('/api/youtube-archive/pipeline/resume', { method: 'POST' });
 }
 
 export async function getPipelineJob(jobId: string): Promise<ImportJob | null> {

@@ -7,9 +7,10 @@ import {
 import {
   getArchiveStatus, syncChannel, listVideos, getVideo, updateVideo,
   processVideo, getSegments, listJobs, startOAuthFlow, disconnectOAuth,
-  runPipeline, runEnrichment, formatDuration, formatTimestamp,
+  runPipeline, startSafeIndexingBatch, resumeSafeIndexing, getIndexingCheckpoint,
+  runEnrichment, formatDuration, formatTimestamp,
   detectSermonStarts, repairTimestamps, generateAudio, getAudioStreamUrl,
-  type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob,
+  type ArchiveStatus, type VideoRecord, type SermonSegment, type ImportJob, type IndexingCheckpoint,
 } from '@/lib/youtube-archive-api';
 import { getPublicOrigin, getApiBase } from '@/lib/api';
 
@@ -706,6 +707,8 @@ export default function YoutubeArchive() {
   const [pipelining, setPipelining] = useState(false);
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null);
   const [pipelineJob, setPipelineJob] = useState<ImportJob | null>(null);
+  const [checkpoint, setCheckpoint] = useState<IndexingCheckpoint | null>(null);
+  const [showFullRebuild, setShowFullRebuild] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichJobId, setEnrichJobId] = useState<string | null>(null);
   const [enrichJob, setEnrichJob] = useState<ImportJob | null>(null);
@@ -737,6 +740,10 @@ export default function YoutubeArchive() {
     }
   }, []);
 
+  const loadCheckpoint = useCallback(async () => {
+    try { setCheckpoint((await getIndexingCheckpoint()).checkpoint); } catch { setCheckpoint(null); }
+  }, []);
+
   const loadVideos = useCallback(async () => {
     setVideosLoading(true);
     try {
@@ -764,6 +771,7 @@ export default function YoutubeArchive() {
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { loadCheckpoint(); }, [loadCheckpoint]);
   useEffect(() => { if (view === 'videos') loadVideos(); }, [view, loadVideos]);
   useEffect(() => { loadJobs(); }, [loadJobs]);
 
@@ -834,11 +842,24 @@ export default function YoutubeArchive() {
     }
   };
 
-  const handleRunPipeline = async () => {
+  const handleSafeBatch = async (resume = false) => {
     setPipelining(true);
     setPipelineJob(null);
     try {
-      const result = await runPipeline();
+      const result = resume ? await resumeSafeIndexing() : await startSafeIndexingBatch();
+      setPipelineJobId(result.jobId);
+    } catch (e) {
+      setPipelining(false);
+      setStatusError(String(e));
+    }
+  };
+
+  const handleFullRebuild = async () => {
+    if (!confirm('This may re-request captions and rebuild completed sermons. Continue only for an intentional full rebuild?')) return;
+    setPipelining(true);
+    setPipelineJob(null);
+    try {
+      const result = await runPipeline(true);
       setPipelineJobId(result.jobId);
     } catch (e) {
       setPipelining(false);
@@ -898,18 +919,19 @@ export default function YoutubeArchive() {
       const job = result.jobs.find((j: ImportJob) => j.id === pipelineJobId);
       if (job) {
         setPipelineJob(job);
-        if (job.status === 'completed' || job.status === 'failed') {
+        if (job.status === 'completed' || job.status === 'failed' || job.status === 'paused') {
           setPipelining(false);
           clearInterval(interval);
           await loadStatus();
           await loadJobs();
           if (view === 'videos') await loadVideos();
+          await loadCheckpoint();
         }
       }
       setJobs(result.jobs.slice(0, 10));
     }, 3000);
     return () => clearInterval(interval);
-  }, [pipelineJobId, pipelining, view, loadStatus, loadJobs, loadVideos]);
+  }, [pipelineJobId, pipelining, view, loadStatus, loadJobs, loadVideos, loadCheckpoint]);
 
   // Poll while enrichment is running
   useEffect(() => {
@@ -1227,6 +1249,27 @@ export default function YoutubeArchive() {
         </div>
 
         {/* Pipeline progress */}
+        {checkpoint?.status === 'paused' && !pipelining && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 space-y-2">
+            <div className="flex items-center gap-2 text-[14px] text-amber-900 font-semibold">
+              <AlertCircle size={16} /> Indexing paused — resumable checkpoint saved
+            </div>
+            <div className="text-[12px] text-amber-800">
+              Position {checkpoint.position + 1} of {checkpoint.videoIds.length} · {checkpoint.completedCount} completed · {checkpoint.remainingCount} remaining
+            </div>
+            <div className="text-[12px] text-amber-800">
+              Pause reason: {checkpoint.pauseReason || 'Quota or service limit reached'}
+            </div>
+            <button onClick={() => handleSafeBatch(true)} className="mt-1 flex items-center gap-2 px-4 py-2 bg-amber-700 text-white rounded-lg text-[13px] font-medium hover:bg-amber-800">
+              <Play size={14} /> Resume Indexing
+            </button>
+          </div>
+        )}
+        {!checkpoint && !pipelining && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-[12px] text-gray-600">
+            No resumable checkpoint exists. Start Safe Indexing Batch.
+          </div>
+        )}
         {pipelining && pipelineJob && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5">
             <div className="flex items-center gap-2 text-[13px] text-blue-800 font-medium">
@@ -1288,24 +1331,30 @@ export default function YoutubeArchive() {
 
         <div className="flex gap-3 items-center flex-wrap">
           <button
-            onClick={handleRunPipeline}
+            onClick={() => handleSafeBatch(false)}
             disabled={pipelining || enriching || !status?.oauth.connected}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-[13px] font-medium hover:bg-indigo-700 transition-colors disabled:opacity-40"
           >
             {pipelining
               ? <><Loader2 size={14} className="animate-spin" /> Running…</>
-              : <><Play size={14} /> Run Full Indexing Pipeline</>
+              : <><Play size={14} /> Start Safe Indexing Batch</>
             }
           </button>
           {!pipelining && (pipelineJob?.progress.failures?.length || (status?.stats.failedImports ?? 0) > 0) ? (
             <button
-              onClick={handleRunPipeline}
+              onClick={() => handleSafeBatch(false)}
               disabled={enriching || !status?.oauth.connected}
               className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg text-[13px] hover:bg-red-50 transition-colors disabled:opacity-40"
             >
               <RefreshCw size={14} /> Retry Failed
             </button>
           ) : null}
+          <button
+            onClick={() => setShowFullRebuild((value) => !value)}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-500 rounded-lg text-[12px] hover:bg-gray-50"
+          >
+            <ChevronRight size={13} className={showFullRebuild ? 'rotate-90' : ''} /> Advanced
+          </button>
           {(status?.stats.failedImports ?? 0) > 0 && (
             <button
               onClick={() => { setShowFailedOnly(true); setView('videos'); }}
@@ -1333,6 +1382,16 @@ export default function YoutubeArchive() {
             </span>
           )}
         </div>
+
+        {showFullRebuild && (
+          <div className="border border-red-200 bg-red-50 rounded-lg p-3 text-[12px] text-red-800 space-y-2">
+            <strong>Advanced full rebuild</strong>
+            <p>This may re-request captions and reprocess completed sermons. Use only for deliberate maintenance; normal indexing must use the safe batch.</p>
+            <button onClick={handleFullRebuild} disabled={pipelining || enriching || !status?.oauth.connected} className="px-3 py-1.5 border border-red-300 rounded text-red-700 hover:bg-red-100 disabled:opacity-40">
+              Confirm and Run Full Rebuild
+            </button>
+          </div>
+        )}
 
         {/* Enrichment progress */}
         {enriching && enrichJob && (
