@@ -51,6 +51,37 @@ import { searchSermons } from "../lib/sermon-search.js";
 
 const router = Router();
 
+const VOICE_BIBLE_BOOKS = new Set([
+  "genesis","exodus","leviticus","numbers","deuteronomy","joshua","judges","ruth",
+  "1samuel","2samuel","1kings","2kings","1chronicles","2chronicles","ezra","nehemiah",
+  "esther","job","psalms","proverbs","ecclesiastes","songofsolomon","isaiah","jeremiah",
+  "lamentations","ezekiel","daniel","hosea","joel","amos","obadiah","jonah","micah",
+  "nahum","habakkuk","zephaniah","haggai","zechariah","malachi","matthew","mark","luke",
+  "john","acts","romans","1corinthians","2corinthians","galatians","ephesians",
+  "philippians","colossians","1thessalonians","2thessalonians","1timothy","2timothy",
+  "titus","philemon","hebrews","james","1peter","2peter","1john","2john","3john","jude","revelation",
+]);
+
+function validateVoiceToolArgs(name: string, args: Record<string, unknown>): Record<string, unknown> | null {
+  if (name === "read_content") {
+    const type = args.type;
+    if (!["bible", "daily-rhythm", "devotional", "sermon-companion", "walk"].includes(String(type))) return null;
+    if (type === "bible") {
+      const book = typeof args.bibleBook === "string" ? args.bibleBook.toLowerCase().replace(/[\s_-]+/g, "") : "";
+      const chapter = Number(args.bibleChapter);
+      if (!VOICE_BIBLE_BOOKS.has(book) || !Number.isInteger(chapter) || chapter < 1 || chapter > 150) return null;
+      return { type, bibleBook: book, bibleChapter: chapter };
+    }
+    return { type, ...(typeof args.titleHint === "string" ? { titleHint: args.titleHint.trim().slice(0, 80) } : {}) };
+  }
+  if (name === "navigate") {
+    const destination = args.destination;
+    if (!["walk", "bible", "discover", "journeys", "back"].includes(String(destination))) return null;
+    return { destination, ...(typeof args.bibleBookId === "string" ? { bibleBookId: args.bibleBookId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) } : {}), ...(Number.isInteger(args.bibleChapter) ? { bibleChapter: args.bibleChapter } : {}) };
+  }
+  return args;
+}
+
 // ─── POST /voice/transcribe ───────────────────────────────────────────────────
 
 router.post("/voice/transcribe", async (req, res) => {
@@ -854,6 +885,12 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
           if (!tc.name) continue;
           let args: object = {};
           try { args = JSON.parse(tc.argsStr || '{}'); } catch { /* malformed args — use empty */ }
+          const validatedArgs = validateVoiceToolArgs(tc.name, args as Record<string, unknown>);
+          if (!validatedArgs) {
+            sse({ type: 'tool_call', tool: 'action_rejected', args: { code: 'VOICE_INVALID_TOOL_ARGS', message: 'I could not safely verify that Voice action.' } });
+            continue;
+          }
+          args = validatedArgs;
           if (tc.name === 'continue_walk') {
             const { titleHint } = args as { titleHint?: string };
             const resolvedArgs = await resolveContinueWalk(userId, titleHint);

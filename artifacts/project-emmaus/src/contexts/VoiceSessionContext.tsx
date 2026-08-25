@@ -59,6 +59,8 @@ import {
   buildSubstitutionNotice,
 } from '@/lib/voice-bible';
 import { remoteBibleProvider } from '@/lib/bible-provider';
+import { validateVoiceReadAction, isSafeVoiceRoute } from '@/lib/voice-action-validation';
+import { loadVoiceReadingProgress, saveVoiceReadingProgress, clearVoiceReadingProgress } from '@/lib/voice-reading-progress';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -237,6 +239,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const bibleContextRef    = useRef<{ bookId: string; chapter: number; translationId: string } | null>(null);
   const readingSectionsRef = useRef<{ label: string; text: string }[]>([]);
   const readingIndexRef    = useRef(0);
+  const readingResourceRef = useRef<{
+    type: 'bible' | 'daily-rhythm' | 'devotional' | 'walk' | 'sermon-companion';
+    id: string;
+    bookId?: string;
+    chapter?: number;
+    translationId?: string;
+  }>({ type: 'bible', id: 'unknown' });
   const isReadingRef       = useRef(false);
   const readingPausedRef   = useRef(false);
   // Sections from the most recently completed reading session.
@@ -937,6 +946,23 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         readerState:              'SPEAKING',
       }));
       setActiveContent({ label: section.label });
+      const uid = userRef.current?.id;
+      if (uid) {
+        saveVoiceReadingProgress({
+          userId: uid,
+          resourceType: readingResourceRef.current.type,
+          resourceId: readingResourceRef.current.id,
+          bookId: readingResourceRef.current.bookId,
+          chapter: readingResourceRef.current.chapter,
+          translationId: readingResourceRef.current.translationId,
+          segmentId: `section-${idx}`,
+          sectionIndex: idx,
+          sectionsTotal: sections.length,
+          provider: 'elevenlabs',
+          updatedAt: new Date().toISOString(),
+          completed: false,
+        });
+      }
       updateMediaSession(section.label, 'playing');
       // Start (or keep) interrupt monitor for this reading session.
       // Called once per section but is a no-op if monitor is already running
@@ -967,6 +993,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         // Preserve the just-finished sections so follow-up questions work.
         // e.g. "What was that verse?" after reading completes.
         lastReadSectionsRef.current = sections.slice();
+        const uid = userRef.current?.id;
+        if (uid) clearVoiceReadingProgress(uid);
         // Reading is done — stop the interrupt monitor that was kept alive across sections.
         stopInterruptMonitor();
         setActiveContent(null);
@@ -1033,6 +1061,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           return false;
         }
         const label = `${dr.journeyTitle} — Day ${dr.currentDay}`;
+        readingResourceRef.current = { type: 'daily-rhythm', id: dr.journeyId };
         if (dr.stepTitle)      sections.push({ label: 'Introduction', text: dr.stepTitle });
         if (dr.stepScripture)  sections.push({ label: 'Scripture',    text: `Today's scripture is ${dr.stepScripture}.` });
         if (dr.stepTeaching)   sections.push({ label: 'Teaching',     text: dr.stepTeaching });
@@ -1084,6 +1113,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
         const dev   = devs[0];
         const label = `${dev.seriesTitle} — Day ${dev.currentDay}`;
+        readingResourceRef.current = { type: 'devotional', id: dev.seriesId };
         if (dev.entryTitle)     sections.push({ label: 'Today',      text: dev.entryTitle });
         if (dev.entryScripture) sections.push({ label: 'Scripture',  text: `Today's scripture is ${dev.entryScripture}.` });
         if (dev.entryContent)   sections.push({ label: 'Reflection', text: dev.entryContent });
@@ -1130,6 +1160,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         const walk = walks[0];
         const label = `${walk.title} — Day ${walk.currentDay}`;
+        readingResourceRef.current = { type: 'walk', id: walk.journeyId };
         if (walk.stepTitle)      sections.push({ label: 'Introduction',  text: walk.stepTitle });
         if (walk.stepScripture)  sections.push({ label: 'Scripture',     text: `Today's scripture is ${walk.stepScripture}.` });
         if (walk.stepTeaching)   sections.push({ label: 'Teaching',      text: walk.stepTeaching });
@@ -1156,6 +1187,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         const sc = appCtx?.sermonCompanion;
         if (!sc) return false;
         const label = `Sermon Companion — Day ${sc.currentDay}`;
+        readingResourceRef.current = { type: 'sermon-companion', id: sc.id };
         if (sc.entryGreeting)   sections.push({ label: 'Opening',    text: sc.entryGreeting });
         if (sc.entryScripture)  sections.push({ label: 'Scripture',  text: `This week's scripture is ${sc.entryScripture}.` });
         if (sc.entryReflection) sections.push({ label: 'Reflection', text: sc.entryReflection });
@@ -1201,6 +1233,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
 
         bibleContextRef.current = { bookId: resolvedRef.bookId, chapter: resolvedRef.chapter, translationId: translation.resolvedId };
+        readingResourceRef.current = {
+          type: 'bible',
+          id: `${resolvedRef.bookId}:${resolvedRef.chapter}`,
+          bookId: resolvedRef.bookId,
+          chapter: resolvedRef.chapter,
+          translationId: translation.resolvedId,
+        };
 
         // Navigate the screen to the chapter being read so the user can follow along.
         const navFnBible = navigateRef.current ?? providerNavigateRef.current;
@@ -1252,7 +1291,16 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }));
 
       setStreamingResponse('');
-      await playReadingSection(sections[0]);
+      const uid = userRef.current?.id;
+      const saved = uid ? loadVoiceReadingProgress(uid) : null;
+      const canResume = saved
+        && saved.resourceType === readingResourceRef.current.type
+        && saved.resourceId === readingResourceRef.current.id
+        && saved.sectionIndex >= 0
+        && saved.sectionIndex < sections.length
+        && !saved.completed;
+      readingIndexRef.current = canResume ? saved.sectionIndex : 0;
+      await playReadingSection(sections[readingIndexRef.current]);
       return true;
     }
 
@@ -1677,16 +1725,27 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             bibleChapter?: number;
             titleHint?:    string;
           };
+          const validation = validateVoiceReadAction(args, appContextRef.current);
+          if (!validation.ok) {
+            console.warn('[VOICE ACTION REJECTED]', JSON.stringify({
+              code: validation.code,
+              action: 'read-content',
+              contentType: args.type ?? null,
+            }));
+            setResponse(validation.message);
+            setStreamingResponse('');
+            await playTTS(validation.message, false);
+            return;
+          }
           let bibleRef: { bookId: string; bookName: string; chapter: number } | undefined;
-          if (args.bibleBook && args.bibleChapter) {
+          if (validation.content === 'bible' && validation.bibleBook && validation.bibleChapter) {
             // Normalise: strip spaces/hyphens so "1 corinthians" → "1corinthians"
-            const normBookId = String(args.bibleBook).toLowerCase().replace(/[\s\-]+/g, '');
-            bibleRef = { bookId: normBookId, bookName: String(args.bibleBook), chapter: args.bibleChapter };
+            bibleRef = { bookId: validation.bibleBook, bookName: validation.bibleBook, chapter: validation.bibleChapter };
           }
           const started = await loadAndStartReading(
-            args.type as 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible',
+            validation.content,
             bibleRef,
-            args.titleHint,
+            validation.titleHint,
           );
           if (!started) {
             // Log the real failure so it's visible in DevTools (not hidden behind a friendly string)
@@ -1725,6 +1784,18 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           const finalRoute =
             args.resolvedRoute ??
             (args.destination === 'back' ? 'HISTORY_BACK' : (routes[args.destination] ?? '/walk'));
+          if (args.destination !== 'back' && !isSafeVoiceRoute(finalRoute)) {
+            console.warn('[VOICE ACTION REJECTED]', JSON.stringify({
+              code: 'VOICE_UNSAFE_ROUTE',
+              action: 'navigate',
+              destination: args.destination,
+            }));
+            const safeMessage = 'I could not safely open that destination.';
+            setResponse(safeMessage);
+            setStreamingResponse('');
+            await playTTS(safeMessage, false);
+            return;
+          }
           const isChapterNav = !!(args.bibleBookId && args.bibleChapter);
           const navFnName = navigateRef.current ? 'navigateRef' : providerNavigateRef.current ? 'providerNavigateRef(wouter)' : 'window.history.pushState';
           console.info('[VOICE TOOL NAV TRACE]', JSON.stringify({
@@ -1802,7 +1873,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             return;
           }
 
-          if (args.route) {
+          if (args.route && isSafeVoiceRoute(args.route)) {
             // Speak any brief LLM confirmation text first, then navigate
             if (fullResponse.trim()) {
               setResponse(fullResponse);
@@ -1824,6 +1895,15 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
                 if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
               }, 1200);
             }
+          } else if (args.route) {
+            console.warn('[VOICE ACTION REJECTED]', JSON.stringify({
+              code: 'VOICE_UNSAFE_ROUTE',
+              action: 'continue-walk',
+            }));
+            const safeMessage = 'I could not safely open that Walk.';
+            setResponse(safeMessage);
+            setStreamingResponse('');
+            await playTTS(safeMessage, false);
           }
           return;
         }
@@ -1836,7 +1916,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           await playTTS(args.spokenText, false);
           if (cancelledRef.current) return;
           // Navigate to the search results page (e.g. /discover?q=faith)
-          if (args.navigateRoute) {
+          if (args.navigateRoute && isSafeVoiceRoute(args.navigateRoute)) {
             const navFn = navigateRef.current ?? providerNavigateRef.current;
             if (navFn) {
               navFn(args.navigateRoute);
@@ -1844,6 +1924,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               window.history.pushState({}, '', args.navigateRoute);
               window.dispatchEvent(new PopStateEvent('popstate'));
             }
+          } else if (args.navigateRoute) {
+            console.warn('[VOICE ACTION REJECTED]', JSON.stringify({
+              code: 'VOICE_UNSAFE_ROUTE',
+              action: 'search-sermons',
+            }));
           }
           // playTTS onended will restart listening automatically
           return;
