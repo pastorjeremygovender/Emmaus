@@ -167,6 +167,8 @@ export interface FrontendProgress {
 export interface DailyRhythmStartup {
   firstOpen: boolean;
   destination: string;
+  openingStateMutated: boolean;
+  previousLastDailyOpenDate?: string | null;
   journeyId: string | null;
   currentDay: number | null;
   progress: FrontendProgress | null;
@@ -1108,7 +1110,7 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
  * Atomically resolves the member's Daily Rhythm position and records whether
  * this is their first Emmaus opening for the server calendar date.
  */
-export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythmStartup> {
+export async function getDailyRhythmStartup(userId: string, startupSessionId = ""): Promise<DailyRhythmStartup> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1120,7 +1122,7 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
     const journeyId = journeyResult.rows[0]?.id ? String(journeyResult.rows[0].id) : null;
     if (!journeyId) {
       await client.query("COMMIT");
-      return { firstOpen: false, destination: "/walk", journeyId: null, currentDay: null, progress: null };
+      return { firstOpen: false, destination: "/walk", openingStateMutated: false, journeyId: null, currentDay: null, progress: null };
     }
 
     let progressResult = await client.query(
@@ -1207,11 +1209,12 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
       }
     }
 
-    const requestedSession = arguments.length > 1 ? String(arguments[1] ?? "") : "";
+    const requestedSession = startupSessionId.trim().slice(0, 160);
     const sameLaunch = Boolean(requestedSession) &&
       row.daily_rhythm_startup_session === requestedSession &&
       row.daily_rhythm_startup_date === today;
     const firstOpen = sameLaunch || row.last_daily_open_date !== today;
+    const previousLastDailyOpenDate = row.last_daily_open_date ?? null;
     if (firstOpen) {
       await client.query(
         `UPDATE user_journey_progress
@@ -1228,6 +1231,8 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
     return {
       firstOpen,
       destination: firstOpen ? `/daily-rhythm/day/${Number(row.current_day || 1)}` : "/walk",
+      openingStateMutated: firstOpen && !sameLaunch,
+      previousLastDailyOpenDate,
       journeyId,
       currentDay: Number(row.current_day || 1),
       progress: frontendProgressFromRaw(row),

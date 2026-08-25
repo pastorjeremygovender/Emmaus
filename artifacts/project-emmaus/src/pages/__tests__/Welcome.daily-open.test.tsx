@@ -74,6 +74,7 @@ describe('Welcome — first daily open routing', () => {
     journeyLoading = true;
     getDailyRhythmStartup.mockResolvedValue({
       firstOpen: true,
+      destination: '/daily-rhythm/day/4',
       journeyId: 'daily',
       currentDay: 4,
       progress: progress.daily,
@@ -105,6 +106,7 @@ describe('Welcome — first daily open routing', () => {
     journeyLoading = false;
     getDailyRhythmStartup.mockResolvedValue({
       firstOpen: false,
+      destination: '/walk',
       journeyId: 'daily',
       currentDay: 4,
       progress: progress.daily,

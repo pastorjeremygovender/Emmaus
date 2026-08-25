@@ -479,8 +479,8 @@ export default function Walk() {
 
     void getDailyRhythmStartup()
       .then(startup => {
-        if (startup.firstOpen && startup.currentDay) {
-          setLocation(`/daily-rhythm/day/${startup.currentDay}`);
+        if (startup.firstOpen) {
+          setLocation(startup.destination);
         }
       })
       .catch(err => console.error('[DailyOpen] server startup decision failed:', err));

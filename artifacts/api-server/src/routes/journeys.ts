@@ -78,7 +78,28 @@ router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response)
   if (!userId) { res.status(401).json({ error: "Authentication required" }); return; }
   try {
     res.set("Cache-Control", "no-store");
-    res.json(await store.getDailyRhythmStartup(userId));
+    const startupSession = String(req.get("x-emmaus-startup-session") ?? "").trim();
+    const result = await store.getDailyRhythmStartup(userId, startupSession);
+    const { previousLastDailyOpenDate, ...publicResult } = result;
+    const johannesburgDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    console.info("[DailyOpen]", {
+      traceId: String(req.id ?? "unknown"),
+      timestamp: new Date().toISOString(),
+      user: `u-${Buffer.from(userId).toString("base64url").slice(0, 10)}`,
+      session: startupSession ? startupSession.slice(0, 12) : "none",
+      serverCalendarDate: johannesburgDate,
+      storedLastDailyOpenDate: previousLastDailyOpenDate,
+      currentDay: result.currentDay,
+      completedDays: result.progress?.completedDays ?? [],
+      unlockAt: result.progress?.dailyRhythmUnlockAt ?? null,
+      firstOpen: result.firstOpen,
+      requestedDestination: result.firstOpen ? "daily-rhythm" : "walk",
+      returnedDestination: result.destination,
+      openingStateMutated: result.openingStateMutated,
+    });
+    res.json(publicResult);
   } catch (err) {
     console.error("GET /journeys/daily-rhythm/startup failed", err);
     res.status(500).json({ error: "Could not resolve Daily Rhythm startup" });

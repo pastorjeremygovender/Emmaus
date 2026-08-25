@@ -58,10 +58,10 @@ async function reset(key: string) {
   await pool.query("DELETE FROM step_reflections WHERE user_id = $1 AND journey_id = $2", [id, journeyId]);
   return id;
 }
-async function startup(key: string) {
-  return json<{ firstOpen: boolean; currentDay: number; journeyId: string; progress: {
+async function startup(key: string, launch = `test-launch-${key}`) {
+  return json<{ firstOpen: boolean; destination: string; currentDay: number; journeyId: string; progress: {
     currentDay: number; completedDays: number[]; lastDailyOpenDate: string | null;
-  } }>(await request("/api/journeys/daily-rhythm/startup", await auth(key)));
+  } }>(await request("/api/journeys/daily-rhythm/startup", { ...(await auth(key)), "X-Emmaus-Startup-Session": launch }));
 }
 async function complete(key: string, day: number) {
   return request(`/api/journeys/${journeyId}/progress/complete-step`, await auth(key), "POST", { day });
@@ -90,6 +90,14 @@ before(async () => {
   app.use("/api", router);
   server = http.createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  await pool.query(`
+    ALTER TABLE user_journey_progress
+      ADD COLUMN IF NOT EXISTS daily_rhythm_unlock_at timestamptz,
+      ADD COLUMN IF NOT EXISTS daily_rhythm_timezone text NOT NULL DEFAULT 'Africa/Johannesburg',
+      ADD COLUMN IF NOT EXISTS last_daily_open_date text,
+      ADD COLUMN IF NOT EXISTS daily_rhythm_startup_session text,
+      ADD COLUMN IF NOT EXISTS daily_rhythm_startup_date text
+  `);
   await store.createJourney({ id: journeyId, title: `__TEST__ Daily Authority ${nonce}`,
     status: "Published", journeyType: "daily-rhythm", durationDays: 3 });
   await store.createStep(journeyId, { day: 1, title: "Day 1" });
@@ -114,7 +122,7 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     assert.equal(r.firstOpen, true); assert.equal(r.journeyId, journeyId);
   });
   it("TEST 3 — subsequent opening the same day enters Today's Steps", async () => {
-    const key = `dr-03-${nonce}`; await reset(key); await startup(key); const r = await startup(key);
+    const key = `dr-03-${nonce}`; await reset(key); await startup(key); const r = await startup(key, "test-launch-2");
     assert.equal(r.firstOpen, false); assert.equal(r.currentDay, 1);
   });
   it("TEST 4 — completing Day 1 does not unlock Day 2 the same day", async () => {
@@ -219,7 +227,61 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
   });
   it("TEST 25 — persisted open date is user-specific and idempotent", async () => {
     const a = `dr-25a-${nonce}`, b = `dr-25b-${nonce}`; await reset(a); await reset(b);
-    const firstA = await startup(a), secondA = await startup(a), firstB = await startup(b);
+    const firstA = await startup(a), secondA = await startup(a, "test-launch-2"), firstB = await startup(b);
     assert.equal(firstA.firstOpen, true); assert.equal(secondA.firstOpen, false); assert.equal(firstB.firstOpen, true);
+  });
+});
+
+describe("Daily Rhythm production-like startup lifecycle", () => {
+  it("TEST A — duplicate startup requests in one launch return one destination", async () => {
+    const key = `dr-a-${nonce}`; await reset(key);
+    const launch = `launch-a-${key}`;
+    const rs = await Promise.all([startup(key, launch), startup(key, launch), startup(key, launch)]);
+    assert.ok(rs.every(r => r.firstOpen === true));
+    assert.ok(rs.every(r => r.destination === "/daily-rhythm/day/1"));
+  });
+  it("TEST B — a React remount in the same launch does not switch to Today's Steps", async () => {
+    const key = `dr-b-${nonce}`; await reset(key);
+    const launch = `launch-b-${key}`;
+    const first = await startup(key, launch); const remount = await startup(key, launch);
+    assert.equal(first.destination, remount.destination);
+    assert.equal(remount.destination, "/daily-rhythm/day/1");
+  });
+  it("TEST C — authentication restoration retries consistently", async () => {
+    const key = `dr-c-${nonce}`; await reset(key);
+    const launch = `launch-c-${key}`;
+    const beforeAuth = await startup(key, launch); const afterAuth = await startup(key, launch);
+    assert.equal(beforeAuth.destination, afterAuth.destination);
+    assert.equal(afterAuth.firstOpen, true);
+  });
+  it("TEST D — a PWA-style restart within one document launch is idempotent", async () => {
+    const key = `dr-d-${nonce}`; await reset(key);
+    const launch = `launch-d-${key}`;
+    const rs = await Promise.all([startup(key, launch), startup(key, launch)]);
+    assert.deepEqual(new Set(rs.map(r => r.destination)), new Set(["/daily-rhythm/day/1"]));
+  });
+  it("TEST E — first genuine launch returns Daily Rhythm", async () => {
+    const key = `dr-e-${nonce}`; await reset(key);
+    assert.equal((await startup(key, `launch-e-1-${key}`)).destination, "/daily-rhythm/day/1");
+  });
+  it("TEST F — second genuine launch returns Today's Steps", async () => {
+    const key = `dr-f-${nonce}`; await reset(key);
+    await startup(key, `launch-f-1-${key}`);
+    assert.equal((await startup(key, `launch-f-2-${key}`)).destination, "/walk");
+  });
+  it("TEST G — independent users each receive their own first-launch destination", async () => {
+    const a = `dr-g-a-${nonce}`, b = `dr-g-b-${nonce}`; await reset(a); await reset(b);
+    const rs = await Promise.all([startup(a, `launch-g-a-${a}`), startup(b, `launch-g-b-${b}`)]);
+    assert.ok(rs.every(r => r.destination === "/daily-rhythm/day/1" && r.firstOpen));
+  });
+  it("TEST H — an incomplete step remains the automatic destination next day", async () => {
+    const key = `dr-h-${nonce}`; await reset(key); await startup(key, `launch-h-1-${key}`); await ageProgress(key);
+    const r = await startup(key, `launch-h-2-${key}`);
+    assert.equal(r.destination, "/daily-rhythm/day/1");
+  });
+  it("TEST I — a completed step unlocks exactly one automatic destination next day", async () => {
+    const key = `dr-i-${nonce}`; await reset(key); await startup(key, `launch-i-1-${key}`); await complete(key, 1); await ageProgress(key);
+    const r = await startup(key, `launch-i-2-${key}`);
+    assert.equal(r.destination, "/daily-rhythm/day/2");
   });
 });

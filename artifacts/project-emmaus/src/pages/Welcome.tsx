@@ -68,9 +68,7 @@ export default function Welcome() {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
         try {
           const startup = await getDailyRhythmStartup();
-          const dest = startup.firstOpen && startup.journeyId && startup.currentDay
-            ? `/daily-rhythm/day/${startup.currentDay}`
-            : '/walk';
+          const dest = startup.destination;
           if (!cancelled) setLocation(dest);
         } catch (err) {
           console.error('[DailyOpen] server startup decision failed:', err);
@@ -114,9 +112,7 @@ export default function Welcome() {
       if (!isOnboarded(user.id)) markOnboarded(user.id);
       try {
         const startup = await getDailyRhythmStartup();
-        const dest = startup.firstOpen && startup.journeyId && startup.currentDay
-          ? `/daily-rhythm/day/${startup.currentDay}`
-          : '/walk';
+        const dest = startup.destination;
         console.debug('[Emmaus routing] Route selected (server):', dest);
         return dest;
       } catch (err) {

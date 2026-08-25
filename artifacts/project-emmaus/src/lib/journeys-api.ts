@@ -175,9 +175,21 @@ export type DailyRhythmStartup = {
 };
 
 export async function getDailyRhythmStartup(): Promise<DailyRhythmStartup> {
+  const key = 'emmaus_daily_startup_session_v1';
+  let startupSession = sessionStorage.getItem(key);
+  if (!startupSession) {
+    startupSession = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(key, startupSession);
+  }
+  console.debug('[DailyOpen]', {
+    phase: 'startup-request',
+    startupSession: startupSession.slice(0, 12),
+    path: '/api/journeys/daily-rhythm/startup',
+  });
   const res = await fetch(getApiUrl('/api/journeys/daily-rhythm/startup'), {
     credentials: 'include',
     cache: 'no-store',
+    headers: { 'X-Emmaus-Startup-Session': startupSession },
   });
   if (!res.ok) throw new Error('Could not resolve Daily Rhythm startup');
   return res.json() as Promise<DailyRhythmStartup>;
