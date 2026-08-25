@@ -26,6 +26,7 @@ import {
   type IndexingCheckpoint, type ImportJob,
   getArchiveStats, type YoutubeVideoRecord,
 } from "../lib/sermon-store.js";
+import { isQuotaExhaustion, isSafeBatchCandidate, advanceCheckpoint, pauseCheckpoint } from "../lib/safe-indexing-policy.js";
 import { readArchiveState, writeArchiveState } from "../lib/archive-state-store.js";
 import {
   getYoutubeConfig, getChannelInfo, getPlaylistVideoIds,
@@ -507,10 +508,6 @@ async function processVideoInternal(
 
 // ─── Bulk pipeline (process approved only) ─────────────────────────────────────
 
-function isQuotaExhaustion(error: string): boolean {
-  return /quota|daily.?limit|rate.?limit|too many requests|403.*youtube|exceeded/i.test(error);
-}
-
 async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
   const existing = await getIndexingCheckpoint();
   const activeJob = (await getAllJobs()).find(job =>
@@ -531,13 +528,9 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
   }
 
   const videos = await getAllVideos();
-  const approved = (v: YoutubeVideoRecord) =>
-    (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
-    v.aiIndexStatus !== "indexed" &&
-    (v.transcriptStatus === "none" || v.transcriptStatus === "failed");
   const videoIds = resume
     ? existing!.videoIds
-    : videos.filter(approved).map(v => v.id);
+    : videos.filter(isSafeBatchCandidate).map(v => v.id);
   const job = await createJob("pipeline-run", { mode: "safe-batch", resume });
   const checkpoint: IndexingCheckpoint = resume
     ? { ...existing!, jobId: job.id, status: "running", pauseReason: undefined, updatedAt: new Date().toISOString() }
@@ -555,7 +548,7 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
     try {
       for (let i = current.position; i < current.videoIds.length; i++) {
         const currentVideo = (await getAllVideos()).find(v => v.id === current.videoIds[i]);
-        if (!currentVideo || !approved(currentVideo)) {
+        if (!currentVideo || !isSafeBatchCandidate(currentVideo)) {
           current = { ...current, position: i + 1, remainingCount: Math.max(0, current.videoIds.length - i - 1), updatedAt: new Date().toISOString() };
           await saveIndexingCheckpoint(current);
           continue;
@@ -563,19 +556,12 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
         await updateJob(job.id, { progress: { total: current.videoIds.length, done: current.completedCount, failed: 0, skipped: i - current.completedCount, currentItem: currentVideo.title } });
         const result = await processVideoInternal(currentVideo.id);
         if (result.error && isQuotaExhaustion(result.error)) {
-          current = { ...current, position: i, remainingCount: current.videoIds.length - i, status: "paused", pauseReason: result.error, updatedAt: new Date().toISOString() };
+          current = pauseCheckpoint({ ...current, position: i }, result.error);
           await saveIndexingCheckpoint(current);
           await updateJob(job.id, { status: "paused", error: result.error });
           return;
         }
-        current = {
-          ...current,
-          position: i + 1,
-          completedVideoIds: result.success ? [...current.completedVideoIds, currentVideo.id] : current.completedVideoIds,
-          completedCount: current.completedCount + (result.success ? 1 : 0),
-          remainingCount: Math.max(0, current.videoIds.length - i - 1),
-          updatedAt: new Date().toISOString(),
-        };
+        current = advanceCheckpoint({ ...current, position: i }, currentVideo.id, result.success);
         await saveIndexingCheckpoint(current);
         invalidateIndex();
       }
@@ -583,7 +569,7 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
       await clearIndexingCheckpoint();
     } catch (err) {
       const reason = String(err);
-      current = { ...current, status: "paused", pauseReason: reason, updatedAt: new Date().toISOString() };
+      current = pauseCheckpoint(current, reason);
       await saveIndexingCheckpoint(current);
       await updateJob(job.id, { status: isQuotaExhaustion(reason) ? "paused" : "failed", error: reason });
     }
