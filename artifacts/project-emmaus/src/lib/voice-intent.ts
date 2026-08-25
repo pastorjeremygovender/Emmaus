@@ -45,6 +45,23 @@ function norm(text: string): string {
   return text.toLowerCase().trim().replace(/[.,!?'"]+/g, '').replace(/\s+/g, ' ');
 }
 
+const SPOKEN_NUMBERS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+  eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
+};
+
+function normalizeSpokenReferenceNumbers(text: string): string {
+  return text
+    .replace(/\bchapter\s+/gi, '')
+    .replace(
+    /\b(chapter|verse)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/gi,
+    (_, label: string, number: string) => `${label} ${SPOKEN_NUMBERS[number.toLowerCase()]}`,
+    )
+    .replace(/\bverse\s+/gi, ' ');
+}
+
 // ─── Bible book name → canonical bookId ──────────────────────────────────────
 // Covers the books most commonly referenced by voice.
 
@@ -159,6 +176,7 @@ const BOOK_MAP: Record<string, { id: string; name: string }> = {
  * Returns the ref with any explicitly named translationId attached.
  */
 function parseBibleRef(t: string): BibleRef | null {
+  t = normalizeSpokenReferenceNumbers(t);
   // ── Extract explicit translation suffix first ──────────────────────────
   // Pattern: "in [the] <translation>" at the end of the utterance.
   // We strip it before matching the book so "in the ASV" doesn't confuse
@@ -190,7 +208,7 @@ function parseBibleRef(t: string): BibleRef | null {
   for (const [spoken, book] of entries) {
     const escaped = spoken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/, '\\s+');
     const pattern = new RegExp(
-      `(?:^|\\s)${escaped}\\s+(\\d+)(?:\\s+(?:verse\\s+|:)?(\\d+))?`,
+      `(?:^|\\s)${escaped}\\s+(\\d+)(?:(?:\\s+|:)(?:verse\\s+)?(\\d+))?`,
       'i',
     );
     const m = pattern.exec(t);
@@ -300,6 +318,13 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
   // ─── Bible reading — "read [book] [chapter]" ─────────────────────────────
   // Only match when the sentence begins with "read" and contains a parsed ref.
   if (/^read\s+/.test(t)) {
+    const ref = parseBibleRef(t);
+    if (ref) return { type: 'read-content', content: 'bible', bibleRef: ref };
+  }
+
+  // Combined navigation/reading requests should open the validated passage
+  // and start playback rather than stopping at the generic Bible screen.
+  if (/(?:take me to|open)\s+.+\s+and\s+read(?:\s+it)?$/.test(t)) {
     const ref = parseBibleRef(t);
     if (ref) return { type: 'read-content', content: 'bible', bibleRef: ref };
   }

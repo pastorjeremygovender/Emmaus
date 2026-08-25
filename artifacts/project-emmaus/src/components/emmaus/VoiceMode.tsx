@@ -26,6 +26,8 @@ import {
   Square,
   Loader2,
   Volume2,
+  Pause,
+  Play,
   MessageSquare,
   X,
   RotateCcw,
@@ -60,11 +62,15 @@ export default function VoiceMode() {
     hasAudioElement,
     showHistory,
     activeContent,
+    sessionPaused,
     startSession,
     endSession,
     handleOrbTap,
     handleTapToHear,
     handleRetryAudio,
+    pauseSession,
+    resumeSession,
+    stopPlayback,
     setShowHistory,
     updateVisualContext,
   } = session;
@@ -120,8 +126,8 @@ export default function VoiceMode() {
     switch (voiceState) {
       case 'READY':     return history.length > 0 ? 'Tap to continue' : 'Tap to begin';
       case 'LISTENING': return 'Listening…';
-      case 'THINKING':  return 'Thinking…';
-      case 'SPEAKING':  return 'Speak to interrupt';
+      case 'THINKING':  return 'Understanding…';
+      case 'SPEAKING':  return activeContent ? 'Reading…' : 'Speaking…';
       case 'ERROR':     return 'Tap to try again';
     }
   })();
@@ -359,6 +365,24 @@ export default function VoiceMode() {
         className="shrink-0 border-t border-border/30 flex items-center justify-center"
         style={{ paddingTop: '12px', paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
       >
+        {(isSpeaking || sessionPaused || activeContent) && (
+          <div className="flex items-center gap-2 mr-4">
+            <button
+              onClick={sessionPaused ? resumeSession : pauseSession}
+              className="min-h-[48px] min-w-[48px] rounded-xl bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20"
+              aria-label={sessionPaused ? 'Resume reading' : 'Pause reading'}
+            >
+              {sessionPaused ? <Play size={19} fill="currentColor" /> : <Pause size={19} />}
+            </button>
+            <button
+              onClick={stopPlayback}
+              className="min-h-[48px] min-w-[48px] rounded-xl bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20"
+              aria-label="Stop reading"
+            >
+              <Square size={19} fill="currentColor" />
+            </button>
+          </div>
+        )}
         <button
           onClick={handleEnd}
           className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors min-h-[48px] px-10 rounded-xl hover:bg-muted/40 active:bg-muted/60"

@@ -98,6 +98,7 @@ export interface VoiceSessionContextType {
   endSession:         () => void;
   pauseSession:       () => void;
   resumeSession:      () => void;
+  stopPlayback:       () => void;
   handleOrbTap:       () => void;
   handleTapToHear:    () => void;
   handleRetryAudio:   () => Promise<void>;
@@ -208,6 +209,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const disposeAudioRef     = useRef<(() => void) | null>(null);
   const playbackAcRef       = useRef<AudioContext | null>(null);
   const cancelledRef        = useRef(true); // true until startSession() is called
+  // Normal users get explicit tap-to-speak turns. Hands-free auto-restart is
+  // deliberately disabled; keep the ref so experimental mode can be gated
+  // separately later without changing the playback state machine.
+  const tapToSpeakOnlyRef   = useRef(true);
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── VAD refs ──────────────────────────────────────────────────────────────
@@ -839,7 +844,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               }
 
               // Normal conversation or end-of-reading: open the mic.
-              startListening();
+              if (!tapToSpeakOnlyRef.current) startListening();
             // Sprint 2: conversational mic delay 1000 → 350 ms (much faster turn-taking).
             // Reading section advance 800 → 250 ms (bypasses mic — just pacing between sections).
             }, isReadingSection ? 250 : 350);
@@ -969,7 +974,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         console.info('[VOICE CONTENT PLAYBACK]', JSON.stringify({ event: 'readingComplete', totalSections: sections.length }));
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
-          if (!cancelledRef.current && !pausedRef.current) startListening();
+          if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
         // Sprint 2: 1500 → 600 ms — open mic promptly after reading ends so
         // follow-up questions feel like natural conversation.
         }, 600);
@@ -1357,10 +1362,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         if (isReadingRef.current && !readingPausedRef.current) {
           await advanceReading();
         } else {
-          setVoiceState('LISTENING');
+          setVoiceState(tapToSpeakOnlyRef.current ? 'READY' : 'LISTENING');
           autoRestartTimerRef.current = setTimeout(() => {
             autoRestartTimerRef.current = null;
-            if (!cancelledRef.current && !pausedRef.current) startListening();
+            if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
           }, 500);
         }
         return;
@@ -1456,7 +1461,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           // Restart listening after navigating back (small delay for page to settle)
           autoRestartTimerRef.current = setTimeout(() => {
             autoRestartTimerRef.current = null;
-            if (!cancelledRef.current && !pausedRef.current) startListening();
+            if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
           }, 1200);
           return;
         }
@@ -1474,7 +1479,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         // Restart listening after navigation so the session continues on the new screen
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
-          if (!cancelledRef.current && !pausedRef.current) startListening();
+          if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
         }, 1200);
         return;
       }
@@ -1769,7 +1774,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             // No TTS — restart listening after navigation settles
             autoRestartTimerRef.current = setTimeout(() => {
               autoRestartTimerRef.current = null;
-              if (!cancelledRef.current && !pausedRef.current) startListening();
+              if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
             }, 1200);
           }
           // If TTS was spoken, its onended handler restarts listening automatically
@@ -1816,7 +1821,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             if (!fullResponse.trim()) {
               autoRestartTimerRef.current = setTimeout(() => {
                 autoRestartTimerRef.current = null;
-                if (!cancelledRef.current && !pausedRef.current) startListening();
+                if (!cancelledRef.current && !pausedRef.current && !tapToSpeakOnlyRef.current) startListening();
               }, 1200);
             }
           }
@@ -1923,7 +1928,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   async function playGreeting(text: string): Promise<void> {
     if (cancelledRef.current) return;
     const uid = userRef.current?.id;
-    if (!uid) { startListening(); return; }
+    if (!uid) { return; }
     setVoiceState('SPEAKING');
     console.info('[VOICE GREETING]', JSON.stringify({
       event:      'greetingAttempted',
@@ -1963,7 +1968,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }));
         // Fall through to startListening() below.
       }
-      if (!cancelledRef.current) startListening();
+      if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
       return;
     }
 
@@ -2003,7 +2008,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       }));
       stopAudioElement();
     }
-    if (!cancelledRef.current) startListening();
+    if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
   }
 
   // ─── Session lifecycle ────────────────────────────────────────────────────
@@ -2058,23 +2063,23 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         if (!ctx) {
           // No content context — start listening straight away.
-          if (!cancelledRef.current) startListening();
+          if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
           return;
         }
         appContextRef.current = ctx;
         const greetingText = buildOpeningGreeting(ctx, userRef.current?.preferredName);
-        if (greetingText) {
-          playGreeting(greetingText);
-        } else {
-          // No content active — skip greeting, go straight to listening.
-          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingSkipped', reason: 'no_active_content' }));
-          startListening();
-        }
+        // Normal Voice is tap-to-speak: do not open the microphone or autoplay
+        // a greeting on session entry. The user explicitly starts each turn.
+        console.info('[VOICE GREETING]', JSON.stringify({
+          event: 'greetingDeferred',
+          hadActiveContent: Boolean(greetingText),
+          reason: 'tap_to_speak_only',
+        }));
       }).catch(() => {
-        if (!cancelledRef.current) startListening();
+      if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
       });
     } else {
-      startListening();
+      if (!tapToSpeakOnlyRef.current) startListening();
     }
     setupMediaSessionHandlers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2130,6 +2135,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     cancelAutoRestart();
     // Stop mic; preserve all session state
     cancelRecorder();
+    audioElRef.current?.pause();
+    if (isReadingRef.current) readingPausedRef.current = true;
     setVoiceState('READY');
     try { navigator.mediaSession.playbackState = 'paused'; } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2139,9 +2146,33 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     if (!isActive) return;
     pausedRef.current = false;
     setSessionPaused(false);
-    startListening();
+    const audio = audioElRef.current;
+    if (audio) {
+      if (isReadingRef.current) readingPausedRef.current = false;
+      setVoiceState('SPEAKING');
+      audio.play().catch(() => {
+        setTtsError(true);
+        setVoiceState('READY');
+      });
+    } else {
+      startListening();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
+
+  const stopPlayback = useCallback(() => {
+    cancelAutoRestart();
+    stopAudio();
+    isReadingRef.current = false;
+    readingPausedRef.current = false;
+    readingSectionsRef.current = [];
+    readingIndexRef.current = 0;
+    setActiveContent(null);
+    setSessionPaused(false);
+    pausedRef.current = false;
+    setVoiceState('READY');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateVisualContext = useCallback((ctx: FlatContext) => {
     setInitContext(ctx);
@@ -2247,7 +2278,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       stopAudio();
       autoRestartTimerRef.current = setTimeout(() => {
         autoRestartTimerRef.current = null;
-        if (!cancelledRef.current) startListening();
+        if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
       }, 600);
     };
     audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
@@ -2272,7 +2303,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         stopAudio();
         autoRestartTimerRef.current = setTimeout(() => {
           autoRestartTimerRef.current = null;
-          if (!cancelledRef.current) startListening();
+          if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
         }, 600);
       };
       audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
@@ -2306,6 +2337,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     endSession,
     pauseSession,
     resumeSession,
+    stopPlayback,
     handleOrbTap,
     handleTapToHear,
     handleRetryAudio,
