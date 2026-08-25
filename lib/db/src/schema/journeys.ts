@@ -210,6 +210,8 @@ export const userJourneyProgressTable = pgTable("user_journey_progress", {
   lastCompletedAt: timestamp("last_completed_at"),
   dailyRhythmTimezone: text("daily_rhythm_timezone").notNull().default("Africa/Johannesburg"),
   lastDailyOpenDate: text("last_daily_open_date"),
+  dailyRhythmStartupSession: text("daily_rhythm_startup_session"),
+  dailyRhythmStartupDate: text("daily_rhythm_startup_date"),
   status: text("status").notNull().default("active"),  // active|completed|paused|dropped
   // Set to NOW() when the member opens/views the content — used by badge computation.
   lastOpenedAt: timestamp("last_opened_at"),

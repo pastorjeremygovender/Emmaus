@@ -488,7 +488,9 @@ export async function runStartupMigrations(): Promise<void> {
       ALTER TABLE user_journey_progress
         ADD COLUMN IF NOT EXISTS daily_rhythm_unlock_at timestamptz,
         ADD COLUMN IF NOT EXISTS daily_rhythm_timezone text NOT NULL DEFAULT 'Africa/Johannesburg',
-        ADD COLUMN IF NOT EXISTS last_daily_open_date text;
+        ADD COLUMN IF NOT EXISTS last_daily_open_date text,
+        ADD COLUMN IF NOT EXISTS daily_rhythm_startup_session text,
+        ADD COLUMN IF NOT EXISTS daily_rhythm_startup_date text;
     `);
     logger.info("Startup migration: Daily Rhythm authority columns ensured (idempotent)");
   } catch (err) {

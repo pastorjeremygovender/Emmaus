@@ -166,6 +166,7 @@ export interface FrontendProgress {
 
 export interface DailyRhythmStartup {
   firstOpen: boolean;
+  destination: string;
   journeyId: string | null;
   currentDay: number | null;
   progress: FrontendProgress | null;
@@ -1119,7 +1120,7 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
     const journeyId = journeyResult.rows[0]?.id ? String(journeyResult.rows[0].id) : null;
     if (!journeyId) {
       await client.query("COMMIT");
-      return { firstOpen: false, journeyId: null, currentDay: null, progress: null };
+      return { firstOpen: false, destination: "/walk", journeyId: null, currentDay: null, progress: null };
     }
 
     let progressResult = await client.query(
@@ -1206,17 +1207,27 @@ export async function getDailyRhythmStartup(userId: string): Promise<DailyRhythm
       }
     }
 
-    const firstOpen = row.last_daily_open_date !== today;
+    const requestedSession = arguments.length > 1 ? String(arguments[1] ?? "") : "";
+    const sameLaunch = Boolean(requestedSession) &&
+      row.daily_rhythm_startup_session === requestedSession &&
+      row.daily_rhythm_startup_date === today;
+    const firstOpen = sameLaunch || row.last_daily_open_date !== today;
     if (firstOpen) {
       await client.query(
-        `UPDATE user_journey_progress SET last_daily_open_date = $1, updated_at = $2 WHERE id = $3`,
-        [today, now, row.id],
+        `UPDATE user_journey_progress
+         SET last_daily_open_date = $1, daily_rhythm_startup_session = COALESCE(NULLIF($2, ''), daily_rhythm_startup_session),
+             daily_rhythm_startup_date = $1, updated_at = $3
+         WHERE id = $4`,
+        [today, requestedSession, now, row.id],
       );
       row.last_daily_open_date = today;
+      row.daily_rhythm_startup_session = requestedSession || row.daily_rhythm_startup_session;
+      row.daily_rhythm_startup_date = today;
     }
     await client.query("COMMIT");
     return {
       firstOpen,
+      destination: firstOpen ? `/daily-rhythm/day/${Number(row.current_day || 1)}` : "/walk",
       journeyId,
       currentDay: Number(row.current_day || 1),
       progress: frontendProgressFromRaw(row),
