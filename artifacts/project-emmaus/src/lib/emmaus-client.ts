@@ -92,6 +92,20 @@ export interface Recommendation {
   speakerName?: string;
 }
 
+export interface SermonRecommendation {
+  sermonId: string;
+  title: string;
+  speaker: string;
+  sermonDate: string;
+  excerpt: string;
+  reason: string;
+  openPath: string;
+  watchUrl: string;
+  watchTimestampSeconds?: number;
+  listenAvailable: boolean;
+  listenPath?: string;
+}
+
 export interface EmmausMetadata {
   answer?: string;
   scripture: ScriptureRef | null;
@@ -99,6 +113,7 @@ export interface EmmausMetadata {
   /** Practical next-steps footer (📖 🙏 🎧 🚶). */
   nextSteps: NextStepItem[];
   recommendations: Recommendation[];
+  sermonRecommendations?: SermonRecommendation[];
   followUpPrompts: string[];
   handoffType: 'pastoral' | 'crisis' | null;
   scriptureReferences?: ScriptureRef[];

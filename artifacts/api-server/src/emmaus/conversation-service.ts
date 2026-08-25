@@ -39,6 +39,7 @@ import {
 } from "./firestore-model.js";
 import {
   retrieveSermon,
+  retrieveSermons,
   type SermonRetrievalResult,
 } from "./sermon-retrieval.js";
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
@@ -368,8 +369,8 @@ export async function handleConversation(
   const biblePassages = await Promise.resolve(searchBibleVerses(req.message, 5))
     .catch((): BiblePassage[] => []);
   logger.info(`[emmaus:${reqId}] scripture_retrieved count=${biblePassages.length}`);
-  const [sermonResult, userMemories, resourceCatalogue, userRooms] = await Promise.all([
-    retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
+  const [sermonResults, userMemories, resourceCatalogue, userRooms] = await Promise.all([
+    retrieveSermons(req.message, bibleBookId, bibleChapter, 3).catch(() => []),
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
@@ -381,12 +382,13 @@ export async function handleConversation(
 
   logger.info(
     `[emmaus:${reqId}] parallel_search ms=${Date.now() - tSearch} ` +
-    `bible=${biblePassages.length} sermon=${!!sermonResult} resources=${resourceCatalogue.resources.length}` +
+    `bible=${biblePassages.length} sermons=${sermonResults.length} resources=${resourceCatalogue.resources.length}` +
     (resourceCatalogue.sourceFailures.length > 0
       ? ` resource_failures=${resourceCatalogue.sourceFailures.join(",")}`
       : "") +
-    (sermonResult ? ` sermon_id=${sermonResult.sermonId} src=${sermonResult.source}` : "")
+    (sermonResults[0] ? ` sermon_id=${sermonResults[0].sermonId} src=${sermonResults[0].source}` : "")
   );
+  const sermonResult = sermonResults[0] ?? null;
 
   // ── 4. Get or create conversation ─────────────────────────────────────────
   let conversationId = contextInput.conversationId;
@@ -660,6 +662,19 @@ export async function handleConversation(
   finalMeta.scripture = validatedMeta.scripture;
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
+  finalMeta.sermonRecommendations = sermonResults.map((sermon) => ({
+    sermonId: sermon.sermonId,
+    title: sermon.title,
+    speaker: sermon.speaker,
+    sermonDate: sermon.sermonDate,
+    excerpt: sermon.excerpt,
+    reason: sermon.reason,
+    openPath: `/sermon/${sermon.sermonId}`,
+    watchUrl: sermon.timestampedUrl,
+    ...(sermon.timestampSeconds != null ? { watchTimestampSeconds: sermon.timestampSeconds } : {}),
+    listenAvailable: Boolean(sermon.audioUrl),
+    ...(sermon.audioUrl ? { listenPath: `/sermon/${sermon.sermonId}` } : {}),
+  }));
 
   // If the model omitted a recommendation despite a clearly matching
   // published resource, expose the best catalogue match deterministically.
@@ -724,7 +739,7 @@ export async function handleConversation(
       title: sermonResult.title,
       speakerName: sermonResult.speaker,
       description: sermonResult.summary,
-      path: sermonResult.timestampedUrl,
+      path: `/sermon/${sermonResult.sermonId}`,
       sermonId: sermonResult.sermonId,
       timestampSeconds: sermonResult.timestampSeconds,
     });

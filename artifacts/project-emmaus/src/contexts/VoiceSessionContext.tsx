@@ -37,6 +37,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   type FlatContext,
   type HistoryItem,
+  type SermonRecommendation,
 } from '@/lib/emmaus-client';
 import {
   transcribeAudio,
@@ -91,6 +92,7 @@ export interface VoiceSessionContextType {
   autoplayBlocked:  boolean;
   showHistory:      boolean;
   activeContent:    { label: string } | null;
+  sermonResults:    SermonRecommendation[];
 
   // ── For the view to access audioElRef (tap-to-play guard) ─────────────────
   hasAudioElement: boolean;
@@ -188,6 +190,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const [autoplayBlocked,   setAutoplayBlocked]   = useState(false);
   const [showHistory,       setShowHistory]       = useState(false);
   const [activeContent,     setActiveContent]     = useState<{ label: string } | null>(null);
+  const [sermonResults,     setSermonResults]     = useState<SermonRecommendation[]>([]);
   const [hasAudioElement,   setHasAudioElement]   = useState(false);
 
   // ── Ref-copies of dynamic state (for use inside stable processAudioBlob) ──
@@ -1909,27 +1912,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         }
 
         if (tc.tool === 'search_sermons') {
-          // Server resolved the search and returned a TTS-ready sentence + optional route.
-          const args = tc.args as { spokenText: string; navigateRoute?: string };
+          // Server resolved the search against published canonical records.
+          const args = tc.args as { spokenText: string; sermonResults?: SermonRecommendation[] };
+          setSermonResults(Array.isArray(args.sermonResults) ? args.sermonResults : []);
           setResponse(args.spokenText);
           setStreamingResponse('');
           await playTTS(args.spokenText, false);
           if (cancelledRef.current) return;
-          // Navigate to the search results page (e.g. /discover?q=faith)
-          if (args.navigateRoute && isSafeVoiceRoute(args.navigateRoute)) {
-            const navFn = navigateRef.current ?? providerNavigateRef.current;
-            if (navFn) {
-              navFn(args.navigateRoute);
-            } else {
-              window.history.pushState({}, '', args.navigateRoute);
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }
-          } else if (args.navigateRoute) {
-            console.warn('[VOICE ACTION REJECTED]', JSON.stringify({
-              code: 'VOICE_UNSAFE_ROUTE',
-              action: 'search-sermons',
-            }));
-          }
           // playTTS onended will restart listening automatically
           return;
         }
@@ -2111,6 +2100,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setTtsError(false);
     setAutoplayBlocked(false);
     setActiveContent(null);
+    setSermonResults([]);
     if (context) {
       setInitContext(context);
       initContextRef.current = context;
@@ -2417,6 +2407,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     autoplayBlocked,
     showHistory,
     activeContent,
+    sermonResults,
     hasAudioElement,
     startSession,
     endSession,

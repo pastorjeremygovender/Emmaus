@@ -202,7 +202,14 @@ async function buildIndex(): Promise<InvertedIndex> {
     // Only index approved segments from approved sermons
     const approvedVideoIds = new Set(
       videos
-        .filter((v) => v.reviewStatus === "approved" || v.reviewStatus === "auto-approved")
+        .filter((v) =>
+          (v.reviewStatus === "approved" || v.reviewStatus === "auto-approved") &&
+          v.contentType === "sermon" &&
+          v.speaker?.trim() &&
+          v.speaker.trim().toLowerCase() !== "unknown speaker" &&
+          !/\bshorts?\b/i.test(v.title) &&
+          !/\bshorts?\b/i.test(v.youtubeUrl)
+        )
         .map((v) => v.id)
     );
 

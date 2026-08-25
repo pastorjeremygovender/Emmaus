@@ -136,6 +136,11 @@ export interface SermonRetrievalResult {
   relativeTimestampLabel?: string;
 }
 
+export interface SermonSearchCardResult extends SermonRetrievalResult {
+  reason: string;
+  excerpt: string;
+}
+
 // ─── Canonical DB sermon scoring ─────────────────────────────────────────────
 
 function scoreCanonicalSermon(
@@ -174,6 +179,67 @@ function scoreCanonicalSermon(
   if (sermon.mainTheme && q.includes(sermon.mainTheme.toLowerCase().slice(0, 20))) score += 6;
 
   return score;
+}
+
+/**
+ * Return the small, publication-safe set used by conversation cards.
+ * Unlike the legacy archive search this only emits canonical UUIDs, because
+ * those are the IDs accepted by the member sermon route.
+ */
+export async function retrieveSermons(
+  query: string,
+  bibleBookId?: string,
+  bibleChapter?: number,
+  maxResults = 3,
+): Promise<SermonSearchCardResult[]> {
+  const minScore = parseInt(process.env.EMMAUS_SERMON_MIN_SCORE ?? "5", 10);
+  try {
+    const sermons = await Promise.race([
+      listPublishedSermons(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), RETRIEVAL_TIMEOUT_MS)),
+    ]);
+    if (!sermons) return [];
+
+    return sermons
+      .map((sermon) => ({ sermon, score: scoreCanonicalSermon(sermon, query, bibleBookId, bibleChapter) }))
+      .filter(({ sermon, score }) =>
+        score >= minScore &&
+        Boolean(sermon.id && sermon.title.trim() && sermon.speaker.trim()) &&
+        sermon.speaker.trim().toLowerCase() !== "unknown speaker" &&
+        !/\bshorts?\b/i.test(sermon.title) &&
+        Boolean(sermon.youtubeUrl.trim())
+      )
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults)
+      .map(({ sermon, score }) => {
+        const timestampSeconds = sermon.sections.find((s) => Number.isFinite(s.timestampSeconds))?.timestampSeconds;
+        const watchUrl = buildTimestampedUrl(sermon.youtubeUrl, timestampSeconds);
+        const excerpt = (sermon.summary || sermon.mainTheme || sermon.scriptureReference || "")
+          .slice(0, 300);
+        return {
+          sermonId: sermon.id,
+          title: sermon.title,
+          speaker: sermon.speaker,
+          sermonDate: sermon.sermonDate,
+          series: sermon.series || undefined,
+          scriptureReference: sermon.scriptureReference,
+          youtubeUrl: sermon.youtubeUrl,
+          timestampedUrl: watchUrl,
+          summary: excerpt,
+          timestampSeconds,
+          timestampLabel: timestampSeconds == null ? undefined : formatTimestampLabel(timestampSeconds),
+          source: "canonical" as const,
+          audioUrl: sermon.audioPath
+            ? `${process.env.BASE_URL ?? ""}/storage/objects/${sermon.audioPath.replace(/^\/objects\//, "")}`
+            : undefined,
+          reason: query.trim() ? `Matches your search for “${query.trim().slice(0, 80)}”.` : "A published sermon from Emmaus.",
+          excerpt,
+        };
+      });
+  } catch (err) {
+    logger.warn({ err: String(err) }, "Multi-sermon retrieval failed");
+    return [];
+  }
 }
 
 // ─── Retrieval ────────────────────────────────────────────────────────────────

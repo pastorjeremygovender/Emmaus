@@ -15,7 +15,7 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type VoiceToolName = 'read_content' | 'navigate' | 'continue_walk';
+export type VoiceToolName = 'read_content' | 'navigate' | 'continue_walk' | 'search_sermons';
 
 export interface VoiceReadContentArgs {
   type: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible';
@@ -56,8 +56,7 @@ export interface VoiceContinueWalkToolCall {
 export interface VoiceSearchSermonsArgs {
   /** TTS-ready sentence describing the result(s). */
   spokenText: string;
-  /** Optional client-side route to navigate to (e.g. '/discover?q=faith'). */
-  navigateRoute?: string;
+  sermonResults: import('./emmaus-client').SermonRecommendation[];
 }
 export interface VoiceSearchSermonsToolCall {
   tool: 'search_sermons';

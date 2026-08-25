@@ -33,6 +33,7 @@ import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
+import { SermonRecommendationCard } from '@/components/emmaus/SermonRecommendationCard';
 import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 import { SafetyHandoverCard } from '@/components/emmaus/SafetyHandoverCard';
 import { MemoryConsentBar } from '@/components/emmaus/MemoryConsentBar';
@@ -473,6 +474,9 @@ export default function AskEmmausConversation() {
                     )}
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
                       <ResourceCard key={i} recommendation={rec} />
+                    ))}
+                    {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
+                      <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
                     ))}
                     {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (
                       <NextStepsCard steps={msg.metadata.nextSteps} />

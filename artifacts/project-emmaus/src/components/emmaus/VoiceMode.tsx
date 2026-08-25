@@ -37,6 +37,7 @@ import { useVoiceEnabled } from '@/hooks/useVoiceEnabled';
 import { takePendingContext, getReturnDestination, clearReturnDestination } from '@/lib/emmaus-pending';
 import { useVoiceSession } from '@/contexts/VoiceSessionContext';
 import { cn } from '@/lib/utils';
+import { SermonRecommendationCard } from '@/components/emmaus/SermonRecommendationCard';
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export default function VoiceMode() {
     stopPlayback,
     setShowHistory,
     updateVisualContext,
+    sermonResults,
   } = session;
 
   // ── Register navigate fn (used by voice commands like "open my bible") ───
@@ -331,6 +333,14 @@ export default function VoiceMode() {
               )}
             </div>
           ) : null}
+
+          {sermonResults.length > 0 && (
+            <div className="w-full space-y-2">
+              {sermonResults.slice(0, 3).map((sermon) => (
+                <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
+              ))}
+            </div>
+          )}
 
           {/* Tap-to-play fallback (mobile autoplay blocked) */}
           {autoplayBlocked && hasAudioElement && response && (

@@ -97,6 +97,21 @@ export interface Recommendation {
   speakerName?: string;
 }
 
+/** Verified sermon search result shown directly in Ask Emmaus and Voice. */
+export interface SermonRecommendation {
+  sermonId: string;
+  title: string;
+  speaker: string;
+  sermonDate: string;
+  excerpt: string;
+  reason: string;
+  openPath: string;
+  watchUrl: string;
+  watchTimestampSeconds?: number;
+  listenAvailable: boolean;
+  listenPath?: string;
+}
+
 /** Resource types accepted by the validated Ask Emmaus contract. */
 export type EmmausResourceType =
   | "sermon"
@@ -117,6 +132,7 @@ export interface EmmausResponseMetadata {
    *  The conversation service appends the "listen" item from verified sermon data. */
   nextSteps: NextStepItem[];
   recommendations: Recommendation[];
+  sermonRecommendations?: SermonRecommendation[];
   followUpPrompts: string[];
   handoffType: HandoffType;
   /** Canonical contract fields. Kept optional for persisted pre-contract messages. */

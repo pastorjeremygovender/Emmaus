@@ -550,40 +550,67 @@ const VOICE_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
  */
 async function resolveSearchSermons(
   query: string,
-): Promise<{ spokenText: string; navigateRoute?: string }> {
+  history: Array<{ role: string; content: string }> = [],
+): Promise<{
+  spokenText: string;
+  sermonResults: Array<{
+    sermonId: string; title: string; speaker: string; sermonDate: string;
+    excerpt: string; reason: string; openPath: string; watchUrl: string;
+    watchTimestampSeconds?: number; listenAvailable: boolean; listenPath?: string;
+  }>;
+}> {
   try {
-    const results = await searchSermons(query.trim(), { maxResults: 3 });
-    const route = `/discover?q=${encodeURIComponent(query.trim())}`;
+    const ordinal = query.trim().match(/^(?:the\s+)?(first|second|third|1st|2nd|3rd)\b/i);
+    const previousSearch = [...history].reverse().find((item) =>
+      item.role === "user" && /\b(?:sermon|preach|preached|pastor|teaching)\b/i.test(item.content)
+    );
+    const effectiveQuery = ordinal && previousSearch ? previousSearch.content : query.trim();
+    const rawResults = await searchSermons(effectiveQuery, { maxResults: 5 });
+    const published = await import("../lib/canonical-sermon-store.js").then((m) => m.listPublishedSermons()).catch(() => []);
+    const byYoutube = new Map(published.map((sermon) => [sermon.youtubeVideoId, sermon]));
+    const results = rawResults
+      .map((result) => ({ result, sermon: byYoutube.get(result.youtubeUrl.match(/[?&]v=([^&]+)/)?.[1] ?? "") }))
+      .filter((item): item is { result: typeof rawResults[number]; sermon: typeof published[number] } => Boolean(item.sermon))
+      .slice(0, 3);
+    const sermonResults = results.map(({ result, sermon }) => ({
+      sermonId: sermon.id,
+      title: sermon.title,
+      speaker: sermon.speaker,
+      sermonDate: sermon.sermonDate,
+      excerpt: (sermon.summary || result.transcriptEvidence || sermon.mainTheme).slice(0, 300),
+      reason: `Matches your search for “${effectiveQuery.slice(0, 80)}”.`,
+      openPath: `/sermon/${sermon.id}`,
+      watchUrl: result.timestampedUrl,
+      ...(result.absoluteStartSeconds != null ? { watchTimestampSeconds: result.absoluteStartSeconds } : {}),
+      listenAvailable: Boolean(result.audioUrl || sermon.audioPath),
+      ...(result.audioUrl || sermon.audioPath ? { listenPath: `/sermon/${sermon.id}` } : {}),
+    }));
 
-    if (results.length === 0) {
+    if (sermonResults.length === 0) {
       return {
-        spokenText: `I couldn't find any sermons specifically about "${query}". You can search in Discover for more.`,
-        navigateRoute: route,
+        spokenText: `I couldn't find a published sermon specifically about "${query.trim()}".`,
+        sermonResults: [],
       };
     }
 
-    const top = results[0];
-    const dateStr = top.sermonDate
-      ? ` from ${new Date(top.sermonDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}`
+    const selected = ordinal
+      ? sermonResults[{ first: 0, second: 1, third: 2, "1st": 0, "2nd": 1, "3rd": 2 }[ordinal[1].toLowerCase()] ?? 0]
+      : sermonResults[0];
+    const dateStr = selected?.sermonDate
+      ? ` from ${new Date(selected.sermonDate).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}`
       : '';
-    const speakerStr = top.speaker ? ` by ${top.speaker}` : '';
-    const seriesStr  = top.series  ? ` in the "${top.series}" series` : '';
-
-    if (results.length === 1) {
-      return {
-        spokenText: `I found a sermon called "${top.title}"${speakerStr}${dateStr}${seriesStr}. I've opened it in Discover so you can watch or read along.`,
-        navigateRoute: route,
-      };
-    }
-
     return {
-      spokenText: `I found ${results.length} sermons about that. The closest is "${top.title}"${speakerStr}${dateStr}. I've opened the search results in Discover so you can browse them.`,
-      navigateRoute: route,
+      spokenText: ordinal && selected
+        ? `Opening "${selected.title}"${dateStr}.`
+        : sermonResults.length === 1
+          ? `I found "${selected.title}"${dateStr}.`
+          : `I found ${sermonResults.length} published sermons. The closest is "${selected.title}"${dateStr}.`,
+      sermonResults,
     };
   } catch {
     return {
-      spokenText: `Let me open Discover so you can search for "${query}" yourself.`,
-      navigateRoute: `/discover?q=${encodeURIComponent(query.trim())}`,
+      spokenText: `I couldn't verify any published sermons for "${query.trim()}".`,
+      sermonResults: [],
     };
   }
 }
@@ -897,7 +924,7 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
             sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
           } else if (tc.name === 'search_sermons') {
             const { query } = args as { query?: string };
-            const resolvedArgs = await resolveSearchSermons(query ?? '');
+            const resolvedArgs = await resolveSearchSermons(query ?? '', Array.isArray(req.body?.history) ? req.body.history : []);
             sse({ type: 'tool_call', tool: tc.name, args: resolvedArgs });
           } else if (tc.name === 'navigate') {
             const navArgs = args as { destination: string; bibleBookId?: string; bibleChapter?: number };
