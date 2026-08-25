@@ -221,6 +221,10 @@ export default function JourneyDay() {
 
   const isCompanion = journey.journeyType === 'companion';
   const hasSermon = isCompanion && (step as any).sermonTimestampSeconds != null;
+  // Illustration placement is keyed to the stable step identifier used by
+  // sharing and the content API. Keep it at component scope so every render
+  // path that displays an illustration uses the same lesson key.
+  const stepId = `day-${day}`;
 
   // Find rooms where user is doing this journey (to offer sharing)
   const myRooms = user ? getMyRooms(user.id) : [];
@@ -256,7 +260,6 @@ export default function JourneyDay() {
 
   const handleShareReflection = (roomId: string) => {
     if (!user || !journeyId) return;
-    const stepId = `day-${day}`;
     shareReflection(user.id, reflectionKey, roomId, journeyId, stepId);
     setSharedRoomId(roomId);
     setSharingDone(true);
