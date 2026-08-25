@@ -4,14 +4,13 @@
  * Canonical route: /daily-rhythm/day/:dayNumber
  *
  * Completion behaviour (spec §1):
- *   Tapping Continue immediately saves progress and returns the user to Today's Steps.
- *   A brief JourneyCompletionPanel is shown in-page and auto-navigates (replace) after
- *   2 s so the member never has to tap a second time and Back does not return to the
- *   just-completed active flow.
+ *   Tapping Continue saves progress and shows a completion decision card.
+ *   The member explicitly chooses whether to review previous days or return to
+ *   Today's Steps.
  *
  * Modes:
  *   Live    — day === member's current day; shows Continue button; marks complete on tap,
- *             then auto-returns (replace) to Today's Steps via JourneyCompletionPanel.
+ *             then waits on the completion decision card for an explicit choice.
  *   Replay  — day <  member's current day; read-only; shows ReadingCompletionFooter only.
  *             Never writes progress.
  *
@@ -119,19 +118,11 @@ export default function DailyRhythmDay() {
 
   // Live reading completed in the current session (in-page state)
   const [justCompleted, setJustCompleted] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     setJustCompleted(false); // reset on day change
   }, [day]);
-
-  // Daily Rhythm is a slow, one-day-at-a-time practice. Completing a day must
-  // never offer a route into tomorrow's content. Give the completion message a
-  // brief moment to land, then return to Today's Steps automatically.
-  useEffect(() => {
-    if (!justCompleted) return;
-    const timer = window.setTimeout(() => setLocation('/walk'), 1200);
-    return () => window.clearTimeout(timer);
-  }, [justCompleted, setLocation]);
 
   // Preserve scroll position for EmbeddedScripture deep-links
   useEffect(() => {
@@ -194,9 +185,15 @@ export default function DailyRhythmDay() {
     ? (fromWalk ? goBack : goToPreviousDays)
     : goBack;
 
-  const handleComplete = () => {
-    completeStep(journeyId, day, '');
-    setJustCompleted(true);
+  const handleComplete = async () => {
+    if (completing) return;
+    setCompleting(true);
+    try {
+      await completeStep(journeyId, day, '');
+      setJustCompleted(true);
+    } finally {
+      setCompleting(false);
+    }
   };
 
   // ── Action button / footer ────────────────────────────────────────────────
@@ -207,7 +204,7 @@ export default function DailyRhythmDay() {
     actionButton = (
       <EmmausCompletionCard
         heading={`${getStepLabel(step, journey)} complete.`}
-        subMessage="Returning to Today's Steps…"
+        subMessage="Continue when you’re ready."
         returnLabel="Back to Today's Steps"
         onReturn={goBack}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
@@ -238,9 +235,10 @@ export default function DailyRhythmDay() {
         size="lg"
         className="w-full h-14 text-[17px] rounded-2xl"
         onClick={handleComplete}
+        disabled={completing}
         data-testid="button-complete-today"
       >
-        Continue
+        {completing ? 'Saving…' : 'Continue'}
       </Button>
     );
   }

@@ -47,9 +47,10 @@ export function StepNavigatorPage({ mode }: Props) {
   const completedSet = new Set(prog?.completedDays ?? []);
   const dailyRhythmLockedToday =
     mode === 'daily-rhythm' && isCompletedToday(prog?.lastCompletedAt);
-  const availableThroughDay = dailyRhythmLockedToday
-    ? Math.max(1, (prog?.currentDay ?? 1) - 1)
-    : (prog?.currentDay ?? 1);
+  // The current day remains visible after completion so the Days screen agrees
+  // with Today's Steps. It is still the server's current day; showing it does
+  // not unlock the next day.
+  const availableThroughDay = prog?.currentDay ?? 1;
 
   // All published non-completion steps — every one is accessible
   const allSteps = journey

@@ -125,16 +125,19 @@ export type Progress = {
   hiddenFromToday?: boolean;
 };
 
+export type DailyRhythmState = api.DailyRhythmState;
+
 type JourneyContextType = {
   journeys: Journey[];
   steps: Step[];
   progress: Record<string, Progress>;
+  dailyRhythmState: DailyRhythmState | null;
   reflections: Record<string, string>;
   loading: boolean;
   getJourney: (id: string) => Journey | undefined;
   getStep: (journeyId: string, day: number) => Step | undefined;
   getStepsForJourney: (journeyId: string) => Step[];
-  completeStep: (journeyId: string, day: number, reflectionText: string) => void;
+  completeStep: (journeyId: string, day: number, reflectionText: string) => Promise<void>;
   startJourney: (journeyId: string) => Promise<void>;
   // Admin mutations — return promises so callers can await and handle errors
   updateJourney: (journey: Journey) => Promise<Journey>;
@@ -159,6 +162,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const [journeys, setJourneys] = useState<Journey[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
+  const [dailyRhythmState, setDailyRhythmState] = useState<DailyRhythmState | null>(null);
   const [reflections, setReflections] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -175,6 +179,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     setJourneys([]);
     setSteps([]);
     setProgress({});
+    setDailyRhythmState(null);
     setReflections({});
 
     if (!subject) {
@@ -218,7 +223,20 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         if (subject) {
           try {
             const prog = await api.getAllProgress();
-            if (!cancelled && activeSubjectRef.current === subject) setProgress(prog);
+            if (!cancelled && activeSubjectRef.current === subject) {
+              setProgress(prog);
+            }
+            try {
+              const rhythm = await api.getDailyRhythmState();
+              if (!cancelled && activeSubjectRef.current === subject) {
+                setProgress(rhythm?.progress ? { ...prog, [rhythm.journeyId]: rhythm.progress } : prog);
+                setDailyRhythmState(rhythm);
+              }
+            } catch (stateError) {
+              // Keep the normal progress snapshot usable during a rolling
+              // deployment or if the optional canonical endpoint is delayed.
+              console.warn('[Daily Rhythm] canonical state unavailable; using progress snapshot', stateError);
+            }
           } catch {
             // ignore progress fetch errors
           }
@@ -318,29 +336,31 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   );
 
   const completeStep = useCallback(
-    (journeyId: string, day: number, reflectionText: string) => {
+    async (journeyId: string, day: number, reflectionText: string): Promise<void> => {
       if (!user?.id) return;
       const subject = user.id;
 
       const isDailyRhythm = journeys.find(j => j.id === journeyId)?.journeyType === 'daily-rhythm'
         || journeys.find(j => j.id === journeyId)?.journeyType === 'core';
 
-      // Optimistically record completion only. Daily Rhythm's current step is
-      // server-owned and must never be advanced by client state or navigation.
-      setProgress(p => {
-        const existing = p[journeyId];
-        if (!existing) return p;
-        const completedDays = [...new Set([...existing.completedDays, day])];
-        return {
-          ...p,
-          [journeyId]: {
-            ...existing,
-            completedDays,
-            currentDay: isDailyRhythm ? existing.currentDay : Math.max(existing.currentDay, day + 1),
-            lastCompletedAt: new Date().toISOString(),
-          },
-        };
-      });
+      // Daily Rhythm never invents progression locally. Its completion state is
+      // applied only from the authoritative server response below.
+      if (!isDailyRhythm) {
+        setProgress(p => {
+          const existing = p[journeyId];
+          if (!existing) return p;
+          const completedDays = [...new Set([...existing.completedDays, day])];
+          return {
+            ...p,
+            [journeyId]: {
+              ...existing,
+              completedDays,
+              currentDay: Math.max(existing.currentDay, day + 1),
+              lastCompletedAt: new Date().toISOString(),
+            },
+          };
+        });
+      }
 
       // Save reflection locally
       if (reflectionText.trim()) {
@@ -355,16 +375,25 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Sync to API — P2-3: log failures instead of silently swallowing them
-      api.completeStep(journeyId, day, reflectionText)
-        .then(prog => {
+      try {
+        const prog = await api.completeStep(journeyId, day, reflectionText);
+        if (activeSubjectRef.current !== subject) return;
+        setProgress(p => ({ ...p, [journeyId]: prog }));
+        if (isDailyRhythm) {
+          const rhythm = await api.getDailyRhythmState();
           if (activeSubjectRef.current === subject) {
-            setProgress(p => ({ ...p, [journeyId]: prog }));
+            setDailyRhythmState(rhythm);
+            if (rhythm?.progress) {
+              setProgress(p => ({ ...p, [rhythm.journeyId]: rhythm.progress! }));
+            }
           }
-        })
-        .catch((err) => console.error('[Emmaus] completeStep server sync failed:', err));
+        }
+      } catch (err) {
+        console.error('[Emmaus] completeStep server sync failed:', err);
+        throw err;
+      }
     },
-    [user?.id, journeys]
+    [user?.id, journeys, progress]
   );
 
   // ─── Admin mutations — await API, then update local state ──────────────────
@@ -525,6 +554,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         journeys: ownsVisibleState ? journeys : [],
         steps: ownsVisibleState ? steps : [],
         progress: ownsVisibleState ? progress : {},
+        dailyRhythmState: ownsVisibleState ? dailyRhythmState : null,
         reflections: ownsVisibleState ? reflections : {},
         loading: visibleLoading,
         getJourney: ownsVisibleState ? getJourney : () => undefined,

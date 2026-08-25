@@ -174,6 +174,20 @@ export interface DailyRhythmStartup {
   progress: FrontendProgress | null;
 }
 
+export interface DailyRhythmState {
+  journeyId: string;
+  progress: FrontendProgress | null;
+  currentStepId: string | null;
+  currentDayNumber: number;
+  currentStepTitle: string | null;
+  currentStepCompleted: boolean;
+  completedStepIds: string[];
+  availableStepIds: string[];
+  reviewableStepIds: string[];
+  nextStepLocked: boolean;
+  nextEligibleUnlockDate: string | null;
+}
+
 function calendarDateInTimezone(date: Date, timezone: string): string {
   try {
     return new Intl.DateTimeFormat("en-CA", {
@@ -1104,6 +1118,55 @@ export async function getProgress(userId: string, journeyId: string): Promise<Fr
     .orderBy(desc(userJourneyProgressTable.updatedAt))
     .limit(1);
   return rows[0] ? toFrontendProgress(rows[0]) : null;
+}
+
+/** Read-only canonical Daily Rhythm snapshot shared by all member surfaces. */
+export async function getDailyRhythmState(userId: string): Promise<DailyRhythmState | null> {
+  const journeyRows = await db.execute(sql`
+    SELECT id FROM journeys
+    WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
+    ORDER BY display_order ASC, created_at DESC LIMIT 1
+  `);
+  const journeyId = journeyRows.rows[0]?.id ? String(journeyRows.rows[0].id) : null;
+  if (!journeyId) return null;
+
+  const progress = await getProgress(userId, journeyId);
+  const currentDayNumber = progress?.currentDay ?? 1;
+  const completedDays = new Set(progress?.completedDays ?? []);
+  const stepRows = await db.execute(sql`
+    SELECT id, day, title
+    FROM journey_steps
+    WHERE journey_id = ${journeyId}
+      AND status = 'Published'
+      AND COALESCE(is_completion_step, false) = false
+    ORDER BY day ASC
+  `);
+  const steps = stepRows.rows.map(row => ({
+    id: String(row.id),
+    day: Number(row.day),
+    title: row.title ? String(row.title) : null,
+  }));
+  const currentStep = steps.find(step => step.day === currentDayNumber) ?? null;
+  const completedStepIds = steps.filter(step => completedDays.has(step.day)).map(step => step.id);
+  const availableStepIds = steps.filter(step => step.day <= currentDayNumber).map(step => step.id);
+  const reviewableStepIds = steps.filter(step => completedDays.has(step.day) || step.day < currentDayNumber).map(step => step.id);
+  const nextEligibleUnlockDate = progress?.dailyRhythmUnlockAt
+    ? calendarDateInTimezone(new Date(progress.dailyRhythmUnlockAt), progress.dailyRhythmTimezone || 'Africa/Johannesburg')
+    : null;
+
+  return {
+    journeyId,
+    progress,
+    currentStepId: currentStep?.id ?? null,
+    currentDayNumber,
+    currentStepTitle: currentStep?.title ?? null,
+    currentStepCompleted: completedDays.has(currentDayNumber),
+    completedStepIds,
+    availableStepIds,
+    reviewableStepIds,
+    nextStepLocked: completedDays.has(currentDayNumber),
+    nextEligibleUnlockDate,
+  };
 }
 
 /**

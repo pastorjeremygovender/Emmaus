@@ -174,6 +174,24 @@ export type DailyRhythmStartup = {
   progress: Progress | null;
 };
 
+export type DailyRhythmState = {
+  journeyId: string;
+  progress: Progress | null;
+  currentStepId: string | null;
+  currentDayNumber: number;
+  currentStepTitle: string | null;
+  currentStepCompleted: boolean;
+  completedStepIds: string[];
+  availableStepIds: string[];
+  reviewableStepIds: string[];
+  nextStepLocked: boolean;
+  nextEligibleUnlockDate: string | null;
+};
+
+export async function getDailyRhythmState(): Promise<DailyRhythmState | null> {
+  return apiFetch<DailyRhythmState | null>('/api/journeys/daily-rhythm/state');
+}
+
 export async function getDailyRhythmStartup(): Promise<DailyRhythmStartup> {
   const key = 'emmaus_daily_startup_session_v1';
   let startupSession = sessionStorage.getItem(key);
