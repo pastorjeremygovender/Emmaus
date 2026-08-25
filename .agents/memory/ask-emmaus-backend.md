@@ -10,3 +10,25 @@ description: Conversation service, SSE streaming, safety layer, system instructi
 - `system-instructions.ts` is the single source of truth for Emmaus persona
 
 See `artifacts/api-server/src/routes/emmaus.ts` for the route implementation.
+
+## Durable safeguards
+
+Trusted member profile lookup must support both the verified subject and the
+account email, because existing member records may use either identity key.
+
+**Why:** A subject-only lookup silently removed preferred-name personalisation
+for valid members whose profile had been created before subject binding.
+
+**How to apply:** When resolving authenticated profile data for Emmaus, prefer
+the verified subject match but fall back to the verified account email; never
+trust the browser-supplied display name.
+
+Resource prompts must include canonical resource IDs as well as titles and
+routes.
+
+**Why:** Validation correctly rejects model-created IDs, but giving the model
+only titles and paths makes every recommendation unverifiable and therefore
+silently disappear.
+
+**How to apply:** Treat catalogue IDs as the model's only recommendation keys;
+the server resolves the final route from the live publication-safe catalogue.

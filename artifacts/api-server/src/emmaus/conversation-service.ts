@@ -61,7 +61,10 @@ async function getTrustedDisplayName(userId: string): Promise<string | undefined
   if (!userId || userId === "anonymous") return undefined;
   try {
     const result = await pool.query<{ preferred_name: string | null; app_role: string | null }>(
-      `SELECT preferred_name, app_role FROM user_profiles WHERE auth_subject = $1 LIMIT 1`,
+      `SELECT preferred_name, app_role FROM user_profiles
+       WHERE auth_subject = $1 OR email = $1
+       ORDER BY CASE WHEN auth_subject = $1 THEN 0 ELSE 1 END
+       LIMIT 1`,
       [userId],
     );
     const profile = result.rows[0];
@@ -250,7 +253,12 @@ function extractMeta(fullText: string): {
   const closeIdx = fullText.indexOf(META_CLOSE);
 
   if (openIdx === -1 || closeIdx === -1) {
-    return { cleanText: fullText.trim(), metadata: null };
+    // A malformed metadata block must never leak its control tags or JSON
+    // into the member-facing answer.
+    return {
+      cleanText: (openIdx >= 0 ? fullText.slice(0, openIdx) : fullText).trim(),
+      metadata: null,
+    };
   }
 
   const cleanText = fullText.substring(0, openIdx).trim();
@@ -491,7 +499,10 @@ export async function handleConversation(
         resource.excerpts.length > 0 ? `Approved excerpts: ${resource.excerpts.map(e => `"${e}"`).join(" | ")}` : "",
         `Source: ${resource.provenance}`,
       ].filter(Boolean).join(" — ");
-      resourceLines.push(`  - [${resource.type}] "${resource.title}" → ${resource.route}${details ? ` — ${details}` : ""}`);
+      resourceLines.push(
+        `  - [${resource.type}] id="${resource.resourceId}"${resource.parentId ? ` parentId="${resource.parentId}"` : ""} ` +
+        `"${resource.title}" → ${resource.route}${details ? ` — ${details}` : ""}`,
+      );
     }
 
     if (userRooms.length > 0) {
@@ -646,13 +657,56 @@ export async function handleConversation(
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
 
+  // If the model omitted a recommendation despite a clearly matching
+  // published resource, expose the best catalogue match deterministically.
+  // This keeps retrieval useful without allowing invented routes or IDs.
+  if (finalMeta.recommendations.length === 0) {
+    const bestResource = resourceCatalogue.resources.find((resource) =>
+      resource.type !== "sermon" && resource.relevance >= 1
+    );
+    if (bestResource) {
+      finalMeta.recommendations.push({
+        type: bestResource.type,
+        title: bestResource.title,
+        description: bestResource.description ?? `A published ${bestResource.provenance.toLowerCase()} relevant to this question.`,
+        resourceId: bestResource.resourceId,
+        parentId: bestResource.parentId,
+        path: bestResource.route,
+      });
+    }
+  }
+
   // Never stream untrusted model URLs. The response body is intentionally
   // sanitized after metadata parsing and before the first text event.
   const safeCleanText = cleanText
+    .replace(/<EMMAUS_META[\s\S]*$/gi, "")
+    .replace(/<\/?EMMAUS_META>/gi, "")
     .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
     .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  // The model sometimes mentions additional passages in prose without
+  // repeating them in scriptureReferences. Promote any exact BSB references
+  // it actually named into the trusted citation set so every quoted passage
+  // can still be rendered as a clickable citation.
+  const proseScriptures = biblePassages.filter((passage) =>
+    new RegExp(`\\b${passage.reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(safeCleanText)
+  ).map((passage) => ({
+    reference: passage.reference,
+    book: passage.reference.replace(/\s+\d+:.*$/, ""),
+    chapter: passage.chapter,
+    verseStart: passage.verse,
+    verseEnd: passage.verse,
+    displayText: passage.reference,
+  }));
+  finalMeta.scriptureReferences = Array.from(
+    new Map(
+      [...(finalMeta.scriptureReferences ?? []), ...proseScriptures]
+        .map(ref => [ref.reference.toLowerCase(), ref] as const),
+    ).values(),
+  );
+  if (!finalMeta.scripture && proseScriptures[0]) finalMeta.scripture = proseScriptures[0];
   finalMeta.answer = safeCleanText;
   if (safeCleanText) sseWrite(res, "text", { content: safeCleanText });
 

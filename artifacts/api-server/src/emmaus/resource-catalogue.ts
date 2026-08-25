@@ -215,7 +215,9 @@ export async function buildEmmausResourceCatalogue(
 
   const resources: EmmausResource[] = [...notes];
   for (const journey of journeys.filter(
-    j => j.journeyType !== "companion" && j.journeyType !== "daily-rhythm" && j.journeyType !== "core",
+    // "core" is a legacy label for published Walks. It must remain searchable;
+    // only the user's separately scoped Daily Rhythm journey is excluded here.
+    j => j.journeyType !== "companion" && j.journeyType !== "daily-rhythm",
   )) {
     const steps = await listSteps(journey.id).catch(err => {
       sourceFailures.push(`journey:${journey.id}`);

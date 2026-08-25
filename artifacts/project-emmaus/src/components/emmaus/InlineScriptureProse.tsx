@@ -18,6 +18,19 @@ function routeFor(ref: ScriptureRef): string | null {
   }`;
 }
 
+function referenceLabels(ref: ScriptureRef): string[] {
+  const labels = new Set<string>();
+  if (ref.reference) labels.add(ref.reference);
+  if (ref.displayText) labels.add(ref.displayText);
+  const start = ref.verseStart;
+  const end = ref.verseEnd;
+  if (start) {
+    labels.add(`${ref.book} ${ref.chapter}:${start}${end && end !== start ? `-${end}` : ''}`);
+    labels.add(`${ref.book} ${ref.chapter}:${start}${end && end !== start ? `–${end}` : ''}`);
+  }
+  return Array.from(labels).sort((a, b) => b.length - a.length);
+}
+
 function Citation({ ref, text }: { ref: ScriptureRef; text: string }) {
   const [, setLocation] = useLocation();
   const route = routeFor(ref);
@@ -37,8 +50,10 @@ function Citation({ ref, text }: { ref: ScriptureRef; text: string }) {
 function InlineParagraph({ text, references }: { text: string; references: ScriptureRef[] }) {
   const matches = references
     .map((ref) => {
-      const display = ref.displayText || ref.reference;
-      const match = text.match(new RegExp(escapeRegExp(display), 'i'));
+      const match = referenceLabels(ref)
+        .map(label => ({ label, match: text.match(new RegExp(escapeRegExp(label), 'i')) }))
+        .filter((candidate): candidate is { label: string; match: RegExpMatchArray } => !!candidate.match)
+        .sort((a, b) => b.label.length - a.label.length)[0]?.match;
       return match && match.index !== undefined ? { ref, start: match.index, end: match.index + match[0].length, text: match[0] } : null;
     })
     .filter((match): match is { ref: ScriptureRef; start: number; end: number; text: string } => !!match)
@@ -68,8 +83,7 @@ export function InlineScriptureProse({
   const paragraphs = text.split(/\n{2,}/).filter(Boolean);
   const validRefs = references.filter((ref) => !!routeFor(ref));
   const proseContainsReference = validRefs.some((ref) => {
-    const label = ref.displayText || ref.reference;
-    return text.toLowerCase().includes(label.toLowerCase());
+    return referenceLabels(ref).some(label => text.toLowerCase().includes(label.toLowerCase()));
   });
   return (
     <div className={paragraphs.length > 1 ? 'space-y-4' : undefined}>
