@@ -122,6 +122,7 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
 
 // isTabPath and TAB_PREFIXES live in lib/tab-paths so they can be unit-tested.
 import { isColdMemberLaunchPath } from '@/lib/tab-paths';
+import { markStartupRoutingComplete } from '@/lib/startup-routing';
 
 function Router() {
   const [location, setLocation] = useLocation();
@@ -138,6 +139,10 @@ function Router() {
       // before the authenticated journey list arrives.
       if (isColdMemberLaunchPath(location)) {
         setLocation('/');
+      } else if (location !== '/') {
+        // A direct launch on a non-member page has no automatic member
+        // startup redirect to resolve. Future SPA navigation is ordinary.
+        markStartupRoutingComplete();
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

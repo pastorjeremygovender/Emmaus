@@ -23,6 +23,7 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { isOnboarded, markOnboarded } from '@/lib/onboarding';
 import { resolveEntryRoute } from '@/lib/entry-route';
 import { getDailyRhythmStartup } from '@/lib/journeys-api';
+import { isStartupRoutingComplete, markStartupRoutingComplete } from '@/lib/startup-routing';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
@@ -46,32 +47,42 @@ export default function Welcome() {
   // first-open-of-the-day rule: a PWA/browser session can remain alive overnight.
   useEffect(() => {
     if (!alreadyShown) return;
+    if (isStartupRoutingComplete()) {
+      if (!authLoading && !loadingProfile && !journeyLoading) setLocation(resolveEntryRoute());
+      return;
+    }
     if (authLoading || loadingProfile || journeyLoading) return;
     let cancelled = false;
     const routeMember = async () => {
     if (user) {
       if (user.passwordRecovery) {
+        markStartupRoutingComplete();
         setLocation('/auth/callback?mode=recovery');
         return;
       }
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
       if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
+        markStartupRoutingComplete();
         sessionStorage.removeItem('pendingInviteToken');
         setLocation(`/join/${pendingJoin}`);
         return;
       }
       if (user.role === 'admin' || user.role === 'superAdmin') {
+        markStartupRoutingComplete();
         setLocation('/admin');
       } else if (!isOnboarded(user.id) && !user.preferredName?.trim()) {
+        markStartupRoutingComplete();
         setLocation('/onboarding');
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
         try {
           const startup = await getDailyRhythmStartup();
           const dest = startup.destination;
+          markStartupRoutingComplete();
           if (!cancelled) setLocation(dest);
         } catch (err) {
           console.error('[DailyOpen] server startup decision failed:', err);
+          markStartupRoutingComplete();
           if (!cancelled) setLocation(resolveEntryRoute());
         }
       }
@@ -86,6 +97,11 @@ export default function Welcome() {
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
     if (alreadyShown) return;
+    if (isStartupRoutingComplete()) {
+      navigatedRef.current = true;
+      setLocation(resolveEntryRoute());
+      return;
+    }
     const id = setTimeout(() => setTimerDone(true), MIN_DURATION);
     return () => clearTimeout(id);
   }, [alreadyShown]);
@@ -122,6 +138,7 @@ export default function Welcome() {
     }
 
     void resolveDestination().then(dest => {
+      markStartupRoutingComplete();
       // Fade out, then navigate.
       setFading(true);
       setTimeout(() => setLocation(dest), FADE_OUT_MS);
