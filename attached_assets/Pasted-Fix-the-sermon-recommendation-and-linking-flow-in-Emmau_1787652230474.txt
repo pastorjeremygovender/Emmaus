@@ -1,0 +1,207 @@
+Fix the sermon recommendation and linking flow in Emmaus Voice and Ask Emmaus.
+
+CURRENT BROKEN BEHAVIOUR
+
+A user asks:
+“Can you refer me to a sermon on faith?”
+
+Emmaus says it found three sermons and implies that links are available in Discover, but:
+
+1. No sermon links or sermon cards appear.
+2. Nothing is actually opened or added to Discover.
+3. Only one of the claimed three sermons is named.
+4. The result may be a YouTube Short with “Unknown Speaker,” rather than a proper published sermon.
+5. If the user says, “I can’t find the links,” Emmaus loses the conversational context.
+6. If the user then says, “I want the sermon,” Emmaus asks for the topic again even though the topic is already known.
+
+REQUIRED FIX
+
+1. NEVER CLAIM AN ACTION THAT DID NOT HAPPEN
+
+Emmaus must never say:
+
+- “I’ve opened the sermons”
+- “You’ll find the links in Discover”
+- “I’ve added them below”
+- or anything similar
+
+unless the application has successfully performed that action and verified the result.
+
+The spoken response must be generated from the actual completed UI/tool result, not from an assumption.
+
+2. DISPLAY SERMON RESULTS IN THE CURRENT CONVERSATION
+
+When sermon search returns results, immediately display up to three tappable sermon cards directly beneath the Emmaus response in both:
+
+- Ask Emmaus
+- Emmaus Voice
+
+Each sermon card must show:
+
+- Sermon title
+- Pastor/speaker name
+- Date
+- Relevant excerpt or reason it matches
+- Watch, Listen or Read option where available
+- A clear “Open Sermon” button
+
+The entire card should also be tappable.
+
+Do not make the user leave the conversation and search for the sermon in Discover.
+
+3. USE REAL DEEP LINKS
+
+Each result must link directly to the specific sermon detail page using the sermon’s real internal sermon ID.
+
+Do not link only to:
+
+- the Discover landing page
+- the Sermons listing page
+- the YouTube homepage
+- or a generic search page
+
+The link must open the exact sermon that was recommended.
+
+If a timestamp is available for the relevant section, include a “Play Relevant Part” option that opens at that timestamp.
+
+4. KEEP DISCOVER SYNCHRONIZED
+
+If the sermon is also supposed to appear in Discover, ensure the same published sermon record is queryable there.
+
+Do not create a temporary AI-only result that cannot be found elsewhere in the app.
+
+However, Discover is secondary. The results must still appear directly in the current Emmaus conversation.
+
+5. PRESERVE CONVERSATIONAL CONTEXT
+
+Store the most recent sermon-search context for the active conversation, including:
+
+- requested topic
+- returned sermon IDs
+- result titles
+- selected or referenced result
+- available actions
+
+If the user says:
+
+- “I can’t find the links”
+- “Show me the sermons”
+- “Open the first one”
+- “I want the sermon”
+- “Play that one”
+- “The second one”
+
+Emmaus must interpret this using the previous sermon results.
+
+For example:
+
+User: “Can you refer me to a sermon on faith?”
+Emmaus: displays the sermon cards.
+
+User: “I want the sermon.”
+Emmaus: “Certainly. The closest match is Faith Explained. Would you like me to open it or play the relevant section?”
+
+It must not ask for the topic again.
+
+6. ONLY REPORT THE NUMBER OF RESULTS ACTUALLY DISPLAYED
+
+If three valid sermons are returned and displayed, say:
+“I found three sermons that may help.”
+
+If only one valid sermon is returned, say:
+“I found one sermon that may help.”
+
+Never say that three were found while naming or displaying only one.
+
+7. IMPROVE RESULT QUALITY
+
+Prioritize results in this order:
+
+1. Published full ICC sermons
+2. Sermons by Pastor Jeremy
+3. Sermons with a valid speaker, date and sermon detail page
+4. Results with a transcript match relevant to the question
+5. Other approved published sermon content
+
+Deprioritize or exclude:
+
+- YouTube Shorts
+- records with “Unknown Speaker”
+- unapproved sermons
+- pending indexing records
+- failed indexing records
+- duplicate records
+- results without a usable internal sermon link
+
+A Short may only be shown when no suitable full sermon exists, and it must be clearly labelled as a short clip.
+
+8. SAFE FALLBACK
+
+If no usable sermon with a valid link is found, Emmaus must say:
+
+“I couldn’t find a published sermon on that subject yet.”
+
+It may then offer:
+
+- relevant Scripture
+- a related Bible Study
+- a Walk or Journey
+- a broader sermon search
+
+It must not invent a sermon title, link, speaker, action or location.
+
+9. VOICE AND SCREEN MUST STAY SYNCHRONIZED
+
+Emmaus Voice should briefly speak the result while the screen displays the actionable cards.
+
+Example spoken response:
+
+“I found two sermons from Pastor Jeremy that speak about faith. I’ve placed them on the screen. The closest match is Faith Explained. You can open the sermon or play the relevant section.”
+
+Only say “I’ve placed them on the screen” after the cards have rendered successfully.
+
+10. ADD TESTS
+
+Test the complete sequence:
+
+A.
+User: “Can you refer me to a sermon on faith?”
+Expected: actual sermon results appear as tappable cards with valid deep links.
+
+B.
+User: “I can’t find the links.”
+Expected: Emmaus re-renders the previous cards and says it has placed them on the screen.
+
+C.
+User: “I want the sermon.”
+Expected: Emmaus uses the existing faith-sermon context and offers to open the closest result. It does not ask for the topic again.
+
+D.
+User: “Open the first one.”
+Expected: the exact sermon detail page opens.
+
+E.
+No valid result exists.
+Expected: Emmaus honestly says that it could not find a published sermon and offers related content.
+
+F.
+Only one valid result exists.
+Expected: Emmaus says it found one result and displays exactly one card.
+
+IMPORTANT
+
+Audit the existing sermon-search function, Emmaus Voice tool/action handler, Ask Emmaus result renderer, conversation-state storage, Discover query and sermon routes before changing anything.
+
+Use the existing published sermon records and routes as the single source of truth. Do not create a second disconnected sermon-search system.
+
+Do not remove or redesign unrelated Emmaus Voice functionality.
+
+After implementing, report:
+
+- the root cause
+- files changed
+- how sermon result IDs are passed into cards
+- the deep-link format used
+- how follow-up context is preserved
+- tests completed
+- confirmation that Emmaus can no longer claim links or actions that do not exist
