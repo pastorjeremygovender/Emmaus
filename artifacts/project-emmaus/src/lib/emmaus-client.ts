@@ -287,6 +287,24 @@ export function startConversation(opts: {
       });
 
       if (!res.ok) {
+        // A workflow restart can clear the development in-memory conversation
+        // store while the browser still holds the old conversation ID. Start
+        // a fresh thread for that one recoverable case; do not retry auth or
+        // ownership failures.
+        if (res.status === 404) {
+          const freshContext = opts.context
+            ? { ...opts.context, conversationId: undefined }
+            : undefined;
+          startConversation({
+            userId: opts.userId,
+            message: opts.message,
+            context: freshContext,
+            history: opts.history,
+            callbacks: opts.callbacks,
+            signal: opts.signal,
+          });
+          return;
+        }
         opts.callbacks.onError(`Server error: ${res.status}`);
         return;
       }
