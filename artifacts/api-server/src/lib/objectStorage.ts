@@ -111,7 +111,7 @@ export class ObjectStorageService {
     return new Response(webStream, { headers });
   }
 
-  async getObjectEntityUploadURL(): Promise<string> {
+  async getObjectEntityUploadURL(prefix = 'uploads'): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -121,7 +121,7 @@ export class ObjectStorageService {
     }
 
     const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+    const fullPath = `${privateObjectDir}/${prefix}/${objectId}`;
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
@@ -131,6 +131,22 @@ export class ObjectStorageService {
       method: 'PUT',
       ttlSec: 3600, // 1 hour — enough headroom for 250 MB on a slow connection
     });
+  }
+
+  async uploadObjectEntityBuffer(
+    buffer: Buffer,
+    contentType: string,
+    prefix = 'illustrations',
+  ): Promise<string> {
+    const uploadURL = await this.getObjectEntityUploadURL(prefix);
+    const response = await fetch(uploadURL, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType, 'Content-Length': String(buffer.length) },
+      body: buffer,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) throw new Error(`Failed to store object, errorcode: ${response.status}`);
+    return this.normalizeObjectEntityPath(uploadURL);
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {

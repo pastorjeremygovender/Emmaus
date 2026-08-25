@@ -2,9 +2,11 @@ import { Router, type Request, type Response } from "express";
 import { pool } from "@workspace/db";
 import { requireAdmin, requireAuth } from "../emmaus/auth.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
+import OpenAI from "openai";
 
 const router = Router();
 const objectStorageService = new ObjectStorageService();
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const TYPES = new Set(["accurate-visual", "artistic-scene", "upload"]);
 const TEMPLATES = new Set(["bible-map", "timeline", "book-outline", "journey-route", "teaching-diagram", "comparison", "people-groups", "custom-diagram"]);
 const STATUSES = new Set(["Suggested", "Generating", "Draft", "Approved", "Failed"]);
@@ -43,7 +45,59 @@ function publicFields(row: Record<string, unknown>) {
     thumbnailObjectPath: row.thumbnail_object_path, caption: row.caption,
     alternativeText: row.alternative_text, placement: row.placement,
     paragraphPosition: row.paragraph_position, status: row.status,
+    generationInstruction: row.generation_instruction, structuredData: row.structured_data,
+    adminNote: row.admin_note, createdAt: row.created_at, updatedAt: row.updated_at,
   };
+}
+
+const ARTISTIC_STYLES = {
+  "dark-cinematic": "dark cinematic editorial photography, dramatic directional light, rich shadows, restrained colour",
+  "light-floral": "light airy editorial illustration, gentle daylight, soft natural colour, subtle botanical detail only when relevant",
+  "in-the-middle": "balanced contemporary editorial illustration, emotionally specific, varied colour and generous negative space",
+} as const;
+type ArtisticStyle = keyof typeof ARTISTIC_STYLES;
+
+async function generateArtisticScene(id: string, instruction: string, style: ArtisticStyle, altText: string) {
+  try {
+    if (!openai) throw new Error("Image generation is not configured");
+    const prompt = [
+      "Create a single safe, respectful artistic scene for a Christian devotional illustration.",
+      "Follow the administrator's instruction literally, without adding readable text, captions, logos, or watermarks.",
+      `Visual style: ${ARTISTIC_STYLES[style]}.`,
+      `Administrator instruction: ${instruction}`,
+      `Accessibility subject description: ${altText}`,
+      "Use original imagery only. Avoid graphic violence, sexual content, hateful symbols, and identifiable private people.",
+    ].join("\n");
+    const response = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt,
+      size: "1024x1024",
+      quality: "high",
+      n: 1,
+    });
+    const encoded = response.data?.[0]?.b64_json;
+    if (!encoded) throw new Error("The image provider returned no image");
+    const bytes = Buffer.from(encoded, "base64");
+    const displayPath = await objectStorageService.uploadObjectEntityBuffer(bytes, "image/png", "illustrations");
+    const thumbnailPath = await objectStorageService.uploadObjectEntityBuffer(bytes, "image/png", "illustrations/thumbnails");
+    const result = await pool.query(
+      `UPDATE illustrations
+       SET display_object_path=$1, thumbnail_object_path=$2,
+           structured_data = COALESCE(structured_data, '{}'::jsonb) || $3::jsonb,
+           status='Draft', approved_by=NULL, approved_at=NULL, updated_at=NOW()
+       WHERE id=$4 AND status='Generating' RETURNING *`,
+      [displayPath, thumbnailPath, JSON.stringify({ style, model: "gpt-image-1", generatedAt: new Date().toISOString() }), id],
+    );
+    return result.rows[0];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Image generation failed";
+    await pool.query(
+      `UPDATE illustrations SET status='Failed', admin_note=$1, updated_at=NOW()
+       WHERE id=$2 AND status='Generating'`,
+      [message.slice(0, 5000), id],
+    );
+    return null;
+  }
 }
 
 router.get("/illustrations", async (req: Request, res: Response) => {
@@ -129,12 +183,52 @@ router.post("/illustrations/upload-url", async (req: Request, res: Response) => 
   } catch { res.status(500).json({ error: "Could not prepare secure upload" }); }
 });
 
+router.post("/illustrations/:id/generate", async (req: Request, res: Response) => {
+  const userId = requireAdmin(req, res); if (!userId) return;
+  const id = String(req.params.id);
+  const instruction = clean(req.body?.instruction, 3000);
+  const style = clean(req.body?.style, 40) as ArtisticStyle | null;
+  if (!instruction || !style || !(style in ARTISTIC_STYLES)) {
+    return res.status(400).json({ error: "A clear instruction and valid Artistic Scene style are required" });
+  }
+  const claimed = await pool.query(
+    `UPDATE illustrations
+     SET status='Generating', generation_instruction=$1, admin_note=NULL,
+         approved_by=NULL, approved_at=NULL, updated_at=NOW()
+     WHERE id=$2 AND illustration_type='artistic-scene' AND status <> 'Generating'
+     RETURNING *`,
+    [instruction, id],
+  );
+  if (!claimed.rowCount) {
+    const current = await pool.query("SELECT * FROM illustrations WHERE id=$1", [id]);
+    if (!current.rowCount) return res.status(404).json({ error: "Illustration not found" });
+    if (current.rows[0].status === "Generating") return res.status(409).json({ error: "Generation is already in progress" });
+    return res.status(400).json({ error: "Only Artistic Scenes can be generated" });
+  }
+  const row = claimed.rows[0];
+  void generateArtisticScene(id, instruction, style, String(row.alternative_text ?? ""));
+  res.status(202).json(publicFields(row));
+});
+
 router.post("/illustrations/:id/regenerate", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res); if (!userId) return;
   const current = await pool.query("SELECT * FROM illustrations WHERE id=$1", [String(req.params.id)]);
   if (!current.rowCount) return res.status(404).json({ error: "Illustration not found" });
   const row = current.rows[0];
-  if (row.illustration_type !== "accurate-visual" || !row.template_type) return res.status(400).json({ error: "Only Accurate Visuals can be regenerated automatically" });
+  if (row.illustration_type === "artistic-scene") {
+    const instruction = clean(req.body?.instruction, 3000) ?? row.generation_instruction;
+    const style = (clean(req.body?.style, 40) ?? (row.structured_data?.style as string)) as ArtisticStyle | null;
+    if (!instruction || !style || !(style in ARTISTIC_STYLES)) return res.status(400).json({ error: "A clear instruction and valid Artistic Scene style are required" });
+    const claimed = await pool.query(
+      `UPDATE illustrations SET status='Generating', generation_instruction=$1, admin_note=NULL,
+       approved_by=NULL, approved_at=NULL, updated_at=NOW()
+       WHERE id=$2 AND status <> 'Generating' RETURNING *`, [instruction, String(req.params.id)],
+    );
+    if (!claimed.rowCount) return res.status(409).json({ error: "Generation is already in progress" });
+    void generateArtisticScene(String(req.params.id), instruction, style, String(row.alternative_text ?? ""));
+    return res.status(202).json(publicFields(claimed.rows[0]));
+  }
+  if (row.illustration_type !== "accurate-visual" || !row.template_type) return res.status(400).json({ error: "Only Accurate Visuals or Artistic Scenes can be regenerated" });
   const sourceSvg = renderSvg(row.template_type, safeStructuredData(row.structured_data));
   const result = await pool.query("UPDATE illustrations SET source_svg=$1, status='Draft', approved_by=NULL, approved_at=NULL, updated_at=NOW() WHERE id=$2 RETURNING *", [sourceSvg, String(req.params.id)]);
   res.json(publicFields(result.rows[0]));

@@ -17,6 +17,9 @@ export type Illustration = {
   structuredData?: Record<string, unknown>;
   generationInstruction?: string | null;
   adminNote?: string | null;
+  thumbnailObjectPath?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,3 +47,9 @@ export function updateIllustration(id: string, body: Record<string, unknown>) {
 export function approveIllustration(id: string) { return request<Illustration>(`/api/illustrations/${encodeURIComponent(id)}/approve`, { method: 'POST', body: '{}' }); }
 export function unapproveIllustration(id: string) { return request<Illustration>(`/api/illustrations/${encodeURIComponent(id)}/unapprove`, { method: 'POST', body: '{}' }); }
 export function removeIllustration(id: string) { return request<void>(`/api/illustrations/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
+export function generateArtisticScene(id: string, body: { instruction: string; style: string }) {
+  return request<Illustration>(`/api/illustrations/${encodeURIComponent(id)}/generate`, { method: 'POST', body: JSON.stringify(body) });
+}
+export function regenerateIllustration(id: string, body?: { instruction?: string; style?: string }) {
+  return request<Illustration>(`/api/illustrations/${encodeURIComponent(id)}/regenerate`, { method: 'POST', body: JSON.stringify(body ?? {}) });
+}
