@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import BibleProgressDashboard from './BibleProgressDashboard';
 import BibleContentGenerator from './BibleContentGenerator';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,10 @@ function BookIntroEditor({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+        <div><p className="text-xs font-semibold text-teal-800">Book illustration</p><p className="text-[11px] text-teal-700/70">Suggest an approved visual for this Bible Study content.</p></div>
+        <IllustrationPicker contentType="bible-study" contentId={form.book_id} compact />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-[12px] font-medium text-gray-600 mb-1">Book ID</label>

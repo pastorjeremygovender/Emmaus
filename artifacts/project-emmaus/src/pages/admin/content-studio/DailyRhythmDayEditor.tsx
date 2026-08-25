@@ -29,6 +29,7 @@ import { ShareImageField } from '@/components/ShareImageField';
 import { refineContent, type DraftField, type RefineAction } from '@/lib/writing-assistant-api';
 import { ContentStudioToolbar } from '../shared';
 import EmmausContentEditor from './EmmausContentEditor';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Variant labels ───────────────────────────────────────────────────────────
 
@@ -524,6 +525,10 @@ export default function DailyRhythmDayEditor({
         }
         fields={
           <div className="flex-1 p-6 space-y-7 max-w-2xl">
+            <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+              <div><p className="text-xs font-semibold text-teal-800">Illustration</p><p className="text-[11px] text-teal-700/70">Add an approved visual without editing this day’s words.</p></div>
+              <IllustrationPicker contentType={journey?.journeyType === 'bible-study' ? 'bible-study' : 'journey'} contentId={journeyId} stepId={(form as DayForm & { id?: string }).id} compact />
+            </div>
 
             {/* Day Number + Title row */}
             <div className="grid grid-cols-[120px_1fr] gap-4">

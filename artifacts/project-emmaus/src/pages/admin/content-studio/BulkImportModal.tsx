@@ -26,6 +26,7 @@ import {
   type ConflictResolution, type ImportResult, type CanonicalField,
 } from './bulk-import-utils';
 import { parseEmmausText } from './bulk-import-emmaus-parser';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -852,6 +853,12 @@ export default function BulkImportModal({ onClose }: Props) {
               ══════════════════════════════════════════════════════════════════════ */}
           {screen === 'preview' && (
             <div className="space-y-3">
+              {destId && (destType === 'walk' || destType === 'daily-rhythm') && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+                  <div><p className="text-xs font-semibold text-teal-800">Illustration suggestions</p><p className="text-[11px] text-teal-700/70">Browse approved visuals without changing the imported text.</p></div>
+                  <IllustrationPicker contentType="journey" contentId={destType === 'daily-rhythm' ? drJourney?.id : destId} compact label="Browse suggestions" suggestOnly />
+                </div>
+              )}
               {/* Summary bar */}
               <div className="flex items-center gap-3 flex-wrap">
                 <Pill label={`${parsedRows.length} rows`} variant="gray" />

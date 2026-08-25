@@ -6,6 +6,7 @@ import {
   TextInput, TextArea, AdminBtn, SaveMessage,
 } from './shared';
 import { ShareImageField } from '@/components/ShareImageField';
+import IllustrationPicker from './content-studio/IllustrationPicker';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ function PhonePreview({ step, journeyTitle, durationDays }: {
         {/* Scrollable content */}
         <div className="overflow-y-auto px-4 pt-5 pb-8 space-y-6 text-gray-800" style={{ height: 530 }}>
 
-          {/* Day + Title */}
+            {/* Day + Title */}
           <div>
             <span className="text-[9px] font-bold text-teal-700 uppercase tracking-widest">Day {step.day}</span>
             <h1 className="mt-1 text-[18px] font-serif font-semibold leading-snug">{title}</h1>
@@ -371,6 +372,12 @@ export default function DayEditor({ journeyId, day, onBack }: Props) {
                 />
               </div>
             )}
+
+            {/* Illustration placement */}
+            <div className="mb-5 flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+              <div><p className="text-xs font-semibold text-teal-800">Illustration</p><p className="text-[11px] text-teal-700/70">Add an approved visual and choose where it appears.</p></div>
+              <IllustrationPicker contentType="journey" contentId={journeyId} stepId={(form as Step & { id?: string }).id} compact />
+            </div>
 
             {/* Card 1 — Today's Theme */}
             <CollapsibleCard title="Today's Theme" defaultOpen>

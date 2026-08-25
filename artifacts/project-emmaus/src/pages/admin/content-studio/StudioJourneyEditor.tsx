@@ -30,6 +30,7 @@ import type { Collection } from '@/lib/collections-api';
 import { Block, stepToBlocks, blocksToCanonical, createBlock } from '@/lib/blocks';
 import { ConfirmDialog, StatusBadge, ContentStudioToolbar } from '../shared';
 import { useAuth } from '@/contexts/AuthContext';
+import IllustrationPicker from './IllustrationPicker';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -773,12 +774,14 @@ function StepFieldEditor({
 // Save & Continue to Day 1.
 
 function JourneyIntroEditor({
+  journeyId,
   content,
   onChange,
   onSaveDraft,
   onContinue,
   saveStatus,
 }: {
+  journeyId: string;
   content: string;
   onChange: (v: string) => void;
   onSaveDraft: () => void;
@@ -800,6 +803,10 @@ function JourneyIntroEditor({
         placeholder="Begin the walk here. Welcome the reader, set the scene, and invite them to open their heart to what lies ahead…"
         className="w-full border border-gray-200 rounded-xl px-5 py-4 text-base text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-colors bg-white resize-y leading-relaxed"
       />
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+        <div><p className="text-xs font-semibold text-teal-800">Illustration</p><p className="text-[11px] text-teal-700/70">Choose an approved visual for the welcome section.</p></div>
+        <IllustrationPicker contentType="journey" contentId={journeyId} compact />
+      </div>
 
       <div className="flex items-center gap-3 mt-6">
         <button
@@ -832,6 +839,7 @@ function JourneyIntroEditor({
 // (nextJourneyId, completionMessage) are saved explicitly via onSaveDraft.
 
 function JourneyCompleteEditor({
+  journeyId,
   step,
   onStepChange,
   nextJourneyId,
@@ -843,6 +851,7 @@ function JourneyCompleteEditor({
   onSaveDraft,
   saveStatus,
 }: {
+  journeyId: string;
   step: StepWithBlocks;
   onStepChange: (changes: Partial<Step>) => void;
   nextJourneyId: string;
@@ -931,6 +940,10 @@ function JourneyCompleteEditor({
           className={textareaCls}
         />
       </FieldBlock>
+      <div className="flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/60 px-3 py-2.5">
+        <div><p className="text-xs font-semibold text-teal-800">Illustration</p><p className="text-[11px] text-teal-700/70">Choose an approved visual for the completion section.</p></div>
+        <IllustrationPicker contentType="journey" contentId={journeyId} stepId={(step as Step & { id?: string }).id} compact />
+      </div>
 
       <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
         <button
@@ -1928,6 +1941,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           /* Journey Introduction — stored on the journey record, not as a step */
           <div className="flex-1 overflow-y-auto bg-white">
             <JourneyIntroEditor
+              journeyId={journeyId}
               content={introContent}
               onChange={setIntroContent}
               onSaveDraft={handleSaveIntro}
@@ -1939,6 +1953,7 @@ export default function StudioJourneyEditor({ journeyId, onBack, onLegacyEditor 
           /* Journey Complete — dedicated completion editor */
           <div className="flex-1 overflow-y-auto bg-white">
             <JourneyCompleteEditor
+              journeyId={journeyId}
               step={selectedStep}
               onStepChange={changes => handleStepMetaChange(selectedStep.day, changes)}
               nextJourneyId={completeNextJourneyId}

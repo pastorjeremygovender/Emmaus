@@ -145,8 +145,9 @@ router.patch("/illustrations/:id", async (req: Request, res: Response) => {
   const body = req.body ?? {};
   const fields: string[] = [], values: unknown[] = [];
   const add = (column: string, value: unknown) => { fields.push(`${column}=$${values.length + 1}`); values.push(value); };
-  for (const [key, column] of [["caption","caption"],["alternativeText","alternative_text"],["adminNote","admin_note"],["generationInstruction","generation_instruction"],["displayObjectPath","display_object_path"],["thumbnailObjectPath","thumbnail_object_path"]] as const) if (body[key] !== undefined) add(column, clean(body[key], 5000));
+  for (const [key, column] of [["caption","caption"],["alternativeText","alternative_text"],["adminNote","admin_note"],["generationInstruction","generation_instruction"],["displayObjectPath","display_object_path"],["thumbnailObjectPath","thumbnail_object_path"],["contentType","content_type"],["contentId","content_id"],["stepId","step_id"]] as const) if (body[key] !== undefined) add(column, clean(body[key], 5000));
   if (body.placement !== undefined && PLACEMENTS.has(String(body.placement))) add("placement", String(body.placement));
+  if (body.paragraphPosition === null || Number.isInteger(body.paragraphPosition)) add("paragraph_position", body.paragraphPosition === null ? null : Number(body.paragraphPosition));
   if (body.structuredData !== undefined) { try { add("structured_data", safeStructuredData(body.structuredData)); } catch { return res.status(400).json({ error: "Invalid structured data" }); } }
   if (body.templateType && TEMPLATES.has(String(body.templateType))) { add("template_type", String(body.templateType)); if (body.sourceSvg === undefined) add("source_svg", renderSvg(String(body.templateType), safeStructuredData(body.structuredData))); }
   if (!fields.length) return res.status(400).json({ error: "No editable fields supplied" });
