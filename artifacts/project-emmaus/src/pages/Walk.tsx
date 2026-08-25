@@ -29,6 +29,7 @@ import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { getDailyRhythmStartup } from '@/lib/journeys-api';
+import { isStartupRoutingComplete, markStartupRoutingComplete } from '@/lib/startup-routing';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
@@ -468,6 +469,9 @@ export default function Walk() {
   // This is a server decision, not a browser-date/localStorage decision.
   const dailyOpenCheckedRef = useRef(false);
   useEffect(() => {
+    // Walk can remount during ordinary SPA navigation. Once bootstrap has
+    // resolved, it must never re-run the automatic Daily Rhythm redirect.
+    if (isStartupRoutingComplete()) return;
     if (loading) return;                          // wait for real data
     if (!user || user.role === 'admin' || user.role === 'superAdmin') return;
     // On a cold /walk load, auth can resolve before JourneyContext has begun
@@ -479,6 +483,7 @@ export default function Walk() {
 
     void getDailyRhythmStartup()
       .then(startup => {
+        markStartupRoutingComplete();
         if (startup.firstOpen) {
           setLocation(startup.destination);
         }
