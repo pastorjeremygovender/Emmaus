@@ -51,6 +51,8 @@ export interface ScriptureRef {
   reference: string;
   book: string;
   chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
   displayText?: string;
 }
 
@@ -80,6 +82,8 @@ export interface Recommendation {
   title: string;
   description?: string;
   path?: string;
+  resourceId?: string;
+  parentId?: string;
   sermonId?: string;
   timestampSeconds?: number;
   /** Custom badge label shown on the card (e.g. "Preached Here"). */
@@ -89,6 +93,7 @@ export interface Recommendation {
 }
 
 export interface EmmausMetadata {
+  answer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer (📖 🙏 🎧 🚶). */
@@ -96,6 +101,14 @@ export interface EmmausMetadata {
   recommendations: Recommendation[];
   followUpPrompts: string[];
   handoffType: 'pastoral' | 'crisis' | null;
+  scriptureReferences?: ScriptureRef[];
+  resourceRecommendations?: Array<{
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    reason: string;
+  }>;
+  prayer?: string | null;
 }
 
 export interface ConversationStub {

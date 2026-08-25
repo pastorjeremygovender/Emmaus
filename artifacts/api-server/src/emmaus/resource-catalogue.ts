@@ -24,7 +24,8 @@ export type EmmausResourceType =
 
 export interface EmmausResource {
   type: EmmausResourceType;
-  resourceId?: string;
+  /** Stable canonical database/content ID. Static study entries use a namespaced ID. */
+  resourceId: string;
   parentId?: string;
   title: string;
   route: string;
@@ -92,7 +93,7 @@ function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query
   return [
     makeResource({
       type: dailyRhythm ? "daily-rhythm" : type,
-      resourceId: journey.id,
+       resourceId: journey.id,
       title: journey.title,
       route,
       scripture: journey.scriptureReference,
@@ -108,6 +109,7 @@ function devotionalResources(series: DevotionalSeries, entries: DevotionalEntry[
   return [
     makeResource({
       type: "devotional",
+      resourceId: series.id,
       title: series.title,
       route: `/devotional/${series.id}/day/1`,
       description: clean(series.description) || undefined,
@@ -116,6 +118,8 @@ function devotionalResources(series: DevotionalSeries, entries: DevotionalEntry[
     }, query, bookId, chapter),
     ...entries.filter(e => e.status === "Published").map(e => makeResource({
       type: "devotional",
+      resourceId: e.id,
+      parentId: series.id,
       title: `${series.title} — ${e.title}`,
       route: `/devotional/${series.id}/day/${e.dayNumber}`,
       scripture: clean(e.scriptureReference) || undefined,
@@ -130,6 +134,7 @@ function companionResources(companion: Companion, entries: CompanionEntry[], que
   return [
     makeResource({
       type: "sermon-companion",
+      resourceId: companion.id,
       title: companion.title,
       route: `/sermon-companion/${companion.id}/overview`,
       description: companion.description,
@@ -138,6 +143,8 @@ function companionResources(companion: Companion, entries: CompanionEntry[], que
     }, query, bookId, chapter),
     ...entries.filter(e => e.status === "Published").map(e => makeResource({
       type: "sermon-companion",
+      resourceId: e.id,
+      parentId: companion.id,
       title: `${companion.title} — ${e.title}`,
       route: `/sermon-companion/${companion.id}/day/${e.dayNumber}`,
       scripture: e.scriptureReference,
@@ -151,6 +158,7 @@ function companionResources(companion: Companion, entries: CompanionEntry[], que
 function sermonResources(sermons: CanonicalSermon[], query: string, bookId?: string, chapter?: number): EmmausResource[] {
   return sermons.map(s => makeResource({
     type: "sermon",
+      resourceId: s.id,
     title: s.title,
     route: `/sermon/${s.id}`,
     scripture: s.scriptureReference,
@@ -174,6 +182,7 @@ async function studyNoteResources(query: string, bookId?: string, chapter?: numb
       const ref = `${row.book_id} ${row.chapter}:${row.verse_start}${row.verse_end ? `-${row.verse_end}` : ""}`;
       return makeResource({
         type: "bible-study",
+        resourceId: `bible-study-note:${String(row.book_id)}:${String(row.chapter)}:${String(row.verse_start)}`,
         title: clean(row.title) || `Bible Study — ${ref}`,
         route: `/bible/read/${row.book_id}/${row.chapter}`,
         scripture: ref,
@@ -257,6 +266,7 @@ export async function buildEmmausResourceCatalogue(
     const intro = BOOK_INTROS[bibleBookId];
     resources.push(makeResource({
       type: "bible-study",
+      resourceId: `bible-intro:${intro.bookId}`,
       title: `${intro.bookId} — Bible introduction`,
       route: `/bible/read/${intro.bookId}/1`,
       scripture: intro.keyVerseRef,
@@ -269,6 +279,7 @@ export async function buildEmmausResourceCatalogue(
     const overview = CHAPTER_OVERVIEWS[`${bibleBookId}:${bibleChapter}`];
     if (overview) resources.push(makeResource({
       type: "bible-study",
+      resourceId: `bible-overview:${bibleBookId}:${bibleChapter}`,
       title: `${bibleBookId} ${bibleChapter} — chapter overview`,
       route: `/bible/read/${bibleBookId}/${bibleChapter}`,
       scripture: `${bibleBookId} ${bibleChapter}`,

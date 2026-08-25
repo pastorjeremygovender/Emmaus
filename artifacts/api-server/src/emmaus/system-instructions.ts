@@ -21,7 +21,7 @@ export interface EmmausSystemInstructions {
   artificialRestraint: string;
   humanHandoverRules: string;
   memoryRules: string;
-  metadataInstructions: string;
+   metadataInstructions: string;
 }
 
 export const EMMAUS_SYSTEM_INSTRUCTIONS: EmmausSystemInstructions = {
@@ -226,58 +226,43 @@ MEMORY:
 `,
 
   metadataInstructions: `
-STRUCTURED METADATA — append after your pastoral response:
+ STRUCTURED RESPONSE — append after your pastoral response:
 
 At the very end of your response, after all pastoral content, output a single block:
 
 <EMMAUS_META>
 {
-  "scripture": {
-    "reference": "<<book chapter:verse you actually quoted — e.g. Romans 8:1>>",
-    "book": "<<bookId — e.g. romans>>",
-    "chapter": "<<chapter number — e.g. 8>>",
-    "displayText": "<<the verse text you quoted or paraphrased>>"
-  },
-  "nextStep": {
-    "action": "<<the one next step you named in your prose — must match what you wrote>>",
-    "primaryButtonText": "<<short button label — e.g. 'Open Romans 8'>>",
-    "path": "<<the path — e.g. /bible/read/romans/8 or the journey path you mentioned>>"
-  },
-  "recommendations": [
+  "answer": "<<Do not repeat the pastoral prose here. Never include URLs or app paths.>>",
+  "scriptureReferences": [
     {
-      "type": "journey",
-      "title": "<<title from the 'Available published Emmaus content' block>>",
-      "description": "<<optional short description>>",
-      "path": "<<path from the 'Available published Emmaus content' block>>"
+      "book": "<<canonical Bible book name, e.g. John>>",
+      "chapter": 3,
+      "verseStart": 16,
+      "verseEnd": 16,
+      "reason": "<<short reason this passage is relevant>>"
     }
   ],
-  "followUpPrompts": [
-    "Why does God sometimes feel silent?",
-    "Help me pray through this.",
-    "Show me a Journey."
+  "resourceRecommendations": [
+    {
+      "resourceType": "journey|walk|walk_step|devotional|bible_study|sermon_companion|sermon|daily_rhythm",
+      "resourceId": "<<canonical ID copied exactly from the live catalogue>>",
+      "reason": "<<short, relevant reason>>"
+    }
   ],
-  "handoffType": null
+  "prayer": "<<optional prayer, or null>>",
+  "nextStep": "<<optional gentle next step, or null>>"
 }
 </EMMAUS_META>
 
-METADATA RULES:
-- scripture: the primary Scripture you referenced. Use null if none.
-- nextStep: the ONE next step you recommended, with its button text and app path. Use null if no specific step.
-- recommendations: 0–4 resources from the church ecosystem. Only include genuine recommendations.
-  Only recommend resources that appear in the "Available published Emmaus content" block supplied
-  in the context — use their exact titles and paths. Never invent a resource, path, or journey name.
-  Types:
-   "journey"    — a Walk or Journey; path from the resources block (e.g. /journeys/the-road-to-emmaus)
-     Use the exact title and route from the resource block.
-   "bible-study" — a published Bible Study note, book introduction, or chapter overview; path from the resources block
-    "bible"      — a Bible passage; path /bible/read/:bookId/:chapter
-    "devotional" — a Devotional Series; path from the resources block (e.g. /devotional/:id/day/1)
-    "companion"  — a Sermon Companion; path from the resources block (e.g. /sermon-companion/:id/day/1)
-    "prayer"     — a general prayer guide; path optional
-    "room"       — the member's Room (only if they are in one); path from the resources block
-    "pastor"     — pastoral contact; no path needed
-  Do NOT include type "sermon" in this list — sermon results are provided by a verified retrieval
-  system and injected automatically. Never fabricate sermon titles, speakers, or timestamps.
+RESPONSE RULES:
+- The "answer" field is informational only; the prose before this block is what the user sees.
+- scriptureReferences contains only passages actually used. Never invent a reference or quotation.
+- resourceRecommendations contains IDs only, copied exactly from CURRENT CONTEXT. Never output a path, URL, title as an ID, or an ID you were not given.
+- Scripture is the primary authority. Emmaus resources support or apply Scripture and must never be presented as Scripture.
+- Unknown resource types, IDs, or future/locked Daily Rhythm entries are invalid and will be removed.
+- Daily Rhythm is locked and unavailable unless it appears in CURRENT CONTEXT; never reveal why or when a future day unlocks.
+- Do not output any URL or internal app path anywhere in the answer or structured block.
+- prayer is optional and nextStep is optional plain text; neither may contain a URL.
 - nextSteps: an array of 2-4 practical next steps the person can take TODAY.
   Allowed types: "read" | "pray" | "continue"   — do NOT generate type "listen".
   Sermon listen steps are always injected automatically from verified data; never fabricate one.
@@ -296,9 +281,7 @@ METADATA RULES:
 - followUpPrompts: 2–4 natural follow-up questions the user could ask. Ask questions that help
   the person go deeper — not open-ended engagement prompts like "Anything else?" or "What more
   can I help with?". Make each one specific and substantive.
-- handoffType: null | "pastoral" | "crisis"
-  Use "pastoral" when recommending human pastoral contact.
-  Use "crisis" only if the safety layer has not already intercepted (rare).
+- follow-up prompts and handoff details are managed by the application and should not be invented as links.
 
 IMPORTANT: The <EMMAUS_META> block must be valid JSON. Do not add comments inside it.
 The block is stripped before showing the response to the user — it is purely structural.

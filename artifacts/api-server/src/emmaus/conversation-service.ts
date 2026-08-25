@@ -44,7 +44,7 @@ import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
 import { logger } from "../lib/logger.js";
-import { validateCitations } from "./citation-validation.js";
+import { validateCitations, validateModelResponse } from "./citation-validation.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -316,7 +316,7 @@ export async function handleConversation(
 
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
-  // ── 3. Parallel: Bible verse search + Sermon retrieval + User memories ───
+  // ── 3. Scripture-first retrieval ─────────────────────────────────────────
   //
   // All three run concurrently — Bible search injects relevant BSB passages;
   // sermon retrieval finds a verified timestamped match; memories personalise
@@ -327,13 +327,17 @@ export async function handleConversation(
   // AE-1: resolve userId early so we can fetch memories in this parallel step.
   const preUserId = contextInput.userId ?? "anonymous";
 
-  const [biblePassages, sermonResult, userMemories, resourceCatalogue, userRooms] = await Promise.all([
-    Promise.resolve(searchBibleVerses(req.message, 5)).catch((): BiblePassage[] => []),
+  // Scripture is deliberately awaited before Emmaus resources. This ordering is
+  // part of the safety contract, not merely prompt wording.
+  const biblePassages = await Promise.resolve(searchBibleVerses(req.message, 5))
+    .catch((): BiblePassage[] => []);
+  logger.info(`[emmaus:${reqId}] scripture_retrieved count=${biblePassages.length}`);
+  const [sermonResult, userMemories, resourceCatalogue, userRooms] = await Promise.all([
     retrieveSermon(req.message, bibleBookId, bibleChapter).catch(() => null),
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
-     buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter, preUserId),
+    buildEmmausResourceCatalogue(req.message, bibleBookId, bibleChapter, preUserId),
     preUserId !== "anonymous"
       ? getRoomsForUser(preUserId).catch((): RoomSummary[] => [])
       : Promise.resolve([] as RoomSummary[]),
@@ -557,7 +561,8 @@ export async function handleConversation(
         const metaIdx = emitBuffer.indexOf(META_OPEN);
         if (metaIdx !== -1) {
           const beforeMeta = emitBuffer.slice(0, metaIdx);
-          if (beforeMeta) sseWrite(res, "text", { content: beforeMeta });
+          // Prose is emitted only after the complete response is validated below.
+          // Holding it prevents a URL split across model chunks from leaking.
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
@@ -566,7 +571,6 @@ export async function handleConversation(
             emitBuffer.length - (META_OPEN.length - 1)
           );
           if (safeLen > 0) {
-            sseWrite(res, "text", { content: emitBuffer.slice(0, safeLen) });
             emitBuffer = emitBuffer.slice(safeLen);
           }
         }
@@ -582,17 +586,15 @@ export async function handleConversation(
   }
 
   // Flush remaining buffer
-  if (!pastMetaOpen && emitBuffer) {
-    sseWrite(res, "text", { content: emitBuffer });
-  }
-
   logger.info(
     `[emmaus:${reqId}] llm_done llm_ms=${Date.now() - tLLM} total_ms=${ms()} chars=${fullResponse.length}`
   );
 
   // ── 10. Parse metadata ────────────────────────────────────────────────────
   const { cleanText, metadata } = extractMeta(fullResponse);
-  const finalMeta: EmmausResponseMetadata = metadata ?? defaultMetadata();
+  const finalMeta: EmmausResponseMetadata = metadata
+    ? validateModelResponse(metadata, resourceCatalogue.resources)
+    : defaultMetadata();
 
   if (needsPastoralNote && !finalMeta.handoffType) {
     finalMeta.handoffType = "pastoral";
@@ -618,6 +620,16 @@ export async function handleConversation(
   finalMeta.scripture = validatedMeta.scripture;
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
+
+  // Never stream untrusted model URLs. The response body is intentionally
+  // sanitized after metadata parsing and before the first text event.
+  const safeCleanText = cleanText
+    .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
+    .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  finalMeta.answer = safeCleanText;
+  if (safeCleanText) sseWrite(res, "text", { content: safeCleanText });
 
   if (sermonResult) {
     // ── Preached Here card ──────────────────────────────────────────────────

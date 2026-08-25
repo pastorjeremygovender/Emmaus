@@ -69,6 +69,21 @@ const TYPE_CONFIG: Record<
     icon: <Mic2 size={15} />,
     color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   },
+  sermon_companion: {
+    label: 'Sermon Companion',
+    icon: <Mic2 size={15} />,
+    color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  },
+  bible_study: {
+    label: 'Bible Study',
+    icon: <BookOpen size={15} />,
+    color: 'bg-primary/10 text-primary',
+  },
+  daily_rhythm: {
+    label: 'Daily Rhythm',
+    icon: <Map size={15} />,
+    color: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+  },
 };
 
 function formatTimestamp(seconds: number): string {
@@ -86,7 +101,12 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
     if (!recommendation.path) return;
     if (/^https?:\/\//i.test(recommendation.path)) {
       window.open(recommendation.path, '_blank', 'noopener noreferrer');
-    } else if (recommendation.path.startsWith('/') && !recommendation.path.startsWith('//')) {
+    } else if (
+      recommendation.path.startsWith('/') &&
+      !recommendation.path.startsWith('//') &&
+      !recommendation.path.includes('\n') &&
+      !recommendation.path.includes('\r')
+    ) {
       setLocation(recommendation.path);
     }
   }

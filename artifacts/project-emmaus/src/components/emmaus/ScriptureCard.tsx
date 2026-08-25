@@ -29,7 +29,11 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
       setUnavailable(true);
       return;
     }
-    const verse = parsed.startVerse ? `?startVerse=${parsed.startVerse}` : '';
+    const startVerse = scripture.verseStart ?? parsed.startVerse;
+    const endVerse = scripture.verseEnd ?? parsed.endVerse;
+    const verse = startVerse
+      ? `?startVerse=${startVerse}${endVerse && endVerse >= startVerse ? `&endVerse=${endVerse}` : ''}`
+      : '';
     setLocation(`/bible/read/${parsed.bookId}/${parsed.chapter}${verse}`);
   }
 

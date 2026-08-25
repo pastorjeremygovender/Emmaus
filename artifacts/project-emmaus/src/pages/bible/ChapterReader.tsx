@@ -40,6 +40,7 @@ export default function ChapterReader() {
   const journeyId      = queryParams.get('journey');
   const returnTo       = queryParams.get('returnTo');       // set when opened from Daily Rhythm
   const startVerseParam = queryParams.get('startVerse');    // set when opened with a verse ref
+  const endVerseParam = queryParams.get('endVerse');        // optional range endpoint
   const qs = journeyId ? `?journey=${journeyId}` : '';
 
   const {
@@ -552,6 +553,10 @@ export default function ChapterReader() {
             <div className="px-5 pt-8">
               {chapterData.verses.map(v => {
                 const hl = getHighlight(book.id, chapterNum, v.verse);
+                const deepLinked = startVerseParam !== null &&
+                  Number.isInteger(Number(startVerseParam)) &&
+                  v.verse >= Number(startVerseParam) &&
+                  v.verse <= (endVerseParam ? Number(endVerseParam) : Number(startVerseParam));
                 const fav = isFavourite(book.id, chapterNum, v.verse);
                 const note = getNote(book.id, chapterNum, v.verse);
                 return (
@@ -561,7 +566,8 @@ export default function ChapterReader() {
                     onClick={() => setVerseSheet({ verse: v.verse, text: v.text })}
                     className={[
                       'inline cursor-pointer leading-[1.85] transition-colors rounded-sm',
-                      hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
+                      deepLinked ? 'bg-primary/15 ring-1 ring-primary/30' :
+                        hl ? HIGHLIGHT_CLASSES[hl.color] : 'hover:bg-muted/50',
                     ].join(' ')}
                   >
                     <sup className="text-[10px] font-semibold text-primary/70 mr-0.5 select-none">{v.verse}</sup>

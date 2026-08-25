@@ -50,6 +50,8 @@ export interface ScriptureRef {
   reference: string;   // e.g. "John 3:16"
   book: string;        // e.g. "john"
   chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
   displayText?: string;
 }
 
@@ -81,10 +83,12 @@ export interface NextStepItem {
 }
 
 export interface Recommendation {
-  type: RecommendationType;
+  type: RecommendationType | EmmausResourceType;
   title: string;
   description?: string;
   path?: string;
+  resourceId?: string;
+  parentId?: string;
   sermonId?: string;
   timestampSeconds?: number;
   /** Custom badge label shown on the card (e.g. "Preached Here"). */
@@ -93,7 +97,19 @@ export interface Recommendation {
   speakerName?: string;
 }
 
+/** Resource types accepted by the validated Ask Emmaus contract. */
+export type EmmausResourceType =
+  | "sermon"
+  | "sermon_companion"
+  | "devotional"
+  | "walk"
+  | "walk_step"
+  | "journey"
+  | "bible_study"
+  | "daily_rhythm";
+
 export interface EmmausResponseMetadata {
+  answer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer rendered with emoji icons (📖 🙏 🎧 🚶).
@@ -103,6 +119,15 @@ export interface EmmausResponseMetadata {
   recommendations: Recommendation[];
   followUpPrompts: string[];
   handoffType: HandoffType;
+  /** Canonical contract fields. Kept optional for persisted pre-contract messages. */
+  scriptureReferences?: ScriptureRef[];
+  resourceRecommendations?: Array<{
+    resourceType: EmmausResourceType;
+    resourceId: string;
+    parentId?: string;
+    reason: string;
+  }>;
+  prayer?: string | null;
 }
 
 // ─── Firestore Document Interfaces ───────────────────────────────────────────
