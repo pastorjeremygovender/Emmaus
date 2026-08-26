@@ -35,7 +35,7 @@ export function StepNavigatorPage({ mode }: Props) {
   const [, setLocation] = useLocation();
   const { journeys, progress, getStepsForJourney } = useJourney();
   const [groups, setGroups] = useState<DailyRhythmGroup[]>([]);
-  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('groups');
+  const [browseMode, setBrowseMode] = useState<'groups' | 'all'>('all');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const journey =
