@@ -33,6 +33,7 @@ import { createLLMProvider, type LLMMessage } from "./llm-provider.js";
 import {
   getConversationStore,
   type EmmausResponseMetadata,
+  type EmmausResourceType as ContractResourceType,
   type NextStepItem,
   type EntryPoint,
   type EmmausMemory,
@@ -44,7 +45,7 @@ import {
 } from "./sermon-retrieval.js";
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
-import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
+import { buildEmmausResourceCatalogue, type EmmausResourceType as CatalogueResourceType } from "./resource-catalogue.js";
 import { actionsForResource } from "./action-registry.js";
 import { logger } from "../lib/logger.js";
 import {
@@ -61,6 +62,17 @@ export interface ConversationRequest {
   context?: EmmausContextInput;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
+
+const RESOURCE_TYPE_TO_CONTRACT: Record<CatalogueResourceType, ContractResourceType> = {
+  journey: "journey",
+  walk: "walk",
+  walk_step: "walk_step",
+  "bible-study": "bible_study",
+  devotional: "devotional",
+  "sermon-companion": "sermon_companion",
+  sermon: "sermon",
+  "daily-rhythm": "daily_rhythm",
+};
 
 export type SseEventType = "text" | "done" | "error";
 
@@ -698,7 +710,11 @@ export async function handleConversation(
   finalMeta.retrievalFailures = Array.from(new Set(retrievalFailures));
   finalMeta.resourceActions = resourceCatalogue.resources
     .slice(0, 28)
-    .flatMap((resource) => actionsForResource(resource));
+    .flatMap((resource) => actionsForResource(resource))
+    .map((action) => ({
+      ...action,
+      resourceType: RESOURCE_TYPE_TO_CONTRACT[action.resourceType],
+    }));
   finalMeta.sermonRecommendations = sermonResults.map((sermon) => ({
     sermonId: sermon.sermonId,
     title: sermon.title,

@@ -7,7 +7,7 @@ import {
   isSafeBatchCandidate,
   pauseCheckpoint,
 } from "../safe-indexing-policy.ts";
-import type { IndexingCheckpoint, YoutubeVideoRecord } from "../sermon-store.ts";
+import type { ImportJob, IndexingCheckpoint, YoutubeVideoRecord } from "../sermon-store.ts";
 
 const baseVideo = (overrides: Partial<YoutubeVideoRecord> = {}): YoutubeVideoRecord => ({
   id: "video-1",

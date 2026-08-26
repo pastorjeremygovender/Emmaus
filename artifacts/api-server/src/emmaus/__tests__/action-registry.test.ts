@@ -25,11 +25,11 @@ test("action resolution requires identity, tenant, and an exact eligible resourc
   assert.equal(resolveCatalogueAction({
     authenticated: false, tenantId: "icc", kind: "OPEN",
     resourceType: resource.type, resourceId: resource.resourceId,
-  }).ok, false);
+  }, []).ok, false);
   assert.equal(resolveCatalogueAction({
     authenticated: true, tenantId: "", kind: "OPEN",
     resourceType: resource.type, resourceId: resource.resourceId,
-  }).ok, false);
+  }, []).ok, false);
   assert.equal(resolveCatalogueAction({
     authenticated: true, tenantId: "icc", kind: "OPEN",
     resourceType: resource.type, resourceId: "wrong",

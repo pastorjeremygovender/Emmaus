@@ -74,8 +74,10 @@ export interface SermonSection {
 export type CreateSermonData = Omit<
   CanonicalSermon,
   "id" | "createdAt" | "updatedAt" | "publishedAt" |
-  "fullTranscript" | "sermonStartTime" | "sermonEndTime" | "detectionConfidence" | "detectionMethod"
+  "fullTranscript" | "sermonStartTime" | "sermonEndTime" | "detectionConfidence" | "detectionMethod" | "displayOrder"
 > & {
+  /** Defaults to zero in the database when omitted. */
+  displayOrder?: number;
   fullTranscript?: string;
   sermonStartTime?: string;
   sermonEndTime?: string;

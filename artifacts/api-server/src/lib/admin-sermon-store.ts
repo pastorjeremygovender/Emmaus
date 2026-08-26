@@ -41,6 +41,7 @@ export interface AdminSermonRecord {
   companionJourneyId?: string;
   /** Pastor-confirmed one-sentence Big Idea */
   mainTheme?: string;
+  displayOrder?: number;
   status: "draft" | "review" | "published";
   pastorEdited: boolean;
   updatedAt: string;

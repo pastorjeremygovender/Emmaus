@@ -109,13 +109,13 @@ router.get("/illustrations", async (req: Request, res: Response) => {
   const extra = stepId ? " AND step_id = $3" : "";
   if (stepId) values.push(stepId);
   const result = await pool.query(`SELECT * FROM illustrations WHERE content_type=$1 AND content_id=$2${extra} AND status='Approved' ORDER BY created_at DESC`, values);
-  res.json(result.rows.map(publicFields));
+  return res.json(result.rows.map(publicFields));
 });
 
 router.get("/illustrations/admin", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res); if (!userId) return;
   const result = await pool.query("SELECT * FROM illustrations ORDER BY updated_at DESC");
-  res.json(result.rows.map((row) => ({ ...publicFields(row), generationInstruction: row.generation_instruction, structuredData: row.structured_data, adminNote: row.admin_note, createdBy: row.created_by, approvedBy: row.approved_by, approvedAt: row.approved_at, createdAt: row.created_at, updatedAt: row.updated_at })));
+  return res.json(result.rows.map((row) => ({ ...publicFields(row), generationInstruction: row.generation_instruction, structuredData: row.structured_data, adminNote: row.admin_note, createdBy: row.created_by, approvedBy: row.approved_by, approvedAt: row.approved_at, createdAt: row.created_at, updatedAt: row.updated_at })));
 });
 
 router.post("/illustrations", async (req: Request, res: Response) => {
@@ -136,7 +136,7 @@ router.post("/illustrations", async (req: Request, res: Response) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Draft',$16) RETURNING *`,
     [contentType, contentId, clean(body.stepId, 200), illustrationType, templateType, sourceSvg, clean(body.displayObjectPath, 500), clean(body.thumbnailObjectPath, 500), clean(body.generationInstruction, 5000), structuredData, clean(body.caption, 500), clean(body.alternativeText, 500) ?? "", clean(body.adminNote, 5000), placement, Number.isInteger(body.paragraphPosition) ? body.paragraphPosition : null, userId],
   );
-  res.status(201).json(publicFields(result.rows[0]));
+  return res.status(201).json(publicFields(result.rows[0]));
 });
 
 router.patch("/illustrations/:id", async (req: Request, res: Response) => {
@@ -155,21 +155,21 @@ router.patch("/illustrations/:id", async (req: Request, res: Response) => {
   values.push(id);
   const result = await pool.query(`UPDATE illustrations SET ${fields.join(",")} WHERE id=$${values.length} RETURNING *`, values);
   if (!result.rowCount) return res.status(404).json({ error: "Illustration not found" });
-  res.json(publicFields(result.rows[0]));
+  return res.json(publicFields(result.rows[0]));
 });
 
 router.post("/illustrations/:id/approve", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res); if (!userId) return;
   const result = await pool.query("UPDATE illustrations SET status='Approved', approved_by=$1, approved_at=NOW(), updated_at=NOW() WHERE id=$2 RETURNING *", [userId, String(req.params.id)]);
   if (!result.rowCount) return res.status(404).json({ error: "Illustration not found" });
-  res.json(publicFields(result.rows[0]));
+  return res.json(publicFields(result.rows[0]));
 });
 
 router.post("/illustrations/:id/unapprove", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res); if (!userId) return;
   const result = await pool.query("UPDATE illustrations SET status='Draft', approved_by=NULL, approved_at=NULL, updated_at=NOW() WHERE id=$1 RETURNING *", [String(req.params.id)]);
   if (!result.rowCount) return res.status(404).json({ error: "Illustration not found" });
-  res.json(publicFields(result.rows[0]));
+  return res.json(publicFields(result.rows[0]));
 });
 
 router.post("/illustrations/upload-url", async (req: Request, res: Response) => {
@@ -180,8 +180,8 @@ router.post("/illustrations/upload-url", async (req: Request, res: Response) => 
   }
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    res.json({ uploadURL, objectPath: objectStorageService.normalizeObjectEntityPath(uploadURL) });
-  } catch { res.status(500).json({ error: "Could not prepare secure upload" }); }
+    return res.json({ uploadURL, objectPath: objectStorageService.normalizeObjectEntityPath(uploadURL) });
+  } catch { return res.status(500).json({ error: "Could not prepare secure upload" }); }
 });
 
 router.post("/illustrations/:id/generate", async (req: Request, res: Response) => {
@@ -208,7 +208,7 @@ router.post("/illustrations/:id/generate", async (req: Request, res: Response) =
   }
   const row = claimed.rows[0];
   void generateArtisticScene(id, instruction, style, String(row.alternative_text ?? ""));
-  res.status(202).json(publicFields(row));
+  return res.status(202).json(publicFields(row));
 });
 
 router.post("/illustrations/:id/regenerate", async (req: Request, res: Response) => {
@@ -232,14 +232,14 @@ router.post("/illustrations/:id/regenerate", async (req: Request, res: Response)
   if (row.illustration_type !== "accurate-visual" || !row.template_type) return res.status(400).json({ error: "Only Accurate Visuals or Artistic Scenes can be regenerated" });
   const sourceSvg = renderSvg(row.template_type, safeStructuredData(row.structured_data));
   const result = await pool.query("UPDATE illustrations SET source_svg=$1, status='Draft', approved_by=NULL, approved_at=NULL, updated_at=NOW() WHERE id=$2 RETURNING *", [sourceSvg, String(req.params.id)]);
-  res.json(publicFields(result.rows[0]));
+  return res.json(publicFields(result.rows[0]));
 });
 
 router.delete("/illustrations/:id", async (req: Request, res: Response) => {
   const userId = requireAdmin(req, res); if (!userId) return;
   const result = await pool.query("DELETE FROM illustrations WHERE id=$1 RETURNING id", [String(req.params.id)]);
   if (!result.rowCount) return res.status(404).json({ error: "Illustration not found" });
-  res.status(204).end();
+  return res.status(204).end();
 });
 
 export default router;

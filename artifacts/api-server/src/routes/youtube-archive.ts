@@ -522,6 +522,10 @@ async function startSafeBatch(res: Response, resume: boolean): Promise<void> {
       (job.status === "running" || job.status === "queued") &&
       job.options?.mode === "safe-batch"
     );
+    if (!activeJob) {
+      res.status(409).json({ error: "A safe indexing batch is already running." });
+      return;
+    }
     res.status(409).json({ error: "A safe indexing batch is already running.", jobId: activeJob.id });
     return;
   }
