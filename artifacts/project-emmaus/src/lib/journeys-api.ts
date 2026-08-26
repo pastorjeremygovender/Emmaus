@@ -185,6 +185,7 @@ export type DailyRhythmStartup = {
   decisionId: string | null;
   launchSessionId: string;
   diagnosticReference?: string;
+  timings?: Record<string, number>;
 };
 
 function isValidDailyRhythmStartup(
@@ -235,6 +236,7 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
     startupSession: startupSession.slice(0, 12),
     path: '/api/journeys/daily-rhythm/startup',
   });
+  const requestStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const res = await fetch(getApiUrl('/api/journeys/daily-rhythm/startup'), {
     credentials: 'include',
     cache: 'no-store',
@@ -242,6 +244,16 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
     signal: options?.signal,
   });
   const body = await res.json().catch(() => null) as Partial<DailyRhythmStartup> & { error?: string };
+  const requestDurationMs = Math.round(
+    (typeof performance !== 'undefined' ? performance.now() : Date.now()) - requestStartedAt,
+  );
+  console.debug('[DailyOpen]', {
+    phase: 'startup-response',
+    startupSession: startupSession.slice(0, 12),
+    durationMs: requestDurationMs,
+    state: body?.state,
+    timings: body?.timings,
+  });
   if (!res.ok || body?.state === 'OPENING_ERROR') {
     const error = new Error(body?.error || 'Could not resolve Daily Rhythm startup') as Error & {
       code?: string;
@@ -262,6 +274,12 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
   }
   return body as DailyRhythmStartup;
 }
+
+export type CompleteStepResponse = {
+  progress: Progress;
+  dailyRhythmStartup?: DailyRhythmStartup | null;
+  dailyRhythmState?: DailyRhythmState | null;
+};
 
 export type SearchResult = {
   journeys: Journey[];
