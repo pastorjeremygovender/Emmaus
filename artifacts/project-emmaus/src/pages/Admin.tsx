@@ -75,7 +75,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; Icon: React.ElementType }[] 
 // ─── Admin shell ──────────────────────────────────────────────────────────────
 
 export default function Admin() {
-  const { user, isDemoMode } = useAuth();
+  const { user, isDemoMode, signOut } = useAuth();
   const [, setLocation] = useLocation();
   const [nav, setNav] = useState<AdminNav>({ section: 'dashboard' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -209,6 +209,15 @@ export default function Admin() {
         >
           <ArrowLeft size={16} className="text-gray-400" />
           Back to App
+        </button>
+        <button
+          onClick={async () => {
+            await signOut();
+            setLocation('/');
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+        >
+          Sign out
         </button>
       </div>
     </nav>

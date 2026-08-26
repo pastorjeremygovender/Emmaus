@@ -231,10 +231,14 @@ export default function DailyRhythmDay() {
     if (completing) return;
     setCompleting(true);
     try {
-      await completeStep(journeyId, day, '');
+      const completion = await completeStep(journeyId, day, '');
       setPostCompletionDestination(consumeOpeningDestination('/walk'));
-      window.dispatchEvent(new Event('emmaus:opening-completed'));
       setJustCompleted(true);
+      if (completion.dailyRhythmStartup?.state === 'COMPLETED') {
+        window.dispatchEvent(new CustomEvent('emmaus:opening-completed', {
+          detail: { decision: completion.dailyRhythmStartup },
+        }));
+      }
     } finally {
       setCompleting(false);
     }

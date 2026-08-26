@@ -104,6 +104,7 @@ router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response)
       state: result.state,
       decisionId: result.decisionId,
       returnedDestination: result.destination,
+      timings: result.timings,
     });
     res.json(result);
   } catch (err) {
@@ -1115,14 +1116,28 @@ router.post("/journeys/:id/progress/start", async (req: Request, res: Response) 
 router.post("/journeys/:id/progress/complete-step", async (req: Request, res: Response) => {
   const userId = resolveUserId(req);
   if (!userId) { res.status(400).json({ error: "userId is required" }); return; }
+  const journeyId = String(req.params["id"]);
   const { day, reflectionText } = req.body as { day: number; reflectionText?: string };
   if (!Number.isInteger(day) || day < 0) {
     res.status(400).json({ error: "day is required" });
     return;
   }
   try {
-    const prog = await store.completeStep(userId, String(req.params["id"]), day, reflectionText);
-    res.json(prog);
+    const prog = await store.completeStep(userId, journeyId, day, reflectionText);
+    const journey = await store.getJourney(journeyId);
+    const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
+    if (!isDailyRhythm) {
+      res.json({ progress: prog });
+      return;
+    }
+
+    // Return the same server-authoritative opening decision that now reflects
+    // the committed completion. The client can update the gate in-place instead
+    // of clearing it and remounting the completion screen.
+    const startupSession = String(req.get("x-emmaus-startup-session") ?? "");
+    const dailyRhythmStartup = await store.getDailyRhythmStartup(userId, startupSession);
+    const dailyRhythmState = await store.getDailyRhythmState(userId);
+    res.json({ progress: prog, dailyRhythmStartup, dailyRhythmState });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not complete step";
     if (message.includes("Daily Rhythm step is locked")) {

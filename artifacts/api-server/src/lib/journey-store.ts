@@ -183,6 +183,7 @@ export interface DailyRhythmStartup {
   decisionId: string | null;
   launchSessionId: string;
   diagnosticReference?: string;
+  timings?: Record<string, number>;
 }
 
 export interface DailyRhythmState {
@@ -1201,8 +1202,14 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     throw new Error("DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE");
   }
   const client = await pool.connect();
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  const mark = (name: string, phaseStartedAt: number) => {
+    timings[name] = Math.round(performance.now() - phaseStartedAt);
+  };
   try {
     await client.query("BEGIN");
+    const assignmentStartedAt = performance.now();
     const journeyResult = await client.query(
       `SELECT id FROM journeys
        WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
@@ -1213,7 +1220,9 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     if (!journeyId) {
       throw new Error("DAILY_RHYTHM_CONTENT_MISSING");
     }
+    mark("assignment_lookup", assignmentStartedAt);
 
+    const profileStartedAt = performance.now();
     const profileResult = await client.query(
       `SELECT timezone FROM user_profiles
        WHERE auth_subject = $1 OR email = $1
@@ -1225,7 +1234,9 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     const now = new Date();
     const today = calendarDateInTimezone(now, timezone);
     const requestedSession = startupSessionId.trim().slice(0, 160) || randomUUID();
+    mark("profile_timezone", profileStartedAt);
 
+    const progressStartedAt = performance.now();
     let progressResult = await client.query(
       `SELECT * FROM user_journey_progress
        WHERE user_id = $1 AND journey_id = $2
@@ -1286,6 +1297,7 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       );
       row.daily_rhythm_timezone = storedTimezone;
     }
+    mark("progress_lookup_or_create", progressStartedAt);
     const unlockDate = row.daily_rhythm_unlock_at
       ? calendarDateInTimezone(new Date(row.daily_rhythm_unlock_at), storedTimezone)
       : today;
@@ -1316,7 +1328,9 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
         )).rows[0];
       }
     }
+    mark("unlock_resolution", progressStartedAt);
 
+    const targetStepStartedAt = performance.now();
     const stepResult = await client.query(
       `SELECT id, day FROM journey_steps
          WHERE journey_id = $1 AND day = $2 AND status = 'Published'
@@ -1325,7 +1339,9 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       [journeyId, Number(row.current_day || 1)],
     );
     if (!stepResult.rows[0]) throw new Error("DAILY_RHYTHM_CONTENT_UNAVAILABLE");
+    mark("target_step_lookup", targetStepStartedAt);
 
+    const ledgerStartedAt = performance.now();
     const existingLedger = await client.query(
       `SELECT * FROM daily_rhythm_opening_ledger
         WHERE user_id = $1 AND local_date = $2
@@ -1362,6 +1378,7 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     }
 
     if (!ledger) throw new Error("DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE");
+    mark("opening_ledger_lookup_or_create", ledgerStartedAt);
     const completedToday = Boolean(ledger.completed_today);
     const state = completedToday ? "COMPLETED" : "OPENING_REQUIRED";
     const destination = completedToday ? "/walk" : String(ledger.destination);
@@ -1379,6 +1396,7 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       row.daily_rhythm_startup_date = today;
     }
     await client.query("COMMIT");
+    mark("commit", startedAt);
     return {
       firstOpen: !completedToday && (firstOpen || sameLaunch),
       destination,
@@ -1396,6 +1414,10 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       reason: String(ledger.reason),
       decisionId: String(ledger.decision_id),
       launchSessionId: String(ledger.launch_session_id || requestedSession),
+      timings: {
+        ...timings,
+        total: Math.round(performance.now() - startedAt),
+      },
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);

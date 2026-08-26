@@ -137,7 +137,11 @@ type JourneyContextType = {
   getJourney: (id: string) => Journey | undefined;
   getStep: (journeyId: string, day: number) => Step | undefined;
   getStepsForJourney: (journeyId: string) => Step[];
-  completeStep: (journeyId: string, day: number, reflectionText: string) => Promise<void>;
+  completeStep: (
+    journeyId: string,
+    day: number,
+    reflectionText: string,
+  ) => Promise<api.CompleteStepResponse>;
   startJourney: (journeyId: string) => Promise<void>;
   // Admin mutations — return promises so callers can await and handle errors
   updateJourney: (journey: Journey) => Promise<Journey>;
@@ -191,66 +195,97 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
 
     async function init() {
       setLoading(true);
+      const bootstrapStartedAt = performance.now();
+      const timings: Record<string, number> = {};
+      const mark = (name: string, startedAt: number) => {
+        timings[name] = Math.round(performance.now() - startedAt);
+      };
       try {
         // Admins and super-admins get all journeys (any status); users get published only
+        const catalogueStartedAt = performance.now();
         const jList = (user?.role === 'admin' || user?.role === 'superAdmin')
           ? await api.listJourneys()
           : await api.listPublishedJourneys();
+        mark('catalogue', catalogueStartedAt);
 
         if (cancelled) return;
         setJourneys(jList);
 
-        // Fetch steps for all journeys
-        const allSteps: Step[] = [];
-        for (const j of jList) {
-          if (cancelled || activeSubjectRef.current !== subject) return;
-          try {
-            const jSteps = await api.listSteps(j.id);
-            allSteps.push(...jSteps);
-          } catch {
-            // ignore per-journey step errors
-          }
-        }
-        if (cancelled || activeSubjectRef.current !== subject) return;
-        // Admins and super-admins see all steps (Draft + Published).
-        // Members see only Published steps. Step status is now kept in sync with the parent
-        // journey by the server (createStep inherits parent status), so this simple filter
-        // is the canonical gate — no client-side parent-status override needed.
         const isAdmin = user?.role === 'admin' || user?.role === 'superAdmin';
-        setSteps(isAdmin ? allSteps : allSteps.filter(s => s.status === 'Published'));
-
-        // Fetch progress for logged-in users
-        if (subject) {
+        const dailyJourney = jList.find(j =>
+          j.journeyType === 'daily-rhythm' || j.journeyType === 'core',
+        );
+        const loadSteps = async (journey: Journey): Promise<Step[]> => {
           try {
-            const prog = await api.getAllProgress();
-            if (!cancelled && activeSubjectRef.current === subject) {
-              setProgress(prog);
-            }
-            try {
-              const rhythm = await api.getDailyRhythmState();
-              if (!cancelled && activeSubjectRef.current === subject) {
-                setProgress(rhythm?.progress ? { ...prog, [rhythm.journeyId]: rhythm.progress } : prog);
-                setDailyRhythmState(rhythm);
-              }
-            } catch (stateError) {
-              // Keep the normal progress snapshot usable during a rolling
-              // deployment or if the optional canonical endpoint is delayed.
-              console.warn('[Daily Rhythm] canonical state unavailable; using progress snapshot', stateError);
-            }
+            return await api.listSteps(journey.id);
           } catch {
-            // ignore progress fetch errors
+            return [];
           }
+        };
 
-          // Load reflections from localStorage (local cache)
+        const progressStartedAt = performance.now();
+        const progressPromise = api.getAllProgress().catch(() => null);
+        const rhythmPromise = api.getDailyRhythmState().catch(stateError => {
+          console.warn('[Daily Rhythm] canonical state unavailable; using progress snapshot', stateError);
+          return null;
+        });
+        const dailyStepsPromise = dailyJourney ? loadSteps(dailyJourney) : Promise.resolve([]);
+        const [prog, rhythm, dailySteps] = await Promise.all([
+          progressPromise,
+          rhythmPromise,
+          dailyStepsPromise,
+        ]);
+        mark('progress-and-daily-step', progressStartedAt);
+
+        if (cancelled || activeSubjectRef.current !== subject) return;
+        const visibleDailySteps = isAdmin
+          ? dailySteps
+          : dailySteps.filter(s => s.status === 'Published');
+        setSteps(visibleDailySteps);
+        if (prog) setProgress(prog);
+        if (rhythm) {
+          setProgress(previous => ({ ...(prog ?? previous), [rhythm.journeyId]: rhythm.progress ?? previous[rhythm.journeyId] }));
+          setDailyRhythmState(rhythm);
+        }
+
+        // The opening only needs the canonical journey and its current step.
+        // Remaining journey steps load in parallel after the first useful screen
+        // can render, instead of blocking every member on the full catalogue.
+        const remainingJourneys = dailyJourney
+          ? jList.filter(j => j.id !== dailyJourney.id)
+          : jList;
+        if (remainingJourneys.length > 0) {
+          const loadRemaining = async () => {
+            const remaining = await Promise.all(remainingJourneys.map(loadSteps));
+            if (cancelled || activeSubjectRef.current !== subject) return;
+            const visibleRemaining = (isAdmin ? remaining.flat() : remaining.flat().filter(s => s.status === 'Published'));
+            setSteps(previous => [...previous, ...visibleRemaining]);
+            console.debug('[JourneyBootstrap]', {
+              phase: 'secondary-content-ready',
+              durationMs: Math.round(performance.now() - bootstrapStartedAt),
+              journeyCount: remainingJourneys.length,
+            });
+          };
+          void loadRemaining();
+        }
+
+        if (subject) {
           const localRef = localStorage.getItem(accountStorageKey('emmaus_reflections', subject));
           if (localRef && !cancelled && activeSubjectRef.current === subject) {
             try {
               setReflections(JSON.parse(localRef));
             } catch {
-              // ignore
+              // ignore malformed local cache
             }
           }
         }
+        console.debug('[JourneyBootstrap]', {
+          phase: 'primary-content-ready',
+          durationMs: Math.round(performance.now() - bootstrapStartedAt),
+          timings,
+          journeyCount: jList.length,
+          primaryStepCount: visibleDailySteps.length,
+        });
       } catch (err) {
         console.error('Failed to load journeys:', err);
       } finally {
@@ -336,8 +371,12 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   );
 
   const completeStep = useCallback(
-    async (journeyId: string, day: number, reflectionText: string): Promise<void> => {
-      if (!user?.id) return;
+    async (
+      journeyId: string,
+      day: number,
+      reflectionText: string,
+    ): Promise<api.CompleteStepResponse> => {
+      if (!user?.id) throw new Error('Not signed in');
       const subject = user.id;
 
       const isDailyRhythm = journeys.find(j => j.id === journeyId)?.journeyType === 'daily-rhythm'
@@ -376,18 +415,22 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const prog = await api.completeStep(journeyId, day, reflectionText);
-        if (activeSubjectRef.current !== subject) return;
+        const completion = await api.completeStep(journeyId, day, reflectionText);
+        if (activeSubjectRef.current !== subject) return completion;
+        const prog = completion.progress;
         setProgress(p => ({ ...p, [journeyId]: prog }));
         if (isDailyRhythm) {
-          const rhythm = await api.getDailyRhythmState();
           if (activeSubjectRef.current === subject) {
-            setDailyRhythmState(rhythm);
-            if (rhythm?.progress) {
-              setProgress(p => ({ ...p, [rhythm.journeyId]: rhythm.progress! }));
+            setDailyRhythmState(completion.dailyRhythmState ?? null);
+            if (completion.dailyRhythmState?.progress) {
+              setProgress(p => ({
+                ...p,
+                [completion.dailyRhythmState!.journeyId]: completion.dailyRhythmState!.progress!,
+              }));
             }
           }
         }
+        return completion;
       } catch (err) {
         console.error('[Emmaus] completeStep server sync failed:', err);
         throw err;

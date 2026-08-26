@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import App from '@/App';
 
 const mocks = vi.hoisted(() => ({
@@ -92,7 +93,32 @@ vi.mock('@/pages/Walk', () => ({
 }));
 
 vi.mock('@/pages/DailyRhythmDay', () => ({
-  default: () => <div data-testid="page-daily-rhythm">Daily Rhythm opening</div>,
+  default: () => {
+    const [completed, setCompleted] = useState(false);
+    return completed ? (
+      <div data-testid="daily-completion-card">Today is complete</div>
+    ) : (
+      <div data-testid="page-daily-rhythm">
+        <button
+          type="button"
+          onClick={() => {
+            setCompleted(true);
+            window.dispatchEvent(new CustomEvent('emmaus:opening-completed', {
+              detail: {
+                decision: {
+                  state: 'COMPLETED',
+                  destination: '/walk',
+                  assignedDay: 1,
+                },
+              },
+            }));
+          }}
+        >
+          Complete today
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/pages/Personal', () => ({
@@ -128,6 +154,7 @@ describe('authenticated browser path matrix', () => {
     vi.clearAllMocks();
     cleanup();
     sessionStorage.clear();
+    sessionStorage.setItem('emmaus_splash_shown', 'true');
     window.scrollTo = vi.fn();
     openAt('/');
     mocks.auth.user = {
@@ -153,6 +180,17 @@ describe('authenticated browser path matrix', () => {
     expect(screen.queryByTestId('page-walk')).not.toBeInTheDocument();
     await waitFor(() => expect(window.location.pathname).toBe('/daily-rhythm/day/1'));
     expect(screen.getByTestId('page-daily-rhythm')).toBeInTheDocument();
+  });
+
+  it('keeps the rendered completion card mounted after the reader reports completion', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('page-daily-rhythm')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Complete today' }));
+
+    expect(screen.getByTestId('daily-completion-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('page-walk')).not.toBeInTheDocument();
+    expect(mocks.startup).toHaveBeenCalledTimes(1);
   });
 
   it('holds a deep link until the server confirms the opening is complete', async () => {
@@ -228,6 +266,16 @@ describe('authenticated browser path matrix', () => {
 
   it('lets an admin explicitly open /admin without a member opening request', async () => {
     mocks.auth.user.role = 'admin';
+    openAt('/admin');
+
+    render(<App />);
+
+    expect(screen.getByTestId('page-admin')).toBeInTheDocument();
+    expect(mocks.startup).not.toHaveBeenCalled();
+  });
+
+  it('lets a super-admin explicitly open /admin without a member opening request', async () => {
+    mocks.auth.user.role = 'superAdmin';
     openAt('/admin');
 
     render(<App />);

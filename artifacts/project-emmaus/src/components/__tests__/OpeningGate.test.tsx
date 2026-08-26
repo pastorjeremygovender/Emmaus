@@ -39,6 +39,9 @@ describe('OpeningGate', () => {
       loadingProfile: false,
     };
     sessionStorage.clear();
+    // Route assertions model an in-session navigation. Cold-launch splash
+    // presentation has its own regression coverage below.
+    sessionStorage.setItem('emmaus_splash_shown', 'true');
     getDailyRhythmStartup.mockResolvedValue({
       state: 'OPENING_REQUIRED',
       destination: '/daily-rhythm/day/1',
@@ -125,5 +128,35 @@ describe('OpeningGate', () => {
     expect(safeOpeningDestination('/admin')).toBeNull();
     expect(safeOpeningDestination('/auth/callback?mode=recovery')).toBeNull();
     expect(safeOpeningDestination('/walk?tab=today')).toBe('/walk?tab=today');
+  });
+
+  it('shows the branded splash during a cold opening instead of a blank screen', async () => {
+    sessionStorage.clear();
+    const pendingStartup = new Promise<never>(() => {});
+    getDailyRhythmStartup.mockReturnValueOnce(pendingStartup);
+
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    expect(screen.getByRole('status', { name: 'Emmaus is loading' })).toBeInTheDocument();
+    expect(screen.queryByText('member content')).not.toBeInTheDocument();
+  });
+
+  it('keeps a completed decision in place when the reader reports completion', async () => {
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('emmaus:opening-completed', {
+        detail: {
+          decision: {
+            state: 'COMPLETED',
+            destination: '/walk',
+            assignedDay: 1,
+          },
+        },
+      }));
+    });
+
+    expect(screen.getByText('member content')).toBeInTheDocument();
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
   });
 });

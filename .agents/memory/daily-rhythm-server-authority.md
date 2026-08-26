@@ -14,3 +14,9 @@ The opening ledger is the single launch authority. Authenticated members at `/`,
 **Why:** Treating `/` or an authenticated invite as public allowed a member to remain on the splash or jump directly into a group, bypassing the required opening.
 
 **How to apply:** Keep Welcome limited to splash/auth/onboarding concerns, preserve validated invite/deep-link destinations separately from the server decision, and fail closed when the opening request cannot be resolved.
+
+Completion must return the committed opening decision to the client, and the gate must accept that decision in place while the completion card remains mounted. The cold-launch brand presentation belongs to the application gate, not to Welcome.
+
+**Why:** Clearing the gate after completion unmounted the reader before the member could choose where to go, while a splash owned by Welcome was skipped whenever the gate blocked an authenticated cold launch.
+
+**How to apply:** Treat `emmaus:opening-completed` as a handoff of the server response, not as a request to re-resolve startup; keep the splash animation independent from route authority and only fade it after auth/opening readiness.

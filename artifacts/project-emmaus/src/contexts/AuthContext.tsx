@@ -112,6 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     options: { preserveUi?: boolean } = {},
   ): Promise<void> => {
     const preserveUi = options.preserveUi === true;
+    // Focus/pageshow/visibility can all fire during one cold restore. Avoid
+    // aborting and replacing the request that is already establishing identity.
+    if (preserveUi && activeRequestRef.current) return;
     const generation = requestGenerationRef.current + 1;
     requestGenerationRef.current = generation;
     activeRequestRef.current?.abort();
@@ -125,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
+      const startedAt = performance.now();
       const response = await fetch(getApiUrl("/api/auth/user"), {
         credentials: "include",
         cache: "no-store",
@@ -135,6 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: ServerAuthUser | null;
         passwordRecovery?: boolean;
       };
+      console.debug("[AuthBootstrap]", {
+        phase: "identity-profile-ready",
+        durationMs: Math.round(performance.now() - startedAt),
+        authenticated: Boolean(serverUser),
+      });
       if (requestGenerationRef.current !== generation) return;
 
       const rememberedSubject =

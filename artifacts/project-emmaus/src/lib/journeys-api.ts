@@ -688,10 +688,17 @@ export async function completeStep(
   journeyId: string,
   day: number,
   reflectionText?: string
-): Promise<Progress> {
-  return apiFetch<Progress>(
+): Promise<CompleteStepResponse> {
+  const startupSession = sessionStorage.getItem('emmaus_daily_startup_session_v1');
+  return apiFetch<CompleteStepResponse>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/complete-step`,
-    { method: 'POST', body: JSON.stringify({ day, reflectionText }) }
+    {
+      method: 'POST',
+      body: JSON.stringify({ day, reflectionText }),
+      headers: startupSession
+        ? { 'X-Emmaus-Startup-Session': startupSession }
+        : undefined,
+    }
   );
 }
 

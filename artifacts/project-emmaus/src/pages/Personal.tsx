@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
   LogOut, Pencil, Check, X, ChevronRight, Moon, Sun,
-  Star, Clock, BookOpen, Headphones, Map, Users,
+  Star, Clock, BookOpen, Headphones, Map, Users, ShieldCheck,
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -244,6 +244,20 @@ export default function Personal() {
             </p>
           </div>
         </header>
+
+        {(user.role === 'admin' || user.role === 'superAdmin') && (
+          <button
+            type="button"
+            onClick={() => setLocation('/admin')}
+            className="w-full flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-primary hover:bg-primary/10 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-[13px] font-medium">
+              <ShieldCheck size={16} aria-hidden="true" />
+              Admin panel
+            </span>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
 
         {/* Unified Ask Emmaus / Search bar */}
         <UnifiedEmmausInput launchOnly className="mt-4" />

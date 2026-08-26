@@ -666,7 +666,7 @@ export default function Walk() {
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       {devMode && <DevModeBanner />}
-      {user.role === 'admin' && !devMode && (
+      {(user.role === 'admin' || user.role === 'superAdmin') && !devMode && (
         <div className="bg-primary text-primary-foreground text-xs py-1.5 text-center font-medium">
           Admin mode —{' '}
           <Link href="/admin" className="underline">Go to Admin</Link>

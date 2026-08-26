@@ -6,6 +6,10 @@ import {
   consumeOpeningDestination,
   rememberOpeningDestination,
 } from '@/lib/opening-destination';
+import BrandedSplash, {
+  SPLASH_FADE_MS,
+  SPLASH_STORAGE_KEY,
+} from '@/components/BrandedSplash';
 
 function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
@@ -64,6 +68,9 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const [decision, setDecision] = useState<DailyRhythmStartup | null>(null);
   const [error, setError] = useState<Error & { diagnosticReference?: string } | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [splashPhase, setSplashPhase] = useState<'visible' | 'fading' | 'done'>(() => (
+    sessionStorage.getItem(SPLASH_STORAGE_KEY) === 'true' ? 'done' : 'visible'
+  ));
   const requestedPathRef = useRef<string | null>(null);
 
   const pathname = location.split('?')[0];
@@ -82,7 +89,13 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const refresh = () => {
+    const refresh = (event: Event) => {
+      const completedDecision = (event as CustomEvent<{ decision?: DailyRhythmStartup }>).detail?.decision;
+      if (completedDecision?.state === 'COMPLETED') {
+        setDecision(completedDecision);
+        setError(null);
+        return;
+      }
       setDecision(null);
       setError(null);
       setRetryKey(value => value + 1);
@@ -174,6 +187,29 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       setLocation(consumeOpeningDestination('/walk'), { replace: true });
     }
   }, [decision, pathname, user, needsOnboarding, needsRecovery, setLocation]);
+
+  const openingReady = !authLoading &&
+    !loadingProfile &&
+    (!needsOpening || Boolean(decision) || Boolean(error));
+
+  useEffect(() => {
+    if (splashPhase !== 'visible' || !openingReady) return;
+    sessionStorage.setItem(SPLASH_STORAGE_KEY, 'true');
+    setSplashPhase('fading');
+  }, [openingReady, splashPhase]);
+
+  useEffect(() => {
+    if (splashPhase !== 'fading') return;
+    const timer = window.setTimeout(() => setSplashPhase('done'), SPLASH_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [splashPhase]);
+
+  if (error && user && needsOpening) {
+    return <OpeningError reference={error.diagnosticReference} onRetry={retry} />;
+  }
+  if (splashPhase !== 'done') {
+    return <BrandedSplash fading={splashPhase === 'fading'} />;
+  }
 
   if (!user || (isAdminPath(pathname) && !needsRecovery) || authenticatedExempt) {
     return <>{children}</>;
