@@ -293,6 +293,19 @@ function extractMeta(fullText: string): {
   }
 }
 
+/**
+ * Sermon prose is only trusted when retrieval supplied a verified sermon.
+ * The model prompt asks it not to invent sermon connections, but the final
+ * response still needs a transport-level guard because model compliance is
+ * not an authorization boundary.
+ */
+function stripUnverifiedSermonMentions(text: string): string {
+  return text
+    .split(/(?<=[.!?])\s+/u)
+    .filter((sentence) => !/\b(?:sermon|preach(?:ed|es|ing)?|preacher)\b/i.test(sentence))
+    .join(" ");
+}
+
 function defaultMetadata(): EmmausResponseMetadata {
   return {
     scripture: null,
@@ -771,12 +784,15 @@ export async function handleConversation(
     .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+  const safeAnswer = sermonResults.length === 0
+    ? stripUnverifiedSermonMentions(safeCleanText)
+    : safeCleanText;
 
   // The model sometimes mentions additional passages in prose without
   // repeating them in scriptureReferences. Promote any exact BSB references
   // it actually named into the trusted citation set so every quoted passage
   // can still be rendered as a clickable citation.
-  const proseScriptures = extractValidatedScriptureReferences(safeCleanText);
+  const proseScriptures = extractValidatedScriptureReferences(safeAnswer);
   const modelScriptureKeys = new Set(
     (finalMeta.scriptureReferences ?? []).map(ref => ref.reference.toLowerCase()),
   );
@@ -795,8 +811,13 @@ export async function handleConversation(
     ).values(),
   );
   if (!finalMeta.scripture && proseScriptures[0]) finalMeta.scripture = proseScriptures[0];
-  finalMeta.answer = safeCleanText;
-  if (safeCleanText) sseWrite(res, "text", { content: safeCleanText });
+  if (sermonResults.length === 0) {
+    // A "listen" item is a sermon action and must be server-verified just
+    // like sermonRecommendations. The model is never allowed to create one.
+    finalMeta.nextSteps = finalMeta.nextSteps.filter((step) => step.type !== "listen");
+  }
+  finalMeta.answer = safeAnswer;
+  if (safeAnswer) sseWrite(res, "text", { content: safeAnswer });
 
   if (sermonResult) {
     // ── Preached Here card ──────────────────────────────────────────────────
@@ -837,7 +858,7 @@ export async function handleConversation(
     conversationId,
     userId,
     role: "assistant",
-    content: cleanText,
+    content: safeAnswer,
     metadata: finalMeta,
     promptVersion: PROMPT_VERSION,
     entryPoint: builtCtx.entryPoint,
