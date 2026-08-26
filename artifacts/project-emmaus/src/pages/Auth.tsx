@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { resetStartupRouting } from "@/lib/startup-routing";
 
 type AuthMode = "signin" | "register" | "forgot";
 
@@ -40,6 +41,12 @@ export default function Auth() {
 
   useEffect(() => {
     if (!user) return;
+    // Auth can be reached after a previous account's startup guard was
+    // completed. Reset it before sending members through Welcome so the new
+    // session gets its Daily Rhythm first-open decision.
+    if (user.role !== "admin" && user.role !== "superAdmin") {
+      resetStartupRouting();
+    }
     setLocation(
       user.role === "admin" || user.role === "superAdmin" ? "/admin" : "/",
     );

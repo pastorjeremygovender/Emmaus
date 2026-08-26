@@ -169,6 +169,9 @@ export type Progress = {
 
 export type DailyRhythmStartup = {
   firstOpen: boolean;
+  destination: string;
+  openingStateMutated: boolean;
+  previousLastDailyOpenDate?: string | null;
   journeyId: string | null;
   currentDay: number | null;
   progress: Progress | null;
@@ -192,7 +195,7 @@ export async function getDailyRhythmState(): Promise<DailyRhythmState | null> {
   return apiFetch<DailyRhythmState | null>('/api/journeys/daily-rhythm/state');
 }
 
-export async function getDailyRhythmStartup(): Promise<DailyRhythmStartup> {
+export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }): Promise<DailyRhythmStartup> {
   const key = 'emmaus_daily_startup_session_v1';
   let startupSession = sessionStorage.getItem(key);
   if (!startupSession) {
@@ -208,6 +211,7 @@ export async function getDailyRhythmStartup(): Promise<DailyRhythmStartup> {
     credentials: 'include',
     cache: 'no-store',
     headers: { 'X-Emmaus-Startup-Session': startupSession },
+    signal: options?.signal,
   });
   if (!res.ok) throw new Error('Could not resolve Daily Rhythm startup');
   return res.json() as Promise<DailyRhythmStartup>;

@@ -468,6 +468,7 @@ export default function Walk() {
   // ── First-daily-open redirect ─────────────────────────────────────────────
   // This is a server decision, not a browser-date/localStorage decision.
   const dailyOpenCheckedRef = useRef(false);
+  const [dailyOpenRetry, setDailyOpenRetry] = useState(0);
   useEffect(() => {
     // Walk can remount during ordinary SPA navigation. Once bootstrap has
     // resolved, it must never re-run the automatic Daily Rhythm redirect.
@@ -480,16 +481,32 @@ export default function Walk() {
     if (journeys.length === 0) return;
     if (dailyOpenCheckedRef.current) return;      // only run once per mount
     dailyOpenCheckedRef.current = true;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     void getDailyRhythmStartup()
       .then(startup => {
+        if (cancelled) return;
         markStartupRoutingComplete();
         if (startup.firstOpen) {
           setLocation(startup.destination);
         }
       })
-      .catch(err => console.error('[DailyOpen] server startup decision failed:', err));
-  }, [loading, user, journeys, setLocation]);
+      .catch(err => {
+        // A failed request must not consume this mount's one chance to retry.
+        // Welcome normally owns cold-start routing, but this fallback covers
+        // retained /walk launches and transient auth/network failures.
+        dailyOpenCheckedRef.current = false;
+        console.error('[DailyOpen] startup decision failed; will retry:', err);
+        retryTimer = setTimeout(() => {
+          if (!cancelled) setDailyOpenRetry(attempt => attempt + 1);
+        }, 1000);
+      });
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [loading, user, journeys, setLocation, dailyOpenRetry]);
 
   if (!user) return null;
 

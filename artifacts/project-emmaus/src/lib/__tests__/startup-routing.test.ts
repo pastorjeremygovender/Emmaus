@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { isColdMemberLaunchPath, isTabPath } from '@/lib/tab-paths';
 import { resolveEntryRoute } from '@/lib/entry-route';
+import { isStartupRoutingComplete, markStartupRoutingComplete, resetStartupRouting } from '@/lib/startup-routing';
 
 // ── isTabPath ────────────────────────────────────────────────────────────────
 
@@ -164,6 +165,15 @@ describe('resolveEntryRoute — always returns /walk', () => {
     expect(resolveEntryRoute()).toBe('/walk');
     expect(resolveEntryRoute()).toBe('/walk');
     expect(resolveEntryRoute()).toBe('/walk');
+  });
+});
+
+describe('startup routing lifecycle guard', () => {
+  it('can reset when a new member signs in within the same app context', () => {
+    markStartupRoutingComplete();
+    expect(isStartupRoutingComplete()).toBe(true);
+    resetStartupRouting();
+    expect(isStartupRoutingComplete()).toBe(false);
   });
 });
 

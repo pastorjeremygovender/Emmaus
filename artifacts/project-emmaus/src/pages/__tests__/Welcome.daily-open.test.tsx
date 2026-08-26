@@ -8,6 +8,9 @@ const onboardingMocks = vi.hoisted(() => ({
   isOnboarded: vi.fn(() => true),
   getDailyRhythmStartup: vi.fn(),
 }));
+const startupRoutingMocks = vi.hoisted(() => ({
+  complete: false,
+}));
 const setLocation = vi.fn();
 const { getDailyRhythmStartup } = onboardingMocks;
 
@@ -53,11 +56,19 @@ vi.mock('@/lib/journeys-api', () => ({
   getDailyRhythmStartup: onboardingMocks.getDailyRhythmStartup,
 }));
 
+vi.mock('@/lib/startup-routing', () => ({
+  isStartupRoutingComplete: () => startupRoutingMocks.complete,
+  markStartupRoutingComplete: () => {
+    startupRoutingMocks.complete = true;
+  },
+}));
+
 describe('Welcome — first daily open routing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-21T09:00:00'));
     vi.clearAllMocks();
+    startupRoutingMocks.complete = false;
     localStorage.clear();
     sessionStorage.clear();
     sessionStorage.setItem('emmaus_splash_shown', 'true');
@@ -114,5 +125,51 @@ describe('Welcome — first daily open routing', () => {
     render(<Welcome />);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(setLocation).toHaveBeenCalledWith('/walk');
+  });
+
+  it('re-checks the server after an overnight re-entry even if yesterday completed startup routing', async () => {
+    startupRoutingMocks.complete = true;
+    journeyLoading = false;
+    getDailyRhythmStartup.mockResolvedValue({
+      firstOpen: true,
+      destination: '/daily-rhythm/day/4',
+      journeyId: 'daily',
+      currentDay: 4,
+      progress: progress.daily,
+    });
+
+    render(<Welcome />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/4');
+  });
+
+  it('does not fall back to Today’s Steps when the first startup request fails', async () => {
+    journeyLoading = false;
+    getDailyRhythmStartup
+      .mockRejectedValueOnce(new Error('temporary startup failure'))
+      .mockResolvedValueOnce({
+        firstOpen: true,
+        destination: '/daily-rhythm/day/4',
+        journeyId: 'daily',
+        currentDay: 4,
+        progress: progress.daily,
+      });
+
+    render(<Welcome />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/4');
+    expect(setLocation).not.toHaveBeenCalledWith('/walk');
   });
 });

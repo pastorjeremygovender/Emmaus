@@ -8,7 +8,8 @@
  *   1. Splash appears immediately (~1 s, never longer than 1.5 s).
  *   2. Auth + journey state resolves behind the splash.
  *   3. After MIN_DURATION AND both resolved → gentle fade-out → navigate:
- *        authenticated member  → Today's Walk (/walk)
+ *        authenticated member  → today's Daily Rhythm step on first opening
+ *                             → Today's Walk (/walk) after that
  *        authenticated admin   → /admin
  *        new member            → /onboarding
  *        unauthenticated       → /auth
@@ -28,6 +29,33 @@ import { isStartupRoutingComplete, markStartupRoutingComplete } from '@/lib/star
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
 const FADE_OUT_MS  = 220;  // ms — fade-out before navigate; total ≤ 1.22 s
+const STARTUP_RETRY_INITIAL_MS = 1000;
+const STARTUP_RETRY_MAX_MS = 10000;
+
+/**
+ * A startup response may be lost after the server commits the daily-open
+ * claim. Retrying with the same session header lets the server return the
+ * original Daily Rhythm destination instead of incorrectly falling back to
+ * /walk. The caller cancels by returning true from isCancelled.
+ */
+async function getDailyRhythmStartupWithRetry(
+  isCancelled: () => boolean,
+): Promise<Awaited<ReturnType<typeof getDailyRhythmStartup>> | null> {
+  let delayMs = STARTUP_RETRY_INITIAL_MS;
+
+  while (!isCancelled()) {
+    try {
+      return await getDailyRhythmStartup();
+    } catch (err) {
+      if (isCancelled()) return null;
+      console.error('[DailyOpen] startup decision failed; retrying:', err);
+      await new Promise<void>(resolve => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, STARTUP_RETRY_MAX_MS);
+    }
+  }
+
+  return null;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -47,10 +75,6 @@ export default function Welcome() {
   // first-open-of-the-day rule: a PWA/browser session can remain alive overnight.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (isStartupRoutingComplete()) {
-      if (!authLoading && !loadingProfile && !journeyLoading) setLocation(resolveEntryRoute());
-      return;
-    }
     if (authLoading || loadingProfile || journeyLoading) return;
     let cancelled = false;
     const routeMember = async () => {
@@ -75,16 +99,11 @@ export default function Welcome() {
         setLocation('/onboarding');
       } else {
         if (!isOnboarded(user.id)) markOnboarded(user.id);
-        try {
-          const startup = await getDailyRhythmStartup();
-          const dest = startup.destination;
-          markStartupRoutingComplete();
-          if (!cancelled) setLocation(dest);
-        } catch (err) {
-          console.error('[DailyOpen] server startup decision failed:', err);
-          markStartupRoutingComplete();
-          if (!cancelled) setLocation(resolveEntryRoute());
-        }
+        const startup = await getDailyRhythmStartupWithRetry(() => cancelled);
+        if (cancelled || !startup) return;
+        const dest = startup.destination;
+        markStartupRoutingComplete();
+        if (!cancelled) setLocation(dest);
       }
     } else {
       setLocation('/auth');
@@ -112,10 +131,12 @@ export default function Welcome() {
     if (!timerDone || authLoading || loadingProfile || journeyLoading) return;
     if (navigatedRef.current) return;
     navigatedRef.current = true;
+    let cancelled = false;
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
-    async function resolveDestination(): Promise<string> {
+    async function resolveDestination(): Promise<string | null> {
       if (!user) return '/auth';
       if (user.passwordRecovery) return '/auth/callback?mode=recovery';
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
@@ -126,23 +147,24 @@ export default function Welcome() {
       if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
       if (!isOnboarded(user.id) && !user.preferredName?.trim()) return '/onboarding';
       if (!isOnboarded(user.id)) markOnboarded(user.id);
-      try {
-        const startup = await getDailyRhythmStartup();
-        const dest = startup.destination;
-        console.debug('[Emmaus routing] Route selected (server):', dest);
-        return dest;
-      } catch (err) {
-        console.error('[DailyOpen] server startup decision failed:', err);
-        return resolveEntryRoute();
-      }
+      const startup = await getDailyRhythmStartupWithRetry(() => cancelled);
+      if (!startup) return null;
+      const dest = startup.destination;
+      console.debug('[Emmaus routing] Route selected (server):', dest);
+      return dest;
     }
 
     void resolveDestination().then(dest => {
+      if (cancelled || !dest) return;
       markStartupRoutingComplete();
       // Fade out, then navigate.
       setFading(true);
-      setTimeout(() => setLocation(dest), FADE_OUT_MS);
+      fadeTimer = setTimeout(() => setLocation(dest), FADE_OUT_MS);
     });
+    return () => {
+      cancelled = true;
+      if (fadeTimer) clearTimeout(fadeTimer);
+    };
   }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney]);
 
   // ── Splash / redirect loading state ───────────────────────────────────────

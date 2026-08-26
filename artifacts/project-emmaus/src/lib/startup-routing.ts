@@ -15,3 +15,12 @@ export function isStartupRoutingComplete(): boolean {
 export function markStartupRoutingComplete(): void {
   startupRoutingComplete = true;
 }
+
+/**
+ * A user can sign out from an admin or member route and sign in again without
+ * creating a new JavaScript context. The new member session must get its own
+ * first-open decision rather than inheriting the previous account's guard.
+ */
+export function resetStartupRouting(): void {
+  startupRoutingComplete = false;
+}
