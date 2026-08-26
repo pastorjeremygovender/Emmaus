@@ -84,6 +84,39 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('emmaus:opening-completed', refresh);
   }, []);
 
+  // A retained PWA can keep this component mounted while the device is locked
+  // or the app is backgrounded.  Re-resolve on resume instead of trusting the
+  // decision made before the server calendar day changed.  pageshow covers
+  // bfcache/PWA restores; visibilitychange covers screen-lock/background
+  // resumes.  Both can fire for one restore, so coalesce them into one request.
+  useEffect(() => {
+    let disposed = false;
+    let refreshQueued = false;
+    const refreshOnResume = () => {
+      if (refreshQueued) return;
+      refreshQueued = true;
+      queueMicrotask(() => {
+        refreshQueued = false;
+        if (disposed || document.visibilityState === 'hidden') return;
+        if (authLoading || loadingProfile || !user || !needsOpening || needsOnboarding) return;
+        requestedPathRef.current = null;
+        setDecision(null);
+        setError(null);
+        setRetryKey(value => value + 1);
+      });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshOnResume();
+    };
+    window.addEventListener('pageshow', refreshOnResume);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      disposed = true;
+      window.removeEventListener('pageshow', refreshOnResume);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [authLoading, loadingProfile, user, needsOpening, needsOnboarding]);
+
   useEffect(() => {
     if (authLoading || loadingProfile || !user || !needsOpening || needsOnboarding) return;
     const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;

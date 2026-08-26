@@ -60,10 +60,29 @@ async function reset(key: string) {
   await pool.query("DELETE FROM step_reflections WHERE user_id = $1 AND journey_id = $2", [id, journeyId]);
   return id;
 }
+type StartupResponse = {
+  firstOpen: boolean;
+  destination: string;
+  openingStateMutated: boolean;
+  currentDay: number;
+  journeyId: string;
+  assignedDay: number;
+  localTimezone: string;
+  localDate: string;
+  progress: {
+    currentDay: number;
+    completedDays: number[];
+    lastDailyOpenDate: string | null;
+    dailyRhythmTimezone?: string;
+  };
+};
 async function startup(key: string, launch = `test-launch-${key}`) {
-  return json<{ firstOpen: boolean; destination: string; currentDay: number; journeyId: string; progress: {
-    currentDay: number; completedDays: number[]; lastDailyOpenDate: string | null;
-  } }>(await request("/api/journeys/daily-rhythm/startup", { ...(await auth(key)), "X-Emmaus-Startup-Session": launch }));
+  return json<StartupResponse>(
+    await request("/api/journeys/daily-rhythm/startup", {
+      ...(await auth(key)),
+      "X-Emmaus-Startup-Session": launch,
+    }),
+  );
 }
 async function complete(key: string, day: number) {
   return request(`/api/journeys/${journeyId}/progress/complete-step`, await auth(key), "POST", { day });
@@ -259,6 +278,66 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const firstA = await startup(a), secondA = await startup(a, "test-launch-2"), firstB = await startup(b);
     assert.equal(firstA.firstOpen, true); assert.equal(secondA.firstOpen, false);
     assert.equal(secondA.destination, "/daily-rhythm/day/1"); assert.equal(firstB.firstOpen, true);
+  });
+
+  it("TEST 26 — retained PWA resume after an overnight boundary gets the server-selected step", async () => {
+    const key = `dr-26-${nonce}`; await reset(key);
+    const retainedLaunch = `retained-pwa-${key}`;
+    await startup(key, retainedLaunch);
+    await complete(key, 1);
+    await ageProgress(key);
+
+    const resumed = await startup(key, retainedLaunch);
+    assert.equal(resumed.destination, "/daily-rhythm/day/2");
+    assert.equal(resumed.assignedDay, 2);
+    assert.equal(resumed.currentDay, 2);
+    assert.equal(resumed.localTimezone, "Africa/Johannesburg");
+  });
+
+  it("TEST 27 — screen-lock resume and a duplicate tab create one opening for the next local date", async () => {
+    const key = `dr-27-${nonce}`; await reset(key);
+    await startup(key, `screen-lock-${key}`);
+    await complete(key, 1);
+    await ageProgress(key);
+
+    const [resumedPwa, duplicateTab] = await Promise.all([
+      startup(key, `screen-lock-${key}`),
+      startup(key, `duplicate-tab-${key}`),
+    ]);
+    assert.equal(resumedPwa.destination, "/daily-rhythm/day/2");
+    assert.equal(duplicateTab.destination, "/daily-rhythm/day/2");
+    assert.equal([resumedPwa, duplicateTab].filter(result => result.openingStateMutated).length, 1);
+    const id = await testUserIdFor(key);
+    const ledgerCount = await pool.query(
+      "SELECT count(*)::int AS count FROM daily_rhythm_opening_ledger WHERE user_id=$1 AND journey_id=$2 AND local_date=$3",
+      [id, journeyId, resumedPwa.localDate],
+    );
+    assert.equal(ledgerCount.rows[0].count, 1);
+  });
+
+  it("TEST 28 — a valid non-default account timezone controls the opening date", async () => {
+    const key = `dr-28-${nonce}`; await reset(key);
+    const id = await testUserIdFor(key);
+    const timezone = "America/Los_Angeles";
+    await pool.query("UPDATE user_profiles SET timezone=$1 WHERE auth_subject=$2", [timezone, id]);
+
+    const result = await startup(key, `timezone-${key}`);
+    const expectedLocalDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    assert.equal(result.localTimezone, timezone);
+    assert.equal(result.localDate, expectedLocalDate);
+    assert.equal(result.progress?.dailyRhythmTimezone, timezone);
+
+    const ledger = await pool.query(
+      "SELECT local_date, local_timezone FROM daily_rhythm_opening_ledger WHERE user_id=$1 AND journey_id=$2",
+      [id, journeyId],
+    );
+    assert.equal(ledger.rows[0].local_date, expectedLocalDate);
+    assert.equal(ledger.rows[0].local_timezone, timezone);
   });
 });
 

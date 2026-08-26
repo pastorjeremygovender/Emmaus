@@ -69,6 +69,32 @@ describe('OpeningGate', () => {
     expect(setLocation).not.toHaveBeenCalledWith('/walk');
   });
 
+  it('re-resolves after a retained PWA resumes without duplicating visibility/page-show requests', async () => {
+    getDailyRhythmStartup
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/1',
+        assignedDay: 1,
+      })
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/2',
+        assignedDay: 2,
+      });
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('pageshow'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(2);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/2', { replace: true });
+  });
+
   it('rejects external and privileged pending destinations', () => {
     expect(safeOpeningDestination('https://example.com/walk')).toBeNull();
     expect(safeOpeningDestination('/admin')).toBeNull();
