@@ -265,6 +265,7 @@ before(async () => {
   assert.equal(refresh.status, 200, "archive fixture should be accepted by the admin update route");
 });
 
+
 after(async () => {
   if (canonicalId) await deleteSermonFully(canonicalId);
   await writeArchiveState("videos", originalVideos);
@@ -275,21 +276,33 @@ after(async () => {
 describe("authenticated Ask Emmaus sermon action parity", { concurrency: 1 }, () => {
   it("returns the same canonical sermon actions to typed and Voice clients", async () => {
     const message = "Please show me the covenant lantern teaching in John 3.";
-    const typed = await postConversation("/api/emmaus/conversation", message, {
+    const context = {
       entryPoint: "personal",
       bookId: "john",
       chapter: 3,
+    };
+    const typed = await postConversation("/api/emmaus/conversation", message, {
+      ...context,
     });
     const voice = await postConversation("/api/voice/conversation", message, {
-      entryPoint: "personal",
-      bookId: "john",
-      chapter: 3,
+      ...context,
+    });
+    assert.ok(voice.done.conversationId, "Voice response should identify the resumable conversation");
+    const resumedVoice = await postConversation("/api/voice/conversation", message, {
+      ...context,
+      conversationId: voice.done.conversationId,
     });
 
     const typedResult = sermonResults(typed).find((result) => result.sermonId === canonicalId);
     const voiceResult = sermonResults(voice).find((result) => result.sermonId === canonicalId);
+    const resumedResult = sermonResults(resumedVoice).find((result) => result.sermonId === canonicalId);
     assert.ok(typedResult, "typed Ask Emmaus should return the tagged canonical sermon");
     assert.deepEqual(voiceResult, typedResult);
+    assert.deepEqual(
+      resumedResult,
+      typedResult,
+      "resumed Voice should preserve the canonical sermon actions exactly",
+    );
 
     const result = typedResult;
     assert.equal(result.source, "canonical");
@@ -301,21 +314,33 @@ describe("authenticated Ask Emmaus sermon action parity", { concurrency: 1 }, ()
 
   it("returns verified Watch and Listen actions without a canonical route for archive-only matches", async () => {
     const message = "Please show me the harbour light teaching in Matthew 5.";
-    const typed = await postConversation("/api/emmaus/conversation", message, {
+    const context = {
       entryPoint: "personal",
       bookId: "matthew",
       chapter: 5,
+    };
+    const typed = await postConversation("/api/emmaus/conversation", message, {
+      ...context,
     });
     const voice = await postConversation("/api/voice/conversation", message, {
-      entryPoint: "personal",
-      bookId: "matthew",
-      chapter: 5,
+      ...context,
+    });
+    assert.ok(voice.done.conversationId, "Voice response should identify the resumable conversation");
+    const resumedVoice = await postConversation("/api/voice/conversation", message, {
+      ...context,
+      conversationId: voice.done.conversationId,
     });
 
     const typedResult = sermonResults(typed).find((result) => result.sermonId === archiveId);
     const voiceResult = sermonResults(voice).find((result) => result.sermonId === archiveId);
+    const resumedResult = sermonResults(resumedVoice).find((result) => result.sermonId === archiveId);
     assert.ok(typedResult, "typed Ask Emmaus should return the tagged archive sermon");
     assert.deepEqual(voiceResult, typedResult);
+    assert.deepEqual(
+      resumedResult,
+      typedResult,
+      "resumed Voice should preserve verified archive Watch and Listen actions",
+    );
 
     const result = typedResult;
     assert.equal(result.source, "archive");
@@ -330,8 +355,14 @@ describe("authenticated Ask Emmaus sermon action parity", { concurrency: 1 }, ()
     const message = `${RUN_TAG} zephyrless meadow`;
     const typed = await postConversation("/api/emmaus/conversation", message);
     const voice = await postConversation("/api/voice/conversation", message);
+    assert.ok(voice.done.conversationId, "Voice response should identify the resumable conversation");
+    const resumedVoice = await postConversation("/api/voice/conversation", message, {
+      entryPoint: "personal",
+      conversationId: voice.done.conversationId,
+    });
 
     assertNoUnverifiedSermonAction(typed, "typed Ask Emmaus");
     assertNoUnverifiedSermonAction(voice, "Voice Ask Emmaus");
+    assertNoUnverifiedSermonAction(resumedVoice, "resumed Voice Ask Emmaus");
   });
 });
