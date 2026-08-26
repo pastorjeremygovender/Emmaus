@@ -1,10 +1,10 @@
 /**
- * voice-conversation-client.ts — Client helper for the voice-specific LLM
- * conversation endpoint (POST /api/voice/conversation).
+ * voice-conversation-client.ts — Client helper for the Voice transport
+ * endpoint (POST /api/voice/conversation).
  *
- * This endpoint uses OpenAI tool/function calling so the LLM can dispatch
- * Emmaus actions (read_content, navigate) in natural language rather than
- * requiring the user to speak specific command phrases.
+ * Voice conversation now uses the canonical Emmaus service. The client still
+ * understands legacy tool events so existing deterministic reading/navigation
+ * playback remains compatible during the transition.
  *
  * Sprint 2: replaces the client-side regex intent classifier for all
  * non-deterministic intents (everything except reading-command, navigate,
@@ -81,10 +81,16 @@ export interface VoiceConversationCallbacks {
   onToolCall: (tc: AnyVoiceToolCall) => void;
   /** Called when the stream completes successfully. */
 
-  onDone: (fullText: string, hadToolCall: boolean) => void;
+  onDone: (fullText: string, hadToolCall: boolean, info?: VoiceDoneInfo) => void;
   /** Called on fetch or parse error. */
 
   onError: (msg: string) => void;
+}
+
+export interface VoiceDoneInfo {
+  conversationId?: string;
+  messageId?: string;
+  metadata?: import('./emmaus-client').EmmausMetadata;
 }
 
 // ─── Main function ────────────────────────────────────────────────────────────
@@ -99,6 +105,7 @@ export function sendVoiceConversation(params: {
   message:          string;
   userId:           string;
   context?:         object;
+  currentPath?:     string;
   history?:         Array<{ role: string; content: string }>;
   voiceAppContext?:  string;
   isReading?:        boolean;
@@ -117,6 +124,7 @@ export function sendVoiceConversation(params: {
         body: JSON.stringify({
           message:         params.message,
           context:         params.context,
+          currentPath:     params.currentPath ?? window.location.pathname,
           history:         (params.history ?? []).slice(-6),
           voiceAppContext: params.voiceAppContext,
           isReading:       params.isReading ?? false,
@@ -140,6 +148,7 @@ export function sendVoiceConversation(params: {
       let buf  = '';
       let fullText    = '';
       let hadToolCall = false;
+      let doneInfo: VoiceDoneInfo | undefined;
 
       const pendingTools: AnyVoiceToolCall[] = [];
 
@@ -162,6 +171,9 @@ export function sendVoiceConversation(params: {
               args?:   Record<string, unknown>;
               text?:   string;
               message?: string;
+              conversationId?: string;
+              messageId?: string;
+              metadata?: import('./emmaus-client').EmmausMetadata;
             };
 
             if (evt.type === 'text' && evt.content) {
@@ -175,7 +187,11 @@ export function sendVoiceConversation(params: {
               pendingTools.push(tc);
               params.callbacks.onToolCall(tc);
             } else if (evt.type === 'done') {
-              // done handled after loop
+              doneInfo = {
+                ...(evt.conversationId ? { conversationId: evt.conversationId } : {}),
+                ...(evt.messageId ? { messageId: evt.messageId } : {}),
+                ...(evt.metadata ? { metadata: evt.metadata } : {}),
+              };
             } else if (evt.type === 'error') {
               params.callbacks.onError(evt.message ?? 'Unknown error from voice conversation');
               return;
@@ -184,7 +200,7 @@ export function sendVoiceConversation(params: {
         }
       }
 
-      params.callbacks.onDone(fullText, hadToolCall);
+       params.callbacks.onDone(fullText, hadToolCall, doneInfo);
 
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;

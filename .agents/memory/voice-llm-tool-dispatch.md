@@ -1,31 +1,23 @@
 ---
-name: Voice LLM tool dispatch
-description: Sprint 2 architecture — POST /api/voice/conversation endpoint with OpenAI tool calling replaces client-side regex intent classifier for natural-language voice routing.
+name: Voice canonical service boundary
+description: Voice conversation is a transport adapter around canonical Emmaus intelligence; deterministic client actions remain only for low-latency controls.
 ---
 
-## What was built
+## Boundary
 
-**Server**: `POST /api/voice/conversation` added at the end of `artifacts/api-server/src/routes/voice.ts`.
-- Uses `OpenAI` directly (same OPENAI_API_KEY as voice-service.ts, NOT via Replit proxy).
-- Model: `VOICE_CONV_MODEL` env var, defaults to `gpt-4o` (NOT `OPENAI_MODEL` — avoids gpt-5 slow path).
-- Two tools defined: `read_content` and `navigate`.
-- SSE events: `{ type: 'text', content }` | `{ type: 'tool_call', tool, args }` | `{ type: 'done', text }` | `{ type: 'error', message }`.
-- `max_completion_tokens: 300` — voice responses must be short.
-- Tool_call events emitted when `finish_reason === 'tool_calls' || 'stop'`.
+`POST /api/voice/conversation` delegates to the canonical Emmaus conversation service. The canonical service owns persona, Scripture-first retrieval, sermon/resource validation, safety, citations, and persistence; Voice only adapts the request and SSE transport.
 
-**Client helper**: `artifacts/project-emmaus/src/lib/voice-conversation-client.ts`
-- `sendVoiceConversation({ message, userId, history, voiceAppContext, isReading, callbacks })` → `{ abort }`.
-- Callbacks: `onText`, `onToolCall`, `onDone(fullText, hadToolCall)`, `onError`.
-- Type cast for tool_call requires `as unknown as AnyVoiceToolCall` — TypeScript limitation with union narrowing.
+The server builds a verified Voice context envelope from authenticated identity and validated route/activity hints. Browser names, IDs, URLs, and audio paths are never authoritative.
+
+The client helper consumes canonical SSE `done` metadata, including the persistent conversation ID and verified sermon recommendations.
 
 **Client dispatch**: `VoiceSessionContext.tsx → processAudioBlob`
 - Fast-path regex kept for: `reading-command`, `navigate`, `continue-reading` (deterministic, zero-latency).
-- Everything else (read-content, continue-walk, get-steps, converse) → `sendVoiceConversation`.
-- Tool call collected during stream, executed AFTER `onDone` fires (avoids async collision with TTS).
+- Everything ambiguous or conversational → `sendVoiceConversation`.
 - `read_content`: maps `bibleBook`+`bibleChapter` → `loadAndStartReading()`; no TTS of text.
 - `navigate`: TTS brief confirmation text first (if any), then navigate, then mic restarts.
 - No tool: accumulate text → `playTTS()` → auto-restart listening (same as old Ask Emmaus path).
-- Conversation history updated in local `history` state (not Emmaus persistent store) for voice turns.
+- The client keeps short local history for responsiveness while the canonical service persists authenticated turns.
 
 ## Key decisions
 
@@ -35,7 +27,7 @@ description: Sprint 2 architecture — POST /api/voice/conversation endpoint wit
 
 **Why keep navigate in fast-path regex?** Navigate regex is already comprehensive and adds zero latency. The LLM navigate tool is a fallback for phrases the regex misses — having both is fine (regex fires first and returns early).
 
-**Why not persist voice conversations to Emmaus store?** Voice sessions are ephemeral. History in `history` state provides multi-turn context within the session. Persistence to Firestore/in-memory store is separate concern (Task #13).
+**Why persist through Emmaus?** Voice and text must share the same conversation, retrieval, safety, and authorization behavior instead of creating two assistants with different answers.
 
 ## Sprint 3 additions (sentence streaming + smart walk)
 

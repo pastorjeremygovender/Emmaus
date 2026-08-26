@@ -54,7 +54,7 @@ import {
 } from '@/lib/emmaus-pending';
 import { fetchVoiceContext, type VoiceAppContext } from '@/lib/voice-context';
 import { resolveIntent, type VoiceIntent } from '@/lib/voice-intent';
-import { sendVoiceConversation, type AnyVoiceToolCall } from '@/lib/voice-conversation-client';
+import { sendVoiceConversation, type AnyVoiceToolCall, type VoiceDoneInfo } from '@/lib/voice-conversation-client';
 import {
   resolveVoiceTranslation,
   buildSubstitutionNotice,
@@ -1246,7 +1246,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         // Navigate the screen to the chapter being read so the user can follow along.
         const navFnBible = navigateRef.current ?? providerNavigateRef.current;
-        const bibleRoute = `/bible/${resolvedRef.bookId}/${resolvedRef.chapter}`;
+        // App.tsx registers the chapter reader under this canonical route.
+        // Never derive a second Bible URL shape in the Voice engine.
+        const bibleRoute = `/bible/read/${resolvedRef.bookId}/${resolvedRef.chapter}`;
         if (navFnBible) {
           navFnBible(bibleRoute);
         } else {
@@ -1308,9 +1310,19 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     }
 
     function buildEmmausContext(intent: VoiceIntent): FlatContext {
-      const base: FlatContext = initContext
-        ? { ...initContext, userName: user!.preferredName }
-        : { entryPoint: 'personal', userName: user!.preferredName };
+      const currentInitContext = initContextRef.current;
+      const currentUser = userRef.current;
+      const base: FlatContext = currentInitContext
+        ? {
+            ...currentInitContext,
+            conversationId: convIdRef.current ?? currentInitContext.conversationId,
+            userName: currentUser?.preferredName,
+          }
+        : {
+            entryPoint: 'personal',
+            conversationId: convIdRef.current ?? undefined,
+            userName: currentUser?.preferredName,
+          };
 
       const parts: string[] = [];
       const appCtx = appContextRef.current;
@@ -1666,6 +1678,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         const handle = sendVoiceConversation({
           message:         text,
           userId:          user.id,
+          context:         emmausCtx,
+          currentPath:     window.location.pathname,
           history:         history,
           voiceAppContext: voiceAppCtx,
           isReading:       isReadingRef.current,
@@ -1689,7 +1703,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
               toolCallPending = tc;
               console.log('[VOICE TOOL CALL]', JSON.stringify({ tool: tc.tool, args: tc.args }));
             },
-            onDone: (_finalText, _hadTool) => {
+            onDone: (_finalText, _hadTool, info?: VoiceDoneInfo) => {
+               if (info?.conversationId) setConvId(info.conversationId);
+               if (info?.metadata?.sermonRecommendations) {
+                 setSermonResults(info.metadata.sermonRecommendations);
+               }
               if (!_hadTool && !cancelledRef.current) {
                 // Pure conversation — persist to local history for multi-turn context
                 setHistory((prev) => [

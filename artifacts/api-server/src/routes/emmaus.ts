@@ -21,7 +21,11 @@ import {
   deleteMemory,
   setSseHeaders,
 } from "../emmaus/conversation-service.js";
-import type { EmmausContextInput, BibleContext, JourneyContext, SermonContext } from "../emmaus/context-builder.js";
+import {
+  toEmmausContextInput,
+  type EmmausContextInput,
+  type FlatEmmausContext,
+} from "../emmaus/context-builder.js";
 import type { EntryPoint } from "../emmaus/firestore-model.js";
 import { requireAuth, isOwner } from "../emmaus/auth.js";
 
@@ -33,31 +37,9 @@ const router: IRouter = Router();
  * The flat context shape clients send.
  * Mapped to the nested EmmausContextInput expected by conversation-service.
  */
-interface FlatContext {
-  entryPoint?: string;
-  conversationId?: string;
-  userName?: string;
-  // Bible
-  bookId?: string;
-  bookName?: string;
-  chapter?: number;
-  chapterHeading?: string;
-  verseText?: string;
-  // Journey
-  journeyId?: string;
-  journeyTitle?: string;
-  currentDay?: number;
-  // Sermon
-  sermonId?: string;
-  sermonTitle?: string;
-  scriptureReference?: string;
-  // Phase 3: Voice Mode app-state context (plain text injected into system prompt)
-  voiceAppContext?: string;
-}
-
 interface EmmausConversationBody {
   message?: unknown;
-  context?: FlatContext;
+  context?: FlatEmmausContext;
   history?: Array<{ role: string; content: string }>;
 }
 
@@ -65,59 +47,6 @@ interface EmmausConversationBody {
  * Map the flat client context into the nested EmmausContextInput.
  * userId is always taken from the server-derived identity, never from the body.
  */
-function toContextInput(flat: FlatContext | undefined, userId: string): EmmausContextInput {
-  const entryPoint = (flat?.entryPoint ?? "standalone") as EntryPoint;
-
-  const ctx: EmmausContextInput = {
-    entryPoint,
-    userId,
-    conversationId: flat?.conversationId,
-    userName: flat?.userName,
-  };
-
-  // Bible context (used by bible entry point)
-  if (flat?.bookId || flat?.bookName || flat?.chapter) {
-    const bible: BibleContext = {
-      bookId: flat.bookId ?? "",
-      bookName: flat.bookName ?? "",
-      chapter: flat.chapter ?? 1,
-      chapterHeading: flat.chapterHeading,
-      verseText: flat.verseText,
-      // Journey linkage within a Bible reading
-      journeyId: flat.journeyId,
-      journeyTitle: flat.journeyTitle,
-    };
-    ctx.bibleContext = bible;
-  }
-
-  // Journey context (used by journeys entry point, no bookId)
-  if (flat?.journeyId && !flat?.bookId) {
-    const journey: JourneyContext = {
-      journeyId: flat.journeyId,
-      journeyTitle: flat.journeyTitle ?? flat.journeyId,
-      currentDay: flat.currentDay ?? 1,
-    };
-    ctx.journeyContext = journey;
-  }
-
-  // Sermon context
-  if (flat?.sermonId) {
-    const sermon: SermonContext = {
-      sermonId: flat.sermonId,
-      sermonTitle: flat.sermonTitle ?? flat.sermonId,
-      scriptureReference: flat.scriptureReference,
-    };
-    ctx.sermonContext = sermon;
-  }
-
-  // Phase 3: Voice app-state context — passed through verbatim
-  if (flat?.voiceAppContext) {
-    ctx.voiceAppContext = flat.voiceAppContext;
-  }
-
-  return ctx;
-}
-
 function parseHistory(raw: unknown): Array<{ role: "user" | "assistant"; content: string }> | undefined {
   if (!Array.isArray(raw)) return undefined;
   return raw
@@ -150,7 +79,7 @@ router.post("/emmaus/conversation", async (req: Request, res: Response) => {
   await handleConversation(
     {
       message: body.message.trim(),
-      context: toContextInput(body.context, userId),
+       context: toEmmausContextInput(body.context, userId),
       history: parseHistory(body.history),
     },
     res
@@ -190,7 +119,7 @@ router.post("/emmaus/conversation/:id/message", async (req: Request, res: Respon
     {
       message: body.message.trim(),
       context: {
-        ...toContextInput(body.context, userId),
+         ...toEmmausContextInput(body.context, userId),
         conversationId,
       },
       history: parseHistory(body.history),

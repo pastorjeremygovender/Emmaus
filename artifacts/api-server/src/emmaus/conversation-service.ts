@@ -337,11 +337,11 @@ export async function handleConversation(
   const detectedNameUpdate = detectNameUpdate(req.message);
 
   if (detectedNameUpdate) {
-    logger.info(`[emmaus:${reqId}] name_update detected="${detectedNameUpdate}"`);
+    logger.info(`[emmaus:${reqId}] name_update detected`);
   }
 
   logger.info(
-    `[emmaus:${reqId}] recv route=${route} maxTokens=${settings.maxTokens} msg="${req.message.slice(0, 60)}"`
+    `[emmaus:${reqId}] recv route=${route} maxTokens=${settings.maxTokens} message_chars=${req.message.length}`
   );
 
   // ── 2. Build context ──────────────────────────────────────────────────────
@@ -684,8 +684,16 @@ export async function handleConversation(
       resource.type !== "sermon" && resource.relevance >= 1
     );
     if (bestResource) {
+      const recommendationType =
+        bestResource.type === "bible-study"
+          ? "bible_study"
+          : bestResource.type === "sermon-companion"
+            ? "sermon_companion"
+            : bestResource.type === "daily-rhythm"
+              ? "daily_rhythm"
+              : bestResource.type;
       finalMeta.recommendations.push({
-        type: bestResource.type,
+        type: recommendationType,
         title: bestResource.title,
         description: bestResource.description ?? `A published ${bestResource.provenance.toLowerCase()} relevant to this question.`,
         resourceId: bestResource.resourceId,
