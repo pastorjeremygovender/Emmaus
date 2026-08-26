@@ -112,6 +112,7 @@ export default function DailyRhythmDay() {
   const fromPreviousDays = source === 'dailyRhythmPrevious';
 
   const journey = journeys.find(j => j.id === journeyId);
+  const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';
   const prog = dailyProgress ?? progress[journeyId];
   const currentDay = prog?.currentDay ?? 1;
   const steps = getStepsForJourney(journeyId);
