@@ -100,16 +100,22 @@ export interface Recommendation {
 /** Verified sermon search result shown directly in Ask Emmaus and Voice. */
 export interface SermonRecommendation {
   sermonId: string;
+  segmentId?: string;
+  source: "canonical" | "archive";
   title: string;
   speaker: string;
   sermonDate: string;
   excerpt: string;
   reason: string;
-  openPath: string;
-  watchUrl: string;
+  /** Present only for a published canonical sermon. */
+  openPath?: string;
+  /** Present only when a verified YouTube URL exists. */
+  watchUrl?: string;
   watchTimestampSeconds?: number;
   listenAvailable: boolean;
   listenPath?: string;
+  audioUrl?: string;
+  relativeStartSeconds?: number;
 }
 
 /** Resource types accepted by the validated Ask Emmaus contract. */

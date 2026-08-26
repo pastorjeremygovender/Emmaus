@@ -6,7 +6,7 @@
  * card layout with speaker, summary excerpt, and a Watch button.
  */
 
-import { Map, Mic2, HandIcon, Users, User, Play, BookOpen } from 'lucide-react';
+import { Map, Mic2, HandIcon, Users, User, Play, BookOpen, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLocation } from 'wouter';
 import type { Recommendation } from '@/lib/emmaus-client';
@@ -103,9 +103,12 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
 
   if (isPreachedHere) {
     // ── Preached Here card ─────────────────────────────────────────────────
-    const watchLabel = recommendation.timestampSeconds
-      ? `Watch from ${formatTimestamp(recommendation.timestampSeconds)}`
-      : 'Watch sermon';
+    const isExternalWatch = Boolean(recommendation.path && /^https?:\/\//i.test(recommendation.path));
+    const watchLabel = isExternalWatch
+      ? recommendation.timestampSeconds
+        ? `Watch from ${formatTimestamp(recommendation.timestampSeconds)}`
+        : 'Watch sermon'
+      : 'Open sermon';
 
     return (
       <button
@@ -149,11 +152,11 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
 
             {/* Watch button */}
             <div className="flex items-center gap-1.5 pt-1">
-              <Play
-                size={11}
-                className="text-amber-700 dark:text-amber-400 fill-current"
-                aria-hidden="true"
-              />
+              {isExternalWatch ? (
+                <Play size={11} className="text-amber-700 dark:text-amber-400 fill-current" aria-hidden="true" />
+              ) : (
+                <ExternalLink size={11} className="text-amber-700 dark:text-amber-400" aria-hidden="true" />
+              )}
               <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
                 {watchLabel}
               </span>

@@ -94,16 +94,23 @@ export interface Recommendation {
 
 export interface SermonRecommendation {
   sermonId: string;
+  segmentId?: string;
+  source: 'canonical' | 'archive';
   title: string;
   speaker: string;
   sermonDate: string;
   excerpt: string;
   reason: string;
-  openPath: string;
-  watchUrl: string;
+  /** Present only when the result maps to a published canonical sermon. */
+  openPath?: string;
+  /** Present only when a verified YouTube URL exists. */
+  watchUrl?: string;
   watchTimestampSeconds?: number;
   listenAvailable: boolean;
   listenPath?: string;
+  /** Relative API audio path used by the in-app player. */
+  audioUrl?: string;
+  relativeStartSeconds?: number;
 }
 
 export interface EmmausMetadata {

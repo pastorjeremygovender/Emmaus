@@ -56,6 +56,17 @@ export interface SermonSection {
   summary?: string;
 }
 
+export interface SermonRetrievalDiagnostics {
+  publishedCanonical: number;
+  eligibleCanonical: number;
+  hiddenCanonical: number;
+  totalIndexRows: number;
+  indexedPublished: number;
+  missingIndexRows: number;
+  staleIndexRows: number;
+  orphanedIndexRows: number;
+}
+
 // ─── List (admin) ─────────────────────────────────────────────────────────────
 
 export async function listAdminSermons(): Promise<CanonicalSermon[]> {
@@ -64,6 +75,15 @@ export async function listAdminSermons(): Promise<CanonicalSermon[]> {
     headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) throw new Error(`Failed to load sermons: ${res.status}`);
+  return res.json();
+}
+
+export async function getSermonRetrievalDiagnostics(): Promise<SermonRetrievalDiagnostics> {
+  const res = await fetch(apiUrl("/sermons/admin/retrieval-diagnostics"), {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`Failed to load retrieval diagnostics: ${res.status}`);
   return res.json();
 }
 

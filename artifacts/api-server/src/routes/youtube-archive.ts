@@ -993,10 +993,14 @@ router.get("/youtube-archive/preached-here", async (req: Request, res: Response)
   try {
     const { chapterSermons, bookSermons } = await searchByScripture(bookId, chapter, 10);
     archiveChapter = chapterSermons.filter(
-      (s: { sermonId?: string }) => !suppressedVideoIds.has(s.sermonId ?? "")
+      (s: { sermonId?: string; youtubeVideoId?: string }) =>
+        !suppressedVideoIds.has(s.youtubeVideoId ?? "") &&
+        !suppressedVideoIds.has(s.sermonId ?? "")
     );
     archiveBook = bookSermons.filter(
-      (s: { sermonId?: string }) => !suppressedVideoIds.has(s.sermonId ?? "")
+      (s: { sermonId?: string; youtubeVideoId?: string }) =>
+        !suppressedVideoIds.has(s.youtubeVideoId ?? "") &&
+        !suppressedVideoIds.has(s.sermonId ?? "")
     );
   } catch (err) {
     logger.warn({ err }, "preached-here: archive lookup failed (non-fatal)");

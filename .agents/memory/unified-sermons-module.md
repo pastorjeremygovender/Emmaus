@@ -27,16 +27,17 @@ description: Architecture and implementation state for the canonical sermon DB p
 
 **Phase 5 — Generator pipeline integration:** Dual-write via `admin-sermon-store.ts` covers this. Generator still writes JSON; canonical DB is updated synchronously via `syncToCanonical`.
 
-**Phase 6 — Ask Emmaus:** `sermon-retrieval.ts` updated with three-tier priority:
-  1. `listPublishedSermons()` from canonical DB — scored via `scoreCanonicalSermon()`.
-  2. YouTube archive (`searchSermons`) — suppresses any result whose `sermonId` (videoId) is in `getPublishedYoutubeVideoIds()`.
-  3. Hardcoded `VERIFIED_SERMONS` registry (legacy fallback).
-- Source union extended: `"canonical" | "archive" | "registry"`.
+**Phase 6 — Ask Emmaus:** `sermon-retrieval.ts` uses a hybrid, publication-safe result set:
+  1. Published canonical DB sermons, including audio-only records.
+  2. Published-sermon knowledge-index matches for companion/teaching text.
+  3. Approved YouTube archive segments for gaps such as Prodigal/Luke 15.
+- Canonical results expose `/sermon/:id`; archive-only results expose only verified YouTube/audio actions.
+- Canonical-linked archive videos are suppressed by the public `youtube_video_id`; fabricated registry/placeholder results are not eligible.
 
 **Phase 7 — Preached Here:** `youtube-archive.ts` `GET /youtube-archive/preached-here` updated:
   1. Fetches `listPublishedSermons()`, filters by `scriptureBookIds` + chapter.
   2. Builds response objects compatible with `SermonSearchResult` shape.
-  3. Appends deduplicated archive results (suppresses by `youtubeVideoId`).
+   3. Appends deduplicated archive results (suppresses by `youtubeVideoId`).
   4. Returns `{ sermons, chapterSermons, bookSermons }` shape unchanged for frontend compat.
 
 **Phase 8 — Member UX:**
@@ -46,7 +47,13 @@ description: Architecture and implementation state for the canonical sermon DB p
 
 ## Key rules
 
-**Never return both canonical + archive for same sermon.** Dedup in retrieval via `youtube_video_id` column.
+**Never return both canonical + archive for same sermon.** Dedup in retrieval and Preached Here uses the canonical `youtube_video_id`, not an archive row's internal UUID.
+
+**Knowledge-index joins cast `sermons.id` to text.** The canonical UUID is stored as text in `emmaus_knowledge_index.sermon_id`.
+
+**Why:** The database schema intentionally preserves the index's text key, so an uncast UUID/text join fails at runtime and silently removes published index matches.
+
+**How to apply:** Use `s.id::text = k.sermon_id` in index reads and diagnostics; keep publication filtering in the SQL join.
 
 **`upsertByLegacyId` uses SELECT+INSERT/UPDATE** (not ON CONFLICT) — the unique index on `legacy_json_id` is non-partial, but the SELECT approach is more robust during boot window migrations.
 

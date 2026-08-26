@@ -33,7 +33,7 @@ import {
   getPublishedYoutubeVideoIds,
 } from "../canonical-sermon-store.js";
 
-import { retrieveSermon } from "../../emmaus/sermon-retrieval.js";
+import { retrieveSermon, retrieveSermons } from "../../emmaus/sermon-retrieval.js";
 
 // Lazy-import Express + the youtube-archive router inside before() so that
 // the router's module-level side-effects (sermon-store init, etc.) only fire
@@ -163,6 +163,18 @@ describe("retrieveSermon — canonical DB sermon priority", () => {
       "retrieveSermon must not return an archive result when a canonical sermon matches — " +
         "canonical has priority 1 and archive is suppressed for the same video.",
     );
+  });
+
+  it("returns verified archive links for a topic without a canonical sermon", async () => {
+    const results = await retrieveSermons("Prodigal Son Luke 15 forgiveness restoration", undefined, undefined, 3);
+    const archive = results.find((result) => result.source === "archive");
+
+    assert.ok(archive, "Expected an approved archive result for the Prodigal/Luke 15 query");
+    assert.equal(archive.openPath, undefined, "Archive video IDs must never become canonical member routes");
+    assert.match(archive.timestampedUrl, /^https:\/\/www\.youtube\.com\/watch\?v=[^&]+(?:&t=\d+s)?$/);
+    assert.doesNotMatch(archive.timestampedUrl, /PLACEHOLDER|undefined|null/i);
+    assert.ok(archive.youtubeVideoId);
+    assert.ok(archive.youtubeVideoId.length > 0);
   });
 });
 

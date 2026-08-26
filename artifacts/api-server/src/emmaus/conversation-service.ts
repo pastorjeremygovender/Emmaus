@@ -717,16 +717,22 @@ export async function handleConversation(
     }));
   finalMeta.sermonRecommendations = sermonResults.map((sermon) => ({
     sermonId: sermon.sermonId,
+    ...(sermon.segmentId ? { segmentId: sermon.segmentId } : {}),
+    source: sermon.source,
     title: sermon.title,
     speaker: sermon.speaker,
     sermonDate: sermon.sermonDate,
     excerpt: sermon.excerpt,
     reason: sermon.reason,
-    openPath: `/sermon/${sermon.sermonId}`,
-    watchUrl: sermon.timestampedUrl,
+    ...(sermon.openPath ? { openPath: sermon.openPath } : {}),
+    ...(sermon.timestampedUrl ? { watchUrl: sermon.timestampedUrl } : {}),
     ...(sermon.timestampSeconds != null ? { watchTimestampSeconds: sermon.timestampSeconds } : {}),
     listenAvailable: Boolean(sermon.audioUrl),
-    ...(sermon.audioUrl ? { listenPath: `/sermon/${sermon.sermonId}` } : {}),
+    ...(sermon.listenPath ? { listenPath: sermon.listenPath } : {}),
+    ...(sermon.audioUrl ? {
+      audioUrl: sermon.audioUrl,
+      ...(sermon.relativeStartSeconds != null ? { relativeStartSeconds: sermon.relativeStartSeconds } : {}),
+    } : {}),
   }));
 
   // If the model omitted a recommendation despite a clearly matching
@@ -800,7 +806,7 @@ export async function handleConversation(
       title: sermonResult.title,
       speakerName: sermonResult.speaker,
       description: sermonResult.summary,
-      path: `/sermon/${sermonResult.sermonId}`,
+      path: sermonResult.timestampedUrl || sermonResult.openPath,
       sermonId: sermonResult.sermonId,
       timestampSeconds: sermonResult.timestampSeconds,
     });

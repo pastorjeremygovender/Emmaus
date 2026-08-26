@@ -31,6 +31,7 @@ import { deleteSermonCompanionContent } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
+import { getKnowledgeIndexDiagnostics } from "../lib/sermon-knowledge-index.js";
 
 export const sermonsRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -85,6 +86,35 @@ sermonsRouter.get("/admin", async (req: Request, res: Response) => {
       error: "Failed to load sermon list",
       detail: err instanceof Error ? err.message : "Unknown error",
     });
+  }
+});
+
+// ─── Admin: read-only retrieval coverage diagnostics ──────────────────────────
+
+sermonsRouter.get("/admin/retrieval-diagnostics", async (req: Request, res: Response) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const sermons = await store.getAllSermons();
+    const published = sermons.filter((sermon) => sermon.status === "Published");
+    const eligible = published.filter((sermon) =>
+      sermon.id &&
+      sermon.title.trim() &&
+      sermon.speaker.trim() &&
+      sermon.speaker.trim().toLowerCase() !== "unknown speaker" &&
+      !/\bshorts?\b/i.test(sermon.title),
+    );
+    const index = await getKnowledgeIndexDiagnostics();
+    res.set("Cache-Control", "no-store");
+    res.json({
+      publishedCanonical: published.length,
+      eligibleCanonical: eligible.length,
+      hiddenCanonical: published.length - eligible.length,
+      ...index,
+      missingIndexRows: Math.max(0, eligible.length - index.indexedPublished),
+    });
+  } catch (err) {
+    logger.error({ err }, "sermons: retrieval diagnostics failed");
+    res.status(500).json({ error: "Failed to load retrieval diagnostics" });
   }
 });
 

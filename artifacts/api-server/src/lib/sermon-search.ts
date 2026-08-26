@@ -72,6 +72,7 @@ interface InvertedIndex {
 export interface SermonSearchResult {
   sermonId: string;         // internal video record ID
   segmentId: string;
+  youtubeVideoId: string;   // public YouTube ID; distinct from internal video record ID
   title: string;
   speaker: string;
   sermonDate: string;
@@ -469,6 +470,7 @@ export async function searchSermons(
       results.push({
         sermonId: seg.videoId,
         segmentId: seg.segmentId,
+        youtubeVideoId: seg.youtubeVideoId,
         title: seg.videoTitle,
         speaker: seg.speaker,
         sermonDate: seg.sermonDate,
@@ -704,6 +706,7 @@ export async function searchByScripture(
     return {
       sermonId: seg.videoId,
       segmentId: seg.segmentId,
+      youtubeVideoId: seg.youtubeVideoId,
       title: seg.videoTitle,
       speaker: seg.speaker,
       sermonDate: seg.sermonDate,

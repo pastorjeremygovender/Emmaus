@@ -56,6 +56,48 @@ export interface KnowledgeIndexResult extends KnowledgeIndexEntry {
   score: number;
 }
 
+export interface KnowledgeIndexDiagnostics {
+  totalIndexRows: number;
+  indexedPublished: number;
+  staleIndexRows: number;
+  orphanedIndexRows: number;
+}
+
+/**
+ * Read-only coverage diagnostics for the admin UI. This deliberately does not
+ * repair or delete anything; lifecycle hooks remain the only mutation path.
+ */
+export async function getKnowledgeIndexDiagnostics(): Promise<KnowledgeIndexDiagnostics> {
+  const result = await pool.query<{
+    total_index_rows: string;
+    indexed_published: string;
+    stale_index_rows: string;
+    orphaned_index_rows: string;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM emmaus_knowledge_index) AS total_index_rows,
+      (SELECT COUNT(*)
+         FROM emmaus_knowledge_index k
+         INNER JOIN sermons s ON s.id::text = k.sermon_id
+        WHERE s.status = 'Published') AS indexed_published,
+      (SELECT COUNT(*)
+         FROM emmaus_knowledge_index k
+         INNER JOIN sermons s ON s.id::text = k.sermon_id
+        WHERE s.status <> 'Published') AS stale_index_rows,
+      (SELECT COUNT(*)
+         FROM emmaus_knowledge_index k
+         LEFT JOIN sermons s ON s.id::text = k.sermon_id
+        WHERE s.id IS NULL) AS orphaned_index_rows
+  `);
+  const row = result.rows[0];
+  return {
+    totalIndexRows: Number(row?.total_index_rows ?? 0),
+    indexedPublished: Number(row?.indexed_published ?? 0),
+    staleIndexRows: Number(row?.stale_index_rows ?? 0),
+    orphanedIndexRows: Number(row?.orphaned_index_rows ?? 0),
+  };
+}
+
 // ─── Upsert ───────────────────────────────────────────────────────────────────
 
 /**
@@ -211,7 +253,9 @@ export async function searchKnowledgeIndex(
       const whereClause = conditions.join(" OR ");
       try {
         const res = await pool.query(
-          `SELECT * FROM emmaus_knowledge_index WHERE ${whereClause}`,
+          `SELECT k.* FROM emmaus_knowledge_index k
+             INNER JOIN sermons s ON s.id::text = k.sermon_id AND s.status = 'Published'
+             WHERE ${whereClause.replace(/\b(content_tsv|scripture_book_ids)\b/g, "k.$1")}`,
           params,
         );
         rows = res.rows;
@@ -219,12 +263,18 @@ export async function searchKnowledgeIndex(
         // content_tsv column may not exist yet (migration pending) — fall back
         // to a full scan so search keeps working on a freshly provisioned DB.
         logger.warn({ ftsErr }, "knowledge-index: FTS query failed, falling back to full scan");
-        const fallback = await pool.query(`SELECT * FROM emmaus_knowledge_index`);
+        const fallback = await pool.query(
+          `SELECT k.* FROM emmaus_knowledge_index k
+             INNER JOIN sermons s ON s.id::text = k.sermon_id AND s.status = 'Published'`,
+        );
         rows = fallback.rows;
       }
     } else {
       // No filters at all — fetch all rows; in-process scoring selects results.
-      const res = await pool.query(`SELECT * FROM emmaus_knowledge_index`);
+      const res = await pool.query(
+        `SELECT k.* FROM emmaus_knowledge_index k
+           INNER JOIN sermons s ON s.id::text = k.sermon_id AND s.status = 'Published'`,
+      );
       rows = res.rows;
     }
   } catch (err) {

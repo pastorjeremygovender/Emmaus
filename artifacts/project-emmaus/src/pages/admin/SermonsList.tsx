@@ -10,7 +10,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Mic2, BookOpen, Trash2, Loader2, CheckCircle2, ExternalLink, MoreHorizontal,
-  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle, Star,
+  ArrowLeft, X, RefreshCw, Upload, FileAudio, AlertCircle, Star, ShieldCheck,
 } from 'lucide-react';
 import {
   type CanonicalSermon,
@@ -23,6 +23,8 @@ import {
   setCurrentWeekSermon,
   processSermon,
   updateAdminSermon,
+  getSermonRetrievalDiagnostics,
+  type SermonRetrievalDiagnostics,
 } from '@/lib/canonical-sermon-api';
 import { StatusBadge } from './shared';
 import ContentStudioListItem from './content-studio/ContentStudioListItem';
@@ -71,6 +73,7 @@ export default function SermonsList({ onEdit, onNew, onOpenCompanion }: Props) {
   const [unpublishTarget, setUnpublishTarget] = useState<CanonicalSermon | null>(null);
   const [openMenuId, setOpenMenuId]           = useState<string | null>(null);
   const [settingCurrentWeek, setSettingCurrentWeek] = useState<Record<string, boolean>>({});
+  const [retrievalDiagnostics, setRetrievalDiagnostics] = useState<SermonRetrievalDiagnostics | null>(null);
 
   // New sermon creation modal — metadata
   const [showNewModal, setShowNewModal]     = useState(false);
@@ -171,6 +174,7 @@ async function uploadAudioFile(
     try {
       const data = await listAdminSermons();
       setSermons(data);
+      getSermonRetrievalDiagnostics().then(setRetrievalDiagnostics).catch(() => setRetrievalDiagnostics(null));
     } catch (err) {
       // Surface the actual status code so production failures can be diagnosed
       // without needing to inspect server logs. Common causes:
@@ -478,7 +482,22 @@ async function uploadAudioFile(
         }
         filters={{ tabs: STATUS_TABS, active: statusTab, onChange: setStatusTab }}
         beforeList={
-          filtered.length > 0 && statusTab === 'All' ? (
+          retrievalDiagnostics ? (
+            <div className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3.5 py-3 text-[12px] text-indigo-900">
+              <div className="flex items-center gap-2 font-semibold">
+                <ShieldCheck size={14} className="text-indigo-600" />
+                Ask Emmaus retrieval coverage
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-indigo-800/80">
+                <span>{retrievalDiagnostics.eligibleCanonical} eligible published</span>
+                <span>{retrievalDiagnostics.indexedPublished} indexed</span>
+                {retrievalDiagnostics.hiddenCanonical > 0 && <span>{retrievalDiagnostics.hiddenCanonical} hidden</span>}
+                {retrievalDiagnostics.missingIndexRows > 0 && <span className="font-medium text-amber-700">{retrievalDiagnostics.missingIndexRows} missing index</span>}
+                {retrievalDiagnostics.staleIndexRows > 0 && <span className="font-medium text-amber-700">{retrievalDiagnostics.staleIndexRows} stale index</span>}
+                {retrievalDiagnostics.orphanedIndexRows > 0 && <span className="font-medium text-red-700">{retrievalDiagnostics.orphanedIndexRows} orphaned index</span>}
+              </div>
+            </div>
+          ) : filtered.length > 0 && statusTab === 'All' ? (
             <div className="mb-3 flex items-center gap-2 rounded-xl border border-teal-100 bg-teal-50/60 px-3.5 py-2.5 text-[12px] text-teal-800">
               <span className="font-semibold">Display order</span>
               <span className="text-teal-700/80">Use the ↑ and ↓ controls on each row to choose the order members see in Discover.</span>

@@ -8,6 +8,7 @@ vi.mock('wouter', () => ({ useLocation: () => ['/', setLocation] }));
 
 const sermon = (id: string, seconds?: number): SermonRecommendation => ({
   sermonId: id,
+  source: 'canonical',
   title: `Sermon ${id}`,
   speaker: 'Pastor Test',
   sermonDate: '2026-08-25',
@@ -50,5 +51,28 @@ describe('sermon search result cards', () => {
     render(<div data-testid="results">{emptyResults.slice(0, 3).map((item) => <SermonRecommendationCard key={item.sermonId} sermon={item} />)}</div>);
     expect(screen.queryByText('Sermon')).not.toBeInTheDocument();
     expect(screen.getByTestId('results')).toBeEmptyDOMElement();
+  });
+
+  it('does not render an internal Open Sermon action for archive-only results', () => {
+    const archive: SermonRecommendation = {
+      sermonId: 'archive-video-record',
+      source: 'archive',
+      title: 'The Father Runs',
+      speaker: 'Pastor Test',
+      sermonDate: '2026-08-25',
+      excerpt: 'A verified archive excerpt.',
+      reason: 'Matches an approved ICC sermon archive segment at 12:34.',
+      watchUrl: 'https://www.youtube.com/watch?v=verified123&t=754s',
+      watchTimestampSeconds: 754,
+      listenAvailable: false,
+    };
+
+    render(<SermonRecommendationCard sermon={archive} />);
+
+    expect(screen.queryByRole('button', { name: 'Open Sermon' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Watch · 12:34' })).toHaveAttribute(
+      'href',
+      archive.watchUrl,
+    );
   });
 });
