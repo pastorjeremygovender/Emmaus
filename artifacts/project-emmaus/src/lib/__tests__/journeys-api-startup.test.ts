@@ -37,4 +37,28 @@ describe('getDailyRhythmStartup response contract', () => {
       assignedDay: 3,
     });
   });
+
+  it('reuses the launch session when an offline request is retried', async () => {
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          state: 'OPENING_REQUIRED',
+          destination: '/daily-rhythm/day/1',
+          assignedDay: 1,
+        }), { status: 200 }),
+      );
+
+    await expect(getDailyRhythmStartup()).rejects.toThrow('Failed to fetch');
+    await expect(getDailyRhythmStartup()).resolves.toMatchObject({
+      state: 'OPENING_REQUIRED',
+      destination: '/daily-rhythm/day/1',
+    });
+
+    const firstHeaders = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers as HeadersInit);
+    const retryHeaders = new Headers(vi.mocked(fetch).mock.calls[1][1]?.headers as HeadersInit);
+    expect(firstHeaders.get('X-Emmaus-Startup-Session')).toBeTruthy();
+    expect(retryHeaders.get('X-Emmaus-Startup-Session'))
+      .toBe(firstHeaders.get('X-Emmaus-Startup-Session'));
+  });
 });

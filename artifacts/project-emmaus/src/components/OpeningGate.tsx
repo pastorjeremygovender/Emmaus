@@ -116,10 +116,12 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') refreshOnResume();
     };
     window.addEventListener('pageshow', refreshOnResume);
+    window.addEventListener('online', refreshOnResume);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       disposed = true;
       window.removeEventListener('pageshow', refreshOnResume);
+      window.removeEventListener('online', refreshOnResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [authLoading, loadingProfile, user, needsOpening, needsOnboarding]);

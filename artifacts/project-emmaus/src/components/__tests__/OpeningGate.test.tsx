@@ -95,6 +95,31 @@ describe('OpeningGate', () => {
     expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/2', { replace: true });
   });
 
+  it('retries the same opening after an offline startup reconnects', async () => {
+    getDailyRhythmStartup
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({
+        state: 'OPENING_REQUIRED',
+        destination: '/daily-rhythm/day/1',
+        assignedDay: 1,
+      });
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(screen.getByText('Today’s opening is unavailable')).toBeInTheDocument();
+    expect(setLocation).not.toHaveBeenCalledWith('/walk');
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(2);
+    expect(setLocation).toHaveBeenLastCalledWith('/daily-rhythm/day/1', { replace: true });
+    expect(setLocation).not.toHaveBeenCalledWith('/walk');
+  });
+
   it('rejects external and privileged pending destinations', () => {
     expect(safeOpeningDestination('https://example.com/walk')).toBeNull();
     expect(safeOpeningDestination('/admin')).toBeNull();
