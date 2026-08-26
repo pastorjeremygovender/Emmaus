@@ -287,10 +287,11 @@ export default function ExploreJourneys() {
     if (!pendingJourneyId) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcAlone = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(id);
+    await startJourney(id, srcAlone === 'nextStepsWalks' ? 'walk' : 'journey');
     setPendingJourneyId(null);
-    const srcAlone = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
     setLocation(`/journey/${id}/day/${day}?source=${srcAlone}`);
   }
 
@@ -298,11 +299,13 @@ export default function ExploreJourneys() {
     if (!pendingJourneyId || !user) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcShared = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    const displayOrigin = srcShared === 'nextStepsWalks' ? 'walk' : 'journey';
     // Single atomic call — throws on failure; the sheet surfaces the error inline.
-    await apiStartShared(user.id, { journeyId: id, roomId });
-    await startJourney(id); // sync local progress cache (no-op at DB)
+    await apiStartShared(user.id, { journeyId: id, roomId, displayOrigin });
+    await startJourney(id, displayOrigin); // sync local progress cache (no-op at DB)
     setPendingJourneyId(null);
-    const srcShared = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
     setLocation(`/journey/${id}/day/${day}?source=${srcShared}`);
   }
 
@@ -310,10 +313,12 @@ export default function ExploreJourneys() {
     if (!pendingJourneyId || !user) return;
     const id  = pendingJourneyId;
     const day = pendingStartDay;
-    const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName });
-    await Promise.all([startJourney(id), loadRooms()]);
+    const journeyType = journeys.find(j => j.id === id)?.journeyType;
+    const srcRoom = journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
+    const displayOrigin = srcRoom === 'nextStepsWalks' ? 'walk' : 'journey';
+    const { roomId } = await apiStartShared(user.id, { journeyId: id, roomName, displayOrigin });
+    await Promise.all([startJourney(id, displayOrigin), loadRooms()]);
     setPendingJourneyId(null);
-    const srcRoom = journeys.find(j => j.id === id)?.journeyType === 'walk' ? 'nextStepsWalks' : 'nextStepsJourneys';
     setLocation(`/journey/${id}/day/${day}?source=${srcRoom}`);
   }
 

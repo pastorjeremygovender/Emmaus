@@ -1109,7 +1109,16 @@ router.post("/journeys/:id/progress/start", async (req: Request, res: Response) 
     res.status(404).json({ error: "Published journey not found" });
     return;
   }
-  const prog = await store.startJourney(userId, String(req.params["id"]));
+  const requestedOrigin = req.body?.displayOrigin;
+  if (requestedOrigin !== undefined && store.parseJourneyDisplayOrigin(requestedOrigin) === null) {
+    res.status(400).json({ error: "displayOrigin must be walk or journey" });
+    return;
+  }
+  const prog = await store.startJourney(
+    userId,
+    String(req.params["id"]),
+    store.parseJourneyDisplayOrigin(requestedOrigin),
+  );
   res.json(prog);
 });
 

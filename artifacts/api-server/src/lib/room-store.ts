@@ -753,6 +753,8 @@ export interface StartSharedParams {
   /** Provide roomId to use an existing room, or roomName to create a new one. */
   roomId?: string;
   roomName?: string;
+  /** The member-facing surface that initiated this shared start. */
+  displayOrigin?: "walk" | "journey";
 }
 
 /**
@@ -819,10 +821,11 @@ export async function startShared(
     const now = new Date();
     await client.query(
       `INSERT INTO user_journey_progress
-         (user_id, journey_id, current_day, completed_days, started_at, status, created_at, updated_at)
-       VALUES ($1, $2, 1, '[]'::jsonb, $3, 'active', $3, $3)
-       ON CONFLICT (user_id, journey_id) DO NOTHING`,
-      [userId, journeyId, now]
+         (user_id, journey_id, current_day, completed_days, started_at, status, display_origin, created_at, updated_at)
+       VALUES ($1, $2, 1, '[]'::jsonb, $3, 'active', $4, $3, $3)
+       ON CONFLICT (user_id, journey_id) DO UPDATE
+         SET display_origin = COALESCE(user_journey_progress.display_origin, EXCLUDED.display_origin)`,
+      [userId, journeyId, now, params.displayOrigin ?? null]
     );
 
     await client.query("COMMIT");

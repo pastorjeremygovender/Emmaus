@@ -24,6 +24,7 @@ import { FavouriteButton } from '@/components/FavouriteButton';
 import { ContentStepRow } from '@/components/ContentStepList';
 import { resolveReturn } from '@/lib/return-context';
 import { getStepLabel, resolveStepPrefix } from '@/lib/step-label';
+import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
 import { apiLinkJourney } from '@/lib/rooms-api';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
 import { StudyTogetherSheet } from '@/components/StudyTogetherSheet';
@@ -61,6 +62,7 @@ export default function JourneyDetail() {
   const [showIntro, setShowIntro]             = useState(false);
 
   const journey = journeys.find(j => j.id === journeyId);
+  const displayOrigin = journeyDisplayOriginForSource(source, journey?.journeyType);
   const prog = journey ? progress[journey.id] : undefined;
   const startedIds = useMemo(() => new Set(Object.keys(progress)), [progress]);
   // Exclude completion steps — they are their own content type (Walk Complete page),
@@ -205,7 +207,7 @@ export default function JourneyDetail() {
   async function handleStartAlone() {
     if (!journey) return;
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(journey.id);
+    await startJourney(journey.id, displayOrigin);
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
@@ -214,9 +216,9 @@ export default function JourneyDetail() {
     if (!journey || !user) return;
     // Single atomic call: link journey + start progress in one DB transaction.
     // Throws on failure — the sheet catches this and shows an inline error.
-    await apiStartShared(user.id, { journeyId: journey.id, roomId });
+    await apiStartShared(user.id, { journeyId: journey.id, roomId, displayOrigin });
     // Sync the local progress cache (DB already has the record; this is a no-op at the DB level).
-    await startJourney(journey.id);
+    await startJourney(journey.id, displayOrigin);
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }
@@ -224,9 +226,9 @@ export default function JourneyDetail() {
   async function handleCreateAndStart(roomName: string) {
     if (!journey || !user) return;
     // Single atomic call: create room + link journey + start progress in one DB transaction.
-    const { roomId } = await apiStartShared(user.id, { journeyId: journey.id, roomName });
+    const { roomId } = await apiStartShared(user.id, { journeyId: journey.id, roomName, displayOrigin });
     // Sync frontend caches: progress (no-op at DB) + rooms list (shows the new room).
-    await Promise.all([startJourney(journey.id), loadRooms()]);
+    await Promise.all([startJourney(journey.id, displayOrigin), loadRooms()]);
     setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
     setPendingStart(false);
   }

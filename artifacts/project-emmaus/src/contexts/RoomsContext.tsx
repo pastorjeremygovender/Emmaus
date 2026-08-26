@@ -247,7 +247,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   const startSharedJourney = useCallback(async (roomId: string, journeyId: string, userId: string) => {
     // RM-2: use the atomic start-shared endpoint so progress is initialised
     // server-side in a single transaction, not a bare link call that can diverge.
-    await apiStartShared(userId, { journeyId, roomId });
+    await apiStartShared(userId, { journeyId, roomId, displayOrigin: 'journey' });
     // Invalidate cached detail so next load re-fetches with the linked journey
     setDetailCache(prev => {
       const next = { ...prev };

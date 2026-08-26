@@ -234,11 +234,16 @@ describe("ISO-2 — POST /journeys/:id/progress/start ignores userId in request 
       method: "POST",
       path: `/api/journeys/${JOURNEY_ID}/progress/start`,
       headers: aliceHeaders,
-      body: { userId: bobUserId },
+      body: { userId: bobUserId, displayOrigin: "walk" },
     });
 
     // The request must succeed (Alice can start a journey she hasn't started yet).
     assert.equal(res.status, 200, `Expected 200, got ${res.status}: ${res.body}`);
+    assert.equal(
+      json<{ displayOrigin?: string }>(res).displayOrigin,
+      "walk",
+      "ISO-2: the authenticated start must persist the requested display origin",
+    );
 
     // Verify only Alice's progress row was created — not a second row for Bob.
     const [aliceProgress] = await db
@@ -253,6 +258,26 @@ describe("ISO-2 — POST /journeys/:id/progress/start ignores userId in request 
     assert.ok(
       aliceProgress,
       "ISO-2: Alice's progress row must exist after /start",
+    );
+    assert.equal(
+      aliceProgress.displayOrigin,
+      "walk",
+      "ISO-2: the persisted display origin must be returned from the database row",
+    );
+
+    // A later re-entry from another surface must not silently reclassify the
+    // original start.
+    const reentry = await httpRequest({
+      method: "POST",
+      path: `/api/journeys/${JOURNEY_ID}/progress/start`,
+      headers: aliceHeaders,
+      body: { displayOrigin: "journey" },
+    });
+    assert.equal(reentry.status, 200, `Expected 200, got ${reentry.status}: ${reentry.body}`);
+    assert.equal(
+      json<{ displayOrigin?: string }>(reentry).displayOrigin,
+      "walk",
+      "ISO-2: a later Journey entry must not overwrite a Walk origin",
     );
 
     // Confirm: only one row exists for JOURNEY_ID with aliceUserId

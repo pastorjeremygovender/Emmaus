@@ -165,7 +165,24 @@ export type Progress = {
   lastDailyOpenDate?: string | null;
   /** Set when member opens the content — clears UPDATED badge */
   lastOpenedAt?: string | null;
+  /** The member-facing surface that originally started this progress. */
+  displayOrigin?: JourneyDisplayOrigin | null;
 };
+
+export type JourneyDisplayOrigin = 'walk' | 'journey';
+
+export function journeyDisplayOriginForSource(
+  source: string | null | undefined,
+  journeyType?: string,
+): JourneyDisplayOrigin {
+  if (source === 'today' || source === 'nextStepsWalks') return 'walk';
+  if (source === 'nextStepsJourneys' || source === 'collectionDetail') return 'journey';
+  // Shared room study belongs to the Journey surface. Direct/legacy routes
+  // preserve the existing content classification while making new starts
+  // explicit and server-persisted.
+  if (source === 'room') return 'journey';
+  return journeyType === 'walk' ? 'walk' : 'journey';
+}
 
 export type DailyRhythmStartup = {
   firstOpen: boolean;
@@ -677,10 +694,17 @@ export async function getAllProgress(): Promise<Record<string, Progress>> {
   return data.progress;
 }
 
-export async function startJourney(journeyId: string): Promise<Progress> {
+export async function startJourney(
+  journeyId: string,
+  displayOrigin?: JourneyDisplayOrigin,
+): Promise<Progress> {
   return apiFetch<Progress>(
     `/api/journeys/${encodeURIComponent(journeyId)}/progress/start`,
-    { method: 'POST' }
+    {
+      method: 'POST',
+      body: displayOrigin ? JSON.stringify({ displayOrigin }) : undefined,
+      headers: displayOrigin ? { 'Content-Type': 'application/json' } : undefined,
+    }
   );
 }
 

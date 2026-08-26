@@ -579,20 +579,33 @@ export default function Walk() {
     },
   );
 
-  // Split started journeys into walks (quick) vs longer studies.
-  // A walk remains visible in Today's Steps after it is started, regardless of
-  // whether it was discovered standalone or through a collection. Collection
-  // membership controls discovery/browsing, not whether the member's active
-  // progress is surfaced here.
+  // Split started journeys by the persisted member-facing origin. Content type
+  // alone is not enough: a walk opened through Discover → Journeys must stay
+  // out of Today's Steps, even when its journeyType is "walk".
+  // Legacy rows without an origin use the stable compatibility rule also used
+  // by the discovery API: collection walks belong to Journeys; standalone
+  // walks belong to Walks; all other growth content belongs to Journeys.
+  function effectiveDisplayOrigin(
+    journey: { journeyType: string; collectionId?: string | null },
+    prog: { displayOrigin?: 'walk' | 'journey' | null },
+  ): 'walk' | 'journey' {
+    if (prog.displayOrigin) return prog.displayOrigin;
+    return journey.journeyType === 'walk' && !journey.collectionId ? 'walk' : 'journey';
+  }
+
   const startedWalks          = startedJourneys.filter(({ journey }) => {
-    if (journey.journeyType !== 'walk') return false;
+    const prog = progress[journey.id];
+    if (!prog || effectiveDisplayOrigin(journey, prog) !== 'walk') return false;
     // Older Sermon Companion journeys were incorrectly migrated to "walk".
     // Keep them out of Walks even if the stored journey type is still wrong.
     const category = journey.category?.trim().toLowerCase();
     const tags = (journey.tags ?? []).map(tag => tag.trim().toLowerCase());
     return category !== 'companion' && !tags.includes('companion');
   });
-  const startedLongerJourneys = startedJourneys.filter(({ journey }) => journey.journeyType !== 'walk');
+  const startedLongerJourneys = startedJourneys.filter(({ journey }) => {
+    const prog = progress[journey.id];
+    return !!prog && effectiveDisplayOrigin(journey, prog) === 'journey';
+  });
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 

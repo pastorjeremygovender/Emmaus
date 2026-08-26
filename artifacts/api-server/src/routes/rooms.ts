@@ -553,10 +553,11 @@ router.post("/start-shared", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { journeyId, roomId, roomName } = req.body as {
+  const { journeyId, roomId, roomName, displayOrigin } = req.body as {
     journeyId?: string;
     roomId?: string;
     roomName?: string;
+    displayOrigin?: unknown;
   };
 
   if (!journeyId) {
@@ -571,6 +572,10 @@ router.post("/start-shared", async (req, res) => {
     res.status(400).json({ error: "Provide roomId or roomName, not both." });
     return;
   }
+  if (displayOrigin !== undefined && displayOrigin !== "walk" && displayOrigin !== "journey") {
+    res.status(400).json({ error: "displayOrigin must be walk or journey." });
+    return;
+  }
 
   try {
     const result = await startShared({
@@ -578,6 +583,7 @@ router.post("/start-shared", async (req, res) => {
       journeyId,
       roomId,
       roomName: roomName?.trim(),
+      displayOrigin: displayOrigin as "walk" | "journey" | undefined,
     });
     res.json(result);
   } catch (err) {

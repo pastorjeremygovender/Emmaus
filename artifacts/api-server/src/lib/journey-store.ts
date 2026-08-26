@@ -163,6 +163,15 @@ export interface FrontendProgress {
   lastOpenedAt?: string | null;
   /** Non-destructive hide: card removed from Today's Steps, progress preserved. */
   hiddenFromToday?: boolean;
+  /** The member-facing surface that originally started this progress. */
+  displayOrigin?: JourneyDisplayOrigin | null;
+}
+
+export type JourneyDisplayOrigin = "walk" | "journey";
+
+export function parseJourneyDisplayOrigin(value: unknown): JourneyDisplayOrigin | null {
+  if (value === "walk" || value === "journey") return value;
+  return null;
 }
 
 export interface DailyRhythmStartup {
@@ -249,6 +258,7 @@ function frontendProgressFromRaw(row: Record<string, unknown>): FrontendProgress
       ? new Date(String(row.last_opened_at ?? row.lastOpenedAt))
       : null,
     hiddenFromToday: Boolean(row.hidden_from_today ?? row.hiddenFromToday ?? false),
+    displayOrigin: parseJourneyDisplayOrigin(row.display_origin ?? row.displayOrigin),
   } as DbProgress);
 }
 
@@ -374,6 +384,7 @@ function toFrontendProgress(row: DbProgress): FrontendProgress {
     status: row.status ?? "active",
     lastOpenedAt: row.lastOpenedAt?.toISOString() ?? null,
     hiddenFromToday: (row as { hiddenFromToday?: boolean }).hiddenFromToday ?? false,
+    displayOrigin: parseJourneyDisplayOrigin((row as { displayOrigin?: unknown }).displayOrigin),
   };
 }
 
@@ -1427,7 +1438,11 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
   }
 }
 
-export async function startJourney(userId: string, journeyId: string): Promise<FrontendProgress> {
+export async function startJourney(
+  userId: string,
+  journeyId: string,
+  displayOrigin?: JourneyDisplayOrigin | null,
+): Promise<FrontendProgress> {
   const now = new Date();
   // Use onConflictDoNothing so concurrent calls (e.g. from the shared-start
   // endpoint and the legacy start endpoint racing) are safe under the unique
@@ -1444,6 +1459,7 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
     // a member who starts a NEW journey should not see UPDATED on reload.
     lastOpenedAt: now,
     dailyRhythmUnlockAt: now,
+    displayOrigin: displayOrigin ?? null,
     createdAt: now,
     updatedAt: now,
   })
@@ -1461,6 +1477,14 @@ export async function startJourney(userId: string, journeyId: string): Promise<F
       hiddenFromToday: false,
       lastOpenedAt: now,
       updatedAt: now,
+      ...(displayOrigin
+        ? {
+            // An origin is immutable once recorded. This also lets a legacy
+            // row be classified on its first explicit re-entry without
+            // reclassifying an already-owned Walk/Journey.
+            displayOrigin: sql`COALESCE(${userJourneyProgressTable.displayOrigin}, ${displayOrigin})`,
+          }
+        : {}),
     },
   })
   .returning();

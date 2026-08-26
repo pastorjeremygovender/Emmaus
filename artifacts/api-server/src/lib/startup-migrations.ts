@@ -546,6 +546,18 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: user_journey_progress.hidden_from_today column failed (non-fatal)");
   }
 
+  // ── Walk/Journey display origin (2026-08) ─────────────────────────────────
+  // Legacy progress has no trustworthy origin, so this remains nullable.
+  try {
+    await pool.query(`
+      ALTER TABLE user_journey_progress
+        ADD COLUMN IF NOT EXISTS display_origin text;
+    `);
+    logger.info("Startup migration: user_journey_progress.display_origin column ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: user_journey_progress.display_origin column failed (non-fatal)");
+  }
+
   // ── Daily Rhythm server-authoritative progression (2026-08) ────────────────
   try {
     await pool.query(`

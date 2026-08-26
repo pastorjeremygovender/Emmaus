@@ -17,6 +17,7 @@ import { ShareImageCard } from '@/components/ShareImageCard';
 import { BottomNav } from '@/components/BottomNav';
 import { dismissBadge } from '@/lib/badge-api';
 import { recordView } from '@/lib/history-api';
+import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
 import ApprovedIllustration from '@/components/ApprovedIllustration';
 
 function formatTimestamp(seconds: number): string {
@@ -92,6 +93,7 @@ export default function JourneyDay() {
   // Read return context from URL — set by the navigation caller
   const source   = new URLSearchParams(window.location.search).get('source');
   const sourceId = new URLSearchParams(window.location.search).get('sourceId');
+  const displayOrigin = journeyDisplayOriginForSource(source, journey?.journeyType);
 
   // URL for the dedicated Walk Complete page — used when the final step is done.
   const walkCompleteUrl = journeyId
@@ -106,7 +108,7 @@ export default function JourneyDay() {
 
   useEffect(() => {
     if (journeyId) {
-      startJourney(journeyId);
+      startJourney(journeyId, displayOrigin);
       // Clear UPDATED badge — member has opened the content (fire-and-forget).
       void dismissBadge('journey', journeyId);
       // Restore a hidden Walk to Today's Steps — idempotent if not hidden.
@@ -119,7 +121,7 @@ export default function JourneyDay() {
       ).catch(() => { /* non-fatal */ });
     }
     window.scrollTo(0, 0);
-  }, [journeyId]);
+  }, [journeyId, displayOrigin]);
 
   // ── Completion-step derivations (hoisted so the navigation effect below can use them) ──
   // If a Walk has a published completion step (is_completion_step=true) the last

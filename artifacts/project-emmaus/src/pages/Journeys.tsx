@@ -895,7 +895,7 @@ export default function Journeys() {
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
     // Throws on failure — the modal catches this and shows an inline error message.
-    await startJourney(item.id);
+    await startJourney(item.id, 'journey');
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -908,8 +908,8 @@ export default function Journeys() {
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
     // Single atomic call — throws on failure; the sheet surfaces the error inline.
-    await apiStartShared(user.id, { journeyId: item.id, roomId });
-    await startJourney(item.id); // sync local progress cache (no-op at DB)
+    await apiStartShared(user.id, { journeyId: item.id, roomId, displayOrigin: 'journey' });
+    await startJourney(item.id, 'journey'); // sync local progress cache (no-op at DB)
     setPendingItem(null);
     setLocation(destination);
     reload();
@@ -921,8 +921,8 @@ export default function Journeys() {
     const destination = item.route.includes('?')
       ? `${item.route}&source=nextStepsJourneys`
       : `${item.route}?source=nextStepsJourneys`;
-    const { roomId } = await apiStartShared(user.id, { journeyId: item.id, roomName });
-    await Promise.all([startJourney(item.id), loadRooms()]);
+    const { roomId } = await apiStartShared(user.id, { journeyId: item.id, roomName, displayOrigin: 'journey' });
+    await Promise.all([startJourney(item.id, 'journey'), loadRooms()]);
     setPendingItem(null);
     setLocation(destination);
     reload();

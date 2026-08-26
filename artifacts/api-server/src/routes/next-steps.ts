@@ -122,9 +122,17 @@ function primaryActionLabel(_contentType: ContentType, state: MemberProgressStat
 function journeyProgressState(
   j: journeyStore.FrontendJourney,
   allProgress: Record<string, journeyStore.FrontendProgress>,
+  expectedOrigin?: journeyStore.JourneyDisplayOrigin,
 ): MemberProgressState {
   const p = allProgress[j.id];
   if (!p) return "not-started";
+  // New rows carry an explicit origin. Legacy rows use the only stable
+  // compatibility signal available: collection membership for Walk-shaped
+  // content, and journey type for standalone growth content.
+  const legacyOrigin: journeyStore.JourneyDisplayOrigin =
+    j.journeyType === "walk" && !j.collectionId ? "walk" : "journey";
+  const effectiveOrigin = p.displayOrigin ?? legacyOrigin;
+  if (expectedOrigin && effectiveOrigin !== expectedOrigin) return "not-started";
   if (j.durationDays > 0 && p.completedDays.length >= j.durationDays) return "completed";
   return "in-progress";
 }
@@ -147,9 +155,15 @@ function buildJourneyItem(
   allProgress: Record<string, journeyStore.FrontendProgress>,
   journeyIdsWithIntro: Set<string> = new Set(),
   publishedSteps?: journeyStore.FrontendStep[],
+  expectedOrigin?: journeyStore.JourneyDisplayOrigin,
 ): NextStepsItem {
-  const state = journeyProgressState(j, allProgress);
-  const p = allProgress[j.id];
+  const state = journeyProgressState(j, allProgress, expectedOrigin);
+  const rawProgress = allProgress[j.id];
+  const legacyOrigin: journeyStore.JourneyDisplayOrigin =
+    j.journeyType === "walk" && !j.collectionId ? "walk" : "journey";
+  const p = rawProgress && (rawProgress.displayOrigin ?? legacyOrigin) === expectedOrigin
+    ? rawProgress
+    : expectedOrigin ? undefined : rawProgress;
 
   // For not-started walks: route to day/0 (Walk Introduction) when one exists,
   // otherwise day/1. This avoids hard-coding day 1 and satisfies the spec
@@ -478,13 +492,13 @@ router.get("/next-steps", async (req: Request, res: Response) => {
         description: c.description || undefined,
         displayOrder: c.displayOrder ?? 0,
         journeys: (byCollection.get(c.id) ?? []).map(j =>
-          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
+          buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro, undefined, "journey"),
         ),
       }));
 
     // Standalone journeys (no collection, not companion/daily-rhythm)
     const standaloneJourneys = standaloneRaw.map(j =>
-      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro),
+      buildJourneyItem(j, j.journeyType === "bible-study" ? "bible-study" : "journey", journeyProgress, journeyIdsWithIntro, undefined, "walk"),
     );
 
     // ── Content Groups (Task #614) ────────────────────────────────────────────

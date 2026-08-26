@@ -282,6 +282,8 @@ export interface StartSharedParams {
   roomId?: string;
   /** Create a new room with this name */
   roomName?: string;
+  /** The member-facing surface that initiated this shared start. */
+  displayOrigin?: 'walk' | 'journey';
 }
 
 export async function apiStartShared(

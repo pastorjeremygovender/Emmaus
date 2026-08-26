@@ -123,6 +123,8 @@ export type Progress = {
   lastOpenedAt?: string | null;
   /** Non-destructive hide: card removed from Today's Steps, all progress preserved. */
   hiddenFromToday?: boolean;
+  /** The member-facing surface that originally started this progress. */
+  displayOrigin?: api.JourneyDisplayOrigin | null;
 };
 
 export type DailyRhythmState = api.DailyRhythmState;
@@ -142,7 +144,7 @@ type JourneyContextType = {
     day: number,
     reflectionText: string,
   ) => Promise<api.CompleteStepResponse>;
-  startJourney: (journeyId: string) => Promise<void>;
+  startJourney: (journeyId: string, displayOrigin?: api.JourneyDisplayOrigin) => Promise<void>;
   // Admin mutations — return promises so callers can await and handle errors
   updateJourney: (journey: Journey) => Promise<Journey>;
   addJourney: (journey: Journey) => Promise<Journey>;
@@ -319,21 +321,26 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   // ─── User operations (fire-and-forget, optimistic) ─────────────────────────
 
   const startJourney = useCallback(
-    async (journeyId: string): Promise<void> => {
+    async (
+      journeyId: string,
+      displayOrigin?: api.JourneyDisplayOrigin,
+    ): Promise<void> => {
       if (!user?.id) throw new Error('Not signed in');
       const subject = user.id;
       const existing = progress[journeyId];
       // Starting an already-active journey is a no-op. Starting a paused or
       // completed journey is explicit re-engagement and must reach the server
       // so it becomes eligible for Today's Steps again.
-      if (existing && existing.status === 'active') return;
+      // An active row with an origin is already classified. Do not rewrite it
+      // just because the member later opened the same Walk elsewhere.
+      if (existing && existing.status === 'active' && existing.displayOrigin) return;
       if (existing) {
         setProgress(p => ({
           ...p,
           [journeyId]: { ...existing, status: 'active', hiddenFromToday: false },
         }));
         try {
-          const prog = await api.startJourney(journeyId);
+          const prog = await api.startJourney(journeyId, displayOrigin);
           if (activeSubjectRef.current !== subject) return;
           setProgress(p => ({ ...p, [journeyId]: prog }));
         } catch (err) {
@@ -350,10 +357,11 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
         completedDays: [],
         startedAt: new Date().toISOString(),
         lastCompletedAt: null,
+        displayOrigin: displayOrigin ?? null,
       };
       setProgress(p => ({ ...p, [journeyId]: optimistic }));
       try {
-        const prog = await api.startJourney(journeyId);
+        const prog = await api.startJourney(journeyId, displayOrigin);
         if (activeSubjectRef.current !== subject) return;
         setProgress(p => ({ ...p, [journeyId]: prog }));
       } catch (err) {

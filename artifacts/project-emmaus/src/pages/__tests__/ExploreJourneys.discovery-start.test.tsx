@@ -80,12 +80,26 @@ describe('Discovery → Today’s Steps contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(await screen.findByRole('button', { name: 'On my own' }));
 
-    await waitFor(() => expect(startJourney).toHaveBeenCalledWith('journey-1'));
+    await waitFor(() => expect(startJourney).toHaveBeenCalledWith('journey-1', 'walk'));
     expect(setLocation).toHaveBeenCalledWith(
       '/journey/journey-1/day/1?source=nextStepsWalks',
     );
     expect(startJourney.mock.invocationCallOrder[0]).toBeLessThan(
       setLocation.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('classifies a discovered non-walk journey for the Journeys surface', async () => {
+    journey.journeyType = 'course';
+    render(<ExploreJourneys />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'On my own' }));
+
+    await waitFor(() => expect(startJourney).toHaveBeenCalledWith('journey-1', 'journey'));
+    expect(setLocation).toHaveBeenCalledWith(
+      '/journey/journey-1/day/1?source=nextStepsJourneys',
     );
   });
 });
