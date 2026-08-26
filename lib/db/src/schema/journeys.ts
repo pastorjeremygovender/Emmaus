@@ -195,6 +195,36 @@ export type DailyRhythmGroupItem = typeof dailyRhythmGroupItemsTable.$inferSelec
 export type InsertJourneyStep = z.infer<typeof insertJourneyStepSchema>;
 export type JourneyStep = typeof journeyStepsTable.$inferSelect;
 
+// Server-authoritative Daily Rhythm opening decisions. This ledger is
+// intentionally separate from progress: opening a step is not completion.
+export const dailyRhythmOpeningLedgerTable = pgTable(
+  "daily_rhythm_opening_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    journeyId: text("journey_id").notNull().references(() => journeysTable.id, { onDelete: "cascade" }),
+    localDate: text("local_date").notNull(),
+    localTimezone: text("local_timezone").notNull().default("Africa/Johannesburg"),
+    assignedDay: integer("assigned_day").notNull(),
+    targetStepId: uuid("target_step_id").references(() => journeyStepsTable.id, { onDelete: "restrict" }),
+    state: text("state").notNull(),
+    completedToday: boolean("completed_today").notNull().default(false),
+    destination: text("destination").notNull(),
+    reason: text("reason").notNull(),
+    decisionId: uuid("decision_id").notNull().defaultRandom(),
+    launchSessionId: text("launch_session_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("daily_rhythm_opening_user_date_unique").on(table.userId, table.localDate),
+    unique("daily_rhythm_opening_decision_unique").on(table.decisionId),
+    index("daily_rhythm_opening_user_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+export type DailyRhythmOpeningLedger = typeof dailyRhythmOpeningLedgerTable.$inferSelect;
+
 // ─── User Journey Progress ──────────────────────────────────────────────────────
 
 export const userJourneyProgressTable = pgTable("user_journey_progress", {

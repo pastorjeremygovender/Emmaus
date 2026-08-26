@@ -10,8 +10,9 @@
  */
 
 import { eq, and, asc, desc, or, ilike, sql, inArray, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { db, pool } from "@workspace/db";
-import { isStartSharedReady } from "./feature-flags.js";
+import { isDailyRhythmOpeningReady, isStartSharedReady } from "./feature-flags.js";
 import {
   journeysTable,
   journeyStepsTable,
@@ -172,6 +173,16 @@ export interface DailyRhythmStartup {
   journeyId: string | null;
   currentDay: number | null;
   progress: FrontendProgress | null;
+  state: "OPENING_REQUIRED" | "COMPLETED" | "OPENING_ERROR";
+  completedToday: boolean;
+  assignedDay: number | null;
+  targetStepId: string | null;
+  localTimezone: string;
+  localDate: string | null;
+  reason: string;
+  decisionId: string | null;
+  launchSessionId: string;
+  diagnosticReference?: string;
 }
 
 export interface DailyRhythmState {
@@ -203,6 +214,18 @@ function calendarDateInTimezone(date: Date, timezone: string): string {
       month: "2-digit",
       day: "2-digit",
     }).format(date);
+  }
+}
+
+function validTimezone(value: unknown): string {
+  const candidate = typeof value === "string" && value.trim()
+    ? value.trim()
+    : "Africa/Johannesburg";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: candidate }).format();
+    return candidate;
+  } catch {
+    return "Africa/Johannesburg";
   }
 }
 
@@ -1174,19 +1197,34 @@ export async function getDailyRhythmState(userId: string): Promise<DailyRhythmSt
  * this is their first Emmaus opening for the server calendar date.
  */
 export async function getDailyRhythmStartup(userId: string, startupSessionId = ""): Promise<DailyRhythmStartup> {
+  if (!isDailyRhythmOpeningReady()) {
+    throw new Error("DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE");
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const journeyResult = await client.query(
       `SELECT id FROM journeys
        WHERE journey_type IN ('daily-rhythm', 'core') AND status = 'Published'
-       ORDER BY display_order ASC, created_at DESC LIMIT 1`,
+       ORDER BY CASE WHEN journey_type = 'daily-rhythm' THEN 0 ELSE 1 END,
+                display_order ASC, created_at DESC LIMIT 1`,
     );
     const journeyId = journeyResult.rows[0]?.id ? String(journeyResult.rows[0].id) : null;
     if (!journeyId) {
-      await client.query("COMMIT");
-      return { firstOpen: false, destination: "/walk", openingStateMutated: false, journeyId: null, currentDay: null, progress: null };
+      throw new Error("DAILY_RHYTHM_CONTENT_MISSING");
     }
+
+    const profileResult = await client.query(
+      `SELECT timezone FROM user_profiles
+       WHERE auth_subject = $1 OR email = $1
+       ORDER BY CASE WHEN auth_subject = $1 THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [userId],
+    );
+    const timezone = validTimezone(profileResult.rows[0]?.timezone);
+    const now = new Date();
+    const today = calendarDateInTimezone(now, timezone);
+    const requestedSession = startupSessionId.trim().slice(0, 160) || randomUUID();
 
     let progressResult = await client.query(
       `SELECT * FROM user_journey_progress
@@ -1194,16 +1232,15 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
        ORDER BY updated_at DESC LIMIT 1 FOR UPDATE`,
       [userId, journeyId],
     );
-    const now = new Date();
     if (progressResult.rows.length === 0) {
       await client.query(
         `INSERT INTO user_journey_progress
           (user_id, journey_id, current_day, completed_days, started_at,
            daily_rhythm_unlock_at, daily_rhythm_timezone, status, created_at, updated_at)
          VALUES ($1, $2, 1, '[]'::jsonb, $3::timestamp, $4::timestamptz,
-                 'Africa/Johannesburg', 'active', $3::timestamp, $3::timestamp)
+                  $5, 'active', $3::timestamp, $3::timestamp)
          ON CONFLICT (user_id, journey_id) DO NOTHING`,
-        [userId, journeyId, now, now],
+        [userId, journeyId, now, now, timezone],
       );
       progressResult = await client.query(
         `SELECT * FROM user_journey_progress
@@ -1239,10 +1276,18 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
         [row.id],
       )).rows[0];
     }
-    const timezone = String(row.daily_rhythm_timezone || "Africa/Johannesburg");
-    const today = calendarDateInTimezone(now, timezone);
+    const storedTimezone = validTimezone(timezone || row.daily_rhythm_timezone);
+    if (row.daily_rhythm_timezone !== storedTimezone) {
+      await client.query(
+        `UPDATE user_journey_progress
+            SET daily_rhythm_timezone = $1, updated_at = $2
+          WHERE id = $3`,
+        [storedTimezone, now, row.id],
+      );
+      row.daily_rhythm_timezone = storedTimezone;
+    }
     const unlockDate = row.daily_rhythm_unlock_at
-      ? calendarDateInTimezone(new Date(row.daily_rhythm_unlock_at), timezone)
+      ? calendarDateInTimezone(new Date(row.daily_rhythm_unlock_at), storedTimezone)
       : today;
     const completedDays = Array.isArray(row.completed_days) ? row.completed_days.map(Number) : [];
     const currentDay = Number(row.current_day || 1);
@@ -1272,13 +1317,56 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
       }
     }
 
-    const requestedSession = startupSessionId.trim().slice(0, 160);
-    const sameLaunch = Boolean(requestedSession) &&
-      row.daily_rhythm_startup_session === requestedSession &&
-      row.daily_rhythm_startup_date === today;
-    const firstOpen = sameLaunch || row.last_daily_open_date !== today;
+    const stepResult = await client.query(
+      `SELECT id, day FROM journey_steps
+         WHERE journey_id = $1 AND day = $2 AND status = 'Published'
+           AND COALESCE(is_completion_step, false) = false
+         LIMIT 1`,
+      [journeyId, Number(row.current_day || 1)],
+    );
+    if (!stepResult.rows[0]) throw new Error("DAILY_RHYTHM_CONTENT_UNAVAILABLE");
+
+    const existingLedger = await client.query(
+      `SELECT * FROM daily_rhythm_opening_ledger
+        WHERE user_id = $1 AND local_date = $2
+        FOR UPDATE`,
+      [userId, today],
+    );
+    let ledger = existingLedger.rows[0];
+    const sameLaunch = Boolean(ledger?.launch_session_id) &&
+      ledger.launch_session_id === requestedSession;
+    let firstOpen = false;
+    if (!ledger) {
+      firstOpen = true;
+      const ledgerInsert = await client.query(
+        `INSERT INTO daily_rhythm_opening_ledger
+          (user_id, journey_id, local_date, local_timezone, assigned_day,
+           target_step_id, state, completed_today, destination, reason,
+           decision_id, launch_session_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'OPENING_REQUIRED', false,
+                 $7, 'daily_rhythm_due', gen_random_uuid(), $8, $9, $9)
+         ON CONFLICT (user_id, local_date) DO NOTHING
+         RETURNING *`,
+        [
+          userId, journeyId, today, storedTimezone, Number(row.current_day || 1),
+          stepResult.rows[0].id,
+          `/daily-rhythm/day/${Number(row.current_day || 1)}`,
+          requestedSession, now,
+        ],
+      );
+      ledger = ledgerInsert.rows[0] ?? (await client.query(
+        `SELECT * FROM daily_rhythm_opening_ledger
+          WHERE user_id = $1 AND local_date = $2 FOR UPDATE`,
+        [userId, today],
+      )).rows[0];
+    }
+
+    if (!ledger) throw new Error("DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE");
+    const completedToday = Boolean(ledger.completed_today);
+    const state = completedToday ? "COMPLETED" : "OPENING_REQUIRED";
+    const destination = completedToday ? "/walk" : String(ledger.destination);
     const previousLastDailyOpenDate = row.last_daily_open_date ?? null;
-    if (firstOpen) {
+    if (firstOpen || row.last_daily_open_date !== today) {
       await client.query(
         `UPDATE user_journey_progress
          SET last_daily_open_date = $1, daily_rhythm_startup_session = COALESCE(NULLIF($2, ''), daily_rhythm_startup_session),
@@ -1292,13 +1380,22 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
     }
     await client.query("COMMIT");
     return {
-      firstOpen,
-      destination: firstOpen ? `/daily-rhythm/day/${Number(row.current_day || 1)}` : "/walk",
+      firstOpen: !completedToday && (firstOpen || sameLaunch),
+      destination,
       openingStateMutated: firstOpen && !sameLaunch,
       previousLastDailyOpenDate,
       journeyId,
       currentDay: Number(row.current_day || 1),
       progress: frontendProgressFromRaw(row),
+      state,
+      completedToday,
+      assignedDay: Number(ledger.assigned_day),
+      targetStepId: ledger.target_step_id ? String(ledger.target_step_id) : null,
+      localTimezone: storedTimezone,
+      localDate: today,
+      reason: String(ledger.reason),
+      decisionId: String(ledger.decision_id),
+      launchSessionId: String(ledger.launch_session_id || requestedSession),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -1413,6 +1510,21 @@ export async function completeStep(
         createdAt: now, updatedAt: now,
       });
     }
+  }
+
+  if (isDailyRhythm) {
+    const timezone = validTimezone(prog.dailyRhythmTimezone);
+    const localDate = calendarDateInTimezone(now, timezone);
+    await pool.query(
+      `UPDATE daily_rhythm_opening_ledger
+          SET completed_today = true,
+              state = 'COMPLETED',
+              destination = '/walk',
+              reason = 'daily_rhythm_completed',
+              updated_at = $1
+        WHERE user_id = $2 AND journey_id = $3 AND local_date = $4`,
+      [now, userId, journeyId, localDate],
+    );
   }
 
   return prog;

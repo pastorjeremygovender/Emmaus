@@ -9,6 +9,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import { extractUserId, requireAuth, requireSuperAdmin } from "../emmaus/auth.js";
 import * as store from "../lib/journey-store.js";
 import type { FrontendStep } from "../lib/journey-store.js";
@@ -92,29 +93,34 @@ router.get("/journeys/daily-rhythm/startup", async (req: Request, res: Response)
     res.set("Cache-Control", "no-store");
     const startupSession = String(req.get("x-emmaus-startup-session") ?? "").trim();
     const result = await store.getDailyRhythmStartup(userId, startupSession);
-    const { previousLastDailyOpenDate, ...publicResult } = result;
-    const johannesburgDate = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Johannesburg", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(new Date());
     console.info("[DailyOpen]", {
       traceId: String(req.id ?? "unknown"),
       timestamp: new Date().toISOString(),
       user: `u-${Buffer.from(userId).toString("base64url").slice(0, 10)}`,
       session: startupSession ? startupSession.slice(0, 12) : "none",
-      serverCalendarDate: johannesburgDate,
-      storedLastDailyOpenDate: previousLastDailyOpenDate,
+      localDate: result.localDate,
+      localTimezone: result.localTimezone,
       currentDay: result.currentDay,
-      completedDays: result.progress?.completedDays ?? [],
-      unlockAt: result.progress?.dailyRhythmUnlockAt ?? null,
-      firstOpen: result.firstOpen,
-      requestedDestination: result.firstOpen ? "daily-rhythm" : "walk",
+      state: result.state,
+      decisionId: result.decisionId,
       returnedDestination: result.destination,
-      openingStateMutated: result.openingStateMutated,
     });
-    res.json(publicResult);
+    res.json(result);
   } catch (err) {
-    console.error("GET /journeys/daily-rhythm/startup failed", err);
-    res.status(500).json({ error: "Could not resolve Daily Rhythm startup" });
+    const diagnosticReference = `opening-${randomUUID()}`;
+    const message = err instanceof Error ? err.message : "unknown";
+    console.error("GET /journeys/daily-rhythm/startup failed", {
+      diagnosticReference,
+      code: message,
+    });
+    const unavailable = message === "DAILY_RHYTHM_OPENING_LEDGER_UNAVAILABLE";
+    res.status(unavailable ? 503 : 500).json({
+      state: "OPENING_ERROR",
+      error: "Could not resolve today's opening.",
+      reason: unavailable ? "opening_ledger_unavailable" : "opening_resolution_failed",
+      diagnosticReference,
+      destination: null,
+    });
   }
 });
 

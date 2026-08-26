@@ -175,6 +175,16 @@ export type DailyRhythmStartup = {
   journeyId: string | null;
   currentDay: number | null;
   progress: Progress | null;
+  state: 'OPENING_REQUIRED' | 'COMPLETED' | 'OPENING_ERROR';
+  completedToday: boolean;
+  assignedDay: number | null;
+  targetStepId: string | null;
+  localTimezone: string;
+  localDate: string | null;
+  reason: string;
+  decisionId: string | null;
+  launchSessionId: string;
+  diagnosticReference?: string;
 };
 
 export type DailyRhythmState = {
@@ -213,8 +223,17 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
     headers: { 'X-Emmaus-Startup-Session': startupSession },
     signal: options?.signal,
   });
-  if (!res.ok) throw new Error('Could not resolve Daily Rhythm startup');
-  return res.json() as Promise<DailyRhythmStartup>;
+  const body = await res.json().catch(() => null) as Partial<DailyRhythmStartup> & { error?: string };
+  if (!res.ok || body?.state === 'OPENING_ERROR') {
+    const error = new Error(body?.error || 'Could not resolve Daily Rhythm startup') as Error & {
+      code?: string;
+      diagnosticReference?: string;
+    };
+    error.code = body?.state;
+    error.diagnosticReference = body?.diagnosticReference;
+    throw error;
+  }
+  return body as DailyRhythmStartup;
 }
 
 export type SearchResult = {

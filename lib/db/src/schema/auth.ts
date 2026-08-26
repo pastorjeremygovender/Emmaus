@@ -75,6 +75,7 @@ export const userProfilesTable = pgTable(
       .$type<AccountStatus>()
       .notNull()
       .default("active"),
+    timezone: text("timezone").notNull().default("Africa/Johannesburg"),
     removedAt: timestamp("removed_at", { withTimezone: true }),
     removedBy: varchar("removed_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true })

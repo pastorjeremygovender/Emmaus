@@ -30,7 +30,7 @@
 
 import { pool } from "@workspace/db";
 import { logger } from "./logger.js";
-import { setStartSharedReady } from "./feature-flags.js";
+import { setDailyRhythmOpeningReady, setStartSharedReady } from "./feature-flags.js";
 import { verifySermonStore } from "./sermon-store.js";
 import { FFMPEG_BIN, FFMPEG_AVAILABLE } from "./audio-transcription.js";
 
@@ -288,6 +288,65 @@ export async function runStartupMigrations(): Promise<void> {
     logger.info("Startup migration: user_profiles table ensured (idempotent)");
   } catch (err) {
     logger.warn({ err }, "Startup migration: user_profiles table failed (non-fatal)");
+  }
+
+  // ── Authenticated timezone + Daily Rhythm opening ledger (2026-08) ──────────
+  // These are schema-only changes. The unique ledger key prevents two API
+  // instances from issuing different opening decisions for one user/date.
+  try {
+    await pool.query(`
+      ALTER TABLE user_profiles
+        ADD COLUMN IF NOT EXISTS timezone text NOT NULL DEFAULT 'Africa/Johannesburg';
+      CREATE TABLE IF NOT EXISTS daily_rhythm_opening_ledger (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id text NOT NULL,
+        journey_id text NOT NULL REFERENCES journeys(id) ON DELETE CASCADE,
+        local_date text NOT NULL,
+        local_timezone text NOT NULL DEFAULT 'Africa/Johannesburg',
+        assigned_day integer NOT NULL,
+        target_step_id uuid REFERENCES journey_steps(id) ON DELETE RESTRICT,
+        state text NOT NULL,
+        completed_today boolean NOT NULL DEFAULT false,
+        destination text NOT NULL,
+        reason text NOT NULL,
+        decision_id uuid NOT NULL DEFAULT gen_random_uuid(),
+        launch_session_id text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+  } catch (err) {
+    logger.error({ err }, "Startup migration: Daily Rhythm opening ledger failed");
+  }
+
+  const openingClient = await pool.connect();
+  try {
+    await openingClient.query("SELECT pg_advisory_lock($1)", [7_391_853]);
+    await openingClient.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS daily_rhythm_opening_user_date_unique
+        ON daily_rhythm_opening_ledger (user_id, local_date);
+      CREATE UNIQUE INDEX IF NOT EXISTS daily_rhythm_opening_decision_unique
+        ON daily_rhythm_opening_ledger (decision_id);
+    `);
+    const verifyOpening = await openingClient.query(`
+      SELECT 1
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indexrelid
+       WHERE c.relname = 'daily_rhythm_opening_user_date_unique'
+         AND i.indisunique = true
+         AND i.indisvalid = true
+    `);
+    if (verifyOpening.rows.length > 0) {
+      setDailyRhythmOpeningReady();
+      logger.info("Startup migration: Daily Rhythm opening ledger verified and active");
+    } else {
+      logger.error("Startup migration: Daily Rhythm opening ledger index is not valid");
+    }
+  } catch (err) {
+    logger.error({ err }, "Startup migration: Daily Rhythm opening ledger index failed");
+  } finally {
+    await openingClient.query("SELECT pg_advisory_unlock($1)", [7_391_853]).catch(() => {});
+    openingClient.release();
   }
 
   // ── Walk Completion step column (2026-07) ─────────────────────────────────────
