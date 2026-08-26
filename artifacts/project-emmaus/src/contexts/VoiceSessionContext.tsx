@@ -239,6 +239,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
   // ── Phase 3: content context refs ─────────────────────────────────────────
   const appContextRef      = useRef<VoiceAppContext | null>(null);
+  const sermonResultsRef   = useRef<SermonRecommendation[]>([]);
   const bibleContextRef    = useRef<{ bookId: string; chapter: number; translationId: string } | null>(null);
   const readingSectionsRef = useRef<{ label: string; text: string }[]>([]);
   const readingIndexRef    = useRef(0);
@@ -256,6 +257,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // Cleared when a new reading session starts or the voice session ends.
   // Used by buildEmmausContext to give the LLM post-reading recall context.
   const lastReadSectionsRef = useRef<{ label: string; text: string }[]>([]);
+
+  useEffect(() => {
+    sermonResultsRef.current = sermonResults;
+  }, [sermonResults]);
 
   // ── Interrupt monitor refs ─────────────────────────────────────────────────
   const intStreamRef        = useRef<MediaStream | null>(null);
@@ -1486,6 +1491,144 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         voiceContextLoaded: !!appContextRef.current,
       }));
 
+      // Bible OPEN is the only Bible action that may navigate. The route is
+      // assembled from the parsed canonical reference, never from model prose.
+      if (intent.type === 'open-bible') {
+        const ref = intent.bibleRef;
+        const route = ref
+          ? `/bible/read/${ref.bookId}/${ref.chapter}${ref.verse ? `?startVerse=${ref.verse}` : ''}`
+          : '/bible';
+        if (!isSafeVoiceRoute(route)) {
+          const message = 'I could not safely open that passage.';
+          setResponse(message);
+          await playTTS(message, false);
+          return;
+        }
+        const label = ref
+          ? `Opening ${ref.bookName} ${ref.chapter}${ref.verse ? `:${ref.verse}` : ''}.`
+          : 'Opening My Bible.';
+        setResponse(label);
+        await playTTS(label, false);
+        if (cancelledRef.current) return;
+        const navFn = navigateRef.current ?? providerNavigateRef.current;
+        if (navFn) navFn(route);
+        else {
+          window.history.pushState({}, '', route);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+        return;
+      }
+
+      // Explicit READ actions are deterministic and do not need a model tool
+      // call. This also keeps reading local: opening the player does not force
+      // a full-page navigation.
+      if (intent.type === 'read-content') {
+        const args = {
+          type: intent.content,
+          ...(intent.bibleRef?.bookId ? { bibleBook: intent.bibleRef.bookId } : {}),
+          ...(intent.bibleRef?.chapter ? { bibleChapter: intent.bibleRef.chapter } : {}),
+          ...(intent.titleHint ? { titleHint: intent.titleHint } : {}),
+        };
+        const validation = validateVoiceReadAction(args, appContextRef.current);
+        if (!validation.ok) {
+          setResponse(validation.message);
+          setStreamingResponse('');
+          await playTTS(validation.message, false);
+          return;
+        }
+        const bibleRef = intent.bibleRef
+          ? {
+              bookId: intent.bibleRef.bookId,
+              bookName: intent.bibleRef.bookName,
+              chapter: intent.bibleRef.chapter,
+              ...(intent.bibleRef.translationId ? { translationId: intent.bibleRef.translationId } : {}),
+            }
+          : undefined;
+        const started = await loadAndStartReading(
+          validation.content,
+          bibleRef,
+          validation.titleHint,
+        );
+        if (!started) {
+          const message = 'I wasn’t able to load that reading. Please try again.';
+          setResponse(message);
+          setStreamingResponse('');
+          await playTTS(message, false);
+        }
+        return;
+      }
+
+      // Continue/open a named Walk from the server-provided Voice context.
+      // The client only uses the exact active journey ID and current day
+      // supplied by the authenticated context endpoint.
+      if (intent.type === 'continue-walk') {
+        const walks = appContextRef.current?.activeWalks ?? [];
+        const normalizedHint = intent.hint?.toLowerCase().trim();
+        const matches = normalizedHint
+          ? walks.filter((walk) => walk.title.toLowerCase().includes(normalizedHint))
+          : walks;
+        const walk = matches.length === 1 ? matches[0] : null;
+        if (walk) {
+          const route = `/journey/${walk.journeyId}/day/${walk.currentDay}`;
+          if (!isSafeVoiceRoute(route)) {
+            const message = 'I could not safely open that Walk.';
+            setResponse(message);
+            await playTTS(message, false);
+            return;
+          }
+          const message = `Continuing ${walk.title}, Day ${walk.currentDay}.`;
+          setResponse(message);
+          await playTTS(message, false);
+          if (cancelledRef.current) return;
+          const navFn = navigateRef.current ?? providerNavigateRef.current;
+          if (navFn) navFn(route);
+          else {
+            window.history.pushState({}, '', route);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+          return;
+        }
+        if (walks.length > 1) {
+          const message = `I found more than one active Walk: ${walks.map((walk) => walk.title).join(', ')}. Which one should we continue?`;
+          setHistory((prev) => [
+            ...prev,
+            { role: 'user' as const, content: text },
+            { role: 'assistant' as const, content: message },
+          ]);
+          setResponse(message);
+          await playTTS(message, false);
+          return;
+        }
+        if (walks.length === 0) {
+          const message = 'I could not find an active Walk to continue.';
+          setResponse(message);
+          await playTTS(message, false);
+          return;
+        }
+      }
+
+      // "Play it" may refer to the last verified sermon card. The only route
+      // accepted here is the route returned by canonical sermon retrieval.
+      if (intent.type === 'play-sermon') {
+        const sermon = sermonResultsRef.current[0];
+        const route = sermon?.listenPath ?? sermon?.openPath;
+        if (route && isSafeVoiceRoute(route)) {
+          const message = sermon?.listenPath
+            ? `Playing ${sermon.title}.`
+            : `Opening ${sermon.title}.`;
+          setResponse(message);
+          await playTTS(message, false);
+          if (cancelledRef.current) return;
+          const navFn = navigateRef.current ?? providerNavigateRef.current;
+          if (navFn) navFn(route);
+          else {
+            window.history.pushState({}, '', route);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+          return;
+        }
+      }
+
       // ── Reading commands ────────────────────────────────────────────────────
       if (intent.type === 'reading-command') {
         const { command } = intent;
@@ -1582,6 +1725,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       let toolCallPending: AnyVoiceToolCall | null = null;
       let hadToolCall = false;
       let fullResponse = '';
+      let canonicalActionRoute: string | null = null;
+      let canonicalActionLabel: string | null = null;
 
       // ── Start interrupt monitor NOW (before the LLM call) ────────────────────
       // Previously the monitor was only started inside playReadingSection, so the
@@ -1708,6 +1853,39 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
                if (info?.metadata?.sermonRecommendations) {
                  setSermonResults(info.metadata.sermonRecommendations);
                }
+               if (intent.type === 'open-resource') {
+                 const active = appContextRef.current;
+                 const activeTarget =
+                   intent.target === 'sermon-companion' && active?.sermonCompanion
+                     ? `/sermon-companion/${active.sermonCompanion.id}/overview`
+                     : intent.target === 'devotional' && active?.activeDevotionals[0]
+                       ? `/devotional/${active.activeDevotionals[0].seriesId}/day/${active.activeDevotionals[0].currentDay}`
+                       : intent.target === 'progress'
+                         ? '/personal'
+                         : intent.target === 'saved-reading'
+                           ? '/bible/history'
+                           : null;
+                 const rec = info?.metadata?.recommendations?.find((item) => {
+                   if (intent.target === 'sermon') return false;
+                   if (intent.target === 'journey') return item.type === 'journey' || item.type === 'walk';
+                   if (intent.target === 'bible-study') return item.type === 'bible-study';
+                   if (intent.target === 'devotional') return item.type === 'devotional';
+                   if (intent.target === 'sermon-companion') return item.type === 'sermon-companion';
+                   return false;
+                 });
+                 const sermon = intent.target === 'sermon'
+                   ? info?.metadata?.sermonRecommendations?.[0] ?? sermonResultsRef.current[0]
+                   : undefined;
+                 const route = activeTarget ?? sermon?.openPath ?? rec?.path ?? null;
+                 if (route && isSafeVoiceRoute(route)) {
+                   canonicalActionRoute = route;
+                   canonicalActionLabel = sermon
+                     ? `Opening ${sermon.title}.`
+                     : activeTarget
+                       ? 'Opening that verified Emmaus resource.'
+                       : `Opening ${rec?.title ?? 'that verified Emmaus resource'}.`;
+                 }
+               }
               if (!_hadTool && !cancelledRef.current) {
                 // Pure conversation — persist to local history for multi-turn context
                 setHistory((prev) => [
@@ -1733,6 +1911,18 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
       abortRef.current = null;
       if (cancelledRef.current) return;
+
+      if (canonicalActionRoute) {
+        setResponse(canonicalActionLabel ?? 'Opening that verified Emmaus resource.');
+        setStreamingResponse('');
+        const navFn = navigateRef.current ?? providerNavigateRef.current;
+        if (navFn) navFn(canonicalActionRoute);
+        else {
+          window.history.pushState({}, '', canonicalActionRoute);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+        return;
+      }
 
       // ── Execute pending tool call ─────────────────────────────────────────────
       if (hadToolCall && toolCallPending) {

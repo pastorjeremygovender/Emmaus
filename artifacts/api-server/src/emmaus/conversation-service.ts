@@ -45,12 +45,14 @@ import {
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue } from "./resource-catalogue.js";
+import { actionsForResource } from "./action-registry.js";
 import { logger } from "../lib/logger.js";
 import {
   extractValidatedScriptureReferences,
   validateCitations,
   validateModelResponse,
 } from "./citation-validation.js";
+import { classifyEmmausIntent } from "@workspace/api-zod";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -333,6 +335,7 @@ export async function handleConversation(
 
   // ── 1. Route classification + name-update detection ───────────────────────
   const route = classifyRoute(req.message);
+  const requestedIntent = classifyEmmausIntent(req.message);
   const settings = routeSettings(route);
   const detectedNameUpdate = detectNameUpdate(req.message);
 
@@ -359,6 +362,7 @@ export async function handleConversation(
   // sermon retrieval finds a verified timestamped match; memories personalise
   // the system context with previously approved notes about the user.
   const tSearch = Date.now();
+  const retrievalFailures: string[] = [];
   const bibleBookId = contextInput.bibleContext?.bookId;
   const bibleChapter = contextInput.bibleContext?.chapter;
   // AE-1: resolve userId early so we can fetch memories in this parallel step.
@@ -367,10 +371,18 @@ export async function handleConversation(
   // Scripture is deliberately awaited before Emmaus resources. This ordering is
   // part of the safety contract, not merely prompt wording.
   const biblePassages = await Promise.resolve(searchBibleVerses(req.message, 5))
-    .catch((): BiblePassage[] => []);
+    .catch((err): BiblePassage[] => {
+      retrievalFailures.push("scripture");
+      logger.warn({ err: String(err) }, "emmaus: Scripture retrieval unavailable");
+      return [];
+    });
   logger.info(`[emmaus:${reqId}] scripture_retrieved count=${biblePassages.length}`);
   const [sermonResults, userMemories, resourceCatalogue, userRooms] = await Promise.all([
-    retrieveSermons(req.message, bibleBookId, bibleChapter, 3).catch(() => []),
+    retrieveSermons(req.message, bibleBookId, bibleChapter, 3).catch((err) => {
+      retrievalFailures.push("sermons");
+      logger.warn({ err: String(err) }, "emmaus: sermon retrieval unavailable");
+      return [];
+    }),
     preUserId !== "anonymous"
       ? store.getMemories(preUserId).catch((): EmmausMemory[] => [])
       : Promise.resolve([] as EmmausMemory[]),
@@ -392,6 +404,7 @@ export async function handleConversation(
 
   // ── 4. Get or create conversation ─────────────────────────────────────────
   let conversationId = contextInput.conversationId;
+  let canonicalHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
   if (!conversationId) {
     const conv = await store.createConversation({
       userId,
@@ -411,6 +424,11 @@ export async function handleConversation(
       res.end();
       return;
     }
+    const storedMessages = await store.getMessages(conversationId);
+    canonicalHistory = storedMessages
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({ role: message.role, content: message.content }))
+      .slice(-settings.historyTurns);
   }
 
   // ── 5. Persist user message ───────────────────────────────────────────────
@@ -471,6 +489,16 @@ export async function handleConversation(
   // Inject verified sermon info into the context block so the model can
   // reference it naturally in prose — but card data comes from retrieval only.
   let contextBlock = builtCtx.systemContextBlock;
+  contextBlock +=
+    `\n\nREQUESTED EMMAUS INTENT: ${requestedIntent.mode}. ` +
+    "A Bible reference is evidence, not permission to navigate. " +
+    (requestedIntent.mode === "ASK"
+      ? "Answer in Ask Emmaus and surface validated Scripture; do not direct the member to a route automatically."
+      : requestedIntent.mode === "FIND"
+        ? "Return validated Bible/resource results inside Ask Emmaus; do not navigate automatically."
+        : requestedIntent.mode === "READ"
+          ? "Use only validated published content or the validated Bible reference for reading; never invent a route or media URL."
+          : "Open only the exact server-valid destination represented by the validated reference; never use a model-generated route.");
 
   // AE-1: Inject approved user memories (fetched in parallel at step 3).
   // Mirrors the format in context-builder.ts so the model sees a consistent block.
@@ -525,6 +553,7 @@ export async function handleConversation(
         resourceLines.join("\n");
     }
     if (resourceCatalogue.sourceFailures.length > 0) {
+      retrievalFailures.push(...resourceCatalogue.sourceFailures);
       contextBlock +=
         `\n\nRESOURCE CATALOGUE NOTICE: These sources were unavailable for this request: ${resourceCatalogue.sourceFailures.join(", ")}. ` +
         "Do not imply that unavailable sources were searched or complete.";
@@ -557,8 +586,11 @@ export async function handleConversation(
   const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
 
   // Inject conversation history — capped by route
-  if (req.history && req.history.length > 0) {
-    for (const h of req.history.slice(-settings.historyTurns)) {
+  const historyForPrompt = canonicalHistory.length > 0
+    ? canonicalHistory
+    : (req.history ?? []).slice(-settings.historyTurns);
+  if (historyForPrompt.length > 0) {
+    for (const h of historyForPrompt) {
       const content =
         h.role === "assistant" ? extractMeta(h.content).cleanText : h.content;
       messages.push({ role: h.role, content });
@@ -662,6 +694,11 @@ export async function handleConversation(
   finalMeta.scripture = validatedMeta.scripture;
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
+  finalMeta.requestedIntent = requestedIntent.mode;
+  finalMeta.retrievalFailures = Array.from(new Set(retrievalFailures));
+  finalMeta.resourceActions = resourceCatalogue.resources
+    .slice(0, 28)
+    .flatMap((resource) => actionsForResource(resource));
   finalMeta.sermonRecommendations = sermonResults.map((sermon) => ({
     sermonId: sermon.sermonId,
     title: sermon.title,

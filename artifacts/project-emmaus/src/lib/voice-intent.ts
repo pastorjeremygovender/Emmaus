@@ -12,13 +12,27 @@
  *   not memorising a set of commands.
  */
 
+import {
+  classifyEmmausIntent,
+  parseCanonicalBibleReference,
+  type CanonicalBibleReference,
+} from '../../../../lib/api-zod/src/emmaus-intent';
+
 // ─── Intent types ─────────────────────────────────────────────────────────────
 
 export type NavigateTarget = 'walk' | 'bible' | 'discover' | 'back' | 'journeys';
 export type ReadingCommand  = 'pause' | 'continue' | 'repeat' | 'next-section' | 'explain' | 'pray';
-export type ReadContentType = 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible';
+export type ReadContentType = 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible' | 'walk';
+export type OpenResourceTarget =
+  | 'sermon-companion'
+  | 'sermon'
+  | 'bible-study'
+  | 'journey'
+  | 'devotional'
+  | 'saved-reading'
+  | 'progress';
 
-export interface BibleRef {
+export interface BibleRef extends CanonicalBibleReference {
   bookId:   string;
   bookName: string;
   chapter:  number;
@@ -36,6 +50,10 @@ export type VoiceIntent =
   | { type: 'navigate'; target: NavigateTarget }                // "open my bible"
   | { type: 'reading-command'; command: ReadingCommand }        // "pause", "explain that"
   | { type: 'read-content'; content: ReadContentType; bibleRef?: BibleRef; titleHint?: string }
+  | { type: 'open-bible'; bibleRef?: BibleRef }
+  | { type: 'find-bible'; bibleRef?: BibleRef; query: string }
+  | { type: 'open-resource'; target: OpenResourceTarget; hint?: string }
+  | { type: 'play-sermon' }
   | { type: 'continue-walk'; hint?: string }                    // "continue my walk"
   | { type: 'continue-reading'; direction?: 'next' | 'previous' }; // "next / previous chapter"
 
@@ -176,6 +194,9 @@ const BOOK_MAP: Record<string, { id: string; name: string }> = {
  * Returns the ref with any explicitly named translationId attached.
  */
 function parseBibleRef(t: string): BibleRef | null {
+  const shared = parseCanonicalBibleReference(t);
+  if (shared) return shared;
+
   t = normalizeSpokenReferenceNumbers(t);
   // ── Extract explicit translation suffix first ──────────────────────────
   // Pattern: "in [the] <translation>" at the end of the utterance.
@@ -247,6 +268,56 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
     /^(?:emmaus[,\s]+|hey emmaus[,\s]+)?(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)/;
   const t = raw.replace(POLITE_PREFIX, '').trim();
 
+  // Classify Scripture intent before generic navigation. A Bible reference in
+  // an explanation or question is still ASK; only an explicit imperative can
+  // produce an OPEN or READ action.
+  const sharedIntent = classifyEmmausIntent(t);
+  if (sharedIntent.mode === 'READ' && sharedIntent.bibleRef) {
+    return { type: 'read-content', content: 'bible', bibleRef: sharedIntent.bibleRef };
+  }
+  if (sharedIntent.mode === 'OPEN') {
+    return { type: 'open-bible', bibleRef: sharedIntent.bibleRef };
+  }
+  if (sharedIntent.mode === 'FIND') {
+    return {
+      type: 'find-bible',
+      bibleRef: sharedIntent.bibleRef,
+      query: sharedIntent.query ?? t,
+    };
+  }
+
+  if (/^(?:play|listen to)\s+(?:it|that|the sermon|the message)$/i.test(t)) {
+    return { type: 'play-sermon' };
+  }
+
+  const openResource = t.match(
+    /^(?:show me|open|go to|take me to)\s+(?:my\s+|the\s+|a\s+)?(.+)$/i,
+  );
+  if (openResource) {
+    const phrase = openResource[1].trim();
+    if (/\bsermon companion\b|\bsermon devotional\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'sermon-companion' };
+    }
+    if (/\bsermons?\b|\bmessages?\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'sermon', hint: phrase };
+    }
+    if (/\bjourneys?\b|\bwalks?\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'journey', hint: phrase };
+    }
+    if (/\bdevotionals?\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'devotional', hint: phrase };
+    }
+    if (/\bbible studies?\b|\bstudy notes?\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'bible-study', hint: phrase };
+    }
+    if (/\bprogress\b|\bcompleted\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'progress' };
+    }
+    if (/\bsaved\b.*\bread to me\b|\bread to me\b.*\bsessions?\b/i.test(phrase)) {
+      return { type: 'open-resource', target: 'saved-reading' };
+    }
+  }
+
   // ─── Reading commands (only when a session is active) ───────────────────
   // These are short, unambiguous phrases that control the reading engine.
   if (isReading) {
@@ -291,7 +362,7 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
     return { type: 'navigate', target: 'back' };
 
   // "open [my/the/a] bible/scripture" — must NOT require "my"; "the" is equally common
-  if (/open (?:my\s+|the\s+|a\s+)?(?:bible|scripture)|take me to (?:my\s+|the\s+)?bible|go to (?:my\s+|the\s+)?bible|show me (?:my\s+|the\s+)?bible/.test(t))
+  if (/^(?:open|take me to|go to|show me) (?:my\s+|the\s+|a\s+)?(?:bible|scripture)$/.test(t))
     return { type: 'navigate', target: 'bible' };
 
   if (/open discover(y)?|go to discover(y)?|take me to discover(y)?|show me discover(y)?/.test(t))
@@ -384,6 +455,10 @@ export function resolveIntent(transcript: string, isReading: boolean): VoiceInte
     if (m && m[1].length > 2 && m[1].length < 50) {
       return { type: 'continue-walk', hint: m[1].trim() };
     }
+  }
+
+  if (/^take me back to (?:my\s+)?(?:walk|journey)$/i.test(t)) {
+    return { type: 'continue-walk' };
   }
 
   // ─── Default: everything else goes to Emmaus with enriched context ───────

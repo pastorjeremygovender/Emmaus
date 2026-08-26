@@ -18,7 +18,7 @@ const API_BASE = (import.meta.env.VITE_API_URL ?? '') as string;
 export type VoiceToolName = 'read_content' | 'navigate' | 'continue_walk' | 'search_sermons';
 
 export interface VoiceReadContentArgs {
-  type: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible';
+  type: 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'bible' | 'walk';
   bibleBook?: string;
   bibleChapter?: number;
   titleHint?: string;
@@ -143,12 +143,13 @@ export function sendVoiceConversation(params: {
         return;
       }
 
-      const reader  = resp.body.getReader();
-      const decoder = new TextDecoder();
+       const reader  = resp.body.getReader();
+       const decoder = new TextDecoder();
       let buf  = '';
       let fullText    = '';
       let hadToolCall = false;
-      let doneInfo: VoiceDoneInfo | undefined;
+       let doneInfo: VoiceDoneInfo | undefined;
+       let terminalEvent = false;
 
       const pendingTools: AnyVoiceToolCall[] = [];
 
@@ -186,7 +187,8 @@ export function sendVoiceConversation(params: {
               const tc = { tool: evt.tool, args: evt.args ?? {} } as unknown as AnyVoiceToolCall;
               pendingTools.push(tc);
               params.callbacks.onToolCall(tc);
-            } else if (evt.type === 'done') {
+             } else if (evt.type === 'done') {
+               terminalEvent = true;
               doneInfo = {
                 ...(evt.conversationId ? { conversationId: evt.conversationId } : {}),
                 ...(evt.messageId ? { messageId: evt.messageId } : {}),
@@ -198,8 +200,33 @@ export function sendVoiceConversation(params: {
             }
           } catch { /* skip malformed line */ }
         }
-      }
+       }
 
+       // Flush a final unterminated line before deciding whether the stream
+       // completed. The canonical transport requires a terminal event; a
+       // proxy/server close is retryable, not a successful Voice response.
+       buf += decoder.decode();
+       if (buf.trim().startsWith('data: ')) {
+         try {
+           const evt = JSON.parse(buf.trim().slice(6)) as {
+             type: string; conversationId?: string; messageId?: string;
+             metadata?: import('./emmaus-client').EmmausMetadata;
+           };
+           if (evt.type === 'done') {
+             terminalEvent = true;
+             doneInfo = {
+               ...(evt.conversationId ? { conversationId: evt.conversationId } : {}),
+               ...(evt.messageId ? { messageId: evt.messageId } : {}),
+               ...(evt.metadata ? { metadata: evt.metadata } : {}),
+             };
+           }
+         } catch { /* incomplete/malformed final event is handled below */ }
+       }
+       reader.releaseLock();
+       if (!terminalEvent) {
+         params.callbacks.onError('Emmaus didn’t complete the Voice response. Please try again.');
+         return;
+       }
        params.callbacks.onDone(fullText, hadToolCall, doneInfo);
 
     } catch (err) {

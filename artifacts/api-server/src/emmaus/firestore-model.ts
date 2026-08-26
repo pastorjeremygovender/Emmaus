@@ -144,6 +144,18 @@ export interface EmmausResponseMetadata {
     reason: string;
   }>;
   prayer?: string | null;
+  /** Shared pre-action intent classification used by typed Ask Emmaus and Voice. */
+  requestedIntent?: "ASK" | "READ" | "OPEN" | "FIND";
+  /** Retrieval sources that were unavailable; callers should offer a retry. */
+  retrievalFailures?: string[];
+  /** Server-generated executable actions for catalogue-backed resources. */
+  resourceActions?: Array<{
+    kind: "OPEN" | "READ" | "CONTINUE";
+    resourceType: EmmausResourceType;
+    resourceId: string;
+    parentId?: string;
+    route: string;
+  }>;
 }
 
 // ─── Firestore Document Interfaces ───────────────────────────────────────────

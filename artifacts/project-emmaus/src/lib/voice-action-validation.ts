@@ -58,10 +58,19 @@ export function validateVoiceReadAction(
   }
 
   const titleHint = typeof args.titleHint === 'string' ? args.titleHint.trim().slice(0, 80) : undefined;
-  return { ok: true, action: 'read-content', content: type, ...(titleHint ? { titleHint } : {}) };
+  return {
+    ok: true,
+    action: 'read-content',
+    content: type as 'bible' | 'daily-rhythm' | 'devotional' | 'sermon-companion' | 'walk',
+    ...(titleHint ? { titleHint } : {}),
+  };
 }
 
 export function isSafeVoiceRoute(route: unknown): route is string {
   if (typeof route !== 'string' || route.length > 300 || /^(?:javascript|data|blob):/i.test(route)) return false;
-  return /^\/(?:walk|bible|bible\/read\/[A-Za-z0-9_-]+\/\d+|discover(?:\?q=[^#]*)?|journeys|personal\/ask-emmaus\/voice|journey\/[A-Za-z0-9_-]+\/day\/\d+)$/.test(route);
+  const [pathname, query = ''] = route.split('?', 2);
+  if (query && !/^(?:startVerse=\d{1,3}(?:&endVerse=\d{1,3})?|endVerse=\d{1,3})$/.test(query)) {
+    return false;
+  }
+  return /^\/(?:walk|bible|discover|journeys|personal\/ask-emmaus\/voice|personal|daily-rhythm\/day\/\d+|bible\/history|journey\/[A-Za-z0-9_-]+\/day\/\d+|journeys\/[A-Za-z0-9_-]+|devotional\/[A-Za-z0-9_-]+\/day\/\d+|sermon-companion\/[A-Za-z0-9_-]+\/(?:overview|day\/\d+)|sermon\/[A-Za-z0-9_-]+|rooms\/[A-Za-z0-9_-]+|bible\/read\/[A-Za-z0-9_-]+\/\d+)$/.test(pathname);
 }

@@ -17,6 +17,8 @@ import { buildScriptureRoute, canonicalBibleBookName } from "./citation-validati
 
 export type EmmausResourceType =
   | "journey"
+  | "walk"
+  | "walk_step"
   | "bible-study"
   | "devotional"
   | "sermon-companion"
@@ -74,12 +76,16 @@ function makeResource(
 }
 
 function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query: string, bookId?: string, chapter?: number, dailyRhythm = false): EmmausResource[] {
-  const type: EmmausResourceType = journey.journeyType === "bible-study" ? "bible-study" : "journey";
+  const type: EmmausResourceType = journey.journeyType === "bible-study"
+    ? "bible-study"
+    : journey.journeyType === "walk" || journey.journeyType === "core"
+      ? "walk"
+      : "journey";
   const route = `/journeys/${journey.id}`;
   const stepResources = steps
     .filter(s => s.status === "Published" && !s.isCompletionStep)
     .map((s: FrontendStep): Omit<EmmausResource, "relevance"> => ({
-       type: dailyRhythm ? "daily-rhythm" : type,
+       type: dailyRhythm ? "daily-rhythm" : type === "walk" ? "walk_step" : type,
        resourceId: s.id,
        parentId: journey.id,
       title: `${journey.title} — ${s.title}`,
@@ -87,20 +93,20 @@ function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query
       scripture: s.scripture || s.scriptureReferences?.map(r => r.reference).join(", ") || undefined,
       description: clean(s.mentorIntro || s.devotional) || undefined,
       excerpts: [s.devotional, s.reflectionQuestion, s.prayerPrompt, s.actionStep, s.memoryVerse].filter(Boolean).map(v => clean(v)),
-       provenance: `Published ${type === "bible-study" ? "Bible Study" : "Journey"} step`,
+        provenance: `Published ${type === "bible-study" ? "Bible Study" : type === "walk" ? "Walk" : "Journey"} step`,
     }))
     .map(r => makeResource(r, query, bookId, chapter));
 
   return [
     makeResource({
-      type: dailyRhythm ? "daily-rhythm" : type,
+       type: dailyRhythm ? "daily-rhythm" : type,
        resourceId: journey.id,
       title: journey.title,
       route,
       scripture: journey.scriptureReference,
       description: journey.description || journey.introductionContent,
       excerpts: [journey.description, journey.introductionContent, journey.subtitle].filter(Boolean).map(v => clean(v)),
-       provenance: `Published ${type === "bible-study" ? "Bible Study" : "Journey"}`,
+       provenance: `Published ${type === "bible-study" ? "Bible Study" : type === "walk" ? "Walk" : "Journey"}`,
     }, query, bookId, chapter),
     ...stepResources,
   ];

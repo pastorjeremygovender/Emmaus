@@ -17,6 +17,7 @@ import { toEmmausContextInput } from "../emmaus/context-builder.js";
 import {
   buildVoiceContextEnvelope,
   normalizeVoiceHistory,
+  normalizeVoiceAppContext,
   type VoiceConversationRequest,
 } from "../emmaus/voice-contracts.js";
 import { isAdmin } from "../lib/user-role-store.js";
@@ -468,11 +469,14 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
    */
   const requestId = Math.random().toString(36).slice(2, 10);
   const contextRecord = rawContext ?? {};
+  const voiceAppContext = normalizeVoiceAppContext(
+    body.voiceAppContext ?? contextRecord.voiceAppContext,
+  );
   const canonicalContext = toEmmausContextInput(
     {
       ...contextRecord,
       userName: undefined,
-      voiceAppContext: undefined,
+      voiceAppContext,
     },
     userId,
   );
@@ -487,6 +491,7 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
   });
   if (lastReadContext) {
     canonicalContext.voiceAppContext =
+      (voiceAppContext ? `${voiceAppContext}\n\n` : "") +
       "Verified reading follow-up text from the current Voice session:\n" + lastReadContext;
   }
 

@@ -144,6 +144,7 @@ export default function AskEmmausConversation() {
   const [isPastoralMode, setIsPastoralMode] = useState(false);
   const [memoryPrompt, setMemoryPrompt] = useState<string | null>(null);
   const [memoryDecided, setMemoryDecided] = useState(false);
+  const [retrievalFailure, setRetrievalFailure] = useState<string[] | null>(null);
 
   // ─── 20-second slow-response timer ─────────────────────────────────────────
   useEffect(() => {
@@ -203,6 +204,7 @@ export default function AskEmmausConversation() {
     ) => {
       if (!user) return;
 
+      setRetrievalFailure(null);
       const streamingMsgId = `streaming-${Date.now()}`;
       streamingIdRef.current = streamingMsgId;
       setIsStreaming(true);
@@ -239,6 +241,11 @@ export default function AskEmmausConversation() {
                 ? { ...m, isStreaming: false, metadata: payload.metadata }
                 : m
             )
+          );
+          setRetrievalFailure(
+            payload.metadata.retrievalFailures?.length
+              ? payload.metadata.retrievalFailures
+              : null,
           );
           // Persist name change when Emmaus detected a "call me [name]" request
           if (payload.detectedNameUpdate) {
@@ -367,6 +374,18 @@ export default function AskEmmausConversation() {
     setMemoryDecided(false);
 
     streamResponse(trimmed, conversationId, history);
+  }
+
+  function handleRetryRetrieval() {
+    if (!retrievalFailure || isStreaming || !user) return;
+    const previousUser = [...messages].reverse().find((message) => message.role === 'user');
+    if (!previousUser) return;
+    const history: HistoryItem[] = messages
+      .filter((m) => !m.isStreaming)
+      .map((m) => ({ role: m.role, content: m.content }));
+    const userMsgId = `user-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: previousUser.content }]);
+    streamResponse(previousUser.content, conversationId, history);
   }
 
   // ─── Memory consent ──────────────────────────────────────────────────────────
@@ -547,6 +566,23 @@ export default function AskEmmausConversation() {
               className="text-[12px] text-amber-600 hover:text-amber-800 underline mt-0.5"
             >
               Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {retrievalFailure && !isStreaming && (
+        <div className="flex-shrink-0 px-4 pt-2 max-w-[560px] mx-auto w-full">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[13px] text-amber-800">
+              I couldn’t reach all of the trusted sources for this answer.
+            </p>
+            <button
+              type="button"
+              onClick={handleRetryRetrieval}
+              className="mt-2 text-[13px] font-medium text-amber-900 underline"
+            >
+              Try the search again
             </button>
           </div>
         </div>

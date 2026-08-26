@@ -24,6 +24,11 @@ const TYPE_CONFIG: Record<
     icon: <Map size={15} />,
     color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   },
+  walk: {
+    label: 'Walk',
+    icon: <Map size={15} />,
+    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  },
   sermon: {
     label: 'Sermon',
     icon: <Mic2 size={15} />,
@@ -68,21 +73,6 @@ const TYPE_CONFIG: Record<
     label: 'Sermon Companion',
     icon: <Mic2 size={15} />,
     color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  },
-  sermon_companion: {
-    label: 'Sermon Companion',
-    icon: <Mic2 size={15} />,
-    color: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  },
-  bible_study: {
-    label: 'Bible Study',
-    icon: <BookOpen size={15} />,
-    color: 'bg-primary/10 text-primary',
-  },
-  daily_rhythm: {
-    label: 'Daily Rhythm',
-    icon: <Map size={15} />,
-    color: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
   },
 };
 

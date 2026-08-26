@@ -78,7 +78,7 @@ export interface NextStepItem {
 }
 
 export interface Recommendation {
-  type: 'journey' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor' | 'daily-rhythm' | 'devotional' | 'bible-study' | 'sermon-companion';
+  type: 'journey' | 'walk' | 'sermon' | 'bible' | 'prayer' | 'room' | 'pastor' | 'daily-rhythm' | 'devotional' | 'bible-study' | 'sermon-companion';
   title: string;
   description?: string;
   path?: string;
@@ -124,6 +124,15 @@ export interface EmmausMetadata {
     reason: string;
   }>;
   prayer?: string | null;
+  requestedIntent?: 'ASK' | 'READ' | 'OPEN' | 'FIND';
+  retrievalFailures?: string[];
+  resourceActions?: Array<{
+    kind: 'OPEN' | 'READ' | 'CONTINUE';
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    route: string;
+  }>;
 }
 
 export interface ConversationStub {

@@ -44,6 +44,8 @@ export interface VoiceConversationRequest {
   message?: unknown;
   history?: unknown;
   context?: Record<string, unknown>;
+  /** Bounded UI-state hint; never an authority for identity, routes, or access. */
+  voiceAppContext?: unknown;
   currentPath?: unknown;
   isReading?: unknown;
   lastReadContext?: unknown;
@@ -133,4 +135,14 @@ export function normalizeVoiceHistory(value: unknown): Array<{
     }))
     .filter((item) => item.content.length > 0)
     .slice(-10);
+}
+
+export function normalizeVoiceAppContext(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/https?:\/\/\S+|(?:^|\s)\/(?:api\/)?[^\s]+/gi, " ")
+    .replace(/(?:journey|series|companion|sermon|step|entry)[_-]?[a-z0-9-]{8,}/gi, "[content]")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 6000);
 }

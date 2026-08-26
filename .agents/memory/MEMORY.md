@@ -69,3 +69,4 @@
 - [Bible Study coverage queue](bible-study-coverage-queue.md) — generation and progress views must use the canonical 66-book catalogue and prioritize unfinished coverage, not a seed-book shortlist.
 - [YouTube OAuth production origin](youtube-oauth-production-origin.md) — production callback must use emmaus.co.za and one-time state, not the returning browser session cookie.
 - [YouTube Whisper pending state](youtube-whisper-pending.md) — caption-miss markers need an explicit retry path; the bulk pipeline must not leave them stranded.
+- [Ask Emmaus and Voice canonical actions](ask-emmaus-voice-canonical-actions.md) — questions are not navigation; executable routes come only from the authenticated server catalogue.
