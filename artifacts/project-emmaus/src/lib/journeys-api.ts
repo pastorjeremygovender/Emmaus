@@ -187,6 +187,24 @@ export type DailyRhythmStartup = {
   diagnosticReference?: string;
 };
 
+function isValidDailyRhythmStartup(
+  body: Partial<DailyRhythmStartup> & { error?: string } | null,
+): body is DailyRhythmStartup {
+  if (!body || (body.state !== 'OPENING_REQUIRED' && body.state !== 'COMPLETED')) {
+    return false;
+  }
+  if (typeof body.destination !== 'string' || !body.destination.startsWith('/')) {
+    return false;
+  }
+  if (!Number.isInteger(body.assignedDay) || Number(body.assignedDay) < 1) {
+    return false;
+  }
+  if (body.state === 'OPENING_REQUIRED') {
+    return /^\/daily-rhythm\/day\/\d+$/.test(body.destination);
+  }
+  return body.destination === '/walk';
+}
+
 export type DailyRhythmState = {
   journeyId: string;
   progress: Progress | null;
@@ -230,6 +248,15 @@ export async function getDailyRhythmStartup(options?: { signal?: AbortSignal }):
       diagnosticReference?: string;
     };
     error.code = body?.state;
+    error.diagnosticReference = body?.diagnosticReference;
+    throw error;
+  }
+  if (!isValidDailyRhythmStartup(body)) {
+    const error = new Error('Could not safely resolve Daily Rhythm startup') as Error & {
+      code?: string;
+      diagnosticReference?: string;
+    };
+    error.code = 'OPENING_RESPONSE_INVALID';
     error.diagnosticReference = body?.diagnosticReference;
     throw error;
   }

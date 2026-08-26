@@ -2,7 +2,10 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDailyRhythmStartup, type DailyRhythmStartup } from '@/lib/journeys-api';
-import { rememberOpeningDestination } from '@/lib/opening-destination';
+import {
+  consumeOpeningDestination,
+  rememberOpeningDestination,
+} from '@/lib/opening-destination';
 
 function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
@@ -64,11 +67,15 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const requestedPathRef = useRef<string | null>(null);
 
   const pathname = location.split('?')[0];
-  const needsOnboarding = Boolean(user && !user.preferredName?.trim() && pathname !== '/onboarding');
+  const needsOnboarding = Boolean(user && !user.preferredName?.trim());
+  const needsRecovery = Boolean(user?.passwordRecovery) && pathname !== '/auth/callback';
   const authenticatedExempt = pathname === '/auth' ||
     pathname === '/auth/callback' ||
     (pathname === '/onboarding' && needsOnboarding);
-  const needsOpening = Boolean(user) && !authenticatedExempt && !isAdminPath(pathname);
+  const needsOpening = Boolean(user) &&
+    !authenticatedExempt &&
+    !isAdminPath(pathname) &&
+    !needsRecovery;
   const retry = () => {
     requestedPathRef.current = null;
     setRetryKey(value => value + 1);
@@ -131,7 +138,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
         if (reason.name !== 'AbortError') setError(reason);
       });
     return () => controller.abort();
-  }, [authLoading, loadingProfile, user?.id, needsOpening, needsOnboarding, retryKey, decision, error]);
+  }, [authLoading, loadingProfile, user?.id, needsOpening, needsOnboarding, retryKey]);
 
   useEffect(() => {
     if (authLoading || loadingProfile || user || isPublicPath(pathname) || isAdminPath(pathname)) return;
@@ -140,13 +147,18 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   }, [authLoading, loadingProfile, user, pathname, setLocation]);
 
   useEffect(() => {
-    if (!user || authLoading || loadingProfile || !needsOnboarding) return;
+    if (!user || authLoading || loadingProfile || !needsOnboarding || needsRecovery || pathname === '/onboarding') return;
     rememberOpeningDestination(`${window.location.pathname}${window.location.search}${window.location.hash}`);
     setLocation('/onboarding', { replace: true });
-  }, [user, authLoading, loadingProfile, needsOnboarding, setLocation]);
+  }, [user, authLoading, loadingProfile, needsOnboarding, needsRecovery, pathname, setLocation]);
 
   useEffect(() => {
-    if (!decision || !user || needsOnboarding) return;
+    if (!user || authLoading || loadingProfile || !needsRecovery) return;
+    setLocation('/auth/callback?mode=recovery', { replace: true });
+  }, [user, authLoading, loadingProfile, needsRecovery, setLocation]);
+
+  useEffect(() => {
+    if (!decision || !user || needsOnboarding || needsRecovery) return;
     if (decision.state === 'OPENING_REQUIRED') {
       if (!isDailyRhythmTarget(pathname, decision.assignedDay)) {
         if (pathname !== '/' && pathname !== '/walk') {
@@ -157,14 +169,14 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
       return;
     }
     if (decision.state === 'COMPLETED' && pathname === '/') {
-      setLocation('/walk', { replace: true });
+      setLocation(consumeOpeningDestination('/walk'), { replace: true });
     }
-  }, [decision, pathname, user, needsOnboarding, setLocation]);
+  }, [decision, pathname, user, needsOnboarding, needsRecovery, setLocation]);
 
-  if (!user || isAdminPath(pathname) || authenticatedExempt) {
+  if (!user || (isAdminPath(pathname) && !needsRecovery) || authenticatedExempt) {
     return <>{children}</>;
   }
-  if (authLoading || loadingProfile || needsOnboarding || !decision) {
+  if (authLoading || loadingProfile || needsOnboarding || needsRecovery || !decision) {
     if (error) {
       return <OpeningError reference={error.diagnosticReference} onRetry={retry} />;
     }

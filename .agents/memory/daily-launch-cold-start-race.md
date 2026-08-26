@@ -49,3 +49,15 @@ page despite a successful production build.
 **How to apply:** When adding route-level loading guards, keep the derived
 boolean beside the data it describes and cover its declaration in the focused
 page contract test.
+
+The opening request lifecycle must remain independent of its resolved/error
+state. Clearing an error for a retry should start exactly one new request, not
+re-run the effect because the state changed.
+
+**Why:** A retry that reset both the request key and error state while the
+effect depended on both could issue two startup requests; the later stale
+response could replace a successful recovery with the normal Walk fallback.
+
+**How to apply:** Use a dedicated retry/lifecycle key to trigger startup
+requests and keep transient decision/error state out of that effect's trigger
+dependencies.
