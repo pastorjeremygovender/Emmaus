@@ -38,3 +38,14 @@ still saw the old current day.
 **How to apply:** Treat the startup destination and the reader's future-day
 guard as one handoff: refresh `/daily-rhythm/state` on Daily Rhythm route entry,
 hold the guard while it loads, and only then render or redirect.
+
+The Daily Rhythm loading guard is runtime-sensitive: bundling can succeed even
+when a newly referenced guard variable is missing, so the source contract must
+assert both the declaration and its use.
+
+**Why:** A missing declaration in a render-time guard produced a blank member
+page despite a successful production build.
+
+**How to apply:** When adding route-level loading guards, keep the derived
+boolean beside the data it describes and cover its declaration in the focused
+page contract test.

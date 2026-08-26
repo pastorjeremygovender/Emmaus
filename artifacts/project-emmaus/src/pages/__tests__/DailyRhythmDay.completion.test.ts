@@ -19,6 +19,7 @@ describe('DailyRhythmDay completion contract', () => {
   });
 
   it('refreshes authoritative progress before applying the future-day guard', () => {
+    expect(source).toContain("const isDailyRhythmJourney = journey?.journeyType === 'daily-rhythm';");
     expect(source).toContain('getDailyRhythmState()');
     expect(source).toContain('dailyProgressLoading');
     expect(source).toContain('if (isDailyRhythmJourney && dailyProgressLoading)');
