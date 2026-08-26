@@ -24,3 +24,17 @@ error as today's normal home route skips the required first reading.
 entry after auth is ready, and retry transient failures until the decision is
 available or the component is unmounted. Reset the lifecycle guard when a new
 member signs in within an existing app context.
+
+The startup response can advance the server progress one moment before the
+client's already-loaded progress snapshot catches up. The Daily Rhythm reader
+must refresh authoritative state before deciding a requested day is ahead of the
+member; otherwise a valid newly unlocked route is immediately redirected to
+`/walk`.
+
+**Why:** Production tracing showed progress loaded just before `daily_rhythm_unlock_at`,
+then startup advanced the account and returned the correct day, while the reader
+still saw the old current day.
+
+**How to apply:** Treat the startup destination and the reader's future-day
+guard as one handoff: refresh `/daily-rhythm/state` on Daily Rhythm route entry,
+hold the guard while it loads, and only then render or redirect.

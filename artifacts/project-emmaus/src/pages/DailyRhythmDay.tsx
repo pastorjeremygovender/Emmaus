@@ -28,7 +28,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
-import { useJourney } from '@/contexts/JourneyContext';
+import { useJourney, type Progress } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check } from 'lucide-react';
@@ -41,6 +41,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { goBackOrFallback } from '@/lib/return-context';
+import { getDailyRhythmState } from '@/lib/journeys-api';
 
 // ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
 // Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
@@ -97,6 +98,8 @@ export default function DailyRhythmDay() {
   const journeyId = journeys.find(j => j.journeyType === 'daily-rhythm')?.id ?? '15-minutes-with-jesus';
   const day = parseInt(dayNumber ?? '1', 10);
   const devMode = isDevelopmentMode(user);
+  const [dailyProgress, setDailyProgress] = useState<Progress | null>(null);
+  const [dailyProgressLoading, setDailyProgressLoading] = useState(true);
 
   // Determine return context.
   // ?source=dailyRhythmPrevious → opened from Previous Days list → return to Previous Days.
@@ -109,9 +112,37 @@ export default function DailyRhythmDay() {
   const fromPreviousDays = source === 'dailyRhythmPrevious';
 
   const journey = journeys.find(j => j.id === journeyId);
-  const prog = progress[journeyId];
+  const prog = dailyProgress ?? progress[journeyId];
   const currentDay = prog?.currentDay ?? 1;
   const steps = getStepsForJourney(journeyId);
+
+  // Startup can advance Daily Rhythm immediately before this page mounts,
+  // while JourneyContext may still hold the progress snapshot fetched a
+  // moment earlier. Refresh the authoritative state before applying the
+  // future-day guard, or the newly unlocked lesson is sent back to /walk.
+  useEffect(() => {
+    if (!journey || journey.journeyType !== 'daily-rhythm' || !user?.id) {
+      setDailyProgressLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDailyProgressLoading(true);
+    void getDailyRhythmState()
+      .then(state => {
+        if (!cancelled) setDailyProgress(state?.progress ?? null);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.warn('[Daily Rhythm] fresh route state unavailable; using loaded progress', error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDailyProgressLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [journey?.id, journey?.journeyType, user?.id]);
 
   // Whether this day has already been completed in a prior session
   const alreadyCompleted = (prog?.completedDays ?? []).includes(day);
@@ -148,6 +179,14 @@ export default function DailyRhythmDay() {
 
   // ── Loading guard ─────────────────────────────────────────────────────────
   if (!journey || (!prog && day > 1)) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      </div>
+    );
+  }
+
+  if (isDailyRhythmJourney && dailyProgressLoading) {
     return (
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading…</p>

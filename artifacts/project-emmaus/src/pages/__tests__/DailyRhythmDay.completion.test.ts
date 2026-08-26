@@ -17,4 +17,10 @@ describe('DailyRhythmDay completion contract', () => {
     expect(source).not.toContain('Continue to ${getStepLabel(nextStep, journey)}');
     expect(source).not.toContain('day + 1?from=walk');
   });
+
+  it('refreshes authoritative progress before applying the future-day guard', () => {
+    expect(source).toContain('getDailyRhythmState()');
+    expect(source).toContain('dailyProgressLoading');
+    expect(source).toContain('if (isDailyRhythmJourney && dailyProgressLoading)');
+  });
 });
