@@ -58,7 +58,7 @@ export default function AuthCallback() {
     setSubmitting(true);
     try {
       await resetPassword(password);
-      setLocation("/walk");
+      setLocation("/");
     } catch (reason) {
       setState("error");
     } finally {

@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import { pool } from "@workspace/db";
 import { authHeader, cleanupTestAuth, testUserIdFor } from "../../test-utils/test-auth.ts";
 import * as store from "../../lib/journey-store.ts";
+import { setDailyRhythmOpeningReady } from "../../lib/feature-flags.ts";
 
 const nodeEnv = process.env.NODE_ENV;
 if (nodeEnv === "production" || process.env.REPLIT_DEPLOYMENT || nodeEnv !== "test" ||
@@ -54,6 +55,7 @@ async function auth(key: string) {
 async function reset(key: string) {
   const id = await testUserIdFor(key);
   users.add(key);
+  await pool.query("DELETE FROM daily_rhythm_opening_ledger WHERE user_id = $1 AND journey_id = $2", [id, journeyId]);
   await pool.query("DELETE FROM user_journey_progress WHERE user_id = $1 AND journey_id = $2", [id, journeyId]);
   await pool.query("DELETE FROM step_reflections WHERE user_id = $1 AND journey_id = $2", [id, journeyId]);
   return id;
@@ -73,6 +75,10 @@ async function ageProgress(key: string) {
      SET daily_rhythm_unlock_at = $1, last_daily_open_date = NULL
      WHERE user_id = $2 AND journey_id = $3`,
     [yesterday(), id, journeyId],
+  );
+  await pool.query(
+    "UPDATE daily_rhythm_opening_ledger SET local_date = '2000-01-01', updated_at = now() WHERE user_id = $1 AND journey_id = $2",
+    [id, journeyId],
   );
 }
 
@@ -98,6 +104,28 @@ before(async () => {
       ADD COLUMN IF NOT EXISTS daily_rhythm_startup_session text,
       ADD COLUMN IF NOT EXISTS daily_rhythm_startup_date text
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS daily_rhythm_opening_ledger (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      journey_id text NOT NULL,
+      local_date text NOT NULL,
+      local_timezone text NOT NULL DEFAULT 'Africa/Johannesburg',
+      assigned_day integer NOT NULL,
+      target_step_id uuid,
+      state text NOT NULL,
+      completed_today boolean NOT NULL DEFAULT false,
+      destination text NOT NULL,
+      reason text NOT NULL,
+      decision_id uuid NOT NULL DEFAULT gen_random_uuid(),
+      launch_session_id text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS daily_rhythm_opening_user_date_unique
+      ON daily_rhythm_opening_ledger(user_id, local_date);
+  `);
+  setDailyRhythmOpeningReady();
   await store.createJourney({ id: journeyId, title: `__TEST__ Daily Authority ${nonce}`,
     status: "Published", journeyType: "daily-rhythm", durationDays: 3 });
   await store.createStep(journeyId, { day: 1, title: "Day 1" });
@@ -107,6 +135,7 @@ before(async () => {
 
 after(async () => {
   await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve()));
+  await pool.query("DELETE FROM daily_rhythm_opening_ledger WHERE journey_id = $1", [journeyId]);
   await pool.query("DELETE FROM journey_steps WHERE journey_id = $1", [journeyId]);
   await pool.query("DELETE FROM journeys WHERE id = $1", [journeyId]);
   await cleanupTestAuth();
@@ -121,9 +150,9 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const key = `dr-02-${nonce}`; await reset(key); const r = await startup(key);
     assert.equal(r.firstOpen, true); assert.equal(r.journeyId, journeyId);
   });
-  it("TEST 3 — subsequent opening the same day enters Today's Steps", async () => {
+  it("TEST 3 — subsequent opening the same day remains in the incomplete Daily Rhythm opening", async () => {
     const key = `dr-03-${nonce}`; await reset(key); await startup(key); const r = await startup(key, "test-launch-2");
-    assert.equal(r.firstOpen, false); assert.equal(r.currentDay, 1);
+    assert.equal(r.firstOpen, false); assert.equal(r.destination, "/daily-rhythm/day/1"); assert.equal(r.currentDay, 1);
   });
   it("TEST 4 — completing Day 1 does not unlock Day 2 the same day", async () => {
     const key = `dr-04-${nonce}`; await reset(key); await startup(key); assert.equal((await complete(key, 1)).status, 200);
@@ -225,10 +254,11 @@ describe("Daily Rhythm authority — 25 persisted-state cases", () => {
     const r = json<{ steps: Array<{ day: number }> }>(await request(`/api/journeys/${journeyId}/steps`, await auth(key)));
     assert.ok(r.steps.every(s => s.day <= 1)); assert.equal((await complete(key, 3)).status, 409);
   });
-  it("TEST 25 — persisted open date is user-specific and idempotent", async () => {
+  it("TEST 25 — opening decisions are user-specific and completion-gated", async () => {
     const a = `dr-25a-${nonce}`, b = `dr-25b-${nonce}`; await reset(a); await reset(b);
     const firstA = await startup(a), secondA = await startup(a, "test-launch-2"), firstB = await startup(b);
-    assert.equal(firstA.firstOpen, true); assert.equal(secondA.firstOpen, false); assert.equal(firstB.firstOpen, true);
+    assert.equal(firstA.firstOpen, true); assert.equal(secondA.firstOpen, false);
+    assert.equal(secondA.destination, "/daily-rhythm/day/1"); assert.equal(firstB.firstOpen, true);
   });
 });
 
@@ -264,10 +294,10 @@ describe("Daily Rhythm production-like startup lifecycle", () => {
     const key = `dr-e-${nonce}`; await reset(key);
     assert.equal((await startup(key, `launch-e-1-${key}`)).destination, "/daily-rhythm/day/1");
   });
-  it("TEST F — second genuine launch returns Today's Steps", async () => {
+  it("TEST F — second genuine launch cannot skip an incomplete Daily Rhythm", async () => {
     const key = `dr-f-${nonce}`; await reset(key);
     await startup(key, `launch-f-1-${key}`);
-    assert.equal((await startup(key, `launch-f-2-${key}`)).destination, "/walk");
+    assert.equal((await startup(key, `launch-f-2-${key}`)).destination, "/daily-rhythm/day/1");
   });
   it("TEST G — independent users each receive their own first-launch destination", async () => {
     const a = `dr-g-a-${nonce}`, b = `dr-g-b-${nonce}`; await reset(a); await reset(b);

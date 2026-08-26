@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect } from 'react';
+import React, { useLayoutEffect } from 'react';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
@@ -11,7 +11,7 @@ import { VoiceSessionProvider } from '@/contexts/VoiceSessionContext';
 import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
-import { localDateKey } from '@/lib/daily-lock';
+import OpeningGate from '@/components/OpeningGate';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -71,28 +71,6 @@ import RoomSettings from '@/pages/rooms/RoomSettings';
 import RoomChat from '@/pages/rooms/RoomChat';
 
 /**
- * Startup routing rule (locked):
- * The first opening of each day for a member enters the foundational Daily
- * Rhythm practice (10 Minutes With Jesus). Later openings land on /walk.
- * Admins land on /admin.
- * A RESUME (lock/unlock, app switch, incoming call) must NOT redirect —
- * the user returns to exactly the screen they left.
- *
- * How we distinguish the two:
- *   _startupChecked is a module-level JS variable.  It resets to false only
- *   when the JS context is destroyed — hard refresh, new tab, PWA force-close,
- *   browser restart.  On mobile resume (page kept in Bfcache or memory), JS is
- *   never re-executed so _startupChecked stays true and the redirect below does
- *   NOT fire.  This is the correct behaviour: resume ≠ fresh launch.
- *
- * A visibilitychange listener was previously present here to "catch" mobile
- * resumes where _startupChecked stayed true.  It was removed because that
- * listener fired on every lock/unlock and app switch, redirecting the user to
- * Today's Steps from wherever they were reading.  Do not re-add it.
- */
-let _startupChecked = false;
-
-/**
  * ScrollToTop — scrolls to (0, 0) on every pathname change.
  *
  * Placed inside WouterRouter so it has access to wouter context.
@@ -120,66 +98,7 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   return null;
 }
 
-// isTabPath and TAB_PREFIXES live in lib/tab-paths so they can be unit-tested.
-import { isColdMemberLaunchPath } from '@/lib/tab-paths';
-import { markStartupRoutingComplete } from '@/lib/startup-routing';
-
 function Router() {
-  const [location, setLocation] = useLocation();
-  const lastVisibleDateRef = React.useRef(localDateKey());
-  const hiddenAtRef = React.useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!_startupChecked) {
-      _startupChecked = true;
-      // If the browser has loaded directly onto a member tab or Today's Steps,
-      // redirect through Welcome so that auth, profile loading, onboarding and
-      // the daily-open route run with fully loaded context data. This matters
-      // especially for a cold /walk load, where Walk can otherwise mount
-      // before the authenticated journey list arrives.
-      if (isColdMemberLaunchPath(location)) {
-        setLocation('/');
-      } else if (location !== '/') {
-        // A direct launch on a non-member page has no automatic member
-        // startup redirect to resolve. Future SPA navigation is ordinary.
-        markStartupRoutingComplete();
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // A PWA can remain mounted overnight, so the module-level startup guard
-  // does not run again when the user opens it the next morning. Re-enter
-  // through Welcome only after a genuine overnight gap; ordinary app
-  // switching, screen locking, and notification shade use must preserve the
-  // exact page the member was reading.
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        hiddenAtRef.current = Date.now();
-        return;
-      }
-
-      const today = localDateKey();
-      const hiddenFor = hiddenAtRef.current === null
-        ? 0
-        : Date.now() - hiddenAtRef.current;
-      const overnightGap = hiddenFor >= 60 * 60 * 1000;
-      const normalHome = location === '/' || location === '/walk';
-
-      if (today !== lastVisibleDateRef.current && overnightGap && normalHome) {
-        console.debug('[Emmaus routing] overnight re-entry → welcome');
-        setLocation('/');
-      }
-
-      lastVisibleDateRef.current = today;
-      hiddenAtRef.current = null;
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [location, setLocation]);
-
   return (
     <Switch>
       <Route path="/" component={Welcome} />
@@ -268,7 +187,9 @@ function App() {
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
                   <VoiceSessionProvider>
                     <ScrollToTop />
-                    <Router />
+                    <OpeningGate>
+                      <Router />
+                    </OpeningGate>
                     <FloatingEmmausButton />
                     <GlobalVoiceIndicator />
                   </VoiceSessionProvider>

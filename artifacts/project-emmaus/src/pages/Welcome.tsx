@@ -20,48 +20,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { useJourney } from '@/contexts/JourneyContext';
-import { isOnboarded, markOnboarded } from '@/lib/onboarding';
-import { resolveEntryRoute } from '@/lib/entry-route';
-import { getDailyRhythmStartup } from '@/lib/journeys-api';
-import { isStartupRoutingComplete, markStartupRoutingComplete } from '@/lib/startup-routing';
+import { rememberOpeningDestination } from '@/lib/opening-destination';
 
 const SPLASH_KEY   = 'emmaus_splash_shown';
 const MIN_DURATION = 1000; // ms — ~1 second per spec (never longer than 1.5 s)
 const FADE_OUT_MS  = 220;  // ms — fade-out before navigate; total ≤ 1.22 s
-const STARTUP_RETRY_INITIAL_MS = 1000;
-const STARTUP_RETRY_MAX_MS = 10000;
-
-/**
- * A startup response may be lost after the server commits the daily-open
- * claim. Retrying with the same session header lets the server return the
- * original Daily Rhythm destination instead of incorrectly falling back to
- * /walk. The caller cancels by returning true from isCancelled.
- */
-async function getDailyRhythmStartupWithRetry(
-  isCancelled: () => boolean,
-): Promise<Awaited<ReturnType<typeof getDailyRhythmStartup>> | null> {
-  let delayMs = STARTUP_RETRY_INITIAL_MS;
-
-  while (!isCancelled()) {
-    try {
-      return await getDailyRhythmStartup();
-    } catch (err) {
-      if (isCancelled()) return null;
-      console.error('[DailyOpen] startup decision failed; retrying:', err);
-      await new Promise<void>(resolve => setTimeout(resolve, delayMs));
-      delayMs = Math.min(delayMs * 2, STARTUP_RETRY_MAX_MS);
-    }
-  }
-
-  return null;
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Welcome() {
   const { user, loading: authLoading, loadingProfile } = useAuth();
-  const { journeys, progress, loading: journeyLoading, getStepsForJourney, startJourney } = useJourney();
   const [, setLocation] = useLocation();
 
   const alreadyShown = sessionStorage.getItem(SPLASH_KEY) === 'true';
@@ -75,52 +43,30 @@ export default function Welcome() {
   // first-open-of-the-day rule: a PWA/browser session can remain alive overnight.
   useEffect(() => {
     if (!alreadyShown) return;
-    if (authLoading || loadingProfile || journeyLoading) return;
-    let cancelled = false;
+    if (authLoading || loadingProfile) return;
     const routeMember = async () => {
-    if (user) {
-      if (user.passwordRecovery) {
-        markStartupRoutingComplete();
-        setLocation('/auth/callback?mode=recovery');
-        return;
+      if (user) {
+        if (user.passwordRecovery) {
+          setLocation('/auth/callback?mode=recovery');
+          return;
+        }
+        const pendingJoin = sessionStorage.getItem('pendingInviteToken');
+        if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
+          rememberOpeningDestination(`/join-room/${pendingJoin}`);
+          return;
+        }
+        if (!user.preferredName?.trim()) setLocation('/onboarding');
       }
-      const pendingJoin = sessionStorage.getItem('pendingInviteToken');
-      if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
-        markStartupRoutingComplete();
-        sessionStorage.removeItem('pendingInviteToken');
-        setLocation(`/join/${pendingJoin}`);
-        return;
-      }
-      if (user.role === 'admin' || user.role === 'superAdmin') {
-        markStartupRoutingComplete();
-        setLocation('/admin');
-      } else if (!isOnboarded(user.id) && !user.preferredName?.trim()) {
-        markStartupRoutingComplete();
-        setLocation('/onboarding');
-      } else {
-        if (!isOnboarded(user.id)) markOnboarded(user.id);
-        const startup = await getDailyRhythmStartupWithRetry(() => cancelled);
-        if (cancelled || !startup) return;
-        const dest = startup.destination;
-        markStartupRoutingComplete();
-        if (!cancelled) setLocation(dest);
-      }
-    } else {
+      else {
       setLocation('/auth');
-    }
+      }
     };
     void routeMember();
-    return () => { cancelled = true; };
-  }, [alreadyShown, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney, setLocation]);
+  }, [alreadyShown, authLoading, loadingProfile, user, setLocation]);
 
   // ── Minimum display timer ─────────────────────────────────────────────────
   useEffect(() => {
     if (alreadyShown) return;
-    if (isStartupRoutingComplete()) {
-      navigatedRef.current = true;
-      setLocation(resolveEntryRoute());
-      return;
-    }
     const id = setTimeout(() => setTimerDone(true), MIN_DURATION);
     return () => clearTimeout(id);
   }, [alreadyShown]);
@@ -128,44 +74,36 @@ export default function Welcome() {
   // ── Navigate once timer, auth, profile, and journey data are all ready ────
   useEffect(() => {
     if (alreadyShown) return;
-    if (!timerDone || authLoading || loadingProfile || journeyLoading) return;
+    if (!timerDone || authLoading || loadingProfile) return;
     if (navigatedRef.current) return;
     navigatedRef.current = true;
-    let cancelled = false;
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
 
     sessionStorage.setItem(SPLASH_KEY, 'true');
 
-    async function resolveDestination(): Promise<string | null> {
+    function resolveDestination(): string | null {
       if (!user) return '/auth';
       if (user.passwordRecovery) return '/auth/callback?mode=recovery';
       const pendingJoin = sessionStorage.getItem('pendingInviteToken');
       if (pendingJoin && user.role !== 'admin' && user.role !== 'superAdmin') {
-        sessionStorage.removeItem('pendingInviteToken');
-        return `/join/${pendingJoin}`;
+        rememberOpeningDestination(`/join-room/${pendingJoin}`);
+        return null;
       }
-      if (user.role === 'admin' || user.role === 'superAdmin') return '/admin';
-      if (!isOnboarded(user.id) && !user.preferredName?.trim()) return '/onboarding';
-      if (!isOnboarded(user.id)) markOnboarded(user.id);
-      const startup = await getDailyRhythmStartupWithRetry(() => cancelled);
-      if (!startup) return null;
-      const dest = startup.destination;
-      console.debug('[Emmaus routing] Route selected (server):', dest);
-      return dest;
+      if (!user.preferredName?.trim()) return '/onboarding';
+      // The application-level OpeningGate owns all authenticated member
+      // destinations. Welcome must never infer or consume the daily decision.
+      return null;
     }
 
-    void resolveDestination().then(dest => {
-      if (cancelled || !dest) return;
-      markStartupRoutingComplete();
-      // Fade out, then navigate.
+    const dest = resolveDestination();
+    if (dest) {
       setFading(true);
       fadeTimer = setTimeout(() => setLocation(dest), FADE_OUT_MS);
-    });
+    }
     return () => {
-      cancelled = true;
       if (fadeTimer) clearTimeout(fadeTimer);
     };
-  }, [alreadyShown, timerDone, authLoading, loadingProfile, journeyLoading, user, journeys, progress, getStepsForJourney, startJourney]);
+  }, [alreadyShown, timerDone, authLoading, loadingProfile, user, setLocation]);
 
   // ── Splash / redirect loading state ───────────────────────────────────────
   // Keep the splash visible while the fast-path redirect resolves. Returning

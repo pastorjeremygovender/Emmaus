@@ -7,6 +7,7 @@ import {
   jsonb,
   uuid,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -206,7 +207,7 @@ export const dailyRhythmOpeningLedgerTable = pgTable(
     localDate: text("local_date").notNull(),
     localTimezone: text("local_timezone").notNull().default("Africa/Johannesburg"),
     assignedDay: integer("assigned_day").notNull(),
-    targetStepId: uuid("target_step_id").references(() => journeyStepsTable.id, { onDelete: "restrict" }),
+    targetStepId: uuid("target_step_id").references(() => journeyStepsTable.id, { onDelete: "set null" }),
     state: text("state").notNull(),
     completedToday: boolean("completed_today").notNull().default(false),
     destination: text("destination").notNull(),

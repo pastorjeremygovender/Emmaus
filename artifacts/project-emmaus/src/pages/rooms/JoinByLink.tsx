@@ -41,6 +41,7 @@ export default function JoinByLink() {
     setStatus('joining');
     const result = await joinRoomByToken(user.id, String(inviteToken));
     if (result.success && result.roomId) {
+      sessionStorage.removeItem('pendingInviteToken');
       setJoinedRoomId(result.roomId);
       setStatus('joined');
     } else {

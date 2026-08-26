@@ -314,6 +314,11 @@ export async function runStartupMigrations(): Promise<void> {
         created_at timestamptz NOT NULL DEFAULT now(),
         updated_at timestamptz NOT NULL DEFAULT now()
       );
+      ALTER TABLE daily_rhythm_opening_ledger
+        DROP CONSTRAINT IF EXISTS daily_rhythm_opening_ledger_target_step_id_fkey;
+      ALTER TABLE daily_rhythm_opening_ledger
+        ADD CONSTRAINT daily_rhythm_opening_ledger_target_step_id_fkey
+        FOREIGN KEY (target_step_id) REFERENCES journey_steps(id) ON DELETE SET NULL;
     `);
   } catch (err) {
     logger.error({ err }, "Startup migration: Daily Rhythm opening ledger failed");

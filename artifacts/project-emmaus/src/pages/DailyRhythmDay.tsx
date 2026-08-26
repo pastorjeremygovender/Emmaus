@@ -42,6 +42,7 @@ import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { goBackOrFallback } from '@/lib/return-context';
 import { getDailyRhythmState } from '@/lib/journeys-api';
+import { consumeOpeningDestination } from '@/lib/opening-destination';
 
 // ─── Ahead-of-rhythm screen (Dev Mode only) ───────────────────────────────────
 // Shown ONLY in Development Mode so admins/testers can diagnose future-day access.
@@ -151,6 +152,7 @@ export default function DailyRhythmDay() {
   // Live reading completed in the current session (in-page state)
   const [justCompleted, setJustCompleted] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [postCompletionDestination, setPostCompletionDestination] = useState('/walk');
 
   useEffect(() => {
     setJustCompleted(false); // reset on day change
@@ -230,6 +232,8 @@ export default function DailyRhythmDay() {
     setCompleting(true);
     try {
       await completeStep(journeyId, day, '');
+      setPostCompletionDestination(consumeOpeningDestination('/walk'));
+      window.dispatchEvent(new Event('emmaus:opening-completed'));
       setJustCompleted(true);
     } finally {
       setCompleting(false);
@@ -246,7 +250,7 @@ export default function DailyRhythmDay() {
         heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="Continue when you’re ready."
         returnLabel="Back to Today's Steps"
-        onReturn={goBack}
+        onReturn={() => setLocation(postCompletionDestination)}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
       />
     );

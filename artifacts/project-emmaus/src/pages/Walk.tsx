@@ -28,8 +28,6 @@ import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
-import { getDailyRhythmStartup } from '@/lib/journeys-api';
-import { isStartupRoutingComplete, markStartupRoutingComplete } from '@/lib/startup-routing';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
@@ -464,49 +462,6 @@ export default function Walk() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [user?.id, reloadThisWeekCompanion, reloadDevotionals]);
-
-  // ── First-daily-open redirect ─────────────────────────────────────────────
-  // This is a server decision, not a browser-date/localStorage decision.
-  const dailyOpenCheckedRef = useRef(false);
-  const [dailyOpenRetry, setDailyOpenRetry] = useState(0);
-  useEffect(() => {
-    // Walk can remount during ordinary SPA navigation. Once bootstrap has
-    // resolved, it must never re-run the automatic Daily Rhythm redirect.
-    if (isStartupRoutingComplete()) return;
-    if (loading) return;                          // wait for real data
-    if (!user || user.role === 'admin' || user.role === 'superAdmin') return;
-    // On a cold /walk load, auth can resolve before JourneyContext has begun
-    // its authenticated fetch. Do not consume the one-shot guard against the
-    // initial empty context; retry when the published journey list arrives.
-    if (journeys.length === 0) return;
-    if (dailyOpenCheckedRef.current) return;      // only run once per mount
-    dailyOpenCheckedRef.current = true;
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-
-    void getDailyRhythmStartup()
-      .then(startup => {
-        if (cancelled) return;
-        markStartupRoutingComplete();
-        if (startup.firstOpen) {
-          setLocation(startup.destination);
-        }
-      })
-      .catch(err => {
-        // A failed request must not consume this mount's one chance to retry.
-        // Welcome normally owns cold-start routing, but this fallback covers
-        // retained /walk launches and transient auth/network failures.
-        dailyOpenCheckedRef.current = false;
-        console.error('[DailyOpen] startup decision failed; will retry:', err);
-        retryTimer = setTimeout(() => {
-          if (!cancelled) setDailyOpenRetry(attempt => attempt + 1);
-        }, 1000);
-      });
-    return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [loading, user, journeys, setLocation, dailyOpenRetry]);
 
   if (!user) return null;
 
