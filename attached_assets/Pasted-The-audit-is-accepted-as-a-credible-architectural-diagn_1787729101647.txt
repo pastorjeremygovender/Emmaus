@@ -1,0 +1,269 @@
+The audit is accepted as a credible architectural diagnosis. You may now implement the replacement, but incorporate the following binding product decisions before changing code.
+
+FOUNDATIONAL RULE
+
+Daily Rhythm — 10 Minutes with Jesus — is the authoritative daily starting point for every member.
+
+“Opened today” must never be treated as equivalent to “completed today.”
+
+If today’s assigned Daily Rhythm is incomplete, every normal opening or reopening of Emmaus must resolve to that Daily Rhythm day.
+
+Only confirmed completion of today’s assigned Daily Rhythm may produce DAILY_RHYTHM_COMPLETE and allow the normal Today’s Steps opening.
+
+Do not use last_daily_open_date, a launch claim, session replay, sessionStorage, localStorage, or previous navigation as evidence of completion.
+
+An opening record may prevent duplicate assignment or duplicate advancement, but it must never release an incomplete user from Daily Rhythm.
+
+ADMIN POLICY
+
+Do not automatically send a user to /admin merely because their role is admin or superAdmin.
+
+Administrators are also Emmaus members and must receive the normal Daily Rhythm opening experience when opening the normal Emmaus app.
+
+The Admin area may bypass the member Opening Gate only when:
+
+1. the authenticated administrator explicitly selects Admin from inside Emmaus; or
+2. the administrator intentionally opens the protected /admin route.
+
+Admin authorization must remain server-side.
+
+Leaving Admin and choosing “Back to App” must pass through the Opening Gate again. If today’s Daily Rhythm is incomplete, open it. If complete, open Today’s Steps.
+
+DEEPLINK POLICY
+
+A genuine shared link, Group invitation, Journey link, sermon link, notification, or other validated deep link must not silently bypass an incomplete Daily Rhythm.
+
+When a validated deep link is opened:
+
+1. Validate and preserve the intended destination.
+2. Run the Opening Gate.
+3. If Daily Rhythm is complete today, continue to the intended destination.
+4. If Daily Rhythm is required, open today’s Daily Rhythm first.
+5. Preserve the pending destination safely.
+6. After Daily Rhythm completion, allow the user to continue to that destination.
+
+Do not treat an arbitrary or stale browser URL as validated deep-link intent.
+
+OPENING GATE
+
+Implement one application-level Opening Gate above every normal authenticated route.
+
+It must expose the following states:
+
+AUTH_LOADING
+AUTHENTICATED
+OPENING_CONTEXT_LOADING
+DAILY_RHYTHM_REQUIRED
+DAILY_RHYTHM_COMPLETE
+OPENING_ERROR
+
+No authenticated child route may render before the Opening Gate has made a definite decision.
+
+The server is the sole authority for:
+
+- authenticated identity
+- canonical Daily Rhythm journey
+- assigned day
+- target published step
+- user timezone
+- local date
+- actual completion state
+- opening result
+- destination
+- reason
+
+Remove all competing production opening authority from:
+
+- resolveDailyOpenRoute()
+- resolveEntryRoute() /walk fallbacks
+- Walk.tsx startup fallbacks
+- Welcome.tsx independent routing
+- route-specific startup effects
+- sessionStorage splash flags
+- localStorage Daily Rhythm opening decisions
+- visibility/date-rollover redirects that independently select a destination
+
+These utilities may remain only where required for non-authoritative UI behavior. They must not determine whether Daily Rhythm is required or complete.
+
+CANONICAL CONTENT
+
+Use one canonical content type:
+
+daily-rhythm
+
+Before enforcing it:
+
+- identify every published journey currently typed core or daily-rhythm
+- identify which journey contains the real 10 Minutes with Jesus content and user progress
+- report any duplicates
+- preserve the journey containing the authoritative published content and progress
+- migrate legacy core records safely
+- remove the obsolete hardcoded 15-minutes-with-jesus fallback
+- do not create a new empty Daily Rhythm journey
+- do not reset or duplicate user progress
+
+TARGET STEP HANDOFF
+
+The authoritative opening response must include:
+
+- journeyId
+- stepId
+- assignedDay
+- state
+- completedToday
+- timezone
+- localDate
+- destination
+- reason
+- decisionId
+- launchSessionId
+
+When the server advances a completed user to the next published day on a new local date, the client must load or refetch the exact server-selected step before applying any missing-step or future-day guard.
+
+A stale client step array must never reject a valid server-selected day or redirect the user to /walk.
+
+TIMEZONE
+
+Use one validated IANA timezone per user.
+
+For existing users without one, safely default to Africa/Johannesburg.
+
+Use the same stored timezone for:
+
+- local date
+- daily assignment
+- unlock boundary
+- completion
+- reopening
+- diagnostics
+- client display
+
+Do not allow the client and server to maintain competing definitions of today.
+
+MISSING CONTENT AND ERRORS
+
+Missing Daily Rhythm content, an unpublished target step, undefined assignment, database failure, timeout, or malformed response must produce OPENING_ERROR.
+
+It must never produce DAILY_RHYTHM_COMPLETE or silently route to /walk.
+
+The error screen must include:
+
+- a calm plain-language message
+- Retry
+- a diagnostic reference ID
+- no normal authenticated content underneath
+
+COMPLETION
+
+Daily Rhythm completion and opening decisions must use compatible transactional protection so that completion racing with startup cannot read or write stale progress.
+
+The completion screen must remain visible after successful completion.
+
+It must not automatically redirect.
+
+The user must choose:
+
+- Back to Today’s Steps
+- Review Previous Days
+- Continue to pending destination, when applicable
+
+DATABASE AND MIGRATION
+
+Create the durable assignment/opening ledger proposed in the audit, with at least:
+
+- user_id
+- journey_id
+- local_date
+- local_timezone
+- assigned_day
+- target_step_id
+- state
+- decision_id
+- created_at
+- updated_at
+
+Enforce a unique user/local-date assignment, while preserving the existing user/journey progress constraint.
+
+The migration must initialize from current progress without:
+
+- resetting current_day
+- altering completed_days
+- manufacturing historical completions
+- rewriting existing completion history
+- advancing users
+- deleting other Journey, Walk, devotional, sermon, Bible, Group, or reflection data
+
+IMPLEMENTATION ORDER
+
+Implement this in controlled phases:
+
+Phase 1:
+- capture a database backup/restore point
+- identify the canonical Daily Rhythm journey
+- audit duplicate core/daily-rhythm journeys
+- add migration safety tests
+
+Phase 2:
+- add the central server opening-decision contract
+- add the durable assignment ledger
+- unify timezone and content type
+- add server tests
+
+Phase 3:
+- add the global client Opening Gate
+- remove competing opening authorities
+- fix target-step handoff
+- add client and route tests
+
+Phase 4:
+- update authentication, verification, recovery, PWA resume, Admin return, and validated deep-link paths
+- add the diagnostic screen
+
+Phase 5:
+- run the complete automated test suite
+- run migration validation
+- provide evidence before deployment
+
+Do not publish automatically.
+
+Before implementation begins, create a restore point.
+
+After implementation, provide:
+
+1. every file changed
+2. every database migration
+3. the canonical journey selected
+4. evidence that no progress was reset
+5. results of every required automated test
+6. any test that failed or was skipped
+7. the exact manual production test sequence
+8. rollback instructions
+
+MANDATORY ACCEPTANCE TESTS
+
+At minimum prove:
+
+1. Brand-new member: verification → onboarding → Day 1.
+2. Existing member with incomplete today: Daily Rhythm opens.
+3. Same member closes and reopens while incomplete: the same Daily Rhythm opens again.
+4. Member completes today: completion screen waits for their choice.
+5. Completed member reopens on the same local date: Today’s Steps opens.
+6. Completed member crosses into the next local date: exactly the next published Daily Rhythm day opens.
+7. Missed calendar days do not skip Daily Rhythm days.
+8. PWA cold launch behaves correctly.
+9. PWA left open overnight behaves correctly.
+10. Browser refresh on an old route behaves correctly.
+11. Restored session on Bible, Journey, sermon, devotional, Group, or Daily Rhythm route passes through the gate.
+12. Different accounts on the same device cannot reuse each other’s decision or state.
+13. Admin opening normal Emmaus receives the member Daily Rhythm rule.
+14. Admin intentionally opening /admin reaches Admin.
+15. “Back to App” from Admin passes through the Opening Gate.
+16. Validated shared link is preserved but cannot bypass incomplete Daily Rhythm.
+17. Password recovery completion passes through the Opening Gate.
+18. Missing or unpublished Daily Rhythm content produces OPENING_ERROR, never /walk.
+19. Newly advanced Day 2 loads the actual Day 2 step despite stale prior client state.
+20. Three separate real member accounts pass without any intervening code changes.
+
+Do not describe the work as fixed merely because the code compiles.
+
+The feature is accepted only when the tests prove the same deterministic behavior across accounts, routes, sessions, PWA states, and local-date rollover.
