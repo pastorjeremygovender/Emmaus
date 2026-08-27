@@ -66,7 +66,7 @@
    ⚠ Bible chapter reader is a special case: it stacks a chapter nav (h-14 =
    3.5rem) below the BottomNav, so FloatingEmmausButton raises its bottom to
    8.5rem on that route. ChapterReader.tsx uses its own inline paddingBottom:
-     FAB raised bottom (8.5rem) + FAB height (3rem) + breathing (1rem) = 12.5rem
+     BottomNav (4rem) + chapter navigation (3.5rem) = 7.5rem
    Update ChapterReader.tsx if FloatingEmmausButton changes the Bible offset. */
 :root {
   --page-safe-bottom: calc(5rem + 3rem + 1rem + env(safe-area-inset-bottom, 0px));

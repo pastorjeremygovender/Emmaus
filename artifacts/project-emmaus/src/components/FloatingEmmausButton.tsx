@@ -1,5 +1,5 @@
 /**
- * FloatingEmmausButton — premium transparent pill FAB with animated blue-green border trace.
+ * FloatingEmmausButton — neutral translucent pill FAB.
  *
  * Hidden on: /, /auth, /checkin, /join-room/*, /admin, /admin/*,
  *            /personal/ask-emmaus, /personal/ask-emmaus/*,
@@ -9,8 +9,7 @@
  * sessionStorage (via setReturnDestination) so that both AskEmmausHome and
  * AskEmmausConversation can return directly to the originating page in one tap.
  *
- * Border technique: rotating conic-gradient inside a pill-shaped clip container.
- * Duration: 6 s per full circuit. Reduced-motion: static gradient border.
+ * Uses the same quiet translucent surface treatment as the Bible navigation.
  */
 
 import { useLocation } from 'wouter';
@@ -27,25 +26,9 @@ import {
 import type { FlatContext } from '@/lib/emmaus-client';
 import { getActiveSermonCompanionContext } from '@/lib/sermon-companion-context';
 
-// ─── Gradient palette ─────────────────────────────────────────────────────────
 
-const BLUE  = '#258CFF';
-const TEAL  = '#21C7C7';
-const GREEN = '#2ED47A';
 
-const CONIC = `conic-gradient(
-  from 0deg,
-  rgba(46,212,122,0.20)  0deg,
-  ${GREEN}               35deg,
-  ${TEAL}                95deg,
-  ${BLUE}               155deg,
-  ${TEAL}               205deg,
-  rgba(46,212,122,0.30) 265deg,
-  rgba(46,212,122,0.15) 330deg,
-  rgba(46,212,122,0.20) 360deg
-)`;
 
-const STATIC_GRADIENT = `linear-gradient(135deg, ${BLUE} 0%, ${TEAL} 50%, ${GREEN} 100%)`;
 
 // ─── Routing helpers ──────────────────────────────────────────────────────────
 
@@ -185,16 +168,6 @@ export function FloatingEmmausButton() {
   const { journeys, progress, getStep } = useJourney();
   const { lastRead, translationId } = useBible();
   const { getMyRooms } = useRooms();
-
-  const [reducedMotion, setReducedMotion] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
   if (!user || isHidden(location)) return null;
 
   function handlePress() {
@@ -224,7 +197,7 @@ export function FloatingEmmausButton() {
   const label = (
     <>
       <span style={{ letterSpacing: '0.01em' }}>Ask Emmaus</span>
-      <ChevronRight size={13} strokeWidth={2.5} style={{ color: BLUE, flexShrink: 0 }} />
+      <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-muted-foreground/60" />
     </>
   );
 
@@ -234,17 +207,18 @@ export function FloatingEmmausButton() {
     display: 'flex',
     alignItems: 'center',
     gap: '5px',
-    padding: '0 20px',
+    padding: '0 18px',
     height: '44px',
     borderRadius: '9999px',
     minHeight: '44px',
-    background: 'hsl(var(--background) / 0.88)',
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
+    background: 'hsl(var(--background) / 0.75)',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
     color: 'hsl(var(--foreground))',
     fontSize: '14px',
     fontWeight: '600',
-    border: 'none',
+    border: '1px solid hsl(var(--border) / 0.65)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
     cursor: 'pointer',
     userSelect: 'none',
     WebkitTapHighlightColor: 'transparent',
@@ -263,73 +237,14 @@ export function FloatingEmmausButton() {
         right: '16px',
       }}
     >
-      {reducedMotion ? (
-        // ── Reduced-motion: static gradient border ───────────────────────────
-        <button
-          onClick={handlePress}
-          aria-label="Ask Emmaus"
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-          style={{
-            ...innerStyle,
-            background: `hsl(var(--background) / 0.88) padding-box, ${STATIC_GRADIENT} border-box`,
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            border: '2px solid transparent',
-            boxShadow: `0 0 10px rgba(37,140,255,0.20)`,
-          }}
-        >
-          {label}
-        </button>
-      ) : (
-        // ── Animated: rotating conic-gradient clipped to pill perimeter ───────
-        <div
-          style={{
-            position: 'relative',
-            borderRadius: '9999px',
-            padding: '2px',
-            boxShadow: `
-              0 0 12px rgba(37,140,255,0.28),
-              0 0 24px rgba(46,212,122,0.14),
-              0 2px 8px rgba(0,0,0,0.12)
-            `,
-          }}
-        >
-          {/* Clip container */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: 'inherit',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Spinning conic-gradient square */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                width: '200%',
-                height: '200%',
-                transform: 'translate(-50%, -50%) rotate(0deg)',
-                background: CONIC,
-                animation: 'border-trace 6s linear infinite',
-              }}
-            />
-          </div>
-
-          {/* Inner button */}
-          <button
-            onClick={handlePress}
-            aria-label="Ask Emmaus"
-            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#258CFF]"
-            style={innerStyle}
-          >
-            {label}
-          </button>
-        </div>
-      )}
+      <button
+        onClick={handlePress}
+        aria-label="Ask Emmaus"
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-foreground/20"
+        style={innerStyle}
+      >
+        {label}
+      </button>
     </div>
   );
 }

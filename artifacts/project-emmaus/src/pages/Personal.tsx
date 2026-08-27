@@ -132,6 +132,7 @@ export default function Personal() {
   // ── History ────────────────────────────────────────────────────────────────
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [histLoading, setHistLoading] = useState(true);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const loadData = useCallback(async () => {
     setFavsLoading(true);
@@ -318,13 +319,22 @@ export default function Personal() {
             </p>
           ) : (
             <div className="space-y-2">
-              {history.slice(0, 20).map(entry => (
-                <HistoryRow
-                  key={entry.id}
-                  entry={entry}
-                  onOpen={() => setLocation(entry.content_route)}
-                />
-              ))}
+                {(showAllHistory ? history : history.slice(0, 5)).map(entry => (
+                  <HistoryRow
+                    key={entry.id}
+                    entry={entry}
+                    onOpen={() => setLocation(entry.content_route)}
+                  />
+                ))}
+                {!showAllHistory && history.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllHistory(true)}
+                    className="w-full pt-1 text-[13px] font-medium text-violet-700/80 hover:text-violet-800 transition-colors"
+                  >
+                    View more
+                  </button>
+                )}
             </div>
           )}
           </SectionWrapper>

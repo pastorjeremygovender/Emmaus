@@ -402,10 +402,19 @@ export default function AskEmmausConversation() {
     setMemoryDecided(true);
   }
 
+  function handleBack() {
+    // New conversations launched from a page keep that page as their return
+    // destination. Existing saved conversations have no launch destination and
+    // should return to Ask Emmaus Home as before.
+    const destination = params.id ? null : getReturnDestination();
+    clearReturnDestination();
+    setLocation(destination?.pathname ?? '/personal/ask-emmaus');
+  }
+
   // ─── Crisis mode ─────────────────────────────────────────────────────────────
 
   if (isCrisisMode) {
-    return <SafetyHandoverCard onReturn={() => setLocation('/personal/ask-emmaus')} />;
+    return <SafetyHandoverCard onReturn={handleBack} />;
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -416,10 +425,7 @@ export default function AskEmmausConversation() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
-            onClick={() => {
-              // Go back to Ask Emmaus home — let it handle the final return to origin.
-              setLocation('/personal/ask-emmaus');
-            }}
+            onClick={handleBack}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >

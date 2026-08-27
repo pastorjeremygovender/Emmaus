@@ -18,6 +18,7 @@ import { VerseStudyPanel, type StudyVerse } from '@/components/VerseStudyPanel';
 import { useTranslations, type TranslationMeta } from '@/hooks/useTranslations';
 import { BottomNav } from '@/components/BottomNav';
 import { FavouriteButton } from '@/components/FavouriteButton';
+import { setPendingMessage, setReturnDestination, sourceSectionFromPath } from '@/lib/emmaus-pending';
 
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   amber: 'bg-amber-100/80 dark:bg-amber-900/30',
@@ -729,10 +730,22 @@ export default function ChapterReader() {
                   {/* Ask Emmaus */}
                   <button
                     onClick={() => {
+                      const prompt = `Help me understand ${ref}: "${verseSheet.text}"`;
+                      setPendingMessage(prompt, {
+                        entryPoint: 'bible',
+                        bookId: book.id,
+                        bookName: book.name,
+                        chapter: chapterNum,
+                        chapterHeading: ref,
+                        verseText: verseSheet.text,
+                      });
+                      setReturnDestination({
+                        pathname: `${window.location.pathname}${window.location.search}`,
+                        scrollY: Math.round(window.scrollY),
+                        sourceSection: sourceSectionFromPath(window.location.pathname),
+                      });
                       setVerseSheet(null);
-                      setLocation(
-                        `/personal/ask-emmaus/conversation?verse=${encodeURIComponent(ref)}&q=${encodeURIComponent(`Help me understand ${ref}: "${verseSheet.text}"`)}`
-                      );
+                      setLocation('/personal/ask-emmaus/conversation');
                     }}
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl border bg-card border-border hover:bg-primary/5 hover:border-primary/30 transition-colors"
                   >
