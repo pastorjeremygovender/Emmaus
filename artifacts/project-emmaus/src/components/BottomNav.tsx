@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { Footprints, BookOpen } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
-import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 // Navigation order (locked):
 // 1. Today's Steps  /walk
@@ -50,46 +49,38 @@ export function BottomNav() {
   }
 
   return (
-    <>
-      <div
-        className="fixed right-2 z-[60]"
-        style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
-      >
-        <MemberHeaderActions />
-      </div>
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background safe-area-bottom">
-        <nav className="flex h-16 items-center justify-around" aria-label="Main navigation">
-          {navItems.map(({ path, label, icon: Icon }) => {
-            const active = isActive(path);
-            return (
-              <Link
-                key={path}
-                href={path}
-                data-testid={`nav-${path.slice(1)}`}
-                className="relative flex h-full min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1"
-                aria-current={active ? 'page' : undefined}
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background safe-area-bottom">
+      <nav className="flex h-16 items-center justify-around" aria-label="Main navigation">
+        {navItems.map(({ path, label, icon: Icon }) => {
+          const active = isActive(path);
+          return (
+            <Link
+              key={path}
+              href={path}
+              data-testid={`nav-${path.slice(1)}`}
+              className="relative flex h-full min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1"
+              aria-current={active ? 'page' : undefined}
+            >
+              {active && (
+                <span className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
+              )}
+              <Icon
+                size={21}
+                className={`shrink-0 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'}`}
+                strokeWidth={active ? 2.5 : 1.8}
+                aria-hidden="true"
+              />
+              <span
+                className={`text-center text-[10px] font-medium leading-tight tracking-tight transition-colors ${
+                  active ? 'text-primary' : 'text-muted-foreground'
+                }`}
               >
-                {active && (
-                  <span className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
-                )}
-                <Icon
-                  size={21}
-                  className={`shrink-0 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'}`}
-                  strokeWidth={active ? 2.5 : 1.8}
-                  aria-hidden="true"
-                />
-                <span
-                  className={`text-center text-[10px] font-medium leading-tight tracking-tight transition-colors ${
-                    active ? 'text-primary' : 'text-muted-foreground'
-                  }`}
-                >
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-    </>
+                {label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

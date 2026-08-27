@@ -12,6 +12,7 @@ import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
 import OpeningGate from '@/components/OpeningGate';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -96,6 +97,36 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
     setLocation(`/daily-rhythm/day/${day}`);
   }, [day]);
   return null;
+}
+
+function isMemberHeaderPath(pathname: string): boolean {
+  return pathname === '/walk' ||
+    pathname.startsWith('/daily-rhythm/') ||
+    pathname.startsWith('/devotional/') ||
+    pathname.startsWith('/journey/') ||
+    pathname.startsWith('/sermon-companion/') ||
+    pathname.startsWith('/sermon/') ||
+    pathname.startsWith('/bible') ||
+    pathname.startsWith('/journeys') ||
+    pathname.startsWith('/content-groups/') ||
+    pathname.startsWith('/personal') ||
+    pathname.startsWith('/rooms');
+}
+
+function GlobalMemberHeaderActions() {
+  const [location] = useLocation();
+  if (!isMemberHeaderPath(location.split('?')[0])) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed right-2 z-[60]"
+      style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
+    >
+      <div className="pointer-events-auto">
+        <MemberHeaderActions />
+      </div>
+    </div>
+  );
 }
 
 function Router() {
@@ -191,6 +222,7 @@ function App() {
                     <OpeningGate>
                       <Router />
                     </OpeningGate>
+                    <GlobalMemberHeaderActions />
                     <FloatingEmmausButton />
                     <GlobalVoiceIndicator />
                   </VoiceSessionProvider>

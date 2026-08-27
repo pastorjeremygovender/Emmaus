@@ -58,6 +58,12 @@ vi.mock('@/contexts/BibleContext', () => ({
 
 vi.mock('@/contexts/AppearanceContext', () => ({
   AppearanceProvider: ({ children }: { children: unknown }) => children,
+  useAppearance: () => ({
+    theme: 'light',
+    fontSize: 'standard',
+    setTheme: vi.fn(),
+    setFontSize: vi.fn(),
+  }),
 }));
 
 vi.mock('@/contexts/VoiceSessionContext', () => ({
