@@ -45,7 +45,11 @@ const nonce = crypto.randomBytes(6).toString("hex");
 const leaderKey = `room-meeting-leader-${nonce}`;
 const memberKey = `room-meeting-member-${nonce}`;
 
-function request(options: RequestOptions): Promise<{ status: number; body: string }> {
+function request(options: RequestOptions): Promise<{
+  status: number;
+  body: string;
+  headers: http.IncomingHttpHeaders;
+}> {
   return new Promise((resolve, reject) => {
     const payload = options.body ? JSON.stringify(options.body) : undefined;
     const headers: Record<string, string> = {
@@ -67,6 +71,7 @@ function request(options: RequestOptions): Promise<{ status: number; body: strin
         res.on("end", () => resolve({
           status: res.statusCode ?? 0,
           body: Buffer.concat(chunks).toString(),
+          headers: res.headers,
         }));
       },
     );
@@ -178,6 +183,16 @@ after(async () => {
 
 describe("two-device active Group Meeting flow", () => {
   it("keeps pre-join state identical and does not authorize discussion early", async () => {
+    const roomDetail = await request({
+      path: `/api/rooms/${roomId}`,
+      headers: leaderHeaders,
+    });
+    assert.equal(roomDetail.status, 200, roomDetail.body);
+    assert.match(
+      String(roomDetail.headers["cache-control"] ?? ""),
+      /no-store/,
+    );
+
     const started = await request({
       method: "POST",
       path: `/api/rooms/${roomId}/session/start`,

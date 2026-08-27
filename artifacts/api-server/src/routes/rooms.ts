@@ -149,6 +149,14 @@ import {
 
 const router = Router();
 
+// Room state is authenticated, user-specific, and changes across devices.
+// Prevent Express/browser validators from converting a JSON response into a
+// body-less 304 that clients cannot rehydrate.
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  next();
+});
+
 async function closeLiveMeeting(roomId: string): Promise<void> {
   try {
     const status = await getVideoStatus(roomId);
