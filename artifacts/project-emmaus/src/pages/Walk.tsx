@@ -929,10 +929,10 @@ export default function Walk() {
           <button
             type="button"
             onClick={() => setLocation('/journeys')}
-            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-card/95 py-3 text-[14px] font-medium text-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary/40 hover:bg-card"
+            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 py-3 text-[14px] text-muted-foreground/50 shadow-sm transition-all hover:border-primary/25 hover:shadow-md"
             aria-label="Discover more content"
           >
-            <Compass size={15} className="text-primary" strokeWidth={1.8} />
+            <Compass size={15} className="shrink-0 text-muted-foreground/50" strokeWidth={1.8} />
             Discover More Content
           </button>
         </motion.div>

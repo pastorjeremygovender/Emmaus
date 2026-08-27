@@ -51,7 +51,10 @@ export function BottomNav() {
 
   return (
     <>
-      <div className="fixed right-2 top-3 z-[60]">
+      <div
+        className="fixed right-2 z-[60]"
+        style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         <MemberHeaderActions />
       </div>
       <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background safe-area-bottom">

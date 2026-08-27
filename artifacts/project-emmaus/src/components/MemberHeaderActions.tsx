@@ -1,17 +1,33 @@
 import { useState } from 'react';
+import { Link, useLocation } from 'wouter';
 import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceContext';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Moon, Settings, Sun } from 'lucide-react';
+import { Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 
 export function MemberHeaderActions() {
+  const [location] = useLocation();
   const { theme, fontSize, setTheme, setFontSize } = useAppearance();
   const [notifs, setNotifs] = useState(true);
 
   return (
     <div className="flex items-center gap-1">
+      <Link
+        href="/personal"
+        className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+          location === '/personal' || location.startsWith('/personal/')
+            ? 'text-primary'
+            : 'text-muted-foreground'
+        }`}
+        aria-label="My Journey"
+        title="My Journey"
+        aria-current={location === '/personal' ? 'page' : undefined}
+        data-testid="top-my-journey"
+      >
+        <User size={19} aria-hidden="true" />
+      </Link>
       <Popover>
         <PopoverTrigger asChild>
           <button
