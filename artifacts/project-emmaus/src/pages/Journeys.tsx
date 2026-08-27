@@ -294,16 +294,14 @@ function SwitchDevotionalDialog({
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item, onAction, onDetails: _onDetails, isGated, onGate, enrollmentState: _es,
-  onViewPreviousSteps, currentDay,
+  item, onAction, isGated, onGate, enrollmentState: _es,
+  currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
-  onDetails?: () => void;
   isGated?: boolean;
   onGate?: () => void;
   enrollmentState?: string | null;
-  onViewPreviousSteps?: () => void;
   currentDay?: number;
 }) {
   const total = item.metadata.durationDays ?? 0;
@@ -320,9 +318,6 @@ function DiscoveryCard({
     subtitle = [dayLabel(total)].filter(Boolean).join(' · ') || (item.description ?? undefined);
   }
 
-  const secondaryLabel = onViewPreviousSteps ? 'View Walk Contents' : undefined;
-  const onSecondary = onViewPreviousSteps;
-
   return (
     <DiscoverCompactCard
       title={item.title}
@@ -333,8 +328,6 @@ function DiscoveryCard({
       state={state}
       isGated={isGated}
       onGate={onGate}
-      secondaryLabel={secondaryLabel}
-      onSecondary={onSecondary}
     />
   );
 }
@@ -419,31 +412,23 @@ function DevotionalsPanel({
 // Shared card-list helper used by both JourneysPanel and WalksPanel.
 function journeyItemCards(
   items: NextStepsItem[],
-  { onAction, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps }:
+  { onAction, isGated, onGate, getEnrollmentState, getProgressDay }:
   {
     onAction: (item: NextStepsItem) => void;
-    onDetails: (id: string) => void;
     isGated: (item: NextStepsItem) => boolean;
     onGate: () => void;
     getEnrollmentState: (id: string) => string | null;
     getProgressDay: (id: string) => number;
-    onViewPreviousSteps: (id: string) => void;
   }
 ) {
-  function viewPreviousStepsFor(item: NextStepsItem) {
-    if (!item.route.startsWith('/journey/')) return undefined;
-    return getProgressDay(item.id) > 1 ? () => onViewPreviousSteps(item.id) : undefined;
-  }
   return items.map(item => (
     <DiscoveryCard
       key={item.id}
       item={item}
       onAction={() => onAction(item)}
-      onDetails={() => onDetails(item.id)}
       isGated={isGated(item)}
       onGate={onGate}
       enrollmentState={getEnrollmentState(item.id)}
-      onViewPreviousSteps={viewPreviousStepsFor(item)}
       currentDay={getProgressDay(item.id)}
     />
   ));
@@ -526,21 +511,19 @@ export function JourneysPanel({
 
 // Walks tab — shows standalone walks that are not assigned to any Journey.
 function WalksPanel({
-  standalone, onAction, onDetails, isGated, onGate, getEnrollmentState,
-  getProgressDay, onViewPreviousSteps, sort,
+  standalone, onAction, isGated, onGate, getEnrollmentState,
+  getProgressDay, sort,
 }: {
   standalone: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  onDetails: (id: string) => void;
   isGated: (item: NextStepsItem) => boolean;
   onGate: () => void;
   getEnrollmentState: (id: string) => string | null;
   getProgressDay: (id: string) => number;
-  onViewPreviousSteps: (id: string) => void;
   sort: DiscoverSort;
 }) {
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
-  const cardProps = { onAction, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
+  const cardProps = { onAction, isGated, onGate, getEnrollmentState, getProgressDay };
   return (
     <div className="space-y-3">
       {journeyItemCards(sortItems(standalone, sort), cardProps)}
@@ -947,7 +930,7 @@ export default function Journeys() {
                   onGate={() => setLocation('/walk')}
                   sort={walksSort}
                 />
-                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
+                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
