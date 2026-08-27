@@ -6,6 +6,7 @@ import { SectionWrapper } from '@/components/SectionWrapper';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 type Tab = 'home' | 'library';
 
@@ -36,8 +37,9 @@ export default function Bible() {
       <main className="relative px-5 pt-10 max-w-[520px] mx-auto space-y-6">
 
         {/* Header */}
-        <header className="space-y-1">
-          <h1 className="text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
+        <header className="sticky top-0 z-30 -mx-5 flex items-start justify-between gap-3 bg-background/95 px-5 pb-2 pt-2 backdrop-blur-sm">
+          <h1 className="min-w-0 text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
+          <MemberHeaderActions />
         </header>
 
         {/* Ask Emmaus */}

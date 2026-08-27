@@ -32,6 +32,7 @@ import {
   BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 import { SectionWrapper } from '@/components/SectionWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
@@ -980,13 +981,18 @@ export default function Journeys() {
       <main className="relative px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
-        <header className="space-y-1">
-          <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-            Discover
-          </h1>
-          <p className="text-[14px] text-muted-foreground leading-relaxed">
-            What would you like to explore?
-          </p>
+        <header className="sticky top-0 z-30 -mx-5 space-y-1 bg-background/95 px-5 pb-2 pt-2 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+                Discover
+              </h1>
+              <p className="text-[14px] text-muted-foreground leading-relaxed">
+                What would you like to explore?
+              </p>
+            </div>
+            <MemberHeaderActions />
+          </div>
         </header>
 
         {/* Unified Ask Emmaus / Search input */}
