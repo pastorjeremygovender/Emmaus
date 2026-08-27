@@ -289,11 +289,14 @@ export async function apiRemoveMember(
 export async function apiGetMessages(
   userId: string,
   roomId: string,
-  before?: string
+  before?: string,
+  discussionId?: string,
 ): Promise<RoomMessage[]> {
-  const url = before
-    ? `/api/rooms/${roomId}/messages?before=${encodeURIComponent(before)}`
-    : `/api/rooms/${roomId}/messages`;
+  const query = new URLSearchParams();
+  if (before) query.set('before', before);
+  if (discussionId) query.set('discussionId', discussionId);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const url = `/api/rooms/${roomId}/messages${suffix}`;
   const data = await roomsFetch<{ messages: RoomMessage[] }>(url, userId);
   return data.messages;
 }
@@ -303,11 +306,16 @@ export async function apiSendMessage(
   roomId: string,
   body: string,
   attachment?: import('@/lib/rooms-types').MediaAttachment,
+  discussionId?: string,
 ): Promise<RoomMessage> {
   const data = await roomsFetch<{ message: RoomMessage }>(
     `/api/rooms/${roomId}/messages`,
     userId,
-    { method: 'POST', body: JSON.stringify({ body, ...(attachment ? { attachment } : {}) }) }
+    { method: 'POST', body: JSON.stringify({
+      body,
+      ...(attachment ? { attachment } : {}),
+      ...(discussionId ? { discussionId } : {}),
+    }) }
   );
   return data.message;
 }
@@ -320,14 +328,38 @@ export async function apiSendMessage(
  */
 export async function apiGetStreamToken(
   userId: string,
-  roomId: string
+  roomId: string,
+  discussionId?: string,
 ): Promise<string> {
   const data = await roomsFetch<{ token: string }>(
     `/api/rooms/${roomId}/messages/stream/token`,
     userId,
-    { method: 'POST' }
+    { method: 'POST', body: JSON.stringify(discussionId ? { discussionId } : {}) }
   );
   return data.token;
+}
+
+export async function apiOpenGroupDiscussion(
+  userId: string,
+  roomId: string,
+): Promise<{ id: string; roomId: string; sessionId: string; createdAt: string }> {
+  const data = await roomsFetch<{ discussion: { id: string; roomId: string; sessionId: string; createdAt: string } }>(
+    `/api/rooms/${roomId}/session/discussion/open`,
+    userId,
+    { method: 'POST' },
+  );
+  return data.discussion;
+}
+
+export async function apiGetActiveGroupDiscussion(
+  userId: string,
+  roomId: string,
+): Promise<{ id: string; roomId: string; sessionId: string; createdAt: string } | null> {
+  const data = await roomsFetch<{ discussion: { id: string; roomId: string; sessionId: string; createdAt: string } | null }>(
+    `/api/rooms/${roomId}/session/discussion`,
+    userId,
+  );
+  return data.discussion;
 }
 export interface StartSharedParams {
   journeyId: string;
@@ -387,9 +419,13 @@ export async function apiGetVideoStatus(
 
 export async function apiStartVideo(
   userId: string,
-  roomId: string
-): Promise<{ ok: boolean; alreadyActive: boolean; livekitRoomName: string }> {
-  return roomsFetch(`/api/rooms/${roomId}/video/start`, userId, { method: 'POST' });
+  roomId: string,
+  mode: 'audio' | 'video' = 'video',
+): Promise<{ ok: boolean; alreadyActive: boolean; livekitRoomName: string; meetingMode: 'audio' | 'video' }> {
+  return roomsFetch(`/api/rooms/${roomId}/video/start`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ mode }),
+  });
 }
 
 export async function apiGetVideoToken(
@@ -481,10 +517,13 @@ export function apiPresenceStreamUrl(roomId: string, token: string): string {
 /** Start a new guided session. Leader only. */
 export async function apiStartSession(
   userId: string,
-  roomId: string
+  roomId: string,
+  meetingMode: 'text' | 'audio' | 'video' = 'text',
 ): Promise<RoomSession> {
   const data = await roomsFetch<{ session: RoomSession }>(
-    `/api/rooms/${roomId}/session/start`, userId, { method: 'POST' }
+    `/api/rooms/${roomId}/session/start`,
+    userId,
+    { method: 'POST', body: JSON.stringify({ meetingMode }) },
   );
   return data.session;
 }

@@ -112,6 +112,7 @@ export interface RoomMessage {
   body: string;
   createdAt: string;
   attachment?: MediaAttachment | null;
+  discussionId?: string | null;
 }
 
 export interface RoomMediaItem {
@@ -244,6 +245,7 @@ function rowToMessage(row: Record<string, unknown>): RoomMessage {
     body: String(row.body ?? ""),
     createdAt: String(row.created_at ?? ""),
     attachment: row.attachment ? (row.attachment as MediaAttachment) : null,
+    discussionId: row.discussion_id ? String(row.discussion_id) : null,
   };
 }
 
@@ -697,13 +699,18 @@ interface Subscriber {
 export async function getMessages(
   roomId: string,
   limit = 50,
-  before?: string
+  before?: string,
+  discussionId?: string
 ): Promise<RoomMessage[]> {
   const params: unknown[] = [roomId, limit];
-  let beforeClause = "";
+  const filters = ["rm.room_id = $1"];
+  if (discussionId) {
+    params.push(discussionId);
+    filters.push(`rm.discussion_id = $${params.length}`);
+  }
   if (before) {
     params.push(before);
-    beforeClause = `AND rm.created_at < $${params.length}`;
+    filters.push(`rm.created_at < $${params.length}`);
   }
 
   const res = await pool.query(
@@ -711,8 +718,7 @@ export async function getMessages(
      FROM   room_messages rm
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm.user_id OR up.email = rm.user_id
-     WHERE  rm.room_id = $1
-     ${beforeClause}
+     WHERE  ${filters.join(" AND ")}
      ORDER  BY rm.created_at DESC
      LIMIT  $2`,
     params
@@ -725,14 +731,34 @@ export async function addMessage(
   userId: string,
   body: string,
   attachment?: MediaAttachment,
+  discussionId?: string,
 ): Promise<RoomMessage> {
-  const res = await pool.query(
-    `INSERT INTO room_messages (room_id, user_id, body, attachment)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [roomId, userId, body, attachment ? JSON.stringify(attachment) : null]
-  );
-  const row = res.rows[0] as Record<string, unknown>;
+  let rows: Record<string, unknown>[];
+  try {
+    const res = await pool.query(
+      `INSERT INTO room_messages (room_id, user_id, body, attachment, discussion_id)
+        VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [roomId, userId, body, attachment ? JSON.stringify(attachment) : null, discussionId ?? null]
+    );
+    rows = res.rows as Record<string, unknown>[];
+  } catch (err) {
+    // A rolling test/older development database may not have completed the
+    // additive migration yet. Preserve its existing room-chat behavior; the
+    // production startup migration always takes the scoped path above.
+    const code = typeof err === "object" && err !== null
+      ? (err as Record<string, unknown>).code
+      : undefined;
+    if (code !== "42703") throw err;
+    const res = await pool.query(
+      `INSERT INTO room_messages (room_id, user_id, body, attachment)
+        VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [roomId, userId, body, attachment ? JSON.stringify(attachment) : null]
+    );
+    rows = res.rows as Record<string, unknown>[];
+  }
+  const row = rows[0];
   // Fetch sender name separately to include in response
   const nameRes = await pool.query(
     `SELECT preferred_name
@@ -1324,7 +1350,8 @@ export interface SessionEvent {
     | "note_pinned"
     | "media_presented"
     | "presentation_page"
-    | "presentation_stopped";
+     | "presentation_stopped"
+     | "OPEN_GROUP_DISCUSSION";
   payload: Record<string, unknown>;
   sentBy: string;
   at: string; // ISO timestamp
@@ -2169,12 +2196,13 @@ export interface VideoSessionStatus {
   startedAt: string | null;
   startedBy: string | null;
   livekitRoomName: string | null;
+  meetingMode: "audio" | "video";
 }
 
 /** Read the current video session state for a room. */
 export async function getVideoStatus(roomId: string): Promise<VideoSessionStatus> {
   const { rows } = await pool.query(
-    `SELECT video_active, video_started_at, video_started_by, livekit_room_name
+    `SELECT video_active, video_started_at, video_started_by, livekit_room_name, meeting_mode
      FROM rooms WHERE id = $1`,
     [roomId]
   );
@@ -2185,6 +2213,7 @@ export async function getVideoStatus(roomId: string): Promise<VideoSessionStatus
     startedAt: r.video_started_at ? String(r.video_started_at) : null,
     startedBy: r.video_started_by ? String(r.video_started_by) : null,
     livekitRoomName: r.livekit_room_name ? String(r.livekit_room_name) : null,
+    meetingMode: r.meeting_mode === "audio" ? "audio" : "video",
   };
 }
 
@@ -2192,17 +2221,75 @@ export async function getVideoStatus(roomId: string): Promise<VideoSessionStatus
 export async function startVideoSession(
   roomId: string,
   startedBy: string,
-  livekitRoomName: string
+  livekitRoomName: string,
+  meetingMode: "audio" | "video" = "video",
 ): Promise<void> {
   await pool.query(
     `UPDATE rooms
      SET video_active = true,
          video_started_at = NOW(),
          video_started_by = $2,
-         livekit_room_name = $3
+          livekit_room_name = $3,
+          meeting_mode = $4
      WHERE id = $1`,
-    [roomId, startedBy, livekitRoomName]
+    [roomId, startedBy, livekitRoomName, meetingMode]
   );
+}
+
+export interface RoomDiscussion {
+  id: string;
+  roomId: string;
+  sessionId: string;
+  createdAt: string;
+}
+
+function rowToDiscussion(row: Record<string, unknown>): RoomDiscussion {
+  return {
+    id: String(row.id),
+    roomId: String(row.room_id),
+    sessionId: String(row.session_id),
+    createdAt: String(row.created_at),
+  };
+}
+
+/** Get or create the one discussion channel belonging to a session. */
+export async function getOrCreateSessionDiscussion(
+  roomId: string,
+  sessionId: string,
+): Promise<RoomDiscussion> {
+  const res = await pool.query(
+    `INSERT INTO room_discussions (room_id, session_id)
+     SELECT $1, rs.id
+     FROM room_sessions rs
+     WHERE rs.id = $2 AND rs.room_id = $1
+     ON CONFLICT (session_id) DO UPDATE SET room_id = EXCLUDED.room_id
+     RETURNING *`,
+    [roomId, sessionId],
+  );
+  if (!res.rows[0]) throw new Error("SESSION_NOT_FOUND");
+  return rowToDiscussion(res.rows[0] as Record<string, unknown>);
+}
+
+export async function getSessionDiscussion(
+  roomId: string,
+  sessionId: string,
+): Promise<RoomDiscussion | null> {
+  const res = await pool.query(
+    `SELECT * FROM room_discussions WHERE room_id = $1 AND session_id = $2`,
+    [roomId, sessionId],
+  );
+  return res.rows[0] ? rowToDiscussion(res.rows[0] as Record<string, unknown>) : null;
+}
+
+export async function getDiscussionById(
+  roomId: string,
+  discussionId: string,
+): Promise<RoomDiscussion | null> {
+  const res = await pool.query(
+    `SELECT * FROM room_discussions WHERE room_id = $1 AND id = $2`,
+    [roomId, discussionId],
+  );
+  return res.rows[0] ? rowToDiscussion(res.rows[0] as Record<string, unknown>) : null;
 }
 
 /** Mark the room's video session as ended. */
@@ -2212,7 +2299,8 @@ export async function endVideoSession(roomId: string): Promise<void> {
      SET video_active = false,
          video_started_at = NULL,
          video_started_by = NULL,
-         livekit_room_name = NULL
+          livekit_room_name = NULL,
+          meeting_mode = 'video'
      WHERE id = $1`,
     [roomId]
   );

@@ -10,6 +10,14 @@ const roomsApiSource = readFileSync(
   resolve(process.cwd(), 'src/lib/rooms-api.ts'),
   'utf8',
 );
+const guidePanelSource = readFileSync(
+  resolve(process.cwd(), 'src/components/GuideGroupPanel.tsx'),
+  'utf8',
+);
+const videoRoomSource = readFileSync(
+  resolve(process.cwd(), 'src/components/VideoRoom.tsx'),
+  'utf8',
+);
 
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
@@ -37,5 +45,22 @@ describe('active meeting synchronization contract', () => {
       'roomsFetch<{ ok: true; attendance: SessionAttendee }>',
     );
     expect(roomsApiSource).toContain('return data.attendance;');
+  });
+
+  it('routes the leader command through one persisted discussion identity', () => {
+    expect(guidePanelSource).toContain('await apiChangeMode(userId, roomId, \'discussion\', leaderName);');
+    expect(guidePanelSource).toContain('const discussion = await apiOpenGroupDiscussion(userId, roomId);');
+    expect(guidePanelSource).toContain('onOpenDiscussion?.(discussion.id);');
+    expect(roomDetailSource).toContain("lastEvent?.type !== 'OPEN_GROUP_DISCUSSION'");
+    expect(roomDetailSource).toContain('setDiscussionPendingNotice(payload.discussionId);');
+    expect(roomDetailSource).toContain('openChat(payload.discussionId);');
+  });
+
+  it('keeps LiveKit audio microphone-only and removes camera controls', () => {
+    expect(videoRoomSource).toContain('video={meetingMode === \'video\'}');
+    expect(videoRoomSource).toContain('controls={{ camera: false, microphone: true');
+    expect(videoRoomSource).toContain('function AudioParticipantGrid');
+    expect(videoRoomSource).toContain('Live Audio');
+    expect(videoRoomSource).toContain("'Microphone' : 'Camera and microphone'");
   });
 });

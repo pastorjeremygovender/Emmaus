@@ -75,6 +75,9 @@ import {
   addSharedNote,
   pinNote,
   getSessionByIdForRoom,
+  getOrCreateSessionDiscussion,
+  getSessionDiscussion,
+  getDiscussionById,
   createPoll,
   getActivePoll,
   getPollWithResults,
@@ -145,6 +148,16 @@ import {
 } from "../lib/livekit.js";
 
 const router = Router();
+
+async function closeLiveMeeting(roomId: string): Promise<void> {
+  try {
+    const status = await getVideoStatus(roomId);
+    if (status.livekitRoomName) await deleteLiveKitRoom(status.livekitRoomName);
+    if (status.videoActive) await endVideoSession(roomId);
+  } catch (err) {
+    logger.warn({ err, roomId }, "best-effort live meeting cleanup failed");
+  }
+}
 
 // ─── Application-admin guard ─────────────────────────────────────────────────
 
@@ -221,6 +234,7 @@ router.get("/:roomId/video/status", async (req, res) => {
         startedAt: null,
         startedBy: null,
         livekitRoomName: null,
+        meetingMode: "video",
         livekitUrl: null,
       });
       return;
@@ -249,6 +263,12 @@ router.post("/:roomId/video/start", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   const { roomId } = req.params;
+  const requestedMode = (req.body as { mode?: unknown })?.mode;
+  if (requestedMode !== undefined && requestedMode !== "audio" && requestedMode !== "video") {
+    res.status(400).json({ error: "mode must be audio or video." });
+    return;
+  }
+  const meetingMode: "audio" | "video" = requestedMode === "audio" ? "audio" : "video";
 
   if (!isLiveKitConfigured()) {
     res.status(503).json({ error: "Live video is not configured on this server." });
@@ -281,15 +301,20 @@ router.post("/:roomId/video/start", async (req, res) => {
     const status = await getVideoStatus(String(roomId));
     if (status.videoActive) {
       // Already active — return current state
-      res.json({ ok: true, alreadyActive: true, livekitRoomName: status.livekitRoomName });
+      res.json({
+        ok: true,
+        alreadyActive: true,
+        livekitRoomName: status.livekitRoomName,
+        meetingMode: status.meetingMode,
+      });
       return;
     }
 
     const livekitRoomName = `emmaus-${String(roomId)}`;
     await ensureLiveKitRoom(livekitRoomName, settings.maxDurationMinutes * 60);
-    await startVideoSession(String(roomId), userId, livekitRoomName);
+    await startVideoSession(String(roomId), userId, livekitRoomName, meetingMode);
 
-    res.json({ ok: true, alreadyActive: false, livekitRoomName });
+    res.json({ ok: true, alreadyActive: false, livekitRoomName, meetingMode });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to start video.";
     res.status(500).json({ error: msg });
@@ -1284,6 +1309,7 @@ interface StreamToken {
   roomId: string;
   expiresAt: number; // Date.now() + TTL
   kind: "chat" | "presence" | "session";
+  discussionId?: string;
 }
 
 // In-memory token store — tokens are consumed on first use and expire after
@@ -1304,6 +1330,13 @@ router.post("/:roomId/messages/stream/token", async (req, res) => {
   if (!userId) return;
 
   const { roomId } = req.params;
+  const discussionId = typeof req.body?.discussionId === "string"
+    ? req.body.discussionId
+    : undefined;
+  if (discussionId && !(await getDiscussionById(String(roomId), discussionId))) {
+    res.status(404).json({ error: "Discussion not found in this room." });
+    return;
+  }
 
   pruneExpiredTokens();
   const token = randomUUID();
@@ -1312,6 +1345,7 @@ router.post("/:roomId/messages/stream/token", async (req, res) => {
     roomId: String(roomId),
     expiresAt: Date.now() + 30_000, // valid for 30 s
     kind: "chat",
+    discussionId,
   });
 
   res.json({ token });
@@ -1338,7 +1372,7 @@ router.get("/:roomId/messages/stream", async (req, res) => {
     return;
   }
 
-  const { userId, roomId } = tokenData;
+  const { userId, roomId, discussionId } = tokenData;
 
   // Revalidate discussion access here — the token may have been issued before
   // the member left or before the active session changed. The token is already
@@ -1373,6 +1407,7 @@ router.get("/:roomId/messages/stream", async (req, res) => {
     roomId,
     userId,
     (msg) => {
+       if (discussionId && msg.discussionId !== discussionId) return;
       try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch { /* ignore */ }
     },
     terminate
@@ -1400,10 +1435,14 @@ router.get("/:roomId/messages", async (req, res) => {
   if (!userId) return;
 
   const { roomId } = req.params;
-  const { before } = req.query as { before?: string };
+  const { before, discussionId } = req.query as { before?: string; discussionId?: string };
 
   try {
-    const messages = await getMessages(String(roomId), 50, before);
+    if (discussionId && !(await getDiscussionById(String(roomId), discussionId))) {
+      res.status(404).json({ error: "Discussion not found in this room." });
+      return;
+    }
+    const messages = await getMessages(String(roomId), 50, before, discussionId);
     res.json({ messages });
   } catch (err) {
     res.status(500).json({ error: "Failed to load messages." });
@@ -1417,7 +1456,11 @@ router.post("/:roomId/messages", async (req, res) => {
   if (!userId) return;
 
   const { roomId } = req.params;
-  const { body, attachment } = req.body as { body?: string; attachment?: MediaAttachment };
+  const { body, attachment, discussionId } = req.body as {
+    body?: string;
+    attachment?: MediaAttachment;
+    discussionId?: string;
+  };
   const trimmedBody = (body ?? "").trim();
   if (!trimmedBody && !attachment) {
     res.status(400).json({ error: "Message body or attachment is required." });
@@ -1425,7 +1468,13 @@ router.post("/:roomId/messages", async (req, res) => {
   }
 
   try {
-    const message = await addMessage(String(roomId), userId, trimmedBody, attachment ?? undefined);
+    if (discussionId && !(await getDiscussionById(String(roomId), discussionId))) {
+      res.status(404).json({ error: "Discussion not found in this room." });
+      return;
+    }
+    const message = await addMessage(
+      String(roomId), userId, trimmedBody, attachment ?? undefined, discussionId,
+    );
     res.status(201).json({ message });
   } catch (err) {
     res.status(500).json({ error: "Failed to post message." });
@@ -1599,8 +1648,43 @@ router.post("/:roomId/session/start", async (req, res) => {
   const { roomId } = req.params;
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
+  const requestedMeetingMode = (req.body as { meetingMode?: unknown })?.meetingMode;
+  if (
+    requestedMeetingMode !== undefined &&
+    requestedMeetingMode !== "text" &&
+    requestedMeetingMode !== "audio" &&
+    requestedMeetingMode !== "video"
+  ) {
+    res.status(400).json({ error: "meetingMode must be text, audio, or video." });
+    return;
+  }
+  const meetingMode: "text" | "audio" | "video" =
+    requestedMeetingMode === "audio" || requestedMeetingMode === "video"
+      ? requestedMeetingMode
+      : "text";
   try {
+    if (meetingMode !== "text") {
+      if (!isLiveKitConfigured()) {
+        res.status(503).json({ error: "Live meetings are not configured on this server." });
+        return;
+      }
+      const settings = await getVideoSettings();
+      if (!settings.videoEnabled) {
+        res.status(403).json({ error: "Live meetings are not enabled for this church." });
+        return;
+      }
+    }
     const session = await startSession(String(roomId), userId);
+    if (meetingMode !== "text") {
+      try {
+        const livekitRoomName = `emmaus-${String(roomId)}`;
+        await ensureLiveKitRoom(livekitRoomName, (await getVideoSettings()).maxDurationMinutes * 60);
+        await startVideoSession(String(roomId), userId, livekitRoomName, meetingMode);
+      } catch (videoError) {
+        await endSession(String(roomId), "ended");
+        throw videoError;
+      }
+    }
     // Starting the meeting is the leader's explicit entry action. startSession
     // records the leader against this exact session in the same transaction.
     const event: SessionEvent = {
@@ -1616,7 +1700,7 @@ router.post("/:roomId/session/start", async (req, res) => {
       sentBy: userId,
       at: new Date().toISOString(),
     });
-    res.status(201).json({ session });
+    res.status(201).json({ session, meetingMode });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
     if (msg === "SESSION_ALREADY_ACTIVE") {
@@ -1641,6 +1725,7 @@ router.post("/:roomId/session/end", async (req, res) => {
   // Bypassing this with a raw endSession("completed") would skip all of that work.
   if (status === "completed") {
     try {
+      await closeLiveMeeting(String(roomId));
       const summary = await completeSession(String(roomId));
       // Clear any active presentation so the DB table is empty after session end.
       await stopPresentation(String(roomId));
@@ -1661,6 +1746,7 @@ router.post("/:roomId/session/end", async (req, res) => {
   }
 
   try {
+    await closeLiveMeeting(String(roomId));
     await endSession(String(roomId), "ended");
     // Clear any active presentation so the DB table is empty after session end.
     await stopPresentation(String(roomId));
@@ -1770,6 +1856,7 @@ router.post("/:roomId/session/complete", async (req, res) => {
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
   try {
+    await closeLiveMeeting(String(roomId));
     const summary = await completeSession(String(roomId));
     // Clear any active presentation so the DB table is empty after session end.
     // Non-fatal — run best-effort after session completion has already been committed.
@@ -1836,6 +1923,63 @@ router.post("/:roomId/session/broadcast", async (req, res) => {
   };
   broadcastRoomEvent(String(roomId), event);
   res.json({ ok: true });
+});
+
+// POST /:roomId/session/discussion/open — leader opens the one discussion
+// channel for the active session. The event is delivered over the authoritative
+// session SSE stream so every joined device receives the same channel id.
+router.post("/:roomId/session/discussion/open", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  try {
+    const session = await getActiveSession(String(roomId));
+    if (!session) {
+      res.status(409).json({ error: "Start a meeting before opening Group Discussion." });
+      return;
+    }
+    const discussion = await getOrCreateSessionDiscussion(String(roomId), session.id);
+    const nameResult = await pool.query(
+      "SELECT preferred_name FROM user_profiles WHERE auth_subject = $1 OR email = $1",
+      [userId],
+    );
+    const senderName = nameResult.rows[0]?.preferred_name?.trim() || "Leader";
+    const event: SessionEvent = {
+      type: "OPEN_GROUP_DISCUSSION",
+      payload: {
+        roomId: String(roomId),
+        sessionId: session.id,
+        discussionId: discussion.id,
+        sender: { userId, name: senderName },
+        serverTimestamp: new Date().toISOString(),
+      },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true, discussion });
+  } catch (err) {
+    if (err instanceof Error && err.message === "SESSION_NOT_FOUND") {
+      res.status(409).json({ error: "The active meeting is no longer available." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to open Group Discussion." });
+  }
+});
+
+// GET /:roomId/session/discussion — late joiners retrieve the current channel.
+router.get("/:roomId/session/discussion", async (req, res) => {
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
+  if (!userId) return;
+  try {
+    const session = await getActiveSession(String(req.params.roomId));
+    const discussion = session
+      ? await getSessionDiscussion(String(req.params.roomId), session.id)
+      : null;
+    res.json({ discussion });
+  } catch {
+    res.status(500).json({ error: "Failed to load Group Discussion." });
+  }
 });
 
 // POST /:roomId/session/attendance/join

@@ -27,6 +27,7 @@ import {
   apiNavigate,
   apiCreatePoll,
   apiCompleteSession,
+  apiOpenGroupDiscussion,
 } from '@/lib/rooms-api';
 import { apiGetRoomMedia, apiStartPresentation } from '@/lib/rooms-api-media';
 import type { RoomSession, ScriptureRef, SessionCompleteSummary, RoomMediaItem, MediaAttachmentType } from '@/lib/rooms-types';
@@ -67,14 +68,16 @@ interface GuideGroupPanelProps {
   onSessionComplete: (summary: SessionCompleteSummary) => void;
   /** Called when leader taps "Ask Emmaus Together" — opens SharedAskEmmausPanel. */
   onOpenAskEmmaus?: () => void;
-  /** Called when leader taps "Open Discussion" — navigates directly to group chat. */
-  onOpenDiscussion?: () => void;
+  /** Called when leader taps "Open Discussion" — navigates to the shared channel. */
+  onOpenDiscussion?: (discussionId: string) => void;
   /** Whether this room type supports Live Video (retained for API compat; no longer gates the UI). */
   videoEligible?: boolean;
   /** Whether a Live Video session is currently active. */
   videoActive?: boolean;
-  /** Called when leader taps "Start Live Video". */
-  onStartVideo?: () => Promise<void>;
+  /** The active LiveKit transport mode. */
+  meetingMode?: 'audio' | 'video';
+  /** Called when leader taps "Start Live Audio" or "Start Live Video". */
+  onStartVideo?: (mode: 'audio' | 'video') => Promise<void>;
   /** Called when leader taps "End Live Video". */
   onEndVideo?: () => Promise<void>;
   /** Called when leader taps "End Meeting" inside the tools panel (before confirmation). */
@@ -105,6 +108,7 @@ export function GuideGroupPanel({
   onOpenAskEmmaus,
   onOpenDiscussion,
   videoActive = false,
+  meetingMode = 'video',
   onStartVideo,
   onEndVideo,
   onEndMeeting,
@@ -178,8 +182,9 @@ export function GuideGroupPanel({
 
   const handleStartDiscussion = () => run('discussion', async () => {
     await apiChangeMode(userId, roomId, 'discussion', leaderName);
+    const discussion = await apiOpenGroupDiscussion(userId, roomId);
     onClose();
-    onOpenDiscussion?.();
+    onOpenDiscussion?.(discussion.id);
   });
 
   const handleAskEmmausTogether = () => {
@@ -242,19 +247,29 @@ export function GuideGroupPanel({
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3">Meeting</p>
               <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
                 {!videoActive ? (
-                  <ToolRow
-                    icon={<Video size={18} />}
-                    label="Start Live Video"
-                    description="Start a live video meeting for everyone in this Group"
-                    loading={busy === 'start-video'}
-                    disabled={!sessionActive}
-                    onClick={() => run('start-video', async () => { await onStartVideo?.(); })}
-                  />
+                  <>
+                    <ToolRow
+                      icon={<Mic size={18} />}
+                      label="Start Live Audio"
+                      description="Start a microphone-only meeting for everyone in this Group"
+                      loading={busy === 'start-audio'}
+                      disabled={!sessionActive}
+                      onClick={() => run('start-audio', async () => { await onStartVideo?.('audio'); })}
+                    />
+                    <ToolRow
+                      icon={<Video size={18} />}
+                      label="Start Live Video"
+                      description="Start a camera and microphone meeting for everyone in this Group"
+                      loading={busy === 'start-video'}
+                      disabled={!sessionActive}
+                      onClick={() => run('start-video', async () => { await onStartVideo?.('video'); })}
+                    />
+                  </>
                 ) : (
                   <ToolRow
-                    icon={<VideoOff size={18} />}
-                    label="End Live Video"
-                    description="End the video session for everyone"
+                    icon={meetingMode === 'audio' ? <Mic size={18} /> : <VideoOff size={18} />}
+                    label={meetingMode === 'audio' ? 'End Live Audio' : 'End Live Video'}
+                    description="End the live meeting for everyone"
                     loading={busy === 'end-video'}
                     disabled={false}
                     onClick={() => run('end-video', async () => { await onEndVideo?.(); })}

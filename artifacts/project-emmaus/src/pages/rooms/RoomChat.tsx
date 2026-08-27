@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById } from '@/lib/rooms-api';
+import {
+  apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById,
+  apiGetActiveGroupDiscussion,
+} from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
 import { ArrowLeft, Send, Paperclip, X, Mic } from 'lucide-react';
@@ -97,6 +100,10 @@ export default function RoomChat() {
   const [isLeader, setIsLeader] = useState(false);
   const [allowMemberPresent, setAllowMemberPresent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [discussionId, setDiscussionId] = useState<string | null>(() => {
+    const queryValue = new URLSearchParams(window.location.search).get('discussionId');
+    return queryValue || null;
+  });
   const [presentingMessageId, setPresentingMessageId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -108,11 +115,13 @@ export default function RoomChat() {
       isLeader?: boolean;
       allowMemberPresent?: boolean;
       sessionId?: string | null;
+      discussionId?: string | null;
     } | null;
     if (state?.roomName) setRoomName(state.roomName);
     if (state?.isLeader !== undefined) setIsLeader(Boolean(state.isLeader));
     if (state?.allowMemberPresent !== undefined) setAllowMemberPresent(Boolean(state.allowMemberPresent));
     if (state?.sessionId !== undefined) setSessionId(state.sessionId ?? null);
+    if (state?.discussionId) setDiscussionId(state.discussionId);
   }, []);
 
   // Direct/reloaded navigation may not have history.state, and a stale history
@@ -122,12 +131,16 @@ export default function RoomChat() {
     if (!user || !roomId) return;
     let cancelled = false;
     apiGetRoomById(user.id, String(roomId))
-      .then(detail => {
+      .then(async detail => {
         if (cancelled || !detail) return;
         setRoomName(detail.room.name);
         setIsLeader(detail.isLeader || isRoomLeaderRole(detail.currentUserRole));
         setAllowMemberPresent(detail.room.allowMemberPresent ?? false);
         setSessionId(detail.activeSession?.id ?? null);
+        if (!discussionId && detail.activeSession?.id) {
+          const discussion = await apiGetActiveGroupDiscussion(user.id, String(roomId));
+          if (!cancelled && discussion) setDiscussionId(discussion.id);
+        }
       })
       .catch(err => {
         if (!cancelled) {
@@ -135,7 +148,7 @@ export default function RoomChat() {
         }
       });
     return () => { cancelled = true; };
-  }, [roomId, user?.id]);
+  }, [roomId, user?.id, discussionId]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -173,7 +186,7 @@ export default function RoomChat() {
 
       let token: string;
       try {
-        token = await apiGetStreamToken(user!.id, String(roomId));
+        token = await apiGetStreamToken(user!.id, String(roomId), discussionId ?? undefined);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : 'Could not open Group Discussion.');
         scheduleReconnect();
@@ -204,7 +217,7 @@ export default function RoomChat() {
       };
 
       try {
-        const history = await apiGetMessages(user!.id, String(roomId));
+        const history = await apiGetMessages(user!.id, String(roomId), undefined, discussionId ?? undefined);
         if (cancelled) { closeCurrentEs(); return; }
         connectionHistoryLoaded = true;
         const merged = mergeMessages(history, connectionBuffer);
@@ -229,7 +242,7 @@ export default function RoomChat() {
         currentEs.close();
       }
     };
-  }, [user, roomId, scrollToBottom]);
+  }, [user, roomId, discussionId, scrollToBottom]);
 
   const handleSend = async () => {
     if ((!body.trim() && !pendingAttachment) || !user || !roomId || sending) return;
@@ -248,12 +261,13 @@ export default function RoomChat() {
       body: text,
       createdAt: new Date().toISOString(),
       attachment,
+      discussionId,
     };
     setMessages(prev => [optimistic, ...prev]);
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), text, attachment ?? undefined);
+      await apiSendMessage(user.id, String(roomId), text, attachment ?? undefined, discussionId ?? undefined);
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setBody(text);
@@ -281,12 +295,13 @@ export default function RoomChat() {
       body: '',
       createdAt: new Date().toISOString(),
       attachment,
+      discussionId,
     };
     setMessages(prev => [optimistic, ...prev]);
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), '', attachment);
+      await apiSendMessage(user.id, String(roomId), '', attachment, discussionId ?? undefined);
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setLoadError(err instanceof Error ? err.message : 'Could not send your attachment.');

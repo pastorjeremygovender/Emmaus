@@ -573,7 +573,8 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS video_active      BOOLEAN   NOT NULL DEFAULT false,
         ADD COLUMN IF NOT EXISTS video_started_at  TIMESTAMPTZ,
         ADD COLUMN IF NOT EXISTS video_started_by  TEXT,
-        ADD COLUMN IF NOT EXISTS livekit_room_name TEXT;
+        ADD COLUMN IF NOT EXISTS livekit_room_name TEXT,
+        ADD COLUMN IF NOT EXISTS meeting_mode      TEXT      NOT NULL DEFAULT 'video';
     `);
     logger.info("Startup migration: rooms video session columns ensured (idempotent)");
   } catch (err) {
@@ -1792,6 +1793,28 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: room_sessions table failed (non-fatal)");
   }
 
+  // ── Session-scoped Group Discussion channels (2026-08) ─────────────────────
+  // Existing room messages remain unassigned. New meeting messages are tagged
+  // with this channel so a meeting has one durable discussion identity.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_discussions (
+        id         uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+        room_id    text        NOT NULL,
+        session_id uuid        NOT NULL UNIQUE REFERENCES room_sessions(id) ON DELETE CASCADE,
+        created_at timestamptz NOT NULL DEFAULT NOW()
+      );
+      ALTER TABLE room_messages
+        ADD COLUMN IF NOT EXISTS discussion_id uuid
+        REFERENCES room_discussions(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS room_messages_discussion_id_idx
+        ON room_messages (discussion_id, created_at DESC);
+    `);
+    logger.info("Startup migration: room discussions ensured (idempotent)");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room discussions failed (non-fatal)");
+  }
+
   // ── Room Session Attendance (Task #435) ──────────────────────────────────────
   try {
     await pool.query(`
@@ -2037,6 +2060,7 @@ export async function runStartupMigrations(): Promise<void> {
   try {
     await pool.query(`
       ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS attachment JSONB;
+      ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS discussion_id uuid;
       ALTER TABLE rooms ADD COLUMN IF NOT EXISTS allow_member_present BOOLEAN NOT NULL DEFAULT FALSE;
       CREATE TABLE IF NOT EXISTS room_media_presentations (
         id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

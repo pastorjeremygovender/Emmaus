@@ -54,6 +54,11 @@ interface VideoRoomProps {
    * Meeting Tools handles start; this component only shows Join + Connected.
    */
   hideStart?: boolean;
+  meetingMode?: 'audio' | 'video';
+  onOpenDiscussion?: () => void;
+  onOpenNotes?: () => void;
+  onOpenPresentedContent?: () => void;
+  hasPresentedContent?: boolean;
 }
 
 // ─── Duration warning hook ────────────────────────────────────────────────────
@@ -88,11 +93,15 @@ function useDurationWarning(
 
 // ─── Participant grid (rendered inside LiveKitRoom context) ───────────────────
 
-function ParticipantGrid({ onLeave, canHost, onEnd, ending }: {
+function VideoParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussion, onOpenNotes, onOpenPresentedContent, hasPresentedContent }: {
   onLeave: () => void;
   canHost: boolean;
   onEnd: () => void;
   ending: boolean;
+  onOpenDiscussion?: () => void;
+  onOpenNotes?: () => void;
+  onOpenPresentedContent?: () => void;
+  hasPresentedContent: boolean;
 }) {
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
@@ -132,6 +141,24 @@ function ParticipantGrid({ onLeave, canHost, onEnd, ending }: {
         />
       </div>
 
+      <div className="grid grid-cols-3 gap-2">
+        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenDiscussion}>
+          Discussion
+        </Button>
+        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenNotes}>
+          Notes
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-xl h-10 text-[11px]"
+          onClick={onOpenPresentedContent}
+          disabled={!hasPresentedContent}
+        >
+          Presented
+        </Button>
+      </div>
+
       <div className="flex gap-2">
         <Button
           variant="outline"
@@ -159,12 +186,107 @@ function ParticipantGrid({ onLeave, canHost, onEnd, ending }: {
   );
 }
 
+function AudioParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussion, onOpenNotes, onOpenPresentedContent, hasPresentedContent }: {
+  onLeave: () => void;
+  canHost: boolean;
+  onEnd: () => void;
+  ending: boolean;
+  onOpenDiscussion?: () => void;
+  onOpenNotes?: () => void;
+  onOpenPresentedContent?: () => void;
+  hasPresentedContent: boolean;
+}) {
+  const { localParticipant } = useLocalParticipant();
+  const remoteParticipants = useRemoteParticipants();
+  const participants = [localParticipant, ...remoteParticipants].filter(Boolean);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 px-1">
+        <Users size={13} className="text-muted-foreground" />
+        <span className="text-[12px] text-muted-foreground">
+          {participants.length} in live audio
+        </span>
+        <span className="ml-auto text-[11px] text-emerald-600 dark:text-emerald-400">Speaker on</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {participants.map(participant => {
+          const name = participant.name?.trim() || 'Member';
+          const initials = name.split(/\s+/).map(word => word[0]).slice(0, 2).join('').toUpperCase();
+          return (
+            <div
+              key={participant.identity}
+              className={`flex items-center gap-2.5 rounded-xl border p-3 ${
+                participant.isSpeaking
+                  ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30'
+                  : 'border-border bg-muted/30'
+              }`}
+            >
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary text-[12px] font-bold flex items-center justify-center shrink-0">
+                {initials || 'M'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-foreground truncate">{name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {participant.isSpeaking ? 'Speaking' : participant.isMicrophoneEnabled ? 'Mic on' : 'Muted'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <ControlBar
+        controls={{ camera: false, microphone: true, screenShare: false, leave: false, chat: false }}
+        style={{ background: 'transparent', padding: 0, justifyContent: 'center' }}
+      />
+
+      <div className="grid grid-cols-3 gap-2">
+        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenDiscussion}>
+          Discussion
+        </Button>
+        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenNotes}>
+          Notes
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-xl h-10 text-[11px]"
+          onClick={onOpenPresentedContent}
+          disabled={!hasPresentedContent}
+        >
+          Presented
+        </Button>
+      </div>
+
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" className="flex-1 rounded-xl h-10" onClick={onLeave}>
+          <PhoneOff size={14} className="mr-1.5" />
+          Leave
+        </Button>
+        {canHost && (
+          <Button variant="destructive" size="sm" className="flex-1 rounded-xl h-10" onClick={onEnd} disabled={ending}>
+            {ending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+            End Live Audio
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 10_000;
 
 export function VideoRoom({
   roomId, userId, displayName, videoEligible, leaderName, hideStart = false,
+  meetingMode = 'video',
+  onOpenDiscussion,
+  onOpenNotes,
+  onOpenPresentedContent,
+  hasPresentedContent = false,
 }: VideoRoomProps) {
   const [status, setStatus] = useState<VideoSessionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -210,7 +332,7 @@ export function VideoRoom({
     setActioning(true);
     setActionError('');
     try {
-      await apiStartVideo(userId, roomId);
+      await apiStartVideo(userId, roomId, meetingMode);
       const { token: t, livekitUrl: url } = await apiGetVideoToken(userId, roomId);
       setToken(t);
       setLivekitUrl(url);
@@ -339,7 +461,7 @@ export function VideoRoom({
           <div className="flex items-center gap-2.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className={`text-[14px] font-semibold ${expanded ? 'text-white' : 'text-foreground'}`}>
-              Live Video
+               {meetingMode === 'audio' ? 'Live Audio' : 'Live Video'}
             </span>
           </div>
           <Button
@@ -369,14 +491,14 @@ export function VideoRoom({
             serverUrl={livekitUrl}
             token={token}
             connect={true}
-            audio={true}
-            video={true}
+             audio={true}
+             video={meetingMode === 'video'}
             onDisconnected={handleLeave}
             onError={(err) => {
               const msg = err.message?.toLowerCase() ?? '';
               setActionError(
                 msg.includes('permission') || msg.includes('denied')
-                  ? 'Camera or microphone access was denied. Check your browser permissions.'
+                   ? `${meetingMode === 'audio' ? 'Microphone' : 'Camera and microphone'} access was denied. Check your browser permissions.`
                   : msg.includes('network') || msg.includes('ice')
                   ? 'Connection lost. Check your internet connection and try rejoining.'
                   : "We couldn't connect. Try again."
@@ -387,12 +509,29 @@ export function VideoRoom({
             style={{ background: 'transparent' }}
           >
             <RoomAudioRenderer />
-            <ParticipantGrid
-              onLeave={handleLeave}
-              canHost={status.canHost ?? false}
-              onEnd={handleEnd}
-              ending={actioning}
-            />
+             {meetingMode === 'audio' ? (
+               <AudioParticipantGrid
+                 onLeave={handleLeave}
+                 canHost={status.canHost ?? false}
+                 onEnd={handleEnd}
+                 ending={actioning}
+                 onOpenDiscussion={onOpenDiscussion}
+                 onOpenNotes={onOpenNotes}
+                 onOpenPresentedContent={onOpenPresentedContent}
+                 hasPresentedContent={hasPresentedContent}
+               />
+             ) : (
+               <VideoParticipantGrid
+                 onLeave={handleLeave}
+                 canHost={status.canHost ?? false}
+                 onEnd={handleEnd}
+                 ending={actioning}
+                 onOpenDiscussion={onOpenDiscussion}
+                 onOpenNotes={onOpenNotes}
+                 onOpenPresentedContent={onOpenPresentedContent}
+                 hasPresentedContent={hasPresentedContent}
+               />
+             )}
           </LiveKitRoom>
         </div>
 
@@ -432,9 +571,11 @@ export function VideoRoom({
               }
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[17px] font-semibold text-white">Start Live Video</div>
+                <div className="text-[17px] font-semibold text-white">
+                  Start Live {meetingMode === 'audio' ? 'Audio' : 'Video'}
+                </div>
               <div className="text-[13px] text-white/80 mt-0.5">
-                Start a live video session with your group.
+                 Start a live {meetingMode === 'audio' ? 'audio' : 'video'} session with your group.
               </div>
             </div>
           </div>
@@ -458,10 +599,10 @@ export function VideoRoom({
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <div>
               <p className="text-[15px] font-semibold text-emerald-900 dark:text-emerald-200">
-                Live Video is active
+                 {meetingMode === 'audio' ? 'Live Audio is active' : 'Live Video is active'}
               </p>
               <p className="text-[12px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                {gathererName} has started a live video session
+                 {gathererName} has started a live {meetingMode} session
               </p>
             </div>
           </div>
@@ -471,7 +612,7 @@ export function VideoRoom({
             disabled={actioning}
           >
             {actioning ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-            Join Live Video
+             Join Live {meetingMode === 'audio' ? 'Audio' : 'Video'}
           </Button>
         </div>
       </div>

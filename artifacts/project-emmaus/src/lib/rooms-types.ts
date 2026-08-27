@@ -184,6 +184,7 @@ export interface VideoSessionStatus {
   livekitUrl: string | null;
   /** Whether the current user can start / end video */
   canHost?: boolean;
+  meetingMode?: 'audio' | 'video';
 }
 
 // ─── Media attachments ────────────────────────────────────────────────────────
@@ -236,6 +237,7 @@ export interface RoomMessage {
   body: string;
   createdAt: string;
   attachment?: MediaAttachment | null;
+  discussionId?: string | null;
 }
 
 // ─── Guided session ───────────────────────────────────────────────────────
@@ -315,7 +317,8 @@ export type SessionEventType =
   | 'note_pinned'
   | 'media_presented'
   | 'presentation_page'
-  | 'presentation_stopped';
+  | 'presentation_stopped'
+  | 'OPEN_GROUP_DISCUSSION';
 
 export interface SessionCompleteSummary {
   sessionId: string;

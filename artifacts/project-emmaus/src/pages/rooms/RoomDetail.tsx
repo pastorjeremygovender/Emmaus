@@ -80,13 +80,14 @@ function isoToLocalDateTime(iso: string): string {
 /** Derive a member's preparation status from their journey progress. */
 function getPrepStatus(
   progress: MemberJourneyProgress[] | undefined,
-  userId: string
+  userId: string,
+  studyTitle?: string | null,
 ): { label: string; color: string } {
-  if (!progress) return { label: 'Not Started', color: 'text-muted-foreground/60' };
+  if (!progress) return { label: 'Study not started', color: 'text-muted-foreground/60' };
   const p = progress.find(mp => mp.userId === userId);
-  if (!p || !p.status || p.status === 'dropped') return { label: 'Not Started', color: 'text-muted-foreground/60' };
-  if (p.status === 'completed') return { label: 'Completed', color: 'text-emerald-600 dark:text-emerald-400' };
-  return { label: 'Reading', color: 'text-sky-600 dark:text-sky-400' };
+  if (!p || !p.status || p.status === 'dropped') return { label: 'Study not started', color: 'text-muted-foreground/60' };
+  if (p.status === 'completed') return { label: 'Study completed', color: 'text-emerald-600 dark:text-emerald-400' };
+  return { label: `Reading ${studyTitle || 'study'}`, color: 'text-sky-600 dark:text-sky-400' };
 }
 
 export default function RoomDetail() {
@@ -124,6 +125,7 @@ export default function RoomDetail() {
   const [scheduleValue, setScheduleValue] = useState('');
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [startingMeeting, setStartingMeeting] = useState(false);
+  const [showStartMeetingMode, setShowStartMeetingMode] = useState(false);
   const [endingMeeting, setEndingMeeting] = useState(false);
   // (showDiscussion removed — Discussion is now a plain card, not an accordion)
   const [refreshing, setRefreshing] = useState(false);
@@ -134,6 +136,7 @@ export default function RoomDetail() {
   const [scripturePendingNotice, setScripturePendingNotice] = useState<{
     scripture: ScriptureRef; leaderName: string;
   } | null>(null);
+  const [discussionPendingNotice, setDiscussionPendingNotice] = useState<string | null>(null);
   const [sseHighlights, setSseHighlights] = useState<RoomHighlight[]>([]);
   const [sseNotes, setSseNotes] = useState<SharedNote[]>([]);
   const [ssePinChange, setSsePinChange] = useState<{ noteId: string; isPinned: boolean } | null>(null);
@@ -159,6 +162,7 @@ export default function RoomDetail() {
   const [videoActive, setVideoActive] = useState(false);
   /** Whether the current user is authorized to start/end video (server-verified). */
   const [videoCanHost, setVideoCanHost] = useState(false);
+  const [liveMeetingMode, setLiveMeetingMode] = useState<'audio' | 'video'>('video');
   const [confirmEndMeeting, setConfirmEndMeeting] = useState(false);
 
   // ── Follow-up phase state ───────────────────────────────────────────────────
@@ -274,6 +278,7 @@ export default function RoomDetail() {
         if (!destroyed) {
           setVideoActive(s.videoActive);
           setVideoCanHost(s.canHost ?? false);
+          setLiveMeetingMode(s.meetingMode ?? 'video');
         }
       } catch { /* non-fatal */ }
     };
@@ -656,21 +661,44 @@ export default function RoomDetail() {
     }
   };
 
-  const openChat = () => {
+  const lastOpenedDiscussionRef = useRef<string | null>(null);
+  const openChat = (discussionId?: string) => {
+    if (discussionId) lastOpenedDiscussionRef.current = discussionId;
+    setDiscussionPendingNotice(null);
     history.replaceState({
       ...history.state,
       roomName: room?.name ?? '',
       isLeader: isAuthorizedLeader,
       allowMemberPresent: allowMemberPresent,
       sessionId: activeSession?.id ?? null,
+      discussionId: discussionId ?? null,
     }, '');
-    setLocation(`/rooms/${roomId}/chat`);
+    setLocation(`/rooms/${roomId}/chat${discussionId ? `?discussionId=${encodeURIComponent(discussionId)}` : ''}`);
   };
 
   const currentAttendance = activeSession
     ? attendanceData.find(a => a.userId === user.id && a.leftAt === null)
     : undefined;
   const hasJoinedCurrentMeeting = Boolean(currentAttendance);
+
+  // OPEN_GROUP_DISCUSSION is authoritative: every joined device receives the
+  // same persisted discussion id. Avoid navigating a background tab blindly.
+  useEffect(() => {
+    if (lastEvent?.type !== 'OPEN_GROUP_DISCUSSION' || !activeSession?.id || !hasJoinedCurrentMeeting) return;
+    const payload = lastEvent.payload as { roomId?: string; sessionId?: string; discussionId?: string };
+    if (
+      payload.roomId !== String(roomId) ||
+      payload.sessionId !== activeSession.id ||
+      !payload.discussionId ||
+      lastOpenedDiscussionRef.current === payload.discussionId
+    ) return;
+    lastOpenedDiscussionRef.current = payload.discussionId;
+    if (document.visibilityState === 'visible') {
+      openChat(payload.discussionId);
+    } else {
+      setDiscussionPendingNotice(payload.discussionId);
+    }
+  }, [activeSession?.id, hasJoinedCurrentMeeting, lastEvent, roomId]);
 
   const handleJoinMeeting = async () => {
     if (!activeSession || joiningMeeting) return;
@@ -731,9 +759,10 @@ export default function RoomDetail() {
 
   // ── Live Video handlers ────────────────────────────────────────────────────
 
-  const handleStartVideo = async () => {
-    await apiStartVideo(user.id, String(roomId));
+  const handleStartVideo = async (mode: 'audio' | 'video' = 'video') => {
+    await apiStartVideo(user.id, String(roomId), mode);
     setVideoActive(true);
+    setLiveMeetingMode(mode);
   };
 
   const handleEndVideo = async () => {
@@ -741,11 +770,18 @@ export default function RoomDetail() {
     setVideoActive(false);
   };
 
-  const handleStartMeetingDirect = async () => {
+  const handleStartMeetingDirect = async (mode: 'text' | 'audio' | 'video' = 'text') => {
     setStartingMeeting(true);
+    setShowStartMeetingMode(false);
     try {
-      const session = await apiStartSession(user.id, String(roomId));
+      const session = await apiStartSession(user.id, String(roomId), mode);
       setActiveSession(session);
+      if (mode === 'audio' || mode === 'video') {
+        setVideoActive(true);
+        setLiveMeetingMode(mode);
+      } else {
+        setVideoActive(false);
+      }
       await refreshAttendance(session.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to start meeting');
@@ -932,16 +968,59 @@ export default function RoomDetail() {
             setShowGuideGroup(false);
             setShowSharedAskEmmaus(true);
           }}
-          onOpenDiscussion={() => {
+          onOpenDiscussion={(discussionId) => {
             setShowGuideGroup(false);
-            openChat();
+            openChat(discussionId);
           }}
           videoEligible={videoCanHost}
           videoActive={videoActive}
           onStartVideo={handleStartVideo}
           onEndVideo={handleEndVideo}
+          meetingMode={liveMeetingMode}
           onEndMeeting={() => setConfirmEndMeeting(true)}
         />
+      )}
+
+      {showStartMeetingMode && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4"
+          onClick={() => setShowStartMeetingMode(false)}
+        >
+          <div
+            className="bg-card rounded-2xl shadow-xl p-6 w-full max-w-sm space-y-4 mb-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-[18px] font-bold text-foreground">Choose meeting format</h2>
+              <p className="text-[13px] text-muted-foreground mt-1">
+                Everyone can join the same meeting. You can change study navigation later.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {([
+                ['text', 'Text meeting', 'Study, notes, prayer, and Group Discussion'],
+                ['audio', 'Live audio', 'Microphone-only meeting; no camera is published'],
+                ['video', 'Live video', 'Camera and microphone meeting'],
+              ] as const).map(([mode, label, description]) => (
+                <button
+                  key={mode}
+                  onClick={() => void handleStartMeetingDirect(mode)}
+                  disabled={startingMeeting}
+                  className="w-full text-left p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors disabled:opacity-60"
+                >
+                  <p className="text-[14px] font-semibold text-foreground">{label}</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">{description}</p>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowStartMeetingMode(false)}
+              className="w-full py-2.5 text-[13px] font-medium text-muted-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {/* End Meeting confirmation */}
@@ -1300,7 +1379,7 @@ export default function RoomDetail() {
                   const displayName = isMe ? `${m.preferredName || 'You'} (you)` : m.preferredName || 'Member';
                   const initials = (m.preferredName || 'M').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
                   const isOnline = onlineUserIds.has(m.userId);
-                  const prepStatus = getPrepStatus(primaryProgress, m.userId);
+                   const prepStatus = getPrepStatus(primaryProgress, m.userId, contentTitle);
                   return (
                     <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3.5">
                       <div className="relative shrink-0">
@@ -1362,7 +1441,7 @@ export default function RoomDetail() {
             {/* START MEETING — primary action, leaders only */}
             {isAuthorizedLeader && (
               <button
-                onClick={handleStartMeetingDirect}
+                onClick={() => setShowStartMeetingMode(true)}
                 disabled={startingMeeting}
                 className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2.5 disabled:opacity-60 hover:opacity-90 transition-opacity"
               >
@@ -1485,6 +1564,22 @@ export default function RoomDetail() {
                 </div>
               )}
 
+              {/* Shared discussion command notice for a backgrounded device */}
+              {discussionPendingNotice && (
+                <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                    <p className="text-[12px] text-sky-700 dark:text-sky-300">Your leader opened Group Discussion.</p>
+                  </div>
+                  <button
+                    onClick={() => openChat(discussionPendingNotice)}
+                    className="text-[12px] text-sky-700 dark:text-sky-300 font-semibold shrink-0 ml-2"
+                  >
+                    Open →
+                  </button>
+                </div>
+              )}
+
               {/* Scripture pending notice */}
               {scripturePendingNotice && !showSharedScripture && (
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
@@ -1527,18 +1622,27 @@ export default function RoomDetail() {
                 videoEligible={true}
                 leaderName={leaderName}
                 hideStart={true}
+                meetingMode={liveMeetingMode}
+                onOpenDiscussion={() => openChat()}
+                onOpenNotes={() => setShowSharedNotes(true)}
+                onOpenPresentedContent={() => {
+                  document.getElementById('room-active-presentation')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                hasPresentedContent={Boolean(activePresentation)}
               />
             )}
 
             {/* Active presentation — shown to all members during a meeting */}
             {activePresentation && (
-              <PresentationPanel
-                presentation={activePresentation}
-                isLeader={isAuthorizedLeader}
-                userId={user.id}
-                roomId={String(roomId)}
-                onStop={() => setActivePresentation(null)}
-              />
+              <div id="room-active-presentation">
+                <PresentationPanel
+                  presentation={activePresentation}
+                  isLeader={isAuthorizedLeader}
+                  userId={user.id}
+                  roomId={String(roomId)}
+                  onStop={() => setActivePresentation(null)}
+                />
+              </div>
             )}
 
             {/* Today's Study */}
