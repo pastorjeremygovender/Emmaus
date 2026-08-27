@@ -22,7 +22,7 @@ import { getCollection } from '@/lib/collections-api';
 import { ChevronLeft, Bookmark, BookmarkCheck, CheckCircle2, Users } from 'lucide-react';
 import { FavouriteButton } from '@/components/FavouriteButton';
 import { ContentStepRow } from '@/components/ContentStepList';
-import { resolveReturn } from '@/lib/return-context';
+import { goBackOrFallback, resolveReturn } from '@/lib/return-context';
 import { getStepLabel, resolveStepPrefix } from '@/lib/step-label';
 import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
 import { apiLinkJourney } from '@/lib/rooms-api';
@@ -157,7 +157,7 @@ export default function JourneyDetail() {
       <div className="min-h-[100dvh] bg-background pb-page-safe flex items-center justify-center">
         <div className="text-center space-y-3 px-5">
           <p className="text-[16px] text-foreground font-medium">This Journey isn't available yet.</p>
-          <Button variant="outline" onClick={() => window.history.length > 1 ? window.history.back() : setLocation('/journeys')}>Back</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/journeys', setLocation)}>Back</Button>
         </div>
         <BottomNav />
       </div>
@@ -262,10 +262,7 @@ export default function JourneyDetail() {
 
         {/* ── Back button — always unwinds history; resolved path is fallback only */}
         <button
-          onClick={() => {
-            if (window.history.length > 1) window.history.back();
-            else setLocation(backDest.path);
-          }}
+          onClick={() => goBackOrFallback(backDest.path, setLocation)}
           className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground transition-colors -ml-0.5"
           aria-label="Back"
         >

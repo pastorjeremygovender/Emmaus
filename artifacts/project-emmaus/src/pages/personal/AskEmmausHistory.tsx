@@ -11,6 +11,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMessages, type StoredMessage } from '@/lib/emmaus-client';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
@@ -37,7 +38,7 @@ export default function AskEmmausHistory() {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[560px] mx-auto">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/personal/ask-emmaus'); }}
+            onClick={() => goBackOrFallback('/personal/ask-emmaus', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back to Ask Emmaus"
           >

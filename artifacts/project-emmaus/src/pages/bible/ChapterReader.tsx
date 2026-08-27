@@ -8,6 +8,7 @@ import {
   BookOpen, Share2, Highlighter, MessageSquare, Sparkles, ArrowLeftRight, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { goBackOrFallback } from '@/lib/return-context';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { getBibleBook, getPrevBook, getNextBook } from '@/lib/bible-data';
 import { useBible, HighlightColor } from '@/contexts/BibleContext';
@@ -418,7 +419,7 @@ export default function ChapterReader() {
 
           {/* Back — returns to caller (Daily Rhythm) or My Bible home */}
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnTo ?? '/bible'); }}
+            onClick={() => goBackOrFallback(returnTo ?? '/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
             aria-label={returnTo ? 'Back to 10 Minutes with Jesus' : 'Back to My Bible'}
           >

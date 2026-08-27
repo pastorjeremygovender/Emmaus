@@ -6,6 +6,7 @@ import { useLocation } from 'wouter';
 import { ArrowLeft, Users, Plus, LogIn, ChevronRight, Loader2, Crown } from 'lucide-react';
 import type { RoomSummary } from '@/lib/rooms-types';
 import { isRoomOwnerRole } from '@/lib/rooms-types';
+import { goBackOrFallback } from '@/lib/return-context';
 
 export default function Rooms() {
   const { user } = useAuth();
@@ -16,11 +17,7 @@ export default function Rooms() {
   if (!user) return null;
 
   const handleBack = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      setLocation('/journey');
-    }
+    goBackOrFallback('/walk', setLocation);
   };
 
   return (

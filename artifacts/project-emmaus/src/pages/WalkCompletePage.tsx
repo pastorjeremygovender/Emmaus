@@ -34,15 +34,10 @@ export default function WalkCompletePage() {
 
   // WJ-1: honour the source/sourceId query params so members land back where
   // they came from (Walk, Bible, Sermon) rather than always on the journey overview.
-  const source   = new URLSearchParams(window.location.search).get('source');
-  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
-  // Always return to the Walk's own detail page — that's the natural parent context
-  // regardless of where the member came from.
+  // The journey detail is only a deep-link fallback. A normal completion
+  // screen must unwind to the route that opened it.
   const returnPath     = journeyId ? `/journeys/${journeyId}` : '/journeys?tab=walks';
-  const walkReturnLabel = 'View Walk Contents';
-
-  // Suppress unused-variable warnings — source/sourceId were used previously.
-  void source; void sourceId;
+  const walkReturnLabel = 'Back to Walk';
 
   // Rooms — show "Add to Room" CTA when user has rooms and walk isn't already linked
   const myRooms = user ? getMyRooms() : [];

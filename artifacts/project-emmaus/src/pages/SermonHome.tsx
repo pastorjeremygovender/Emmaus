@@ -22,6 +22,7 @@ import {
   Play, Pause, Volume2,
 } from 'lucide-react';
 import { BottomNav } from '@/components/BottomNav';
+import { goBackOrFallback } from '@/lib/return-context';
 
 const BASE = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 
@@ -347,7 +348,7 @@ export default function SermonHome() {
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => history.back()}
+            onClick={() => goBackOrFallback('/journeys?tab=sermons', setLocation)}
             className="p-1.5 -ml-1 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
             aria-label="Go back"
           >
@@ -371,7 +372,7 @@ export default function SermonHome() {
       <div className="min-h-[100dvh] bg-background flex flex-col pb-page-safe">
         <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => history.back()}
+            onClick={() => goBackOrFallback('/journeys?tab=sermons', setLocation)}
             className="p-1.5 -ml-1 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
             aria-label="Go back"
           >
@@ -393,7 +394,7 @@ export default function SermonHome() {
             </p>
             <div className="flex gap-3 mt-1">
               <button
-                onClick={() => history.back()}
+                onClick={() => goBackOrFallback('/journeys?tab=sermons', setLocation)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 <ArrowLeft size={13} /> Back
@@ -441,7 +442,7 @@ export default function SermonHome() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button
-          onClick={() => history.back()}
+          onClick={() => goBackOrFallback('/journeys?tab=sermons', setLocation)}
           className="p-1.5 -ml-1 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
           aria-label="Go back"
         >

@@ -18,6 +18,7 @@ import type {
   RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionAttendee,
 } from '@/lib/rooms-types';
 import { isRoomLeaderRole, isRoomOwnerRole } from '@/lib/rooms-types';
+import { goBackOrFallback } from '@/lib/return-context';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
@@ -619,8 +620,7 @@ export default function RoomDetail() {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleBack = () => {
-    if (window.history.length > 1) window.history.back();
-    else setLocation('/rooms');
+    goBackOrFallback('/rooms', setLocation);
   };
 
   const handleLeave = async () => {

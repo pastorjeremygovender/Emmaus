@@ -1,6 +1,7 @@
 import { useLocation } from 'wouter';
 import { ChevronLeft, Footprints, BookOpen, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { goBackOrFallback } from '@/lib/return-context';
 
 export default function NotFound() {
   const [, setLocation] = useLocation();
@@ -25,7 +26,7 @@ export default function NotFound() {
         <Button
           variant="outline"
           className="h-11 rounded-xl text-[15px] w-full gap-2"
-          onClick={() => window.history.back()}
+          onClick={() => goBackOrFallback('/walk', setLocation)}
           aria-label="Go back"
         >
           <ChevronLeft size={16} />

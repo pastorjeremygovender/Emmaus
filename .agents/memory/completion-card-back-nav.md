@@ -6,7 +6,7 @@ description: Universal rule for how back buttons on completion cards must be imp
 # Completion card back navigation rule
 
 ## The rule
-**Completion card `onReturn` callbacks must always use `history.back()` (with `setLocation` as fallback only when `history.length <= 1`).**
+**Completion card `onReturn` callbacks must always use the shared `goBackOrFallback()` helper.** The helper uses a marked, depth-tracked Emmaus history entry to pop one in-app route, and uses a replacing fallback only for direct/deep-linked entries.
 
 "View Previous Steps →" / "See Previous Days →" secondary links are the ONLY place `setLocation` (forward navigation) is correct, because those are explicit forward-navigation choices.
 
@@ -17,7 +17,7 @@ Previous Days pages (PreviousDays.tsx, JourneyPreviousDays.tsx, DevotionalPrevio
 
 ```tsx
 // ✅ CORRECT — completion card back button
-onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+onReturn={() => goBackOrFallback(returnPath, setLocation)}
 
 // ✅ CORRECT — "View Previous Steps →" secondary link (forward navigation)
 onPreviousDays={() => setLocation(`/journey/${journeyId}/previous?from=${source ?? 'walk'}`)}
@@ -34,6 +34,6 @@ onReturn={() => setLocation(returnPath)}
 - `WalkCompletePage.tsx` — walk complete card
 
 ## DailyRhythmDay special case
-`goToPreviousDays` (used for header back arrow when replaying from Previous Days) must use `history.back()` — it must NOT use `setLocation` even though the destination is Previous Days.
+`goToPreviousDays` (used for header back arrow when replaying from Previous Days) must use `goBackOrFallback()` — it must NOT use a direct `setLocation` even though the destination is Previous Days.
 
 `openPreviousDays` is the separate function that uses `setLocation` — only used for the "See Previous Days →" secondary link (when user arrived from Today's Steps and wants to navigate forward to Previous Days).

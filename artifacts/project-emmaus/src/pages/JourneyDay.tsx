@@ -656,7 +656,7 @@ export default function JourneyDay() {
                     : undefined
                 }
                 returnLabel={backLabel}
-                onReturn={() => { if (window.history.length > 1) window.history.back(); else setLocation(returnPath); }}
+                onReturn={() => goBackOrFallback(returnPath, setLocation)}
                 onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
                 previousDaysLabel="View Previous Steps →"
               />

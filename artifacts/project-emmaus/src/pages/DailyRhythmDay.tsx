@@ -254,7 +254,7 @@ export default function DailyRhythmDay() {
         heading={`${getStepLabel(step, journey)} complete.`}
         subMessage="Continue when you’re ready."
         returnLabel="Back to Today's Steps"
-        onReturn={() => setLocation(postCompletionDestination)}
+        onReturn={() => goBackOrFallback(postCompletionDestination, setLocation)}
         onPreviousDays={hasPreviousDays ? openPreviousDays : undefined}
       />
     );

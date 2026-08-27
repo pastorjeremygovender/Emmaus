@@ -32,6 +32,7 @@ import { getDevotionalLabel } from '@/lib/step-label';
 import { BottomNav } from '@/components/BottomNav';
 import { BrowseModeToggle } from '@/components/BrowseModeToggle';
 import { ContentStepList } from '@/components/ContentStepList';
+import { goBackOrFallback } from '@/lib/return-context';
 
 function resolveCurrentDayNumber(
   sorted: SeriesWithEntries['entries'],
@@ -79,8 +80,7 @@ export function DevotionalNavigatorPage() {
       setLocation(`/devotional/${seriesId}/navigate`);
       return;
     }
-    if (window.history.length > 1) window.history.back();
-    else setLocation('/walk');
+    goBackOrFallback('/walk', setLocation);
   }
 
   if (loading || !series) {

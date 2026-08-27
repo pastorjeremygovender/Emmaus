@@ -9,6 +9,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Users, Loader2, AlertCircle } from 'lucide-react';
 import { extractGroupInviteToken } from '@/lib/groups-invite';
+import { goBackOrFallback } from '@/lib/return-context';
 import {
   getContentTypeShortLabel,
   getRoomTypeLabel,
@@ -107,7 +108,7 @@ export default function JoinRoom() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/rooms'); }}
+            onClick={() => goBackOrFallback('/rooms', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />

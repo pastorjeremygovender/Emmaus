@@ -19,6 +19,7 @@ import { BrowseModeToggle } from '@/components/BrowseModeToggle';
 import { listDailyRhythmGroups, type DailyRhythmGroup } from '@/lib/journeys-api';
 import { isCompletedToday } from '@/lib/daily-lock';
 import type { Journey } from '@/contexts/JourneyContext';
+import { goBackOrFallback } from '@/lib/return-context';
 
 interface Props {
   mode: 'daily-rhythm' | 'journey';
@@ -85,8 +86,7 @@ export function StepNavigatorPage({ mode }: Props) {
       setSelectedGroupId(null);
       return;
     }
-    if (window.history.length > 1) window.history.back();
-    else setLocation('/walk');
+    goBackOrFallback('/walk', setLocation);
   }
 
   useEffect(() => {

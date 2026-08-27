@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, BookOpen, ChevronRight, Clock } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { getBibleJourney } from '@/lib/bible-data';
+import { goBackOrFallback } from '@/lib/return-context';
 import { LUKE_CHAPTER_HEADINGS } from '@/lib/bible-provider';
 import { LUKE_READING_MINUTES } from '@/data/kjv-luke';
 import { useBible } from '@/contexts/BibleContext';
@@ -83,7 +84,7 @@ export default function BibleJourneyDetail() {
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center h-14 px-4 max-w-[520px] mx-auto">
           <button
-            onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation('/bible'); }}
+            onClick={() => goBackOrFallback('/bible', setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <ArrowLeft size={22} />

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { safeOpeningDestination } from "@/lib/opening-destination";
+import { goBackOrFallback } from "@/lib/return-context";
 
 type AuthMode = "signin" | "register" | "forgot";
 
@@ -111,8 +112,7 @@ export default function Auth() {
       <button
         onClick={() => {
           if (mode !== "signin") changeMode("signin");
-          else if (window.history.length > 1) window.history.back();
-          else setLocation("/");
+          else goBackOrFallback("/", setLocation);
         }}
         className="absolute top-6 left-6 p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
         aria-label="Back to welcome"

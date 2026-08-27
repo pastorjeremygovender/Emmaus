@@ -12,6 +12,7 @@ import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
 import OpeningGate from '@/components/OpeningGate';
+import { installAppHistoryTracking } from '@/lib/return-context';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -178,6 +179,8 @@ function Router() {
 }
 
 function App() {
+  useLayoutEffect(() => installAppHistoryTracking(), []);
+
   return (
     <AuthProvider>
       <AppearanceProvider>

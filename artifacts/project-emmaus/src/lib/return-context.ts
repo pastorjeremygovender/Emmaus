@@ -62,20 +62,127 @@ const SOURCE_MAP: Record<string, { path: string; label: string }> = {
   myJourney:            { path: '/my-journey',               label: 'My Journey'     },
 };
 
+const EMMAUS_HISTORY_MARKER = '__emmausHistory';
+const EMMAUS_HISTORY_DEPTH = '__emmausHistoryDepth';
+const HISTORY_INSTALL_MARKER = '__emmausHistoryTrackingInstalled';
+
+type EmmausHistoryState = {
+  [EMMAUS_HISTORY_MARKER]?: true;
+  [EMMAUS_HISTORY_DEPTH]?: number;
+  [key: string]: unknown;
+};
+
+function asHistoryState(state: unknown): EmmausHistoryState | null {
+  return state && typeof state === 'object'
+    ? state as EmmausHistoryState
+    : null;
+}
+
+function historyDepth(state: unknown): number | null {
+  const parsed = asHistoryState(state);
+  if (parsed?.[EMMAUS_HISTORY_MARKER] !== true) return null;
+  const value = parsed[EMMAUS_HISTORY_DEPTH];
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
+function markHistoryState(state: unknown, depth: number): EmmausHistoryState {
+  const base = asHistoryState(state) ?? {};
+  return {
+    ...base,
+    [EMMAUS_HISTORY_MARKER]: true,
+    [EMMAUS_HISTORY_DEPTH]: depth,
+  };
+}
+
 /**
- * Pop only a real in-app history entry. Browser history can contain an
- * unrelated external page, and test/webview environments can report a
- * length greater than one without a usable SPA state. Falling back to the
- * resolved parent keeps a deep link from becoming a dead end or loop.
+ * Mark the browser history entries created by the SPA.
+ *
+ * Wouter intentionally calls pushState/replaceState with a null state. A
+ * marker and monotonic depth let Back distinguish an earlier Emmaus route from
+ * an unrelated browser entry without changing any of the route URLs.
+ */
+export function installAppHistoryTracking(): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const appHistory = window.history as History & {
+    [HISTORY_INSTALL_MARKER]?: boolean;
+  };
+  if (appHistory[HISTORY_INSTALL_MARKER]) return () => {};
+
+  const initialDepth = historyDepth(appHistory.state) ?? 0;
+  appHistory.replaceState(
+    markHistoryState(appHistory.state, initialDepth),
+    '',
+    window.location.href,
+  );
+
+  const originalPushState = appHistory.pushState;
+  const originalReplaceState = appHistory.replaceState;
+
+  appHistory.pushState = function pushState(state, title, url) {
+    const currentDepth = historyDepth(appHistory.state) ?? 0;
+    return originalPushState.call(
+      this,
+      markHistoryState(state, currentDepth + 1),
+      title,
+      url,
+    );
+  };
+
+  appHistory.replaceState = function replaceState(state, title, url) {
+    const currentDepth = historyDepth(appHistory.state) ?? 0;
+    return originalReplaceState.call(
+      this,
+      markHistoryState(state, currentDepth),
+      title,
+      url,
+    );
+  };
+
+  Object.defineProperty(appHistory, HISTORY_INSTALL_MARKER, {
+    value: true,
+    configurable: true,
+  });
+
+  return () => {
+    appHistory.pushState = originalPushState;
+    appHistory.replaceState = originalReplaceState;
+    delete appHistory[HISTORY_INSTALL_MARKER];
+  };
+}
+
+function sameCurrentRoute(target: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const resolved = new URL(target, window.location.href);
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}` === current;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pop exactly one earlier in-app history entry.
+ *
+ * A direct/deep-linked page has depth 0, so its safe fallback is replaced
+ * rather than pushed. That prevents pressing Back after the fallback from
+ * returning to the page that just redirected. Self-target fallbacks are a
+ * no-op instead of creating a circular route.
  */
 export function goBackOrFallback(
   fallback: string,
   setLocation: (path: string, options?: { replace?: boolean }) => void,
 ): void {
-  if (window.history.length > 1 && window.history.state !== null) {
+  if (sameCurrentRoute(fallback)) return;
+
+  const depth = historyDepth(window.history.state);
+  if (depth !== null && depth > 0) {
     window.history.back();
   } else {
-    setLocation(fallback);
+    setLocation(fallback, { replace: true });
   }
 }
 

@@ -13,7 +13,7 @@ describe('DailyRhythmDay completion contract', () => {
     expect(source).toContain("new CustomEvent('emmaus:opening-completed'");
     expect(source).toContain('detail: { decision: completion.dailyRhythmStartup }');
     expect(source).toContain('returnLabel="Back to Today\'s Steps"');
-    expect(source).toContain('onReturn={() => setLocation(postCompletionDestination)}');
+    expect(source).toContain('onReturn={() => goBackOrFallback(postCompletionDestination, setLocation)}');
     expect(source).not.toContain('setTimeout(() => setLocation(\'/walk\')');
     expect(source).not.toContain('Returning to Today\'s Steps…');
     expect(source).not.toContain('Continue to ${getStepLabel(nextStep, journey)}');

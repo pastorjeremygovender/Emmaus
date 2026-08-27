@@ -34,6 +34,7 @@ import React, {
 } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
+import { goBackOrFallback } from '@/lib/return-context';
 import {
   type FlatContext,
   type HistoryItem,
@@ -1754,7 +1755,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           walk: '/walk', bible: '/bible', discover: '/discover', journeys: '/journeys',
         };
         if (intent.target === 'back') {
-          window.history.back();
+          goBackOrFallback('/personal/ask-emmaus', (path) => {
+            const navFn = navigateRef.current ?? providerNavigateRef.current;
+            if (navFn) navFn(path);
+            else window.location.assign(path);
+          });
           // Restart listening after navigating back (small delay for page to settle)
           autoRestartTimerRef.current = setTimeout(() => {
             autoRestartTimerRef.current = null;
@@ -2139,7 +2144,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
             if (cancelledRef.current) return;
           }
           if (args.destination === 'back' && !args.resolvedRoute) {
-            window.history.back();
+            goBackOrFallback('/personal/ask-emmaus', (path) => {
+              const navFn = navigateRef.current ?? providerNavigateRef.current;
+              if (navFn) navFn(path);
+              else window.location.assign(path);
+            });
           } else {
             const navFn = navigateRef.current ?? providerNavigateRef.current;
             if (navFn) navFn(finalRoute);
