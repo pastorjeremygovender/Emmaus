@@ -306,6 +306,19 @@ function stripUnverifiedSermonMentions(text: string): string {
     .join(" ");
 }
 
+/**
+ * Apply the transport-level redactions that are safe to perform while the
+ * model is still generating. The final answer is sanitised again after the
+ * metadata block has been parsed.
+ */
+function sanitizeStreamingText(text: string): string {
+  return text
+    .replace(/<EMMAUS_META[\s\S]*$/gi, "")
+    .replace(/<\/?EMMAUS_META>/gi, "")
+    .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
+    .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ");
+}
+
 function defaultMetadata(): EmmausResponseMetadata {
   return {
     scripture: null,
