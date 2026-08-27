@@ -33,7 +33,6 @@ import {
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
-import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Journey } from '@/contexts/JourneyContext';
 import {
@@ -979,10 +978,6 @@ export default function Journeys() {
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="relative px-5 pt-10 max-w-[480px] mx-auto">
-
-        <div className="absolute right-2 top-3 z-10">
-          <ShareEmmausButton />
-        </div>
 
         {/* Header */}
         <header className="space-y-1">

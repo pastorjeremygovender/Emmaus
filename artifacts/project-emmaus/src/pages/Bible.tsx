@@ -3,7 +3,6 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
-import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -35,10 +34,6 @@ export default function Bible() {
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="relative px-5 pt-10 max-w-[520px] mx-auto space-y-6">
-
-        <div className="absolute right-2 top-3 z-10">
-          <ShareEmmausButton />
-        </div>
 
         {/* Header */}
         <header className="space-y-1">

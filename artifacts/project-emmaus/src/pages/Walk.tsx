@@ -27,7 +27,6 @@ import { isCompletedToday } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
-import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
   getAllProgress,
@@ -688,10 +687,6 @@ export default function Walk() {
 
       <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        <div className="absolute right-2 top-3 z-10">
-          <ShareEmmausButton />
-        </div>
-
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
         <header className="px-1 pb-0.5">
           <motion.h1
@@ -929,11 +924,13 @@ export default function Walk() {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.13 }}
-          className="pb-1"
+          className="pb-24"
         >
           <button
+            type="button"
             onClick={() => setLocation('/journeys')}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all text-[14px] font-medium text-muted-foreground hover:text-foreground"
+            className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-40 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border border-primary/20 bg-card/95 py-3 text-[14px] font-medium text-foreground shadow-lg backdrop-blur-sm transition-all hover:border-primary/40 hover:bg-card"
+            aria-label="Discover more content"
           >
             <Compass size={15} className="text-primary" strokeWidth={1.8} />
             Discover More Content

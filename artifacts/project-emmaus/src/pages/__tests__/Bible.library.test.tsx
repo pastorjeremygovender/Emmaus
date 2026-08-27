@@ -21,6 +21,7 @@ vi.mock('@/contexts/BibleContext', () => ({
 
 vi.mock('@/components/BottomNav', () => ({ BottomNav: () => null }));
 vi.mock('@/components/UnifiedEmmausInput', () => ({ UnifiedEmmausInput: () => null }));
+vi.mock('@/components/MemberHeaderActions', () => ({ MemberHeaderActions: () => null }));
 vi.mock('@/components/ShareEmmausButton', () => ({ ShareEmmausButton: () => null }));
 vi.mock('@/components/SectionWrapper', () => ({
   SectionWrapper: ({ children }: { children: React.ReactNode }) => <>{children}</>,

@@ -1,12 +1,12 @@
 import { Link, useLocation } from 'wouter';
-import { Footprints, BookOpen, Compass, User } from 'lucide-react';
+import { Footprints, BookOpen } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 // Navigation order (locked):
 // 1. Today's Steps  /walk
 // 2. My Bible       /bible
-// 3. Discover       /journeys
-// 4. My Journey     /personal
+// Discover and My Journey are accessed from the top header and Walk cards.
 
 export function BottomNav() {
   const [location] = useLocation();
@@ -14,8 +14,6 @@ export function BottomNav() {
   const navItems = [
     { path: '/walk',      label: "Today's Steps", icon: Footprints },
     { path: '/bible',     label: 'My Bible',      icon: BookOpen },
-    { path: '/journeys',  label: 'Discover',      icon: Compass },
-    { path: '/personal',  label: 'My Journey',    icon: User },
   ];
 
   function isActive(path: string): boolean {
@@ -52,38 +50,43 @@ export function BottomNav() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border safe-area-bottom">
-      <nav className="flex justify-around items-center h-16" aria-label="Main navigation">
-        {navItems.map(({ path, label, icon: Icon }) => {
-          const active = isActive(path);
-          return (
-            <Link
-              key={path}
-              href={path}
-              data-testid={`nav-${path.slice(1)}`}
-              className="flex-1 flex flex-col items-center justify-center h-full gap-1 min-h-[44px] relative px-1"
-              aria-current={active ? 'page' : undefined}
-            >
-              {active && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
-              )}
-              <Icon
-                size={21}
-                className={`transition-colors shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`}
-                strokeWidth={active ? 2.5 : 1.8}
-                aria-hidden="true"
-              />
-              <span
-                className={`text-[10px] font-medium tracking-tight transition-colors text-center leading-tight ${
-                  active ? 'text-primary' : 'text-muted-foreground'
-                }`}
+    <>
+      <div className="fixed right-2 top-3 z-[60]">
+        <MemberHeaderActions />
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background safe-area-bottom">
+        <nav className="flex h-16 items-center justify-around" aria-label="Main navigation">
+          {navItems.map(({ path, label, icon: Icon }) => {
+            const active = isActive(path);
+            return (
+              <Link
+                key={path}
+                href={path}
+                data-testid={`nav-${path.slice(1)}`}
+                className="relative flex h-full min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1"
+                aria-current={active ? 'page' : undefined}
               >
-                {label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
+                {active && (
+                  <span className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full bg-primary" />
+                )}
+                <Icon
+                  size={21}
+                  className={`shrink-0 transition-colors ${active ? 'text-primary' : 'text-muted-foreground'}`}
+                  strokeWidth={active ? 2.5 : 1.8}
+                  aria-hidden="true"
+                />
+                <span
+                  className={`text-center text-[10px] font-medium leading-tight tracking-tight transition-colors ${
+                    active ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                >
+                  {label}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </>
   );
 }

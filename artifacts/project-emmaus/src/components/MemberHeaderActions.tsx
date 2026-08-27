@@ -1,0 +1,104 @@
+import { useState } from 'react';
+import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceContext';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
+import { Moon, Settings, Sun } from 'lucide-react';
+import { ShareEmmausButton } from '@/components/ShareEmmausButton';
+
+export function MemberHeaderActions() {
+  const { theme, fontSize, setTheme, setFontSize } = useAppearance();
+  const [notifs, setNotifs] = useState(true);
+
+  return (
+    <div className="flex items-center gap-1">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+            aria-label="Open settings"
+            title="Settings"
+            data-testid="settings-trigger"
+          >
+            <Settings size={19} aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={8}
+          className="w-[min(20rem,calc(100vw-1rem))] space-y-3 rounded-2xl p-3"
+        >
+          <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+            <Settings size={16} className="text-primary" aria-hidden="true" />
+            <h2 className="text-sm font-semibold">Settings</h2>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
+            <Label htmlFor="notifications-toggle" className="cursor-pointer text-[14px] font-semibold">
+              Daily Reminders
+            </Label>
+            <Switch
+              id="notifications-toggle"
+              checked={notifs}
+              onCheckedChange={setNotifs}
+              data-testid="toggle-notifications"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
+            <div className="flex items-center gap-2.5">
+              {theme === 'dark'
+                ? <Moon size={17} className="text-primary" aria-hidden="true" />
+                : <Sun size={17} className="text-amber-600" aria-hidden="true" />}
+              <div>
+                <Label htmlFor="dark-mode-toggle" className="block cursor-pointer text-[14px] font-semibold">
+                  Dark mode
+                </Label>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Use a darker, gentler colour palette</p>
+              </div>
+            </div>
+            <Switch
+              id="dark-mode-toggle"
+              checked={theme === 'dark'}
+              onCheckedChange={checked => setTheme(checked ? 'dark' : 'light')}
+              data-testid="toggle-dark-mode"
+            />
+          </div>
+          <div className="rounded-xl border border-border/50 bg-card px-3.5 py-3">
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[14px] font-semibold">Text size</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Make reading more comfortable</p>
+              </div>
+              <span className="text-xs text-muted-foreground" aria-live="polite">
+                {fontSize === 'standard' ? 'Standard' : fontSize === 'large' ? 'Large' : 'Extra large'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-label="Text size">
+              {([
+                ['standard', 'Standard', 'A'],
+                ['large', 'Large', 'A+'],
+                ['extra-large', 'Extra large', 'A++'],
+              ] as [AppearanceFontSize, string, string][]).map(([value, label, sample]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={fontSize === value}
+                  onClick={() => setFontSize(value)}
+                  className={`rounded-lg border px-2 py-2 text-center transition-colors ${
+                    fontSize === value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{sample}</span>
+                  <span className="mt-0.5 block text-[10px]">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+      <ShareEmmausButton />
+    </div>
+  );
+}
