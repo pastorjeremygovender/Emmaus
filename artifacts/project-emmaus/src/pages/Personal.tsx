@@ -187,15 +187,14 @@ export default function Personal() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="relative px-5 pt-[10.5rem] max-w-[480px] mx-auto space-y-4">
+      <main className="relative px-5 pt-10 max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
-        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
-          <div className="mx-auto max-w-[480px] px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
-            <div className="mb-3 flex justify-end">
-            <MemberHeaderActions />
-            </div>
-            <div className="flex items-center gap-5">
+        <header className="space-y-3">
+          <div className="flex justify-end">
+            <MemberHeaderActions compact />
+          </div>
+          <div className="flex items-center gap-5">
             <div
               className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
               aria-hidden="true"
@@ -238,7 +237,6 @@ export default function Personal() {
             <p className="text-[15px] text-muted-foreground mt-0.5" data-testid="text-streak">
               {streakLabel(streak)}
             </p>
-            </div>
             </div>
           </div>
         </header>

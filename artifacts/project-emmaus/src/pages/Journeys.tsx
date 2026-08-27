@@ -978,21 +978,19 @@ export default function Journeys() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="relative px-5 pt-24 max-w-[480px] mx-auto">
+      <main className="relative px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
-        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-[480px] items-start justify-between gap-3 space-y-1 px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
-            <div className="min-w-0">
-              <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
-                Discover
-              </h1>
-              <p className="text-[14px] text-muted-foreground leading-relaxed">
-                What would you like to explore?
-              </p>
-            </div>
-            <MemberHeaderActions />
+        <header className="flex items-start justify-between gap-3 space-y-1">
+          <div className="min-w-0">
+            <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
+              Discover
+            </h1>
+            <p className="text-[14px] text-muted-foreground leading-relaxed">
+              What would you like to explore?
+            </p>
           </div>
+          <MemberHeaderActions />
         </header>
 
         {/* Unified Ask Emmaus / Search input */}

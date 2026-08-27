@@ -686,25 +686,23 @@ export default function Walk() {
         </div>
       )}
 
-      <main className="relative px-4 pt-24 pb-4 max-w-[480px] mx-auto space-y-3.5">
+      <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
-        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-[480px] items-start justify-between gap-3 px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
-            <div className="min-w-0 px-1">
-              <motion.h1
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6 }}
-                className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
-                data-testid="text-greeting"
-              >
-                {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
-              </motion.h1>
-              <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
-            </div>
-            <MemberHeaderActions />
+        <header className="flex items-start justify-between gap-3 px-1 pb-0.5">
+          <div className="min-w-0">
+            <motion.h1
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-[26px] font-sans font-medium tracking-tight leading-tight text-foreground"
+              data-testid="text-greeting"
+            >
+              {greetingFirstName ? `${greeting}, ${greetingFirstName}.` : `${greeting}.`}
+            </motion.h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
           </div>
+          <MemberHeaderActions />
         </header>
 
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}

@@ -7,16 +7,20 @@ import { Switch } from '@/components/ui/switch';
 import { Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 
-export function MemberHeaderActions() {
+export function MemberHeaderActions({ compact = false }: { compact?: boolean }) {
   const [location] = useLocation();
   const { theme, fontSize, setTheme, setFontSize } = useAppearance();
   const [notifs, setNotifs] = useState(true);
+  const actionSize = compact ? 40 : 44;
+  const iconSize = compact ? 17 : 19;
 
   return (
     <div className="flex items-center gap-1">
       <Link
         href="/personal"
-        className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+        className={`flex items-center justify-center rounded-full transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+          compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
+        } ${
           location === '/personal' || location.startsWith('/personal/')
             ? 'text-primary'
             : 'text-muted-foreground'
@@ -26,18 +30,20 @@ export function MemberHeaderActions() {
         aria-current={location === '/personal' ? 'page' : undefined}
         data-testid="top-my-journey"
       >
-        <User size={19} aria-hidden="true" />
+        <User size={iconSize} aria-hidden="true" />
       </Link>
       <Popover>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+            className={`flex items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+              compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
+            }`}
             aria-label="Open settings"
             title="Settings"
             data-testid="settings-trigger"
           >
-            <Settings size={19} aria-hidden="true" />
+            <Settings size={iconSize} aria-hidden="true" />
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -114,7 +120,7 @@ export function MemberHeaderActions() {
           </div>
         </PopoverContent>
       </Popover>
-      <ShareEmmausButton />
+          <ShareEmmausButton compact={compact} />
     </div>
   );
 }

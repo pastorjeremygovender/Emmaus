@@ -7,7 +7,7 @@ import { shareContent } from '@/lib/share';
  * Unlike ShareButton, this always points to Emmaus itself rather than
  * sharing the page or content currently being viewed.
  */
-export function ShareEmmausButton() {
+export function ShareEmmausButton({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<'idle' | 'copied'>('idle');
 
   async function handleShare() {
@@ -32,13 +32,15 @@ export function ShareEmmausButton() {
     <button
       type="button"
       onClick={handleShare}
-      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+      className={`flex items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+        compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
+      }`}
       aria-label={status === 'copied' ? 'Emmaus link copied' : 'Share Emmaus'}
       title={status === 'copied' ? 'Link copied' : 'Share Emmaus'}
     >
       {status === 'copied'
         ? <Check size={19} aria-hidden="true" />
-        : <Share2 size={19} aria-hidden="true" />}
+        : <Share2 size={compact ? 17 : 19} aria-hidden="true" />}
     </button>
   );
 }
