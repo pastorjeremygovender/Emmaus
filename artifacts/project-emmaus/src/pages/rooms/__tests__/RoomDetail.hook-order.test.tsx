@@ -176,10 +176,12 @@ describe('RoomDetail async loading', () => {
     const pending = new Promise<ReturnType<typeof makeRoomDetail>>(resolve => {
       resolveDetail = resolve;
     });
-    mocks.loadRoomDetail.mockReturnValueOnce(pending);
+    // React's development renderer may invoke effects more than once. Every
+    // initial invocation must observe the same in-flight detail request.
+    mocks.loadRoomDetail.mockReturnValue(pending);
 
     render(<RoomDetail />);
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument();
 
     await act(async () => {
       resolveDetail(makeRoomDetail());
