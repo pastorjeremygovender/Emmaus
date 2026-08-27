@@ -53,3 +53,12 @@ while emitting raw provider chunks could leak metadata, URLs, or app routes.
 **How to apply:** Keep a short provider-output tail to catch split tags and
 unsafe links, emit only redacted chunks, and reconcile the client message with
 `metadata.answer` when the `done` event arrives.
+
+The conversation view needs a client display queue in addition to SSE chunking.
+
+**Why:** Browsers can deliver several SSE frames in one task and React can batch
+their state updates, making a correctly streamed response still look like one
+bulk render.
+
+**How to apply:** Queue incoming text and drain a small visible slice on a
+short timer; delay completion metadata until the queue is empty.

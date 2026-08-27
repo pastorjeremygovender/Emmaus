@@ -215,71 +215,109 @@ export default function AskEmmausConversation() {
         { id: streamingMsgId, role: 'assistant', content: '', isStreaming: true },
       ]);
 
+      // Keep the network stream and the visual stream separate. Fetch can
+      // deliver several SSE frames in one browser task, and React may batch
+      // those state updates into a single paint. A small queue guarantees that
+      // the answer remains visibly progressive even when the transport bursts.
+      let pendingText = '';
+      let drainTimer: ReturnType<typeof setTimeout> | null = null;
+      let completedPayload: SseDoneEvent | null = null;
+
+      const drainTextQueue = () => {
+        drainTimer = null;
+        if (pendingText) {
+          const visibleChunk = pendingText.slice(0, 24);
+          pendingText = pendingText.slice(visibleChunk.length);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingMsgId
+                ? { ...m, content: m.content + visibleChunk }
+                : m
+            )
+          );
+        }
+
+        if (pendingText) {
+          drainTimer = setTimeout(drainTextQueue, 16);
+        } else if (completedPayload) {
+          finishStream(completedPayload);
+        }
+      };
+
+      const scheduleTextDrain = () => {
+        if (drainTimer === null) {
+          drainTimer = setTimeout(drainTextQueue, 16);
+        }
+      };
+
+      const finishStream = (payload: SseDoneEvent) => {
+        setIsStreaming(false);
+        setConversationId(payload.conversationId);
+        // Update URL to include the conversationId (replace history entry)
+        window.history.replaceState(
+          null,
+          '',
+          `/personal/ask-emmaus/conversation/${payload.conversationId}`
+        );
+        // Finalise the message with metadata
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingMsgId
+              ? {
+                  ...m,
+                  // The server may apply a final transport-level redaction
+                  // after parsing metadata. Reconcile the streamed text
+                  // with that canonical answer before marking it complete.
+                  content: payload.metadata.answer ?? m.content,
+                  isStreaming: false,
+                  metadata: payload.metadata,
+                }
+              : m
+          )
+        );
+        setRetrievalFailure(
+          payload.metadata.retrievalFailures?.length
+            ? payload.metadata.retrievalFailures
+            : null,
+        );
+        // Persist name change when Emmaus detected a "call me [name]" request
+        if (payload.detectedNameUpdate) {
+          updateName(payload.detectedNameUpdate);
+        }
+        // Crisis handoff
+        if (payload.metadata.handoffType === 'crisis') {
+          setIsCrisisMode(true);
+        }
+        // P2-6: Pastoral nudge — softer than crisis, shown as inline banner
+        if (payload.metadata.handoffType === 'pastoral') {
+          setIsPastoralMode(true);
+        }
+        // Suggest memory if there is a next step worth remembering
+        if (
+          payload.metadata.nextStep &&
+          payload.metadata.nextStep.action &&
+          !memoryDecided
+        ) {
+          setMemoryPrompt(payload.metadata.nextStep.action);
+        }
+        // Do not programmatically focus the follow-up textarea — doing so
+        // causes the browser to scroll it into view, overriding the scroll
+        // position set above. Users tap the textarea themselves on mobile.
+      };
+
       const callbacks = {
         onText: (chunk: string) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingMsgId
-                ? { ...m, content: m.content + chunk }
-                : m
-            )
-          );
+          pendingText += chunk;
+          scheduleTextDrain();
         },
         onDone: (payload: SseDoneEvent) => {
-          setIsStreaming(false);
-          setConversationId(payload.conversationId);
-          // Update URL to include the conversationId (replace history entry)
-          window.history.replaceState(
-            null,
-            '',
-            `/personal/ask-emmaus/conversation/${payload.conversationId}`
-          );
-          // Finalise the message with metadata
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === streamingMsgId
-                ? {
-                    ...m,
-                    // The server may apply a final transport-level redaction
-                    // after parsing metadata. Reconcile the streamed text
-                    // with that canonical answer before marking it complete.
-                    content: payload.metadata.answer ?? m.content,
-                    isStreaming: false,
-                    metadata: payload.metadata,
-                  }
-                : m
-            )
-          );
-          setRetrievalFailure(
-            payload.metadata.retrievalFailures?.length
-              ? payload.metadata.retrievalFailures
-              : null,
-          );
-          // Persist name change when Emmaus detected a "call me [name]" request
-          if (payload.detectedNameUpdate) {
-            updateName(payload.detectedNameUpdate);
-          }
-          // Crisis handoff
-          if (payload.metadata.handoffType === 'crisis') {
-            setIsCrisisMode(true);
-          }
-          // P2-6: Pastoral nudge — softer than crisis, shown as inline banner
-          if (payload.metadata.handoffType === 'pastoral') {
-            setIsPastoralMode(true);
-          }
-          // Suggest memory if there is a next step worth remembering
-          if (
-            payload.metadata.nextStep &&
-            payload.metadata.nextStep.action &&
-            !memoryDecided
-          ) {
-            setMemoryPrompt(payload.metadata.nextStep.action);
-          }
-          // Do not programmatically focus the follow-up textarea — doing so
-          // causes the browser to scroll it into view, overriding the scroll
-          // position set above. Users tap the textarea themselves on mobile.
+          completedPayload = payload;
+          scheduleTextDrain();
         },
         onError: (message: string) => {
+          if (drainTimer !== null) clearTimeout(drainTimer);
+          drainTimer = null;
+          pendingText = '';
           setIsStreaming(false);
           setMessages((prev) =>
             prev.map((m) =>
