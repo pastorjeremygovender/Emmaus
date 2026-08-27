@@ -1022,16 +1022,40 @@ export default function Journeys() {
           <div className="pt-4 pb-6">
             {activeTab === 'walks' && (
               <SectionWrapper color="emerald" label="Walks (Quick Studies)" headerAction={<SortBySelect value={walksSort} onChange={setWalksSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  sort={walksSort}
+                />
                 <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
               <SectionWrapper color="amber" label="Journeys (Longer Studies)" headerAction={<SortBySelect value={journeysSort} onChange={setJourneysSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="journey"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  sort={journeysSort}
+                />
                 <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
               </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
               <SectionWrapper color="violet" label="Daily Devotionals" headerAction={<SortBySelect value={devotionalsSort} onChange={setDevotionalsSort} />}>
+                <ContentGroupsPanel
+                  groups={data.contentGroups}
+                  type="daily-devotional"
+                  onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
+                  isGated={!gateClear}
+                  onGate={() => setLocation('/walk')}
+                  sort={devotionalsSort}
+                />
                 <DevotionalsPanel items={data.dailyDevotionals} sort={devotionalsSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} isGated={!gateClear} onGate={() => setLocation('/walk')} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}

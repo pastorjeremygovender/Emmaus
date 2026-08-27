@@ -66,7 +66,13 @@ const data = {
   standaloneJourneys: [walk],
   currentSermonCompanion: companion,
   previousSermonCompanions: [earlierCompanion, laterCompanion],
-  contentGroups: [],
+  contentGroups: [{
+    id: 'group-1',
+    title: 'Trust Walks',
+    description: 'A curated set of walks.',
+    displayOrder: 0,
+    items: [walk],
+  }],
 };
 
 vi.mock('wouter', () => ({
@@ -156,6 +162,15 @@ describe('Discovery content activation contract', () => {
       '/journeys/walk-1?source=nextStepsWalks',
     );
     expect(startJourney).not.toHaveBeenCalled();
+  });
+
+  it('opens a published content group from the Walks tab', async () => {
+    render(<Journeys />);
+    fireEvent.click(await screen.findByText('Trust Walks'));
+
+    expect(setLocation).toHaveBeenCalledWith(
+      '/content-groups/group-1?type=journey',
+    );
   });
 
   it('starts a discovered devotional before navigating to its first entry', async () => {
