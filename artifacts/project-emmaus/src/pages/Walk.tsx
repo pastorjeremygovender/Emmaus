@@ -686,11 +686,11 @@ export default function Walk() {
         </div>
       )}
 
-      <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
+      <main className="relative px-4 pt-24 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-30 -mx-4 bg-background/95 px-4 pb-2 pt-2 backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-3">
+        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-[480px] items-start justify-between gap-3 px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
             <div className="min-w-0 px-1">
               <motion.h1
                 initial={{ opacity: 0, x: -8 }}

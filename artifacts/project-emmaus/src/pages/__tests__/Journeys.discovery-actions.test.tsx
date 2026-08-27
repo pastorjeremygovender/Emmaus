@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Journeys from '../Journeys';
 
+vi.mock('@/components/MemberHeaderActions', () => ({
+  MemberHeaderActions: () => null,
+}));
+
 const mocks = vi.hoisted(() => ({
   setLocation: vi.fn(),
   startJourney: vi.fn(() => Promise.resolve()),

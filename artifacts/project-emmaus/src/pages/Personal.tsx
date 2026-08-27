@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 import { fetchFavourites, type Favourite } from '@/lib/favourites-api';
 import { fetchHistory, historyTimeLabel, type HistoryEntry } from '@/lib/history-api';
 
@@ -186,17 +187,22 @@ export default function Personal() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="relative px-5 pt-10 max-w-[480px] mx-auto space-y-4">
+      <main className="relative px-5 pt-[10.5rem] max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
-        <header className="flex items-center gap-5">
-          <div
-            className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
-            aria-hidden="true"
-          >
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
+        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
+          <div className="mx-auto max-w-[480px] px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <div className="mb-3 flex justify-end">
+            <MemberHeaderActions />
+            </div>
+            <div className="flex items-center gap-5">
+            <div
+              className="w-[64px] h-[64px] rounded-full bg-primary/10 text-primary flex items-center justify-center text-[22px] font-sans font-semibold shrink-0"
+              aria-hidden="true"
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex items-center gap-2">
                 <input
@@ -232,6 +238,8 @@ export default function Personal() {
             <p className="text-[15px] text-muted-foreground mt-0.5" data-testid="text-streak">
               {streakLabel(streak)}
             </p>
+            </div>
+            </div>
           </div>
         </header>
 

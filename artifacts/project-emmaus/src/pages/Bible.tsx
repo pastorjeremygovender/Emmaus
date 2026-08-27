@@ -34,12 +34,14 @@ export default function Bible() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="relative px-5 pt-10 max-w-[520px] mx-auto space-y-6">
+      <main className="relative px-5 pt-24 max-w-[520px] mx-auto space-y-6">
 
         {/* Header */}
-        <header className="sticky top-0 z-30 -mx-5 flex items-start justify-between gap-3 bg-background/95 px-5 pb-2 pt-2 backdrop-blur-sm">
+        <header className="fixed inset-x-0 top-0 z-30 bg-background/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-[520px] items-start justify-between gap-3 px-5 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
           <h1 className="min-w-0 text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
           <MemberHeaderActions />
+          </div>
         </header>
 
         {/* Ask Emmaus */}
