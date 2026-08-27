@@ -17,18 +17,16 @@ import { useJourney } from '@/contexts/JourneyContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
-import { Button } from '@/components/ui/button';
-import { EmmausContentCard } from '@/components/EmmausContentCard';
 import { dismissBadge, computeUpdatedBadge } from '@/lib/badge-api';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, ChevronRight, Compass, EyeOff, MoreHorizontal, Pause, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { CheckCircle2, ChevronRight, Compass, X } from 'lucide-react';
 import { useEnrollment } from '@/lib/enrollment';
 import { isCompletedToday } from '@/lib/daily-lock';
 import { getStepLabel, resolveStepPrefix, getDevotionalLabel } from '@/lib/step-label';
 import { isDevelopmentMode } from '@/lib/dev-mode';
 import { DevModeBanner } from '@/components/DevModeBanner';
 import { MemberHeaderActions } from '@/components/MemberHeaderActions';
-import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   getAllProgress,
   listPublishedSeries,
@@ -46,12 +44,12 @@ import { listCollections, type Collection } from '@/lib/collections-api';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Fire-and-forget engagement action (pause / hide / unhide / remove).
+/** Fire-and-forget engagement action (hide / unhide / remove).
  *  Identity is derived server-side from the secure session cookie. */
 async function callEngagementAction(
   type: 'journey' | 'devotional' | 'sermon-companion',
   id: string,
-  action: 'pause' | 'remove' | 'hide' | 'unhide',
+  action: 'remove' | 'hide' | 'unhide',
   _userId?: string,
 ): Promise<void> {
   try {
@@ -63,99 +61,22 @@ async function callEngagementAction(
   } catch { /* network errors are non-fatal */ }
 }
 
-// ─── Walk-specific MoreMenu ────────────────────────────────────────────────────
-
-function WalkMoreMenu({ onPause, onHide }: { onPause: () => void; onHide: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
+// ─── Walk card dismissal ──────────────────────────────────────────────────────
+function WalkDismissButton({ onDismiss }: { onDismiss: () => void }) {
   return (
-    // Stop ALL clicks inside this component from reaching the card's onClick.
-    // Every interactive element below also calls stopPropagation for defence-in-depth.
-    <div
-      ref={ref}
-      className="relative"
-      onClick={(e) => e.stopPropagation()}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onDismiss();
+      }}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      aria-label="Remove from Today's Steps"
+      title="Remove from Today's Steps"
     >
-      {/* ── Three-dot trigger ──────────────────────────────────────────────── */}
-      <button
-        onClick={(e) => { e.stopPropagation(); setOpen(p => !p); }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-        aria-label="More actions"
-      >
-        <MoreHorizontal size={17} />
-      </button>
-
-      {/* ── Dropdown panel ─────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-44"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Pause — remove from Today's Steps, preserve progress, stay on page */}
-            <button
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen(false); onPause(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
-            >
-              <Pause size={13} className="text-muted-foreground" /> Pause
-            </button>
-
-            {/* Hide — remove card from Today's Steps, preserve progress, stay on page */}
-            <button
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen(false); onHide(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
-            >
-              <EyeOff size={13} className="text-muted-foreground" /> Hide from Today's Steps
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── Walk-specific PauseDialog ────────────────────────────────────────────────
-
-function WalkPauseDialog({
-  title,
-  onPause,
-  onCancel,
-}: { title: string; onPause: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress will be kept exactly as it is. Pausing stops your daily rhythm until you choose to resume from the Discover tab.
-        </p>
-        <p className="text-[13px] text-muted-foreground/70 leading-relaxed -mt-2">
-          To simply remove this card from Today's Steps without pausing, use <span className="font-medium text-muted-foreground">Hide from Today's Steps</span> instead.
-        </p>
-        <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause</Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
-        </div>
-      </div>
-    </div>
+      <X size={17} strokeWidth={1.8} />
+    </button>
   );
 }
 
@@ -372,14 +293,6 @@ export default function Walk() {
 
   // handleBeginCompanion removed — the permanent This Week's Sermon card routes
   // directly to /sermon-companion/:id/overview which handles starting the companion.
-
-  // ── Pause / Remove dialog state ──────────────────────────────────────────────
-  // Tracks which card is showing the confirm-pause dialog.
-  const [pauseTarget, setPauseTarget] = useState<
-    { type: 'journey'; id: string; title: string }
-    | { type: 'devotional'; id: string; title: string }
-    | null
-  >(null);
 
   // ── Journey hide state — optimistic local removal ────────────────────────────
   // Journey progress is loaded from JourneyContext (not a local fetch like
@@ -798,9 +711,8 @@ export default function Walk() {
                 badge={badge}
                 trailing={
                   !allComplete ? (
-                    <WalkMoreMenu
-                      onPause={() => setPauseTarget({ type: 'devotional', id: ad.series.id, title: ad.series.title })}
-                      onHide={() => {
+                    <WalkDismissButton
+                      onDismiss={() => {
                         setActiveDevotionals(prev => prev.filter(d => d.series.id !== ad.series.id));
                         void callEngagementAction('devotional', ad.series.id, 'hide', user?.id);
                       }}
@@ -838,9 +750,8 @@ export default function Walk() {
                 badge={badge}
                 trailing={
                   !isCompleted ? (
-                    <WalkMoreMenu
-                      onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
-                      onHide={() => {
+                    <WalkDismissButton
+                      onDismiss={() => {
                         setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
                         void callEngagementAction('journey', journey.id, 'hide', user?.id);
                       }}
@@ -887,9 +798,8 @@ export default function Walk() {
                 badge={badge}
                 trailing={
                   !isCompleted ? (
-                    <WalkMoreMenu
-                      onPause={() => setPauseTarget({ type: 'journey', id: journey.id, title: journey.title })}
-                      onHide={() => {
+                    <WalkDismissButton
+                      onDismiss={() => {
                         setHiddenJourneyIds(prev => new Set([...prev, journey.id]));
                         void callEngagementAction('journey', journey.id, 'hide', user?.id);
                       }}
@@ -947,24 +857,6 @@ export default function Walk() {
 
       <BottomNav />
 
-      {/* ── Pause confirmation dialog ───────────────────────────────────────── */}
-      {pauseTarget && (
-        <WalkPauseDialog
-          title={pauseTarget.title}
-          onCancel={() => setPauseTarget(null)}
-          onPause={() => {
-            const target = pauseTarget;
-            setPauseTarget(null);
-            if (target.type === 'journey') {
-              setHiddenJourneyIds(prev => new Set([...prev, target.id]));
-              void callEngagementAction('journey', target.id, 'pause', user?.id);
-            } else if (target.type === 'devotional') {
-              setActiveDevotionals(prev => prev.filter(d => d.series.id !== target.id));
-              void callEngagementAction('devotional', target.id, 'pause', user?.id);
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
