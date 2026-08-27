@@ -9,13 +9,6 @@
   50% { transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
 }
 
-/* Ask Emmaus button — animated border trace (translate must be included so
-   the animation does not override the centering transform) */
-@keyframes border-trace {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to   { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
 /* ── Daily Rhythm heartbeat ──────────────────────────────────────────────────
    Gentle double-pulse: slight scale + soft primary-green glow.
    Applied only when today's reading is still actionable (not done).

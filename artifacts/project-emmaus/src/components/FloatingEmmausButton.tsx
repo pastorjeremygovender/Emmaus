@@ -13,7 +13,6 @@
  * Duration: 6 s per full circuit. Reduced-motion: static gradient border.
  */
 
-import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
