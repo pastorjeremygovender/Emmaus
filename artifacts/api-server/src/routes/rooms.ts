@@ -7,7 +7,7 @@
  * Mounted at /rooms in routes/index.ts.
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { requireAuth } from "../emmaus/auth.js";
 import { isStartSharedReady } from "../lib/feature-flags.js";
@@ -106,6 +106,7 @@ import {
 } from "../lib/room-store.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { pool } from "@workspace/db";
+import { logger } from "../lib/logger.js";
 
 const objectStorage = new ObjectStorageService();
 
@@ -1217,6 +1218,52 @@ router.get("/:roomId/presence/stream", async (req, res) => {
   req.on("close", terminate);
 });
 
+// ─── Group Discussion access ─────────────────────────────────────────────────
+//
+// While a meeting is active, discussion is available only to members who have
+// explicitly joined this exact session. Outside a meeting, members can still
+// read the historical discussion archive.
+async function canAccessRoomDiscussion(roomId: string, userId: string): Promise<boolean> {
+  const role = await getMemberRole(roomId, userId);
+  if (!role) return false;
+
+  const activeSession = await getActiveSession(roomId);
+  if (!activeSession) return true;
+
+  const attendance = await pool.query(
+    `SELECT 1
+       FROM room_session_attendance
+      WHERE session_id = $1
+        AND room_id = $2
+        AND user_id = $3
+        AND left_at IS NULL
+      LIMIT 1`,
+    [activeSession.id, roomId, userId],
+  );
+  return (attendance.rowCount ?? 0) > 0;
+}
+
+async function requireRoomDiscussionAccess(
+  req: Request,
+  res: Response,
+  roomId: string,
+): Promise<string | null> {
+  const userId = requireAuth(req, res);
+  if (!userId) return null;
+  try {
+    if (!(await canAccessRoomDiscussion(roomId, userId))) {
+      res.status(403).json({
+        error: "Join the active meeting before opening Group Discussion.",
+      });
+      return null;
+    }
+    return userId;
+  } catch {
+    res.status(500).json({ error: "Failed to verify Group Discussion access." });
+    return null;
+  }
+}
+
 // ─── Chat — SSE stream (new messages pushed in real-time) ────────────────────
 //
 // EventSource cannot send custom request headers, so we use
@@ -1253,20 +1300,10 @@ function pruneExpiredTokens(): void {
 }
 
 router.post("/:roomId/messages/stream/token", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
   if (!userId) return;
 
   const { roomId } = req.params;
-  try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) {
-      res.status(403).json({ error: "You are not a member of this room." });
-      return;
-    }
-  } catch {
-    res.status(500).json({ error: "Failed to verify room membership." });
-    return;
-  }
 
   pruneExpiredTokens();
   const token = randomUUID();
@@ -1303,17 +1340,16 @@ router.get("/:roomId/messages/stream", async (req, res) => {
 
   const { userId, roomId } = tokenData;
 
-  // Revalidate membership here — the token may have been issued before the
-  // member left or was removed.  The token is already consumed so it cannot
-  // be replayed even if we reject here.
+  // Revalidate discussion access here — the token may have been issued before
+  // the member left or before the active session changed. The token is already
+  // consumed so it cannot be replayed even if we reject here.
   try {
-    const role = await getMemberRole(roomId, userId);
-    if (!role) {
-      res.status(403).json({ error: "You are no longer a member of this room." });
+    if (!(await canAccessRoomDiscussion(roomId, userId))) {
+      res.status(403).json({ error: "Join the active meeting before opening Group Discussion." });
       return;
     }
   } catch {
-    res.status(500).json({ error: "Failed to verify room membership." });
+    res.status(500).json({ error: "Failed to verify Group Discussion access." });
     return;
   }
 
@@ -1349,8 +1385,7 @@ router.get("/:roomId/messages/stream", async (req, res) => {
   heartbeatTimer = setInterval(async () => {
     try { res.write(": heartbeat\n\n"); } catch { /* ignore */ }
     try {
-      const role = await getMemberRole(roomId, userId);
-      if (!role) terminate(); // membership was revoked
+      if (!(await canAccessRoomDiscussion(roomId, userId))) terminate();
     } catch { /* ignore — best-effort safety check */ }
   }, 25_000);
 
@@ -1361,19 +1396,13 @@ router.get("/:roomId/messages/stream", async (req, res) => {
 // ─── Chat — get messages ──────────────────────────────────────────────────────
 
 router.get("/:roomId/messages", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
   if (!userId) return;
 
   const { roomId } = req.params;
   const { before } = req.query as { before?: string };
 
   try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) {
-      res.status(403).json({ error: "You are not a member of this room." });
-      return;
-    }
-
     const messages = await getMessages(String(roomId), 50, before);
     res.json({ messages });
   } catch (err) {
@@ -1384,7 +1413,7 @@ router.get("/:roomId/messages", async (req, res) => {
 // ─── Chat — post a message ────────────────────────────────────────────────────
 
 router.post("/:roomId/messages", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
   if (!userId) return;
 
   const { roomId } = req.params;
@@ -1396,11 +1425,6 @@ router.post("/:roomId/messages", async (req, res) => {
   }
 
   try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) {
-      res.status(403).json({ error: "You are not a member of this room." });
-      return;
-    }
     const message = await addMessage(String(roomId), userId, trimmedBody, attachment ?? undefined);
     res.status(201).json({ message });
   } catch (err) {
@@ -1411,7 +1435,7 @@ router.post("/:roomId/messages", async (req, res) => {
 // ─── Chat — request presigned upload URL (any member) ─────────────────────────
 
 router.post("/:roomId/messages/upload-url", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
   if (!userId) return;
 
   const { roomId } = req.params;
@@ -1436,11 +1460,6 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
   }
 
   try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) {
-      res.status(403).json({ error: "You are not a member of this room." });
-      return;
-    }
     const uploadUrl = await objectStorage.getObjectEntityUploadURL();
     const objectPath = objectStorage.normalizeObjectEntityPath(uploadUrl);
     res.json({ uploadUrl, objectPath, attachmentType: allowed.attachmentType });
@@ -1452,12 +1471,10 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
 // ─── Chat — list media shared in Group Discussion ─────────────────────────────
 
 router.get("/:roomId/media", async (req, res) => {
-  const userId = requireAuth(req, res);
+  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
   if (!userId) return;
   const { roomId } = req.params;
   try {
-    const role = await getMemberRole(String(roomId), userId);
-    if (!role) { res.status(403).json({ error: "Not a member." }); return; }
     const media = await getRoomMedia(String(roomId));
     res.json({ media });
   } catch {
@@ -1584,6 +1601,8 @@ router.post("/:roomId/session/start", async (req, res) => {
   if (!userId) return;
   try {
     const session = await startSession(String(roomId), userId);
+    // Starting the meeting is the leader's explicit entry action. startSession
+    // records the leader against this exact session in the same transaction.
     const event: SessionEvent = {
       type: "session_started",
       payload: { sessionId: session.id },
@@ -1591,6 +1610,12 @@ router.post("/:roomId/session/start", async (req, res) => {
       at: new Date().toISOString(),
     };
     broadcastRoomEvent(String(roomId), event);
+    broadcastRoomEvent(String(roomId), {
+      type: "attendance_changed",
+      payload: { sessionId: session.id, roomId: String(roomId), changedUserId: userId },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
     res.status(201).json({ session });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
@@ -1829,8 +1854,31 @@ router.post("/:roomId/session/attendance/join", async (req, res) => {
     return;
   }
   try {
-    await recordSessionJoin(sessionId, String(roomId), userId);
-    res.json({ ok: true });
+    const attendance = await recordSessionJoin(sessionId, String(roomId), userId);
+    if (!attendance) {
+      res.status(409).json({ error: "This meeting has ended. Join the current active meeting instead." });
+      return;
+    }
+    logger.info({
+      userId,
+      roomId: String(roomId),
+      sessionId,
+      attendanceId: attendance.id,
+      discussionChannelId: String(roomId),
+      attendanceQueryKey: `room:${String(roomId)}:session:${sessionId}:attendance`,
+    }, "room meeting attendance joined");
+    broadcastRoomEvent(String(roomId), {
+      type: "attendance_changed",
+      payload: {
+        roomId: String(roomId),
+        sessionId,
+        changedUserId: userId,
+        attendanceId: attendance.id,
+      },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true, attendance });
   } catch {
     res.status(500).json({ error: "Failed to record attendance." });
   }
@@ -1847,9 +1895,20 @@ router.post("/:roomId/session/attendance/leave", async (req, res) => {
     return;
   }
   try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
     // roomId passed so the store can gate on active-session status —
     // post-completion leaves are no-ops (preserves authoritative timestamps).
     await recordSessionLeave(sessionId, String(roomId), userId);
+    broadcastRoomEvent(String(roomId), {
+      type: "attendance_changed",
+      payload: { roomId: String(roomId), sessionId, changedUserId: userId },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to record attendance leave." });
@@ -1857,17 +1916,16 @@ router.post("/:roomId/session/attendance/leave", async (req, res) => {
 });
 
 // GET /:roomId/session/attendance
-// Restricted to room admins (the room leader). The store JOIN validates
-// that sessionId belongs to roomId, preventing cross-room attendance disclosure.
+// Any active room member can read the attendance for the requested session so
+// every device renders the same server-side participant list. The store JOIN
+// validates that sessionId belongs to roomId, preventing cross-room disclosure.
 router.get("/:roomId/session/attendance", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   const { roomId } = req.params;
   const role = await getMemberRole(String(roomId), userId);
-  if (!isRoomLeaderRole(role)) {
-    // 403 for non-members and non-leader members alike;
-    // the frontend silently ignores this to avoid exposing role info.
-    res.status(403).json({ error: "Only the room leader can view attendance." });
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
     return;
   }
   const { sessionId } = req.query as { sessionId?: string };

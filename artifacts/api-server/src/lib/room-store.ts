@@ -1306,6 +1306,7 @@ export interface SessionEvent {
     | "session_started"
     | "session_ended"
     | "session_complete"
+    | "attendance_changed"
     | "navigate"
     | "mode_change"
     | "focus_verse"
@@ -1364,15 +1365,29 @@ export async function startSession(
   // the application-level check below provides a friendly error message.
   // The leader must explicitly end or complete the current session before
   // starting a new one so that completion logic is never bypassed.
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query("BEGIN");
+    const { rows } = await client.query(
       `INSERT INTO room_sessions (room_id, started_by)
        VALUES ($1, $2)
        RETURNING *`,
       [roomId, startedBy]
     );
-    return rowToSession(rows[0] as Record<string, unknown>);
+    const session = rowToSession(rows[0] as Record<string, unknown>);
+    // Starting a meeting is the leader's explicit entry action. Record the
+    // leader against this exact session in the same transaction so every
+    // device sees the leader as present without making page-open imply join.
+    await client.query(
+      `INSERT INTO room_session_attendance (session_id, room_id, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (session_id, user_id) DO UPDATE SET left_at = NULL`,
+      [session.id, roomId, startedBy]
+    );
+    await client.query("COMMIT");
+    return session;
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
     // PostgreSQL unique violation: error code 23505
     if (
       typeof err === "object" && err !== null &&
@@ -1381,6 +1396,8 @@ export async function startSession(
       throw new Error("SESSION_ALREADY_ACTIVE");
     }
     throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -1476,7 +1493,12 @@ export async function recordSessionJoin(
   sessionId: string,
   roomId: string,
   userId: string
-): Promise<void> {
+): Promise<{
+  id: string;
+  userId: string;
+  joinedAt: string;
+  leftAt: string | null;
+} | null> {
   // INSERT ... SELECT ensures no row is inserted (and no conflict fires)
   // when the session is completed or ended — the status guard lives in SQL,
   // not in application code, so no TOCTOU window exists.
@@ -1484,15 +1506,24 @@ export async function recordSessionJoin(
   // forcing this INSERT to wait and re-evaluate the status predicate after the
   // completion transaction commits — at which point status='completed' and
   // no rows are returned, so no attendance row is inserted.
-  await pool.query(
+  const result = await pool.query(
     `INSERT INTO room_session_attendance (session_id, room_id, user_id)
      SELECT $1::uuid, $2, $3
      FROM room_sessions
      WHERE id = $1::uuid AND room_id = $2 AND status = 'active'
      FOR KEY SHARE
-     ON CONFLICT (session_id, user_id) DO UPDATE SET left_at = NULL`,
+      ON CONFLICT (session_id, user_id) DO UPDATE SET left_at = NULL
+      RETURNING *`,
     [sessionId, roomId, userId]
   );
+  if (!result.rows[0]) return null;
+  const row = result.rows[0] as Record<string, unknown>;
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    joinedAt: String(row.joined_at),
+    leftAt: row.left_at ? String(row.left_at) : null,
+  };
 }
 
 /** Record a member leaving the active session.
@@ -1740,9 +1771,9 @@ export async function acknowledgeSessionCompletion(
 export async function getSessionAttendance(
   sessionId: string,
   roomId: string
-): Promise<Array<{ userId: string; preferredName: string; joinedAt: string; leftAt: string | null }>> {
+): Promise<Array<{ id: string; userId: string; preferredName: string; joinedAt: string; leftAt: string | null }>> {
   const { rows } = await pool.query(
-    `SELECT a.user_id, a.joined_at, a.left_at, up.preferred_name
+    `SELECT a.id, a.user_id, a.joined_at, a.left_at, up.preferred_name
      FROM room_session_attendance a
      -- Ownership validation: session must belong to this room;
      -- cross-room session UUIDs produce 0 rows.
@@ -1754,6 +1785,7 @@ export async function getSessionAttendance(
     [sessionId, roomId]
   );
   return rows.map(r => ({
+    id: String(r.id),
     userId: String(r.user_id),
     preferredName: r.preferred_name && String(r.preferred_name).trim()
       ? String(r.preferred_name).trim()

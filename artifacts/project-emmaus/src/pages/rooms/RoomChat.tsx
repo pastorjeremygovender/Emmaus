@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { apiGetMessages, apiGetStreamToken, apiSendMessage } from '@/lib/rooms-api';
+import { apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
 import { ArrowLeft, Send, Paperclip, X, Mic } from 'lucide-react';
 import type { RoomMessage, MediaAttachment } from '@/lib/rooms-types';
+import { isRoomLeaderRole } from '@/lib/rooms-types';
 import { MediaMessageBubble } from '@/components/MediaMessageBubble';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { VoiceNoteRecorder, supportsMediaRecorder } from '@/components/VoiceNoteRecorder';
@@ -91,7 +92,8 @@ export default function RoomChat() {
   const [isRecording, setIsRecording] = useState(false);
   const voiceFallbackRef = useRef<HTMLInputElement>(null);
 
-  // Presentation permission — passed via navigation state from RoomDetail
+  // Presentation permission is seeded from history state for fast paint, then
+  // replaced by the authoritative room response below.
   const [isLeader, setIsLeader] = useState(false);
   const [allowMemberPresent, setAllowMemberPresent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -112,6 +114,28 @@ export default function RoomChat() {
     if (state?.allowMemberPresent !== undefined) setAllowMemberPresent(Boolean(state.allowMemberPresent));
     if (state?.sessionId !== undefined) setSessionId(state.sessionId ?? null);
   }, []);
+
+  // Direct/reloaded navigation may not have history.state, and a stale history
+  // entry must not grant presentation rights or an old session ID. Reconcile
+  // all room context from the server before relying on it.
+  useEffect(() => {
+    if (!user || !roomId) return;
+    let cancelled = false;
+    apiGetRoomById(user.id, String(roomId))
+      .then(detail => {
+        if (cancelled || !detail) return;
+        setRoomName(detail.room.name);
+        setIsLeader(detail.isLeader || isRoomLeaderRole(detail.currentUserRole));
+        setAllowMemberPresent(detail.room.allowMemberPresent ?? false);
+        setSessionId(detail.activeSession?.id ?? null);
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Could not load Group Discussion.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [roomId, user?.id]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -150,7 +174,8 @@ export default function RoomChat() {
       let token: string;
       try {
         token = await apiGetStreamToken(user!.id, String(roomId));
-      } catch {
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Could not open Group Discussion.');
         scheduleReconnect();
         return;
       }
@@ -186,7 +211,8 @@ export default function RoomChat() {
         setMessages(merged);
         scrollToBottom();
         attempt = 0;
-      } catch {
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Could not load Group Discussion history.');
         closeCurrentEs();
         scheduleReconnect();
       }
@@ -228,10 +254,11 @@ export default function RoomChat() {
 
     try {
       await apiSendMessage(user.id, String(roomId), text, attachment ?? undefined);
-    } catch {
+    } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setBody(text);
       if (attachment) setPendingAttachment(attachment);
+      setLoadError(err instanceof Error ? err.message : 'Could not send your message.');
     } finally {
       setSending(false);
     }
@@ -260,8 +287,9 @@ export default function RoomChat() {
 
     try {
       await apiSendMessage(user.id, String(roomId), '', attachment);
-    } catch {
+    } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
+      setLoadError(err instanceof Error ? err.message : 'Could not send your attachment.');
     } finally {
       setSending(false);
     }

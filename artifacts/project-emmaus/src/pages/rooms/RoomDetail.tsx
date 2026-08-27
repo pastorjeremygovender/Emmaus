@@ -15,7 +15,7 @@ import {
 import { useJourney } from '@/contexts/JourneyContext';
 import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
-  RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll,
+  RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionAttendee,
 } from '@/lib/rooms-types';
 import { isRoomLeaderRole, isRoomOwnerRole } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
@@ -30,7 +30,7 @@ import { roomSessionAckKey } from '@/lib/account-storage';
 import {
   apiGetJourneyProgress, apiLinkJourney, apiRenameRoom,
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
-  apiRecordAttendanceJoin, apiRecordAttendanceLeave,
+  apiRecordAttendanceJoin,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
   apiStartSession, apiEndSession, apiCompleteSession, apiAcknowledgeSessionCompletion, apiUpdateLeaderNote, apiUpdateSchedule,
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
@@ -149,9 +149,8 @@ export default function RoomDetail() {
   } | null>(null);
 
   // ── Attendance state ────────────────────────────────────────────────────────
-  const [attendanceData, setAttendanceData] = useState<Array<{
-    userId: string; joinedAt: string; leftAt: string | null;
-  }>>([]);
+  const [attendanceData, setAttendanceData] = useState<SessionAttendee[]>([]);
+  const [joiningMeeting, setJoiningMeeting] = useState(false);
 
   // ── Leader's completion summary ─────────────────────────────────────────────
   const [leaderSessionComplete, setLeaderSessionComplete] = useState<import('@/lib/rooms-types').SessionCompleteSummary | null>(null);
@@ -195,6 +194,7 @@ export default function RoomDetail() {
     pollRevealUpdate,
     activePresentation,
     setActivePresentation,
+    lastEvent,
   } = useFollowLeader({
     roomId: String(roomId),
     userId: user?.id ?? '',
@@ -282,30 +282,75 @@ export default function RoomDetail() {
     return () => { destroyed = true; clearInterval(id); };
   }, [activeSession, user?.id, roomId]);
 
-  // Attendance auto-record
-  useEffect(() => {
-    if (!activeSession || !user || !roomId) return;
-    const sessionId = activeSession.id;
-    const uid = user.id;
-    const rid = String(roomId);
-    apiRecordAttendanceJoin(uid, rid, sessionId).catch(() => {});
-    return () => { apiRecordAttendanceLeave(uid, rid, sessionId).catch(() => {}); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id]);
+  const refreshAttendance = useCallback(async (sessionId: string) => {
+    if (!user?.id || !roomId) return;
+    try {
+      const data = await apiGetSessionAttendance(user.id, String(roomId), sessionId);
+      if (import.meta.env.DEV) {
+        console.debug('[room-meeting] attendance refetch', {
+          userId: user.id,
+          roomId: String(roomId),
+          sessionId,
+          queryKey: `room:${String(roomId)}:session:${sessionId}:attendance`,
+          attendeeCount: data.length,
+        });
+      }
+      setAttendanceData(data);
+    } catch (err) {
+      console.debug('[room-meeting] attendance refetch failed', {
+        userId: user?.id,
+        roomId: String(roomId),
+        sessionId,
+        message: err instanceof Error ? err.message : 'unknown error',
+      });
+    }
+  }, [roomId, user?.id]);
 
-  // Attendance polling
+  // Read the authoritative participant list on session changes and while the
+  // meeting is open. No request here records attendance.
   useEffect(() => {
-    if (!activeSession || !user || !roomId || !room) return;
-    const fetchAttendance = () => {
-      apiGetSessionAttendance(user.id, String(roomId), activeSession.id)
-        .then(data => setAttendanceData(data))
-        .catch(() => {});
-    };
-    fetchAttendance();
-    const interval = setInterval(fetchAttendance, 30_000);
+    if (!activeSession?.id || !user?.id || !roomId) {
+      setAttendanceData([]);
+      return;
+    }
+    // Never render a previous session's participants while the new session's
+    // authoritative response is in flight.
+    setAttendanceData([]);
+    void refreshAttendance(activeSession.id);
+    const interval = setInterval(() => void refreshAttendance(activeSession.id), 30_000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id, !!room]);
+  }, [activeSession?.id, refreshAttendance, roomId, user?.id]);
+
+  // Session SSE is room-scoped, but attendance is session-scoped. Only refetch
+  // for an attendance event belonging to the active session.
+  useEffect(() => {
+    const payload = lastEvent?.payload as { sessionId?: string } | undefined;
+    if (
+      lastEvent?.type === 'attendance_changed' &&
+      activeSession?.id &&
+      payload?.sessionId === activeSession.id
+    ) {
+      void refreshAttendance(activeSession.id);
+    }
+  }, [activeSession?.id, lastEvent, refreshAttendance]);
+
+  // Reconcile after tab focus, foreground/background return, and connection
+  // recovery. These are all refetches; none can create an attendance row.
+  useEffect(() => {
+    if (!activeSession?.id) return;
+    const refresh = () => void refreshAttendance(activeSession.id);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [activeSession?.id, refreshAttendance]);
 
   // Hydrate active poll
   useEffect(() => {
@@ -622,6 +667,41 @@ export default function RoomDetail() {
     setLocation(`/rooms/${roomId}/chat`);
   };
 
+  const currentAttendance = activeSession
+    ? attendanceData.find(a => a.userId === user.id && a.leftAt === null)
+    : undefined;
+  const hasJoinedCurrentMeeting = Boolean(currentAttendance);
+
+  const handleJoinMeeting = async () => {
+    if (!activeSession || joiningMeeting) return;
+    setJoiningMeeting(true);
+    const rid = String(roomId);
+    const sid = activeSession.id;
+    try {
+      const attendance = await apiRecordAttendanceJoin(user.id, rid, sid);
+      if (import.meta.env.DEV) {
+        console.debug('[room-meeting] explicit join saved', {
+          userId: user.id,
+          roomId: rid,
+          sessionId: sid,
+          attendanceId: attendance.id,
+          discussionChannelId: rid,
+        });
+      }
+      // Immediate local confirmation comes from the saved server record; the
+      // follow-up refetch reconciles names/other participants authoritatively.
+      setAttendanceData(prev => [
+        ...prev.filter(a => a.userId !== user.id),
+        { ...attendance, preferredName: user.preferredName || 'Member' },
+      ]);
+      await refreshAttendance(sid);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not join this meeting.');
+    } finally {
+      setJoiningMeeting(false);
+    }
+  };
+
   const handleSaveLeaderNote = async () => {
     setLeaderNoteSaving(true);
     try {
@@ -666,6 +746,7 @@ export default function RoomDetail() {
     try {
       const session = await apiStartSession(user.id, String(roomId));
       setActiveSession(session);
+      await refreshAttendance(session.id);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to start meeting');
     } finally {
@@ -1312,18 +1393,48 @@ export default function RoomDetail() {
                   </div>
                 </div>
                 {!isAuthorizedLeader && (
-                  <button
-                    onClick={() => setFollowLeader(!followLeader)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
-                      followLeader
-                        ? 'bg-emerald-600 text-white border-emerald-600'
-                        : 'bg-transparent text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:border-emerald-500'
-                    }`}
-                  >
-                    {followLeader ? '● Following' : 'Follow Leader'}
-                  </button>
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      onClick={() => setFollowLeader(!followLeader)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
+                        followLeader
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-transparent text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:border-emerald-500'
+                      }`}
+                      title="Controls whether this screen opens the leader's shared study and Scripture"
+                    >
+                      {followLeader ? '● Follow leader: On' : 'Follow leader: Off'}
+                    </button>
+                    <span className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70">
+                      Study navigation only
+                    </span>
+                  </div>
                 )}
               </div>
+
+              {!hasJoinedCurrentMeeting ? (
+                <div className="rounded-xl bg-white/70 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-100">You haven&apos;t joined yet</p>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">Join to appear as In meeting and open Group Discussion.</p>
+                    </div>
+                    <button
+                      onClick={handleJoinMeeting}
+                      disabled={joiningMeeting}
+                      className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[12px] font-bold disabled:opacity-60"
+                    >
+                      {joiningMeeting && <Loader2 size={13} className="animate-spin" />}
+                      Join Meeting
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-[12px] text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 size={14} />
+                  You are in this meeting
+                </div>
+              )}
 
               {/* Leader action buttons — ONE set, here in the banner */}
               {isAuthorizedLeader && (
@@ -1363,6 +1474,14 @@ export default function RoomDetail() {
                     <StickyNote size={13} />
                     Group Notes
                   </button>
+                  {hasJoinedCurrentMeeting && (
+                    <button onClick={openChat}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all"
+                    >
+                      <MessageSquare size={13} />
+                      Group Discussion
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1485,7 +1604,7 @@ export default function RoomDetail() {
                   const initials = (m.preferredName || 'M').split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
                   const isOnline = onlineUserIds.has(m.userId);
                   const record = attendanceData.find(a => a.userId === m.userId);
-                  const hasJoined = !!record;
+                  const hasJoined = record?.leftAt === null;
                   return (
                     <div key={m.userId} className="flex items-center gap-3.5 px-4 py-3.5">
                       <div className="relative shrink-0">

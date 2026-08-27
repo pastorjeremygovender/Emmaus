@@ -297,6 +297,7 @@ export type SessionEventType =
   | 'session_started'
   | 'session_ended'
   | 'session_complete'
+  | 'attendance_changed'
   | 'navigate'
   | 'mode_change'
   | 'focus_verse'
@@ -332,6 +333,8 @@ export interface SessionEvent {
 }
 
 export interface SessionAttendee {
+  /** Server attendance row identifier, returned after an explicit join. */
+  id?: string;
   userId: string;
   preferredName: string;
   joinedAt: string;

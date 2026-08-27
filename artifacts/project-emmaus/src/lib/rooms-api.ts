@@ -555,11 +555,13 @@ export async function apiRecordAttendanceJoin(
   userId: string,
   roomId: string,
   sessionId: string
-): Promise<void> {
-  await roomsFetch(`/api/rooms/${roomId}/session/attendance/join`, userId, {
+): Promise<SessionAttendee> {
+  const data = await roomsFetch<{ ok: true; attendance: SessionAttendee }>(
+    `/api/rooms/${roomId}/session/attendance/join`, userId, {
     method: 'POST',
     body: JSON.stringify({ sessionId }),
   });
+  return data.attendance;
 }
 
 /** Record that the current user left the session. */
