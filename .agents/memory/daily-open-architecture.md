@@ -54,3 +54,14 @@ Use fake system time to test the only-once-per-day contract; manual testing cann
 ## Auth.tsx
 - Members are sent to `/` after login so Welcome can apply the once-per-day
   Daily Rhythm launch rule.
+
+The application gate should cache a successful server opening per authenticated
+subject and local calendar day. Same-day root reloads can go directly to Walk,
+while `/` and direct `/walk` entries after a day boundary must still consult the
+server.
+
+**Why:** Repeating the authoritative startup request on every reload made Emmaus
+feel slow even though the server decision itself was healthy.
+
+**How to apply:** Keep the cache account-scoped and write it only after a valid
+server decision. Do not use it to bypass a first opening on a new local day.

@@ -39,6 +39,7 @@ describe('OpeningGate', () => {
       loadingProfile: false,
     };
     sessionStorage.clear();
+    localStorage.clear();
     // Route assertions model an in-session navigation. Cold-launch splash
     // presentation has its own regression coverage below.
     sessionStorage.setItem('emmaus_splash_shown', 'true');
@@ -68,6 +69,22 @@ describe('OpeningGate', () => {
     expect(getDailyRhythmStartup).not.toHaveBeenCalled();
     expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText('room content')).toBeInTheDocument();
+  });
+
+  it('opens the Walk immediately on a same-day reload after the opening is resolved', async () => {
+    const firstRender = render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    firstRender.unmount();
+    vi.clearAllMocks();
+
+    render(<OpeningGate><div>member content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).toHaveBeenCalledWith('/walk', { replace: true });
+    expect(screen.getByText('member content')).toBeInTheDocument();
   });
 
   it('fails closed on an opening error instead of falling back to the Walk', async () => {

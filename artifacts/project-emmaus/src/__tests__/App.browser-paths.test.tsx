@@ -154,6 +154,7 @@ describe('authenticated browser path matrix', () => {
     vi.clearAllMocks();
     cleanup();
     sessionStorage.clear();
+    localStorage.clear();
     sessionStorage.setItem('emmaus_splash_shown', 'true');
     window.scrollTo = vi.fn();
     openAt('/');
