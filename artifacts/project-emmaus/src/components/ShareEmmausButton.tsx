@@ -28,24 +28,17 @@ export function ShareEmmausButton() {
     }
   }
 
-  const isCopied = status === 'copied';
-
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={handleShare}
-        className="flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
-        aria-label="Share Emmaus"
-      >
-        {isCopied ? <Check size={15} aria-hidden="true" /> : <Share2 size={15} aria-hidden="true" />}
-        <span>{isCopied ? 'Link copied' : 'Share Emmaus'}</span>
-      </button>
-      {isCopied && (
-        <p className="pr-1 text-right text-[11px] leading-tight text-muted-foreground">
-          Paste it into WhatsApp or another app.
-        </p>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={handleShare}
+      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10"
+      aria-label={status === 'copied' ? 'Emmaus link copied' : 'Share Emmaus'}
+      title={status === 'copied' ? 'Link copied' : 'Share Emmaus'}
+    >
+      {status === 'copied'
+        ? <Check size={19} aria-hidden="true" />
+        : <Share2 size={19} aria-hidden="true" />}
+    </button>
   );
 }

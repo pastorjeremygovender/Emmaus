@@ -194,7 +194,7 @@ export default function Personal() {
     <div className="min-h-[100dvh] bg-background pb-page-safe">
       <main className="px-5 pt-12 max-w-[480px] mx-auto space-y-4">
 
-        <div className="-mt-3 flex justify-end">
+        <div className="-mr-3 -mt-3 flex justify-end">
           <ShareEmmausButton />
         </div>
 
