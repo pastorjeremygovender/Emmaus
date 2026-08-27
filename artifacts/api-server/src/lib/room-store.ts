@@ -2,7 +2,7 @@
  * room-store.ts — PostgreSQL CRUD for the Rooms feature.
  *
  * Rooms are invite-only groups. Members join via a 7-char code or a UUID link
- * token. Each room has one admin (the creator, or a transferred admin), a shared
+ * token. Each room has one Owner, optional Leaders, shared
  * chat, and optionally linked journeys.
  */
 
@@ -19,8 +19,19 @@ export type ContentType = "walk" | "journey" | "devotional" | "bible-study" | "s
 export interface RoomMember {
   userId: string;
   preferredName: string;
-  role: "admin" | "member";
+  role: RoomRole;
   joinedAt: string;
+}
+
+/** Group-scoped permissions. `admin` is retained only for old API clients. */
+export type RoomRole = "owner" | "leader" | "member" | "admin";
+
+export function isRoomLeaderRole(role: string | null | undefined): boolean {
+  return role === "owner" || role === "leader" || role === "admin";
+}
+
+export function isRoomOwnerRole(role: string | null | undefined): boolean {
+  return role === "owner" || role === "admin";
 }
 
 export interface RoomSummary {
@@ -165,7 +176,7 @@ function rowToMember(row: Record<string, unknown>): RoomMember {
       row.preferred_name && String(row.preferred_name).trim()
         ? String(row.preferred_name).trim()
         : "",
-    role: (row.role as "admin" | "member") ?? "member",
+    role: (row.role as RoomRole) ?? "member",
     joinedAt: String(row.joined_at ?? ""),
   };
 }
@@ -259,10 +270,10 @@ export async function createRoom(
     );
     const { id: roomId } = res.rows[0];
 
-    // Creator becomes the admin member automatically
+    // Creator becomes the Owner member automatically.
     await client.query(
       `INSERT INTO room_members (room_id, user_id, role)
-       VALUES ($1, $2, 'admin')`,
+       VALUES ($1, $2, 'owner')`,
       [roomId, createdBy]
     );
 
@@ -322,7 +333,7 @@ export async function getAllRoomsAdmin(): Promise<RoomSummary[]> {
 }
 export async function getRoomsForUser(
   userId: string
-): Promise<Array<RoomSummary & { currentUserRole: "admin" | "member" }>> {
+): Promise<Array<RoomSummary & { currentUserRole: RoomRole }>> {
   const res = await pool.query(
     `SELECT r.*,
             rm.role            AS current_user_role,
@@ -332,7 +343,8 @@ export async function getRoomsForUser(
      FROM   rooms r
      JOIN   room_members rm ON rm.room_id = r.id AND rm.user_id = $1
      JOIN   room_members rm2 ON rm2.room_id = r.id
-     LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+      LEFT JOIN room_members rm_admin
+        ON rm_admin.room_id = r.id AND rm_admin.role IN ('owner', 'admin')
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      GROUP  BY r.id, up.preferred_name, rm_admin.user_id, rm.role
@@ -341,7 +353,7 @@ export async function getRoomsForUser(
   );
   return res.rows.map(row => ({
     ...rowToSummary(row),
-    currentUserRole: (row.current_user_role as "admin" | "member") ?? "member",
+    currentUserRole: (row.current_user_role as RoomRole) ?? "member",
   }));
 }
 
