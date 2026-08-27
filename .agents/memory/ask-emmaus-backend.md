@@ -62,3 +62,13 @@ bulk render.
 
 **How to apply:** Queue incoming text and drain a small visible slice on a
 short timer; delay completion metadata until the queue is empty.
+
+Ordinary Ask Emmaus questions should use a low-latency model by default; reserve
+the provider's stronger configured model for explicitly deep questions.
+
+**Why:** The model's first-token latency and long completion tail were the
+dominant causes of the member-visible wait, not Bible or sermon retrieval.
+
+**How to apply:** Keep `EMMAUS_FAST_MODEL` as the override, retain the fast
+fallback for normal route classification, and leave the deep route independently
+configurable.

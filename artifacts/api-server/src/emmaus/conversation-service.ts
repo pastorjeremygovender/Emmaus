@@ -253,9 +253,9 @@ function routeSettings(route: Route) {
       | "medium"
       | "high",
     // EMMAUS_FAST_MODEL overrides the provider default for fast-path requests.
-    // Allows routing quick questions to a low-latency model (e.g. gpt-4o)
-    // while keeping a stronger model for deep-path reasoning.
-    model: process.env.EMMAUS_FAST_MODEL,
+      // Use a low-latency default for ordinary questions while keeping the
+      // configured provider model available for the deep path.
+      model: process.env.EMMAUS_FAST_MODEL ?? "gpt-4o-mini",
   };
 }
 
@@ -317,6 +317,24 @@ function sanitizeStreamingText(text: string): string {
     .replace(/<\/?EMMAUS_META>/gi, "")
     .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
     .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ");
+}
+
+/**
+ * Return the portion of a rolling model buffer that cannot be part of a split
+ * metadata tag or an unfinished URL/app route. This lets the visible stream
+ * start earlier without weakening the final redaction pass.
+ */
+function safeStreamingLength(text: string): number {
+  let safeLength = Math.max(0, text.length - (META_OPEN.length - 1));
+  const unsafeStartPattern =
+    /https?:\/\/|(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)/gi;
+
+  for (const match of text.matchAll(unsafeStartPattern)) {
+    const start = match.index ?? 0;
+    if (start < safeLength) safeLength = start;
+  }
+
+  return safeLength;
 }
 
 function defaultMetadata(): EmmausResponseMetadata {
@@ -385,7 +403,8 @@ export async function handleConversation(
   }
 
   logger.info(
-    `[emmaus:${reqId}] recv route=${route} maxTokens=${settings.maxTokens} message_chars=${req.message.length}`
+    `[emmaus:${reqId}] recv route=${route} model=${settings.model ?? "provider-default"} ` +
+    `maxTokens=${settings.maxTokens} message_chars=${req.message.length}`
   );
 
   // ── 2. Build context ──────────────────────────────────────────────────────
@@ -649,10 +668,6 @@ export async function handleConversation(
   let fullResponse = "";
   let emitBuffer = "";
   let pastMetaOpen = false;
-  // Keep a short tail un-emitted so a split metadata tag, URL, or route cannot
-  // leak into the visible stream. This still releases the answer in small
-  // pieces as soon as the model provides enough text.
-  const STREAM_GUARD_CHARS = Math.max(META_OPEN.length - 1, 64);
   let streamedText = "";
   let firstTextEmitted = false;
   const tLLM = Date.now();
@@ -689,10 +704,7 @@ export async function handleConversation(
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
-          const safeLen = Math.max(
-            0,
-            emitBuffer.length - STREAM_GUARD_CHARS
-          );
+          const safeLen = safeStreamingLength(emitBuffer);
           if (safeLen > 0) {
             const safeChunk = sanitizeStreamingText(emitBuffer.slice(0, safeLen));
             if (safeChunk) {

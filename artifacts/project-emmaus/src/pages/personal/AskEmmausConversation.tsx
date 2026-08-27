@@ -222,11 +222,13 @@ export default function AskEmmausConversation() {
       let pendingText = '';
       let drainTimer: ReturnType<typeof setTimeout> | null = null;
       let completedPayload: SseDoneEvent | null = null;
+      const DISPLAY_CHARS_PER_TICK = 8;
+      const DISPLAY_TICK_MS = 30;
 
       const drainTextQueue = () => {
         drainTimer = null;
         if (pendingText) {
-          const visibleChunk = pendingText.slice(0, 24);
+          const visibleChunk = pendingText.slice(0, DISPLAY_CHARS_PER_TICK);
           pendingText = pendingText.slice(visibleChunk.length);
           setMessages((prev) =>
             prev.map((m) =>
@@ -238,7 +240,7 @@ export default function AskEmmausConversation() {
         }
 
         if (pendingText) {
-          drainTimer = setTimeout(drainTextQueue, 16);
+          drainTimer = setTimeout(drainTextQueue, DISPLAY_TICK_MS);
         } else if (completedPayload) {
           finishStream(completedPayload);
         }
@@ -246,7 +248,7 @@ export default function AskEmmausConversation() {
 
       const scheduleTextDrain = () => {
         if (drainTimer === null) {
-          drainTimer = setTimeout(drainTextQueue, 16);
+          drainTimer = setTimeout(drainTextQueue, DISPLAY_TICK_MS);
         }
       };
 
