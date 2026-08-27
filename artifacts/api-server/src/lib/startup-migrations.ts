@@ -416,6 +416,93 @@ export async function runStartupMigrations(): Promise<void> {
     logger.warn({ err }, "Startup migration: rooms tables failed (non-fatal)");
   }
 
+  // ── Groups V2: room-scoped Owner / Leader / Member roles ───────────────────
+  // Preserve every membership while translating the legacy single-admin model.
+  // The room creator wins ownership; any other legacy admin becomes a Leader.
+  // This is intentionally limited to membership metadata, not authored content.
+  try {
+    await pool.query(`
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        FOR constraint_name IN
+          SELECT con.conname
+            FROM pg_constraint con
+            JOIN pg_class rel ON rel.oid = con.conrelid
+           WHERE rel.relname = 'room_members'
+             AND con.contype = 'c'
+             AND pg_get_constraintdef(con.oid) ILIKE '%role%'
+        LOOP
+          EXECUTE format('ALTER TABLE room_members DROP CONSTRAINT %I', constraint_name);
+        END LOOP;
+      END $$;
+
+      DROP INDEX IF EXISTS room_members_one_owner_idx;
+
+      -- Existing creators remain Owners even if their row was already a Member.
+      UPDATE room_members rm
+         SET role = 'owner'
+        FROM rooms r
+       WHERE rm.room_id = r.id
+         AND rm.user_id = r.created_by;
+
+      -- Convert legacy admins that are not the creator to Leaders.
+      UPDATE room_members rm
+         SET role = 'leader'
+        FROM rooms r
+       WHERE rm.room_id = r.id
+         AND rm.role = 'admin'
+         AND rm.user_id <> r.created_by;
+
+      -- If a legacy room has no creator membership, preserve its first legacy
+      -- admin as Owner rather than inventing a membership row.
+      WITH first_legacy_owner AS (
+        SELECT DISTINCT ON (room_id) room_id, user_id
+          FROM room_members
+         WHERE role = 'admin'
+         ORDER BY room_id, joined_at ASC, user_id ASC
+      )
+      UPDATE room_members rm
+         SET role = 'owner'
+        FROM first_legacy_owner flo
+       WHERE rm.room_id = flo.room_id
+         AND rm.user_id = flo.user_id;
+
+      -- Any remaining legacy admin is a Leader.
+      UPDATE room_members SET role = 'leader' WHERE role = 'admin';
+
+      -- Repair duplicate owners deterministically while retaining membership.
+      WITH ranked_owners AS (
+        SELECT rm.room_id, rm.user_id,
+               row_number() OVER (
+                 PARTITION BY rm.room_id
+                 ORDER BY (rm.user_id = r.created_by) DESC,
+                          rm.joined_at ASC, rm.user_id ASC
+               ) AS owner_rank
+          FROM room_members rm
+          JOIN rooms r ON r.id = rm.room_id
+         WHERE rm.role = 'owner'
+      )
+      UPDATE room_members rm
+         SET role = 'leader'
+        FROM ranked_owners ro
+       WHERE rm.room_id = ro.room_id
+         AND rm.user_id = ro.user_id
+         AND ro.owner_rank > 1;
+
+      ALTER TABLE room_members
+        ADD CONSTRAINT room_members_role_check
+        CHECK (role IN ('owner', 'leader', 'member'));
+
+      CREATE UNIQUE INDEX IF NOT EXISTS room_members_one_owner_idx
+        ON room_members(room_id)
+        WHERE role = 'owner';
+    `);
+    logger.info("Startup migration: room member roles normalized to Owner/Leader/Member");
+  } catch (err) {
+    logger.warn({ err }, "Startup migration: room member role migration failed (non-fatal)");
+  }
+
   try {
     await pool.query(`
       ALTER TABLE rooms

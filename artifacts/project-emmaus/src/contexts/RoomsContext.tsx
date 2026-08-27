@@ -18,9 +18,12 @@ import {
   apiStartShared,
   apiLeaveRoom,
   apiDeleteRoom,
-  apiTransferAdmin,
+  apiTransferOwnership,
+  apiPromoteMember,
+  apiDemoteLeader,
   apiRemoveMember,
 } from '../lib/rooms-api';
+import { isRoomLeaderRole } from '../lib/rooms-types';
 import type { RoomSummary, RoomDetail, RoomMember, RoomRole, RoomInvitePreview } from '../lib/rooms-types';
 
 // ─── Context type ──────────────────────────────────────────────────────────
@@ -56,6 +59,9 @@ interface RoomsContextType {
   leaveRoom: (roomId: string, userId: string) => Promise<void>;
   deleteRoom: (roomId: string, userId: string) => Promise<void>;
   transferAdmin: (roomId: string, toUserId: string, userId: string) => Promise<void>;
+  transferOwnership: (roomId: string, toUserId: string, userId: string) => Promise<void>;
+  promoteMember: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
+  demoteLeader: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
   removeMember: (roomId: string, targetUserId: string, userId: string) => Promise<void>;
 
   // Stubs — journey/notification/post features planned for later tasks
@@ -118,6 +124,14 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     loadRooms();
   }, [loadRooms]);
 
+  // Membership roles may be changed by another device. Keep list cards
+  // aligned with the server without requiring a full app reload.
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(loadRooms, 30_000);
+    return () => clearInterval(timer);
+  }, [user, loadRooms]);
+
   // ── Room detail ──────────────────────────────────────────────────────────
   const loadRoomDetail = useCallback(async (roomId: string): Promise<RoomDetail | null> => {
     if (!user) return null;
@@ -148,7 +162,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     const detail = detailCache[roomId];
     if (!detail) return false;
     const member = detail.members.find(m => m.userId === userId);
-    return member?.role === 'admin';
+    return isRoomLeaderRole(member?.role);
   }, [detailCache]);
 
   const canInvite = useCallback((roomId: string, userId: string): boolean => {
@@ -223,10 +237,21 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const transferAdmin = useCallback(async (roomId: string, toUserId: string, userId: string) => {
-    await apiTransferAdmin(userId, roomId, toUserId);
-    // Invalidate cached detail so next load reflects updated roles
-    setDetailCache(prev => { const next = { ...prev }; delete next[roomId]; return next; });
-  }, []);
+    await apiTransferOwnership(userId, roomId, toUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
+
+  const transferOwnership = transferAdmin;
+
+  const promoteMember = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
+    await apiPromoteMember(userId, roomId, targetUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
+
+  const demoteLeader = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
+    await apiDemoteLeader(userId, roomId, targetUserId);
+    await Promise.all([loadRoomDetail(roomId), loadRooms()]);
+  }, [loadRoomDetail, loadRooms]);
 
   const removeMember = useCallback(async (roomId: string, targetUserId: string, userId: string) => {
     await apiRemoveMember(userId, roomId, targetUserId);
@@ -300,6 +325,9 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
       leaveRoom,
       deleteRoom,
       transferAdmin,
+      transferOwnership,
+      promoteMember,
+      demoteLeader,
       removeMember,
       getUnreadCount,
       getMyNotifications,

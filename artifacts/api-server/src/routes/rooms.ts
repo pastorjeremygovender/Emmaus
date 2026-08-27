@@ -2,7 +2,7 @@
  * routes/rooms.ts — Emmaus Rooms API
  *
  * All routes require an authenticated caller (requireAuth).
- * Admin-only operations verify role = 'admin' in room_members before acting.
+ * Room management operations verify room-scoped Owner/Leader roles before acting.
  *
  * Mounted at /rooms in routes/index.ts.
  */
@@ -93,6 +93,9 @@ import {
   stopPresentation,
   setAllowMemberPresent,
   getAllowMemberPresent,
+  updateMemberRole,
+  isRoomLeaderRole,
+  isRoomOwnerRole,
   type RoomType,
   type ContentType,
   type VideoSettings,
@@ -531,12 +534,13 @@ router.get("/", async (req, res) => {
 
   try {
     const rooms = await getRoomsForUser(userId);
-    // Redact invitation credentials for rooms where the caller is not admin
+    // Keep the authoritative room role in the list response. Redact invite
+    // credentials for non-leaders without dropping that role information.
     const sanitised = rooms.map(({ currentUserRole, ...room }) => {
-      if (currentUserRole !== "admin") {
-        return { ...room, inviteCode: "", inviteToken: "" };
+      if (!isRoomLeaderRole(currentUserRole)) {
+        return { ...room, currentUserRole, inviteCode: "", inviteToken: "" };
       }
-      return room;
+      return { ...room, currentUserRole };
     });
     res.json({ rooms: sanitised });
   } catch (err) {
@@ -731,19 +735,13 @@ router.get("/:roomId", async (req, res) => {
       return;
     }
 
-    // Redact invitation credentials for non-admin members
-    const sanitisedRoom = role === "admin"
+    // Redact invitation credentials for non-leaders
+    const sanitisedRoom = isRoomLeaderRole(role)
       ? room
       : { ...room, inviteCode: "", inviteToken: "" };
 
-    // isLeader: room admin OR app-level admin/superAdmin.
-    // App admins need full leader visibility in any group they view so they
-    // can provide support and test group flows without being the room admin.
-    const [appRole, activeSession] = await Promise.all([
-      getUserRole(userId),
-      getActiveSession(String(roomId)),
-    ]);
-    const isLeader = role === "admin" || appRole === "admin" || appRole === "superAdmin";
+    const activeSession = await getActiveSession(String(roomId));
+    const isLeader = isRoomLeaderRole(role);
 
     res.json({ room: sanitisedRoom, currentUserRole: role, isLeader, activeSession: activeSession ?? null });
   } catch (err) {
@@ -751,7 +749,7 @@ router.get("/:roomId", async (req, res) => {
   }
 });
 
-// ─── Rename room (room admin only) ───────────────────────────────────────────
+// ─── Rename room (room Owner/Leader only) ───────────────────────────────────
 
 router.patch("/:roomId", async (req, res) => {
   const userId = requireAuth(req, res);
@@ -771,8 +769,8 @@ router.patch("/:roomId", async (req, res) => {
 
   try {
     const role = await getMemberRole(String(roomId), userId);
-    if (role !== "admin") {
-      res.status(403).json({ error: "Only the room admin can rename this room." });
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only a room Owner or Leader can rename this room." });
       return;
     }
 
@@ -783,7 +781,7 @@ router.patch("/:roomId", async (req, res) => {
   }
 });
 
-// ─── Groups V2: Update leader note (room admin only) ─────────────────────────
+// ─── Groups V2: Update leader note (room Owner/Leader only) ─────────────────
 
 router.patch("/:roomId/leader-note", async (req, res) => {
   const { roomId } = req.params;
@@ -800,7 +798,7 @@ router.patch("/:roomId/leader-note", async (req, res) => {
   }
 });
 
-// ─── Groups V2: Update meeting schedule (room admin only) ────────────────────
+// ─── Groups V2: Update meeting schedule (room Owner/Leader only) ────────────
 
 router.patch("/:roomId/schedule", async (req, res) => {
   const { roomId } = req.params;
@@ -837,7 +835,7 @@ router.patch("/:roomId/schedule", async (req, res) => {
   }
 });
 
-// ─── Delete room (admin only) ─────────────────────────────────────────────────
+// ─── Delete room (Owner only) ────────────────────────────────────────────────
 
 router.delete("/:roomId", async (req, res) => {
   const userId = requireAuth(req, res);
@@ -846,8 +844,8 @@ router.delete("/:roomId", async (req, res) => {
   const { roomId } = req.params;
   try {
     const role = await getMemberRole(String(roomId), userId);
-    if (role !== "admin") {
-      res.status(403).json({ error: "Only the room admin can delete this room." });
+    if (!isRoomOwnerRole(role)) {
+      res.status(403).json({ error: "Only the room Owner can delete this room." });
       return;
     }
 
@@ -858,7 +856,7 @@ router.delete("/:roomId", async (req, res) => {
   }
 });
 
-// ─── Transfer admin (admin only) ──────────────────────────────────────────────
+// ─── Transfer ownership (Owner only) ────────────────────────────────────────
 
 router.post("/:roomId/transfer", async (req, res) => {
   const userId = requireAuth(req, res);
@@ -873,8 +871,8 @@ router.post("/:roomId/transfer", async (req, res) => {
 
   try {
     const role = await getMemberRole(String(roomId), userId);
-    if (role !== "admin") {
-      res.status(403).json({ error: "Only the room admin can transfer admin rights." });
+    if (!isRoomOwnerRole(role)) {
+      res.status(403).json({ error: "Only the room Owner can transfer ownership." });
       return;
     }
 
@@ -887,11 +885,66 @@ router.post("/:roomId/transfer", async (req, res) => {
     await transferAdmin(String(roomId), userId, toUserId);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: "Failed to transfer admin." });
+    const code = err instanceof Error ? err.message : "";
+    if (code === "NOT_OWNER") {
+      res.status(403).json({ error: "Only the room Owner can transfer ownership." });
+      return;
+    }
+    if (code === "TARGET_NOT_MEMBER" || code === "INVALID_OWNER_TRANSFER") {
+      res.status(400).json({ error: "Choose a different non-owner member of this room." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to transfer ownership." });
   }
 });
 
-// ─── Remove a member (admin only) ────────────────────────────────────────────
+// ─── Promote/demote members (Owner only) ────────────────────────────────────
+
+router.post("/:roomId/members/:targetUserId/promote", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, targetUserId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!isRoomOwnerRole(role)) {
+      res.status(403).json({ error: "Only the room Owner can appoint Leaders." });
+      return;
+    }
+    await updateMemberRole(String(roomId), String(targetUserId), "leader");
+    res.json({ ok: true, role: "leader" });
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "";
+    res.status(code === "MEMBER_NOT_FOUND_OR_OWNER" ? 400 : 500).json({
+      error: code === "MEMBER_NOT_FOUND_OR_OWNER"
+        ? "Target must be an existing non-owner member."
+        : "Failed to appoint Leader.",
+    });
+  }
+});
+
+router.post("/:roomId/members/:targetUserId/demote", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, targetUserId } = req.params;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!isRoomOwnerRole(role)) {
+      res.status(403).json({ error: "Only the room Owner can remove Leader status." });
+      return;
+    }
+    await updateMemberRole(String(roomId), String(targetUserId), "member");
+    res.json({ ok: true, role: "member" });
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "";
+    res.status(code === "MEMBER_NOT_FOUND_OR_OWNER" ? 400 : 500).json({
+      error: code === "MEMBER_NOT_FOUND_OR_OWNER"
+        ? "Target must be an existing non-owner member."
+        : "Failed to remove Leader status.",
+    });
+  }
+});
+
+// ─── Remove a member (Owner/Leader) ─────────────────────────────────────────
 
 router.delete("/:roomId/members/:targetUserId", async (req, res) => {
   const userId = requireAuth(req, res);
@@ -900,13 +953,26 @@ router.delete("/:roomId/members/:targetUserId", async (req, res) => {
   const { roomId, targetUserId } = req.params;
   try {
     const role = await getMemberRole(String(roomId), userId);
-    if (role !== "admin") {
-      res.status(403).json({ error: "Only the room admin can remove members." });
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only a room Owner or Leader can remove members." });
       return;
     }
 
     if (String(targetUserId) === userId) {
-      res.status(400).json({ error: "The admin cannot remove themselves. Transfer admin first." });
+      res.status(400).json({ error: "You cannot remove yourself from this room." });
+      return;
+    }
+    const targetRole = await getMemberRole(String(roomId), String(targetUserId));
+    if (!targetRole) {
+      res.status(404).json({ error: "Target user is not a member of this room." });
+      return;
+    }
+    if (isRoomOwnerRole(targetRole)) {
+      res.status(400).json({ error: "The room Owner cannot be removed." });
+      return;
+    }
+    if (!isRoomOwnerRole(role) && isRoomLeaderRole(targetRole)) {
+      res.status(403).json({ error: "Only the room Owner can remove a Leader." });
       return;
     }
 
@@ -930,8 +996,8 @@ router.post("/:roomId/leave", async (req, res) => {
       res.status(400).json({ error: "You are not a member of this room." });
       return;
     }
-    if (role === "admin") {
-      res.status(400).json({ error: "Transfer admin to another member before leaving." });
+    if (isRoomOwnerRole(role)) {
+      res.status(400).json({ error: "Transfer ownership to another member before leaving." });
       return;
     }
 
@@ -944,11 +1010,11 @@ router.post("/:roomId/leave", async (req, res) => {
 
 // ─── Link a journey to the room ───────────────────────────────────────────────
 
-// POST /:roomId/journeys — link a journey to the room (room admin only)
+// POST /:roomId/journeys — link a journey to the room (Owner/Leader only)
 // Linking a walk determines the shared study plan for the whole group, so it
 // must be gated the same way as other leader-owned mutations (session start,
-// leader note, schedule). guardLeader enforces room_members.role='admin'.
-// The creator of a group is the room admin and can immediately link a study.
+// leader note, schedule). guardLeader enforces the appointed room role.
+// The creator of a group is the room Owner and can immediately link a study.
 router.post("/:roomId/journeys", async (req, res) => {
   const { roomId } = req.params;
   const userId = await guardLeader(req, res, String(roomId));
@@ -1461,7 +1527,7 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
   if (!userId) return;
   const { roomId, prayerId } = req.params;
   const role = await getMemberRole(String(roomId), userId);
-  if (role !== "admin") {
+  if (!isRoomLeaderRole(role)) {
     res.status(403).json({ error: "Only room admins can mark requests as answered." });
     return;
   }
@@ -1475,7 +1541,7 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
 
 // ─── Session — leader-guided real-time session ────────────────────────────────
 //
-// Only the room admin (group leader = group creator) can start/end sessions and
+// Only appointed room Owners and Leaders can start/end sessions and
 // broadcast leader events. All room members can read session state + subscribe
 // to the SSE event stream.
 //
@@ -1492,15 +1558,8 @@ router.patch("/:roomId/prayer/:prayerId/answered", async (req, res) => {
 //  GET  /:roomId/session/events              — any member: SSE event stream
 
 /** Ensure the caller is an authorized leader for this room. */
-// guardLeader: authorize group-management actions (sessions, leader note, schedule, study link).
-//
-// Authorization policy: room admin is the group leader.
-// The creator of a group is automatically the room admin, so any member who
-// creates a group can immediately use all leader controls.
-//
-// Video hosting uses the stricter canHostVideo() (room-admin + isAuthorizedLeader)
-// because it involves external real-time infrastructure. All other leader controls
-// only need room-admin status.
+// guardLeader authorizes group-management actions using only the room's
+// appointed Owner/Leader role. Global application roles do not bypass this.
 async function guardLeader(
   req: Parameters<typeof requireAuth>[0],
   res: Parameters<typeof requireAuth>[1],
@@ -1509,16 +1568,9 @@ async function guardLeader(
   const userId = requireAuth(req, res);
   if (!userId) return null;
 
-  // Allow:  (a) the room admin, OR (b) an app-level admin/superAdmin.
-  // App admins need to be able to manage any group for support and testing
-  // without having to be made the room admin first.
-  const [role, appRole] = await Promise.all([
-    getMemberRole(roomId, userId),
-    getUserRole(userId),
-  ]);
-  const isAppAdmin = appRole === "admin" || appRole === "superAdmin";
-  if (role !== "admin" && !isAppAdmin) {
-    res.status(403).json({ error: "Only the group leader can perform this action." });
+  const role = await getMemberRole(roomId, userId);
+  if (!isRoomLeaderRole(role)) {
+    res.status(403).json({ error: "Only a room Owner or Leader can perform this action." });
     return null;
   }
 
@@ -1812,8 +1864,8 @@ router.get("/:roomId/session/attendance", async (req, res) => {
   if (!userId) return;
   const { roomId } = req.params;
   const role = await getMemberRole(String(roomId), userId);
-  if (role !== "admin") {
-    // 403 for non-members (role === null) and non-admin members alike;
+  if (!isRoomLeaderRole(role)) {
+    // 403 for non-members and non-leader members alike;
     // the frontend silently ignores this to avoid exposing role info.
     res.status(403).json({ error: "Only the room leader can view attendance." });
     return;
@@ -2621,17 +2673,15 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     if (!role) { res.status(403).json({ error: "Not a member." }); return; }
 
     // Determine whether this user may present:
-    // - Authorized leaders always may
+    // - Room Owners and Leaders always may
     // - If allow_member_present is true, member may present their own message
-    const appRole = await getUserRole(userId);
-    const leaderAccess = await getLeaderAccess(userId, appRole);
-    const canPresent = leaderAccess.authorized;
+    const canPresent = isRoomLeaderRole(role);
 
     if (!canPresent) {
       // Check member-present setting and whether this is their own message
       const allowMemberPresent = await getAllowMemberPresent(String(roomId));
       if (!allowMemberPresent) {
-        res.status(403).json({ error: "Only authorized group leaders may present." });
+         res.status(403).json({ error: "Only room Owners or Leaders may present." });
         return;
       }
       // Verify the message belongs to this user
@@ -2645,7 +2695,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
           return;
         }
       } else {
-        res.status(403).json({ error: "Only authorized group leaders may present." });
+        res.status(403).json({ error: "Only room Owners or Leaders may present." });
         return;
       }
     }
@@ -2701,10 +2751,9 @@ router.patch("/:roomId/session/presentation/page", async (req, res) => {
     return;
   }
   try {
-    const appRolePg = await getUserRole(userId);
-    const leaderAccessPg = await getLeaderAccess(userId, appRolePg);
-    if (!leaderAccessPg.authorized) {
-      res.status(403).json({ error: "Only authorized group leaders may change presentation pages." });
+    const role = await getMemberRole(String(roomId), userId);
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only room Owners or Leaders may change presentation pages." });
       return;
     }
     await updatePresentationPage(String(roomId), page);
@@ -2725,15 +2774,10 @@ router.delete("/:roomId/session/presentation", async (req, res) => {
   if (!userId) return;
   const { roomId } = req.params;
   try {
-    const appRoleDel = await getUserRole(userId);
-    const leaderAccessDel = await getLeaderAccess(userId, appRoleDel);
-    if (!leaderAccessDel.authorized) {
-      // Also allow the presenter themselves to stop
-      const pres = await getActivePresentation(String(roomId));
-      if (!pres || pres.presentedBy !== userId) {
-        res.status(403).json({ error: "Only the presenter or an authorized leader may stop the presentation." });
-        return;
-      }
+    const role = await getMemberRole(String(roomId), userId);
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only room Owners or Leaders may stop the presentation." });
+      return;
     }
     await stopPresentation(String(roomId));
     broadcastRoomEvent(String(roomId), {
@@ -2761,8 +2805,8 @@ router.patch("/:roomId/allow-member-present", async (req, res) => {
   }
   try {
     const role = await getMemberRole(String(roomId), userId);
-    if (role !== "admin") {
-      res.status(403).json({ error: "Only the group admin may change this setting." });
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only a room Owner or Leader may change this setting." });
       return;
     }
     await setAllowMemberPresent(String(roomId), allow);

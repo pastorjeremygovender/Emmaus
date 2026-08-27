@@ -34,6 +34,11 @@ export function isRoomOwnerRole(role: string | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** Host permission is derived only from the room membership role. */
+export function canHostWithRoomRole(role: string | null | undefined): boolean {
+  return isRoomLeaderRole(role);
+}
+
 export interface RoomSummary {
   id: string;
   name: string;
@@ -323,7 +328,8 @@ export async function getAllRoomsAdmin(): Promise<RoomSummary[]> {
             rm_admin.user_id   AS admin_user_id
      FROM   rooms r
      LEFT JOIN room_members rm       ON rm.room_id = r.id
-     LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+     LEFT JOIN room_members rm_admin
+       ON rm_admin.room_id = r.id AND rm_admin.role IN ('owner', 'admin')
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      GROUP BY r.id, up.preferred_name, rm_admin.user_id
@@ -364,7 +370,8 @@ export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
             up.preferred_name AS admin_preferred_name
      FROM   rooms r
      LEFT JOIN room_members rm ON rm.room_id = r.id
-     LEFT JOIN room_members rm_admin ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+     LEFT JOIN room_members rm_admin
+       ON rm_admin.room_id = r.id AND rm_admin.role IN ('owner', 'admin')
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      WHERE  r.id = $1
@@ -420,7 +427,7 @@ async function getInvitePreview(
      FROM rooms r
      LEFT JOIN room_members rm_all ON rm_all.room_id = r.id
      LEFT JOIN room_members rm_admin
-       ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+       ON rm_admin.room_id = r.id AND rm_admin.role IN ('owner', 'admin')
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
      WHERE ${whereClause}
@@ -470,7 +477,7 @@ export const LIVE_MEETING_TYPES_SERVER: RoomType[] = ["leadership", "church"];
 export async function getMemberRole(
   roomId: string,
   userId: string
-): Promise<"admin" | "member" | null> {
+): Promise<RoomRole | null> {
   const res = await pool.query(
     `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, userId]
@@ -605,13 +612,36 @@ export async function transferAdmin(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const memberRes = await client.query(
+      `SELECT user_id, role
+         FROM room_members
+        WHERE room_id = $1
+          AND user_id IN ($2, $3)
+        FOR UPDATE`,
+      [roomId, fromUserId, toUserId],
+    );
+    const members = new Map(
+      memberRes.rows.map(row => [String(row.user_id), String(row.role)]),
+    );
+    const fromRole = members.get(fromUserId);
+    const toRole = members.get(toUserId);
+    if (!fromRole || !toRole) throw new Error("TARGET_NOT_MEMBER");
+    if (!isRoomOwnerRole(fromRole)) throw new Error("NOT_OWNER");
+    if (fromUserId === toUserId || isRoomOwnerRole(toRole)) {
+      throw new Error("INVALID_OWNER_TRANSFER");
+    }
+
+    // Demote first so the partial unique Owner index can never observe two
+    // owners, even briefly. The previous Owner remains a Leader.
     await client.query(
-      `UPDATE room_members SET role = 'member' WHERE room_id = $1 AND user_id = $2`,
-      [roomId, fromUserId]
+      `UPDATE room_members SET role = 'leader'
+        WHERE room_id = $1 AND user_id = $2`,
+      [roomId, fromUserId],
     );
     await client.query(
-      `UPDATE room_members SET role = 'admin'  WHERE room_id = $1 AND user_id = $2`,
-      [roomId, toUserId]
+      `UPDATE room_members SET role = 'owner'
+        WHERE room_id = $1 AND user_id = $2`,
+      [roomId, toUserId],
     );
     await client.query("COMMIT");
   } catch (err) {
@@ -619,6 +649,25 @@ export async function transferAdmin(
     throw err;
   } finally {
     client.release();
+  }
+}
+
+/** Change a non-owner member between the room's Leader and Member roles. */
+export async function updateMemberRole(
+  roomId: string,
+  targetUserId: string,
+  role: "leader" | "member",
+): Promise<void> {
+  const result = await pool.query(
+    `UPDATE room_members
+        SET role = $3
+      WHERE room_id = $1
+        AND user_id = $2
+        AND role <> 'owner'`,
+    [roomId, targetUserId, role],
+  );
+  if (result.rowCount === 0) {
+    throw new Error("MEMBER_NOT_FOUND_OR_OWNER");
   }
 }
 
@@ -869,7 +918,7 @@ export async function startShared(
       if (!memberRes.rows[0]) throw new Error("NOT_A_MEMBER");
       roomId = params.roomId;
     } else {
-      // Create the room and make the caller its admin
+      // Create the room and make the caller its Owner
       const roomRes = await client.query(
         `INSERT INTO rooms (name, invite_code, invite_token, created_by)
          VALUES ($1, $2, $3, $4) RETURNING id`,
@@ -877,7 +926,7 @@ export async function startShared(
       );
       roomId = String(roomRes.rows[0].id);
       await client.query(
-        `INSERT INTO room_members (room_id, user_id, role) VALUES ($1, $2, 'admin')`,
+        `INSERT INTO room_members (room_id, user_id, role) VALUES ($1, $2, 'owner')`,
         [roomId, userId]
       );
     }
@@ -2238,25 +2287,23 @@ export async function setLeaderAccess(
  * Check whether a user is authorised to HOST (start/end) video for a room.
  *
  * Conditions (ALL must be true):
- *  1. User must be the room admin (room_members.role = 'admin').
- *  2. User must be an Authorized Room Leader (isAuthorizedLeader).
+ *  1. User must be an appointed room Owner or Leader.
+ *  2. Global application roles do not grant room host privileges.
  *
  * Never trust a client-supplied appRole — call getUserRole() before passing it.
  */
 export async function canHostVideo(
   userId: string,
   roomId: string,
-  appRole: string
+  _appRole?: string
 ): Promise<boolean> {
-  // 1. Must be the room admin
+  // Room hosting is appointed at the room level. The application role is
+  // intentionally ignored so a global admin who is only a Member cannot host.
   const { rows: memberRows } = await pool.query(
     `SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2`,
     [roomId, userId]
   );
-  if (memberRows[0]?.role !== "admin") return false;
-
-  // 2. Must be an Authorized Room Leader
-  return isAuthorizedLeader(userId, appRole);
+  return canHostWithRoomRole(memberRows[0]?.role);
 }
 
 // ─── Church video settings ────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { goBackOrFallback } from '@/lib/return-context';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Share2, Loader2 } from 'lucide-react';
 import type { RoomDetail } from '@/lib/rooms-types';
+import { isRoomLeaderRole } from '@/lib/rooms-types';
 import { groupInviteUrl } from '@/lib/groups-invite';
 
 export default function InviteMembers() {
@@ -24,7 +25,7 @@ export default function InviteMembers() {
     if (!roomId || !user) return;
     loadRoomDetail(String(roomId)).then(detail => {
       if (!detail) { setLoadError('Group not found.'); return; }
-      if (detail.currentUserRole !== 'admin') { setLoadError('Only the Group leader can invite members.'); return; }
+      if (!isRoomLeaderRole(detail.currentUserRole)) { setLoadError('Only a Group Owner or Leader can invite members.'); return; }
       setRoom(detail);
     });
   }, [roomId, user, loadRoomDetail]);

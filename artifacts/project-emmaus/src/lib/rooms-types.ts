@@ -7,7 +7,22 @@
 // A Walk can be Personal or Ministry. A Bible Study can be Leadership or
 // Ministry. The architecture supports any combination.
 
-export type RoomRole = 'admin' | 'member';
+/** `admin` remains accepted at the API boundary for pre-migration data. */
+export type RoomRole = 'owner' | 'leader' | 'member' | 'admin';
+
+export function isRoomLeaderRole(role: RoomRole | null | undefined): boolean {
+  return role === 'owner' || role === 'leader' || role === 'admin';
+}
+
+export function isRoomOwnerRole(role: RoomRole | null | undefined): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
+export function getRoomRoleLabel(role: RoomRole): string {
+  if (role === 'owner' || role === 'admin') return 'Owner';
+  if (role === 'leader') return 'Leader';
+  return 'Member';
+}
 
 // ─── Dimension 1: Permission Level ────────────────────────────────────────
 /** The seven group types available in Groups V2. */
@@ -86,6 +101,8 @@ export interface RoomSummary {
   createdAt: string;
   memberCount: number;
   adminName: string;
+  /** Present on member-facing list responses; absent on server summaries. */
+  currentUserRole?: RoomRole;
   /** Groups V2: short message from the leader for all members. */
   leaderNote?: string | null;
   /** Groups V2: ISO timestamp of the next scheduled meeting. */
@@ -122,10 +139,7 @@ export interface RoomDetail extends RoomSummary {
   members: RoomMember[];
   linkedJourneys: LinkedJourney[];
   currentUserRole: RoomRole;
-  /** Server-computed: true when the requesting user is the room admin.
-   *  The room creator is automatically the room admin, so any creator can use
-   *  all leader controls (session start, leader note, schedule, study link).
-   *  Video hosting uses a separate, stricter check (canHostVideo). */
+  /** Server-computed: true when the requesting user is an appointed Owner or Leader. */
   isLeader: boolean;
   /** The currently active session for this room, if one is running. Included
    *  on initial load so members see the Meeting phase immediately without

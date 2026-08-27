@@ -10,7 +10,7 @@ import type {
   VideoSessionStatus, PrayerRequest, ContentType,
   RoomSession, SessionMode, ScriptureRef, SessionAttendee,
   RoomHighlight, SharedNote, RoomPoll, RoomPollResults, RoomEmmausAnswer,
-  RoomInvitePreview,
+  RoomInvitePreview, RoomRole,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export async function apiGetRooms(userId: string): Promise<RoomSummary[]> {
 export async function apiGetRoomById(
   userId: string,
   roomId: string
-): Promise<{ room: RoomDetail; currentUserRole: 'admin' | 'member'; isLeader: boolean; activeSession: import('./rooms-types').RoomSession | null } | null> {
+): Promise<{ room: RoomDetail; currentUserRole: RoomRole; isLeader: boolean; activeSession: import('./rooms-types').RoomSession | null } | null> {
   try {
     return await roomsFetch(`/api/rooms/${roomId}`, userId);
   } catch (err) {
@@ -243,6 +243,34 @@ export async function apiTransferAdmin(
   await roomsFetch(`/api/rooms/${roomId}/transfer`, userId, {
     method: 'POST',
     body: JSON.stringify({ toUserId }),
+  });
+}
+
+export async function apiTransferOwnership(
+  userId: string,
+  roomId: string,
+  toUserId: string,
+): Promise<void> {
+  return apiTransferAdmin(userId, roomId, toUserId);
+}
+
+export async function apiPromoteMember(
+  userId: string,
+  roomId: string,
+  targetUserId: string,
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/members/${encodeURIComponent(targetUserId)}/promote`, userId, {
+    method: 'POST',
+  });
+}
+
+export async function apiDemoteLeader(
+  userId: string,
+  roomId: string,
+  targetUserId: string,
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/members/${encodeURIComponent(targetUserId)}/demote`, userId, {
+    method: 'POST',
   });
 }
 

@@ -17,6 +17,7 @@ import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
   RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll,
 } from '@/lib/rooms-types';
+import { isRoomLeaderRole, isRoomOwnerRole } from '@/lib/rooms-types';
 import { PrayerRequests } from '@/components/PrayerRequests';
 import { GuideGroupPanel } from '@/components/GuideGroupPanel';
 import { SharedScripturePanel } from '@/components/SharedScripturePanel';
@@ -377,6 +378,28 @@ export default function RoomDetail() {
     });
   }, [roomId, user, loadRoomDetail]);
 
+  // Room roles can change from another device. Refresh the authoritative room
+  // detail periodically so stale SSE/session state cannot leave management
+  // controls visible after an Owner demotes or removes this user.
+  useEffect(() => {
+    if (!roomId || !user) return;
+    let destroyed = false;
+    const refreshRoomRole = async () => {
+      const detail = await loadRoomDetail(String(roomId));
+      if (destroyed || !detail) return;
+      setRoom(detail);
+      setLeaderNote(detail.leaderNote ?? null);
+      setNextMeeting(detail.nextMeeting ?? null);
+      setRevealOnMeeting(detail.revealOnMeeting ?? false);
+      setAllowMemberPresent(detail.allowMemberPresent ?? false);
+    };
+    const timer = setInterval(refreshRoomRole, 30_000);
+    return () => {
+      destroyed = true;
+      clearInterval(timer);
+    };
+  }, [roomId, user, loadRoomDetail]);
+
   // Progress refresh interval
   useEffect(() => {
     if (!room) return;
@@ -462,12 +485,10 @@ export default function RoomDetail() {
   }
 
   // ── Derived state ───────────────────────────────────────────────────────────
-  const isAdmin = room.currentUserRole === 'admin';
-  const isAppAdmin = user.role === 'admin' || user.role === 'superAdmin';
-  // isLeader is server-computed: true for room admin OR app admin/superAdmin.
-  // The fallback (isAdmin || isAppAdmin) ensures the client never silently
-  // strips UI from a super admin when the server flag is missing/stale.
-  const isAuthorizedLeader = room.isLeader || isAdmin || isAppAdmin;
+  const isOwner = isRoomOwnerRole(room.currentUserRole);
+  // Keep the server-computed value authoritative while retaining a safe
+  // role-based fallback for an older response shape.
+  const isAuthorizedLeader = room.isLeader || isRoomLeaderRole(room.currentUserRole);
 
   const linkedJourneyIds = new Set(room.linkedJourneys.map(lj => lj.journeyId));
   const availableWalks = journeys.filter(j =>
@@ -485,7 +506,8 @@ export default function RoomDetail() {
     : 0;
   const onWalkCompleteStep = currentStep != null && totalSteps > 0 && currentStep > totalSteps;
 
-  const leaderMember = room.members.find(m => m.role === 'admin');
+  const leaderMember = room.members.find(m => isRoomOwnerRole(m.role))
+    ?? room.members.find(m => m.role === 'leader');
   const leaderName = leaderMember?.preferredName ?? 'Your leader';
 
   // Whether today's study is hidden by reveal-on-meeting gate
@@ -754,7 +776,7 @@ export default function RoomDetail() {
                 className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-2xl shadow-lg overflow-hidden z-30"
                 onClick={e => e.stopPropagation()}
               >
-                {isAdmin ? (
+                {isAuthorizedLeader ? (
                   <>
                     <button
                       onClick={handleStartRename}
@@ -777,13 +799,15 @@ export default function RoomDetail() {
                       <Settings size={15} className="text-muted-foreground shrink-0" />
                       Group Settings
                     </button>
-                    <button
-                      onClick={() => { setShowOverflow(false); setConfirmDelete(true); }}
-                      className="w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 border-t border-border/60"
-                    >
-                      <Trash2 size={15} className="shrink-0" />
-                      Delete Group
-                    </button>
+                    {isOwner && (
+                      <button
+                        onClick={() => { setShowOverflow(false); setConfirmDelete(true); }}
+                        className="w-full text-left px-4 py-3.5 text-[14px] text-destructive hover:bg-destructive/5 transition-colors flex items-center gap-2.5 border-t border-border/60"
+                      >
+                        <Trash2 size={15} className="shrink-0" />
+                        Delete Group
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button
@@ -1174,7 +1198,7 @@ export default function RoomDetail() {
                       <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
                     </button>
                   )}
-                  {isAdmin && (
+                  {isAuthorizedLeader && (
                     <button onClick={() => setLocation(`/rooms/${roomId}/invite`)} className="text-[13px] text-primary font-medium hover:underline">
                       Invite
                     </button>
@@ -1183,8 +1207,10 @@ export default function RoomDetail() {
               </div>
               <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
                 {[...room.members].sort((a, b) => {
-                  if (a.role === 'admin') return -1;
-                  if (b.role === 'admin') return 1;
+                  if (isRoomOwnerRole(a.role)) return -1;
+                  if (isRoomOwnerRole(b.role)) return 1;
+                  if (a.role === 'leader') return -1;
+                  if (b.role === 'leader') return 1;
                   const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
                   const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
                   return aOnline - bOnline;
@@ -1203,13 +1229,14 @@ export default function RoomDetail() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-[14px] font-medium text-foreground truncate">{displayName}</p>
-                          {m.role === 'admin' && <Crown size={12} className="text-amber-500 shrink-0" />}
+                          {isRoomOwnerRole(m.role) && <Crown size={12} className="text-amber-500 shrink-0" />}
+                          {m.role === 'leader' && <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Leader</span>}
                         </div>
                         {primaryProgress && (
                           <p className={`text-[11px] font-medium mt-0.5 ${prepStatus.color}`}>{prepStatus.label}</p>
                         )}
                       </div>
-                      {isAdmin && !isMe && (
+                      {isAuthorizedLeader && !isMe && (isOwner || m.role === 'member') && (
                         <button onClick={() => handleRemoveMember(m)} className="text-[12px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1 shrink-0">
                           Remove
                         </button>
@@ -1221,8 +1248,8 @@ export default function RoomDetail() {
             </section>
 
 
-            {/* Group Settings — room admin only */}
-            {isAdmin && (
+            {/* Group Settings — room Owner/Leader only */}
+            {isAuthorizedLeader && (
               <section>
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">
                   Group Settings
@@ -1445,8 +1472,10 @@ export default function RoomDetail() {
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Members Present</p>
               <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
                 {[...room.members].sort((a, b) => {
-                  if (a.role === 'admin') return -1;
-                  if (b.role === 'admin') return 1;
+                  if (isRoomOwnerRole(a.role)) return -1;
+                  if (isRoomOwnerRole(b.role)) return 1;
+                  if (a.role === 'leader') return -1;
+                  if (b.role === 'leader') return 1;
                   const aOnline = onlineUserIds.has(a.userId) ? 0 : 1;
                   const bOnline = onlineUserIds.has(b.userId) ? 0 : 1;
                   return aOnline - bOnline;
@@ -1466,7 +1495,8 @@ export default function RoomDetail() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-[14px] font-medium text-foreground truncate">{displayName}</p>
-                          {m.role === 'admin' && <Crown size={12} className="text-amber-500 shrink-0" />}
+                          {isRoomOwnerRole(m.role) && <Crown size={12} className="text-amber-500 shrink-0" />}
+                          {m.role === 'leader' && <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Leader</span>}
                         </div>
                         <p className={`text-[11px] font-medium mt-0.5 ${hasJoined ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground/60'}`}>
                           {hasJoined ? 'In meeting' : 'Not yet joined'}

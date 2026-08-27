@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
 import { ArrowLeft, Users, Plus, LogIn, ChevronRight, Loader2, Crown } from 'lucide-react';
 import type { RoomSummary } from '@/lib/rooms-types';
+import { isRoomOwnerRole } from '@/lib/rooms-types';
 
 export default function Rooms() {
   const { user } = useAuth();
@@ -116,7 +117,6 @@ export default function Rooms() {
                 <RoomCard
                   key={room.id}
                   room={room}
-                  currentUserId={user.id}
                   onClick={() => setLocation(`/rooms/${room.id}`)}
                 />
               ))}
@@ -151,19 +151,24 @@ export default function Rooms() {
   );
 }
 
-function RoomCard({ room, onClick, currentUserId }: { room: RoomSummary; onClick: () => void; currentUserId: string }) {
-  // The room list summary doesn't expose currentUserRole, so we use createdBy as a
-  // reasonable proxy. A room transfer would need a backend change to fix precisely.
-  const isAdmin = room.createdBy === currentUserId;
+function RoomCard({ room, onClick }: { room: RoomSummary; onClick: () => void }) {
+  // Use the server-authoritative membership role. A missing role is treated
+  // conservatively as Member rather than granting management UI.
+  const role = room.currentUserRole ?? 'member';
+  const isOwner = isRoomOwnerRole(role);
 
   // Build the natural membership label
   let membershipLabel: string;
-  if (isAdmin) {
+  if (role === 'owner' || role === 'admin') {
     if (room.memberCount <= 1) {
-      membershipLabel = 'You are the Admin';
+      membershipLabel = 'You are the Owner';
     } else {
-      membershipLabel = `${room.memberCount} members · You are the Admin`;
+      membershipLabel = `${room.memberCount} members · You are the Owner`;
     }
+  } else if (role === 'leader') {
+    membershipLabel = room.memberCount <= 1
+      ? 'You are a Leader'
+      : `${room.memberCount} members · You are a Leader`;
   } else {
     if (room.memberCount <= 1) {
       membershipLabel = 'Member';
@@ -181,7 +186,8 @@ function RoomCard({ room, onClick, currentUserId }: { room: RoomSummary; onClick
         <div className="flex-1 min-w-0">
           <h3 className="text-[18px] font-sans font-semibold text-foreground truncate">{room.name}</h3>
           <div className="flex items-center gap-1.5 mt-1.5 text-[13px] text-muted-foreground">
-            {isAdmin && <Crown size={12} className="text-amber-500 shrink-0" />}
+            {isOwner && <Crown size={12} className="text-amber-500 shrink-0" />}
+            {role === 'leader' && <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Leader</span>}
             <span>{membershipLabel}</span>
           </div>
         </div>
