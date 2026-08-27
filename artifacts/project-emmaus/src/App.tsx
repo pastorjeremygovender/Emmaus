@@ -1,4 +1,5 @@
 import React, { useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
@@ -117,15 +118,22 @@ function GlobalMemberHeaderActions() {
   const [location] = useLocation();
   if (!isMemberHeaderPath(location.split('?')[0])) return null;
 
-  return (
+  return createPortal(
     <div
-      className="pointer-events-none fixed right-2 z-[60]"
-      style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
+      aria-label="Member shortcuts"
+      style={{
+        position: 'fixed',
+        top: 'max(0.75rem, env(safe-area-inset-top))',
+        right: '0.5rem',
+        zIndex: 60,
+        pointerEvents: 'none',
+      }}
     >
-      <div className="pointer-events-auto">
+      <div style={{ pointerEvents: 'auto' }}>
         <MemberHeaderActions />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
