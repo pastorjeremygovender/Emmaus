@@ -15,7 +15,7 @@
  * Route: /journeys
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
@@ -28,14 +28,13 @@ import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
 import {
-  X, Pause, MoreHorizontal, ChevronRight,
+  X, ChevronRight,
   BookHeart, Mic2, Map as MapIcon,
 } from 'lucide-react';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 import { SectionWrapper } from '@/components/SectionWrapper';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Journey } from '@/contexts/JourneyContext';
 import {
   fetchNextSteps,
   startSeries,
@@ -244,82 +243,6 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-// ─── More menu ────────────────────────────────────────────────────────────────
-
-function MoreMenu({ onPause, onDetails }: { onPause: () => void; onDetails: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(p => !p)}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-        aria-label="More actions"
-      >
-        <MoreHorizontal size={17} />
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute right-0 top-9 z-30 bg-background border border-border rounded-xl shadow-lg py-1 w-48"
-          >
-            <button
-              onClick={() => { setOpen(false); onPause(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors flex items-center gap-2"
-            >
-              <Pause size={14} className="text-muted-foreground" /> Pause Journey
-            </button>
-            <button
-              onClick={() => { setOpen(false); onDetails(); }}
-              className="w-full text-left px-4 py-2.5 text-[14px] text-foreground hover:bg-muted/50 transition-colors"
-            >
-              View Details
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── Modal dialogs ────────────────────────────────────────────────────────────
-
-function PauseDialog({ title, onPause, onCancel }: { title: string; onPause: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border p-6 max-w-sm w-full space-y-5 shadow-xl">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-medium text-foreground leading-snug pr-3">Pause {title}?</h2>
-          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-[14px] text-muted-foreground leading-relaxed">
-          Your progress and responses will be kept exactly as they are. You can resume whenever you're ready.
-        </p>
-        <div className="flex gap-3">
-          <Button className="flex-1 h-11 rounded-xl" onClick={onPause}>Pause Journey</Button>
-          <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={onCancel}>Not now</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function JourneyLimitDialog({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5 bg-foreground/20 backdrop-blur-sm">
@@ -371,12 +294,11 @@ function SwitchDevotionalDialog({
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item, onAction, onPause, onDetails: _onDetails, isGated, onGate, enrollmentState: _es,
+  item, onAction, onDetails: _onDetails, isGated, onGate, enrollmentState: _es,
   onViewPreviousSteps, currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
-  onPause?: () => void;
   onDetails?: () => void;
   isGated?: boolean;
   onGate?: () => void;
@@ -398,10 +320,8 @@ function DiscoveryCard({
     subtitle = [dayLabel(total)].filter(Boolean).join(' · ') || (item.description ?? undefined);
   }
 
-  const secondaryLabel = state === 'in-progress' && onPause
-    ? 'Pause Walk'
-    : onViewPreviousSteps ? 'View Walk Contents' : undefined;
-  const onSecondary = state === 'in-progress' && onPause ? onPause : onViewPreviousSteps;
+  const secondaryLabel = onViewPreviousSteps ? 'View Walk Contents' : undefined;
+  const onSecondary = onViewPreviousSteps;
 
   return (
     <DiscoverCompactCard
@@ -499,10 +419,9 @@ function DevotionalsPanel({
 // Shared card-list helper used by both JourneysPanel and WalksPanel.
 function journeyItemCards(
   items: NextStepsItem[],
-  { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps }:
+  { onAction, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps }:
   {
     onAction: (item: NextStepsItem) => void;
-    onPause: (id: string) => void;
     onDetails: (id: string) => void;
     isGated: (item: NextStepsItem) => boolean;
     onGate: () => void;
@@ -520,7 +439,6 @@ function journeyItemCards(
       key={item.id}
       item={item}
       onAction={() => onAction(item)}
-      onPause={() => onPause(item.id)}
       onDetails={() => onDetails(item.id)}
       isGated={isGated(item)}
       onGate={onGate}
@@ -608,12 +526,11 @@ export function JourneysPanel({
 
 // Walks tab — shows standalone walks that are not assigned to any Journey.
 function WalksPanel({
-  standalone, onAction, onPause, onDetails, isGated, onGate, getEnrollmentState,
+  standalone, onAction, onDetails, isGated, onGate, getEnrollmentState,
   getProgressDay, onViewPreviousSteps, sort,
 }: {
   standalone: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  onPause: (id: string) => void;
   onDetails: (id: string) => void;
   isGated: (item: NextStepsItem) => boolean;
   onGate: () => void;
@@ -623,7 +540,7 @@ function WalksPanel({
   sort: DiscoverSort;
 }) {
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
-  const cardProps = { onAction, onPause, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
+  const cardProps = { onAction, onDetails, isGated, onGate, getEnrollmentState, getProgressDay, onViewPreviousSteps };
   return (
     <div className="space-y-3">
       {journeyItemCards(sortItems(standalone, sort), cardProps)}
@@ -783,7 +700,7 @@ export default function Journeys() {
   const { user } = useAuth();
   const { getMyRooms, loadRooms } = useRooms();
   const [, setLocation] = useLocation();
-  const { getState, pauseJourney, canActivateMore } = useEnrollment();
+  const { getState, canActivateMore } = useEnrollment();
 
   // ── Unified search/question active state ─────────────────────────────────
   const [discoverActive, setDiscoverActive] = useState(false);
@@ -820,7 +737,6 @@ export default function Journeys() {
   // ── Journey dialog state ──────────────────────────────────────────────────
 
   const [pendingItem,     setPendingItem]     = useState<NextStepsItem | null>(null);
-  const [pauseTargetId,   setPauseTargetId]   = useState<string | null>(null);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   // ── Devotional state ──────────────────────────────────────────────────────
@@ -1031,7 +947,7 @@ export default function Journeys() {
                   onGate={() => setLocation('/walk')}
                   sort={walksSort}
                 />
-                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onPause={(id) => setPauseTargetId(id)} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
+                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} onDetails={(id) => setLocation(`/journeys/${id}?source=nextStepsWalks`)} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} onViewPreviousSteps={(id) => setLocation(`/journey/${id}/previous?source=nextStepsWalks`)} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
@@ -1089,15 +1005,6 @@ export default function Journeys() {
           onStartInRoom={handleStartWithRoom}
           onCreateAndStart={handleCreateAndStart}
           onClose={() => setPendingItem(null)}
-        />
-      )}
-
-      {/* Pause dialog */}
-      {pauseTargetId && (
-        <PauseDialog
-          title={journeys.find((j: Journey) => j.id === pauseTargetId)?.title ?? 'this journey'}
-          onPause={() => { pauseJourney(pauseTargetId); setPauseTargetId(null); }}
-          onCancel={() => setPauseTargetId(null)}
         />
       )}
 
