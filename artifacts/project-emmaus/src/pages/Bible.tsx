@@ -3,6 +3,7 @@ import { useBible } from '@/contexts/BibleContext';
 import { BottomNav } from '@/components/BottomNav';
 import { UnifiedEmmausInput } from '@/components/UnifiedEmmausInput';
 import { SectionWrapper } from '@/components/SectionWrapper';
+import { motion } from 'framer-motion';
 import { BookOpen, ChevronRight, Bookmark, Heart, BookMarked, Library } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MyLibrary from '@/pages/bible/MyLibrary';
@@ -41,14 +42,32 @@ export default function Bible() {
           <div className="mb-1 flex justify-end">
             <MemberHeaderActions compact />
           </div>
-          <h1 className="min-w-0 text-[30px] font-sans font-medium tracking-tight">My Bible</h1>
+          <motion.h1
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6 }}
+            className="min-w-0 text-[30px] font-sans font-medium tracking-tight"
+          >
+            My Bible
+          </motion.h1>
         </header>
 
         {/* Ask Emmaus */}
-        <UnifiedEmmausInput launchOnly />
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.08 }}
+        >
+          <UnifiedEmmausInput launchOnly />
+        </motion.div>
 
         {/* Tab switcher */}
-        <div className="flex gap-1 p-1 bg-muted/60 rounded-xl">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.13 }}
+          className="flex gap-1 p-1 bg-muted/60 rounded-xl"
+        >
           <button
             type="button"
             onClick={() => openTab('home')}
@@ -85,11 +104,16 @@ export default function Bible() {
               </span>
             )}
           </button>
-        </div>
+        </motion.div>
 
         {/* ── Home Tab ─────────────────────────────────────────────────────── */}
         {activeTab === 'home' && (
-          <div className="space-y-4 pb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18 }}
+            className="space-y-4 pb-4"
+          >
 
             {/* Continue / Begin Reading */}
             {lastRead ? (
@@ -148,14 +172,19 @@ export default function Bible() {
               </div>
             </SectionWrapper>
 
-          </div>
+          </motion.div>
         )}
 
         {/* ── My Library Tab ────────────────────────────────────────────────── */}
         {activeTab === 'library' && (
-          <div className="pb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.18 }}
+            className="pb-4"
+          >
             <MyLibrary />
-          </div>
+          </motion.div>
         )}
 
       </main>

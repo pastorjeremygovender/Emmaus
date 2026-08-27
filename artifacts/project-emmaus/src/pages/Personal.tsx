@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 import { fetchFavourites, type Favourite } from '@/lib/favourites-api';
 import { fetchHistory, historyTimeLabel, type HistoryEntry } from '@/lib/history-api';
+import { motion } from 'framer-motion';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,12 @@ export default function Personal() {
       <main className="relative px-5 pt-10 max-w-[480px] mx-auto space-y-4">
 
         {/* Profile header */}
-        <header className="space-y-3">
+        <motion.header
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="space-y-3"
+        >
           <div className="flex justify-end">
             <MemberHeaderActions compact />
           </div>
@@ -239,27 +245,45 @@ export default function Personal() {
             </p>
             </div>
           </div>
-        </header>
+        </motion.header>
 
         {(user.role === 'admin' || user.role === 'superAdmin') && (
-          <button
-            type="button"
-            onClick={() => setLocation('/admin')}
-            className="w-full flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-primary hover:bg-primary/10 transition-colors"
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.08 }}
           >
-            <span className="flex items-center gap-2 text-[13px] font-medium">
-              <ShieldCheck size={16} aria-hidden="true" />
-              Admin panel
-            </span>
-            <ChevronRight size={16} aria-hidden="true" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setLocation('/admin')}
+              className="w-full flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-primary hover:bg-primary/10 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-[13px] font-medium">
+                <ShieldCheck size={16} aria-hidden="true" />
+                Admin panel
+              </span>
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </motion.div>
         )}
 
         {/* Unified Ask Emmaus / Search bar */}
-        <UnifiedEmmausInput launchOnly className="mt-4" />
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.13 }}
+        >
+          <UnifiedEmmausInput launchOnly className="mt-4" />
+        </motion.div>
 
-        {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
-        <SectionWrapper color="amber" label="Favourites">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.18 }}
+          className="space-y-4"
+        >
+          {/* ── ⭐ Favourites ────────────────────────────────────────────────────── */}
+          <SectionWrapper color="amber" label="Favourites">
           {favsLoading ? (
             <div className="space-y-2">
               {[1, 2].map(i => <div key={i} className="h-10 rounded-xl bg-amber-100/80 animate-pulse" />)}
@@ -280,10 +304,10 @@ export default function Personal() {
               ))}
             </div>
           )}
-        </SectionWrapper>
+          </SectionWrapper>
 
-        {/* ── History ────────────────────────────────────────────────────────── */}
-        <SectionWrapper color="violet" label="History">
+          {/* ── History ────────────────────────────────────────────────────────── */}
+          <SectionWrapper color="violet" label="History">
           {histLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-xl bg-violet-100/80 animate-pulse" />)}
@@ -303,11 +327,11 @@ export default function Personal() {
               ))}
             </div>
           )}
-        </SectionWrapper>
+          </SectionWrapper>
 
-        {/* ── Saved Reflections ──────────────────────────────────────────────── */}
-        {savedReflections.length > 0 && (
-          <SectionWrapper color="emerald" label="Saved Reflections">
+          {/* ── Saved Reflections ──────────────────────────────────────────────── */}
+          {savedReflections.length > 0 && (
+            <SectionWrapper color="emerald" label="Saved Reflections">
             <div className="space-y-2">
               {savedReflections.map((r, i) => (
                 <div key={i} className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 space-y-1">
@@ -316,19 +340,20 @@ export default function Personal() {
                 </div>
               ))}
             </div>
-          </SectionWrapper>
-        )}
+            </SectionWrapper>
+          )}
 
-        {/* Sign Out */}
-        <Button
-          variant="ghost"
-          className="w-full h-12 text-destructive hover:text-destructive flex gap-2 text-base"
-          onClick={handleSignOut}
-          data-testid="button-sign-out"
-        >
-          <LogOut size={17} aria-hidden="true" />
-          Sign Out
-        </Button>
+          {/* Sign Out */}
+          <Button
+            variant="ghost"
+            className="w-full h-12 text-destructive hover:text-destructive flex gap-2 text-base"
+            onClick={handleSignOut}
+            data-testid="button-sign-out"
+          >
+            <LogOut size={17} aria-hidden="true" />
+            Sign Out
+          </Button>
+        </motion.div>
 
       </main>
       <BottomNav />
