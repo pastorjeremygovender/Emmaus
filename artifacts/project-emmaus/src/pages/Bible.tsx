@@ -35,7 +35,7 @@ export default function Bible() {
 
   return (
     <div className="min-h-[100dvh] bg-background pb-page-safe">
-      <main className="relative px-5 pt-10 max-w-[520px] mx-auto space-y-6">
+      <main className="relative px-4 pt-4 max-w-[520px] mx-auto space-y-3">
 
         {/* Header */}
         <header>
@@ -46,7 +46,7 @@ export default function Bible() {
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
-            className="min-w-0 text-[30px] font-sans font-medium tracking-tight"
+            className="min-w-0 text-[28px] font-sans font-medium tracking-tight"
           >
             My Bible
           </motion.h1>
@@ -72,7 +72,7 @@ export default function Bible() {
             type="button"
             onClick={() => openTab('home')}
             className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+              'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'home'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -85,7 +85,7 @@ export default function Bible() {
             type="button"
             onClick={() => openTab('library')}
             className={[
-              'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+              'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors',
               activeTab === 'library'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -112,14 +112,14 @@ export default function Bible() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.18 }}
-            className="space-y-4 pb-4"
+            className="space-y-2 pb-0"
           >
 
             {/* Continue / Begin Reading */}
             {lastRead ? (
-              <SectionWrapper color="amber" label="Continue Reading">
+              <SectionWrapper color="amber" label="Continue Reading" className="px-3 py-2 space-y-1.5">
                 <div
-                  className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
+                  className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation(`/bible/read/${lastRead.bookId}/${lastRead.chapter}`)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -136,9 +136,9 @@ export default function Bible() {
                 </div>
               </SectionWrapper>
             ) : (
-              <SectionWrapper color="amber" label="Begin Reading">
+              <SectionWrapper color="amber" label="Begin Reading" className="px-3 py-2 space-y-1.5">
                 <div
-                  className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
+                  className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                   onClick={() => setLocation('/bible/read/luke/1')}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -157,9 +157,9 @@ export default function Bible() {
             )}
 
             {/* Browse Books */}
-            <SectionWrapper color="emerald" label="Browse Books">
+            <SectionWrapper color="emerald" label="Browse Books" className="px-3 py-2 space-y-1.5">
               <div
-                className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
+                className="bg-card rounded-xl border border-border/50 px-3 py-2 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
                 onClick={() => setLocation('/bible/books')}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -181,7 +181,7 @@ export default function Bible() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.18 }}
-            className="pb-4"
+            className="pb-0"
           >
             <MyLibrary />
           </motion.div>

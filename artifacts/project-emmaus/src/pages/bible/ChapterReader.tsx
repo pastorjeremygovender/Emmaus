@@ -525,7 +525,7 @@ export default function ChapterReader() {
       {/* ── Scripture ───────────────────────────────────────────────────────── */}
       <main
         className="max-w-[600px] mx-auto"
-        style={{ paddingBottom: 'calc(12.5rem + env(safe-area-inset-bottom, 0px))' }}
+        style={{ paddingBottom: 'calc(7.5rem + env(safe-area-inset-bottom, 0px))' }}
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -593,7 +593,7 @@ export default function ChapterReader() {
       {/* ── Chapter Navigation — sits directly above the app nav ─────────────── */}
       {/* bottom = BottomNav height (h-16=4rem) + device safe-area inset */}
       <div
-        className="fixed left-0 right-0 z-20 bg-background/95 backdrop-blur-sm border-t border-border/50"
+        className="fixed left-0 right-0 z-20 bg-muted/30 backdrop-blur-sm border-t border-border/50"
         style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="max-w-[600px] mx-auto">

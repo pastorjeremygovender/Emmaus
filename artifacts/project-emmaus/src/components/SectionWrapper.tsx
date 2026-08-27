@@ -15,15 +15,17 @@ export function SectionWrapper({
   label,
   headerAction,
   children,
+  className,
 }: {
   color: SectionColor;
   label: string;
   headerAction?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   const c = SECTION_COLORS[color];
   return (
-    <section className={cn('rounded-2xl border px-4 pt-3 pb-3.5 space-y-2', c.bg)}>
+    <section className={cn('rounded-2xl border px-4 pt-3 pb-3.5 space-y-2', c.bg, className)}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', c.dot)} aria-hidden="true" />
