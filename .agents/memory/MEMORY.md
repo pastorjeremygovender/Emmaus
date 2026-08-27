@@ -72,3 +72,4 @@
 - [YouTube Whisper pending state](youtube-whisper-pending.md) — caption-miss markers need an explicit retry path; the bulk pipeline must not leave them stranded.
 - [Ask Emmaus and Voice canonical actions](ask-emmaus-voice-canonical-actions.md) — questions are not navigation; executable routes come only from the authenticated server catalogue.
 - [Authenticated JSON cache policy](authenticated-json-cache-policy.md) — browser 304 responses have no JSON body; authenticated client fetches must bypass conditional caching when they cannot rehydrate from a cache.
+- [Room navigation guards](room-navigation-guards.md) — room routes must bypass Daily Rhythm interception, and asynchronously loaded detail components must keep hooks above early returns.

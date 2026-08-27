@@ -15,6 +15,10 @@ function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+function isRoomPath(pathname: string): boolean {
+  return pathname === '/rooms' || pathname.startsWith('/rooms/');
+}
+
 function isPublicPath(pathname: string): boolean {
   return pathname === '/' ||
     pathname === '/auth' ||
@@ -79,7 +83,11 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const needsRecovery = Boolean(user?.passwordRecovery) && pathname !== '/auth/callback';
   const authenticatedExempt = pathname === '/auth' ||
     pathname === '/auth/callback' ||
-    (pathname === '/onboarding' && needsOnboarding);
+    (pathname === '/onboarding' && needsOnboarding) ||
+    // Room navigation is an in-session action. It must not be interrupted by
+    // the Daily Rhythm opening decision after the member has already entered
+    // the app.
+    isRoomPath(pathname);
   const needsOpening = Boolean(user) &&
     !authenticatedExempt &&
     !isAdminPath(pathname) &&

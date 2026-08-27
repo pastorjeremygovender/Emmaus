@@ -174,6 +174,7 @@ export default function RoomDetail() {
 
   const renameInputRef = useRef<HTMLInputElement>(null);
   const roomRef = useRef<RoomDetailType | null>(null);
+  const lastOpenedDiscussionRef = useRef<string | null>(null);
   useEffect(() => { roomRef.current = room; }, [room]);
 
   // ── Follow Leader / Session event bus ──────────────────────────────────────
@@ -515,6 +516,46 @@ export default function RoomDetail() {
     };
   }, [roomId, user]);
 
+  // These values and this effect must remain above the loading/error returns.
+  // Room detail loads asynchronously; putting a hook below those returns makes
+  // React change the hook count when the 200 response arrives.
+  const currentAttendance = activeSession
+    ? attendanceData.find(a => a.userId === user?.id && a.leftAt === null)
+    : undefined;
+  const hasJoinedCurrentMeeting = Boolean(currentAttendance);
+  const openChat = (discussionId?: string) => {
+    if (discussionId) lastOpenedDiscussionRef.current = discussionId;
+    setDiscussionPendingNotice(null);
+    history.replaceState({
+      ...history.state,
+      roomName: room?.name ?? '',
+      isLeader: Boolean(room?.isLeader || isRoomLeaderRole(room?.currentUserRole)),
+      allowMemberPresent,
+      sessionId: activeSession?.id ?? null,
+      discussionId: discussionId ?? null,
+    }, '');
+    setLocation(`/rooms/${roomId}/chat${discussionId ? `?discussionId=${encodeURIComponent(discussionId)}` : ''}`);
+  };
+
+  // OPEN_GROUP_DISCUSSION is authoritative: every joined device receives the
+  // same persisted discussion id. Avoid navigating a background tab blindly.
+  useEffect(() => {
+    if (lastEvent?.type !== 'OPEN_GROUP_DISCUSSION' || !activeSession?.id || !hasJoinedCurrentMeeting) return;
+    const payload = lastEvent.payload as { roomId?: string; sessionId?: string; discussionId?: string };
+    if (
+      payload.roomId !== String(roomId) ||
+      payload.sessionId !== activeSession.id ||
+      !payload.discussionId ||
+      lastOpenedDiscussionRef.current === payload.discussionId
+    ) return;
+    lastOpenedDiscussionRef.current = payload.discussionId;
+    if (document.visibilityState === 'visible') {
+      openChat(payload.discussionId);
+    } else {
+      setDiscussionPendingNotice(payload.discussionId);
+    }
+  }, [activeSession?.id, hasJoinedCurrentMeeting, lastEvent, roomId]);
+
   if (!user || !roomId) return null;
 
   if (loadError) {
@@ -660,45 +701,6 @@ export default function RoomDetail() {
       setRenameSaving(false);
     }
   };
-
-  const lastOpenedDiscussionRef = useRef<string | null>(null);
-  const openChat = (discussionId?: string) => {
-    if (discussionId) lastOpenedDiscussionRef.current = discussionId;
-    setDiscussionPendingNotice(null);
-    history.replaceState({
-      ...history.state,
-      roomName: room?.name ?? '',
-      isLeader: isAuthorizedLeader,
-      allowMemberPresent: allowMemberPresent,
-      sessionId: activeSession?.id ?? null,
-      discussionId: discussionId ?? null,
-    }, '');
-    setLocation(`/rooms/${roomId}/chat${discussionId ? `?discussionId=${encodeURIComponent(discussionId)}` : ''}`);
-  };
-
-  const currentAttendance = activeSession
-    ? attendanceData.find(a => a.userId === user.id && a.leftAt === null)
-    : undefined;
-  const hasJoinedCurrentMeeting = Boolean(currentAttendance);
-
-  // OPEN_GROUP_DISCUSSION is authoritative: every joined device receives the
-  // same persisted discussion id. Avoid navigating a background tab blindly.
-  useEffect(() => {
-    if (lastEvent?.type !== 'OPEN_GROUP_DISCUSSION' || !activeSession?.id || !hasJoinedCurrentMeeting) return;
-    const payload = lastEvent.payload as { roomId?: string; sessionId?: string; discussionId?: string };
-    if (
-      payload.roomId !== String(roomId) ||
-      payload.sessionId !== activeSession.id ||
-      !payload.discussionId ||
-      lastOpenedDiscussionRef.current === payload.discussionId
-    ) return;
-    lastOpenedDiscussionRef.current = payload.discussionId;
-    if (document.visibilityState === 'visible') {
-      openChat(payload.discussionId);
-    } else {
-      setDiscussionPendingNotice(payload.discussionId);
-    }
-  }, [activeSession?.id, hasJoinedCurrentMeeting, lastEvent, roomId]);
 
   const handleJoinMeeting = async () => {
     if (!activeSession || joiningMeeting) return;

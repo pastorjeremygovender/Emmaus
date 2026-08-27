@@ -60,6 +60,16 @@ describe('OpeningGate', () => {
     expect(screen.getByText('member content')).toBeInTheDocument();
   });
 
+  it('does not interrupt in-session room navigation with the Daily Rhythm opening', async () => {
+    currentLocation = '/rooms/room-1';
+    render(<OpeningGate><div>room content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('room content')).toBeInTheDocument();
+  });
+
   it('fails closed on an opening error instead of falling back to the Walk', async () => {
     getDailyRhythmStartup.mockRejectedValueOnce(
       Object.assign(new Error('opening unavailable'), { diagnosticReference: 'opening-test' }),
