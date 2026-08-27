@@ -69,12 +69,27 @@ function readPassword(value: unknown): string | null {
   return value.length >= 8 && value.length <= 128 ? value : null;
 }
 
-function getAuthRedirectUrl(): string {
-  return `${getCanonicalPublicOrigin()}/api/auth/callback`;
+function readSafeReturnTo(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 300 || !value.startsWith("/")) return null;
+  if (value.startsWith("//") || value.includes("\n") || value.includes("\r")) return null;
+  return /^\/(?:groups\/join|join-room)\/[A-Za-z0-9_-]{8,160}$/.test(value)
+    ? value
+    : null;
 }
 
-function getRecoveryPageUrl(): string {
-  return `${getCanonicalPublicOrigin()}/auth/callback?mode=recovery`;
+function getAuthRedirectUrl(returnTo?: string | null): string {
+  const url = new URL(`${getCanonicalPublicOrigin()}/api/auth/callback`);
+  const safe = readSafeReturnTo(returnTo);
+  if (safe) url.searchParams.set("returnTo", safe);
+  return url.toString();
+}
+
+function getRecoveryPageUrl(returnTo?: string | null): string {
+  const url = new URL(`${getCanonicalPublicOrigin()}/auth/callback`);
+  url.searchParams.set("mode", "recovery");
+  const safe = readSafeReturnTo(returnTo);
+  if (safe) url.searchParams.set("returnTo", safe);
+  return url.toString();
 }
 
 class IdentityConflictError extends Error {
@@ -450,11 +465,12 @@ authRouter.post(
     }
 
     try {
+      const returnTo = readSafeReturnTo(req.body?.returnTo);
       await requireMigratedProfileForEmail(email);
       await signUpWithPassword({
         email,
         password,
-        redirectTo: getAuthRedirectUrl(),
+        redirectTo: getAuthRedirectUrl(returnTo),
       });
       logger.info({ event: "confirmation_requested", emailDomain: email.split("@")[1] }, "Auth confirmation requested");
       // Deliberately generic: do not expose whether this email already exists.
@@ -486,9 +502,10 @@ authRouter.post(
     }
 
     try {
+      const returnTo = readSafeReturnTo(req.body?.returnTo);
       await resendConfirmationEmail({
         email,
-        redirectTo: getAuthRedirectUrl(),
+        redirectTo: getAuthRedirectUrl(returnTo),
       });
       logger.info(
         { event: "confirmation_accepted", emailDomain: email.split("@")[1] },
@@ -541,6 +558,7 @@ authRouter.get(
       req.query.type === "email" || req.query.type === "recovery"
         ? req.query.type
         : null;
+    const returnTo = readSafeReturnTo(req.query.returnTo);
     req.log.info(
       {
         callbackPath: req.path,
@@ -550,7 +568,10 @@ authRouter.get(
       "Supabase account-link callback received",
     );
     if (!tokenHash || !type) {
-      res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=invalid-link`);
+      const target = new URL(`${getCanonicalPublicOrigin()}/auth/callback`);
+      target.searchParams.set("error", "invalid-link");
+      if (returnTo) target.searchParams.set("returnTo", returnTo);
+      res.redirect(303, target.toString());
       return;
     }
 
@@ -562,17 +583,28 @@ authRouter.get(
       await establishSession(req, res, session, {
         passwordRecovery: type === "recovery",
       });
-      res.redirect(303, type === "recovery" ? getRecoveryPageUrl() : getCanonicalPublicOrigin());
+      if (type === "recovery") {
+        res.redirect(303, getRecoveryPageUrl(returnTo));
+      } else {
+        res.redirect(303, returnTo
+          ? `${getCanonicalPublicOrigin()}${returnTo}`
+          : getCanonicalPublicOrigin());
+      }
     } catch (error) {
       if (error instanceof LegacyProfileMigrationRequiredError) {
         res.redirect(
           303,
-          `${getCanonicalPublicOrigin()}/auth?error=legacy-account-migration`,
+          `${getCanonicalPublicOrigin()}/auth?error=legacy-account-migration${
+            returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""
+          }`,
         );
         return;
       }
       req.log.warn({ err: error }, "Supabase account-link verification failed");
-      res.redirect(303, `${getCanonicalPublicOrigin()}/auth/callback?error=expired-link`);
+      const target = new URL(`${getCanonicalPublicOrigin()}/auth/callback`);
+      target.searchParams.set("error", "expired-link");
+      if (returnTo) target.searchParams.set("returnTo", returnTo);
+      res.redirect(303, target.toString());
     }
   },
 );
@@ -587,10 +619,11 @@ authRouter.post(
     }
 
     try {
+      const returnTo = readSafeReturnTo(req.body?.returnTo);
       await requireMigratedProfileForEmail(email);
       await sendPasswordRecoveryEmail({
         email,
-        redirectTo: getAuthRedirectUrl(),
+        redirectTo: getAuthRedirectUrl(returnTo),
       });
       res.status(202).json({
         message:

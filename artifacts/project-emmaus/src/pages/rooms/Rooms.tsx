@@ -9,7 +9,8 @@ import type { RoomSummary } from '@/lib/rooms-types';
 export default function Rooms() {
   const { user } = useAuth();
   const { rooms, loading, error } = useRooms();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const showChooser = new URLSearchParams(location.split('?')[1] ?? '').get('chooser') === '1';
 
   if (!user) return null;
 
@@ -39,6 +40,28 @@ export default function Rooms() {
             Walk journeys together with family or friends.
           </p>
         </header>
+
+        {showChooser && (
+          <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+            <h2 className="font-semibold text-lg">What would you like to do?</h2>
+            <p className="text-sm text-muted-foreground">Join an existing Group, or create one of your own.</p>
+            <Button
+              className="w-full h-12 rounded-2xl text-[15px]"
+              onClick={() => setLocation('/rooms/join')}
+            >
+              <LogIn size={17} className="mr-2" />
+              Join a Group
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-2xl text-[15px]"
+              onClick={() => setLocation('/rooms/create')}
+            >
+              <Plus size={17} className="mr-2" />
+              Create a Group
+            </Button>
+          </section>
+        )}
 
         {/* Room list */}
         <section className="space-y-3">

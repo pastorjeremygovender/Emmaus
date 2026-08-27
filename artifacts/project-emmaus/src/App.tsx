@@ -169,6 +169,7 @@ function Router() {
       <Route path="/rooms/:roomId" component={RoomDetail} />
 
       {/* Invite link */}
+      <Route path="/groups/join/:inviteToken" component={JoinByLink} />
       <Route path="/join-room/:inviteToken" component={JoinByLink} />
 
       <Route component={NotFound} />

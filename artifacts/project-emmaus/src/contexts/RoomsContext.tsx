@@ -13,13 +13,15 @@ import {
   apiCreateRoom,
   apiJoinByCode,
   apiJoinByToken,
+  apiGetInvitePreview,
+  apiGetCodeInvitePreview,
   apiStartShared,
   apiLeaveRoom,
   apiDeleteRoom,
   apiTransferAdmin,
   apiRemoveMember,
 } from '../lib/rooms-api';
-import type { RoomSummary, RoomDetail, RoomMember, RoomRole } from '../lib/rooms-types';
+import type { RoomSummary, RoomDetail, RoomMember, RoomRole, RoomInvitePreview } from '../lib/rooms-types';
 
 // ─── Context type ──────────────────────────────────────────────────────────
 
@@ -47,8 +49,10 @@ interface RoomsContextType {
 
   // Mutations
   createRoom: (userId: string, name: string, description?: string, roomType?: string) => Promise<{ roomId: string; inviteCode: string; inviteToken: string }>;
-  joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
-  joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string }>;
+  joinRoomByCode: (userId: string, code: string) => Promise<{ success: boolean; error?: string; roomId?: string; alreadyMember?: boolean }>;
+  joinRoomByToken: (userId: string, token: string) => Promise<{ success: boolean; error?: string; roomId?: string; alreadyMember?: boolean }>;
+  getInvitePreview: (token: string) => Promise<RoomInvitePreview>;
+  getCodeInvitePreview: (code: string, userId?: string) => Promise<RoomInvitePreview>;
   leaveRoom: (roomId: string, userId: string) => Promise<void>;
   deleteRoom: (roomId: string, userId: string) => Promise<void>;
   transferAdmin: (roomId: string, toUserId: string, userId: string) => Promise<void>;
@@ -182,7 +186,7 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await apiJoinByCode(userId, code);
       await loadRooms();
-      return { success: true, roomId: result.roomId };
+      return { success: true, roomId: result.roomId, alreadyMember: result.alreadyMember };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Failed to join room' };
     }
@@ -192,11 +196,19 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await apiJoinByToken(userId, token);
       await loadRooms();
-      return { success: true, roomId: result.roomId };
+      return { success: true, roomId: result.roomId, alreadyMember: result.alreadyMember };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Invalid invite link' };
     }
   }, [loadRooms]);
+
+  const getInvitePreview = useCallback(async (token: string) => {
+    return apiGetInvitePreview(token, user?.id ?? '');
+  }, [user]);
+
+  const getCodeInvitePreview = useCallback(async (code: string, userId?: string) => {
+    return apiGetCodeInvitePreview(code, userId ?? user?.id ?? '');
+  }, [user]);
 
   const leaveRoom = useCallback(async (roomId: string, userId: string) => {
     await apiLeaveRoom(userId, roomId);
@@ -283,6 +295,8 @@ export function RoomsProvider({ children }: { children: React.ReactNode }) {
       createRoom,
       joinRoomByCode,
       joinRoomByToken,
+      getInvitePreview,
+      getCodeInvitePreview,
       leaveRoom,
       deleteRoom,
       transferAdmin,

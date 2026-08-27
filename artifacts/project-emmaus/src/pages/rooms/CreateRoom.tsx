@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRooms } from '@/contexts/RoomsContext';
 import { BottomNav } from '@/components/BottomNav';
-import { getPublicUrl } from '@/lib/api';
+import { groupInviteUrl } from '@/lib/groups-invite';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Loader2, Share2 } from 'lucide-react';
 import type { RoomType } from '@/lib/rooms-types';
@@ -58,7 +58,7 @@ export default function CreateRoom() {
   };
 
   const inviteLink = created
-    ? getPublicUrl(`/join-room/${created.inviteToken}`)
+    ? groupInviteUrl(created.inviteToken)
     : '';
 
   const copyLink = async () => {

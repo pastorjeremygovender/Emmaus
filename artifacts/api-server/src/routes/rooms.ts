@@ -21,6 +21,8 @@ import {
   getMemberRole,
   joinByCode,
   joinByToken,
+  getRoomInvitePreviewByCode,
+  getRoomInvitePreviewByToken,
   leaveRoom,
   deleteRoom,
   updateRoomName,
@@ -597,6 +599,21 @@ router.post("/start-shared", async (req, res) => {
 
 // ─── Join by invite code ──────────────────────────────────────────────────────
 
+router.get("/invite/code/:inviteCode", async (req, res) => {
+  const preview = await getRoomInvitePreviewByCode(
+    String(req.params.inviteCode),
+    req.isAuthenticated() ? req.user.id : undefined,
+  );
+  if (!preview) {
+    res.status(404).json({
+      code: "INVITE_NOT_FOUND",
+      error: "This invitation is invalid, expired, or has been revoked.",
+    });
+    return;
+  }
+  res.json({ preview });
+});
+
 router.post("/join/code", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
@@ -610,7 +627,10 @@ router.post("/join/code", async (req, res) => {
   try {
     const result = await joinByCode(code.trim(), userId);
     if (!result) {
-      res.status(404).json({ error: "Invite code not found." });
+       res.status(404).json({
+         code: "INVITE_NOT_FOUND",
+         error: "This invitation is invalid, expired, or has been revoked.",
+       });
       return;
     }
     res.json(result);
@@ -621,7 +641,22 @@ router.post("/join/code", async (req, res) => {
 
 // ─── Join by invite link token ────────────────────────────────────────────────
 
-router.get("/join/:inviteToken", async (req, res) => {
+router.get("/invite/:inviteToken", async (req, res) => {
+  const preview = await getRoomInvitePreviewByToken(
+    String(req.params.inviteToken),
+    req.isAuthenticated() ? req.user.id : undefined,
+  );
+  if (!preview) {
+    res.status(404).json({
+      code: "INVITE_NOT_FOUND",
+      error: "This invitation is invalid, expired, or has been revoked.",
+    });
+    return;
+  }
+  res.json({ preview });
+});
+
+router.post("/invite/:inviteToken/accept", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
@@ -629,14 +664,50 @@ router.get("/join/:inviteToken", async (req, res) => {
   try {
     const result = await joinByToken(String(inviteToken), userId);
     if (!result) {
-      res.status(404).json({ error: "Invite link not found or expired." });
+      res.status(404).json({
+        code: "INVITE_NOT_FOUND",
+        error: "This invitation is invalid, expired, or has been revoked.",
+      });
       return;
     }
-    // Return JSON — frontend can redirect to /rooms/:roomId
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Failed to join room via link." });
   }
+});
+
+router.get("/join/:inviteToken", async (req, res) => {
+  const { inviteToken } = req.params;
+  const preview = await getRoomInvitePreviewByToken(
+    String(inviteToken),
+    req.isAuthenticated() ? req.user.id : undefined,
+  );
+  if (!preview) {
+    res.status(404).json({
+      code: "INVITE_NOT_FOUND",
+      error: "This invitation is invalid, expired, or has been revoked.",
+    });
+    return;
+  }
+  // Legacy GET links are deliberately preview-only. Membership is created
+  // only by an explicit POST acceptance.
+  res.json({ preview });
+});
+
+/** Backward-compatible API path for older clients, but still an explicit mutation. */
+router.post("/join/:inviteToken", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const result = await joinByToken(String(req.params.inviteToken), userId);
+  if (!result) {
+    res.status(404).json({
+      code: "INVITE_NOT_FOUND",
+      error: "This invitation is invalid, expired, or has been revoked.",
+    });
+    return;
+  }
+  res.json(result);
 });
 
 // ─── Get room detail ──────────────────────────────────────────────────────────

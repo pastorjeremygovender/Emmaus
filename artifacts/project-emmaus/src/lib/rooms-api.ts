@@ -10,6 +10,7 @@ import type {
   VideoSessionStatus, PrayerRequest, ContentType,
   RoomSession, SessionMode, ScriptureRef, SessionAttendee,
   RoomHighlight, SharedNote, RoomPoll, RoomPollResults, RoomEmmausAnswer,
+  RoomInvitePreview,
 } from './rooms-types';
 
 // ─── Internal fetch helper ─────────────────────────────────────────────────
@@ -192,7 +193,7 @@ export async function apiDeleteRoom(userId: string, roomId: string): Promise<voi
 export async function apiJoinByCode(
   userId: string,
   code: string
-): Promise<{ roomId: string }> {
+): Promise<{ roomId: string; alreadyMember: boolean }> {
   return roomsFetch('/api/rooms/join/code', userId, {
     method: 'POST',
     body: JSON.stringify({ code }),
@@ -202,8 +203,32 @@ export async function apiJoinByCode(
 export async function apiJoinByToken(
   userId: string,
   token: string
-): Promise<{ roomId: string }> {
-  return roomsFetch(`/api/rooms/join/${token}`, userId);
+): Promise<{ roomId: string; alreadyMember: boolean }> {
+  return roomsFetch(`/api/rooms/invite/${encodeURIComponent(token)}/accept`, userId, {
+    method: 'POST',
+  });
+}
+
+export async function apiGetInvitePreview(
+  token: string,
+  userId = '',
+): Promise<RoomInvitePreview> {
+  const data = await roomsFetch<{ preview: RoomInvitePreview }>(
+    `/api/rooms/invite/${encodeURIComponent(token)}`,
+    userId,
+  );
+  return data.preview;
+}
+
+export async function apiGetCodeInvitePreview(
+  code: string,
+  userId: string,
+): Promise<RoomInvitePreview> {
+  const data = await roomsFetch<{ preview: RoomInvitePreview }>(
+    `/api/rooms/invite/code/${encodeURIComponent(code.trim().toUpperCase())}`,
+    userId,
+  );
+  return data.preview;
 }
 
 export async function apiLeaveRoom(userId: string, roomId: string): Promise<void> {

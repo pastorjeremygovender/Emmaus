@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { safeOpeningDestination } from "@/lib/opening-destination";
 
 type CallbackState = "recovery" | "error";
 
@@ -10,6 +11,7 @@ type CallbackParams = {
   state: CallbackState;
   tokenHash: string | null;
   tokenType: "email" | "recovery" | null;
+  returnTo: string | null;
 };
 
 function parseCallback(): CallbackParams {
@@ -19,8 +21,9 @@ function parseCallback(): CallbackParams {
       ? (params.get("type") as "email" | "recovery")
       : null;
   const tokenHash = params.get("token_hash");
+  const returnTo = safeOpeningDestination(params.get("returnTo"));
   if (tokenHash && tokenType) {
-    return { state: "error", tokenHash, tokenType };
+    return { state: "error", tokenHash, tokenType, returnTo };
   }
   return {
     state:
@@ -29,6 +32,7 @@ function parseCallback(): CallbackParams {
         : "error",
     tokenHash: null,
     tokenType: null,
+    returnTo,
   };
 }
 
@@ -46,6 +50,7 @@ export default function AuthCallback() {
       token_hash: initialCallback.tokenHash,
       type: initialCallback.tokenType,
     });
+    if (initialCallback.returnTo) query.set("returnTo", initialCallback.returnTo);
     // Some Supabase templates redirect to the SPA route instead of the API
     // route. Forward only the one-time token hash immediately; the API
     // exchanges it and sets the opaque HttpOnly recovery session.
@@ -58,7 +63,7 @@ export default function AuthCallback() {
     setSubmitting(true);
     try {
       await resetPassword(password);
-      setLocation("/");
+      setLocation(initialCallback.returnTo ?? "/");
     } catch (reason) {
       setState("error");
     } finally {

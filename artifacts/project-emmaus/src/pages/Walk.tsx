@@ -919,7 +919,7 @@ export default function Walk() {
                   onAction={() => setLocation(`/rooms/${room.id}`)}
                 />
               ))}
-              <AddMoreRow label="Add a Group" onClick={() => setLocation('/rooms/create')} />
+              <AddMoreRow label="Add a Group" onClick={() => setLocation('/rooms?chooser=1')} />
             </SectionWrapper>
           );
         })()}

@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { rememberOpeningDestination } from '@/lib/opening-destination';
+import { rememberGroupInvite, safeGroupInviteDestination } from '@/lib/groups-invite';
 
 export default function Welcome() {
   const { user, loading: authLoading, loadingProfile } = useAuth();
@@ -20,9 +21,15 @@ export default function Welcome() {
       setLocation('/auth/callback?mode=recovery');
       return;
     }
-    const pendingJoin = sessionStorage.getItem('pendingInviteToken');
-    if (pendingJoin && user && user.role !== 'admin' && user.role !== 'superAdmin') {
-      rememberOpeningDestination(`/join-room/${pendingJoin}`);
+    const pendingJoin =
+      safeGroupInviteDestination(sessionStorage.getItem('emmaus_pending_group_invite_v1')) ??
+      safeGroupInviteDestination(localStorage.getItem('emmaus_pending_group_invite_v1')) ??
+      (sessionStorage.getItem('pendingInviteToken')
+        ? `/join-room/${sessionStorage.getItem('pendingInviteToken')}`
+        : null);
+    if (pendingJoin && user) {
+      rememberGroupInvite(pendingJoin);
+      rememberOpeningDestination(pendingJoin);
       return;
     }
     if (user && !user.preferredName?.trim()) setLocation('/onboarding');

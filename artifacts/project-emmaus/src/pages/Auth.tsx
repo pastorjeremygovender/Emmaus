@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { ArrowLeft, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { safeOpeningDestination } from "@/lib/opening-destination";
 
 type AuthMode = "signin" | "register" | "forgot";
 
@@ -18,6 +19,10 @@ function getInitialError(): string {
     "legacy-account-migration"
     ? "This Emmaus profile needs a secure migration before email and password can be used. Please contact your Emmaus administrator."
     : "";
+}
+
+function getReturnTo(): string | null {
+  return safeOpeningDestination(new URLSearchParams(window.location.search).get("returnTo"));
 }
 
 export default function Auth() {
@@ -37,20 +42,24 @@ export default function Auth() {
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
+  const returnTo = getReturnTo();
 
   useEffect(() => {
     if (!user) return;
     // Every authenticated account returns through the application Opening
     // Gate. Admins may still intentionally choose /admin from inside Emmaus.
-    setLocation("/");
-  }, [setLocation, user]);
+    setLocation(returnTo ?? "/");
+  }, [returnTo, setLocation, user]);
 
   const changeMode = (next: AuthMode) => {
     setError("");
     setNotice("");
     setPassword("");
     setMode(next);
-    const suffix = next === "signin" ? "" : `?mode=${next}`;
+    const params = new URLSearchParams();
+    if (next !== "signin") params.set("mode", next);
+    if (returnTo) params.set("returnTo", returnTo);
+    const suffix = params.toString() ? `?${params.toString()}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${suffix}`);
   };
 
@@ -63,12 +72,12 @@ export default function Auth() {
       if (mode === "signin") {
         await signIn(email, password);
       } else if (mode === "register") {
-        await signUp(email, password);
+         await signUp(email, password, returnTo ?? undefined);
         setNotice(
           "Check your inbox to verify your email, then return here to sign in.",
         );
       } else {
-        await sendPasswordReset(email);
+         await sendPasswordReset(email, returnTo ?? undefined);
         setNotice(
           "If an Emmaus account uses this email, password reset instructions are on the way.",
         );
@@ -157,7 +166,7 @@ export default function Auth() {
                 setError("");
                 setResending(true);
                 try {
-                  await resendConfirmationEmail(email);
+                   await resendConfirmationEmail(email, returnTo ?? undefined);
                   setNotice("A new verification email was requested. If it does not arrive, the email provider may be blocking delivery.");
                 } catch (reason) {
                   setError(

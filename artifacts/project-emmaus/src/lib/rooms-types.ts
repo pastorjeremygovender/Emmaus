@@ -94,6 +94,17 @@ export interface RoomSummary {
   revealOnMeeting?: boolean;
 }
 
+export interface RoomInvitePreview {
+  id: string;
+  name: string;
+  description: string;
+  roomType: RoomType;
+  contentType: ContentType | null;
+  adminName: string;
+  memberCount: number;
+  isMember: boolean;
+}
+
 export interface RoomMember {
   userId: string;
   preferredName: string;

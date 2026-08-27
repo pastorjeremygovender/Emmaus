@@ -32,9 +32,9 @@ type AuthContextType = {
   sessionEpoch: number;
   isDemoMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  resendConfirmationEmail: (email: string) => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>;
+  signUp: (email: string, password: string, returnTo?: string) => Promise<void>;
+  resendConfirmationEmail: (email: string, returnTo?: string) => Promise<void>;
+  sendPasswordReset: (email: string, returnTo?: string) => Promise<void>;
   resetPassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateFeeling: (feeling: string) => void;
@@ -232,7 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [invalidateAuthView, refreshAuthenticatedUser]);
 
   const signIn = useCallback(
-    async (email: string, password: string): Promise<void> => {
+    async (email: string, password: string, returnTo?: string): Promise<void> => {
       authMutationRef.current = true;
       invalidateAuthView();
       try {
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+         body: JSON.stringify({ email, password, returnTo }),
         });
         if (!response.ok) throw new Error(await readApiError(response));
         broadcastAuthChange();
@@ -268,22 +268,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const resendConfirmationEmail = useCallback(async (email: string): Promise<void> => {
+  const resendConfirmationEmail = useCallback(async (email: string, returnTo?: string): Promise<void> => {
     const response = await fetch(getApiUrl("/api/auth/resend-confirmation"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, returnTo }),
     });
     if (!response.ok) throw new Error(await readApiError(response));
   }, []);
 
-  const sendPasswordReset = useCallback(async (email: string): Promise<void> => {
+  const sendPasswordReset = useCallback(async (email: string, returnTo?: string): Promise<void> => {
     const response = await fetch(getApiUrl("/api/auth/recover"), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, returnTo }),
     });
     if (!response.ok) throw new Error(await readApiError(response));
   }, []);

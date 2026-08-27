@@ -54,6 +54,18 @@ export interface RoomDetail extends RoomSummary {
   linkedJourneys: LinkedJourney[];
 }
 
+/** Safe, non-mutating information shown before a member accepts an invitation. */
+export interface RoomInvitePreview {
+  id: string;
+  name: string;
+  description: string;
+  roomType: RoomType;
+  contentType: ContentType | null;
+  adminName: string;
+  memberCount: number;
+  isMember: boolean;
+}
+
 export interface LinkedJourney {
   journeyId: string;
   startedBy: string;
@@ -380,6 +392,57 @@ export async function getRoomById(roomId: string): Promise<RoomDetail | null> {
 
 // ─── Membership ───────────────────────────────────────────────────────────────
 
+async function getInvitePreview(
+  whereClause: string,
+  value: string,
+  userId?: string,
+): Promise<RoomInvitePreview | null> {
+  const res = await pool.query(
+    `SELECT r.id, r.name, r.description, r.room_type, r.content_type,
+            COUNT(DISTINCT rm_all.user_id) AS member_count,
+            up.preferred_name AS admin_preferred_name,
+            EXISTS (
+              SELECT 1 FROM room_members rm_self
+              WHERE rm_self.room_id = r.id AND rm_self.user_id = $2
+            ) AS is_member
+     FROM rooms r
+     LEFT JOIN room_members rm_all ON rm_all.room_id = r.id
+     LEFT JOIN room_members rm_admin
+       ON rm_admin.room_id = r.id AND rm_admin.role = 'admin'
+     LEFT JOIN user_profiles up
+       ON up.auth_subject = rm_admin.user_id OR up.email = rm_admin.user_id
+     WHERE ${whereClause}
+     GROUP BY r.id, up.preferred_name`,
+    [value, userId ?? null],
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+    roomType: String(row.room_type ?? "personal") as RoomType,
+    contentType: row.content_type ? String(row.content_type) as ContentType : null,
+    adminName: row.admin_preferred_name ? String(row.admin_preferred_name).trim() : "",
+    memberCount: Number(row.member_count ?? 0),
+    isMember: Boolean(row.is_member),
+  };
+}
+
+export function getRoomInvitePreviewByToken(
+  inviteToken: string,
+  userId?: string,
+): Promise<RoomInvitePreview | null> {
+  return getInvitePreview("r.invite_token = $1", inviteToken, userId);
+}
+
+export function getRoomInvitePreviewByCode(
+  inviteCode: string,
+  userId?: string,
+): Promise<RoomInvitePreview | null> {
+  return getInvitePreview("r.invite_code = $1", inviteCode.trim().toUpperCase(), userId);
+}
+
 /** Fetch only the room_type for a room — used for server-side video eligibility gate. */
 export async function getRoomType(roomId: string): Promise<RoomType | null> {
   const { rows } = await pool.query(
@@ -406,7 +469,7 @@ export async function getMemberRole(
 export async function joinByCode(
   inviteCode: string,
   userId: string
-): Promise<{ roomId: string } | null> {
+): Promise<{ roomId: string; alreadyMember: boolean } | null> {
   const roomRes = await pool.query(
     `SELECT id FROM rooms WHERE invite_code = $1`,
     [inviteCode.toUpperCase()]
@@ -414,20 +477,19 @@ export async function joinByCode(
   if (!roomRes.rows[0]) return null;
   const { id: roomId } = roomRes.rows[0];
 
-  // Upsert — silently succeeds if already a member
-  await pool.query(
+  const insertRes = await pool.query(
     `INSERT INTO room_members (room_id, user_id, role)
      VALUES ($1, $2, 'member')
      ON CONFLICT (room_id, user_id) DO NOTHING`,
     [roomId, userId]
   );
-  return { roomId };
+  return { roomId, alreadyMember: insertRes.rowCount === 0 };
 }
 
 export async function joinByToken(
   inviteToken: string,
   userId: string
-): Promise<{ roomId: string } | null> {
+): Promise<{ roomId: string; alreadyMember: boolean } | null> {
   const roomRes = await pool.query(
     `SELECT id FROM rooms WHERE invite_token = $1`,
     [inviteToken]
@@ -435,13 +497,13 @@ export async function joinByToken(
   if (!roomRes.rows[0]) return null;
   const { id: roomId } = roomRes.rows[0];
 
-  await pool.query(
+  const insertRes = await pool.query(
     `INSERT INTO room_members (room_id, user_id, role)
      VALUES ($1, $2, 'member')
      ON CONFLICT (room_id, user_id) DO NOTHING`,
     [roomId, userId]
   );
-  return { roomId };
+  return { roomId, alreadyMember: insertRes.rowCount === 0 };
 }
 
 export async function leaveRoom(roomId: string, userId: string): Promise<void> {

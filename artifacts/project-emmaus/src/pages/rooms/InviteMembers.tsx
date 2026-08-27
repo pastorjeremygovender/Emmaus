@@ -7,7 +7,7 @@ import { goBackOrFallback } from '@/lib/return-context';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Copy, Check, Share2, Loader2 } from 'lucide-react';
 import type { RoomDetail } from '@/lib/rooms-types';
-import { getPublicUrl } from '@/lib/api';
+import { groupInviteUrl } from '@/lib/groups-invite';
 
 export default function InviteMembers() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -48,7 +48,7 @@ export default function InviteMembers() {
     );
   }
 
-  const inviteLink = getPublicUrl(`/join-room/${room.inviteToken}`);
+  const inviteLink = groupInviteUrl(room.inviteToken);
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(inviteLink);

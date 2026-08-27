@@ -20,7 +20,8 @@ function isPublicPath(pathname: string): boolean {
     pathname === '/auth' ||
     pathname === '/auth/callback' ||
     pathname === '/onboarding' ||
-    pathname.startsWith('/join-room/');
+    pathname.startsWith('/join-room/') ||
+    pathname.startsWith('/groups/join/');
 }
 
 function isDailyRhythmTarget(pathname: string, assignedDay: number | null): boolean {
