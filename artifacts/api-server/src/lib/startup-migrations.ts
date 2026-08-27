@@ -2076,6 +2076,14 @@ export async function runStartupMigrations(): Promise<void> {
     // Defaults match the hardcoded values that were shipped in the initial Voice release.
     await pool.query(`ALTER TABLE voice_settings ADD COLUMN IF NOT EXISTS vad_threshold INTEGER NOT NULL DEFAULT 50`);
     await pool.query(`ALTER TABLE voice_settings ADD COLUMN IF NOT EXISTS vad_ticks     INTEGER NOT NULL DEFAULT 6`);
+    await pool.query(`
+      ALTER TABLE voice_settings
+        ADD COLUMN IF NOT EXISTS comparison_openai_enabled BOOLEAN NOT NULL DEFAULT false
+    `);
+    await pool.query(`
+      ALTER TABLE voice_settings
+        ADD COLUMN IF NOT EXISTS comparison_elevenlabs_enabled BOOLEAN NOT NULL DEFAULT false
+    `);
     // Seed row defaults to enabled = true.
     // ON CONFLICT: preserve the enabled column if an admin has already touched it,
     // but upgrade the row from the original false default so existing deployments

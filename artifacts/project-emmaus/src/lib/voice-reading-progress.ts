@@ -10,7 +10,7 @@ export interface VoiceReadingProgress {
   segmentId: string;
   sectionIndex: number;
   sectionsTotal: number;
-  provider: 'elevenlabs' | 'openai' | 'recorded';
+  provider: 'elevenlabs' | 'openai' | 'device' | 'recorded';
   providerTimeSeconds?: number;
   updatedAt: string;
   completed: boolean;

@@ -16,6 +16,157 @@ export interface VoiceSettings {
   speed: number;
   vadThreshold: number; // 1–100 avg freq-bin amplitude; admin-tunable
   vadTicks: number;     // 1–20 consecutive 100 ms ticks above threshold
+  openaiTtsComparisonEnabled: boolean;
+  elevenLabsComparisonEnabled: boolean;
+}
+
+export interface VoiceProviderStatus {
+  normalStt: { provider: 'openai'; model: string; available: boolean };
+  normalTts: { provider: 'device' };
+  comparisons: {
+    openai: { available: boolean; enabled: boolean };
+    elevenlabs: { available: boolean; enabled: boolean };
+  };
+}
+
+export interface VoiceUsageSnapshot {
+  operation: 'transcription' | 'tts';
+  provider: 'openai' | 'elevenlabs' | 'device';
+  requests: number;
+  failures: number;
+  totalLatencyMs: number;
+  totalDurationMs: number;
+  totalCharacters: number;
+  cacheReuses: number;
+  estimatedCostUsd: number;
+  elevenLabsCalls: number;
+}
+
+export interface DeviceSpeechHandle {
+  promise: Promise<void>;
+  cancel: () => void;
+}
+
+/** Keep browser speech safe and readable without sending more text to a provider. */
+export function sanitizeSpeechText(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 5000);
+}
+
+/**
+ * Select a stable English device voice. Prefer the user's South African voice,
+ * then British English, then other English voices in deterministic name order.
+ */
+export function selectDeviceVoice(
+  voices: readonly SpeechSynthesisVoice[] = typeof speechSynthesis !== 'undefined'
+    ? speechSynthesis.getVoices()
+    : [],
+): SpeechSynthesisVoice | null {
+  const english = voices.filter((voice) => /^en(?:-|$)/i.test(voice.lang));
+  if (!english.length) return null;
+  const rank = (voice: SpeechSynthesisVoice): number => {
+    const lang = voice.lang.toLowerCase();
+    if (lang === 'en-za') return 0;
+    if (lang === 'en-gb') return 1;
+    if (lang === 'en-us') return 2;
+    return 3;
+  };
+  return [...english].sort((a, b) =>
+    rank(a) - rank(b) || a.name.localeCompare(b.name),
+  )[0] ?? null;
+}
+
+/**
+ * Speak with the device/browser engine. The returned handle is cancel-safe so
+ * session cleanup can stop output without turning an intentional stop into an
+ * error state.
+ */
+export function speakWithDevice(
+  text: string,
+  options: { rate?: number; voice?: SpeechSynthesisVoice | null } = {},
+): DeviceSpeechHandle {
+  const cleanText = sanitizeSpeechText(text);
+  let settled = false;
+  let resolvePromise: () => void = () => {};
+  let rejectPromise: (error: Error) => void = () => {};
+  const promise = new Promise<void>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+
+  if (typeof window === 'undefined' || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+    rejectPromise(new Error('Device speech synthesis is not available on this device.'));
+    return { promise, cancel: () => {} };
+  }
+  if (!cleanText) {
+    resolvePromise();
+    return { promise, cancel: () => {} };
+  }
+
+  const synthesis = window.speechSynthesis;
+  let utterance: SpeechSynthesisUtterance | null = null;
+  const settle = (error?: Error) => {
+    if (settled) return;
+    settled = true;
+    utterance = null;
+    if (error) rejectPromise(error);
+    else resolvePromise();
+  };
+
+  const start = () => {
+    if (settled) return;
+    const next = new SpeechSynthesisUtterance(cleanText);
+    utterance = next;
+    next.rate = Math.max(0.5, Math.min(2, options.rate ?? 1));
+    next.lang = 'en-ZA';
+    const voice = options.voice ?? selectDeviceVoice(synthesis.getVoices());
+    if (voice) {
+      next.voice = voice;
+      next.lang = voice.lang;
+    }
+    next.onend = () => settle();
+    next.onerror = (event) => {
+      if (event.error === 'canceled' || event.error === 'interrupted') settle();
+      else settle(new Error('Device speech playback failed.'));
+    };
+    synthesis.speak(next);
+  };
+
+  // Some mobile browsers populate voices asynchronously. Waiting briefly for
+  // the event still leaves a deterministic fallback (en-ZA) when none arrive.
+  if (synthesis.getVoices().length > 0) {
+    start();
+  } else {
+    let started = false;
+    const onVoicesChanged = () => {
+      if (started) return;
+      started = true;
+      synthesis.removeEventListener('voiceschanged', onVoicesChanged);
+      start();
+    };
+    synthesis.addEventListener('voiceschanged', onVoicesChanged, { once: true });
+    window.setTimeout(() => {
+      if (started || settled) return;
+      started = true;
+      synthesis.removeEventListener('voiceschanged', onVoicesChanged);
+      start();
+    }, 250);
+  }
+
+  return {
+    promise,
+    cancel: () => {
+      if (settled) return;
+      settled = true;
+      synthesis.cancel();
+      utterance = null;
+      resolvePromise();
+    },
+  };
 }
 
 /** Sensitivity label derived from vadThreshold + vadTicks stored in the DB. */
@@ -73,6 +224,7 @@ export function getSupportedMimeType(): string {
 export async function transcribeAudio(
   audioBlob: Blob,
   userId: string,
+  durationMs = 0,
 ): Promise<string> {
   // Encode to base64 to avoid multipart complexity
   const arrayBuffer = await audioBlob.arrayBuffer();
@@ -83,19 +235,45 @@ export async function transcribeAudio(
   }
   const base64 = btoa(binary);
 
-  const resp = await fetch(`${API_BASE}/api/voice/transcribe`, {
-    method: 'POST',
-    headers: authHeaders(userId),
-    body: JSON.stringify({ audio: base64, mimeType: audioBlob.type || 'audio/webm' }),
-  });
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    try {
+      const resp = await fetch(`${API_BASE}/api/voice/transcribe`, {
+        method: 'POST',
+        headers: authHeaders(userId),
+        signal: controller.signal,
+        body: JSON.stringify({
+          audio: base64,
+          mimeType: audioBlob.type || 'audio/webm',
+          durationMs: Math.max(0, durationMs),
+        }),
+      });
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
-    throw new Error(err.error ?? `Transcription failed (${resp.status})`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Voice input is unavailable right now.' })) as { error?: string };
+        const providerError = new Error(err.error ?? `Transcription failed (${resp.status})`);
+        lastError = providerError;
+        // A single retry is allowed for transient provider/network protection.
+        if (![408, 409, 429, 500, 502, 503, 504].includes(resp.status) || attempt === 1) {
+          throw providerError;
+        }
+      } else {
+        const data = await resp.json() as { transcript: string };
+        return data.transcript;
+      }
+    } catch (error) {
+      lastError = error instanceof DOMException && error.name === 'AbortError'
+        ? new Error('Voice input took too long. Please try again.')
+        : error instanceof Error ? error : new Error('Voice input is unavailable right now.');
+      if (attempt === 1) throw lastError;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
   }
-
-  const data = await resp.json() as { transcript: string };
-  return data.transcript;
+  throw lastError ?? new Error('Voice input is unavailable right now.');
 }
 
 // ─── TTS ──────────────────────────────────────────────────────────────────────
@@ -186,7 +364,12 @@ export async function streamSpeechToAudio(
         if (appending || sb.updating) return;
         if (queue.length > 0) {
           appending = true;
-          try { sb.appendBuffer(queue.shift()!); } catch { appending = false; }
+          try {
+            const chunk = queue.shift()!;
+            sb.appendBuffer(
+              chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as unknown as ArrayBuffer,
+            );
+          } catch { appending = false; }
         } else if (fetchDone) {
           try { if (ms.readyState === 'open') ms.endOfStream(); } catch { /* ignore */ }
         }
@@ -250,6 +433,24 @@ export async function fetchSpeechArrayBuffer(
   return resp.arrayBuffer();
 }
 
+/** Admin/test-only server TTS comparison. Normal Voice never calls this. */
+export async function fetchComparisonSpeechBlobUrl(
+  text: string,
+  userId: string,
+  provider: 'openai' | 'elevenlabs',
+): Promise<string> {
+  const resp = await fetch(`${API_BASE}/api/voice/speak`, {
+    method: 'POST',
+    headers: authHeaders(userId),
+    body: JSON.stringify({ text, provider }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Voice comparison is unavailable.' })) as { error?: string };
+    throw new Error(err.error ?? `Speech comparison failed (${resp.status})`);
+  }
+  return URL.createObjectURL(await resp.blob());
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export async function getVoiceSettings(_userId: string): Promise<VoiceSettings> {
@@ -269,4 +470,21 @@ export async function updateVoiceSettings(
   });
   if (!resp.ok) throw new Error(`Failed to save voice settings (${resp.status})`);
   return resp.json() as Promise<VoiceSettings>;
+}
+
+export async function getVoiceProviderStatus(_userId: string): Promise<VoiceProviderStatus> {
+  const resp = await fetch(`${API_BASE}/api/voice/providers`, {
+    headers: authHeaders(_userId),
+  });
+  if (!resp.ok) throw new Error('Could not load Voice provider status');
+  return resp.json() as Promise<VoiceProviderStatus>;
+}
+
+export async function getVoiceUsageMetrics(_userId: string): Promise<VoiceUsageSnapshot[]> {
+  const resp = await fetch(`${API_BASE}/api/voice/metrics`, {
+    headers: authHeaders(_userId),
+  });
+  if (!resp.ok) throw new Error('Could not load Voice usage metrics');
+  const data = await resp.json() as { metrics: VoiceUsageSnapshot[] };
+  return data.metrics;
 }

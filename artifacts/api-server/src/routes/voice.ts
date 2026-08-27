@@ -2,7 +2,8 @@
  * voice.ts — Emmaus Voice API routes.
  *
  *   POST /api/voice/transcribe   — Convert recorded audio to text (auth required)
- *   POST /api/voice/speak        — Convert text to speech, streams audio/mpeg (auth required)
+ *   POST /api/voice/speak        — Admin comparison TTS only, streams audio/mpeg
+ *   GET  /api/voice/providers    — Provider policy/status (admin required)
  *   GET  /api/voice/settings     — Read current voice settings (auth required)
  *   PUT  /api/voice/settings     — Update voice settings (admin required)
  *
@@ -23,13 +24,22 @@ import {
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
 import {
+  getVoiceUsageSnapshot,
+  recordVoiceUsage,
+  estimateOpenAiTtsCost,
+} from "../lib/voice-metrics.js";
+import {
   transcribeAudioBase64,
   fetchSpeechStream,
   getVoiceSettings,
   updateVoiceSettings,
   getProviderStatus,
+  getVoiceProviderStatus,
+  acquireVoiceRequest,
+  releaseVoiceRequest,
   checkVoiceRateLimit,
   checkTTSRateLimit,
+  type VoiceComparisonProvider,
   type VoiceId,
 } from "../lib/voice-service.js";
 import {
@@ -63,7 +73,11 @@ router.post("/voice/transcribe", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { audio, mimeType } = req.body as { audio?: string; mimeType?: string };
+  const { audio, mimeType, durationMs } = req.body as {
+    audio?: string;
+    mimeType?: string;
+    durationMs?: number;
+  };
 
   if (!audio || typeof audio !== "string") {
     res.status(400).json({ error: "audio (base64 string) is required" });
@@ -96,6 +110,12 @@ router.post("/voice/transcribe", async (req, res) => {
     return;
   }
 
+  const requestId = Math.random().toString(36).slice(2, 10);
+  if (!acquireVoiceRequest(userId, requestId)) {
+    res.status(409).json({ error: "A Voice request is already in progress. Please wait for it to finish." });
+    return;
+  }
+
   const start = Date.now();
   try {
     const transcript = await transcribeAudioBase64(
@@ -106,25 +126,54 @@ router.post("/voice/transcribe", async (req, res) => {
       { userId, chars: transcript.length, ms: Date.now() - start },
       "voice: transcription ok",
     );
+    recordVoiceUsage({
+      operation: "transcription",
+      provider: "openai",
+      latencyMs: Date.now() - start,
+      durationMs: typeof durationMs === "number" ? durationMs : 0,
+      characters: transcript.length,
+    });
     res.json({ transcript });
   } catch (err) {
+    recordVoiceUsage({
+      operation: "transcription",
+      provider: "openai",
+      latencyMs: Date.now() - start,
+      durationMs: typeof durationMs === "number" ? durationMs : 0,
+      failed: true,
+    });
     logger.warn({ err, userId, ms: Date.now() - start }, "voice: transcription failed");
     res.status(500).json({ error: "Transcription is not available right now. Please try again." });
+  } finally {
+    releaseVoiceRequest(userId, requestId);
   }
 });
 
-// ─── POST /voice/speak ────────────────────────────────────────────────────────
+// ─── POST /voice/speak (admin comparison only) ────────────────────────────────
 
 router.post("/voice/speak", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  // Only 'text' is accepted from callers — voice and speed are always taken
-  // from admin settings to prevent per-request overrides.
-  const { text } = req.body as { text?: string };
+  // Normal members use device speech synthesis and must never reach a paid TTS
+  // provider. This endpoint exists only for the admin comparison screen.
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "Server TTS is available only to authorized comparisons" });
+    return;
+  }
+
+  const { text, provider } = req.body as {
+    text?: string;
+    provider?: VoiceComparisonProvider;
+  };
 
   if (!text || typeof text !== "string" || !text.trim()) {
     res.status(400).json({ error: "text is required" });
+    return;
+  }
+
+  if (provider !== "openai" && provider !== "elevenlabs") {
+    res.status(400).json({ error: "A comparison provider is required" });
     return;
   }
 
@@ -143,9 +192,19 @@ router.post("/voice/speak", async (req, res) => {
     return;
   }
 
-  const status = getProviderStatus();
+  const comparisonEnabled =
+    provider === "openai"
+      ? settings.openaiTtsComparisonEnabled
+      : settings.elevenLabsComparisonEnabled
+        && process.env.VOICE_ENABLE_ELEVENLABS_COMPARISON === "true";
+  if (!comparisonEnabled) {
+    res.status(403).json({ error: "That comparison provider is disabled" });
+    return;
+  }
+
+  const status = getVoiceProviderStatus().comparisons[provider];
   if (!status.available) {
-    res.status(503).json({ error: status.reason ?? "Speech not available" });
+    res.status(503).json({ error: "That comparison provider is not configured" });
     return;
   }
 
@@ -153,9 +212,8 @@ router.post("/voice/speak", async (req, res) => {
   const { voice, speed } = settings;
 
   const textReadyAt = Date.now();
-  const provider    = process.env.ELEVENLABS_API_KEY ? 'elevenlabs' : 'openai';
   try {
-    const ttsResp = await fetchSpeechStream(text, voice, speed);
+    const ttsResp = await fetchSpeechStream(text, voice, speed, provider);
     const firstAudioChunkAt = Date.now();
 
     logger.info({
@@ -165,6 +223,13 @@ router.post("/voice/speak", async (req, res) => {
       textLen:          Math.min(text.length, 5000),
       timeToFirstAudio: firstAudioChunkAt - textReadyAt,
     }, "voice: TTS ok");
+    recordVoiceUsage({
+      operation: "tts",
+      provider,
+      latencyMs: Date.now() - textReadyAt,
+      characters: text.length,
+      estimatedCostUsd: provider === "openai" ? estimateOpenAiTtsCost(text.length) : 0,
+    });
 
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
@@ -181,6 +246,13 @@ router.post("/voice/speak", async (req, res) => {
     };
     await pump();
   } catch (err) {
+    recordVoiceUsage({
+      operation: "tts",
+      provider,
+      latencyMs: Date.now() - textReadyAt,
+      characters: text.length,
+      failed: true,
+    });
     logger.warn({ err, userId, ms: Date.now() - textReadyAt }, "voice: TTS failed");
     if (!res.headersSent) {
       res.status(500).json({ error: "Voice playback is not available right now." });
@@ -190,12 +262,32 @@ router.post("/voice/speak", async (req, res) => {
   }
 });
 
+router.get("/voice/metrics", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  res.json({ metrics: getVoiceUsageSnapshot() });
+});
+
 // ─── GET /voice/settings ──────────────────────────────────────────────────────
 
 router.get("/voice/settings", (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   res.json(getVoiceSettings());
+});
+
+router.get("/voice/providers", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  if (!(await isAdmin(userId))) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  res.json(getVoiceProviderStatus());
 });
 
 // ─── PUT /voice/settings ──────────────────────────────────────────────────────
@@ -209,12 +301,22 @@ router.put("/voice/settings", async (req, res) => {
     return;
   }
 
-  const { enabled, voice, speed, vadThreshold, vadTicks } = req.body as {
+  const {
+    enabled,
+    voice,
+    speed,
+    vadThreshold,
+    vadTicks,
+    openaiTtsComparisonEnabled,
+    elevenLabsComparisonEnabled,
+  } = req.body as {
     enabled?: boolean;
     voice?: string;
     speed?: number;
     vadThreshold?: number;
     vadTicks?: number;
+    openaiTtsComparisonEnabled?: boolean;
+    elevenLabsComparisonEnabled?: boolean;
   };
 
   try {
@@ -224,6 +326,8 @@ router.put("/voice/settings", async (req, res) => {
       ...(typeof speed === "number" ? { speed } : {}),
       ...(typeof vadThreshold === "number" ? { vadThreshold } : {}),
       ...(typeof vadTicks === "number" ? { vadTicks } : {}),
+      ...(typeof openaiTtsComparisonEnabled === "boolean" ? { openaiTtsComparisonEnabled } : {}),
+      ...(typeof elevenLabsComparisonEnabled === "boolean" ? { elevenLabsComparisonEnabled } : {}),
     });
     res.json(updated);
   } catch (err) {
@@ -468,6 +572,10 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
    * cannot provide identity, routes, resource IDs, or an authoritative name.
    */
   const requestId = Math.random().toString(36).slice(2, 10);
+  if (!acquireVoiceRequest(userId, requestId)) {
+    res.status(409).json({ error: 'A Voice request is already in progress. Please wait for it to finish.' });
+    return;
+  }
   const contextRecord = rawContext ?? {};
   const voiceAppContext = normalizeVoiceAppContext(
     body.voiceAppContext ?? contextRecord.voiceAppContext,
@@ -495,15 +603,19 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
       "Verified reading follow-up text from the current Voice session:\n" + lastReadContext;
   }
 
-  setSseHeaders(res);
-  await handleConversation(
-    {
-      message: message.trim(),
-      context: canonicalContext,
-      history,
-    },
-    res,
-  );
+  try {
+    setSseHeaders(res);
+    await handleConversation(
+      {
+        message: message.trim(),
+        context: canonicalContext,
+        history,
+      },
+      res,
+    );
+  } finally {
+    releaseVoiceRequest(userId, requestId);
+  }
   return;
 });
 

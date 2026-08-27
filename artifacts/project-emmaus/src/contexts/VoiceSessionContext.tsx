@@ -45,6 +45,9 @@ import {
   fetchSpeechArrayBuffer,
   getSupportedMimeType,
   getVoiceSettings,
+  speakWithDevice,
+  selectDeviceVoice,
+  type DeviceSpeechHandle,
 } from '@/lib/voice-client';
 import { getUnlockedAudioContext } from '@/lib/voice-audio-unlock';
 import {
@@ -212,6 +215,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const abortRef            = useRef<(() => void) | null>(null);
   const audioElRef          = useRef<HTMLAudioElement | null>(null);
   const disposeAudioRef     = useRef<(() => void) | null>(null);
+  const deviceSpeechRef    = useRef<DeviceSpeechHandle | null>(null);
   const playbackAcRef       = useRef<AudioContext | null>(null);
   const cancelledRef        = useRef(true); // true until startSession() is called
   // Normal users get explicit tap-to-speak turns. Hands-free auto-restart is
@@ -219,6 +223,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // separately later without changing the playback state machine.
   const tapToSpeakOnlyRef   = useRef(true);
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceTurnRef        = useRef(0);
+  const deviceVoiceRef      = useRef<SpeechSynthesisVoice | null>(null);
+  const voiceSpeedRef       = useRef(1);
 
   // ── VAD refs ──────────────────────────────────────────────────────────────
   const vadAcRef            = useRef<AudioContext | null>(null);
@@ -273,7 +281,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   const intMimeTypeRef      = useRef<string>('');
 
   // ── Stable ref for processAudioBlob (avoids stale closures in recorder.onstop) ──
-  const processAudioBlobRef = useRef<((blob: Blob, mimeType: string) => Promise<void>) | null>(null);
+  const processAudioBlobRef = useRef<((blob: Blob, mimeType: string, turnId?: number) => Promise<void>) | null>(null);
 
   // ── pausedRef — mirrors sessionPaused for use inside the stable processAudioBlob
   // callback. Without this, the auto-restart timer inside playTTS would see the
@@ -291,6 +299,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     if (autoRestartTimerRef.current) {
       clearTimeout(autoRestartTimerRef.current);
       autoRestartTimerRef.current = null;
+    }
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
     }
   }
 
@@ -331,6 +346,8 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     // whole reading session without restarting getUserMedia per section.
     audioElRef.current?.pause();
     audioElRef.current = null;
+    deviceSpeechRef.current?.cancel();
+    deviceSpeechRef.current = null;
     setHasAudioElement(false);
     disposeAudioRef.current?.();
     disposeAudioRef.current = null;
@@ -347,6 +364,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   }
 
   function cancelRecorder() {
+    clearRecordingTimer();
     clearVAD();
     const rec = recorderRef.current;
     if (rec) {
@@ -359,6 +377,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   }
 
   function stopRecorder() {
+    clearRecordingTimer();
     clearVAD();
     const rec = recorderRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
@@ -559,6 +578,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     setTranscript('');
     setTtsError(false);
     hadVoiceActivityRef.current = false; // reset here, NOT in clearVAD()
+    const turnId = ++voiceTurnRef.current;
 
     try {
       // Request AEC + noise suppression explicitly — critical for device speakers
@@ -583,13 +603,22 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         stopMicStream();
-        const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
+        const actualMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: actualMimeType });
         chunksRef.current = [];
-        await processAudioBlobRef.current?.(blob, mimeType || 'audio/webm');
+        await processAudioBlobRef.current?.(blob, actualMimeType, turnId);
       };
 
       recorder.start(200);
       recordingStartRef.current = Date.now();
+      recordingTimerRef.current = setTimeout(() => {
+        recordingTimerRef.current = null;
+        if (voiceTurnRef.current === turnId && recorderRef.current === recorder && recorder.state !== 'inactive') {
+          hadVoiceActivityRef.current = true;
+          stopRecorder();
+          setVoiceState('THINKING');
+        }
+      }, 30_000);
 
       // ── Voice Activity Detection ──────────────────────────────────────────
       try {
@@ -692,6 +721,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     // The user was definitely speaking (they triggered the barge-in by talking for 1500 ms).
     // Mark voice activity so processAudioBlob doesn't reject this blob at the VAD gate.
     hadVoiceActivityRef.current = true;
+    const turnId = ++voiceTurnRef.current;
 
     if (!stream) { startListening(); return; }
 
@@ -711,12 +741,21 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
     rec.onstop = async () => {
       stopMicStream();
-      const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
+      const actualMimeType = rec?.mimeType || mimeType || 'audio/webm';
+      const blob = new Blob(chunksRef.current, { type: actualMimeType });
       chunksRef.current = [];
-      await processAudioBlobRef.current?.(blob, mimeType || 'audio/webm');
+      await processAudioBlobRef.current?.(blob, actualMimeType, turnId);
     };
 
     recorderRef.current = rec;
+    recordingStartRef.current = Date.now();
+    recordingTimerRef.current = setTimeout(() => {
+      recordingTimerRef.current = null;
+      if (voiceTurnRef.current === turnId && recorderRef.current === rec && rec.state !== 'inactive') {
+        stopRecorder();
+        setVoiceState('THINKING');
+      }
+    }, 30_000);
     setVoiceState('LISTENING');
 
     try {
@@ -764,13 +803,13 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
   // ─── Audio processing pipeline (stable — reads everything from refs) ───────
 
-  const processAudioBlob = useCallback(async (blob: Blob, mimeType: string) => {
+  const processAudioBlob = useCallback(async (blob: Blob, mimeType: string, turnId?: number) => {
     // Pull current values from refs — no stale closures
     const user        = userRef.current;
     const history     = historyRef.current;
     const initContext = initContextRef.current;
 
-    if (!user || cancelledRef.current) return;
+    if (!user || cancelledRef.current || (turnId !== undefined && turnId !== voiceTurnRef.current)) return;
 
     // ── Inner helpers (same as Phases 1–3) ────────────────────────────────
 
@@ -789,9 +828,56 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         sectionLabel,
         sectionsTotal: isReadingSection ? readingSectionsRef.current.length : null,
         textLength:    ttsText.length,
-        ttsProvider:   'elevenlabs',
+        ttsProvider:   'device',
       }));
 
+      // Normal users hear the browser/device voice. This is free, keeps
+      // personalized answers off any reusable audio cache, and avoids sending
+      // normal response text to a paid TTS provider.
+      const deviceSpeech = speakWithDevice(ttsText, {
+        rate: Math.max(0.5, Math.min(2, voiceSpeedRef.current)),
+        voice: deviceVoiceRef.current,
+      });
+      deviceSpeechRef.current = deviceSpeech;
+      try {
+        await deviceSpeech.promise;
+        if (deviceSpeechRef.current !== deviceSpeech) return;
+        deviceSpeechRef.current = null;
+        if (cancelledRef.current) return;
+        setVoiceState('READY');
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current) {
+          autoRestartTimerRef.current = setTimeout(() => {
+            autoRestartTimerRef.current = null;
+            if (!cancelledRef.current && !pausedRef.current && isReadingRef.current && !readingPausedRef.current) {
+              advanceReading();
+            }
+          }, 250);
+        }
+      } catch (deviceErr) {
+        if (deviceSpeechRef.current !== deviceSpeech) return;
+        deviceSpeechRef.current = null;
+        console.warn('[VOICE CONTENT PLAYBACK]', JSON.stringify({
+          event: 'deviceTtsFailed',
+          isReadingSection,
+          sectionIndex: sectionIdx,
+          error: String(deviceErr),
+        }));
+        if (!cancelledRef.current) {
+          setTtsError(true);
+          setVoiceState('READY');
+        }
+        if (isReadingSection && isReadingRef.current && !readingPausedRef.current && !cancelledRef.current) {
+          setTimeout(() => { if (!cancelledRef.current) advanceReading(); }, 500);
+        }
+      }
+      return;
+
+      /*
+       * Server-backed comparison playback remains below for the admin/test
+       * surface only. Keeping the old path isolated here prevents normal Voice
+       * turns from accidentally selecting a configured paid provider.
+       */
+      if (false) {
       let ttsAudio: HTMLAudioElement;
       try {
         const result = await streamSpeechToAudio(ttsText, user!.id);
@@ -926,6 +1012,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           resolve();
         });
       });
+      }
     }
 
     async function playReadingSection(section: { label: string; text: string } | undefined): Promise<void> {
@@ -966,7 +1053,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
           segmentId: `section-${idx}`,
           sectionIndex: idx,
           sectionsTotal: sections.length,
-          provider: 'elevenlabs',
+           provider: 'device',
           updatedAt: new Date().toISOString(),
           completed: false,
         });
@@ -1446,7 +1533,11 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
     try {
       const audioBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
-      const text = await transcribeAudio(audioBlob, user.id);
+      const text = await transcribeAudio(
+        audioBlob,
+        user.id,
+        Math.max(0, Date.now() - recordingStartRef.current),
+      );
 
       console.log('[VOICE CORE TRACE]', JSON.stringify({
         event:               'transcription_complete',
@@ -1458,7 +1549,7 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
         nextState:           text.trim() ? 'dispatch' : 'error_or_advance',
       }));
 
-      if (cancelledRef.current) return;
+       if (cancelledRef.current || (turnId !== undefined && turnId !== voiceTurnRef.current)) return;
 
       if (!text.trim()) {
         if (isReadingRef.current && !readingPausedRef.current) { await advanceReading(); return; }
@@ -1716,7 +1807,9 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
       // Fast paths kept above (reading-command / navigate / continue-reading) are
       // deterministic, zero-latency, and need no LLM involvement.
 
-      const emmausCtx    = buildEmmausContext(intent);
+       if (turnId !== undefined && turnId !== voiceTurnRef.current) return;
+
+       const emmausCtx    = buildEmmausContext(intent);
       const voiceAppCtx  = emmausCtx.voiceAppContext;
       const lastReadCtx  = !isReadingRef.current && lastReadSectionsRef.current.length > 0
         ? lastReadSectionsRef.current.map((s) => `[${s.label}] ${s.text.slice(0, 300)}`).join('\n')
@@ -2221,88 +2314,33 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
    */
   async function playGreeting(text: string): Promise<void> {
     if (cancelledRef.current) return;
-    const uid = userRef.current?.id;
-    if (!uid) { return; }
     setVoiceState('SPEAKING');
     console.info('[VOICE GREETING]', JSON.stringify({
-      event:      'greetingAttempted',
+      event: 'greetingAttempted',
       textLength: text.length,
+      provider: 'device',
     }));
-
-    // ── Tier 1: Web Audio API (iOS-safe) ─────────────────────────────────────
-    const ac = getUnlockedAudioContext();
-    if (ac && ac.state === 'running') {
-      // Assign to playbackAcRef so cleanupAll() can close it at session end.
-      if (playbackAcRef.current !== ac) {
-        playbackAcRef.current?.close().catch(() => {});
-        playbackAcRef.current = ac;
-      }
-      try {
-        console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingWebAudioFetch' }));
-        const arrayBuffer = await fetchSpeechArrayBuffer(text, uid);
-        if (cancelledRef.current) return;
-        const audioBuffer = await ac.decodeAudioData(arrayBuffer);
-        if (cancelledRef.current) return;
-
-        await new Promise<void>((resolve) => {
-          const src = ac.createBufferSource();
-          src.buffer = audioBuffer;
-          src.connect(ac.destination);
-          src.onended = () => {
-            console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingCompleted', path: 'web-audio' }));
-            resolve();
-          };
-          src.start(0);
-          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingPlayStarted', path: 'web-audio' }));
-        });
-      } catch (err) {
-        console.warn('[VOICE GREETING]', JSON.stringify({
-          event: 'greetingWebAudioFailed',
-          error: String(err),
-        }));
-        // Fall through to startListening() below.
-      }
-      if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
-      return;
-    }
-
-    // ── Tier 2: HTMLAudioElement (non-iOS / no AudioContext available) ────────
     try {
-      const result = await streamSpeechToAudio(text, uid);
-      if (cancelledRef.current) { result.dispose(); return; }
-      audioElRef.current      = result.audio;
-      disposeAudioRef.current = result.dispose;
-      setHasAudioElement(true);
-      await new Promise<void>((resolve) => {
-        result.audio.onended = () => {
-          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingCompleted', path: 'html-audio' }));
-          stopAudioElement(); resolve();
-        };
-        result.audio.onerror = () => {
-          console.warn('[VOICE GREETING]', JSON.stringify({ event: 'greetingAudioError' }));
-          stopAudioElement(); resolve();
-        };
-        result.audio.play().then(() => {
-          console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingPlayStarted', path: 'html-audio' }));
-        }).catch((err: unknown) => {
-          const isNotAllowed = err instanceof DOMException && err.name === 'NotAllowedError';
-          console.warn('[VOICE GREETING]', JSON.stringify({
-            event:     'greetingPlayBlocked',
-            reason:    isNotAllowed ? 'autoplay_NotAllowedError' : 'play_rejected',
-            errorName: err instanceof DOMException ? err.name : String(err),
-          }));
-          // Autoplay blocked — skip greeting silently, go straight to listening.
-          stopAudioElement(); resolve();
-        });
+      const speech = speakWithDevice(text, {
+        rate: Math.max(0.5, Math.min(2, voiceSpeedRef.current)),
+        voice: deviceVoiceRef.current,
       });
+      deviceSpeechRef.current = speech;
+      await speech.promise;
+      if (deviceSpeechRef.current === speech) {
+        deviceSpeechRef.current = null;
+        console.info('[VOICE GREETING]', JSON.stringify({ event: 'greetingCompleted', provider: 'device' }));
+      }
     } catch (err) {
       console.warn('[VOICE GREETING]', JSON.stringify({
-        event: 'greetingTtsFailed',
+        event: 'deviceSpeechUnavailable',
         error: String(err),
       }));
-      stopAudioElement();
     }
+    if (!cancelledRef.current) setVoiceState('READY');
     if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
+    return;
+
   }
 
   // ─── Session lifecycle ────────────────────────────────────────────────────
@@ -2350,6 +2388,10 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
 
         // Apply admin-tuned VAD parameters — must happen before startListening().
         if (vs) {
+          voiceSpeedRef.current = vs.speed ?? 1;
+          deviceVoiceRef.current = selectDeviceVoice(
+            typeof speechSynthesis !== 'undefined' ? speechSynthesis.getVoices() : [],
+          );
           vadSettingsRef.current = {
             threshold: vs.vadThreshold ?? 50,
             ticks:     vs.vadTicks     ?? 6,
@@ -2565,45 +2607,47 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
   // ─── Tap-to-play fallback ─────────────────────────────────────────────────
 
   const handleTapToHear = useCallback(() => {
-    const audio = audioElRef.current;
-    if (!audio) return;
+    if (!response) return;
     setAutoplayBlocked(false);
     setVoiceState('SPEAKING');
-    audio.onended = () => {
-      stopAudio();
-      autoRestartTimerRef.current = setTimeout(() => {
-        autoRestartTimerRef.current = null;
-        if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
-      }, 600);
-    };
-    audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
-    audio.play().catch(() => { stopAudio(); setVoiceState('READY'); });
+    const speech = speakWithDevice(response, {
+      rate: Math.max(0.5, Math.min(2, voiceSpeedRef.current)),
+      voice: deviceVoiceRef.current,
+    });
+    deviceSpeechRef.current = speech;
+    speech.promise
+      .then(() => {
+        if (deviceSpeechRef.current !== speech) return;
+        deviceSpeechRef.current = null;
+        setVoiceState('READY');
+      })
+      .catch(() => {
+        if (deviceSpeechRef.current !== speech) return;
+        deviceSpeechRef.current = null;
+        setTtsError(true);
+        setVoiceState('READY');
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Retry audio ──────────────────────────────────────────────────────────
 
   const handleRetryAudio = useCallback(async () => {
-    const user = userRef.current;
-    if (!user || !response) return;
+    if (!response) return;
     setTtsError(false);
     setVoiceState('SPEAKING');
     try {
-      const { audio, dispose } = await streamSpeechToAudio(response, user.id);
-      if (cancelledRef.current) { dispose(); return; }
-      audioElRef.current      = audio;
-      disposeAudioRef.current = dispose;
-      setHasAudioElement(true);
-      audio.onended = () => {
-        stopAudio();
-        autoRestartTimerRef.current = setTimeout(() => {
-          autoRestartTimerRef.current = null;
-          if (!cancelledRef.current && !tapToSpeakOnlyRef.current) startListening();
-        }, 600);
-      };
-      audio.onerror = () => { stopAudio(); setVoiceState('READY'); };
-      audio.play().catch(() => { stopAudio(); setVoiceState('READY'); });
+      const speech = speakWithDevice(response, {
+        rate: Math.max(0.5, Math.min(2, voiceSpeedRef.current)),
+        voice: deviceVoiceRef.current,
+      });
+      deviceSpeechRef.current = speech;
+      await speech.promise;
+      if (deviceSpeechRef.current !== speech) return;
+      deviceSpeechRef.current = null;
+      setVoiceState('READY');
     } catch {
+      deviceSpeechRef.current = null;
       setTtsError(true);
       setVoiceState('READY');
     }

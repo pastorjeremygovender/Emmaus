@@ -22,6 +22,9 @@ import { FlaskConical, ChevronDown, Video, Mic } from 'lucide-react';
 import {
   getVoiceSettings,
   updateVoiceSettings,
+  getVoiceProviderStatus,
+  getVoiceUsageMetrics,
+  fetchComparisonSpeechBlobUrl,
   sensitivityFromSettings,
   VAD_PRESETS,
   type VoiceSettings,
@@ -197,10 +200,15 @@ function VoiceSettingsSection() {
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [error,   setError]   = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<Awaited<ReturnType<typeof getVoiceProviderStatus>> | null>(null);
+  const [usageMetrics, setUsageMetrics] = useState<Awaited<ReturnType<typeof getVoiceUsageMetrics>>>([]);
+  const [testingProvider, setTestingProvider] = useState<'openai' | 'elevenlabs' | null>(null);
 
   useEffect(() => {
     if (!user) return;
     getVoiceSettings(user.id).then(setSettings).catch(() => {});
+    getVoiceProviderStatus(user.id).then(setProviderStatus).catch(() => {});
+    getVoiceUsageMetrics(user.id).then(setUsageMetrics).catch(() => {});
   }, [user]);
 
   async function patch<K extends keyof VoiceSettings>(key: K, value: VoiceSettings[K]) {
@@ -236,7 +244,8 @@ function VoiceSettingsSection() {
 
       <p className="text-xs text-gray-400 leading-relaxed">
         Voice mode lets members speak their questions and hear Emmaus respond in a natural voice.
-        Uses OpenAI Whisper for transcription and TTS for spoken responses.
+         Members use OpenAI gpt-4o-mini-transcribe for input and free device speech for output.
+         Paid TTS providers below are comparison-only and never run for normal members.
       </p>
 
       {error && (
@@ -274,6 +283,104 @@ function VoiceSettingsSection() {
           ))}
         </select>
         <p className="text-xs text-gray-400">Nova and Shimmer are recommended for a warm, pastoral feel.</p>
+      </div>
+
+      {/* Provider policy and explicit comparison controls */}
+      <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div>
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Provider policy</div>
+          <p className="text-xs text-gray-400 mt-1">
+            Normal Voice: OpenAI gpt-4o-mini-transcribe + device voice. Comparison audio is admin-only,
+            uncached, and billed to the configured provider.
+          </p>
+        </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.openaiTtsComparisonEnabled}
+            onChange={e => patch('openaiTtsComparisonEnabled', e.target.checked)}
+            className="w-4 h-4 rounded mt-0.5"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-700">Allow OpenAI TTS comparison</div>
+            <div className="text-xs text-gray-400">
+              {providerStatus?.comparisons.openai.available ? 'Configured' : 'OpenAI is not configured'}
+            </div>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.elevenLabsComparisonEnabled}
+            onChange={e => patch('elevenLabsComparisonEnabled', e.target.checked)}
+            className="w-4 h-4 rounded mt-0.5"
+          />
+          <div>
+            <div className="text-sm font-medium text-gray-700">Allow ElevenLabs comparison</div>
+            <div className="text-xs text-gray-400">
+              Disabled by default and requires the server comparison feature gate.
+              {providerStatus?.comparisons.elevenlabs.available ? ' Key configured.' : ' Key not configured.'}
+            </div>
+          </div>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {(['openai', 'elevenlabs'] as const).map(provider => {
+            const enabled = provider === 'openai'
+              ? settings.openaiTtsComparisonEnabled
+              : settings.elevenLabsComparisonEnabled;
+            return (
+              <button
+                key={provider}
+                type="button"
+                disabled={!enabled || testingProvider !== null}
+                onClick={async () => {
+                  if (!user || !enabled) return;
+                  setTestingProvider(provider);
+                  setError(null);
+                  try {
+                    const url = await fetchComparisonSpeechBlobUrl(
+                      'This is a short Emmaus Voice provider comparison sample.',
+                      user.id,
+                      provider,
+                    );
+                    const audio = new Audio(url);
+                    audio.onended = () => URL.revokeObjectURL(url);
+                    await audio.play();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Comparison playback failed');
+                  } finally {
+                    setTestingProvider(null);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 hover:border-gray-300 disabled:opacity-50"
+              >
+                {testingProvider === provider ? 'Playing…' : `Test ${provider === 'openai' ? 'OpenAI Voice' : 'ElevenLabs Voice'}`}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-400">
+          Device Voice is always the default. The ElevenLabs comparison also requires
+          VOICE_ENABLE_ELEVENLABS_COMPARISON=true on the server.
+        </p>
+        {usageMetrics.length > 0 && (
+          <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-2">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Current-process usage</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {usageMetrics.map(metric => (
+                <div key={`${metric.operation}-${metric.provider}`} className="text-[11px] text-gray-500">
+                  <span className="font-medium text-gray-700 capitalize">{metric.operation} · {metric.provider}</span>
+                  <div>
+                    {metric.requests} requests · {metric.failures} failures · {metric.totalCharacters.toLocaleString()} chars
+                    · approx ${metric.estimatedCostUsd.toFixed(4)}
+                  </div>
+                  <div>{metric.cacheReuses} cache reuses · {metric.elevenLabsCalls} ElevenLabs calls</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400">Aggregated only; no transcript, audio, or member identifiers are retained. Resets when the API restarts.</p>
+          </div>
+        )}
       </div>
 
       {/* Speed */}

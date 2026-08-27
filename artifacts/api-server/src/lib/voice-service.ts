@@ -1,9 +1,12 @@
 /**
  * voice-service.ts — Emmaus Voice: speech-to-text and text-to-speech.
  *
- * Provider priority (runtime):
- *   - ElevenLabs if ELEVENLABS_API_KEY is set (STT: scribe_v1, TTS: eleven_turbo_v2_5)
- *   - OpenAI fallback (STT: whisper-1, TTS: tts-1)
+ * Normal-user provider policy:
+ *   - STT: OpenAI gpt-4o-mini-transcribe
+ *   - TTS: device/browser speech synthesis (the client owns this decision)
+ *
+ * Paid providers are isolated behind explicit admin comparison calls. Merely
+ * configuring ELEVENLABS_API_KEY must never activate it.
  *
  * Settings: persisted to the voice_settings DB table (single row, id=1).
  *           In-memory cache is warmed by initVoiceSettings() on boot.
@@ -30,6 +33,10 @@ const EL_VOICE_MAP: Record<string, string> = {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export type VoiceId = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+export type VoiceComparisonProvider = 'openai' | 'elevenlabs';
+export const VOICE_STT_MODEL = 'gpt-4o-mini-transcribe';
+export const VOICE_OPENAI_TTS_MODEL = 'tts-1';
+export const VOICE_ELEVENLABS_TTS_MODEL = 'eleven_turbo_v2_5';
 
 export interface VoiceSettings {
   enabled: boolean;
@@ -37,6 +44,8 @@ export interface VoiceSettings {
   speed: number;        // 0.25 – 4.0
   vadThreshold: number; // 1 – 100  (avg freq-bin amplitude to detect speech)
   vadTicks: number;     // 1 – 20   (consecutive 100 ms ticks above threshold)
+  openaiTtsComparisonEnabled: boolean;
+  elevenLabsComparisonEnabled: boolean;
 }
 
 // Sensitivity presets exposed to the admin UI.
@@ -59,6 +68,8 @@ let _settings: VoiceSettings = {
   speed: 1.0,
   vadThreshold: 50,
   vadTicks: 6,
+  openaiTtsComparisonEnabled: false,
+  elevenLabsComparisonEnabled: false,
 };
 
 /**
@@ -67,13 +78,26 @@ let _settings: VoiceSettings = {
  * Called once during startup (after the voice_settings table migration runs).
  */
 export async function initVoiceSettings(): Promise<void> {
-  // Log ElevenLabs key status — never print the key value
-  const elKeyConfigured = !!(process.env.ELEVENLABS_API_KEY);
-  logger.info({ apiKeyConfigured: elKeyConfigured }, '[VOICE ELEVENLABS]');
+  logger.info({
+    openaiConfigured: !!process.env.OPENAI_API_KEY,
+    elevenLabsConfigured: !!process.env.ELEVENLABS_API_KEY,
+    normalSttModel: VOICE_STT_MODEL,
+    normalTts: 'device',
+  }, '[VOICE PROVIDERS]');
 
   try {
-    const result = await pool.query<{ enabled: boolean; voice: string; speed: string; vad_threshold: number | null; vad_ticks: number | null }>(
-      'SELECT enabled, voice, speed, vad_threshold, vad_ticks FROM voice_settings WHERE id = 1',
+    const result = await pool.query<{
+      enabled: boolean;
+      voice: string;
+      speed: string;
+      vad_threshold: number | null;
+      vad_ticks: number | null;
+      comparison_openai_enabled: boolean | null;
+      comparison_elevenlabs_enabled: boolean | null;
+    }>(
+      `SELECT enabled, voice, speed, vad_threshold, vad_ticks,
+              comparison_openai_enabled, comparison_elevenlabs_enabled
+       FROM voice_settings WHERE id = 1`,
     );
     if (result.rows.length > 0) {
       const row = result.rows[0];
@@ -83,6 +107,8 @@ export async function initVoiceSettings(): Promise<void> {
         speed: parseFloat(row.speed),
         vadThreshold: row.vad_threshold ?? 50,
         vadTicks:     row.vad_ticks     ?? 6,
+        openaiTtsComparisonEnabled: Boolean(row.comparison_openai_enabled),
+        elevenLabsComparisonEnabled: Boolean(row.comparison_elevenlabs_enabled),
       };
       logger.info({ settings: _settings }, 'voice: settings loaded from DB');
     }
@@ -119,8 +145,19 @@ export async function updateVoiceSettings(
   const updated = { ..._settings, ...partial };
 
   await pool.query(
-    'UPDATE voice_settings SET enabled=$1, voice=$2, speed=$3, vad_threshold=$4, vad_ticks=$5 WHERE id=1',
-    [updated.enabled, updated.voice, updated.speed, updated.vadThreshold, updated.vadTicks],
+    `UPDATE voice_settings
+       SET enabled=$1, voice=$2, speed=$3, vad_threshold=$4, vad_ticks=$5,
+           comparison_openai_enabled=$6, comparison_elevenlabs_enabled=$7
+     WHERE id=1`,
+    [
+      updated.enabled,
+      updated.voice,
+      updated.speed,
+      updated.vadThreshold,
+      updated.vadTicks,
+      updated.openaiTtsComparisonEnabled,
+      updated.elevenLabsComparisonEnabled,
+    ],
   );
 
   _settings = updated;
@@ -132,85 +169,20 @@ export async function updateVoiceSettings(
 
 /**
  * Transcribe base64-encoded audio.
- * Provider: ElevenLabs scribe_v1 if ELEVENLABS_API_KEY is set, else OpenAI whisper-1.
+ * Provider: OpenAI gpt-4o-mini-transcribe. ElevenLabs is never selected here.
  * Logs [VOICE STT] with provider, model, latency, and transcript (truncated).
  */
 export async function transcribeAudioBase64(
   base64Audio: string,
   mimeType: string,
 ): Promise<string> {
-  const elKey = process.env.ELEVENLABS_API_KEY;
   const start  = Date.now();
-
-  if (elKey) {
-    try {
-      return await transcribeWithElevenLabs(base64Audio, mimeType, elKey, start);
-    } catch (elErr) {
-      // ElevenLabs STT failed (quota, plan restriction, temporary outage, etc.)
-      // Fall back to OpenAI Whisper if an API key is available.
-      const openaiKey = process.env.OPENAI_API_KEY;
-      if (!openaiKey) throw elErr; // no fallback available — re-throw original error
-
-      logger.warn(
-        { err: String(elErr) },
-        '[VOICE STT] ElevenLabs STT failed — falling back to OpenAI Whisper',
-      );
-      return transcribeWithOpenAI(base64Audio, mimeType, start);
-    }
-  }
   return transcribeWithOpenAI(base64Audio, mimeType, start);
 }
 
-/** Strip codec parameters so `audio/webm;codecs=opus` → `audio/webm`.
- *  ElevenLabs and OpenAI Whisper reject the codecs= suffix in the content-type. */
+/** Strip codec parameters so `audio/webm;codecs=opus` → `audio/webm`. */
 function cleanMimeType(mimeType: string): string {
   return mimeType.split(';')[0].trim();
-}
-
-async function transcribeWithElevenLabs(
-  base64Audio: string,
-  mimeType: string,
-  apiKey: string,
-  startMs: number,
-): Promise<string> {
-  const buffer      = Buffer.from(base64Audio, 'base64');
-  const ext         = mimeExtToExt(mimeType);
-  const cleanedMime = cleanMimeType(mimeType);
-
-  logger.info({ blobBytes: buffer.byteLength, mimeType, cleanedMime, ext }, '[VOICE STT] ElevenLabs attempt');
-
-  const blob   = new Blob([buffer], { type: cleanedMime });
-  const file   = new File([blob], `voice.${ext}`, { type: cleanedMime });
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('model_id', 'scribe_v1');
-
-  const resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey },
-    body: formData,
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
-    // Hard failure — do NOT silently fall back; caller decides
-    throw new Error(`ElevenLabs STT error ${resp.status}: ${body.slice(0, 200)}`);
-  }
-
-  const json = await resp.json() as { text?: string };
-  const transcript = (json.text ?? '').trim();
-  const latencyMs  = Date.now() - startMs;
-
-  logger.info({
-    provider:               'elevenlabs',
-    model:                  'scribe_v1',
-    audioDurationMs:        'N/A',   // not exposed by EL API; estimated client-side
-    transcriptionLatencyMs: latencyMs,
-    transcript:             transcript.slice(0, 120),
-  }, '[VOICE STT]');
-
-  return transcript;
 }
 
 async function transcribeWithOpenAI(
@@ -232,7 +204,7 @@ async function transcribeWithOpenAI(
 
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('model', 'whisper-1');
+  formData.append('model', VOICE_STT_MODEL);
   formData.append('response_format', 'text');
 
   const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -251,12 +223,11 @@ async function transcribeWithOpenAI(
 
   logger.info({
     provider:               'openai',
-    model:                  'whisper-1',
+    model:                  VOICE_STT_MODEL,
     audioDurationMs:        'N/A',
     transcriptionLatencyMs: latencyMs,
     transcript:             transcript.slice(0, 120),
-    fallback:               true,
-    reason:                 'ELEVENLABS_API_KEY not set',
+    normalUserProvider:     true,
   }, '[VOICE STT]');
 
   return transcript;
@@ -265,17 +236,18 @@ async function transcribeWithOpenAI(
 // ─── Text-to-speech ───────────────────────────────────────────────────────────
 
 /**
- * Fetch TTS audio and return the raw Response for streaming.
- * Provider: ElevenLabs eleven_turbo_v2_5 if ELEVENLABS_API_KEY is set, else OpenAI tts-1.
- * ElevenLabs starts streaming bytes almost immediately, cutting time-to-first-audio.
+ * Fetch comparison TTS audio and return the raw Response for streaming.
+ * Normal users use device speech synthesis and never call this function.
  */
 export async function fetchSpeechStream(
   text: string,
   voice: VoiceId,
   speed: number,
+  provider: VoiceComparisonProvider = 'openai',
 ): Promise<Response> {
-  const elKey = process.env.ELEVENLABS_API_KEY;
-  if (elKey) {
+  if (provider === 'elevenlabs') {
+    const elKey = process.env.ELEVENLABS_API_KEY;
+    if (!elKey) throw new Error('ElevenLabs comparison is not configured');
     return fetchSpeechStreamElevenLabs(text, voice, speed, elKey);
   }
   return fetchSpeechStreamOpenAI(text, voice, speed);
@@ -292,7 +264,7 @@ async function fetchSpeechStreamElevenLabs(
 
   const voiceId  = EL_VOICE_MAP[voice] ?? EL_VOICE_MAP['nova'];
   // eleven_turbo_v2_5 = lowest latency model; ~75ms to first chunk
-  const model    = 'eleven_turbo_v2_5';
+  const model    = VOICE_ELEVENLABS_TTS_MODEL;
 
   // Clamp speed: ElevenLabs accepts 0.7–1.2 in stability; we map 0.25–4.0 speed to it
   // ElevenLabs does not have a direct "speed" param in the same way as OpenAI.
@@ -348,7 +320,7 @@ async function fetchSpeechStreamOpenAI(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'tts-1',
+      model: VOICE_OPENAI_TTS_MODEL,
       input,
       voice,
       speed,
@@ -419,10 +391,52 @@ export function checkTTSRateLimit(userId: string): boolean {
   return true;
 }
 
+// One active billable Voice request per authenticated user. This protects
+// against double taps and late recorder callbacks creating overlapping calls.
+const activeVoiceRequests = new Map<string, string>();
+
+export function acquireVoiceRequest(userId: string, requestId: string): boolean {
+  if (activeVoiceRequests.has(userId)) return false;
+  activeVoiceRequests.set(userId, requestId);
+  return true;
+}
+
+export function releaseVoiceRequest(userId: string, requestId: string): void {
+  if (activeVoiceRequests.get(userId) === requestId) activeVoiceRequests.delete(userId);
+}
+
+export function getVoiceProviderStatus(): {
+  normalStt: { provider: 'openai'; model: string; available: boolean };
+  normalTts: { provider: 'device' };
+  comparisons: {
+    openai: { available: boolean; enabled: boolean };
+    elevenlabs: { available: boolean; enabled: boolean };
+  };
+} {
+  return {
+    normalStt: {
+      provider: 'openai',
+      model: VOICE_STT_MODEL,
+      available: !!process.env.OPENAI_API_KEY,
+    },
+    normalTts: { provider: 'device' },
+    comparisons: {
+      openai: {
+        available: !!process.env.OPENAI_API_KEY,
+        enabled: _settings.openaiTtsComparisonEnabled,
+      },
+      elevenlabs: {
+        available: !!process.env.ELEVENLABS_API_KEY,
+        enabled: _settings.elevenLabsComparisonEnabled
+          && process.env.VOICE_ENABLE_ELEVENLABS_COMPARISON === 'true',
+      },
+    },
+  };
+}
+
 // ─── Provider status ──────────────────────────────────────────────────────────
 
 export function getProviderStatus(): { available: boolean; reason?: string } {
-  if (process.env.ELEVENLABS_API_KEY) return { available: true };
   if (process.env.OPENAI_API_KEY)     return { available: true };
-  return { available: false, reason: 'No voice API key configured (ELEVENLABS_API_KEY or OPENAI_API_KEY)' };
+  return { available: false, reason: 'OpenAI transcription is not configured' };
 }
