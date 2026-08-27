@@ -43,3 +43,13 @@ unclickable.
 **How to apply:** Extract book-qualified references, validate chapter/range
 against the canonical Bible structure, merge deduplicated refs, and generate
 links only in trusted application code.
+
+Ask Emmaus prose may stream before metadata validation only through the guarded,
+redacted SSE path; the final metadata answer remains canonical.
+
+**Why:** Waiting for the complete model response made the UI appear frozen,
+while emitting raw provider chunks could leak metadata, URLs, or app routes.
+
+**How to apply:** Keep a short provider-output tail to catch split tags and
+unsafe links, emit only redacted chunks, and reconcile the client message with
+`metadata.answer` when the `done` event arrives.

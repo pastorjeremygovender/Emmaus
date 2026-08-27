@@ -70,6 +70,7 @@ describe("Emmaus streaming — metadata stripping", () => {
     assert.ok(!allText.includes("<EMMAUS_META"), "no EMMAUS_META tag should appear in emitted text");
     assert.ok(!allText.includes("</EMMAUS_META"), "no EMMAUS_META close tag should appear in emitted text");
     assert.ok(allText.length > 10, "emitted text should be non-empty");
+    assert.ok(events.length > 1, "response should arrive in multiple text events before done");
   });
 
   it("done event is received with structured metadata", async () => {

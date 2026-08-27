@@ -238,7 +238,15 @@ export default function AskEmmausConversation() {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === streamingMsgId
-                ? { ...m, isStreaming: false, metadata: payload.metadata }
+                ? {
+                    ...m,
+                    // The server may apply a final transport-level redaction
+                    // after parsing metadata. Reconcile the streamed text
+                    // with that canonical answer before marking it complete.
+                    content: payload.metadata.answer ?? m.content,
+                    isStreaming: false,
+                    metadata: payload.metadata,
+                  }
                 : m
             )
           );

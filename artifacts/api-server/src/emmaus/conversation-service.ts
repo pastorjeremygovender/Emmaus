@@ -347,6 +347,9 @@ function sseWrite(res: Response, type: SseEventType, payload: unknown) {
   res.write(
     `data: ${JSON.stringify({ type, ...((payload as object) ?? {}) })}\n\n`
   );
+  // Flush immediately when compression/proxy middleware exposes a flush
+  // method. Without this, several SSE events can be buffered into one batch.
+  (res as Response & { flush?: () => void }).flush?.();
 }
 
 export function setSseHeaders(res: Response) {
@@ -646,6 +649,11 @@ export async function handleConversation(
   let fullResponse = "";
   let emitBuffer = "";
   let pastMetaOpen = false;
+  // Keep a short tail un-emitted so a split metadata tag, URL, or route cannot
+  // leak into the visible stream. This still releases the answer in small
+  // pieces as soon as the model provides enough text.
+  const STREAM_GUARD_CHARS = Math.max(META_OPEN.length - 1, 64);
+  let streamedText = "";
   let firstTextEmitted = false;
   const tLLM = Date.now();
 
@@ -673,16 +681,24 @@ export async function handleConversation(
         const metaIdx = emitBuffer.indexOf(META_OPEN);
         if (metaIdx !== -1) {
           const beforeMeta = emitBuffer.slice(0, metaIdx);
-          // Prose is emitted only after the complete response is validated below.
-          // Holding it prevents a URL split across model chunks from leaking.
+          const safeChunk = sanitizeStreamingText(beforeMeta);
+          if (safeChunk) {
+            sseWrite(res, "text", { content: safeChunk });
+            streamedText += safeChunk;
+          }
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
           const safeLen = Math.max(
             0,
-            emitBuffer.length - (META_OPEN.length - 1)
+            emitBuffer.length - STREAM_GUARD_CHARS
           );
           if (safeLen > 0) {
+            const safeChunk = sanitizeStreamingText(emitBuffer.slice(0, safeLen));
+            if (safeChunk) {
+              sseWrite(res, "text", { content: safeChunk });
+              streamedText += safeChunk;
+            }
             emitBuffer = emitBuffer.slice(safeLen);
           }
         }
@@ -695,6 +711,16 @@ export async function handleConversation(
     });
     res.end();
     return;
+  }
+
+  // If the provider returned plain prose without a metadata block, release the
+  // guarded tail now that the stream has ended.
+  if (!pastMetaOpen && emitBuffer) {
+    const safeChunk = sanitizeStreamingText(emitBuffer);
+    if (safeChunk) {
+      sseWrite(res, "text", { content: safeChunk });
+      streamedText += safeChunk;
+    }
   }
 
   // Flush remaining buffer
@@ -790,11 +816,7 @@ export async function handleConversation(
 
   // Never stream untrusted model URLs. The response body is intentionally
   // sanitized after metadata parsing and before the first text event.
-  const safeCleanText = cleanText
-    .replace(/<EMMAUS_META[\s\S]*$/gi, "")
-    .replace(/<\/?EMMAUS_META>/gi, "")
-    .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
-    .replace(/(?:^|\s)\/(?:api\/)?(?:bible|journeys?|journey|devotional|sermon(?:-companion)?|rooms?|admin)[^\s)\]}"']*/gi, " ")
+  const safeCleanText = sanitizeStreamingText(cleanText)
     .replace(/\s{2,}/g, " ")
     .trim();
   const safeAnswer = sermonResults.length === 0
@@ -830,7 +852,11 @@ export async function handleConversation(
     finalMeta.nextSteps = finalMeta.nextSteps.filter((step) => step.type !== "listen");
   }
   finalMeta.answer = safeAnswer;
-  if (safeAnswer) sseWrite(res, "text", { content: safeAnswer });
+  // Normal responses have already been released incrementally above. Keep the
+  // fallback for providers that return no streamable text.
+  if (safeAnswer && !streamedText) {
+    sseWrite(res, "text", { content: safeAnswer });
+  }
 
   if (sermonResult) {
     // ── Preached Here card ──────────────────────────────────────────────────
