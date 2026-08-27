@@ -981,7 +981,10 @@ export default function Journeys() {
       <main className="relative px-5 pt-10 max-w-[480px] mx-auto">
 
         {/* Header */}
-        <header className="flex items-start justify-between gap-3 space-y-1">
+        <header className="space-y-1">
+          <div className="mb-1 flex justify-end">
+            <MemberHeaderActions compact />
+          </div>
           <div className="min-w-0">
             <h1 className="text-[28px] font-sans font-medium tracking-tight text-foreground">
               Discover
@@ -990,7 +993,6 @@ export default function Journeys() {
               What would you like to explore?
             </p>
           </div>
-          <MemberHeaderActions />
         </header>
 
         {/* Unified Ask Emmaus / Search input */}

@@ -689,7 +689,10 @@ export default function Walk() {
       <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
         {/* ── Greeting ─────────────────────────────────────────────────────── */}
-        <header className="flex items-start justify-between gap-3 px-1 pb-0.5">
+        <header className="px-1 pb-0.5">
+          <div className="mb-1 flex justify-end">
+            <MemberHeaderActions compact />
+          </div>
           <div className="min-w-0">
             <motion.h1
               initial={{ opacity: 0, x: -8 }}
@@ -702,7 +705,6 @@ export default function Walk() {
             </motion.h1>
             <p className="text-[13px] text-muted-foreground mt-0.5">Here's your day.</p>
           </div>
-          <MemberHeaderActions />
         </header>
 
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
