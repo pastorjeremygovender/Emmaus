@@ -22,6 +22,10 @@ export async function roomsFetch<T>(
 ): Promise<T> {
   const res = await fetch(getApiUrl(path), {
     ...options,
+    // Room data is authenticated and changes across devices. Do not let the
+    // browser turn a valid response into a bare 304 that this JSON client
+    // cannot rehydrate.
+    cache: 'no-store',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
