@@ -1,5 +1,4 @@
 import React, { useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
@@ -13,7 +12,6 @@ import { GlobalVoiceIndicator } from '@/components/emmaus/GlobalVoiceIndicator';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { AppearanceProvider } from '@/contexts/AppearanceContext';
 import OpeningGate from '@/components/OpeningGate';
-import { MemberHeaderActions } from '@/components/MemberHeaderActions';
 
 // Pages
 import Welcome from '@/pages/Welcome';
@@ -98,43 +96,6 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
     setLocation(`/daily-rhythm/day/${day}`);
   }, [day]);
   return null;
-}
-
-function isMemberHeaderPath(pathname: string): boolean {
-  return pathname === '/walk' ||
-    pathname.startsWith('/daily-rhythm/') ||
-    pathname.startsWith('/devotional/') ||
-    pathname.startsWith('/journey/') ||
-    pathname.startsWith('/sermon-companion/') ||
-    pathname.startsWith('/sermon/') ||
-    pathname.startsWith('/bible') ||
-    pathname.startsWith('/journeys') ||
-    pathname.startsWith('/content-groups/') ||
-    pathname.startsWith('/personal') ||
-    pathname.startsWith('/rooms');
-}
-
-function GlobalMemberHeaderActions() {
-  const [location] = useLocation();
-  if (!isMemberHeaderPath(location.split('?')[0])) return null;
-
-  return createPortal(
-    <div
-      aria-label="Member shortcuts"
-      style={{
-        position: 'fixed',
-        top: 'max(0.75rem, env(safe-area-inset-top))',
-        right: '0.5rem',
-        zIndex: 60,
-        pointerEvents: 'none',
-      }}
-    >
-      <div style={{ pointerEvents: 'auto' }}>
-        <MemberHeaderActions />
-      </div>
-    </div>,
-    document.body,
-  );
 }
 
 function Router() {
@@ -230,7 +191,6 @@ function App() {
                     <OpeningGate>
                       <Router />
                     </OpeningGate>
-                    <GlobalMemberHeaderActions />
                     <FloatingEmmausButton />
                     <GlobalVoiceIndicator />
                   </VoiceSessionProvider>
