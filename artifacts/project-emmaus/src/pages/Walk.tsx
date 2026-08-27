@@ -686,9 +686,9 @@ export default function Walk() {
         </div>
       )}
 
-      <main className="px-4 pt-8 pb-4 max-w-[480px] mx-auto space-y-3.5">
+      <main className="relative px-4 pt-10 pb-4 max-w-[480px] mx-auto space-y-3.5">
 
-        <div className="-mr-2 -mt-3 flex justify-end">
+        <div className="absolute right-2 top-3 z-10">
           <ShareEmmausButton />
         </div>
 
