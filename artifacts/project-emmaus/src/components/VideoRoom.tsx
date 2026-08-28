@@ -27,7 +27,7 @@ import {
 import '@livekit/components-styles';
 import { Track } from 'livekit-client';
 import {
-  PhoneOff, AlertCircle, Loader2, Users, Settings,
+  AlertCircle, Loader2, Users, Settings,
   Maximize2, Minimize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -57,10 +57,6 @@ interface VideoRoomProps {
   meetingMode?: 'audio' | 'video';
   /** In a Room meeting, LiveKit access requires explicit meeting attendance. */
   hasJoinedMeeting?: boolean;
-  onOpenDiscussion?: () => void;
-  onOpenNotes?: () => void;
-  onOpenPresentedContent?: () => void;
-  hasPresentedContent?: boolean;
 }
 
 // ─── Duration warning hook ────────────────────────────────────────────────────
@@ -95,15 +91,10 @@ function useDurationWarning(
 
 // ─── Participant grid (rendered inside LiveKitRoom context) ───────────────────
 
-function VideoParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussion, onOpenNotes, onOpenPresentedContent, hasPresentedContent }: {
-  onLeave: () => void;
+function VideoParticipantGrid({ canHost, onEnd, ending }: {
   canHost: boolean;
   onEnd: () => void;
   ending: boolean;
-  onOpenDiscussion?: () => void;
-  onOpenNotes?: () => void;
-  onOpenPresentedContent?: () => void;
-  hasPresentedContent: boolean;
 }) {
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
@@ -143,60 +134,26 @@ function VideoParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussio
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenDiscussion}>
-          Discussion
-        </Button>
-        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenNotes}>
-          Notes
-        </Button>
+      {canHost && (
         <Button
-          variant="outline"
+          variant="destructive"
           size="sm"
-          className="rounded-xl h-10 text-[11px]"
-          onClick={onOpenPresentedContent}
-          disabled={!hasPresentedContent}
+          className="w-full rounded-xl h-10"
+          onClick={onEnd}
+          disabled={ending}
         >
-          Presented
+          {ending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+          End Gathering
         </Button>
-      </div>
-
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 rounded-xl h-10"
-          onClick={onLeave}
-        >
-          <PhoneOff size={14} className="mr-1.5" />
-          Leave Gathering
-        </Button>
-        {canHost && (
-          <Button
-            variant="destructive"
-            size="sm"
-            className="flex-1 rounded-xl h-10"
-            onClick={onEnd}
-            disabled={ending}
-          >
-            {ending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
-            End Gathering
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
-function AudioParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussion, onOpenNotes, onOpenPresentedContent, hasPresentedContent }: {
-  onLeave: () => void;
+function AudioParticipantGrid({ canHost, onEnd, ending }: {
   canHost: boolean;
   onEnd: () => void;
   ending: boolean;
-  onOpenDiscussion?: () => void;
-  onOpenNotes?: () => void;
-  onOpenPresentedContent?: () => void;
-  hasPresentedContent: boolean;
 }) {
   const { localParticipant } = useLocalParticipant();
   const remoteParticipants = useRemoteParticipants();
@@ -244,36 +201,12 @@ function AudioParticipantGrid({ onLeave, canHost, onEnd, ending, onOpenDiscussio
         style={{ background: 'transparent', padding: 0, justifyContent: 'center' }}
       />
 
-      <div className="grid grid-cols-3 gap-2">
-        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenDiscussion}>
-          Discussion
+      {canHost && (
+        <Button variant="destructive" size="sm" className="w-full rounded-xl h-10" onClick={onEnd} disabled={ending}>
+          {ending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+          End Live Audio
         </Button>
-        <Button variant="outline" size="sm" className="rounded-xl h-10 text-[11px]" onClick={onOpenNotes}>
-          Notes
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-xl h-10 text-[11px]"
-          onClick={onOpenPresentedContent}
-          disabled={!hasPresentedContent}
-        >
-          Presented
-        </Button>
-      </div>
-
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" className="flex-1 rounded-xl h-10" onClick={onLeave}>
-          <PhoneOff size={14} className="mr-1.5" />
-          Leave
-        </Button>
-        {canHost && (
-          <Button variant="destructive" size="sm" className="flex-1 rounded-xl h-10" onClick={onEnd} disabled={ending}>
-            {ending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
-            End Live Audio
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -286,10 +219,6 @@ export function VideoRoom({
   roomId, userId, displayName, videoEligible, leaderName, hideStart = false,
   meetingMode = 'video',
   hasJoinedMeeting,
-  onOpenDiscussion,
-  onOpenNotes,
-  onOpenPresentedContent,
-  hasPresentedContent = false,
 }: VideoRoomProps) {
   const [status, setStatus] = useState<VideoSessionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -522,27 +451,17 @@ export function VideoRoom({
           >
             <RoomAudioRenderer />
              {meetingMode === 'audio' ? (
-               <AudioParticipantGrid
-                 onLeave={handleLeave}
-                 canHost={status.canHost ?? false}
-                 onEnd={handleEnd}
-                 ending={actioning}
-                 onOpenDiscussion={onOpenDiscussion}
-                 onOpenNotes={onOpenNotes}
-                 onOpenPresentedContent={onOpenPresentedContent}
-                 hasPresentedContent={hasPresentedContent}
-               />
+             <AudioParticipantGrid
+                  canHost={status.canHost ?? false}
+                  onEnd={handleEnd}
+                  ending={actioning}
+                />
              ) : (
-               <VideoParticipantGrid
-                 onLeave={handleLeave}
-                 canHost={status.canHost ?? false}
-                 onEnd={handleEnd}
-                 ending={actioning}
-                 onOpenDiscussion={onOpenDiscussion}
-                 onOpenNotes={onOpenNotes}
-                 onOpenPresentedContent={onOpenPresentedContent}
-                 hasPresentedContent={hasPresentedContent}
-               />
+                <VideoParticipantGrid
+                  canHost={status.canHost ?? false}
+                  onEnd={handleEnd}
+                  ending={actioning}
+                />
              )}
           </LiveKitRoom>
         </div>

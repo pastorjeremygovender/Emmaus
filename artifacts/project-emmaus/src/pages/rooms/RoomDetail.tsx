@@ -1728,12 +1728,6 @@ export default function RoomDetail() {
                 hideStart={true}
                 meetingMode={liveMeetingMode}
                 hasJoinedMeeting={hasJoinedCurrentMeeting}
-                onOpenDiscussion={() => openChat()}
-                onOpenNotes={() => setShowSharedNotes(true)}
-                onOpenPresentedContent={() => {
-                  document.getElementById('room-active-presentation')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}
-                hasPresentedContent={Boolean(activePresentation)}
               />
             )}
 
