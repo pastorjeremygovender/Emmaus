@@ -117,6 +117,8 @@ export interface RoomMessage {
   createdAt: string;
   attachment?: MediaAttachment | null;
   discussionId?: string | null;
+  /** Realtime tombstone sent when this post is deleted. */
+  deleted?: boolean;
 }
 
 export interface RoomMediaItem {
@@ -792,6 +794,103 @@ export async function addMessage(
   notifySubscribers(roomId, msg);
 
   return msg;
+}
+
+export type DeleteRoomMessageStatus = "deleted" | "not_found" | "forbidden";
+
+export interface DeleteRoomMessageResult {
+  status: DeleteRoomMessageStatus;
+  messageId: string;
+  presentationStopped: boolean;
+}
+
+/**
+ * Permanently delete a chat post after checking ownership. The deleted
+ * message is broadcast as a realtime tombstone so every open chat removes it
+ * without waiting for a refresh.
+ */
+export async function deleteRoomMessage(
+  roomId: string,
+  messageId: string,
+  requesterId: string,
+  requesterIsLeader: boolean,
+  deleteStoredObject?: (objectPath: string) => Promise<void>,
+): Promise<DeleteRoomMessageResult> {
+  const client = await pool.connect();
+  let deletedMessage: RoomMessage | null = null;
+  let objectPath = "";
+  let presentationStopped = false;
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT rm.*, up.preferred_name
+       FROM room_messages rm
+       LEFT JOIN user_profiles up
+         ON up.auth_subject = rm.user_id OR up.email = rm.user_id
+       WHERE rm.id = $1 AND rm.room_id = $2
+       FOR UPDATE OF rm`,
+      [messageId, roomId],
+    );
+    if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { status: "not_found", messageId, presentationStopped: false };
+    }
+    const row = result.rows[0] as Record<string, unknown>;
+    if (!requesterIsLeader && String(row.user_id) !== requesterId) {
+      await client.query("ROLLBACK");
+      return { status: "forbidden", messageId, presentationStopped: false };
+    }
+
+    const attachment = row.attachment as MediaAttachment | null;
+    objectPath = attachment?.objectPath ?? "";
+    deletedMessage = {
+      ...rowToMessage(row),
+      body: "",
+      attachment: null,
+      deleted: true,
+    };
+
+    const presentation = await client.query(
+      `DELETE FROM room_media_presentations
+       WHERE room_id = $1 AND message_id = $2
+       RETURNING id`,
+      [roomId, messageId],
+    );
+    presentationStopped = (presentation.rowCount ?? 0) > 0;
+    if (presentationStopped) {
+      await client.query(
+        `UPDATE room_sessions
+         SET metadata = metadata - 'activeTool'
+         WHERE room_id = $1
+           AND status = 'active'
+           AND metadata->>'activeTool' = 'presentation'`,
+        [roomId],
+      );
+    }
+    await client.query(
+      `DELETE FROM room_messages WHERE id = $1 AND room_id = $2`,
+      [messageId, roomId],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  if (objectPath && deleteStoredObject) {
+    try {
+      await deleteStoredObject(objectPath);
+    } catch {
+      // The post is already deleted; an object-storage cleanup failure must
+      // not make other clients believe the deletion failed.
+    }
+  }
+  if (deletedMessage) {
+    notifySubscribers(roomId, deletedMessage);
+  }
+  return { status: "deleted", messageId, presentationStopped };
 }
 
 // ─── Room Media helpers ───────────────────────────────────────────────────────

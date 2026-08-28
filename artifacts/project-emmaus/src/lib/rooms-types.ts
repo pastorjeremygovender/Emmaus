@@ -242,6 +242,8 @@ export interface RoomMessage {
   createdAt: string;
   attachment?: MediaAttachment | null;
   discussionId?: string | null;
+  /** Realtime tombstone emitted when a post is deleted. */
+  deleted?: boolean;
 }
 
 // ─── Guided session ───────────────────────────────────────────────────────

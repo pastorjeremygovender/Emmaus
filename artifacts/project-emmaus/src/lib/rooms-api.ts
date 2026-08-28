@@ -323,6 +323,18 @@ export async function apiSendMessage(
   return data.message;
 }
 
+export async function apiDeleteMessage(
+  userId: string,
+  roomId: string,
+  messageId: string,
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/messages/${messageId}`,
+    userId,
+    { method: 'DELETE' },
+  );
+}
+
 /**
  * Exchange authenticated credentials for a short-lived one-time SSE stream
  * token.  The token is valid for 30 s and must be passed to the EventSource

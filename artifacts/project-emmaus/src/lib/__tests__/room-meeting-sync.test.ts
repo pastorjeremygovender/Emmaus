@@ -131,6 +131,13 @@ describe('active meeting synchronization contract', () => {
     expect(roomChatSource).toContain('Close Discussion');
   });
 
+  it('shows post deletion only to the author and room leader', () => {
+    expect(roomChatSource).toContain('apiDeleteMessage');
+    expect(roomChatSource).toContain('(isLeader || isMe)');
+    expect(roomChatSource).toContain('Delete post');
+    expect(roomsApiSource).toContain('/messages/${messageId}');
+  });
+
   it('keeps Discussion close authoritative on the chat route, including reconnect hydration', () => {
     expect(roomChatSource).toContain('apiGetSessionEventsToken');
     expect(roomChatSource).toContain("payload.type === 'tool_closed'");

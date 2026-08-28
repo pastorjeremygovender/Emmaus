@@ -2,13 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById,
+  apiGetMessages, apiGetStreamToken, apiSendMessage, apiDeleteMessage, apiGetRoomById,
   apiGetActiveGroupDiscussion, apiCloseSharedTool, apiGetSessionEventsToken,
   apiSessionEventsUrl,
 } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
-import { ArrowLeft, Send, Paperclip, X, Mic } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Mic, Trash2, Loader2 } from 'lucide-react';
 import type { RoomMessage, MediaAttachment } from '@/lib/rooms-types';
 import { isRoomLeaderRole } from '@/lib/rooms-types';
 import { MediaMessageBubble } from '@/components/MediaMessageBubble';
@@ -107,6 +107,7 @@ export default function RoomChat() {
   });
   const [presentingMessageId, setPresentingMessageId] = useState<string | null>(null);
   const [closingDiscussion, setClosingDiscussion] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -294,7 +295,11 @@ export default function RoomChat() {
           if (!connectionHistoryLoaded) {
             connectionBuffer.push(msg);
           } else {
-            setMessages(prev => mergeMessages(prev, [msg]));
+            if (msg.deleted) {
+              setMessages(prev => prev.filter(existing => existing.id !== msg.id));
+            } else {
+              setMessages(prev => mergeMessages(prev, [msg]));
+            }
             scrollToBottom();
           }
         } catch {
@@ -470,6 +475,20 @@ export default function RoomChat() {
     }
   };
 
+  const handleDeleteMessage = async (message: RoomMessage) => {
+    if (!user || !roomId || deletingMessageId) return;
+    if (!window.confirm('Delete this post? It will be removed for everyone in this Group.')) return;
+    setDeletingMessageId(message.id);
+    try {
+      await apiDeleteMessage(user.id, String(roomId), message.id);
+      setMessages(prev => prev.filter(item => item.id !== message.id));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not delete this post.');
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
   if (!user) return null;
 
   const groups = groupByDate(messages);
@@ -595,10 +614,26 @@ export default function RoomChat() {
                         </div>
                       )}
 
-                      {/* Time */}
-                      <span className="text-[11px] text-muted-foreground px-1">
-                        {formatTime(msg.createdAt)}
-                      </span>
+                      {/* Time and post actions */}
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatTime(msg.createdAt)}
+                        </span>
+                        {(isLeader || isMe) && !msg.id.startsWith('opt-') && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteMessage(msg)}
+                            disabled={deletingMessageId !== null}
+                            aria-label={`Delete post from ${msg.senderName}`}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive disabled:opacity-50"
+                          >
+                            {deletingMessageId === msg.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <Trash2 size={12} />}
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

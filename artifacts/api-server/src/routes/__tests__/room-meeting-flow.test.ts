@@ -377,6 +377,7 @@ describe("two-device active Group Meeting flow", () => {
 
     const token = json<{ token: string }>(chatToken).token;
     let received = "";
+    let leaderMessageId = "";
     const closeStream = await openChatStream(token, body => { received = body; });
     try {
       const sent = await request({
@@ -386,6 +387,7 @@ describe("two-device active Group Meeting flow", () => {
         body: { body: "A realtime test message" },
       });
       assert.equal(sent.status, 201, sent.body);
+      leaderMessageId = json<{ message: { id: string } }>(sent).message.id;
       await new Promise<void>((resolve, reject) => {
         const startedAt = Date.now();
         const poll = () => {
@@ -401,6 +403,52 @@ describe("two-device active Group Meeting flow", () => {
       closeStream();
     }
 
+      const memberSent = await request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/messages`,
+        headers: memberHeaders,
+        body: { body: "A member-owned post" },
+      });
+      assert.equal(memberSent.status, 201, memberSent.body);
+      const memberMessageId = json<{ message: { id: string } }>(memberSent).message.id;
+
+      const memberDeletingLeaderPost = await request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/messages/${leaderMessageId}`,
+        headers: memberHeaders,
+      });
+      assert.equal(memberDeletingLeaderPost.status, 403, memberDeletingLeaderPost.body);
+
+      const memberDeletingOwnPost = await request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/messages/${memberMessageId}`,
+        headers: memberHeaders,
+      });
+      assert.equal(memberDeletingOwnPost.status, 200, memberDeletingOwnPost.body);
+
+      const secondMemberPost = await request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/messages`,
+        headers: memberHeaders,
+        body: { body: "A post for the leader to moderate" },
+      });
+      assert.equal(secondMemberPost.status, 201, secondMemberPost.body);
+      const moderatedMessageId = json<{ message: { id: string } }>(secondMemberPost).message.id;
+
+      const leaderDeletingMemberPost = await request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/messages/${moderatedMessageId}`,
+        headers: leaderHeaders,
+      });
+      assert.equal(leaderDeletingMemberPost.status, 200, leaderDeletingMemberPost.body);
+
+      const leaderDeletingOwnPost = await request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/messages/${leaderMessageId}`,
+        headers: leaderHeaders,
+      });
+      assert.equal(leaderDeletingOwnPost.status, 200, leaderDeletingOwnPost.body);
+
     const history = await request({
       path: `/api/rooms/${roomId}/messages`,
       headers: memberHeaders,
@@ -409,7 +457,7 @@ describe("two-device active Group Meeting flow", () => {
     assert.equal(
       json<{ messages: Array<{ body: string }> }>(history).messages
         .some(message => message.body === "A realtime test message"),
-      true,
+      false,
     );
   });
 

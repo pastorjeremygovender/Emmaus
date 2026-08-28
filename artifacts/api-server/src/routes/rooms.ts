@@ -32,6 +32,7 @@ import {
   removeMember,
   getMessages,
   addMessage,
+  deleteRoomMessage,
   linkJourney,
   unlinkPrimaryJourney,
   startShared,
@@ -1538,6 +1539,47 @@ router.post("/:roomId/messages", async (req, res) => {
     res.status(201).json({ message });
   } catch (err) {
     res.status(500).json({ error: "Failed to post message." });
+  }
+});
+
+// ─── Chat — delete a post (author or room leader) ────────────────────────────
+
+router.delete("/:roomId/messages/:messageId", async (req, res) => {
+  const { roomId, messageId } = req.params;
+  const userId = await requireRoomDiscussionAccess(req, res, String(roomId));
+  if (!userId) return;
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
+    const result = await deleteRoomMessage(
+      String(roomId),
+      String(messageId),
+      userId,
+      isRoomLeaderRole(role),
+      objectPath => objectStorage.deleteObjectEntity(objectPath),
+    );
+    if (result.status === "not_found") {
+      res.status(404).json({ error: "Message not found in this room." });
+      return;
+    }
+    if (result.status === "forbidden") {
+      res.status(403).json({ error: "You can only delete your own messages." });
+      return;
+    }
+    if (result.presentationStopped) {
+      broadcastRoomEvent(String(roomId), {
+        type: "presentation_stopped",
+        payload: { messageId: String(messageId), reason: "message_deleted" },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to delete message." });
   }
 });
 
