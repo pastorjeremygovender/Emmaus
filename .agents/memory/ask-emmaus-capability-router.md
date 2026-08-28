@@ -14,3 +14,9 @@ Resource-topic intent must win over Bible-reference fallback when a request name
 **Why:** Natural requests such as “show me the teaching in John 3” contain a valid reference but are asking for a resource search; streaming model output before retrieval validation can leak fabricated sermon claims.
 
 **How to apply:** Normalize polite prefixes before semantic routing, recognize sermon/topic terms before generic Bible handling, and only release no-result prose after the final sermon redaction pass.
+
+Typed responses must pass through one final server normalizer before SSE completion or persistence; that normalizer owns canonical Scripture prose, resource grounding, deduplication, and display/speakable answer fields. Voice remains outside this boundary.
+
+**Why:** Model metadata and prose are separate trust surfaces, and normalizing only cards or only canonical actions leaves streamed text and conversation history inconsistent.
+
+**How to apply:** Buffer typed model prose until final validation, normalize canonical and model responses through the same function, and keep the authenticated Voice envelope on its existing streaming contract.

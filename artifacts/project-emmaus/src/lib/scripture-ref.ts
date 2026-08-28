@@ -28,6 +28,11 @@ const BOOK_ALIASES: Record<string, string> = {
   psa:             'psalms',
   ps:              'psalms',
   pss:             'psalms',
+  jn:              'john',
+  jhn:             'john',
+  rom:             'romans',
+  heb:             'hebrews',
+  gen:             'genesis',
 
   // Song of Solomon
   song:            'songofsolomon',
@@ -76,7 +81,7 @@ const CANONICAL_BOOK_NAMES: Record<string, string> = {
   deuteronomy: 'Deuteronomy', joshua: 'Joshua', judges: 'Judges', ruth: 'Ruth',
   '1samuel': '1 Samuel', '2samuel': '2 Samuel', '1kings': '1 Kings', '2kings': '2 Kings',
   '1chronicles': '1 Chronicles', '2chronicles': '2 Chronicles', ezra: 'Ezra',
-  nehemiah: 'Nehemiah', esther: 'Esther', job: 'Job', psalms: 'Psalms',
+  nehemiah: 'Nehemiah', esther: 'Esther', job: 'Job', psalms: 'Psalm',
   proverbs: 'Proverbs', ecclesiastes: 'Ecclesiastes', songofsolomon: 'Song of Solomon',
   isaiah: 'Isaiah', jeremiah: 'Jeremiah', lamentations: 'Lamentations', ezekiel: 'Ezekiel',
   daniel: 'Daniel', hosea: 'Hosea', joel: 'Joel', amos: 'Amos', obadiah: 'Obadiah',

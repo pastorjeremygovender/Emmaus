@@ -6,6 +6,7 @@ import type {
 } from "./firestore-model.js";
 import {
   extractValidatedScriptureReferences,
+  normalizeValidatedScriptureProse,
   validateCitations,
 } from "./citation-validation.js";
 import type { EmmausResource } from "./resource-catalogue.js";
@@ -13,7 +14,10 @@ import type { EmmausResource } from "./resource-catalogue.js";
 const MAX_DISPLAY_CHARS = 2400;
 const MAX_SPEAKABLE_CHARS = 720;
 
-type ResourceForGrounding = Pick<EmmausResource, "type" | "resourceId" | "parentId" | "title" | "route">;
+type ResourceForGrounding = Pick<
+  EmmausResource,
+  "type" | "resourceId" | "parentId" | "title" | "route" | "relevanceReasons"
+>;
 
 export interface NormalizedEmmausResponse {
   metadata: EmmausResponseMetadata;
@@ -44,6 +48,7 @@ function resourceKey(item: {
   resourceId?: string;
   sermonId?: string;
   path?: string;
+  title?: string;
 }): string {
   const type = canonicalType(String(item.type ?? "")) ?? String(item.type ?? "").toLowerCase();
   const id = item.resourceId ?? item.sermonId ?? item.path ?? `${item.title ?? ""}`;
@@ -119,14 +124,22 @@ function groundResourceClaims(
       const lower = sentence.toLowerCase();
       if (/\bpastor jeremy\b/i.test(sentence) && sermons.length === 0) return false;
 
-      const specificResourceClaim =
-        /\b(?:this|the|a|an|my|your|emmaus(?:'s)?|in emmaus)\s+(?:emmaus\s+)?(?:walk|journey|devotional(?: series)?|bible study|sermon|sermon companion)\b/i.test(sentence);
-      if (!specificResourceClaim) return true;
-
       const titleMentioned = Array.from(knownTitles).some((title) =>
         title.length >= 4 && lower.includes(title),
       );
       if (titleMentioned) return true;
+
+      // A model may name an invented resource without an article, for example
+      // "Try the Ember Journey". Keep only names that match the verified title
+      // set; generic "a Walk" claims are handled by the type check below.
+      const namedResource = sentence.match(
+        /\b([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,5})\s+(Walk|Journey|Devotional|Bible Study|Sermon Companion)\b/,
+      );
+      if (namedResource && !titleMentioned) return false;
+
+      const specificResourceClaim =
+        /\b(?:this|the|a|an|my|your|emmaus(?:'s)?|in emmaus)\s+(?:emmaus\s+)?(?:walk|journey|devotional(?: series)?|bible study|sermon|sermon companion)\b/i.test(sentence);
+      if (!specificResourceClaim) return true;
 
       return (
         (/\bwalk\b/i.test(sentence) && hasResourceType(resources, ["walk", "walk_step"])) ||
@@ -188,10 +201,11 @@ export function normalizeEmmausResponse(input: {
   metadata: EmmausResponseMetadata;
   resources?: ResourceForGrounding[];
 }): NormalizedEmmausResponse {
+  const normalizedInputAnswer = normalizeValidatedScriptureProse(input.answer);
   const metadata = input.resources
     ? validateCitations(input.metadata, input.resources as EmmausResource[])
     : { ...input.metadata };
-  const proseReferences = extractValidatedScriptureReferences(input.answer);
+  const proseReferences = extractValidatedScriptureReferences(normalizedInputAnswer);
   const scriptureReferences = Array.from(
     new Map(
       [...(metadata.scriptureReferences ?? []), ...proseReferences]
@@ -208,12 +222,22 @@ export function normalizeEmmausResponse(input: {
   metadata.sermonRecommendations = dedupeSermons(metadata.sermonRecommendations ?? []);
   metadata.resourceRecommendations = metadata.recommendations
     .filter((recommendation) => recommendation.resourceId)
-    .map((recommendation) => ({
-      resourceType: canonicalType(String(recommendation.type)) ?? "journey",
-      resourceId: recommendation.resourceId!,
-      ...(recommendation.parentId ? { parentId: recommendation.parentId } : {}),
-      reason: recommendation.description?.slice(0, 240) ?? "Relevant published Emmaus resource.",
-    }));
+    .map((recommendation) => {
+      const type = canonicalType(String(recommendation.type)) ?? "journey";
+      const match = input.resources?.find((resource) =>
+        resource.resourceId === recommendation.resourceId &&
+        canonicalType(resource.type) === type,
+      );
+      return {
+        resourceType: type,
+        resourceId: recommendation.resourceId!,
+        ...(recommendation.parentId ? { parentId: recommendation.parentId } : {}),
+        reason: recommendation.description?.slice(0, 240) ?? "Relevant published Emmaus resource.",
+        ...(match?.relevanceReasons?.length
+          ? { relevanceReasons: match.relevanceReasons.slice(0, 8) }
+          : {}),
+      };
+    });
   metadata.nextSteps = Array.from(
     new Map((metadata.nextSteps ?? []).map((step) => [
       `${step.type ?? "step"}:${step.path ?? step.text}`,
@@ -224,9 +248,11 @@ export function normalizeEmmausResponse(input: {
   dedupeActions(metadata);
 
   const grounded = input.resources
-    ? groundResourceClaims(input.answer, input.resources, metadata.sermonRecommendations ?? [])
-    : input.answer;
-  const displayAnswer = conciseDisplayAnswer(grounded);
+    ? groundResourceClaims(normalizedInputAnswer, input.resources, metadata.sermonRecommendations ?? [])
+    : normalizedInputAnswer;
+  const displayAnswer = conciseDisplayAnswer(
+    grounded || "I couldn't verify that Emmaus resource. I can still help you explore the Scripture behind your question.",
+  );
   const spoken = speakableAnswer(displayAnswer);
   metadata.answer = displayAnswer;
   metadata.displayAnswer = displayAnswer;

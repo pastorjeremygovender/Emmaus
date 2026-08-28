@@ -16,6 +16,7 @@ import { ScriptureCard } from '@/components/emmaus/ScriptureCard';
 import { NextStepCard } from '@/components/emmaus/NextStepCard';
 import { NextStepsCard } from '@/components/emmaus/NextStepsCard';
 import { ResourceCard } from '@/components/emmaus/ResourceCard';
+import { SermonRecommendationCard } from '@/components/emmaus/SermonRecommendationCard';
 import { InlineScriptureProse } from '@/components/emmaus/InlineScriptureProse';
 
 export default function AskEmmausHistory() {
@@ -78,7 +79,13 @@ export default function AskEmmausHistory() {
                 <InlineScriptureProse
                   text={msg.content}
                   references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
-                  resources={msg.metadata?.recommendations ?? []}
+                  resources={[
+                    ...(msg.metadata?.recommendations ?? []),
+                    ...(msg.metadata?.sermonRecommendations ?? []).map((sermon) => ({
+                      title: sermon.title,
+                      path: sermon.openPath ?? sermon.watchUrl,
+                    })),
+                  ]}
                 />
                 {msg.metadata && (
                   <div className="space-y-3">
@@ -90,6 +97,9 @@ export default function AskEmmausHistory() {
                     )}
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
                       <ResourceCard key={i} recommendation={rec} />
+                    ))}
+                    {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
+                      <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />
                     ))}
                     {/* P2-5: render nextSteps array (read/pray/continue/listen cards) */}
                     {msg.metadata.nextSteps && msg.metadata.nextSteps.length > 0 && (

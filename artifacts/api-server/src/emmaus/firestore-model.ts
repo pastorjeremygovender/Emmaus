@@ -152,6 +152,7 @@ export interface EmmausResponseMetadata {
     resourceId: string;
     parentId?: string;
     reason: string;
+    relevanceReasons?: string[];
   }>;
   prayer?: string | null;
   /** Shared pre-action intent classification used by typed Ask Emmaus and Voice. */

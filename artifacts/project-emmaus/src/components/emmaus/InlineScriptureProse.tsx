@@ -43,10 +43,10 @@ function InlineResource({
   if (!recommendation.path) return <>{text}</>;
   const className = "text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-sm";
   if (/^https?:\/\//i.test(recommendation.path)) {
-    return <a className={className} href={recommendation.path} target="_blank" rel="noreferrer">{text}</a>;
+    return <a className={className} href={recommendation.path} target="_blank" rel="noreferrer" aria-label={`Open ${recommendation.title}`}>{text}</a>;
   }
   if (!recommendation.path.startsWith('/') || recommendation.path.startsWith('//')) return <>{text}</>;
-  return <button type="button" className={className} onClick={() => setLocation(recommendation.path!)}>{text}</button>;
+  return <button type="button" className={className} onClick={() => setLocation(recommendation.path!)} aria-label={`Open ${recommendation.title}`}>{text}</button>;
 }
 
 function Citation({ ref, text }: { ref: ScriptureRef; text: string }) {
@@ -124,7 +124,13 @@ export function InlineScriptureProse({
   resources?: Array<{ title: string; path?: string }>;
 }) {
   const paragraphs = text.split(/\n{2,}/).filter(Boolean);
-  const validRefs = references.filter((ref) => !!routeFor(ref));
+  const validRefs = Array.from(
+    new Map(
+      references
+        .filter((ref) => !!routeFor(ref))
+        .map((ref) => [ref.reference.toLowerCase(), ref] as const),
+    ).values(),
+  );
   const proseContainsReference = validRefs.some((ref) => {
     return referenceLabels(ref).some(label => text.toLowerCase().includes(label.toLowerCase()));
   });

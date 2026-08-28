@@ -270,7 +270,7 @@ export default function AskEmmausConversation() {
                   // The server may apply a final transport-level redaction
                   // after parsing metadata. Reconcile the streamed text
                   // with that canonical answer before marking it complete.
-                  content: payload.metadata.answer ?? m.content,
+                  content: payload.metadata.displayAnswer ?? payload.metadata.answer ?? m.content,
                   isStreaming: false,
                   metadata: payload.metadata,
                 }
@@ -535,7 +535,13 @@ export default function AskEmmausConversation() {
                       <InlineScriptureProse
                         text={msg.content}
                         references={msg.metadata?.scriptureReferences ?? (msg.metadata?.scripture ? [msg.metadata.scripture] : [])}
-                        resources={msg.metadata?.recommendations ?? []}
+                        resources={[
+                          ...(msg.metadata?.recommendations ?? []),
+                          ...(msg.metadata?.sermonRecommendations ?? []).map((sermon) => ({
+                            title: sermon.title,
+                            path: sermon.openPath ?? sermon.watchUrl,
+                          })),
+                        ]}
                       />
                     ) : null}
                 </div>

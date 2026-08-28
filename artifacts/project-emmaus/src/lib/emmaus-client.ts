@@ -131,6 +131,7 @@ export interface EmmausMetadata {
     resourceId: string;
     parentId?: string;
     reason: string;
+    relevanceReasons?: string[];
   }>;
   prayer?: string | null;
   requestedIntent?: 'ASK' | 'READ' | 'OPEN' | 'FIND';

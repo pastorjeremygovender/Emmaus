@@ -38,6 +38,8 @@ export interface EmmausResource {
   excerpts: string[];
   provenance: string;
   relevance: number;
+  /** Auditable reasons this resource was selected for the current request. */
+  relevanceReasons?: string[];
 }
 
 const MAX_TEXT = 700;
@@ -52,7 +54,10 @@ function words(text: string): string[] {
   return Array.from(new Set(text.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 3)));
 }
 
-function relevance(resource: EmmausResource, query: string, bookId?: string, chapter?: number): number {
+function relevanceDetails(resource: EmmausResource, query: string, bookId?: string, chapter?: number): {
+  score: number;
+  reasons: string[];
+} {
   const q = new Set(words(query));
   const searchable = words([
     resource.title,
@@ -60,10 +65,18 @@ function relevance(resource: EmmausResource, query: string, bookId?: string, cha
     resource.scripture,
     ...resource.excerpts,
   ].filter(Boolean).join(" "));
-  let score = searchable.reduce((n, word) => n + (q.has(word) ? 1 : 0), 0);
-  if (bookId && resource.scripture?.toLowerCase().includes(bookId.toLowerCase())) score += 5;
-  if (chapter && resource.scripture?.match(new RegExp(`\\b${chapter}\\b`))) score += 2;
-  return score;
+  const matchingWords = searchable.filter((word) => q.has(word));
+  let score = matchingWords.length;
+  const reasons = matchingWords.slice(0, 8).map((word) => `query:${word}`);
+  if (bookId && resource.scripture?.toLowerCase().includes(bookId.toLowerCase())) {
+    score += 5;
+    reasons.push(`scripture-book:${bookId}`);
+  }
+  if (chapter && resource.scripture?.match(new RegExp(`\\b${chapter}\\b`))) {
+    score += 2;
+    reasons.push(`scripture-chapter:${chapter}`);
+  }
+  return { score, reasons };
 }
 
 function makeResource(
@@ -72,7 +85,8 @@ function makeResource(
   bookId?: string,
   chapter?: number,
 ): EmmausResource {
-  return { ...data, relevance: relevance(data as EmmausResource, query, bookId, chapter) };
+  const details = relevanceDetails(data as EmmausResource, query, bookId, chapter);
+  return { ...data, relevance: details.score, relevanceReasons: details.reasons };
 }
 
 function journeyResources(journey: FrontendJourney, steps: FrontendStep[], query: string, bookId?: string, chapter?: number, dailyRhythm = false): EmmausResource[] {
@@ -304,7 +318,14 @@ export async function buildEmmausResourceCatalogue(
   }
 
   return {
-    resources: resources
+    resources: Array.from(
+      new Map(
+        resources.map((resource) => [
+          `${resource.type}:${resource.resourceId}:${resource.parentId ?? ""}`,
+          resource,
+        ]),
+      ).values(),
+    )
       .sort((a, b) => b.relevance - a.relevance)
       .slice(0, MAX_RESOURCES_IN_PROMPT)
       .map(r => ({ ...r, excerpts: r.excerpts.slice(0, MAX_EXCERPTS_PER_RESOURCE) })),

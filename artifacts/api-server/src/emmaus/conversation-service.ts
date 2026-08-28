@@ -46,10 +46,15 @@ import {
 import { searchBibleVerses, type BiblePassage } from "../lib/bible-verse-search.js";
 import { getRoomsForUser, type RoomSummary } from "../lib/room-store.js";
 import { buildEmmausResourceCatalogue, type EmmausResourceType as CatalogueResourceType } from "./resource-catalogue.js";
+import { getJourney, getProgress } from "../lib/journey-store.js";
+import { getPublishedSermonById } from "../lib/canonical-sermon-store.js";
 import { actionsForResource } from "./action-registry.js";
 import { logger } from "../lib/logger.js";
 import {
+  buildScriptureRoute,
+  canonicalBibleBookName,
   extractValidatedScriptureReferences,
+  normalizeBibleBook,
   validateCitations,
   validateModelResponse,
 } from "./citation-validation.js";
@@ -106,6 +111,69 @@ async function getTrustedDisplayName(userId: string): Promise<string | undefined
     logger.warn({ err: String(err) }, "emmaus: trusted display name unavailable");
     return undefined;
   }
+}
+
+/**
+ * Client context identifies where the member opened Ask Emmaus, but it is not
+ * an authority for titles, speakers, Scripture names, or progress. Rebuild
+ * those fields from authenticated server data before placing context in the
+ * model prompt. Voice uses a separately authenticated envelope and bypasses
+ * this adapter.
+ */
+async function reconstructTrustedContext(
+  input: EmmausContextInput,
+  userId: string,
+): Promise<EmmausContextInput> {
+  if (input.voiceContextEnvelope) return input;
+
+  const trusted: EmmausContextInput = {
+    entryPoint: input.entryPoint,
+    userId,
+    conversationId: input.conversationId,
+  };
+
+  if (input.bibleContext) {
+    const bookId = normalizeBibleBook(input.bibleContext.bookId || input.bibleContext.bookName);
+    const chapter = Number(input.bibleContext.chapter);
+    if (bookId && buildScriptureRoute({ book: bookId, chapter })) {
+      trusted.bibleContext = {
+        bookId,
+        bookName: canonicalBibleBookName(bookId),
+        chapter,
+      };
+    }
+  }
+
+  try {
+    if (input.journeyContext?.journeyId) {
+      const journey = await getJourney(input.journeyContext.journeyId);
+      if (journey?.status === "Published") {
+        const progress = await getProgress(userId, journey.id);
+        trusted.journeyContext = {
+          journeyId: journey.id,
+          journeyTitle: journey.title,
+          currentDay: progress?.currentDay ?? 1,
+        };
+      }
+    }
+
+    if (input.sermonContext?.sermonId) {
+      const sermon = await getPublishedSermonById(input.sermonContext.sermonId);
+      if (sermon?.status === "Published") {
+        trusted.sermonContext = {
+          sermonId: sermon.id,
+          sermonTitle: sermon.title,
+          speaker: sermon.speaker,
+          scriptureReference: sermon.scriptureReference,
+          sermonDate: sermon.sermonDate,
+        };
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: String(err) }, "emmaus: optional client context could not be verified");
+  }
+
+  return trusted;
 }
 
 export interface SseDonePayload {
@@ -534,9 +602,11 @@ export async function handleConversation(
   );
 
   // ── 2. Build context ──────────────────────────────────────────────────────
-  const contextInput: EmmausContextInput = req.context ?? {
+  const rawContext: EmmausContextInput = req.context ?? {
     entryPoint: "standalone",
   };
+  const isVoiceRequest = Boolean(rawContext.voiceContextEnvelope);
+  const contextInput = await reconstructTrustedContext(rawContext, rawContext.userId ?? "anonymous");
   const builtCtx = buildContext(contextInput);
   const userId = builtCtx.userId;
 
@@ -862,22 +932,22 @@ export async function handleConversation(
         const metaIdx = emitBuffer.indexOf(META_OPEN);
         if (metaIdx !== -1) {
           const beforeMeta = emitBuffer.slice(0, metaIdx);
-          const safeChunk = sermonResults.length > 0
+          const safeChunk = isVoiceRequest && sermonResults.length > 0
             ? sanitizeStreamingText(beforeMeta)
             : "";
-          if (safeChunk) {
+          if (isVoiceRequest && safeChunk) {
             sseWrite(res, "text", { content: safeChunk });
             streamedText += safeChunk;
           }
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
-          const safeLen = sermonResults.length > 0
+          const safeLen = isVoiceRequest && sermonResults.length > 0
             ? safeStreamingLength(emitBuffer)
             : 0;
           if (safeLen > 0) {
             const safeChunk = sanitizeStreamingText(emitBuffer.slice(0, safeLen));
-            if (safeChunk) {
+            if (isVoiceRequest && safeChunk) {
               sseWrite(res, "text", { content: safeChunk });
               streamedText += safeChunk;
             }
@@ -900,7 +970,7 @@ export async function handleConversation(
   // nothing, keep all prose buffered until the validated final answer exists:
   // otherwise a model can stream an unverified sermon mention before the
   // transport-level redaction runs.
-  if (!pastMetaOpen && emitBuffer && sermonResults.length > 0) {
+  if (isVoiceRequest && !pastMetaOpen && emitBuffer && sermonResults.length > 0) {
     const safeChunk = sanitizeStreamingText(emitBuffer);
     if (safeChunk) {
       sseWrite(res, "text", { content: safeChunk });
@@ -1040,27 +1110,22 @@ export async function handleConversation(
     finalMeta.nextSteps = finalMeta.nextSteps.filter((step) => step.type !== "listen");
   }
   pipelineTimings.validationMs = Date.now() - validationStart;
-  finalMeta.answer = safeAnswer;
-  pipelineTimings.totalMs = ms();
-  finalMeta.pipelineTimings = pipelineTimings;
-  // Normal responses have already been released incrementally above. Keep the
-  // fallback for providers that return no streamable text.
-  if (safeAnswer && !streamedText) {
-    sseWrite(res, "text", { content: safeAnswer });
-  }
-
-  if (sermonResult) {
-    // ── Preached Here card ──────────────────────────────────────────────────
-    finalMeta.recommendations.unshift({
-      type: "sermon",
-      label: "Preached Here",
-      title: sermonResult.title,
-      speakerName: sermonResult.speaker,
-      description: sermonResult.summary,
-      path: sermonResult.timestampedUrl || sermonResult.openPath,
-      sermonId: sermonResult.sermonId,
-      timestampSeconds: sermonResult.timestampSeconds,
-    });
+   if (sermonResult) {
+     // Voice keeps its legacy generic sermon recommendation for compatibility.
+     // Typed Ask Emmaus renders the dedicated sermonRecommendations card only,
+     // preventing the same sermon from appearing twice.
+     if (isVoiceRequest) {
+       finalMeta.recommendations.unshift({
+         type: "sermon",
+         label: "Preached Here",
+         title: sermonResult.title,
+         speakerName: sermonResult.speaker,
+         description: sermonResult.summary,
+         path: sermonResult.timestampedUrl || sermonResult.openPath,
+         sermonId: sermonResult.sermonId,
+         timestampSeconds: sermonResult.timestampSeconds,
+       });
+     }
 
     // ── Listen step (always verified — never LLM-generated) ────────────────
     const hasListen = finalMeta.nextSteps.some((s) => s.type === "listen");
@@ -1083,13 +1148,39 @@ export async function handleConversation(
     }
   }
 
+  // This is the final response boundary. Typed Ask Emmaus deliberately emits
+  // no model prose before this point, so the answer sent over SSE is identical
+  // to the grounded answer persisted below. Voice remains on its existing
+  // streaming path and receives the legacy metadata shape.
+  pipelineTimings.validationMs = Date.now() - validationStart;
+  pipelineTimings.totalMs = ms();
+  finalMeta.pipelineTimings = pipelineTimings;
+  const normalized = isVoiceRequest
+    ? {
+        metadata: finalMeta,
+        displayAnswer: safeAnswer,
+        speakableAnswer: safeAnswer,
+      }
+    : normalizeEmmausResponse({
+        answer: safeAnswer,
+        metadata: finalMeta,
+        resources: resourceCatalogue.resources,
+      });
+  const responseMeta = normalized.metadata;
+  responseMeta.answer = normalized.displayAnswer;
+  responseMeta.pipelineTimings = pipelineTimings;
+
+  if (normalized.displayAnswer && (!isVoiceRequest || !streamedText)) {
+    sseWrite(res, "text", { content: normalized.displayAnswer });
+  }
+
   // ── 13. Persist assistant message ─────────────────────────────────────────
   const assistantMsg = await store.addMessage({
     conversationId,
     userId,
     role: "assistant",
-    content: safeAnswer,
-    metadata: finalMeta,
+    content: normalized.displayAnswer,
+    metadata: responseMeta,
     promptVersion: PROMPT_VERSION,
     entryPoint: builtCtx.entryPoint,
     safetyChecked: true,
@@ -1100,7 +1191,7 @@ export async function handleConversation(
   const donePayload: SseDonePayload = {
     conversationId,
     messageId: assistantMsg.id,
-    metadata: finalMeta,
+    metadata: responseMeta,
     promptVersion: PROMPT_VERSION,
     ...(detectedNameUpdate ? { detectedNameUpdate } : {}),
   };

@@ -24,9 +24,10 @@ const aliases: Record<string, string> = {
   "song of solomon": "songofsolomon",
   "song of songs": "songofsolomon", "1 samuel": "1samuel", "2 samuel": "2samuel",
   "1 kings": "1kings", "2 kings": "2kings", "1 chronicles": "1chronicles",
-  "2 chronicles": "2chronicles", "1 corinthians": "1corinthians", "2 corinthians": "2corinthians",
-  "1 thessalonians": "1thessalonians", "2 thessalonians": "2thessalonians",
-  "1 john": "1john", "2 john": "2john", "3 john": "3john",
+  "2 chronicles": "2chronicles",
+  "1 sam": "1samuel", "2 sam": "2samuel",
+  "1 kgs": "1kings", "2 kgs": "2kings",
+  "1 chr": "1chronicles", "2 chr": "2chronicles",
 };
 
 export function normalizeBibleBook(book: string): string | null {
@@ -125,7 +126,8 @@ const PROSE_BOOK_NAMES = [
   "First Cor", "Second Cor", "First Thess", "Second Thess", "First Tim", "Second Tim",
   "First Pet", "Second Pet", "First Jn", "Second Jn", "Third Jn",
   "1 Cor", "2 Cor", "1 Thess", "2 Thess", "1 Tim", "2 Tim", "1 Pet", "2 Pet",
-  "1 Jn", "2 Jn", "3 Jn", "Jhn", "Jn", "Heb", "Rom", "Gen",
+  "1 Jn", "2 Jn", "3 Jn", "Jhn", "Jn", "Ps", "Heb", "Rom", "Gen",
+  "1 Sam", "2 Sam", "1 Kgs", "2 Kgs", "1 Chr", "2 Chr",
   "First Corinthians", "Second Corinthians", "First Thessalonians",
   "Second Thessalonians", "First Timothy", "Second Timothy", "First Peter",
   "Second Peter", "First John", "Second John", "Third John",
@@ -197,6 +199,46 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
     }
   }
   return found;
+}
+
+/**
+ * Rewrites references that the model used in prose into the same canonical
+ * display form used by cards and routes. This is intentionally server-side so
+ * lowercase, abbreviated, and spoken references cannot bypass inline linking.
+ */
+export function normalizeValidatedScriptureProse(text: string): string {
+  const numericPattern = new RegExp(
+    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?(?:\\s*,\\s*\\d{1,3})?)?\\b`,
+    "gi",
+  );
+  let normalized = text.replace(numericPattern, (full, rawBook: string, rawChapter: string, rawVerse?: string, rawEnd?: string) => {
+    const ref = validateScripture({
+      book: rawBook,
+      chapter: Number(rawChapter),
+      verseStart: rawVerse == null ? undefined : Number(rawVerse),
+      verseEnd: rawEnd == null ? undefined : Number(rawEnd),
+      reference: full,
+      displayText: full,
+    });
+    return ref?.reference ?? full;
+  });
+
+  const spokenPattern = new RegExp(
+    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(\\d{1,3})(?:\\s*,?\\s*verse\\s+(\\d{1,3})(?:\\s*(?:to|through|[-–—])\\s*(\\d{1,3}))?)?\\b`,
+    "gi",
+  );
+  normalized = normalized.replace(spokenPattern, (full, rawBook: string, rawChapter: string, rawVerse?: string, rawEnd?: string) => {
+    const ref = validateScripture({
+      book: rawBook,
+      chapter: Number(rawChapter),
+      verseStart: rawVerse == null ? undefined : Number(rawVerse),
+      verseEnd: rawEnd == null ? undefined : Number(rawEnd),
+      reference: full,
+      displayText: full,
+    });
+    return ref?.reference ?? full;
+  });
+  return normalized;
 }
 
 /** Validate the complete model response while retaining the existing metadata shape. */
