@@ -2144,6 +2144,29 @@ export async function getSessionAttendance(
   }));
 }
 
+/** Return whether a user is currently attending the active session for a room. */
+export async function hasActiveSessionAttendance(
+  sessionId: string,
+  roomId: string,
+  userId: string,
+): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1
+     FROM room_session_attendance a
+     JOIN room_sessions rs
+       ON rs.id = a.session_id
+      AND rs.room_id = a.room_id
+     WHERE a.session_id = $1
+       AND a.room_id = $2
+       AND a.user_id = $3
+       AND a.left_at IS NULL
+       AND rs.status = 'active'
+     LIMIT 1`,
+    [sessionId, roomId, userId],
+  );
+  return rows.length > 0;
+}
+
 // ─── Session event bus (in-memory SSE) ───────────────────────────────────────
 //
 // Same subscriber-map pattern as chat + presence SSE streams.

@@ -72,6 +72,7 @@ import {
   recordSessionJoin,
   recordSessionLeave,
   getSessionAttendance,
+  hasActiveSessionAttendance,
   terminateAllSessionFromRoom,
   addHighlight,
   getHighlights,
@@ -387,6 +388,17 @@ router.post("/:roomId/video/token", async (req, res) => {
     const status = await getVideoStatus(String(roomId));
     if (!status.videoActive || !status.livekitRoomName) {
       res.status(409).json({ error: "No active video session for this Room." });
+      return;
+    }
+
+    const activeSession = await getActiveSession(String(roomId));
+    if (!activeSession) {
+      res.status(409).json({ error: "No active meeting for this Room." });
+      return;
+    }
+    const attending = await hasActiveSessionAttendance(activeSession.id, String(roomId), userId);
+    if (!attending) {
+      res.status(403).json({ error: "Join the meeting before joining live audio or video." });
       return;
     }
 

@@ -55,6 +55,8 @@ interface VideoRoomProps {
    */
   hideStart?: boolean;
   meetingMode?: 'audio' | 'video';
+  /** In a Room meeting, LiveKit access requires explicit meeting attendance. */
+  hasJoinedMeeting?: boolean;
   onOpenDiscussion?: () => void;
   onOpenNotes?: () => void;
   onOpenPresentedContent?: () => void;
@@ -283,6 +285,7 @@ const POLL_INTERVAL_MS = 10_000;
 export function VideoRoom({
   roomId, userId, displayName, videoEligible, leaderName, hideStart = false,
   meetingMode = 'video',
+  hasJoinedMeeting,
   onOpenDiscussion,
   onOpenNotes,
   onOpenPresentedContent,
@@ -353,6 +356,10 @@ export function VideoRoom({
   };
 
   const handleJoin = async () => {
+    if (hasJoinedMeeting === false) {
+      setActionError('Join the meeting first, then join Live Audio.');
+      return;
+    }
     setActioning(true);
     setActionError('');
     try {
@@ -364,6 +371,7 @@ export function VideoRoom({
       const msg = err instanceof Error ? err.message : '';
       setActionError(
         msg.includes('No active') ? 'The gathering has ended.'
+          : msg.includes('Join the meeting') ? 'Join the meeting first, then join Live Audio.'
           : "We couldn't connect. Please try again."
       );
     } finally {
@@ -609,11 +617,18 @@ export function VideoRoom({
           <Button
             className="w-full h-12 rounded-xl text-[16px] bg-emerald-600 hover:bg-emerald-700"
             onClick={handleJoin}
-            disabled={actioning}
+            disabled={actioning || hasJoinedMeeting === false}
           >
             {actioning ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-             Join Live {meetingMode === 'audio' ? 'Audio' : 'Video'}
+            {hasJoinedMeeting === false
+              ? 'Join Meeting First'
+              : `Join Live ${meetingMode === 'audio' ? 'Audio' : 'Video'}`}
           </Button>
+          {hasJoinedMeeting === false && (
+            <p className="text-[12px] text-center text-emerald-700 dark:text-emerald-300 mt-2">
+              Join the meeting above before connecting to live {meetingMode}.
+            </p>
+          )}
         </div>
       </div>
       {actionError && (

@@ -1723,6 +1723,7 @@ export default function RoomDetail() {
                 leaderName={leaderName}
                 hideStart={true}
                 meetingMode={liveMeetingMode}
+                 hasJoinedMeeting={hasJoinedCurrentMeeting}
                 onOpenDiscussion={() => openChat()}
                 onOpenNotes={() => setShowSharedNotes(true)}
                 onOpenPresentedContent={() => {
