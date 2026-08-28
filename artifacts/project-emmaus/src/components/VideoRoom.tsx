@@ -22,10 +22,11 @@ import {
   useTracks,
   useRemoteParticipants,
   useLocalParticipant,
+  useConnectionState,
   ControlBar,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { Track } from 'livekit-client';
+import { ConnectionState, Track } from 'livekit-client';
 import {
   AlertCircle, Loader2, Users, Settings,
   Maximize2, Minimize2, Hand,
@@ -105,12 +106,31 @@ function hasRaisedHand(participant: HandParticipant): boolean {
 
 function RaiseHandControl() {
   const { localParticipant } = useLocalParticipant();
+  const connectionState = useConnectionState();
   const [raised, setRaised] = useState(() => hasRaisedHand(localParticipant));
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     setRaised(hasRaisedHand(localParticipant));
   }, [localParticipant, localParticipant.attributes[RAISE_HAND_ATTRIBUTE]]);
+
+  useEffect(() => {
+    const connectionIsUnavailable =
+      connectionState === ConnectionState.Disconnected ||
+      connectionState === ConnectionState.Reconnecting ||
+      connectionState === ConnectionState.SignalReconnecting;
+    if (connectionIsUnavailable || connectionState !== ConnectionState.Connected) {
+      // Reconnecting rooms keep their LiveKit context mounted. Do not let a
+      // locally cached signal remain visible while the participant is away.
+      setRaised(false);
+      return;
+    }
+
+    // A reconnect can rehydrate the participant with its previous attributes.
+    // The hand is transient, so make the connected session authoritative too.
+    setRaised(false);
+    void localParticipant.setAttributes({ [RAISE_HAND_ATTRIBUTE]: '' }).catch(() => {});
+  }, [connectionState, localParticipant]);
 
   // The signal is scoped to this LiveKit connection. Clear it when the local
   // participant leaves so a reconnect cannot inherit a stale question state.

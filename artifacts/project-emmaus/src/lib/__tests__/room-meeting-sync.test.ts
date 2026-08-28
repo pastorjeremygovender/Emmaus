@@ -188,6 +188,28 @@ describe('active meeting synchronization contract', () => {
     expect(videoRoomSource).toContain('hasRaisedHand(participant)');
   });
 
+  it('clears raised hands across reconnects and participant departures in both layouts', () => {
+    expect(videoRoomSource).toContain('useConnectionState');
+    expect(videoRoomSource).toContain('connectionState !== ConnectionState.Connected');
+    expect(videoRoomSource).toContain('ConnectionState.Reconnecting');
+    expect(videoRoomSource).toContain('ConnectionState.SignalReconnecting');
+    expect(videoRoomSource).toContain('setRaised(false)');
+    expect(videoRoomSource).toContain('useRemoteParticipants');
+    expect(videoRoomSource).toContain('function VideoParticipantGrid');
+    expect(videoRoomSource).toContain('function AudioParticipantGrid');
+
+    const videoSummary = videoRoomSource.slice(
+      videoRoomSource.indexOf('function VideoParticipantGrid'),
+      videoRoomSource.indexOf('function AudioParticipantGrid'),
+    );
+    const audioSummary = videoRoomSource.slice(
+      videoRoomSource.indexOf('function AudioParticipantGrid'),
+      videoRoomSource.indexOf('// ─── Main component'),
+    );
+    expect(videoSummary).toContain('RaisedHandsSummary participants={allParticipants}');
+    expect(audioSummary).toContain('RaisedHandsSummary participants={participants}');
+  });
+
   it('provides explicit close and download controls for media viewers', () => {
     expect(mediaBubbleSource).toContain('aria-label="Close image viewer"');
     expect(mediaBubbleSource).toContain("event.key === 'Escape'");

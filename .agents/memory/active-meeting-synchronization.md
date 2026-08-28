@@ -14,3 +14,9 @@ Shared Meeting Tools are a single authoritative lifecycle: replacing or closing 
 **Why:** SSE delivery can be delayed or missed, so hiding a panel locally is insufficient; reconnect hydration must not resurrect a superseded tool or let an out-of-order close erase the current one.
 
 **How to apply:** Persist the active tool on the room session, clear superseded durable artefacts server-side, and broadcast replacement/close after persistence. Durable clearing remains ownership-checked; clients handle `tool_closed` only for the named surface, so an old Discussion can close without erasing a newer shared tool.
+
+LiveKit participant attributes used for attention signals are transient presence, not recoverable meeting state. Clear the local display whenever the connection is unavailable, clear the published attribute again after connection recovery, and derive remote summaries only from LiveKit's current participant collection.
+
+**Why:** LiveKit keeps the room context mounted through signal reconnects and can rehydrate the local participant's prior attributes. Without an explicit recovery reset, a raised hand can reappear even though departures correctly remove remote participants.
+
+**How to apply:** Treat reconnect, refresh, and leave as lowering the hand. Apply the same current-participant summary rule to both Live Audio and Live Video layouts.
