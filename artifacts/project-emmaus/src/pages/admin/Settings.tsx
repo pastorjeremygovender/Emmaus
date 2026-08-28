@@ -49,32 +49,67 @@ type VidSettings = {
   allowedRoles: string[];
 };
 
+type LiveKitStatus = {
+  configured: boolean;
+  missingSecrets: string[];
+};
+
 function VideoSettingsSection() {
   const { user } = useAuth();
   const [settings, setSettings] = useState<VidSettings | null>(null);
+  const [livekit, setLivekit] = useState<LiveKitStatus | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    apiGetVideoSettings(user.id).then(setSettings).catch(() => {});
+    apiGetVideoSettings(user.id)
+      .then(({ settings: nextSettings, livekit: nextLivekit }) => {
+        setSettings(nextSettings);
+        setLivekit(nextLivekit);
+        setError(null);
+      })
+      .catch(() => setError('Unable to load Live Meetings settings.'));
   }, [user]);
 
   async function patch<K extends keyof VidSettings>(key: K, value: VidSettings[K]) {
     if (!settings || !user) return;
+    const previous = settings;
     const next: VidSettings = { ...settings, [key]: value };
     setSettings(next);
     setSaving(true);
+    setError(null);
+    setSavedMessage(null);
     try {
       const updated = await apiUpdateVideoSettings(user.id, { [key]: value });
       setSettings(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch { /* non-fatal */ }
-    finally { setSaving(false); }
+      setSavedMessage(
+        key === 'videoEnabled'
+          ? value
+            ? 'Live audio and video meetings enabled.'
+            : 'Live audio and video meetings disabled.'
+          : 'Saved',
+      );
+      setTimeout(() => setSavedMessage(null), 3000);
+    } catch {
+      setSettings(previous);
+      setError('Unable to save Live Meetings settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  if (!settings) return null;
+  if (error && !settings) {
+    return (
+      <div className="bg-white rounded-xl border border-red-200 p-6">
+        <h2 className="text-sm font-semibold text-gray-700">Groups</h2>
+        <p className="text-sm text-red-600 mt-2">{error}</p>
+      </div>
+    );
+  }
+
+  if (!settings || !livekit) return null;
 
   const ALL_ROLES = ['group_leader', 'pastor', 'admin', 'superAdmin'];
 
@@ -83,32 +118,74 @@ function VideoSettingsSection() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Video size={16} className="text-gray-500" />
-          <h2 className="text-sm font-semibold text-gray-700">Groups &amp; Video Settings</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Groups</h2>
         </div>
         {saving && <span className="text-xs text-gray-400">Saving…</span>}
-        {saved  && <span className="text-xs text-green-600">Saved</span>}
       </div>
 
-      <p className="text-xs text-gray-400 leading-relaxed">
-        Video Rooms require LiveKit integration (Step 2 — not yet active). These settings
-        will enforce cost limits and permission controls when video is enabled.
-      </p>
-
-      {/* Enable / disable video */}
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={settings.videoEnabled}
-          onChange={e => patch('videoEnabled', e.target.checked)}
-          className="w-4 h-4 rounded"
-        />
+      <div className="rounded-xl border border-gray-200 p-5 space-y-5">
         <div>
-          <div className="text-sm font-medium text-gray-700">Video Rooms enabled</div>
-          <div className="text-xs text-gray-400">
-            When off, no user can start or join a LiveKit video session.
-          </div>
+          <h3 className="text-xs font-bold tracking-widest text-gray-500">LIVE MEETINGS</h3>
+          <p className="text-sm text-gray-500 mt-2">Allow Groups to use live audio and video meetings.</p>
         </div>
-      </label>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-gray-700">Live Meetings Enabled</div>
+            <div className="text-xs text-gray-400 mt-1">
+              When off, Groups cannot start or join live meetings.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.videoEnabled}
+            aria-label="Live Meetings Enabled"
+            disabled={saving}
+            onClick={() => patch('videoEnabled', !settings.videoEnabled)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+              settings.videoEnabled ? 'bg-teal-700' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                settings.videoEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Live Audio</span>
+            <span className={settings.videoEnabled ? 'text-emerald-600' : 'text-gray-400'}>
+              — {settings.videoEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Live Video</span>
+            <span className={settings.videoEnabled ? 'text-emerald-600' : 'text-gray-400'}>
+              — {settings.videoEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm gap-4">
+            <span className="text-gray-600">LiveKit configuration</span>
+            <span className={livekit.configured ? 'text-emerald-600' : 'text-amber-600'}>
+              — {livekit.configured ? 'Connected' : 'Missing configuration'}
+            </span>
+          </div>
+          {!livekit.configured && livekit.missingSecrets.length > 0 && (
+            <p className="text-xs text-amber-700 pt-1">
+              Missing secret{livekit.missingSecrets.length === 1 ? '' : 's'}: {livekit.missingSecrets.join(', ')}
+            </p>
+          )}
+        </div>
+
+        {savedMessage && (
+          <p className="text-sm text-emerald-600" role="status">{savedMessage}</p>
+        )}
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      </div>
 
       {/* Limits */}
       <div className="grid grid-cols-3 gap-4">
@@ -145,7 +222,7 @@ function VideoSettingsSection() {
       </div>
 
       {/* Allowed roles */}
-      <Field label="Who can start video">
+      <Field label="Who can start Live Meetings">
         <div className="flex flex-wrap gap-3 pt-1">
           {ALL_ROLES.map(role => (
             <label key={role} className="flex items-center gap-2 cursor-pointer">
@@ -165,7 +242,7 @@ function VideoSettingsSection() {
           ))}
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Members can always join authorised meetings but cannot start video unless granted a role above.
+           Members can always join authorised meetings but cannot start Live Meetings unless granted a role above.
         </p>
       </Field>
 
@@ -173,8 +250,8 @@ function VideoSettingsSection() {
       <div className="pt-2 border-t border-gray-100 space-y-2">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Group Types</p>
         <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-          <div><span className="font-medium text-gray-700">Personal</span> — any member, no video</div>
-          <div><span className="font-medium text-gray-700">Ministry</span> — Group Leader+, video allowed</div>
+           <div><span className="font-medium text-gray-700">Personal</span> — any member, no live meetings</div>
+           <div><span className="font-medium text-gray-700">Ministry</span> — Group Leader+, live meetings allowed</div>
           <div><span className="font-medium text-gray-700">Leadership</span> — Pastor+, private</div>
           <div><span className="font-medium text-gray-700">Church Service</span> — future: reserved</div>
         </div>

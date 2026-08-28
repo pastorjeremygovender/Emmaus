@@ -125,20 +125,19 @@ export async function apiMarkPrayerAnswered(
 }
 
 export async function apiGetVideoSettings(userId: string): Promise<{
-  videoEnabled: boolean;
-  maxConcurrentRooms: number;
-  maxParticipantsPerRoom: number;
-  maxDurationMinutes: number;
-  allowedRoles: string[];
-}> {
-  const data = await roomsFetch<{ settings: {
+  settings: {
     videoEnabled: boolean;
     maxConcurrentRooms: number;
     maxParticipantsPerRoom: number;
     maxDurationMinutes: number;
     allowedRoles: string[];
-  } }>('/api/rooms/admin/video-settings', userId);
-  return data.settings;
+  };
+  livekit: {
+    configured: boolean;
+    missingSecrets: string[];
+  };
+}> {
+  return roomsFetch('/api/rooms/admin/video-settings', userId);
 }
 
 export async function apiUpdateVideoSettings(

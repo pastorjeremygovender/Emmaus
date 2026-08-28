@@ -30,6 +30,19 @@ export function isLiveKitConfigured(): boolean {
   return getLiveKitConfig() !== null;
 }
 
+/** Safe admin-facing configuration summary; never returns credential values. */
+export function getLiveKitConfigurationStatus(): {
+  configured: boolean;
+  missingSecrets: string[];
+} {
+  const requiredSecrets = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"];
+  const missingSecrets = requiredSecrets.filter((name) => !process.env[name]);
+  return {
+    configured: missingSecrets.length === 0,
+    missingSecrets,
+  };
+}
+
 /** The WebSocket URL that is safe to expose to the browser (no secrets). */
 export function getLiveKitUrl(): string | null {
   return process.env.LIVEKIT_URL ?? null;

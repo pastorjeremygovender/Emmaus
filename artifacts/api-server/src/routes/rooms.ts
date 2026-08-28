@@ -145,6 +145,7 @@ import { isAdmin, getUserRole } from "../lib/user-role-store.js";
 import { logAuditEvent } from "../lib/audit-log.js";
 import {
   isLiveKitConfigured,
+  getLiveKitConfigurationStatus,
   getLiveKitUrl,
   createLiveKitToken,
   ensureLiveKitRoom,
@@ -495,7 +496,7 @@ router.get("/admin/video-settings", async (req, res) => {
   if (!(await guardAdmin(req, res))) return;
   try {
     const settings = await getVideoSettings();
-    res.json({ settings });
+    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
   } catch {
     res.status(500).json({ error: "Failed to load video settings." });
   }
@@ -505,7 +506,7 @@ router.patch("/admin/video-settings", async (req, res) => {
   if (!(await guardAdmin(req, res))) return;
   try {
     const settings = await updateVideoSettings(req.body as Partial<VideoSettings>);
-    res.json({ settings });
+    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
   } catch {
     res.status(500).json({ error: "Failed to update video settings." });
   }
