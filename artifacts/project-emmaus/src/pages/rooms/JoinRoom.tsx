@@ -95,7 +95,7 @@ export default function JoinRoom() {
           <Button className="w-full rounded-2xl h-12" onClick={() => setLocation(`/rooms/${joinedRoomId}`)}>
             See Members &amp; Journeys
           </Button>
-          <Button variant="outline" className="w-full rounded-2xl h-11" onClick={() => setLocation('/rooms')}>
+          <Button variant="outline" className="w-full rounded-2xl h-11" onClick={() => goBackOrFallback('/rooms', setLocation)}>
             Back to Groups
           </Button>
         </div>

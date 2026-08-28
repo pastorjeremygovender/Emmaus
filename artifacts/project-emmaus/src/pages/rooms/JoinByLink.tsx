@@ -15,6 +15,7 @@ import {
   getRoomTypeLabel,
   type RoomInvitePreview,
 } from '@/lib/rooms-types';
+import { goBackOrFallback } from '@/lib/return-context';
 
 type Status =
   | 'loading'
@@ -187,7 +188,7 @@ export default function JoinByLink() {
         <Button className="w-full rounded-2xl h-12" onClick={() => setLocation(`/rooms/${joinedRoomId}`)}>
           Open Group
         </Button>
-        <Button variant="outline" className="w-full rounded-2xl h-11" onClick={() => setLocation('/rooms')}>
+        <Button variant="outline" className="w-full rounded-2xl h-11" onClick={() => goBackOrFallback('/rooms', setLocation)}>
           Back to Groups
         </Button>
       </InviteShell>
@@ -201,7 +202,7 @@ export default function JoinByLink() {
       </div>
       <h1 className="text-[22px] font-sans font-semibold">Invitation unavailable</h1>
       <p className="text-[15px] text-muted-foreground">{error}</p>
-      <Button className="w-full rounded-2xl" onClick={() => setLocation('/rooms')}>
+      <Button className="w-full rounded-2xl" onClick={() => goBackOrFallback('/rooms', setLocation)}>
         Back to Groups
       </Button>
     </InviteShell>

@@ -10,6 +10,7 @@ import { useBible } from '@/contexts/BibleContext';
 import { useChapter } from '@/hooks/useChapter';
 import { getChapterStudyPrompts } from '@/data/chapter-study-prompts';
 import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
+import { goBackOrFallback } from '@/lib/return-context';
 
 export default function ChapterCompletion() {
   const { bookId, chapter: chapterStr } = useParams<{ bookId: string; chapter: string }>();
@@ -84,7 +85,10 @@ export default function ChapterCompletion() {
       {/* Back button */}
       <div className="px-5 pt-6 max-w-[520px] mx-auto">
         <button
-          onClick={() => setLocation(`/bible/read/${resolvedBookId}/${chapterNum}${journeyId ? `?journey=${journeyId}` : ''}`)}
+          onClick={() => goBackOrFallback(
+            `/bible/read/${resolvedBookId}/${chapterNum}${journeyId ? `?journey=${journeyId}` : ''}`,
+            setLocation,
+          )}
           className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
         >
           <ChevronLeft size={16} />
@@ -187,9 +191,10 @@ export default function ChapterCompletion() {
                 : undefined
             }
             returnLabel="Back to Discover"
-            onReturn={() =>
-              setLocation(journeyId ? `/bible/journey/${journeyId}` : '/journeys')
-            }
+            onReturn={() => goBackOrFallback(
+              journeyId ? `/bible/journey/${journeyId}` : '/journeys',
+              setLocation,
+            )}
           />
         </motion.div>
 

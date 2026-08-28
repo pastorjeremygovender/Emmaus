@@ -217,7 +217,7 @@ export default function CollectionPage() {
         <Button
           variant="outline"
           className="rounded-xl h-10"
-          onClick={() => setLocation(backDestination)}
+          onClick={() => goBackOrFallback(backDestination, setLocation)}
         >
           Go Back
         </Button>

@@ -247,7 +247,7 @@ export default function ChapterReader() {
       <div className="min-h-[100dvh] flex items-center justify-center p-8 bg-background">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">Book not found.</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to My Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to My Bible</Button>
         </div>
       </div>
     );
@@ -546,7 +546,7 @@ export default function ChapterReader() {
             <p className="text-[16px] text-muted-foreground">
               {book.name} {chapterNum} is not available in this translation.
             </p>
-            <Button variant="outline" onClick={() => setLocation('/bible')}>Back to My Bible</Button>
+            <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to My Bible</Button>
           </div>
         ) : (
           <div>

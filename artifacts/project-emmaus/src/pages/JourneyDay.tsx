@@ -209,7 +209,7 @@ export default function JourneyDay() {
               Today's 10 Minutes with Jesus will be ready soon. Check back later.
             </p>
             <div className="pt-4">
-              <Button variant="outline" className="rounded-xl px-8" onClick={() => setLocation('/walk')}>
+              <Button variant="outline" className="rounded-xl px-8" onClick={() => goBackOrFallback('/walk', setLocation)}>
                 Back to Today's Steps
               </Button>
             </div>
@@ -452,7 +452,7 @@ export default function JourneyDay() {
                 size="lg"
                 variant="outline"
                 className="w-full h-14 text-[17px] rounded-2xl"
-                onClick={() => setLocation('/walk')}
+                onClick={() => goBackOrFallback('/walk', setLocation)}
               >
                 Back to Today's Steps
               </Button>

@@ -44,7 +44,7 @@ export default function BibleJourneyDetail() {
       <div className="min-h-[100dvh] flex items-center justify-center p-8 bg-background">
         <div className="text-center space-y-4">
           <p className="text-[17px] text-muted-foreground">Journey not found.</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to Bible</Button>
         </div>
       </div>
     );
@@ -57,7 +57,7 @@ export default function BibleJourneyDetail() {
           <h2 className="text-[22px] font-sans font-semibold">{journey.title}</h2>
           <p className="text-[15px] text-muted-foreground">{journey.description}</p>
           <p className="text-[14px] text-primary font-medium">Coming soon</p>
-          <Button variant="outline" onClick={() => setLocation('/bible')}>Back to Bible</Button>
+          <Button variant="outline" onClick={() => goBackOrFallback('/bible', setLocation)}>Back to Bible</Button>
         </div>
       </div>
     );

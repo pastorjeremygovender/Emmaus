@@ -563,7 +563,7 @@ export default function RoomDetail() {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
         <p className="text-muted-foreground">{loadError}</p>
-        <Button onClick={() => setLocation('/rooms')}>Back to Groups</Button>
+        <Button onClick={() => goBackOrFallback('/rooms', setLocation)}>Back to Groups</Button>
       </div>
     );
   }

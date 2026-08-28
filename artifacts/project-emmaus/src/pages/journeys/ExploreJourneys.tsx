@@ -21,6 +21,7 @@ import { listCollections, type CollectionSummary } from '@/lib/collections-api';
 import { checkJourneysHaveIntro } from '@/lib/journeys-api';
 import { ChevronLeft, Search, X, Bookmark, BookmarkCheck, ArrowRight } from 'lucide-react';
 import type { Journey } from '@/contexts/JourneyContext';
+import { goBackOrFallback } from '@/lib/return-context';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -345,7 +346,7 @@ export default function ExploreJourneys() {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-3 px-5 pt-12 pb-3">
           <button
-            onClick={() => setLocation('/journeys')}
+            onClick={() => goBackOrFallback('/journeys', setLocation)}
             className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors shrink-0"
             aria-label="Back to Journeys"
           >

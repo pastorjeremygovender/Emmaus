@@ -77,7 +77,7 @@ export function DevotionalNavigatorPage() {
 
   function goBack() {
     if (groupId) {
-      setLocation(`/devotional/${seriesId}/navigate`);
+      goBackOrFallback(`/devotional/${seriesId}/navigate`, setLocation);
       return;
     }
     goBackOrFallback('/walk', setLocation);
