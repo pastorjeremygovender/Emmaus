@@ -88,7 +88,7 @@ function json<T>(response: { body: string }): T {
 
 async function openChatStream(
   token: string,
-  onMessage: (body: string) => void,
+  onMessage: (message: { body?: string; clientMessageId?: string }) => void,
 ): Promise<() => void> {
   const req = http.request({
     hostname: "127.0.0.1",
@@ -114,8 +114,11 @@ async function openChatStream(
       for (const event of events) {
         const line = event.split("\n").find(value => value.startsWith("data: "));
         if (line) {
-          const message = JSON.parse(line.slice(6)) as { body?: string };
-          if (message.body) onMessage(message.body);
+          const message = JSON.parse(line.slice(6)) as {
+            body?: string;
+            clientMessageId?: string;
+          };
+          if (message.body) onMessage(message);
         }
       }
     });
@@ -377,21 +380,35 @@ describe("two-device active Group Meeting flow", () => {
 
     const token = json<{ token: string }>(chatToken).token;
     let received = "";
+    let receivedClientMessageId = "";
     let leaderMessageId = "";
-    const closeStream = await openChatStream(token, body => { received = body; });
+    const closeStream = await openChatStream(token, message => {
+      received = message.body ?? "";
+      receivedClientMessageId = message.clientMessageId ?? "";
+    });
     try {
+      const clientMessageId = "room-meeting-flow-client-message";
       const sent = await request({
         method: "POST",
         path: `/api/rooms/${roomId}/messages`,
         headers: leaderHeaders,
-        body: { body: "A realtime test message" },
+        body: { body: "A realtime test message", clientMessageId },
       });
       assert.equal(sent.status, 201, sent.body);
-      leaderMessageId = json<{ message: { id: string } }>(sent).message.id;
+      const sentMessage = json<{
+        message: { id: string; clientMessageId?: string };
+      }>(sent).message;
+      leaderMessageId = sentMessage.id;
+      assert.equal(sentMessage.clientMessageId, clientMessageId);
       await new Promise<void>((resolve, reject) => {
         const startedAt = Date.now();
         const poll = () => {
-          if (received === "A realtime test message") return resolve();
+          if (
+            received === "A realtime test message" &&
+            receivedClientMessageId === clientMessageId
+          ) {
+            return resolve();
+          }
           if (Date.now() - startedAt > 2_000) {
             return reject(new Error(`Timed out waiting for SSE message; received=${received}`));
           }

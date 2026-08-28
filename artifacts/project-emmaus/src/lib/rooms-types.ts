@@ -235,6 +235,8 @@ export interface RoomMediaItem {
 
 export interface RoomMessage {
   id: string;
+  /** Transient sender-generated ID used to reconcile optimistic and SSE copies. */
+  clientMessageId?: string;
   roomId: string;
   userId: string;
   senderName: string;

@@ -7,6 +7,7 @@ import {
 
 const optimistic: RoomMessage = {
   id: 'opt-1',
+  clientMessageId: 'client-1',
   roomId: 'room-1',
   userId: 'user-1',
   senderName: 'You',
@@ -59,5 +60,17 @@ describe('Room message sender reconciliation', () => {
     );
 
     expect(reconciled).toEqual([normalizedServerMessage]);
+  });
+
+  it('reconciles an SSE echo by client message ID when identity fields differ', () => {
+    const normalizedServerMessage = {
+      ...serverMessage,
+      userId: 'verified-auth-subject',
+      discussionId: null,
+    };
+
+    const merged = mergeRoomMessages([optimistic], [normalizedServerMessage]);
+
+    expect(merged).toEqual([normalizedServerMessage]);
   });
 });

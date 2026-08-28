@@ -69,6 +69,7 @@ export default function RoomChat() {
   const [messages, setMessages] = useState<RoomMessage[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [loadError, setLoadError] = useState('');
   const [roomName, setRoomName] = useState('');
 
@@ -341,16 +342,19 @@ export default function RoomChat() {
   }, [user, roomId, discussionId, scrollToBottom]);
 
   const handleSend = async () => {
-    if ((!body.trim() && !pendingAttachment) || !user || !roomId || sending) return;
+    if ((!body.trim() && !pendingAttachment) || !user || !roomId || sendingRef.current) return;
+    sendingRef.current = true;
     const text = body.trim();
     const attachment = pendingAttachment;
+    const clientMessageId = crypto.randomUUID();
     setBody('');
     setPendingAttachment(null);
     setSending(true);
 
     // Optimistic message
     const optimistic: RoomMessage = {
-      id: `opt-${Date.now()}`,
+      id: `opt-${clientMessageId}`,
+      clientMessageId,
       roomId: String(roomId),
       userId: user.id,
       senderName: user.preferredName || 'You',
@@ -369,6 +373,7 @@ export default function RoomChat() {
         text,
         attachment ?? undefined,
         discussionId ?? undefined,
+        clientMessageId,
       );
       setMessages(prev =>
         reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
@@ -379,6 +384,7 @@ export default function RoomChat() {
       if (attachment) setPendingAttachment(attachment);
       setLoadError(err instanceof Error ? err.message : 'Could not send your message.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -389,11 +395,14 @@ export default function RoomChat() {
    * matching the spec's "stop → upload → send" flow.
    */
   const sendAttachmentDirectly = async (attachment: MediaAttachment) => {
-    if (!user || !roomId || sending) return;
+    if (!user || !roomId || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
+    const clientMessageId = crypto.randomUUID();
 
     const optimistic: RoomMessage = {
-      id: `opt-${Date.now()}`,
+      id: `opt-${clientMessageId}`,
+      clientMessageId,
       roomId: String(roomId),
       userId: user.id,
       senderName: user.preferredName || 'You',
@@ -412,6 +421,7 @@ export default function RoomChat() {
         '',
         attachment,
         discussionId ?? undefined,
+        clientMessageId,
       );
       setMessages(prev =>
         reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
@@ -420,6 +430,7 @@ export default function RoomChat() {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setLoadError(err instanceof Error ? err.message : 'Could not send your attachment.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -509,7 +520,9 @@ export default function RoomChat() {
 
   if (!user) return null;
 
-  const groups = groupByDate(messages);
+  // Keep the final render boundary canonical as protection against stale
+  // overlapping SSE callbacks in retained mobile/PWA sessions.
+  const groups = groupByDate(mergeRoomMessages(messages, []));
 
   return (
     <div className="min-h-[100dvh] bg-background flex flex-col">

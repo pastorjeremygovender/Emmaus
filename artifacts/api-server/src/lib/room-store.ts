@@ -110,6 +110,8 @@ export interface MediaAttachment {
 
 export interface RoomMessage {
   id: string;
+  /** Transient sender-generated ID used to reconcile optimistic and SSE copies. */
+  clientMessageId?: string;
   roomId: string;
   userId: string;
   senderName: string;
@@ -753,6 +755,7 @@ export async function addMessage(
   body: string,
   attachment?: MediaAttachment,
   discussionId?: string,
+  clientMessageId?: string,
 ): Promise<RoomMessage> {
   let rows: Record<string, unknown>[];
   try {
@@ -788,7 +791,10 @@ export async function addMessage(
     [userId]
   );
   const preferred_name = nameRes.rows[0]?.preferred_name ?? null;
-  const msg = rowToMessage({ ...row, preferred_name });
+  const msg = {
+    ...rowToMessage({ ...row, preferred_name }),
+    ...(clientMessageId ? { clientMessageId } : {}),
+  };
 
   // Notify all SSE subscribers for this room
   notifySubscribers(roomId, msg);

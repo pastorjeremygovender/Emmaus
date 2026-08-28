@@ -1518,14 +1518,27 @@ router.post("/:roomId/messages", async (req, res) => {
   if (!userId) return;
 
   const { roomId } = req.params;
-  const { body, attachment, discussionId } = req.body as {
+  const { body, attachment, discussionId, clientMessageId } = req.body as {
     body?: string;
     attachment?: MediaAttachment;
     discussionId?: string;
+    clientMessageId?: string;
   };
   const trimmedBody = (body ?? "").trim();
   if (!trimmedBody && !attachment) {
     res.status(400).json({ error: "Message body or attachment is required." });
+    return;
+  }
+  if (
+    clientMessageId !== undefined &&
+    (
+      typeof clientMessageId !== "string" ||
+      clientMessageId.length < 1 ||
+      clientMessageId.length > 100 ||
+      !/^[A-Za-z0-9_-]+$/.test(clientMessageId)
+    )
+  ) {
+    res.status(400).json({ error: "Invalid client message ID." });
     return;
   }
 
@@ -1535,7 +1548,12 @@ router.post("/:roomId/messages", async (req, res) => {
       return;
     }
     const message = await addMessage(
-      String(roomId), userId, trimmedBody, attachment ?? undefined, discussionId,
+      String(roomId),
+      userId,
+      trimmedBody,
+      attachment ?? undefined,
+      discussionId,
+      clientMessageId,
     );
     res.status(201).json({ message });
   } catch (err) {

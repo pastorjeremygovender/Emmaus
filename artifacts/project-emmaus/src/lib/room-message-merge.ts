@@ -13,6 +13,13 @@ function hasSameAttachment(a: RoomMessage, b: RoomMessage): boolean {
 
 function isServerEchoOfOptimistic(optimistic: RoomMessage, server: RoomMessage): boolean {
   if (!optimistic.id.startsWith('opt-') || server.id.startsWith('opt-')) return false;
+  if (
+    optimistic.clientMessageId &&
+    server.clientMessageId &&
+    optimistic.clientMessageId === server.clientMessageId
+  ) {
+    return true;
+  }
   const age = new Date(server.createdAt).getTime() - new Date(optimistic.createdAt).getTime();
   return (
     age >= -5_000 &&

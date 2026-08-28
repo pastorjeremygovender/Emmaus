@@ -74,3 +74,4 @@
 - [Authenticated JSON cache policy](authenticated-json-cache-policy.md) — browser 304 responses have no JSON body; authenticated client fetches must bypass conditional caching when they cannot rehydrate from a cache.
 - [Room navigation guards](room-navigation-guards.md) — room routes must bypass Daily Rhythm interception, and asynchronously loaded detail components must keep hooks above early returns.
 - [Shared room tool lifecycle](shared-room-tool-lifecycle.md) — chat and shared AI surfaces need durable session state plus the session SSE path; message SSE alone cannot close or recover tools.
+- [Room message reconciliation](room-message-reconciliation.md) — optimistic Room posts must use a client-generated ID shared by POST and SSE; field-based echo matching is only a fallback.

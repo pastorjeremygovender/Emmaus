@@ -310,6 +310,7 @@ export async function apiSendMessage(
   body: string,
   attachment?: import('@/lib/rooms-types').MediaAttachment,
   discussionId?: string,
+  clientMessageId?: string,
 ): Promise<RoomMessage> {
   const data = await roomsFetch<{ message: RoomMessage }>(
     `/api/rooms/${roomId}/messages`,
@@ -318,6 +319,7 @@ export async function apiSendMessage(
       body,
       ...(attachment ? { attachment } : {}),
       ...(discussionId ? { discussionId } : {}),
+      ...(clientMessageId ? { clientMessageId } : {}),
     }) }
   );
   return data.message;
