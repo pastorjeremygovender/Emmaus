@@ -61,16 +61,51 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
 }
 
 /**
- * Merge two newest-first message lists, deduplicating by id.
- * Real server messages take priority over optimistic placeholders.
+ * Merge two newest-first message lists, deduplicating by id and reconciling
+ * a server echo with the sender's optimistic placeholder.
  */
+function hasSameAttachment(a: RoomMessage, b: RoomMessage): boolean {
+  if (!a.attachment && !b.attachment) return true;
+  if (!a.attachment || !b.attachment) return false;
+  return (
+    a.attachment.objectPath === b.attachment.objectPath &&
+    a.attachment.type === b.attachment.type &&
+    a.attachment.filename === b.attachment.filename &&
+    a.attachment.size === b.attachment.size
+  );
+}
+
+function isServerEchoOfOptimistic(optimistic: RoomMessage, server: RoomMessage): boolean {
+  if (!optimistic.id.startsWith('opt-') || server.id.startsWith('opt-')) return false;
+  // The server timestamp must be at or shortly after the optimistic post.
+  // This avoids accidentally replacing an older identical message.
+  const age = new Date(server.createdAt).getTime() - new Date(optimistic.createdAt).getTime();
+  return (
+    age >= -5_000 &&
+    age <= 120_000 &&
+    optimistic.userId === server.userId &&
+    optimistic.body === server.body &&
+    optimistic.discussionId === server.discussionId &&
+    hasSameAttachment(optimistic, server)
+  );
+}
+
 function mergeMessages(a: RoomMessage[], b: RoomMessage[]): RoomMessage[] {
   const seen = new Map<string, RoomMessage>();
-  for (const msg of [...a, ...b]) {
+  const all = [...a, ...b];
+  const serverMessages = all.filter(msg => !msg.id.startsWith('opt-'));
+
+  for (const msg of serverMessages) {
     const existing = seen.get(msg.id);
-    if (!existing || existing.id.startsWith('opt-')) {
+    if (!existing) {
       seen.set(msg.id, msg);
     }
+  }
+  for (const msg of all.filter(item => item.id.startsWith('opt-'))) {
+    const hasServerEcho = serverMessages.some(server =>
+      isServerEchoOfOptimistic(msg, server),
+    );
+    if (!hasServerEcho) seen.set(msg.id, msg);
   }
   return Array.from(seen.values()).sort(
     (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
