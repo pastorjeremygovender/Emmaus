@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   listJourneys: vi.fn(),
   listSteps: vi.fn(),
   getAllProgress: vi.fn(),
+  getDailyRhythmState: vi.fn(),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -38,6 +39,7 @@ vi.mock('@/lib/journeys-api', () => ({
   listJourneys: mocks.listJourneys,
   listSteps: mocks.listSteps,
   getAllProgress: mocks.getAllProgress,
+  getDailyRhythmState: mocks.getDailyRhythmState,
 }));
 
 const emptyBibleData = {
@@ -81,6 +83,7 @@ function JourneyProbe() {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  mocks.getDailyRhythmState.mockResolvedValue(null);
   mocks.currentUser = {
     id: 'subject-a',
     role: 'user',

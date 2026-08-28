@@ -142,6 +142,11 @@ function sermonResults(response: SseResponse): Array<Record<string, unknown>> {
 function assertPipelineTimings(response: SseResponse, label: string): void {
   const timings = response.done.metadata?.pipelineTimings as Record<string, unknown> | undefined;
   assert.ok(timings, `${label} should expose structured pipeline timings`);
+  assert.match(
+    String(response.done.metadata?.requestId ?? ""),
+    /^[a-z0-9]{6}$/,
+    `${label} should expose a correlatable request ID`,
+  );
   for (const field of [
     "authMs",
     "contextMs",

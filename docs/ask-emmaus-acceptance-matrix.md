@@ -4,6 +4,27 @@ Status: **release evidence, not a production approval**. The automated checks be
 run against the repository's test doubles or development database. A production
 release remains blocked until the authenticated browser checklist is completed.
 
+## Evidence recorded on 2026-08-28
+
+| Check | Result | Evidence |
+|---|---|---|
+| Preview authentication boundary | Observed only while signed out | `evidence/task-712-preview-sign-in.jpg`; the preview displayed the sign-in form and browser logs reported `authenticated: false` |
+| Authenticated API transport parity | Passed with isolated test identities | `pnpm run test:sermon-action-parity` — 3/3 tests passed for typed Ask Emmaus, Voice, resumed Voice, canonical/archive sermon actions, negative retrieval, timing fields, and correlatable request IDs |
+| Authenticated browser flow | **Not verified** | This environment has no real member/admin credentials or browser interaction capability; the screenshot is not evidence of a signed-in account |
+| Frontend account isolation/path regression suite | Passed as automated tests | `App.browser-paths.test.tsx`, `App.startup-performance.test.tsx`, and `provider-account-isolation.test.tsx` — 13/13 tests passed |
+| API restart/persistence boundary | Observed | API workflow restarted cleanly; the current conversation store remains memory-backed and is not restart-safe |
+
+The test identities above are deliberately isolated development identities created
+by the test-only auth harness. They are not real member/admin accounts and do not
+replace the authenticated browser checklist below. Matrix statuses remain
+unchanged where browser or multi-user release evidence is still outstanding.
+
+The final server log also correlated the deterministic typed request
+`reqId=gt7mci` (`authMs=0`, `totalMs=414`, no model generation) with the general
+Voice request `reqId=gx8hlu` (`authMs=0`, `modelTtftMs=939`,
+`modelGenerationMs=7098`, `totalMs=7604`). These are development test identities,
+not publication evidence.
+
 | Requirement | Status | Evidence |
 |---|---|---|
 | Canonical published sermons are indexed | Fully verified | `src/lib/__tests__/sermon-knowledge-index.test.ts`; `updateSermonLifecycle` |

@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "AC4KrF7bjMU_ab8HTxZNT"
+uri = "file://evidence/task-712-preview-sign-in.jpg"
+type = "image"
+title = "Ask Emmaus preview sign-in boundary"
+description = "Signed-out preview evidence captured during the authenticated browser verification attempt on 2026-08-28. This does not represent a signed-in member or admin pass."
+logical_id = "cadba9e0-4ac3-4ae0-9c90-398525ae3afa"
+content_hash = "sha256:c5325c1da2baedb0693297bd868aef40af21cf6f316dd10cd51d762ec9f9a0ab"
+size = 26191
+mtime_ms = 1787928383166
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:56d2210c-938e-4468-a6aa-b25d01eaaa3b/cadba9e0-4ac3-4ae0-9c90-398525ae3afa/ea3930e2-598d-4f21-8384-68426d6bc86f"
+storage_version_token = "1787928875811805"
+content_type = "image/jpeg"

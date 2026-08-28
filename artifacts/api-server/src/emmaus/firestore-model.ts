@@ -169,6 +169,8 @@ export interface EmmausResponseMetadata {
     label: string;
     route: string;
   }>;
+  /** Correlates the SSE response with the server's structured request log. */
+  requestId?: string;
   /** Structured stage timings used for release acceptance comparisons. */
   pipelineTimings?: {
     authMs: number | null;

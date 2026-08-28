@@ -391,6 +391,7 @@ async function completeCanonicalResponse(
   metadata: EmmausResponseMetadata,
   pipelineTimings?: EmmausResponseMetadata["pipelineTimings"],
   pipelineStartMs?: number,
+  requestId?: string,
 ): Promise<void> {
   const userId = builtCtx.userId;
   const requestedIntent = classifyEmmausIntent(req.message);
@@ -431,6 +432,7 @@ async function completeCanonicalResponse(
   const finalMeta: EmmausResponseMetadata = {
     ...metadata,
     requestedIntent: requestedIntent.mode,
+    ...(requestId ? { requestId } : {}),
     scriptureReferences: metadata.scriptureReferences ?? (metadata.scripture ? [metadata.scripture] : []),
     ...(pipelineTimings
       ? { pipelineTimings: { ...pipelineTimings, totalMs: pipelineStartMs ? Date.now() - pipelineStartMs : pipelineTimings.totalMs } }
@@ -462,6 +464,10 @@ async function completeCanonicalResponse(
     promptVersion: PROMPT_VERSION,
   } satisfies SseDonePayload);
   res.end();
+  logger.info(
+    { reqId: requestId, pipelineTimings: finalMeta.pipelineTimings },
+    "emmaus: request_complete",
+  );
 }
 
 
@@ -543,7 +549,17 @@ export async function handleConversation(
         `[emmaus:${reqId}] canonical_resolved intent=${routeAskEmmausRequest(req.message).intent} ms=${ms()}`
       );
       pipelineTimings.totalMs = ms();
-      await completeCanonicalResponse(req, res, store, builtCtx, contextInput, canonical.metadata, pipelineTimings, t0);
+      await completeCanonicalResponse(
+        req,
+        res,
+        store,
+        builtCtx,
+        contextInput,
+        canonical.metadata,
+        pipelineTimings,
+        t0,
+        reqId,
+      );
       return;
     }
   }
@@ -895,6 +911,7 @@ export async function handleConversation(
   const finalMeta: EmmausResponseMetadata = metadata
     ? validateModelResponse(metadata, resourceCatalogue.resources)
     : defaultMetadata();
+  finalMeta.requestId = reqId;
 
   if (needsPastoralNote && !finalMeta.handoffType) {
     finalMeta.handoffType = "pastoral";

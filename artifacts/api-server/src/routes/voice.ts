@@ -528,8 +528,10 @@ export function selectSermonResult<T extends { openPath: string }>(
 }
 
 router.post('/voice/conversation', async (req: Request, res: Response) => {
+  const authStarted = Date.now();
   const userId = requireAuth(req, res);
   if (!userId) return;
+  const authMs = Date.now() - authStarted;
 
   const body = req.body as VoiceConversationRequest;
   const message = typeof body.message === "string" ? body.message : "";
@@ -610,6 +612,7 @@ router.post('/voice/conversation', async (req: Request, res: Response) => {
         message: message.trim(),
         context: canonicalContext,
         history,
+        authMs,
       },
       res,
     );
