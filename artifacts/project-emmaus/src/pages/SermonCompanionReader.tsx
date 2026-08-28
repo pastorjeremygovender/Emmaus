@@ -327,7 +327,7 @@ export default function SermonCompanionReader() {
         <p className="text-xs text-muted-foreground/70">
           The companion may still be generating. Please check back in a moment.
         </p>
-        <Button variant="outline" size="sm" onClick={() => setLocation(returnDest)}>
+        <Button variant="outline" size="sm" onClick={() => goBackOrFallback(returnDest, setLocation)}>
           {returnLabel}
         </Button>
         <BottomNav />

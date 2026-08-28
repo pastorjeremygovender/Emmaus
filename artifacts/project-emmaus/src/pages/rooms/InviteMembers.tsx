@@ -36,7 +36,7 @@ export default function InviteMembers() {
     return (
       <div className="p-6 text-center mt-20 space-y-4">
         <p className="text-muted-foreground">{loadError}</p>
-        <Button onClick={() => setLocation(`/rooms/${roomId}`)}>Back</Button>
+        <Button onClick={() => goBackOrFallback(`/rooms/${roomId}`, setLocation)}>Back</Button>
       </div>
     );
   }
