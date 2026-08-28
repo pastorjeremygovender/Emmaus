@@ -203,6 +203,28 @@ router.get("/admin/all", async (req, res) => {
 
 // ─── Admin: full room detail (invite credentials always included) ──────────────
 
+// Keep the fixed video-settings path before the generic /admin/:roomId route.
+// Otherwise Express treats "video-settings" as a room ID and returns a 500.
+router.get("/admin/video-settings", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const settings = await getVideoSettings();
+    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
+  } catch {
+    res.status(500).json({ error: "Failed to load video settings." });
+  }
+});
+
+router.patch("/admin/video-settings", async (req, res) => {
+  if (!(await guardAdmin(req, res))) return;
+  try {
+    const settings = await updateVideoSettings(req.body as Partial<VideoSettings>);
+    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
+  } catch {
+    res.status(500).json({ error: "Failed to update video settings." });
+  }
+});
+
 router.get("/admin/:roomId", async (req, res) => {
   if (!(await guardAdmin(req, res))) return;
   const { roomId } = req.params;
@@ -489,28 +511,6 @@ router.patch("/admin/persons/:userId/leader-access", async (req, res) => {
     res.json(result);
   } catch {
     res.status(500).json({ error: "Failed to update leader access." });
-  }
-});
-
-// ─── Admin: video settings ────────────────────────────────────────────────────
-
-router.get("/admin/video-settings", async (req, res) => {
-  if (!(await guardAdmin(req, res))) return;
-  try {
-    const settings = await getVideoSettings();
-    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
-  } catch {
-    res.status(500).json({ error: "Failed to load video settings." });
-  }
-});
-
-router.patch("/admin/video-settings", async (req, res) => {
-  if (!(await guardAdmin(req, res))) return;
-  try {
-    const settings = await updateVideoSettings(req.body as Partial<VideoSettings>);
-    res.json({ settings, livekit: getLiveKitConfigurationStatus() });
-  } catch {
-    res.status(500).json({ error: "Failed to update video settings." });
   }
 });
 
