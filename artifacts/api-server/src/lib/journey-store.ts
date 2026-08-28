@@ -174,6 +174,14 @@ export function parseJourneyDisplayOrigin(value: unknown): JourneyDisplayOrigin 
   return null;
 }
 
+export function authoritativeDisplayOrigin(
+  journey: Pick<FrontendJourney, "journeyType" | "collectionId"> | null | undefined,
+): JourneyDisplayOrigin | null {
+  if (!journey) return null;
+  if (journey.collectionId) return "journey";
+  return journey.journeyType === "walk" ? "walk" : "journey";
+}
+
 export interface DailyRhythmStartup {
   firstOpen: boolean;
   destination: string;
@@ -1052,9 +1060,15 @@ export async function pauseJourney(userId: string, journeyId: string): Promise<v
 
 export async function resumeJourney(userId: string, journeyId: string): Promise<void> {
   const now = new Date();
+  const journey = await getJourney(journeyId);
+  const displayOrigin = authoritativeDisplayOrigin(journey);
   await db
     .update(userJourneyProgressTable)
-    .set({ status: "active", updatedAt: now })
+    .set({
+      status: "active",
+      ...(displayOrigin ? { displayOrigin } : {}),
+      updatedAt: now,
+    })
     .where(and(
       eq(userJourneyProgressTable.userId, userId),
       eq(userJourneyProgressTable.journeyId, journeyId),
@@ -1071,6 +1085,26 @@ export async function removeJourneyProgress(userId: string, journeyId: string): 
 }
 
 export async function getAllProgress(userId: string): Promise<Record<string, FrontendProgress>> {
+  // Authenticated, idempotent legacy reconciliation. Only the presentation
+  // classification is repaired; child progress and all member-authored data
+  // remain untouched.
+  await pool.query(
+    `UPDATE user_journey_progress AS ujp
+        SET display_origin = CASE
+          WHEN j.collection_id IS NOT NULL THEN 'journey'
+          WHEN j.journey_type = 'walk' THEN 'walk'
+          ELSE 'journey'
+        END
+       FROM journeys AS j
+      WHERE ujp.user_id = $1
+        AND j.id = ujp.journey_id
+        AND ujp.display_origin IS DISTINCT FROM CASE
+          WHEN j.collection_id IS NOT NULL THEN 'journey'
+          WHEN j.journey_type = 'walk' THEN 'walk'
+          ELSE 'journey'
+        END`,
+    [userId],
+  );
   const rows = await db
     .select()
     .from(userJourneyProgressTable)
@@ -1441,9 +1475,11 @@ export async function getDailyRhythmStartup(userId: string, startupSessionId = "
 export async function startJourney(
   userId: string,
   journeyId: string,
-  displayOrigin?: JourneyDisplayOrigin | null,
+  _displayOrigin?: JourneyDisplayOrigin | null,
 ): Promise<FrontendProgress> {
   const now = new Date();
+  const journey = await getJourney(journeyId);
+  const displayOrigin = authoritativeDisplayOrigin(journey);
   // Use onConflictDoNothing so concurrent calls (e.g. from the shared-start
   // endpoint and the legacy start endpoint racing) are safe under the unique
   // index on (user_id, journey_id).  If the INSERT is a no-op, RETURNING is
@@ -1477,14 +1513,7 @@ export async function startJourney(
       hiddenFromToday: false,
       lastOpenedAt: now,
       updatedAt: now,
-      ...(displayOrigin
-        ? {
-            // An origin is immutable once recorded. This also lets a legacy
-            // row be classified on its first explicit re-entry without
-            // reclassifying an already-owned Walk/Journey.
-            displayOrigin: sql`COALESCE(${userJourneyProgressTable.displayOrigin}, ${displayOrigin})`,
-          }
-        : {}),
+      ...(displayOrigin ? { displayOrigin } : {}),
     },
   })
   .returning();
@@ -1501,6 +1530,7 @@ export async function completeStep(
   const now = new Date();
   const journey = await getJourney(journeyId);
   const isDailyRhythm = journey?.journeyType === "daily-rhythm" || journey?.journeyType === "core";
+  const displayOrigin = authoritativeDisplayOrigin(journey);
   const existing = await getProgress(userId, journeyId);
 
   let prog: FrontendProgress;
@@ -1523,6 +1553,7 @@ export async function completeStep(
         // previously hidden or completed item to the active Today's Steps list.
         status: "active",
         hiddenFromToday: false,
+        ...(displayOrigin ? { displayOrigin } : {}),
         updatedAt: now,
       })
       .where(and(

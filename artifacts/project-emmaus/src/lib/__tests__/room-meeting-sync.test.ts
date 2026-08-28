@@ -71,6 +71,15 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('openChat(payload.discussionId);');
   });
 
+  it('does not show the inactive Group Discussion shortcut in the meeting card', () => {
+    const quickAccessStart = roomDetailSource.indexOf('/* Quick-access: open scripture or group notes */');
+    const quickAccessEnd = roomDetailSource.indexOf('/* Shared discussion command notice', quickAccessStart);
+    const quickAccessBlock = roomDetailSource.slice(quickAccessStart, quickAccessEnd);
+
+    expect(quickAccessBlock).not.toContain('Group Discussion');
+    expect(quickAccessBlock).not.toContain('openChat()');
+  });
+
   it('keeps LiveKit audio microphone-only and removes camera controls', () => {
     expect(videoRoomSource).toContain('video={meetingMode === \'video\'}');
     expect(videoRoomSource).toContain('controls={{ camera: false, microphone: true');

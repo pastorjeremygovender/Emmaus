@@ -144,6 +144,13 @@ export default function CollectionPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const search = useSearch();
+  const resumeJourneyId = useMemo(() => {
+    try {
+      return new URLSearchParams(search).get('resume');
+    } catch {
+      return null;
+    }
+  }, [search]);
   // Resolve back destination from the ?source= param so that navigating here
   // from the Journeys tab (?source=nextStepsJourneys) returns to /journeys?tab=journeys
   // rather than /journeys/explore.
@@ -206,6 +213,7 @@ export default function CollectionPage() {
     }
     return set;
   }, [collectionJourneys, steps, progress]);
+  const resumeJourney = collectionJourneys.find(journey => journey.id === resumeJourneyId);
 
   // ── Not found ──────────────────────────────────────────────────────────────
   if (!loading && !collection) {
@@ -278,6 +286,14 @@ export default function CollectionPage() {
 
           {/* Journey list */}
           <div className="px-5 space-y-3">
+            {resumeJourney && !completedSet.has(resumeJourney.id) && (
+              <Button
+                className="w-full rounded-xl"
+                onClick={() => setLocation(`/journeys/${resumeJourney.id}?source=collectionDetail&sourceId=${id}`)}
+              >
+                Continue {resumeJourney.title}
+              </Button>
+            )}
             {collectionJourneys.length === 0 ? (
               <p className="text-[14px] text-muted-foreground py-8 text-center">
                 No Walks in this journey yet.

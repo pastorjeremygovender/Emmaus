@@ -44,3 +44,16 @@ already existing in the database.
 **How to apply:** Poll only during active generation, match the persisted request
 identity, then stop polling as soon as the state becomes completed/failed or the
 tool is closed/replaced.
+
+Shared Ask Emmaus is a live group discussion aid, so it must use a bounded fast
+model budget and must not await a durable database write before broadcasting
+every streamed token. Persist partial text on a short interval/size threshold,
+then always persist the final completed answer.
+
+**Why:** A deep model with a 6,000-token budget plus one database round trip per
+chunk made a whole Group wait far too long. The bounded/throttled path produced
+first visible text and full completion in about two seconds in a real Room test.
+
+**How to apply:** Keep private/deep Ask Emmaus routing separate from the shared
+Room path. Preserve immediate SSE delivery, periodic reconnect-safe snapshots,
+final persistence, stale-request cancellation, and the existing retryable timeout.

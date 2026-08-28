@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { ContentBadge } from '@/components/ContentBadge';
 import type { ReactNode } from 'react';
 import { listCollections, type Collection } from '@/lib/collections-api';
+import { projectTodaysJourneys } from '@/lib/todays-journey-projection';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -148,6 +149,7 @@ function CompactCard({
   done = false,
   badge,
   trailing,
+  imageUrl,
 }: {
   title: string;
   subtitle?: string;
@@ -156,6 +158,7 @@ function CompactCard({
   done?: boolean;
   badge?: 'UPDATED' | 'NEW' | null;
   trailing?: ReactNode;
+  imageUrl?: string;
 }) {
   const clickable = !!onAction;
   return (
@@ -167,6 +170,14 @@ function CompactCard({
       onClick={clickable ? onAction : undefined}
     >
       <div className="flex items-center gap-2 min-w-0">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+            loading="lazy"
+          />
+        ) : null}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <p className="text-[14px] font-semibold text-foreground leading-snug truncate flex-1">
@@ -252,12 +263,6 @@ export default function Walk() {
       });
     return () => { cancelled = true; };
   }, []);
-  const collectionMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const c of collections) m.set(c.id, c.title);
-    return m;
-  }, [collections]);
-
   const reloadDevotionals = useCallback(async (userId?: string) => {
     const auth = userId ? { userId } : undefined;
     const [seriesList, progressList] = await Promise.all([
@@ -508,33 +513,16 @@ export default function Walk() {
     },
   );
 
-  // Split started journeys by the persisted member-facing origin. Content type
-  // alone is not enough: a walk opened through Discover → Journeys must stay
-  // out of Today's Steps, even when its journeyType is "walk".
-  // Legacy rows without an origin use the stable compatibility rule also used
-  // by the discovery API: collection walks belong to Journeys; standalone
-  // walks belong to Walks; all other growth content belongs to Journeys.
-  function effectiveDisplayOrigin(
-    journey: { journeyType: string; collectionId?: string | null },
-    prog: { displayOrigin?: 'walk' | 'journey' | null },
-  ): 'walk' | 'journey' {
-    if (prog.displayOrigin) return prog.displayOrigin;
-    return journey.journeyType === 'walk' && !journey.collectionId ? 'walk' : 'journey';
-  }
-
-  const startedWalks          = startedJourneys.filter(({ journey }) => {
-    const prog = progress[journey.id];
-    if (!prog || effectiveDisplayOrigin(journey, prog) !== 'walk') return false;
-    // Older Sermon Companion journeys were incorrectly migrated to "walk".
-    // Keep them out of Walks even if the stored journey type is still wrong.
+  const visibleStartedJourneys = startedJourneys.filter(({ journey }) => {
     const category = journey.category?.trim().toLowerCase();
     const tags = (journey.tags ?? []).map(tag => tag.trim().toLowerCase());
     return category !== 'companion' && !tags.includes('companion');
   });
-  const startedLongerJourneys = startedJourneys.filter(({ journey }) => {
-    const prog = progress[journey.id];
-    return !!prog && effectiveDisplayOrigin(journey, prog) === 'journey';
-  });
+  const {
+    standaloneWalks: startedWalks,
+    standaloneJourneys: startedLongerJourneys,
+    collectionCards,
+  } = projectTodaysJourneys(visibleStartedJourneys, collections);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -782,9 +770,34 @@ export default function Walk() {
 
         {/* ── 4. Journeys (Longer Studies) — always visible ─────────────────── */}
         <SectionWrapper color="indigo" label="Journeys (Longer Studies)" delay={0.11}>
-          {!collectionsReady && startedLongerJourneys.some(({ journey }) => journey.collectionId) ? (
+          {!collectionsReady && visibleStartedJourneys.some(({ journey }) => journey.collectionId) ? (
             <SkeletonCard />
-          ) : startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+          ) : <>
+          {collectionCards.map(({ collection, active, children }) => {
+            const { journey, prog, currentStep } = active;
+            const allComplete = children.every(child =>
+              child.totalPublishedSteps > 0 &&
+              child.prog.completedDays.length >= child.totalPublishedSteps
+            );
+            const journeySubtitle = allComplete
+              ? 'Journey Complete'
+              : `${journey.title}${currentStep?.title ? ` · ${currentStep.title}` : ''}`;
+            return (
+              <CompactCard
+                key={collection.id}
+                title={collection.title}
+                subtitle={journeySubtitle}
+                ctaLabel={allComplete ? undefined : 'View & Continue'}
+                imageUrl={collection.coverImageUrl}
+                onAction={() => {
+                  void dismissBadge('journey', journey.id);
+                  setLocation(`/journeys/collections/${collection.id}?source=today&resume=${encodeURIComponent(journey.id)}`);
+                }}
+                done={allComplete}
+              />
+            );
+          })}
+          {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
             const completedCount  = prog.completedDays.length;
             const isCompleted     = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
             const journeySubtitle = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
@@ -793,20 +806,11 @@ export default function Walk() {
               prog.lastOpenedAt ?? null,
               true,
             );
-            // If this journey belongs to a collection, show the collection name as the
-            // card title and prefix the subtitle with the journey name.
-            const collectionTitle = journey.collectionId ? collectionMap.get(journey.collectionId) : undefined;
-            const cardTitle    = collectionTitle ?? journey.title;
-            const cardSubtitle = collectionTitle && journeySubtitle
-              ? `${journey.title} · ${journeySubtitle}`
-              : collectionTitle
-                ? journey.title
-                : journeySubtitle;
             return (
               <CompactCard
                 key={journey.id}
-                title={cardTitle}
-                subtitle={cardSubtitle}
+                title={journey.title}
+                subtitle={journeySubtitle}
                 ctaLabel={isCompleted ? undefined : 'Continue'}
                 onAction={() => {
                   void dismissBadge('journey', journey.id);
@@ -826,7 +830,7 @@ export default function Walk() {
                 }
               />
             );
-          })}
+          })}</>}
           <AddMoreRow label="Add a Journey" onClick={() => navigateToDiscover('journeys')} />
         </SectionWrapper>
 

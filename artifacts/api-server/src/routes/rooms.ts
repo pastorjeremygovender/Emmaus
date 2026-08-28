@@ -2673,6 +2673,14 @@ router.patch("/:roomId/session/notes/:noteId/pin", async (req, res) => {
 
 // ─── Shared Ask Emmaus (Task #437) ───────────────────────────────────────────
 
+// Group answers are short, shared discussion aids. Keep this path independent
+// from the slower/deeper private Ask Emmaus model and avoid paying for a large
+// reasoning/output budget when several members are waiting together.
+const SHARED_EMMAUS_MODEL = process.env.EMMAUS_GROUP_MODEL ?? "gpt-4o-mini";
+const SHARED_EMMAUS_MAX_TOKENS = 1400;
+const SHARED_EMMAUS_STATE_WRITE_INTERVAL_MS = 750;
+const SHARED_EMMAUS_STATE_WRITE_CHARS = 600;
+
 // POST /:roomId/session/ask-emmaus — leader only; HTTP returns immediately,
 // streaming is broadcast to ALL session subscribers via SSE bus.
 router.post("/:roomId/session/ask-emmaus", async (req, res) => {
@@ -2800,7 +2808,12 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
 
       const provider = createLLMProvider();
       let fullText = "";
-      const iterator = provider.streamCompletion(messages, { maxTokens: 6000 })[Symbol.asyncIterator]();
+      let lastPersistedAt = 0;
+      let lastPersistedLength = 0;
+      const iterator = provider.streamCompletion(messages, {
+        maxTokens: SHARED_EMMAUS_MAX_TOKENS,
+        model: SHARED_EMMAUS_MODEL,
+      })[Symbol.asyncIterator]();
       const STREAM_IDLE_TIMEOUT_MS = 45_000;
 
       // gpt-5 reasoning models reject small output budgets. Keep this above
@@ -2816,10 +2829,18 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
         const chunk = next.value;
         if (!chunk.content) continue;
         fullText += chunk.content;
-        const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, { text: fullText });
-        if (!stillCurrent) {
-          await iterator.return?.(undefined as never);
-          return;
+        const shouldPersist =
+          lastPersistedAt === 0 ||
+          Date.now() - lastPersistedAt >= SHARED_EMMAUS_STATE_WRITE_INTERVAL_MS ||
+          fullText.length - lastPersistedLength >= SHARED_EMMAUS_STATE_WRITE_CHARS;
+        if (shouldPersist) {
+          const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, { text: fullText });
+          if (!stillCurrent) {
+            await iterator.return?.(undefined as never);
+            return;
+          }
+          lastPersistedAt = Date.now();
+          lastPersistedLength = fullText.length;
         }
         broadcastRoomEvent(String(roomId), {
           type: "emmaus_chunk",

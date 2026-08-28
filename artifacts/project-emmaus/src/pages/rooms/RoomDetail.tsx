@@ -1590,7 +1590,7 @@ export default function RoomDetail() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-100">You haven&apos;t joined yet</p>
-                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">Join to appear as In meeting and open Group Discussion.</p>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">Join to appear as In meeting.</p>
                     </div>
                     <button
                       onClick={handleJoinMeeting}
@@ -1657,14 +1657,6 @@ export default function RoomDetail() {
                     <StickyNote size={13} />
                     Group Notes
                   </button>
-                  {hasJoinedCurrentMeeting && (
-                    <button onClick={() => openChat()}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all"
-                    >
-                      <MessageSquare size={13} />
-                      Group Discussion
-                    </button>
-                  )}
                 </div>
               )}
 
