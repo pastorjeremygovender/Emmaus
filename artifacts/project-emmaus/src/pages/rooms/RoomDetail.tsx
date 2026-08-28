@@ -1918,7 +1918,15 @@ export default function RoomDetail() {
                   isLeader={isAuthorizedLeader}
                   userId={user.id}
                   roomId={String(roomId)}
-                  onStop={() => setActivePresentation(null)}
+                  onStop={() => {
+                    setActivePresentation(null);
+                    if (presentationReturnToChat) {
+                      const discussion = presentationDiscussionId
+                        ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
+                        : '';
+                      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+                    }
+                  }}
                   onClose={() => {
                     setActivePresentation(null);
                     if (presentationReturnToChat) {

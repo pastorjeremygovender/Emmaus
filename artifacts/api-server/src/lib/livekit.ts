@@ -61,6 +61,8 @@ export interface TokenGrant {
   canPublish?: boolean;
   /** Whether this participant can subscribe to others' tracks. */
   canSubscribe?: boolean;
+  /** Whether this participant can update their own LiveKit name/metadata/attributes. */
+  canUpdateOwnMetadata?: boolean;
   /** Whether this participant has room-admin privileges inside LiveKit. */
   roomAdmin?: boolean;
 }
@@ -84,6 +86,7 @@ export async function createLiveKitToken(grant: TokenGrant): Promise<string> {
     room: grant.roomName,
     canPublish: grant.canPublish ?? true,
     canSubscribe: grant.canSubscribe ?? true,
+    canUpdateOwnMetadata: grant.canUpdateOwnMetadata ?? false,
     canPublishData: grant.roomAdmin ?? false,
     roomAdmin: grant.roomAdmin ?? false,
   });

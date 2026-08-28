@@ -448,6 +448,7 @@ router.post("/:roomId/video/token", async (req, res) => {
       displayName,
       canPublish: true,
       canSubscribe: true,
+      canUpdateOwnMetadata: true,
       roomAdmin: isHost,
     });
 

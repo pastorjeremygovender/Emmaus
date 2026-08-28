@@ -15,6 +15,7 @@ import { MediaMessageBubble } from '@/components/MediaMessageBubble';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { VoiceNoteRecorder, supportsMediaRecorder } from '@/components/VoiceNoteRecorder';
 import { goBackOrFallback } from '@/lib/return-context';
+import { mergeRoomMessages, reconcileSentRoomMessage } from '@/lib/room-message-merge';
 
 const MAX_RECONNECT_ATTEMPTS = 6;
 const BASE_BACKOFF_MS = 1_000;
@@ -58,58 +59,6 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
     current.items.push(msg);
   }
   return groups;
-}
-
-/**
- * Merge two newest-first message lists, deduplicating by id and reconciling
- * a server echo with the sender's optimistic placeholder.
- */
-function hasSameAttachment(a: RoomMessage, b: RoomMessage): boolean {
-  if (!a.attachment && !b.attachment) return true;
-  if (!a.attachment || !b.attachment) return false;
-  return (
-    a.attachment.objectPath === b.attachment.objectPath &&
-    a.attachment.type === b.attachment.type &&
-    a.attachment.filename === b.attachment.filename &&
-    a.attachment.size === b.attachment.size
-  );
-}
-
-function isServerEchoOfOptimistic(optimistic: RoomMessage, server: RoomMessage): boolean {
-  if (!optimistic.id.startsWith('opt-') || server.id.startsWith('opt-')) return false;
-  // The server timestamp must be at or shortly after the optimistic post.
-  // This avoids accidentally replacing an older identical message.
-  const age = new Date(server.createdAt).getTime() - new Date(optimistic.createdAt).getTime();
-  return (
-    age >= -5_000 &&
-    age <= 120_000 &&
-    optimistic.userId === server.userId &&
-    optimistic.body === server.body &&
-    optimistic.discussionId === server.discussionId &&
-    hasSameAttachment(optimistic, server)
-  );
-}
-
-function mergeMessages(a: RoomMessage[], b: RoomMessage[]): RoomMessage[] {
-  const seen = new Map<string, RoomMessage>();
-  const all = [...a, ...b];
-  const serverMessages = all.filter(msg => !msg.id.startsWith('opt-'));
-
-  for (const msg of serverMessages) {
-    const existing = seen.get(msg.id);
-    if (!existing) {
-      seen.set(msg.id, msg);
-    }
-  }
-  for (const msg of all.filter(item => item.id.startsWith('opt-'))) {
-    const hasServerEcho = serverMessages.some(server =>
-      isServerEchoOfOptimistic(msg, server),
-    );
-    if (!hasServerEcho) seen.set(msg.id, msg);
-  }
-  return Array.from(seen.values()).sort(
-    (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()
-  );
 }
 
 export default function RoomChat() {
@@ -234,11 +183,14 @@ export default function RoomChat() {
               };
             };
              if (payload.type === 'media_presented') {
-               const isPresenter = payload.payload?.presentedBy === user.id;
-               const discussionQuery = isPresenter && discussionId
+               const discussionQuery = discussionId
                  ? `&discussionId=${encodeURIComponent(discussionId)}`
                  : '';
-               const returnQuery = isPresenter ? '&return=chat' : '';
+               // Everyone currently on Chat arrived here from the discussion,
+               // not just the person who started the presentation. Preserve
+               // that origin for every Chat viewer so global Stop returns them
+               // to the discussion instead of the meeting screen.
+               const returnQuery = '&return=chat';
                setLocation(
                  `/rooms/${String(roomId)}?presentation=1${returnQuery}${discussionQuery}`,
                );
@@ -346,7 +298,7 @@ export default function RoomChat() {
             if (msg.deleted) {
               setMessages(prev => prev.filter(existing => existing.id !== msg.id));
             } else {
-              setMessages(prev => mergeMessages(prev, [msg]));
+              setMessages(prev => mergeRoomMessages(prev, [msg]));
             }
             scrollToBottom();
           }
@@ -364,7 +316,7 @@ export default function RoomChat() {
         const history = await apiGetMessages(user!.id, String(roomId), undefined, discussionId ?? undefined);
         if (cancelled) { closeCurrentEs(); return; }
         connectionHistoryLoaded = true;
-        const merged = mergeMessages(history, connectionBuffer);
+        const merged = mergeRoomMessages(history, connectionBuffer);
         setMessages(merged);
         scrollToBottom();
         attempt = 0;
@@ -411,7 +363,16 @@ export default function RoomChat() {
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), text, attachment ?? undefined, discussionId ?? undefined);
+      const serverMessage = await apiSendMessage(
+        user.id,
+        String(roomId),
+        text,
+        attachment ?? undefined,
+        discussionId ?? undefined,
+      );
+      setMessages(prev =>
+        reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
+      );
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setBody(text);
@@ -445,7 +406,16 @@ export default function RoomChat() {
     scrollToBottom();
 
     try {
-      await apiSendMessage(user.id, String(roomId), '', attachment, discussionId ?? undefined);
+      const serverMessage = await apiSendMessage(
+        user.id,
+        String(roomId),
+        '',
+        attachment,
+        discussionId ?? undefined,
+      );
+      setMessages(prev =>
+        reconcileSentRoomMessage(prev, optimistic.id, serverMessage),
+      );
     } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setLoadError(err instanceof Error ? err.message : 'Could not send your attachment.');

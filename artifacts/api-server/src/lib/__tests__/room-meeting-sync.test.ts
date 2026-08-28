@@ -46,3 +46,7 @@ test("shared Emmaus retries claim the session atomically and reject overlapping 
   assert.match(routesSource, /claimSharedEmmausRequest/);
   assert.match(routesSource, /status\(409\)/);
 });
+
+test("LiveKit meeting tokens allow participants to publish raise-hand attributes", () => {
+  assert.match(routesSource, /canUpdateOwnMetadata:\s*true/);
+});

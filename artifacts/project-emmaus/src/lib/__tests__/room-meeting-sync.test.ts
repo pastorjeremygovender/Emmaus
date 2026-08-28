@@ -173,9 +173,11 @@ describe('active meeting synchronization contract', () => {
   it('prioritises chat-originated presentations and returns to the discussion', () => {
     expect(roomChatSource).toContain("payload.type === 'media_presented'");
     expect(roomChatSource).toContain("presentation=1${returnQuery}${discussionQuery}");
-    expect(roomChatSource).toContain("returnQuery = isPresenter ? '&return=chat' : ''");
+    expect(roomChatSource).toContain("const returnQuery = '&return=chat'");
+    expect(roomChatSource).not.toContain('isPresenter');
     expect(roomDetailSource).toContain("presentationQuery.get('return') === 'chat'");
     expect(roomDetailSource).toContain('scrollIntoView');
+    expect(roomDetailSource).toContain('onStop={() => {');
     expect(roomDetailSource).toContain('onClose={() =>');
     expect(roomDetailSource).toContain('`/rooms/${String(roomId)}/chat${discussion}`');
   });
