@@ -26,6 +26,14 @@ const roomChatSource = readFileSync(
   resolve(process.cwd(), 'src/pages/rooms/RoomChat.tsx'),
   'utf8',
 );
+const sharedAskSource = readFileSync(
+  resolve(process.cwd(), 'src/components/SharedAskEmmausPanel.tsx'),
+  'utf8',
+);
+const followLeaderSource = readFileSync(
+  resolve(process.cwd(), 'src/hooks/useFollowLeader.ts'),
+  'utf8',
+);
 
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
@@ -99,5 +107,22 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('Leave Meeting');
     expect(roomChatSource).toContain("apiCloseSharedTool(user.id, String(roomId), 'discussion')");
     expect(roomChatSource).toContain('Close Discussion');
+  });
+
+  it('keeps Discussion close authoritative on the chat route, including reconnect hydration', () => {
+    expect(roomChatSource).toContain('apiGetSessionEventsToken');
+    expect(roomChatSource).toContain("payload.type === 'tool_closed'");
+    expect(roomChatSource).toContain("payload.payload?.tool === 'discussion'");
+    expect(roomChatSource).toContain("metadata?.activeTool !== 'discussion'");
+    expect(followLeaderSource).toContain('closedToolsRef');
+    expect(followLeaderSource).toContain('eventSessionId !== currentSessionId');
+  });
+
+  it('recovers Ask Emmaus state after reconnects and leaves no indefinite spinner', () => {
+    expect(followLeaderSource).toContain('metadata?.activeEmmaus');
+    expect(followLeaderSource).toContain('requestId !== emmausRequestRef.current');
+    expect(sharedAskSource).toContain('generationTimedOut');
+    expect(sharedAskSource).toContain('30_000');
+    expect(sharedAskSource).toContain('try the question again');
   });
 });

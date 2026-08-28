@@ -125,6 +125,42 @@ async function openChatStream(
   return close;
 }
 
+async function openSessionStream(
+  token: string,
+  onEvent: (event: { type?: string; payload?: Record<string, unknown> }) => void,
+): Promise<() => void> {
+  const req = http.request({
+    hostname: "127.0.0.1",
+    port: (server.address() as { port: number }).port,
+    path: `/api/rooms/${roomId}/session/events?token=${encodeURIComponent(token)}`,
+    headers: { Accept: "text/event-stream" },
+  });
+  let response: http.IncomingMessage | null = null;
+  const close = () => {
+    response?.destroy();
+    req.destroy();
+  };
+  req.on("error", err => {
+    if ((err as NodeJS.ErrnoException).code !== "ECONNRESET") throw err;
+  });
+  req.on("response", res => {
+    response = res;
+    let buffer = "";
+    res.on("data", chunk => {
+      buffer += Buffer.from(chunk).toString();
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const event of events) {
+        const line = event.split("\n").find(value => value.startsWith("data: "));
+        if (line) onEvent(JSON.parse(line.slice(6)) as { type?: string; payload?: Record<string, unknown> });
+      }
+    });
+  });
+  req.end();
+  await new Promise(resolve => setTimeout(resolve, 30));
+  return close;
+}
+
 before(async () => {
   const [
     { default: express },
@@ -304,5 +340,81 @@ describe("two-device active Group Meeting flow", () => {
         .some(message => message.body === "A realtime test message"),
       true,
     );
+  });
+
+  it("broadcasts Discussion close and keeps it closed in reconnect hydration", async () => {
+    const tokenResponse = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/events/token`,
+      headers: memberHeaders,
+    });
+    assert.equal(tokenResponse.status, 200, tokenResponse.body);
+    const token = json<{ token: string }>(tokenResponse).token;
+    const events: Array<{ type?: string; payload?: Record<string, unknown> }> = [];
+    const closeStream = await openSessionStream(token, event => events.push(event));
+    const waitFor = async (type: string) => {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 2_000) {
+        if (events.some(event => event.type === type)) return;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      throw new Error(`Timed out waiting for ${type}`);
+    };
+
+    try {
+      const mode = await request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/mode`,
+        headers: leaderHeaders,
+        body: { mode: "discussion" },
+      });
+      assert.equal(mode.status, 200, mode.body);
+      await waitFor("mode_change");
+
+      const closed = await request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/tool-close`,
+        headers: leaderHeaders,
+        body: { tool: "discussion" },
+      });
+      assert.equal(closed.status, 200, closed.body);
+      await waitFor("tool_closed");
+
+      const detail = await request({
+        path: `/api/rooms/${roomId}`,
+        headers: memberHeaders,
+      });
+      assert.equal(detail.status, 200, detail.body);
+      assert.equal(
+        json<{ activeSession: { metadata?: { activeTool?: string } } }>(detail)
+          .activeSession.metadata?.activeTool,
+        undefined,
+      );
+    } finally {
+      closeStream();
+    }
+
+    const lateTokenResponse = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/events/token`,
+      headers: memberHeaders,
+    });
+    assert.equal(lateTokenResponse.status, 200, lateTokenResponse.body);
+    const lateEvents: Array<{ type?: string; payload?: Record<string, unknown> }> = [];
+    const closeLateStream = await openSessionStream(
+      json<{ token: string }>(lateTokenResponse).token,
+      event => lateEvents.push(event),
+    );
+    try {
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const state = lateEvents.find(event => event.type === "session_state");
+      assert.equal(
+        (state?.payload?.session as { metadata?: { activeTool?: string } } | null)
+          ?.metadata?.activeTool,
+        undefined,
+      );
+    } finally {
+      closeLateStream();
+    }
   });
 });

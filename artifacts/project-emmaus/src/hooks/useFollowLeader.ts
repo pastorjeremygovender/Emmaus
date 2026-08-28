@@ -183,7 +183,7 @@ export function useFollowLeader({
                effectiveTool === 'poll' || effectiveTool === 'ask-emmaus' ||
                effectiveTool === 'presentation' || effectiveTool === 'study'
                ? effectiveTool
-               : session.currentScripture ? 'scripture' : null,
+               : !hydratedToolWasClosed && session.currentScripture ? 'scripture' : null,
            );
            if (effectiveTool === 'ask-emmaus' && hydratedEmmaus?.requestId) {
              emmausRequestRef.current = hydratedEmmaus.requestId;

@@ -2785,7 +2785,11 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
         const chunk = next.value;
         if (!chunk.content) continue;
         fullText += chunk.content;
-        await updateSharedEmmausState(String(roomId), requestId, { text: fullText });
+        const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, { text: fullText });
+        if (!stillCurrent) {
+          await iterator.return?.(undefined as never);
+          return;
+        }
         broadcastRoomEvent(String(roomId), {
           type: "emmaus_chunk",
           payload: { requestId, text: chunk.content },
@@ -2799,6 +2803,9 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
       const metaIdx = fullText.indexOf("<EMMAUS_META>");
       const cleanText =
         metaIdx !== -1 ? fullText.slice(0, metaIdx).trim() : fullText.trim();
+      if (!cleanText) {
+        throw new Error("Emmaus returned an empty response.");
+      }
 
       const answer = await addEmmausAnswer(
         session.id, String(roomId), userId, trimmedQ, cleanText
