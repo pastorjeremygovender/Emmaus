@@ -34,6 +34,14 @@ const followLeaderSource = readFileSync(
   resolve(process.cwd(), 'src/hooks/useFollowLeader.ts'),
   'utf8',
 );
+const presentationSource = readFileSync(
+  resolve(process.cwd(), 'src/components/PresentationPanel.tsx'),
+  'utf8',
+);
+const mediaBubbleSource = readFileSync(
+  resolve(process.cwd(), 'src/components/MediaMessageBubble.tsx'),
+  'utf8',
+);
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
     expect(roomDetailSource).not.toContain('Attendance auto-record');
@@ -114,7 +122,8 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('Hide all');
     expect(roomDetailSource).toContain('apiAddPreparedRoomMedia');
     expect(roomDetailSource).toContain('apiSetRoomMediaVisibility');
-    expect(roomDetailSource).toContain('<MediaMessageBubble attachment={item.attachment} isMe={false} />');
+    expect(roomDetailSource).toContain('attachment={item.attachment}');
+    expect(roomDetailSource).toContain('allowDownload={isAuthorizedLeader || shared}');
   });
 
   it('keeps the completion card focused on summary counts', () => {
@@ -159,5 +168,32 @@ describe('active meeting synchronization contract', () => {
     expect(sharedAskSource).toContain('Try this question again');
     expect(followLeaderSource).toContain('apiGetSession(userId, roomId)');
     expect(followLeaderSource).toContain('setInterval(() => void reconcile(), 3_000)');
+  });
+
+  it('prioritises chat-originated presentations and returns to the discussion', () => {
+    expect(roomChatSource).toContain("payload.type === 'media_presented'");
+    expect(roomChatSource).toContain("presentation=1${returnQuery}${discussionQuery}");
+    expect(roomChatSource).toContain("returnQuery = isPresenter ? '&return=chat' : ''");
+    expect(roomDetailSource).toContain("presentationQuery.get('return') === 'chat'");
+    expect(roomDetailSource).toContain('scrollIntoView');
+    expect(roomDetailSource).toContain('onClose={() =>');
+    expect(roomDetailSource).toContain('`/rooms/${String(roomId)}/chat${discussion}`');
+  });
+
+  it('shares a transient raise-hand signal through LiveKit attributes', () => {
+    expect(videoRoomSource).toContain("const RAISE_HAND_ATTRIBUTE = 'emmaus.raise_hand'");
+    expect(videoRoomSource).toContain('localParticipant.setAttributes');
+    expect(videoRoomSource).toContain('Raise hand / ask a question');
+    expect(videoRoomSource).toContain('RaisedHandsSummary');
+    expect(videoRoomSource).toContain('hasRaisedHand(participant)');
+  });
+
+  it('provides explicit close and download controls for media viewers', () => {
+    expect(mediaBubbleSource).toContain('aria-label="Close image viewer"');
+    expect(mediaBubbleSource).toContain("event.key === 'Escape'");
+    expect(mediaBubbleSource).toContain('allowDownload?: boolean');
+    expect(mediaBubbleSource).toContain('download={filename}');
+    expect(presentationSource).toContain('aria-label="Close presentation viewer"');
+    expect(presentationSource).toContain('onClose?: () => void');
   });
 });

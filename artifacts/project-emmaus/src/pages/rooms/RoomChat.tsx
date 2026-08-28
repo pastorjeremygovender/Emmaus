@@ -230,8 +230,20 @@ export default function RoomChat() {
                   id?: string;
                   metadata?: { activeTool?: string };
                 } | null;
+                 presentedBy?: string;
               };
             };
+             if (payload.type === 'media_presented') {
+               const isPresenter = payload.payload?.presentedBy === user.id;
+               const discussionQuery = isPresenter && discussionId
+                 ? `&discussionId=${encodeURIComponent(discussionId)}`
+                 : '';
+               const returnQuery = isPresenter ? '&return=chat' : '';
+               setLocation(
+                 `/rooms/${String(roomId)}?presentation=1${returnQuery}${discussionQuery}`,
+               );
+               return;
+             }
             if (payload.type === 'tool_closed' && payload.payload?.tool === 'discussion') {
               if (
                 !payload.payload.sessionId ||
@@ -246,7 +258,8 @@ export default function RoomChat() {
               if (
                 !current ||
                 current.id !== sessionId ||
-                current.metadata?.activeTool !== 'discussion'
+                (current.metadata?.activeTool !== 'discussion' &&
+                  current.metadata?.activeTool !== 'presentation')
               ) {
                 closeDiscussion();
               }

@@ -4,7 +4,7 @@
  * Supports: image, pdf, video, voice, document, link
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   FileText, Film, Mic, Link as LinkIcon, Download,
   Play, Pause, ExternalLink, Presentation,
@@ -18,6 +18,8 @@ interface MediaMessageBubbleProps {
   /** Whether the current user can present (authorized leader or member-present enabled for own content). */
   canPresent?: boolean;
   onPresent?: () => void;
+  /** Show a real download action, used for visible prepared meeting media. */
+  allowDownload?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -34,9 +36,34 @@ function formatDuration(seconds: number): string {
 
 // ─── Image ────────────────────────────────────────────────────────────────────
 
-function ImageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+function DownloadAction({ url, filename, isMe }: { url: string; filename: string; isMe: boolean }) {
+  return (
+    <a
+      href={url}
+      download={filename}
+      onClick={event => event.stopPropagation()}
+      className={`inline-flex items-center gap-1.5 text-[12px] font-medium hover:underline ${
+        isMe ? 'text-primary-foreground/80' : 'text-primary'
+      }`}
+      aria-label={`Download ${filename}`}
+    >
+      <Download size={12} /> Download
+    </a>
+  );
+}
+
+function ImageBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open]);
 
   return (
     <div className="space-y-1.5">
@@ -56,6 +83,7 @@ function ImageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
           {attachment.caption}
         </p>
       )}
+      {allowDownload && <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />}
       {canPresent && onPresent && (
         <button
           onClick={onPresent}
@@ -70,13 +98,35 @@ function ImageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Viewing ${attachment.filename}`}
         >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/15 text-white flex items-center justify-center hover:bg-white/25"
+            aria-label="Close image viewer"
+          >
+            <span className="sr-only">Close image viewer</span>
+            <span aria-hidden="true">×</span>
+          </button>
           <img
             src={url}
             alt={attachment.filename}
             className="max-w-full max-h-full object-contain rounded-lg"
             onClick={e => e.stopPropagation()}
           />
+          {allowDownload && (
+            <a
+              href={url}
+              download={attachment.filename}
+              onClick={e => e.stopPropagation()}
+              className="absolute bottom-5 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-black"
+            >
+              <Download size={15} /> Download
+            </a>
+          )}
         </div>
       )}
     </div>
@@ -85,7 +135,7 @@ function ImageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
 
 // ─── Voice note ───────────────────────────────────────────────────────────────
 
-function VoiceBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+function VoiceBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -148,6 +198,7 @@ function VoiceBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
           </div>
         </div>
       </div>
+      {allowDownload && <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />}
       {canPresent && onPresent && (
         <button onClick={onPresent} className="flex items-center gap-1.5 text-[12px] font-medium text-primary hover:underline mt-1">
           <Presentation size={12} /> Present to Group
@@ -159,7 +210,7 @@ function VoiceBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
 
 // ─── Video ────────────────────────────────────────────────────────────────────
 
-function VideoBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+function VideoBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
   const url = getMediaUrl(attachment.objectPath);
   return (
     <div className="space-y-1.5">
@@ -170,6 +221,7 @@ function VideoBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
         className="w-full max-w-[280px] rounded-xl bg-black"
         preload="metadata"
       />
+      {allowDownload && <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />}
       {attachment.caption && (
         <p className={`text-[13px] leading-snug ${isMe ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
           {attachment.caption}
@@ -186,7 +238,7 @@ function VideoBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBu
 
 // ─── PDF / Document ───────────────────────────────────────────────────────────
 
-function DocumentBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+function DocumentBubble({ attachment, isMe, canPresent, onPresent, allowDownload }: MediaMessageBubbleProps) {
   const url = attachment.type === 'link'
     ? (attachment.url ?? '#')
     : getMediaUrl(attachment.objectPath);
@@ -199,8 +251,9 @@ function DocumentBubble({ attachment, isMe, canPresent, onPresent }: MediaMessag
     <div className="space-y-1.5">
       <a
         href={url}
-        target="_blank"
-        rel="noopener noreferrer"
+        target={allowDownload ? undefined : '_blank'}
+        rel={allowDownload ? undefined : 'noopener noreferrer'}
+        download={allowDownload && attachment.type !== 'link' ? attachment.filename : undefined}
         className={`flex items-center gap-3 p-3 rounded-xl border max-w-[260px] transition-opacity hover:opacity-80 ${
           isMe
             ? 'border-primary-foreground/20 bg-primary-foreground/10'
@@ -222,13 +275,18 @@ function DocumentBubble({ attachment, isMe, canPresent, onPresent }: MediaMessag
               : attachment.type === 'link'
               ? 'Link'
               : formatBytes(attachment.size)}
-            <ExternalLink size={10} />
+          {allowDownload && attachment.type !== 'link'
+            ? <Download size={10} />
+            : <ExternalLink size={10} />}
           </div>
         </div>
-        {attachment.type !== 'link' && (
+        {attachment.type !== 'link' && !allowDownload && (
           <Download size={14} className={isMe ? 'text-primary-foreground/60 shrink-0' : 'text-muted-foreground shrink-0'} />
         )}
       </a>
+      {allowDownload && attachment.type !== 'link' && (
+        <DownloadAction url={url} filename={attachment.filename} isMe={isMe} />
+      )}
       {attachment.caption && (
         <p className={`text-[13px] leading-snug ${isMe ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
           {attachment.caption}
@@ -245,7 +303,13 @@ function DocumentBubble({ attachment, isMe, canPresent, onPresent }: MediaMessag
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function MediaMessageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+export function MediaMessageBubble({
+  attachment,
+  isMe,
+  canPresent,
+  onPresent,
+  allowDownload,
+}: MediaMessageBubbleProps) {
   if (attachment.removed) {
     return (
       <div className="rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5 max-w-[260px]">
@@ -259,15 +323,15 @@ export function MediaMessageBubble({ attachment, isMe, canPresent, onPresent }: 
 
   switch (attachment.type) {
     case 'image':
-      return <ImageBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} />;
+      return <ImageBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
     case 'voice':
-      return <VoiceBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} />;
+      return <VoiceBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
     case 'video':
-      return <VideoBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} />;
+      return <VideoBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
     case 'pdf':
     case 'document':
     case 'link':
     default:
-      return <DocumentBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} />;
+      return <DocumentBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} allowDownload={allowDownload} />;
   }
 }

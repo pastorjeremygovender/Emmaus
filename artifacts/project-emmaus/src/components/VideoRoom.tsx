@@ -28,7 +28,7 @@ import '@livekit/components-styles';
 import { Track } from 'livekit-client';
 import {
   AlertCircle, Loader2, Users, Settings,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, Hand,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VideoSessionStatus } from '@/lib/rooms-types';
@@ -91,6 +91,87 @@ function useDurationWarning(
 
 // ─── Participant grid (rendered inside LiveKitRoom context) ───────────────────
 
+const RAISE_HAND_ATTRIBUTE = 'emmaus.raise_hand';
+
+type HandParticipant = {
+  identity: string;
+  name?: string;
+  attributes: Readonly<Record<string, string>>;
+};
+
+function hasRaisedHand(participant: HandParticipant): boolean {
+  return participant.attributes[RAISE_HAND_ATTRIBUTE] === 'true';
+}
+
+function RaiseHandControl() {
+  const { localParticipant } = useLocalParticipant();
+  const [raised, setRaised] = useState(() => hasRaisedHand(localParticipant));
+  const [updating, setUpdating] = useState(false);
+
+  useEffect(() => {
+    setRaised(hasRaisedHand(localParticipant));
+  }, [localParticipant, localParticipant.attributes[RAISE_HAND_ATTRIBUTE]]);
+
+  // The signal is scoped to this LiveKit connection. Clear it when the local
+  // participant leaves so a reconnect cannot inherit a stale question state.
+  useEffect(() => {
+    return () => {
+      void localParticipant.setAttributes({ [RAISE_HAND_ATTRIBUTE]: '' }).catch(() => {});
+    };
+  }, [localParticipant]);
+
+  const toggle = async () => {
+    if (updating) return;
+    const next = !raised;
+    setRaised(next);
+    setUpdating(true);
+    try {
+      await localParticipant.setAttributes({
+        [RAISE_HAND_ATTRIBUTE]: next ? 'true' : '',
+      });
+    } catch {
+      setRaised(!next);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      disabled={updating}
+      aria-pressed={raised}
+      className={`w-full flex items-center justify-center gap-2 rounded-xl border py-2.5 text-[13px] font-semibold transition-colors disabled:opacity-60 ${
+        raised
+          ? 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+          : 'border-border bg-card text-foreground hover:bg-muted/60'
+      }`}
+    >
+      <Hand size={15} />
+      {raised ? 'Lower hand' : 'Raise hand / ask a question'}
+    </button>
+  );
+}
+
+function RaisedHandsSummary({ participants }: { participants: HandParticipant[] }) {
+  const raised = participants.filter(hasRaisedHand);
+  if (raised.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-800/50 dark:bg-amber-950/20">
+      <div className="flex items-center gap-2 text-[12px] font-semibold text-amber-800 dark:text-amber-200">
+        <Hand size={14} />
+        <span>Questions</span>
+      </div>
+      <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-300">
+        {raised.map(participant => participant.name?.trim() || 'Member').join(', ')}{' '}
+        {raised.length === 1 ? 'would like to ask a question.' : 'would like to ask questions.'}
+      </p>
+    </div>
+  );
+}
+
 function VideoParticipantGrid({ canHost, onEnd, ending }: {
   canHost: boolean;
   onEnd: () => void;
@@ -123,9 +204,17 @@ function VideoParticipantGrid({ canHost, onEnd, ending }: {
               trackRef={trackRef}
               style={{ width: '100%', height: '100%', borderRadius: '12px' }}
             />
+            {hasRaisedHand(trackRef.participant) && (
+              <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[11px] font-semibold text-amber-950 shadow-sm">
+                <Hand size={12} /> Question
+              </span>
+            )}
           </div>
         ))}
       </div>
+
+      <RaisedHandsSummary participants={allParticipants} />
+      <RaiseHandControl />
 
       <div className="pt-1">
         <ControlBar
@@ -176,7 +265,7 @@ function AudioParticipantGrid({ canHost, onEnd, ending }: {
           return (
             <div
               key={participant.identity}
-              className={`flex items-center gap-2.5 rounded-xl border p-3 ${
+              className={`relative flex items-center gap-2.5 rounded-xl border p-3 ${
                 participant.isSpeaking
                   ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30'
                   : 'border-border bg-muted/30'
@@ -191,10 +280,18 @@ function AudioParticipantGrid({ canHost, onEnd, ending }: {
                   {participant.isSpeaking ? 'Speaking' : participant.isMicrophoneEnabled ? 'Mic on' : 'Muted'}
                 </p>
               </div>
+              {hasRaisedHand(participant) && (
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                  <Hand size={11} /> Question
+                </span>
+              )}
             </div>
           );
         })}
       </div>
+
+      <RaisedHandsSummary participants={participants} />
+      <RaiseHandControl />
 
       <ControlBar
         controls={{ camera: false, microphone: true, screenShare: false, leave: false, chat: false }}

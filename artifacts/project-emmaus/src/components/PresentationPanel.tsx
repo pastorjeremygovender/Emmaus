@@ -20,6 +20,8 @@ interface PresentationPanelProps {
   userId: string;
   roomId: string;
   onStop?: () => void;
+  /** Close this viewer locally without stopping the group presentation. */
+  onClose?: () => void;
 }
 
 export function PresentationPanel({
@@ -28,6 +30,7 @@ export function PresentationPanel({
   userId,
   roomId,
   onStop,
+  onClose,
 }: PresentationPanelProps) {
   const [busy, setBusy] = useState(false);
 
@@ -80,6 +83,14 @@ export function PresentationPanel({
         <p className="text-[11px] text-primary/70 shrink-0">
           by {presentation.presentedByName}
         </p>
+         <button
+           type="button"
+           onClick={onClose}
+           className="w-9 h-9 rounded-lg flex items-center justify-center text-primary/70 hover:bg-primary/10 hover:text-primary"
+           aria-label="Close presentation viewer"
+         >
+           <X size={17} />
+         </button>
       </div>
 
       {/* Content area */}

@@ -108,6 +108,9 @@ export default function RoomDetail() {
   const { loadRoomDetail, leaveRoom, deleteRoom, removeMember } = useRooms();
   const { getJourney, getStepsForJourney, journeys, progress: myProgress } = useJourney();
   const [, setLocation] = useLocation();
+  const presentationQuery = new URLSearchParams(window.location.search);
+  const presentationReturnToChat = presentationQuery.get('return') === 'chat';
+  const presentationDiscussionId = presentationQuery.get('discussionId');
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [room, setRoom] = useState<RoomDetailType | null>(null);
@@ -279,6 +282,33 @@ export default function RoomDetail() {
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id]);
+
+  // A presentation opened from Discussion has priority over the chat route.
+  // Bring the active surface into view, and return only that browser to Chat
+  // when its local viewer is closed or the leader stops presenting.
+  useEffect(() => {
+    if (!activePresentation) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById('room-active-presentation')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activePresentation?.messageId]);
+
+  useEffect(() => {
+    if (
+      presentationReturnToChat &&
+      (lastEvent?.type === 'presentation_stopped' ||
+        (lastEvent?.type === 'tool_closed' && lastEvent.payload.tool === 'presentation'))
+    ) {
+      const discussion = presentationDiscussionId
+        ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
+        : '';
+      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+    }
+  }, [lastEvent, presentationDiscussionId, presentationReturnToChat, roomId, setLocation]);
 
   // Live Video status polling — kept here (before the early returns) so the
   // hook call count never changes between renders. Runs for ALL room types:
@@ -1590,7 +1620,11 @@ export default function RoomDetail() {
                     const shared = item.attachment.sharedBeforeMeeting === true;
                     return (
                       <div key={item.messageId} className="p-4 rounded-2xl border border-border bg-card space-y-3">
-                        <MediaMessageBubble attachment={item.attachment} isMe={false} />
+                        <MediaMessageBubble
+                          attachment={item.attachment}
+                          isMe={false}
+                          allowDownload={isAuthorizedLeader || shared}
+                        />
                         {isAuthorizedLeader && (
                           <div className="flex items-center gap-2 pt-2 border-t border-border/60">
                             <button
@@ -1876,6 +1910,28 @@ export default function RoomDetail() {
               )}
             </div>
 
+            {/* Active presentation has priority over the live meeting card. */}
+            {activePresentation && (
+              <div id="room-active-presentation" className="scroll-mt-16 mb-4">
+                <PresentationPanel
+                  presentation={activePresentation}
+                  isLeader={isAuthorizedLeader}
+                  userId={user.id}
+                  roomId={String(roomId)}
+                  onStop={() => setActivePresentation(null)}
+                  onClose={() => {
+                    setActivePresentation(null);
+                    if (presentationReturnToChat) {
+                      const discussion = presentationDiscussionId
+                        ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
+                        : '';
+                      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
             {/* Live Video — renders join card (when active) or connected panel */}
             {videoActive && (
               <VideoRoom
@@ -1888,19 +1944,6 @@ export default function RoomDetail() {
                 meetingMode={liveMeetingMode}
                 hasJoinedMeeting={hasJoinedCurrentMeeting}
               />
-            )}
-
-            {/* Active presentation — shown to all members during a meeting */}
-            {activePresentation && (
-              <div id="room-active-presentation">
-                <PresentationPanel
-                  presentation={activePresentation}
-                  isLeader={isAuthorizedLeader}
-                  userId={user.id}
-                  roomId={String(roomId)}
-           onStop={() => setActivePresentation(null)}
-                />
-              </div>
             )}
 
             {/* Today's Study */}
