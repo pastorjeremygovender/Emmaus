@@ -3,7 +3,8 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById,
-  apiGetActiveGroupDiscussion, apiCloseSharedTool,
+  apiGetActiveGroupDiscussion, apiCloseSharedTool, apiGetSessionEventsToken,
+  apiSessionEventsUrl,
 } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
@@ -138,6 +139,16 @@ export default function RoomChat() {
         setIsLeader(detail.isLeader || isRoomLeaderRole(detail.currentUserRole));
         setAllowMemberPresent(detail.room.allowMemberPresent ?? false);
         setSessionId(detail.activeSession?.id ?? null);
+        // A discussion route is only valid while Discussion is the
+        // server-authoritative shared tool. This also handles late subscribers
+        // after a leader has already closed it.
+        if (
+          !detail.activeSession ||
+          detail.activeSession.metadata?.activeTool !== 'discussion'
+        ) {
+          setLocation(`/rooms/${String(roomId)}`);
+          return;
+        }
         if (!discussionId && detail.activeSession?.id) {
           const discussion = await apiGetActiveGroupDiscussion(user.id, String(roomId));
           if (!cancelled && discussion) setDiscussionId(discussion.id);
@@ -150,6 +161,85 @@ export default function RoomChat() {
       });
     return () => { cancelled = true; };
   }, [roomId, user?.id, discussionId]);
+
+  // RoomChat has its own message SSE stream, so it must also observe the
+  // session stream while open. Otherwise a leader's tool_closed event reaches
+  // RoomDetail instances but not participants currently viewing the chat.
+  useEffect(() => {
+    if (!user || !roomId || !sessionId) return;
+    let cancelled = false;
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const closeDiscussion = () => {
+      if (cancelled || closed) return;
+      closed = true;
+      setLocation(`/rooms/${String(roomId)}`);
+    };
+
+    const connect = async () => {
+      try {
+        const token = await apiGetSessionEventsToken(user.id, String(roomId));
+        if (cancelled) return;
+        es = new EventSource(apiSessionEventsUrl(String(roomId), token));
+        es.onmessage = event => {
+          try {
+            const payload = JSON.parse(event.data) as {
+              type?: string;
+              payload?: {
+                tool?: string;
+                sessionId?: string;
+                session?: {
+                  id?: string;
+                  metadata?: { activeTool?: string };
+                } | null;
+              };
+            };
+            if (payload.type === 'tool_closed' && payload.payload?.tool === 'discussion') {
+              if (
+                !payload.payload.sessionId ||
+                payload.payload.sessionId === sessionId
+              ) {
+                closeDiscussion();
+              }
+              return;
+            }
+            if (payload.type === 'session_state') {
+              const current = payload.payload?.session;
+              if (
+                !current ||
+                current.id !== sessionId ||
+                current.metadata?.activeTool !== 'discussion'
+              ) {
+                closeDiscussion();
+              }
+            }
+          } catch {
+            // Ignore malformed events; the next session-state event reconciles.
+          }
+        };
+        es.onerror = () => {
+          es?.close();
+          es = null;
+          if (!cancelled && !closed) {
+            reconnectTimer = setTimeout(connect, 2_000);
+          }
+        };
+      } catch {
+        if (!cancelled && !closed) {
+          reconnectTimer = setTimeout(connect, 2_000);
+        }
+      }
+    };
+
+    void connect();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
+    };
+  }, [roomId, sessionId, user?.id, setLocation]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);

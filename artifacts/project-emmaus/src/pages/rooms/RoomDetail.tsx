@@ -386,8 +386,14 @@ export default function RoomDetail() {
 
   // Auto-open Ask Emmaus from SSE
   useEffect(() => {
-    if (emmausQuestion && !showSharedAskEmmaus) setShowSharedAskEmmaus(true);
-  }, [emmausQuestion, showSharedAskEmmaus]);
+    if (
+      activeTool === 'ask-emmaus' &&
+      (emmausQuestion || emmausAnswer) &&
+      !showSharedAskEmmaus
+    ) {
+      setShowSharedAskEmmaus(true);
+    }
+  }, [activeTool, emmausAnswer, emmausQuestion, showSharedAskEmmaus]);
 
   // A new shared tool replaces the old surface on every connected device.
   useEffect(() => {

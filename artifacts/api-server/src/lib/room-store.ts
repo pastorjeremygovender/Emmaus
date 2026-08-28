@@ -1446,6 +1446,15 @@ export interface RoomSession {
   groupPositionStep: string | null;
 }
 
+export interface ActiveEmmausState {
+  requestId: string;
+  question: string;
+  text: string;
+  status: "generating" | "completed" | "failed";
+  answerId: string | null;
+  error?: string;
+}
+
 export interface SessionCompleteSummary {
   sessionId: string;
   modesEntered: string[];
@@ -1652,6 +1661,9 @@ export async function clearSharedTool(
   if (metadata.activeTool === tool) {
     delete metadata.activeTool;
   }
+  if (tool === "ask-emmaus") {
+    delete metadata.activeEmmaus;
+  }
 
   await updateSessionState(roomId, {
     ...(tool === "scripture" ? { currentScripture: null } : {}),
@@ -1672,9 +1684,35 @@ export async function replaceSharedTool(
     if (previousTool === "poll") await clearActivePoll(roomId, session.id);
     if (previousTool === "presentation") await stopPresentation(roomId);
   }
+  const metadata: Record<string, unknown> = { ...session.metadata, activeTool: tool };
+  if (previousTool === "ask-emmaus" && tool !== "ask-emmaus") {
+    delete metadata.activeEmmaus;
+  }
+  await updateSessionState(roomId, { metadata });
+}
+
+/**
+ * Persist the current shared Ask Emmaus request only while it still owns the
+ * active tool. This prevents a delayed provider completion from resurrecting a
+ * panel that a leader has already closed or replaced.
+ */
+export async function updateSharedEmmausState(
+  roomId: string,
+  requestId: string,
+  patch: Partial<ActiveEmmausState>,
+): Promise<boolean> {
+  const session = await getActiveSession(roomId);
+  if (!session || session.metadata.activeTool !== "ask-emmaus") return false;
+  const current = session.metadata.activeEmmaus as ActiveEmmausState | undefined;
+  if (!current || current.requestId !== requestId) return false;
+
   await updateSessionState(roomId, {
-    metadata: { ...session.metadata, activeTool: tool },
+    metadata: {
+      ...session.metadata,
+      activeEmmaus: { ...current, ...patch },
+    },
   });
+  return true;
 }
 
 /** Record a member joining the active session for attendance.

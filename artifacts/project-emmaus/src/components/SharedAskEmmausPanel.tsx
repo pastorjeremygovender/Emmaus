@@ -83,9 +83,23 @@ export function SharedAskEmmausPanel({
   const [question, setQuestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [generationTimedOut, setGenerationTimedOut] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const latestAnswerIdRef = useRef<string | null>(null);
+
+  // A disconnected provider or dropped SSE connection must not leave the
+  // leader's group permanently disabled behind a spinner. The server also
+  // times out, but this local guard gives the UI a retryable state first.
+  useEffect(() => {
+    if (activeQuestion === null) {
+      setGenerationTimedOut(false);
+      return;
+    }
+    setGenerationTimedOut(false);
+    const timer = setTimeout(() => setGenerationTimedOut(true), 30_000);
+    return () => clearTimeout(timer);
+  }, [activeQuestion]);
 
   // Load previous answers for this session on mount
   useEffect(() => {
@@ -127,9 +141,10 @@ export function SharedAskEmmausPanel({
 
   const handleSubmit = async () => {
     const q = question.trim();
-    if (!q || submitting || activeQuestion !== null) return;
+    if (!q || submitting || (activeQuestion !== null && !generationTimedOut)) return;
     setSubmitting(true);
     setSubmitError('');
+    setGenerationTimedOut(false);
     try {
       await apiSharedAskEmmaus(userId, roomId, sessionId, q, userName);
       setQuestion('');
@@ -141,7 +156,7 @@ export function SharedAskEmmausPanel({
     }
   };
 
-  const isGenerating = activeQuestion !== null;
+  const isGenerating = activeQuestion !== null && !generationTimedOut;
 
   return (
     <>
@@ -218,6 +233,17 @@ export function SharedAskEmmausPanel({
               isStreaming
               streamText={streamText}
             />
+          )}
+          {generationTimedOut && activeQuestion && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3.5">
+              <p className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">
+                Emmaus is taking longer than expected
+              </p>
+              <p className="text-[13px] text-muted-foreground mt-1">
+                The group can try the question again. A completed response will
+                still appear here if it arrives shortly.
+              </p>
+            </div>
           )}
         </div>
 

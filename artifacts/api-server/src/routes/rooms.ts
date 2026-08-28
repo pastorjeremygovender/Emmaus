@@ -65,6 +65,7 @@ import {
   updateSessionState,
   clearSharedTool,
   replaceSharedTool,
+  updateSharedEmmausState,
   broadcastRoomEvent,
   subscribeToSessionEvents,
   recordSessionJoin,
@@ -2696,12 +2697,36 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
     return;
   }
 
-  await replaceSharedTool(String(roomId), "ask-emmaus");
+  const requestId = randomUUID();
+  try {
+    await replaceSharedTool(String(roomId), "ask-emmaus");
+    await updateSessionState(String(roomId), {
+      metadata: {
+        ...(await getActiveSession(String(roomId)))?.metadata,
+        activeTool: "ask-emmaus",
+        activeEmmaus: {
+          requestId,
+          question: trimmedQ,
+          text: "",
+          status: "generating",
+          answerId: null,
+        },
+      },
+    });
+  } catch {
+    res.status(500).json({ error: "Could not start the shared Ask Emmaus request." });
+    return;
+  }
 
   // Signal to all members that streaming is about to begin
   broadcastRoomEvent(String(roomId), {
     type: "emmaus_started",
-    payload: { question: trimmedQ, askedBy: userId, askerName: askerName ?? "" },
+    payload: {
+      requestId,
+      question: trimmedQ,
+      askedBy: userId,
+      askerName: askerName ?? "",
+    },
     sentBy: userId,
     at: new Date().toISOString(),
   });
@@ -2744,20 +2769,31 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
 
       const provider = createLLMProvider();
       let fullText = "";
+      const iterator = provider.streamCompletion(messages, { maxTokens: 6000 })[Symbol.asyncIterator]();
+      const STREAM_IDLE_TIMEOUT_MS = 45_000;
 
       // gpt-5 reasoning models reject small output budgets. Keep this above
       // their minimum while allowing the normal provider to stop naturally.
-      for await (const chunk of provider.streamCompletion(messages, { maxTokens: 6000 })) {
-        if (chunk.done) break;
+      while (true) {
+        const next = await Promise.race([
+          iterator.next(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Emmaus response timed out.")), STREAM_IDLE_TIMEOUT_MS),
+          ),
+        ]);
+        if (next.done) break;
+        const chunk = next.value;
         if (!chunk.content) continue;
         fullText += chunk.content;
+        await updateSharedEmmausState(String(roomId), requestId, { text: fullText });
         broadcastRoomEvent(String(roomId), {
           type: "emmaus_chunk",
-          payload: { text: chunk.content },
+          payload: { requestId, text: chunk.content },
           sentBy: userId,
           at: new Date().toISOString(),
         });
       }
+      await iterator.return?.(undefined as never);
 
       // Strip <EMMAUS_META> block before storing
       const metaIdx = fullText.indexOf("<EMMAUS_META>");
@@ -2767,19 +2803,46 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
       const answer = await addEmmausAnswer(
         session.id, String(roomId), userId, trimmedQ, cleanText
       );
+      const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, {
+        text: cleanText,
+        status: "completed",
+        answerId: answer.id,
+        error: undefined,
+      });
+      if (!stillCurrent) return;
 
       broadcastRoomEvent(String(roomId), {
         type: "emmaus_done",
-        payload: { question: trimmedQ, fullText: cleanText, answerId: answer.id },
+        payload: {
+          requestId,
+          question: trimmedQ,
+          fullText: cleanText,
+          answerId: answer.id,
+        },
         sentBy: userId,
         at: new Date().toISOString(),
       });
-    } catch {
+    } catch (err) {
+      const errorMessage = err instanceof Error && err.message.includes("timed out")
+        ? "Emmaus took too long to respond. Please try again."
+        : "Something went wrong generating the response. Please try again.";
+      try {
+        const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, {
+          status: "failed",
+          error: errorMessage,
+          text: errorMessage,
+        });
+        if (!stillCurrent) return;
+      } catch {
+        // The live event below still gives connected clients a retryable result
+        // when the persistence update itself is the failing step.
+      }
       broadcastRoomEvent(String(roomId), {
         type: "emmaus_done",
         payload: {
+          requestId,
           question: trimmedQ,
-          fullText: "Something went wrong generating the response. Please try again.",
+          fullText: errorMessage,
           answerId: null,
           error: true,
         },

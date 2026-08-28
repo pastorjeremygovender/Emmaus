@@ -112,7 +112,12 @@ export function useFollowLeader({
   // ── Shared Ask Emmaus (Task #437) ────────────────────────────────────────
   const [emmausQuestion, setEmmausQuestion] = useState<string | null>(null);
   const [emmausStreamText, setEmmausStreamText] = useState('');
-  const [emmausAnswer, setEmmausAnswer] = useState<{ question: string; fullText: string; answerId: string | null } | null>(null);
+  const [emmausAnswer, setEmmausAnswer] = useState<{
+    question: string;
+    fullText: string;
+    answerId: string | null;
+    error?: boolean;
+  } | null>(null);
 
   // ── Polls (Task #437) ────────────────────────────────────────────────────
   const [incomingPoll, setIncomingPoll] = useState<RoomPoll | null>(null);
@@ -132,6 +137,9 @@ export function useFollowLeader({
   // has been received.  Used to guard against session_state:null racing with the
   // HTTP seed and briefly flipping the UI back to Preparation phase.
   const sessionExplicitlyEndedRef = useRef(false);
+  const activeSessionRef = useRef<RoomSession | null>(null);
+  const emmausRequestRef = useRef<string | null>(null);
+  const closedToolsRef = useRef(new Set<string>());
 
   useEffect(() => { followLeaderRef.current = followLeader; }, [followLeader]);
   useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
@@ -148,6 +156,7 @@ export function useFollowLeader({
         if (session !== null) {
           // Active session received — always apply it.
           sessionExplicitlyEndedRef.current = false;
+          activeSessionRef.current = session;
           setActiveSession(session);
           if (session.currentMode) {
             setSessionMode(session.currentMode as SessionMode);
@@ -158,13 +167,45 @@ export function useFollowLeader({
              setActiveScripture(null);
           }
            const hydratedTool = session.metadata?.activeTool;
+           const hydratedEmmaus = session.metadata?.activeEmmaus as {
+             requestId?: string;
+             question?: string;
+             text?: string;
+             status?: 'generating' | 'completed' | 'failed';
+             answerId?: string | null;
+             error?: string;
+           } | undefined;
+           const hydratedToolWasClosed = typeof hydratedTool === 'string' &&
+             closedToolsRef.current.has(`${session.id}:${hydratedTool}`);
+           const effectiveTool = hydratedToolWasClosed ? null : hydratedTool;
            setActiveTool(
-             hydratedTool === 'scripture' || hydratedTool === 'discussion' ||
-               hydratedTool === 'poll' || hydratedTool === 'ask-emmaus' ||
-               hydratedTool === 'presentation' || hydratedTool === 'study'
-               ? hydratedTool
+             effectiveTool === 'scripture' || effectiveTool === 'discussion' ||
+               effectiveTool === 'poll' || effectiveTool === 'ask-emmaus' ||
+               effectiveTool === 'presentation' || effectiveTool === 'study'
+               ? effectiveTool
                : session.currentScripture ? 'scripture' : null,
            );
+           if (effectiveTool === 'ask-emmaus' && hydratedEmmaus?.requestId) {
+             emmausRequestRef.current = hydratedEmmaus.requestId;
+             setEmmausStreamText(hydratedEmmaus.text ?? '');
+             if (hydratedEmmaus.status === 'generating') {
+               setEmmausQuestion(hydratedEmmaus.question ?? null);
+               setEmmausAnswer(null);
+             } else {
+               setEmmausQuestion(null);
+               setEmmausAnswer({
+                 question: hydratedEmmaus.question ?? '',
+                 fullText: hydratedEmmaus.text ?? '',
+                 answerId: hydratedEmmaus.answerId ?? null,
+                 error: hydratedEmmaus.status === 'failed',
+               });
+             }
+           } else if (effectiveTool !== 'ask-emmaus') {
+             emmausRequestRef.current = null;
+             setEmmausQuestion(null);
+             setEmmausStreamText('');
+             setEmmausAnswer(null);
+           }
           // Auto-enable follow leader when reconnecting to an active session.
           if (session.status === 'active') {
             setFollowLeader(true);
@@ -175,6 +216,7 @@ export function useFollowLeader({
           // the HTTP seed (which sets activeSession) and the first SSE
           // session_state arriving with null from clobbering the HTTP state.
           if (sessionExplicitlyEndedRef.current) {
+            activeSessionRef.current = null;
             setActiveSession(null);
             setSessionMode('study');
             setActiveScripture(null);
@@ -233,6 +275,8 @@ export function useFollowLeader({
 
       case 'session_ended': {
         sessionExplicitlyEndedRef.current = true;
+        activeSessionRef.current = null;
+        emmausRequestRef.current = null;
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
@@ -260,6 +304,8 @@ export function useFollowLeader({
         const prayerRequestCount = Number(event.payload.prayerRequestCount ?? 0);
         const sharedNoteCount = Number(event.payload.sharedNoteCount ?? 0);
         sessionExplicitlyEndedRef.current = true;
+        activeSessionRef.current = null;
+        emmausRequestRef.current = null;
         setSessionComplete({ sessionId, modesEntered, memberCount, prayerRequestCount, sharedNoteCount });
         setActiveSession(null);
         setSessionMode('study');
@@ -309,7 +355,11 @@ export function useFollowLeader({
       }
 
       case 'tool_closed': {
-        const tool = event.payload.tool as UseFollowLeaderResult['activeTool'];
+         const tool = event.payload.tool as UseFollowLeaderResult['activeTool'];
+         const eventSessionId = String(event.payload.sessionId ?? '');
+         const currentSessionId = activeSessionRef.current?.id ?? '';
+         if (eventSessionId && currentSessionId && eventSessionId !== currentSessionId) break;
+         if (eventSessionId) closedToolsRef.current.add(`${eventSessionId}:${tool}`);
         setActiveTool(prev => prev === tool ? null : prev);
         if (tool === 'scripture') setActiveScripture(null);
         if (tool === 'poll') {
@@ -318,6 +368,7 @@ export function useFollowLeader({
           setPollRevealUpdate(null);
         }
         if (tool === 'ask-emmaus') {
+           emmausRequestRef.current = null;
           setEmmausQuestion(null);
           setEmmausStreamText('');
           setEmmausAnswer(null);
@@ -329,12 +380,16 @@ export function useFollowLeader({
       case 'navigate': {
         const payload = event.payload as NavigatePayload;
         if (payload.scripture) {
+           const sessionId = activeSessionRef.current?.id;
+           if (sessionId) closedToolsRef.current.delete(`${sessionId}:scripture`);
           setSessionMode('scripture');
           setActiveScripture(payload.scripture);
            setActiveTool('scripture');
           // Notify all members (even non-followers) so they can see the notice
           onScriptureOpenRef.current?.(payload.scripture, payload.leaderName ?? '');
         } else if (payload.stepId) {
+           const sessionId = activeSessionRef.current?.id;
+           if (sessionId) closedToolsRef.current.delete(`${sessionId}:study`);
           setSessionMode('study');
           setActiveScripture(null);
            setActiveTool('study');
@@ -350,6 +405,11 @@ export function useFollowLeader({
         const mode = event.payload.mode as string;
         const leaderName = (event.payload.leaderName as string) ?? '';
         if (['study', 'scripture', 'discussion', 'prayer', 'poll'].includes(mode)) {
+           const sessionId = activeSessionRef.current?.id;
+           const nextTool = mode === 'scripture' || mode === 'discussion' || mode === 'poll'
+             ? mode
+             : 'study';
+           if (sessionId) closedToolsRef.current.delete(`${sessionId}:${nextTool}`);
           setSessionMode(mode as SessionMode);
           if (mode !== 'scripture') setActiveScripture(null);
            setActiveTool(
@@ -399,6 +459,10 @@ export function useFollowLeader({
       // ── Shared Ask Emmaus ───────────────────────────────────────────────
       case 'emmaus_started': {
         const question = event.payload.question as string;
+         const requestId = String(event.payload.requestId ?? `legacy:${question ?? ''}`);
+         const sessionId = activeSessionRef.current?.id;
+         if (sessionId) closedToolsRef.current.delete(`${sessionId}:ask-emmaus`);
+         emmausRequestRef.current = requestId;
         setEmmausQuestion(question ?? null);
         setEmmausStreamText('');
         setEmmausAnswer(null);
@@ -408,7 +472,9 @@ export function useFollowLeader({
 
       case 'emmaus_chunk': {
         const text = event.payload.text as string;
-        if (text) setEmmausStreamText(prev => prev + text);
+         const requestId = event.payload.requestId as string | undefined;
+         if (requestId && requestId !== emmausRequestRef.current) break;
+         if (text) setEmmausStreamText(prev => prev + text);
         break;
       }
 
@@ -416,7 +482,15 @@ export function useFollowLeader({
         const q = event.payload.question as string;
         const fullText = event.payload.fullText as string;
         const answerId = (event.payload.answerId as string | null) ?? null;
-        setEmmausAnswer({ question: q, fullText, answerId });
+         const requestId = event.payload.requestId as string | undefined;
+         if (requestId && requestId !== emmausRequestRef.current) break;
+         setEmmausStreamText(fullText);
+         setEmmausAnswer({
+           question: q,
+           fullText,
+           answerId,
+           error: Boolean(event.payload.error),
+         });
         setEmmausQuestion(null);
         break;
       }
