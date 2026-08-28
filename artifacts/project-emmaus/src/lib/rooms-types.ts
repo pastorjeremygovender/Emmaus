@@ -318,6 +318,7 @@ export type SessionEventType =
   | 'media_presented'
   | 'presentation_page'
   | 'presentation_stopped'
+   | 'tool_closed'
   | 'OPEN_GROUP_DISCUSSION';
 
 export interface SessionCompleteSummary {

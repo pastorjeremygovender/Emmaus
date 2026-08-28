@@ -29,10 +29,10 @@ import { SessionCompleteCard } from '@/components/SessionCompleteCard';
 import { useFollowLeader } from '@/hooks/useFollowLeader';
 import { roomSessionAckKey } from '@/lib/account-storage';
 import {
-  apiGetJourneyProgress, apiLinkJourney, apiRenameRoom,
+  apiGetJourneyProgress, apiLinkJourney, apiUnlinkPrimaryJourney, apiRenameRoom,
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
   apiRecordAttendanceJoin,
-  apiGetActivePoll, apiGetSessionAttendance, apiChangeMode,
+  apiGetActivePoll, apiGetSessionAttendance, apiChangeMode, apiCloseSharedTool,
   apiStartSession, apiEndSession, apiCompleteSession, apiAcknowledgeSessionCompletion, apiUpdateLeaderNote, apiUpdateSchedule,
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
@@ -200,6 +200,7 @@ export default function RoomDetail() {
     pollRevealUpdate,
     activePresentation,
     setActivePresentation,
+    activeTool,
     lastEvent,
   } = useFollowLeader({
     roomId: String(roomId),
@@ -389,6 +390,47 @@ export default function RoomDetail() {
   useEffect(() => {
     if (emmausQuestion && !showSharedAskEmmaus) setShowSharedAskEmmaus(true);
   }, [emmausQuestion, showSharedAskEmmaus]);
+
+  // A new shared tool replaces the old surface on every connected device.
+  useEffect(() => {
+    if (!lastEvent) return;
+    if (lastEvent.type === 'tool_closed') {
+      setShowSharedScripture(false);
+      setShowSharedAskEmmaus(false);
+      setActivePoll(null);
+      setDiscussionPendingNotice(null);
+      return;
+    }
+    if (
+      lastEvent.type === 'navigate' ||
+      lastEvent.type === 'mode_change' ||
+      lastEvent.type === 'poll_started' ||
+      lastEvent.type === 'emmaus_started' ||
+      lastEvent.type === 'media_presented'
+    ) {
+      const replacement =
+        lastEvent.type === 'navigate'
+          ? ((lastEvent.payload as { scripture?: unknown }).scripture ? 'scripture' : 'study')
+          : lastEvent.type === 'mode_change'
+            ? String((lastEvent.payload as { mode?: unknown }).mode)
+            : lastEvent.type === 'poll_started'
+              ? 'poll'
+              : lastEvent.type === 'emmaus_started'
+                ? 'ask-emmaus'
+                : 'presentation';
+      if (replacement !== 'scripture') setShowSharedScripture(false);
+      if (replacement !== 'ask-emmaus') setShowSharedAskEmmaus(false);
+      if (replacement !== 'poll') setActivePoll(null);
+    }
+  }, [lastEvent]);
+
+  // Reconnect hydration may restore a shared Bible without delivering the
+  // original navigate event. Only auto-open it while following the leader.
+  useEffect(() => {
+    if (activeTool === 'scripture' && activeScripture && followLeader) {
+      setShowSharedScripture(true);
+    }
+  }, [activeTool, activeScripture, followLeader]);
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -675,6 +717,34 @@ export default function RoomDetail() {
       alert(err instanceof Error ? err.message : 'Failed to link walk');
     } finally {
       setLinkingId(null);
+    }
+  };
+
+  const handleRemoveStudy = async () => {
+    if (!room?.linkedContentId) return;
+    if (!window.confirm('Remove this study from the group? Members will see a blank Today’s Study area.')) return;
+    try {
+      await apiUnlinkPrimaryJourney(user.id, String(roomId), room.linkedContentId);
+      setRoom(prev => prev ? {
+        ...prev,
+        linkedContentId: null,
+        linkedContentType: null,
+      } : prev);
+      setShowLinkWalk(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove the study');
+    }
+  };
+
+  const handleCloseSharedTool = async (
+    tool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation',
+    closeLocal: () => void,
+  ) => {
+    try {
+      await apiCloseSharedTool(user.id, String(roomId), tool);
+      closeLocal();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not close the shared tool.');
     }
   };
 
@@ -1063,7 +1133,7 @@ export default function RoomDetail() {
           activeQuestion={emmausQuestion}
           streamText={emmausStreamText}
           latestAnswer={emmausAnswer}
-          onClose={() => setShowSharedAskEmmaus(false)}
+           onClose={() => void handleCloseSharedTool('ask-emmaus', () => setShowSharedAskEmmaus(false))}
         />
       )}
 
@@ -1076,7 +1146,10 @@ export default function RoomDetail() {
           pollVoteUpdate={pollVoteUpdate}
           pollRevealUpdate={pollRevealUpdate}
           initialResults={hydratedPollResults ?? undefined}
-          onClose={() => setActivePoll(null)}
+           onClose={() => void handleCloseSharedTool('poll', () => {
+             setActivePoll(null);
+             setHydratedPollResults(null);
+           })}
         />
       )}
 
@@ -1090,11 +1163,11 @@ export default function RoomDetail() {
           focusHighlightId={sseFocusChange}
           isLeader={isAuthorizedLeader}
           userName={user.preferredName || 'Member'}
-          onClose={() => {
-            setShowSharedScripture(false);
-            setSseHighlights([]);
-            setSseFocusChange(null);
-          }}
+           onClose={() => void handleCloseSharedTool('scripture', () => {
+             setShowSharedScripture(false);
+             setSseHighlights([]);
+             setSseFocusChange(null);
+           })}
         />
       )}
 
@@ -1172,13 +1245,20 @@ export default function RoomDetail() {
                       </div>
                     </div>
                   </button>
-                  {isAuthorizedLeader && availableWalks.length > 0 && !showLinkWalk && (
-                    <button onClick={() => setShowLinkWalk(true)} className="mt-2 text-[13px] text-primary font-medium hover:underline pl-1">
-                      Change Study →
-                    </button>
+                  {isAuthorizedLeader && (
+                    <div className="flex items-center gap-3 mt-2 pl-1">
+                      {availableWalks.length > 0 && !showLinkWalk && (
+                        <button onClick={() => setShowLinkWalk(true)} className="text-[13px] text-primary font-medium hover:underline">
+                          Change Study →
+                        </button>
+                      )}
+                      <button onClick={() => void handleRemoveStudy()} className="text-[13px] text-destructive font-medium hover:underline">
+                        Remove Study
+                      </button>
+                    </div>
                   )}
                 </>
-              ) : (
+              ) : isAuthorizedLeader ? (
                 <div className="p-5 rounded-2xl border border-dashed border-border bg-card/50 text-center space-y-3">
                   <BookOpen size={22} className="mx-auto text-muted-foreground opacity-40" />
                   <p className="text-[14px] text-muted-foreground">Choose something to study together.</p>
@@ -1188,6 +1268,8 @@ export default function RoomDetail() {
                     </button>
                   )}
                 </div>
+              ) : (
+                <div className="min-h-[40px]" aria-label="No study assigned" />
               )}
 
               {/* Visibility toggle — always visible for leader, disappears once meeting starts */}
@@ -1556,7 +1638,7 @@ export default function RoomDetail() {
                     Group Notes
                   </button>
                   {hasJoinedCurrentMeeting && (
-                    <button onClick={openChat}
+                    <button onClick={() => openChat()}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[12px] font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all"
                     >
                       <MessageSquare size={13} />
@@ -1642,7 +1724,7 @@ export default function RoomDetail() {
                   isLeader={isAuthorizedLeader}
                   userId={user.id}
                   roomId={String(roomId)}
-                  onStop={() => setActivePresentation(null)}
+           onStop={() => setActivePresentation(null)}
                 />
               </div>
             )}
@@ -1794,7 +1876,7 @@ export default function RoomDetail() {
             {/* Discussion Archive */}
             <section>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Discussion Archive</p>
-              <button onClick={openChat}
+              <button onClick={() => openChat()}
                 className="w-full text-left p-4 rounded-2xl border border-border bg-card hover:border-primary/30 transition-all flex items-center gap-3.5"
               >
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center shrink-0">

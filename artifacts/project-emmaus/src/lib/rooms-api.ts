@@ -459,6 +459,17 @@ export async function apiLinkJourney(
   });
 }
 
+export async function apiUnlinkPrimaryJourney(
+  userId: string,
+  roomId: string,
+  journeyId?: string,
+): Promise<void> {
+  const query = journeyId ? `?journeyId=${encodeURIComponent(journeyId)}` : '';
+  await roomsFetch(`/api/rooms/${roomId}/journeys/primary${query}`, userId, {
+    method: 'DELETE',
+  });
+}
+
 export async function apiGetJourneyProgress(
   userId: string,
   roomId: string,
@@ -577,6 +588,18 @@ export async function apiChangeMode(
   await roomsFetch(`/api/rooms/${roomId}/session/mode`, userId, {
     method: 'POST',
     body: JSON.stringify({ mode, leaderName }),
+  });
+}
+
+/** Close the currently shared tool for every device in this meeting. */
+export async function apiCloseSharedTool(
+  userId: string,
+  roomId: string,
+  tool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation',
+): Promise<void> {
+  await roomsFetch(`/api/rooms/${roomId}/session/tool-close`, userId, {
+    method: 'POST',
+    body: JSON.stringify({ tool }),
   });
 }
 

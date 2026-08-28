@@ -199,7 +199,7 @@ export function SharedScripturePanel({
       : `${scripture.book} ${scripture.chapter}`);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div className="fixed inset-0 z-50 flex flex-col h-[100dvh] bg-background pb-page-safe">
       {/* Header */}
       <header className="flex items-center justify-between px-4 h-14 border-b border-border/60 shrink-0">
         <div className="flex items-center gap-2">

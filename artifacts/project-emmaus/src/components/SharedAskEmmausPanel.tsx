@@ -152,7 +152,7 @@ export function SharedAskEmmausPanel({
       />
 
       {/* Panel */}
-      <div className="fixed inset-0 z-50 flex flex-col max-w-[480px] mx-auto bg-background">
+      <div className="fixed inset-0 z-50 flex flex-col h-[100dvh] max-w-[480px] mx-auto bg-background pb-page-safe">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 shrink-0">
           <div className="flex items-center gap-2.5">

@@ -85,6 +85,8 @@ interface UseFollowLeaderResult {
   /** Active media presentation (null when none in progress). */
   activePresentation: PresentationState | null;
   setActivePresentation: (p: PresentationState | null) => void;
+   /** The server-authoritative tool currently shared with the meeting. */
+   activeTool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation' | 'study' | null;
 }
 
 export function useFollowLeader({
@@ -119,6 +121,7 @@ export function useFollowLeader({
 
   // ── Group Media Presentation ──────────────────────────────────────────────
   const [activePresentation, setActivePresentation] = useState<PresentationState | null>(null);
+  const [activeTool, setActiveTool] = useState<UseFollowLeaderResult['activeTool']>(null);
 
   // Refs for stable callbacks in the SSE loop
   const followLeaderRef = useRef(followLeader);
@@ -151,7 +154,17 @@ export function useFollowLeader({
           }
           if (session.currentScripture) {
             setActiveScripture(session.currentScripture);
+           } else {
+             setActiveScripture(null);
           }
+           const hydratedTool = session.metadata?.activeTool;
+           setActiveTool(
+             hydratedTool === 'scripture' || hydratedTool === 'discussion' ||
+               hydratedTool === 'poll' || hydratedTool === 'ask-emmaus' ||
+               hydratedTool === 'presentation' || hydratedTool === 'study'
+               ? hydratedTool
+               : session.currentScripture ? 'scripture' : null,
+           );
           // Auto-enable follow leader when reconnecting to an active session.
           if (session.status === 'active') {
             setFollowLeader(true);
@@ -165,6 +178,7 @@ export function useFollowLeader({
             setActiveSession(null);
             setSessionMode('study');
             setActiveScripture(null);
+             setActiveTool(null);
           } else {
             // Use functional update: only clear if we don't already have a session.
             setActiveSession(prev => {
@@ -222,6 +236,7 @@ export function useFollowLeader({
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
+         setActiveTool(null);
         // Clear accumulated session data so it doesn't bleed into the next meeting.
         setIncomingHighlights([]);
         setIncomingNotes([]);
@@ -249,6 +264,7 @@ export function useFollowLeader({
         setActiveSession(null);
         setSessionMode('study');
         setActiveScripture(null);
+         setActiveTool(null);
         // Clear accumulated session data so it doesn't bleed into the next meeting.
         setIncomingHighlights([]);
         setIncomingNotes([]);
@@ -274,6 +290,7 @@ export function useFollowLeader({
           currentPage: p.currentPage,
           pageCount: p.pageCount ?? undefined,
         });
+        setActiveTool('presentation');
         break;
       }
 
@@ -287,6 +304,25 @@ export function useFollowLeader({
 
       case 'presentation_stopped': {
         setActivePresentation(null);
+        setActiveTool(prev => prev === 'presentation' ? null : prev);
+        break;
+      }
+
+      case 'tool_closed': {
+        const tool = event.payload.tool as UseFollowLeaderResult['activeTool'];
+        setActiveTool(prev => prev === tool ? null : prev);
+        if (tool === 'scripture') setActiveScripture(null);
+        if (tool === 'poll') {
+          setIncomingPoll(null);
+          setPollVoteUpdate(null);
+          setPollRevealUpdate(null);
+        }
+        if (tool === 'ask-emmaus') {
+          setEmmausQuestion(null);
+          setEmmausStreamText('');
+          setEmmausAnswer(null);
+        }
+        if (tool === 'presentation') setActivePresentation(null);
         break;
       }
 
@@ -295,11 +331,13 @@ export function useFollowLeader({
         if (payload.scripture) {
           setSessionMode('scripture');
           setActiveScripture(payload.scripture);
+           setActiveTool('scripture');
           // Notify all members (even non-followers) so they can see the notice
           onScriptureOpenRef.current?.(payload.scripture, payload.leaderName ?? '');
         } else if (payload.stepId) {
           setSessionMode('study');
           setActiveScripture(null);
+           setActiveTool('study');
         }
         // Only auto-navigate (step changes) when followLeader is ON
         if (followLeaderRef.current && onNavigateRef.current) {
@@ -314,6 +352,11 @@ export function useFollowLeader({
         if (['study', 'scripture', 'discussion', 'prayer', 'poll'].includes(mode)) {
           setSessionMode(mode as SessionMode);
           if (mode !== 'scripture') setActiveScripture(null);
+           setActiveTool(
+             mode === 'scripture' || mode === 'discussion' || mode === 'poll'
+               ? mode
+               : 'study',
+           );
         }
         onModeChangeRef.current?.(mode as SessionMode, leaderName);
         break;
@@ -359,6 +402,7 @@ export function useFollowLeader({
         setEmmausQuestion(question ?? null);
         setEmmausStreamText('');
         setEmmausAnswer(null);
+        setActiveTool('ask-emmaus');
         break;
       }
 
@@ -380,7 +424,10 @@ export function useFollowLeader({
       // ── Polls ────────────────────────────────────────────────────────────
       case 'poll_started': {
         const poll = event.payload.poll as RoomPoll;
-        if (poll) setIncomingPoll(poll);
+        if (poll) {
+          setIncomingPoll(poll);
+          setActiveTool('poll');
+        }
         break;
       }
 
@@ -487,5 +534,6 @@ export function useFollowLeader({
     pollRevealUpdate,
     activePresentation,
     setActivePresentation,
+    activeTool,
   };
 }

@@ -33,6 +33,7 @@ import {
   getMessages,
   addMessage,
   linkJourney,
+  unlinkPrimaryJourney,
   startShared,
   getAllRoomsAdmin,
   getMemberJourneyProgress,
@@ -62,6 +63,8 @@ import {
   endSession,
   getActiveSession,
   updateSessionState,
+  clearSharedTool,
+  replaceSharedTool,
   broadcastRoomEvent,
   subscribeToSessionEvents,
   recordSessionJoin,
@@ -80,6 +83,7 @@ import {
   getDiscussionById,
   createPoll,
   getActivePoll,
+  clearActivePoll,
   getPollWithResults,
   castVote,
   revealPollResults,
@@ -1068,6 +1072,21 @@ router.post("/:roomId/journeys", async (req, res) => {
   }
 });
 
+// DELETE /:roomId/journeys/primary — clear the study shown in Today's Study.
+// The historical room_journeys row is retained for progress history.
+router.delete("/:roomId/journeys/primary", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const journeyId = typeof req.query.journeyId === "string" ? req.query.journeyId : undefined;
+  try {
+    await unlinkPrimaryJourney(String(roomId), journeyId);
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to remove the study." });
+  }
+});
+
 // ─── Journey progress for all room members ───────────────────────────────────
 
 router.get("/:roomId/journeys/:journeyId/progress", async (req, res) => {
@@ -1492,7 +1511,7 @@ router.post("/:roomId/messages", async (req, res) => {
 // ─── Chat — request presigned upload URL (any member) ─────────────────────────
 
 router.post("/:roomId/messages/upload-url", async (req, res) => {
-  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
+  const userId = requireAuth(req, res);
   if (!userId) return;
 
   const { roomId } = req.params;
@@ -1517,6 +1536,11 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
   }
 
   try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
     const uploadUrl = await objectStorage.getObjectEntityUploadURL();
     const objectPath = objectStorage.normalizeObjectEntityPath(uploadUrl);
     res.json({ uploadUrl, objectPath, attachmentType: allowed.attachmentType });
@@ -1528,10 +1552,15 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
 // ─── Chat — list media shared in Group Discussion ─────────────────────────────
 
 router.get("/:roomId/media", async (req, res) => {
-  const userId = await requireRoomDiscussionAccess(req, res, String(req.params.roomId));
-  if (!userId) return;
   const { roomId } = req.params;
+  const userId = requireAuth(req, res);
+  if (!userId) return;
   try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!role) {
+      res.status(403).json({ error: "You are not a member of this room." });
+      return;
+    }
     const media = await getRoomMedia(String(roomId));
     res.json({ media });
   } catch {
@@ -1801,9 +1830,14 @@ router.post("/:roomId/session/navigate", async (req, res) => {
     leaderName?: string;
   };
   try {
+    await replaceSharedTool(String(roomId), scripture !== undefined ? "scripture" : "study");
     await updateSessionState(String(roomId), {
       ...(stepId !== undefined ? { currentStep: stepId } : {}),
       ...(scripture !== undefined ? { currentScripture: scripture } : {}),
+      metadata: {
+        ...(await getActiveSession(String(roomId)))?.metadata,
+        activeTool: scripture !== undefined ? "scripture" : "study",
+      },
       ...(stepId !== undefined && scripture === undefined ? { currentMode: "study" as SessionMode } : {}),
       ...(scripture !== undefined && stepId === undefined ? { currentMode: "scripture" as SessionMode } : {}),
     });
@@ -1837,7 +1871,18 @@ router.post("/:roomId/session/mode", async (req, res) => {
     return;
   }
   try {
-    await updateSessionState(String(roomId), { currentMode: mode });
+    const activeTool = mode === "scripture" ? "scripture"
+      : mode === "discussion" ? "discussion"
+      : mode === "poll" ? "poll"
+      : "study";
+    await replaceSharedTool(String(roomId), activeTool);
+    await updateSessionState(String(roomId), {
+      currentMode: mode,
+      metadata: {
+        ...(await getActiveSession(String(roomId)))?.metadata,
+        activeTool,
+      },
+    });
     // Durably record which modes were entered — awaited so completeSession()
     // can rely on metadata.modesEntered being current before the leader
     // taps Complete Session.
@@ -1854,6 +1899,49 @@ router.post("/:roomId/session/mode", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to change mode." });
+  }
+});
+
+// POST /:roomId/session/tool-close
+// Any member may dismiss the shared tool; the close is authoritative for all
+// devices and is persisted so reconnect hydration cannot resurrect it.
+router.post("/:roomId/session/tool-close", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId } = req.params;
+  const role = await getMemberRole(String(roomId), userId);
+  if (!role) {
+    res.status(403).json({ error: "You are not a member of this room." });
+    return;
+  }
+  const tool = (req.body as { tool?: string })?.tool;
+  const validTools = ["scripture", "discussion", "poll", "ask-emmaus", "presentation"];
+  if (!tool || !validTools.includes(tool)) {
+    res.status(400).json({ error: `tool must be one of: ${validTools.join(", ")}` });
+    return;
+  }
+  try {
+    const session = await getActiveSession(String(roomId));
+    if (!session) {
+      res.status(409).json({ error: "There is no active meeting." });
+      return;
+    }
+    if (session.metadata.activeTool && session.metadata.activeTool !== tool) {
+      res.json({ ok: true, ignored: true });
+      return;
+    }
+    await clearSharedTool(String(roomId), tool as Parameters<typeof clearSharedTool>[1]);
+    if (tool === "poll") await clearActivePoll(String(roomId), session.id);
+    if (tool === "presentation") await stopPresentation(String(roomId));
+    broadcastRoomEvent(String(roomId), {
+      type: "tool_closed",
+      payload: { tool, sessionId: session.id },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to close the shared tool." });
   }
 });
 
@@ -2543,6 +2631,8 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
   // Check for pastoral signals — inject a soft note in the context if needed
   const needsPastoralNote = checkPastoralHandoff(trimmedQ);
 
+  await replaceSharedTool(String(roomId), "ask-emmaus");
+
   // Signal to all members that streaming is about to begin
   broadcastRoomEvent(String(roomId), {
     type: "emmaus_started",
@@ -2714,6 +2804,11 @@ router.post("/:roomId/session/poll", async (req, res) => {
       session.id, String(roomId), userId,
       question.trim(), resolvedType, resolvedOptions
     );
+    await replaceSharedTool(String(roomId), "poll");
+    await updateSessionState(String(roomId), {
+      poll,
+      metadata: { ...(await getActiveSession(String(roomId)))?.metadata, activeTool: "poll" },
+    });
     broadcastRoomEvent(String(roomId), {
       type: "poll_started",
       payload: { poll },
@@ -2881,6 +2976,15 @@ router.post("/:roomId/session/presentation", async (req, res) => {
   try {
     const role = await getMemberRole(String(roomId), userId);
     if (!role) { res.status(403).json({ error: "Not a member." }); return; }
+    const activeSession = await getActiveSession(String(roomId));
+    if (!activeSession) {
+      res.status(409).json({ error: "Start a meeting before presenting shared media." });
+      return;
+    }
+    if (sessionId && sessionId !== activeSession.id) {
+      res.status(409).json({ error: "This presentation belongs to a different meeting." });
+      return;
+    }
 
     // Determine whether this user may present:
     // - Room Owners and Leaders always may
@@ -2916,9 +3020,10 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     );
     const presenterName = String(nameRows[0]?.preferred_name ?? "").trim() || "Member";
 
+    await replaceSharedTool(String(roomId), "presentation");
     const presentation = await startPresentation(
       String(roomId),
-      sessionId ?? null,
+      activeSession.id,
       messageId ?? null,
       filename,
       mediaType,
@@ -2927,6 +3032,9 @@ router.post("/:roomId/session/presentation", async (req, res) => {
       presenterName,
       typeof pageCount === "number" ? pageCount : null,
     );
+    await updateSessionState(String(roomId), {
+      metadata: { ...(await getActiveSession(String(roomId)))?.metadata, activeTool: "presentation" },
+    });
 
     broadcastRoomEvent(String(roomId), {
       type: "media_presented",
@@ -2990,6 +3098,7 @@ router.delete("/:roomId/session/presentation", async (req, res) => {
       return;
     }
     await stopPresentation(String(roomId));
+    await clearSharedTool(String(roomId), "presentation");
     broadcastRoomEvent(String(roomId), {
       type: "presentation_stopped",
       payload: {},

@@ -532,7 +532,7 @@ export default function RoomChat() {
       />
 
       {/* Input bar */}
-      <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 max-w-[480px] mx-auto w-full">
+      <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 pb-safe-or-4 max-w-[480px] mx-auto w-full">
         {isRecording ? (
           /* ── Voice recording mode ── */
           <VoiceNoteRecorder

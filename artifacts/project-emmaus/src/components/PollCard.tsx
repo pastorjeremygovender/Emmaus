@@ -162,7 +162,7 @@ export function PollCard({
 
       {/* Bottom sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-50 max-w-[480px] mx-auto">
-        <div className="bg-card rounded-t-3xl border border-border/60 shadow-2xl">
+        <div className="bg-card rounded-t-3xl border border-border/60 shadow-2xl max-h-[85dvh] overflow-y-auto pb-page-safe">
           {/* Handle */}
           <div className="pt-3 flex flex-col items-center">
             <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />

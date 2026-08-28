@@ -894,6 +894,21 @@ export async function linkJourney(
   }
 }
 
+/** Remove the room's primary study while retaining its historical journey link. */
+export async function unlinkPrimaryJourney(
+  roomId: string,
+  journeyId?: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE rooms
+        SET linked_content_id = NULL,
+            linked_content_type = NULL
+      WHERE id = $1
+        AND ($2::text IS NULL OR linked_content_id = $2)`,
+    [roomId, journeyId ?? null],
+  );
+}
+
 // ─── Atomic shared-start ─────────────────────────────────────────────────────
 
 export interface StartSharedParams {
@@ -1351,6 +1366,7 @@ export interface SessionEvent {
     | "media_presented"
     | "presentation_page"
      | "presentation_stopped"
+    | "tool_closed"
      | "OPEN_GROUP_DISCUSSION";
   payload: Record<string, unknown>;
   sentBy: string;
@@ -1510,6 +1526,43 @@ export async function updateSessionState(
      WHERE room_id = $1 AND status = 'active'`,
     vals
   );
+}
+
+/** Clear one shared surface from the active session's durable tool state. */
+export async function clearSharedTool(
+  roomId: string,
+  tool: "scripture" | "discussion" | "poll" | "ask-emmaus" | "presentation",
+): Promise<void> {
+  const session = await getActiveSession(roomId);
+  if (!session) return;
+
+  const metadata = { ...session.metadata };
+  if (metadata.activeTool === tool) {
+    delete metadata.activeTool;
+  }
+
+  await updateSessionState(roomId, {
+    ...(tool === "scripture" ? { currentScripture: null } : {}),
+    ...(tool === "poll" ? { poll: null } : {}),
+    metadata,
+  });
+}
+
+/** Replace the current shared tool and clear any durable presentation/poll it supersedes. */
+export async function replaceSharedTool(
+  roomId: string,
+  tool: "scripture" | "discussion" | "poll" | "ask-emmaus" | "presentation" | "study",
+): Promise<void> {
+  const session = await getActiveSession(roomId);
+  if (!session) return;
+  const previousTool = session.metadata.activeTool;
+  if (previousTool && previousTool !== tool) {
+    if (previousTool === "poll") await clearActivePoll(roomId, session.id);
+    if (previousTool === "presentation") await stopPresentation(roomId);
+  }
+  await updateSessionState(roomId, {
+    metadata: { ...session.metadata, activeTool: tool },
+  });
 }
 
 /** Record a member joining the active session for attendance.
@@ -2644,6 +2697,43 @@ export async function getActivePoll(
   );
   if (!rows[0]) return null;
   return rowToPoll(rows[0] as Record<string, unknown>);
+}
+
+/** Remove the current poll so it cannot return during reconnect hydration. */
+export async function clearActivePoll(
+  roomId: string,
+  sessionId: string,
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `DELETE FROM room_poll_votes
+        WHERE poll_id IN (
+          SELECT id FROM room_polls
+           WHERE room_id = $1 AND session_id = $2
+           ORDER BY created_at DESC
+           LIMIT 1
+        )`,
+      [roomId, sessionId],
+    );
+    await client.query(
+      `DELETE FROM room_polls
+       WHERE id = (
+         SELECT id FROM room_polls
+          WHERE room_id = $1 AND session_id = $2
+          ORDER BY created_at DESC
+          LIMIT 1
+       )`,
+      [roomId, sessionId],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**

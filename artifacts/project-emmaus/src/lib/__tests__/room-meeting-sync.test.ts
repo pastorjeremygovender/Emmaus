@@ -63,4 +63,19 @@ describe('active meeting synchronization contract', () => {
     expect(videoRoomSource).toContain('Live Audio');
     expect(videoRoomSource).toContain("'Microphone' : 'Camera and microphone'");
   });
+
+  it('persists shared-tool replacement and closes it for every connected device', () => {
+    expect(roomsApiSource).toContain('/session/tool-close');
+    expect(roomDetailSource).toContain("handleCloseSharedTool('scripture'");
+    expect(roomDetailSource).toContain("handleCloseSharedTool('ask-emmaus'");
+    expect(roomDetailSource).toContain("handleCloseSharedTool('poll'");
+    expect(roomDetailSource).toContain("lastEvent.type === 'tool_closed'");
+    expect(roomDetailSource).toContain('setDiscussionPendingNotice(null);');
+  });
+
+  it('allows members to stage media before a meeting but only present during one', () => {
+    expect(guidePanelSource).toContain('Add media before the meeting');
+    expect(guidePanelSource).toContain('disabled={!sessionActive || busy === `present-${item.messageId}`}');
+    expect(guidePanelSource).toContain('await apiSendMessage(userId, roomId, \'\', attachment);');
+  });
 });
