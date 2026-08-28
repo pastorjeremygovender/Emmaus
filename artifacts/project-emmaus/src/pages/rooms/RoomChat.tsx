@@ -3,7 +3,7 @@ import { useParams, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   apiGetMessages, apiGetStreamToken, apiSendMessage, apiGetRoomById,
-  apiGetActiveGroupDiscussion,
+  apiGetActiveGroupDiscussion, apiCloseSharedTool,
 } from '@/lib/rooms-api';
 import { getApiUrl } from '@/lib/api';
 import { apiStartPresentation } from '@/lib/rooms-api-media';
@@ -105,6 +105,7 @@ export default function RoomChat() {
     return queryValue || null;
   });
   const [presentingMessageId, setPresentingMessageId] = useState<string | null>(null);
+  const [closingDiscussion, setClosingDiscussion] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -366,6 +367,19 @@ export default function RoomChat() {
     }
   };
 
+  const handleCloseDiscussion = async () => {
+    if (!user || !roomId || closingDiscussion) return;
+    setClosingDiscussion(true);
+    try {
+      await apiCloseSharedTool(user.id, String(roomId), 'discussion');
+      setLocation(`/rooms/${roomId}`);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Could not close Group Discussion.');
+    } finally {
+      setClosingDiscussion(false);
+    }
+  };
+
   if (!user) return null;
 
   const groups = groupByDate(messages);
@@ -388,6 +402,15 @@ export default function RoomChat() {
             </div>
             <div className="text-[12px] text-muted-foreground">Group Discussion</div>
           </div>
+          {isLeader && sessionId && discussionId && (
+            <button
+              onClick={() => void handleCloseDiscussion()}
+              disabled={closingDiscussion}
+              className="shrink-0 px-3 py-2 rounded-xl border border-border text-[12px] font-semibold text-foreground hover:bg-muted/50 disabled:opacity-60"
+            >
+              {closingDiscussion ? 'Closing…' : 'Close Discussion'}
+            </button>
+          )}
         </div>
       </header>
 

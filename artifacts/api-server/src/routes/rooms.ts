@@ -2686,6 +2686,16 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
   // Check for pastoral signals — inject a soft note in the context if needed
   const needsPastoralNote = checkPastoralHandoff(trimmedQ);
 
+  if (session.status !== "active") {
+    res.status(404).json({ error: "Session is no longer active." });
+    return;
+  }
+  const activeSession = await getActiveSession(String(roomId));
+  if (!activeSession || activeSession.id !== session.id) {
+    res.status(409).json({ error: "There is no active meeting for this session." });
+    return;
+  }
+
   await replaceSharedTool(String(roomId), "ask-emmaus");
 
   // Signal to all members that streaming is about to begin
@@ -2735,7 +2745,9 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
       const provider = createLLMProvider();
       let fullText = "";
 
-      for await (const chunk of provider.streamCompletion(messages, { maxTokens: 900 })) {
+      // gpt-5 reasoning models reject small output budgets. Keep this above
+      // their minimum while allowing the normal provider to stop naturally.
+      for await (const chunk of provider.streamCompletion(messages, { maxTokens: 6000 })) {
         if (chunk.done) break;
         if (!chunk.content) continue;
         fullText += chunk.content;

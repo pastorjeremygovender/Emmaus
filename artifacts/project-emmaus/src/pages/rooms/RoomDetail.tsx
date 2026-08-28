@@ -33,6 +33,7 @@ import {
   apiSendPresenceHeartbeat, apiGetPresenceStreamToken, apiPresenceStreamUrl,
   apiRecordAttendanceJoin,
   apiGetActivePoll, apiGetSessionAttendance, apiChangeMode, apiCloseSharedTool,
+  apiRecordAttendanceLeave,
   apiStartSession, apiEndSession, apiCompleteSession, apiAcknowledgeSessionCompletion, apiUpdateLeaderNote, apiUpdateSchedule,
   apiStartVideo, apiEndVideo, apiGetVideoStatus,
 } from '@/lib/rooms-api';
@@ -155,6 +156,7 @@ export default function RoomDetail() {
   // ── Attendance state ────────────────────────────────────────────────────────
   const [attendanceData, setAttendanceData] = useState<SessionAttendee[]>([]);
   const [joiningMeeting, setJoiningMeeting] = useState(false);
+  const [leavingMeeting, setLeavingMeeting] = useState(false);
 
   // ── Leader's completion summary ─────────────────────────────────────────────
   const [leaderSessionComplete, setLeaderSessionComplete] = useState<import('@/lib/rooms-types').SessionCompleteSummary | null>(null);
@@ -182,8 +184,6 @@ export default function RoomDetail() {
   const {
     activeSession,
     setActiveSession,
-    followLeader,
-    setFollowLeader,
     sessionMode,
     activeScripture,
     incomingHighlights,
@@ -209,10 +209,8 @@ export default function RoomDetail() {
     onModeChange: (_mode) => {},
     onScriptureOpen: (scripture, leaderName) => {
       setScripturePendingNotice({ scripture, leaderName });
-      if (followLeader) {
-        setShowSharedScripture(true);
-        setScripturePendingNotice(null);
-      }
+      setShowSharedScripture(true);
+      setScripturePendingNotice(null);
     },
   });
 
@@ -427,10 +425,10 @@ export default function RoomDetail() {
   // Reconnect hydration may restore a shared Bible without delivering the
   // original navigate event. Only auto-open it while following the leader.
   useEffect(() => {
-    if (activeTool === 'scripture' && activeScripture && followLeader) {
+    if (activeTool === 'scripture' && activeScripture) {
       setShowSharedScripture(true);
     }
-  }, [activeTool, activeScripture, followLeader]);
+  }, [activeTool, activeScripture]);
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -799,6 +797,26 @@ export default function RoomDetail() {
       alert(err instanceof Error ? err.message : 'Could not join this meeting.');
     } finally {
       setJoiningMeeting(false);
+    }
+  };
+
+  const handleLeaveMeeting = async () => {
+    if (!activeSession || !currentAttendance || leavingMeeting) return;
+    setLeavingMeeting(true);
+    const rid = String(roomId);
+    const sid = activeSession.id;
+    try {
+      await apiRecordAttendanceLeave(user.id, rid, sid);
+      setAttendanceData(prev => prev.map(attendee =>
+        attendee.userId === user.id
+          ? { ...attendee, leftAt: new Date().toISOString() }
+          : attendee,
+      ));
+      await refreshAttendance(sid);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not leave this meeting.');
+    } finally {
+      setLeavingMeeting(false);
     }
   };
 
@@ -1555,24 +1573,6 @@ export default function RoomDetail() {
                     </p>
                   </div>
                 </div>
-                {!isAuthorizedLeader && (
-                  <div className="flex flex-col items-end gap-1">
-                    <button
-                      onClick={() => setFollowLeader(!followLeader)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-all ${
-                        followLeader
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-transparent text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700 hover:border-emerald-500'
-                      }`}
-                      title="Controls whether this screen opens the leader's shared study and Scripture"
-                    >
-                      {followLeader ? '● Follow leader: On' : 'Follow leader: Off'}
-                    </button>
-                    <span className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70">
-                      Study navigation only
-                    </span>
-                  </div>
-                )}
               </div>
 
               {!hasJoinedCurrentMeeting ? (
@@ -1593,9 +1593,19 @@ export default function RoomDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-[12px] text-emerald-700 dark:text-emerald-300">
-                  <CheckCircle2 size={14} />
-                  You are in this meeting
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-[12px] text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 size={14} />
+                    You are in this meeting
+                  </div>
+                  <button
+                    onClick={handleLeaveMeeting}
+                    disabled={leavingMeeting}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-[12px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 disabled:opacity-60"
+                  >
+                    {leavingMeeting && <Loader2 size={13} className="animate-spin" />}
+                    Leave Meeting
+                  </button>
                 </div>
               )}
 
