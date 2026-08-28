@@ -110,6 +110,7 @@ function groundResourceClaims(
   answer: string,
   resources: ResourceForGrounding[],
   sermons: SermonRecommendation[],
+  unresolvedSources: string[] = [],
 ): string {
   const knownTitles = new Set([
     ...resources.map((resource) => resource.title.toLowerCase()),
@@ -120,14 +121,14 @@ function groundResourceClaims(
     .map((sentence) => sentence
       .replace(/\bPastor Jeremy Govender\b/gi, "Pastor Jeremy")
       .trim())
-    .filter((sentence) => {
+    .flatMap((sentence) => {
       const lower = sentence.toLowerCase();
-      if (/\bpastor jeremy\b/i.test(sentence) && sermons.length === 0) return false;
+      if (/\bpastor jeremy\b/i.test(sentence) && sermons.length === 0) return [];
 
       const titleMentioned = Array.from(knownTitles).some((title) =>
         title.length >= 4 && lower.includes(title),
       );
-      if (titleMentioned) return true;
+      if (titleMentioned) return [sentence];
 
       // A model may name an invented resource without an article, for example
       // "Try the Ember Journey". Keep only names that match the verified title
@@ -135,11 +136,19 @@ function groundResourceClaims(
       const namedResource = sentence.match(
         /\b([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,5})\s+(Walk|Journey|Devotional|Bible Study|Sermon Companion)\b/,
       );
-      if (namedResource && !titleMentioned) return false;
+       if (namedResource && !titleMentioned) {
+        return unresolvedSources.length > 0
+          ? ["I couldn't verify that Emmaus resource right now."]
+          : [];
+       }
 
       const specificResourceClaim =
         /\b(?:this|the|a|an|my|your|emmaus(?:'s)?|in emmaus)\s+(?:emmaus\s+)?(?:walk|journey|devotional(?: series)?|bible study|sermon|sermon companion)\b/i.test(sentence);
-      if (!specificResourceClaim) return true;
+      if (!specificResourceClaim) return [sentence];
+
+      if (unresolvedSources.length > 0) {
+        return ["I couldn't verify that Emmaus resource right now."];
+      }
 
       return (
         (/\bwalk\b/i.test(sentence) && hasResourceType(resources, ["walk", "walk_step"])) ||
@@ -147,7 +156,7 @@ function groundResourceClaims(
         (/\bdevotional/i.test(sentence) && hasResourceType(resources, ["devotional", "daily_rhythm"])) ||
         (/\bbible study\b/i.test(sentence) && hasResourceType(resources, ["bible_study"])) ||
         (/\bsermon|sermon companion\b/i.test(sentence) && sermons.length > 0)
-      );
+      ) ? [sentence] : [];
     })
     .join(" ")
     .replace(/\s{2,}/g, " ")
@@ -200,6 +209,7 @@ export function normalizeEmmausResponse(input: {
   answer: string;
   metadata: EmmausResponseMetadata;
   resources?: ResourceForGrounding[];
+  unresolvedSources?: string[];
 }): NormalizedEmmausResponse {
   const normalizedInputAnswer = normalizeValidatedScriptureProse(input.answer);
   const metadata = input.resources
@@ -248,7 +258,12 @@ export function normalizeEmmausResponse(input: {
   dedupeActions(metadata);
 
   const grounded = input.resources
-    ? groundResourceClaims(normalizedInputAnswer, input.resources, metadata.sermonRecommendations ?? [])
+    ? groundResourceClaims(
+        normalizedInputAnswer,
+        input.resources,
+        metadata.sermonRecommendations ?? [],
+        input.unresolvedSources,
+      )
     : normalizedInputAnswer;
   const displayAnswer = conciseDisplayAnswer(
     grounded || "I couldn't verify that Emmaus resource. I can still help you explore the Scripture behind your question.",

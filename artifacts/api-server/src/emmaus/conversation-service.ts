@@ -987,8 +987,9 @@ export async function handleConversation(
   // ── 11. Parse metadata ────────────────────────────────────────────────────
   const validationStart = Date.now();
   const { cleanText, metadata } = extractMeta(fullResponse);
+  const groundingResources = resourceCatalogue.allResources ?? resourceCatalogue.resources;
   const finalMeta: EmmausResponseMetadata = metadata
-    ? validateModelResponse(metadata, resourceCatalogue.resources)
+    ? validateModelResponse(metadata, groundingResources)
     : defaultMetadata();
   finalMeta.requestId = reqId;
 
@@ -1012,7 +1013,7 @@ export async function handleConversation(
 
   // Model metadata is advisory. Only catalogue-backed resources and valid
   // Scripture references are allowed to reach the client.
-  const validatedMeta = validateCitations(finalMeta, resourceCatalogue.resources);
+  const validatedMeta = validateCitations(finalMeta, groundingResources);
   finalMeta.scripture = validatedMeta.scripture;
   finalMeta.nextStep = validatedMeta.nextStep;
   finalMeta.recommendations = validatedMeta.recommendations;
@@ -1164,7 +1165,8 @@ export async function handleConversation(
     : normalizeEmmausResponse({
         answer: safeAnswer,
         metadata: finalMeta,
-        resources: resourceCatalogue.resources,
+        resources: groundingResources,
+        unresolvedSources: resourceCatalogue.sourceFailures,
       });
   const responseMeta = normalized.metadata;
   responseMeta.answer = normalized.displayAnswer;

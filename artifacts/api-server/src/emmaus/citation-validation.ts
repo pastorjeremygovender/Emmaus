@@ -144,15 +144,48 @@ const PROSE_BOOK_NAMES = [
   "Jude", "Revelation",
 ].sort((a, b) => b.length - a.length);
 
+const NUMBER_WORDS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50,
+  sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+
+function parseReferenceNumber(value: string): number | null {
+  const normalized = value.trim().toLowerCase().replace(/-/g, " ");
+  if (/^\d{1,3}$/u.test(normalized)) return Number(normalized);
+  let total = 0;
+  let current = 0;
+  for (const token of normalized.split(/\s+/u)) {
+    if (token === "and") continue;
+    if (token === "hundred") {
+      current = (current || 1) * 100;
+      continue;
+    }
+    const amount = NUMBER_WORDS[token];
+    if (amount == null) return null;
+    current += amount;
+  }
+  const result = total + current;
+  return result > 0 ? result : null;
+}
+
 function proseBookPattern(): string {
   return PROSE_BOOK_NAMES.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+}
+
+function spokenNumberPattern(): string {
+  const words = Object.keys(NUMBER_WORDS).join("|");
+  return `(?:\\d{1,3}|(?:${words})(?:[- ](?:${words}|and)){0,5})`;
 }
 
 /** Extract and validate Bible references named in final prose, independently
  * of the model's structured metadata. */
 export function extractValidatedScriptureReferences(text: string): ScriptureRef[] {
   const pattern = new RegExp(
-    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?(?:\\s*,\\s*\\d{1,3})?)?\\b`,
+    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?)?\\b`,
     "gi",
   );
   const found: ScriptureRef[] = [];
@@ -178,7 +211,7 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
   }
 
   const spokenPattern = new RegExp(
-    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(\\d{1,3})(?:\\s*,?\\s*verse\\s+(\\d{1,3})(?:\\s*(?:to|through|[-–—])\\s*(\\d{1,3}))?)?\\b`,
+    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(${spokenNumberPattern()})(?:\\s*,?\\s*verse(?:s)?\\s+(${spokenNumberPattern()})(?:\\s*(?:to|through|[-–—])\\s+(${spokenNumberPattern()}))?)?\\b`,
     "gi",
   );
   for (const match of text.matchAll(spokenPattern)) {
@@ -188,9 +221,9 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
       .replace(/^Third /i, "3 ");
     const ref = validateScripture({
       book,
-      chapter: Number(match[2]),
-      verseStart: match[3] == null ? undefined : Number(match[3]),
-      verseEnd: match[4] == null ? undefined : Number(match[4]),
+      chapter: parseReferenceNumber(match[2]) ?? -1,
+      verseStart: match[3] == null ? undefined : parseReferenceNumber(match[3]) ?? -1,
+      verseEnd: match[4] == null ? undefined : parseReferenceNumber(match[4]) ?? -1,
       reference: match[0],
       displayText: match[0],
     });
@@ -208,7 +241,7 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
  */
 export function normalizeValidatedScriptureProse(text: string): string {
   const numericPattern = new RegExp(
-    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?(?:\\s*,\\s*\\d{1,3})?)?\\b`,
+    `\\b((?:${proseBookPattern()}))\\s+(\\d{1,3})(?::(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?)?\\b`,
     "gi",
   );
   let normalized = text.replace(numericPattern, (full, rawBook: string, rawChapter: string, rawVerse?: string, rawEnd?: string) => {
@@ -224,15 +257,15 @@ export function normalizeValidatedScriptureProse(text: string): string {
   });
 
   const spokenPattern = new RegExp(
-    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(\\d{1,3})(?:\\s*,?\\s*verse\\s+(\\d{1,3})(?:\\s*(?:to|through|[-–—])\\s*(\\d{1,3}))?)?\\b`,
+    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(${spokenNumberPattern()})(?:\\s*,?\\s*verse(?:s)?\\s+(${spokenNumberPattern()})(?:\\s*(?:to|through|[-–—])\\s+(${spokenNumberPattern()}))?)?\\b`,
     "gi",
   );
   normalized = normalized.replace(spokenPattern, (full, rawBook: string, rawChapter: string, rawVerse?: string, rawEnd?: string) => {
     const ref = validateScripture({
       book: rawBook,
-      chapter: Number(rawChapter),
-      verseStart: rawVerse == null ? undefined : Number(rawVerse),
-      verseEnd: rawEnd == null ? undefined : Number(rawEnd),
+      chapter: parseReferenceNumber(rawChapter) ?? -1,
+      verseStart: rawVerse == null ? undefined : parseReferenceNumber(rawVerse) ?? -1,
+      verseEnd: rawEnd == null ? undefined : parseReferenceNumber(rawEnd) ?? -1,
       reference: full,
       displayText: full,
     });

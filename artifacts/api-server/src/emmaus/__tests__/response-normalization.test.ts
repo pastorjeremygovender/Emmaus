@@ -95,4 +95,56 @@ describe("Ask Emmaus final response normalization", () => {
     assert.equal(result.metadata.displayAnswer, result.displayAnswer);
     assert.equal(result.metadata.speakableAnswer, result.speakableAnswer);
   });
+
+  it("grounds against the complete catalogue even when a resource is outside prompt limits", () => {
+    const resources = Array.from({ length: 30 }, (_, index) => ({
+      type: "journey" as const,
+      resourceId: `journey-${index}`,
+      title: index === 29 ? "Prodigal Welcome Journey" : `Journey ${index}`,
+      route: `/journeys/journey-${index}`,
+      excerpts: [],
+      provenance: "Published Journey",
+      relevance: index === 29 ? 99 : 1,
+      relevanceReasons: index === 29 ? ["query:prodigal"] : [],
+    }));
+    const result = normalizeEmmausResponse({
+      answer: "The Prodigal Welcome Journey is a good next step. Try the Imaginary Journey too.",
+      metadata: {
+        ...baseMetadata(),
+        recommendations: [{
+          type: "journey",
+          title: "Prodigal Welcome Journey",
+          resourceId: "journey-29",
+          path: "/journeys/journey-29",
+        }],
+      },
+      resources,
+    });
+    assert.match(result.displayAnswer, /Prodigal Welcome Journey/);
+    assert.doesNotMatch(result.displayAnswer, /Imaginary Journey/);
+    assert.deepEqual(result.metadata.resourceRecommendations?.[0]?.relevanceReasons, ["query:prodigal"]);
+  });
+
+  it("marks resource claims unresolved when a catalogue source is temporarily unavailable", () => {
+    const result = normalizeEmmausResponse({
+      answer: "Try the Ember Journey while the resource catalogue is unavailable.",
+      metadata: { ...baseMetadata(), recommendations: [] },
+      resources: [],
+      unresolvedSources: ["journeys"],
+    });
+    assert.match(result.displayAnswer, /couldn't verify that Emmaus resource right now/i);
+    assert.doesNotMatch(result.displayAnswer, /Try the Ember Journey/);
+  });
+
+  it("keeps display and speakable answers concise and free of links", () => {
+    const result = normalizeEmmausResponse({
+      answer: `${"Faith grows through faithful practice. ".repeat(120)} https://example.invalid`,
+      metadata: { ...baseMetadata(), recommendations: [] },
+      resources: [],
+    });
+    assert.ok(result.displayAnswer.length <= 2400);
+    assert.ok(result.speakableAnswer.length <= 720);
+    assert.doesNotMatch(result.displayAnswer, /https?:\/\//);
+    assert.doesNotMatch(result.speakableAnswer, /https?:\/\//);
+  });
 });

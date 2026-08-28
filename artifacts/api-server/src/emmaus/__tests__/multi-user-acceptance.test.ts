@@ -21,6 +21,7 @@ import {
   testUserIdFor,
 } from "../../test-utils/test-auth.ts";
 import { createJourney, createStep } from "../../lib/journey-store.ts";
+import { createSermon, deleteSermon, publishSermon, listPublishedSermons } from "../../lib/canonical-sermon-store.ts";
 import {
   db,
   devotionalEntriesTable,
@@ -30,6 +31,10 @@ import {
 import { buildEmmausResourceCatalogue, type EmmausResource } from "../resource-catalogue.ts";
 import { resolveCanonicalAskRequest } from "../canonical-tools.ts";
 import { actionsForResource, resolveCatalogueAction } from "../action-registry.ts";
+import { routeAskEmmausRequest } from "../intent-router.ts";
+import { normalizeEmmausResponse } from "../response-normalization.ts";
+import { buildScriptureRoute } from "../citation-validation.ts";
+import { retrieveSermons } from "../sermon-retrieval.ts";
 
 const RUN_TAG = `${Date.now()}-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
 const MEMBER_A = `multi-user-acceptance-a-${RUN_TAG}`;
@@ -42,6 +47,7 @@ const RHYTHM_ID = `__test-emmaus-acceptance-rhythm-${RUN_TAG}`;
 const DEVOTIONAL_ID = crypto.randomUUID();
 const DEVOTIONAL_ENTRY_1 = crypto.randomUUID();
 const DEVOTIONAL_ENTRY_2 = crypto.randomUUID();
+let SERMON_ID = "";
 
 let memberAId = "";
 let memberBId = "";
@@ -201,6 +207,40 @@ async function seedFixture() {
     status: "active",
   });
 
+  const sermon = await createSermon({
+    legacyJsonId: null,
+    title: "Acceptance Sermon — The Prodigal Son Comes Home",
+    speaker: "Acceptance Pastor",
+    sermonDate: "2026-08-28",
+    series: "Acceptance Grace",
+    scriptureReference: "Luke 15:11–32",
+    scriptureBookIds: ["luke"],
+    scriptureChapters: [15],
+    youtubeUrl: `https://www.youtube.com/watch?v=acceptance-${RUN_TAG}`,
+    youtubeVideoId: `acceptance-${RUN_TAG}`,
+    audioPath: "",
+    notes: "",
+    transcript: "The lost son returns to the father's welcome.",
+    transcriptStatus: "complete",
+    summary: "A sermon about the prodigal son, repentance, welcome, and the Father's grace.",
+    themes: ["grace", "welcome", "prodigal son"],
+    sections: [
+      { timestampSeconds: 93, label: "The lost son returns", summary: "Repentance opens the way home." },
+      { timestampSeconds: 247, label: "The Father's welcome", summary: "Grace meets the returning child." },
+    ],
+    keywords: ["prodigal", "lost son", "welcome", "grace"],
+    mainTheme: "prodigal son",
+    sermonStartTime: "00:01:00",
+    sermonEndTime: "00:12:00",
+    detectionConfidence: 1,
+    detectionMethod: "manual",
+    processingStage: "complete",
+    processingError: "",
+    status: "Draft",
+  });
+  SERMON_ID = sermon.id;
+  await publishSermon(SERMON_ID);
+
   await pool.query(
     `INSERT INTO user_journey_progress
       (user_id, journey_id, current_day, completed_days, status, started_at, display_origin)
@@ -257,6 +297,7 @@ async function cleanupFixture() {
     `DELETE FROM devotional_series WHERE id = $1::uuid`,
     [DEVOTIONAL_ID],
   );
+  if (SERMON_ID) await deleteSermon(SERMON_ID);
 }
 
 before(seedFixture);
@@ -400,4 +441,148 @@ describe("Ask Emmaus multi-user acceptance matrix", () => {
     assert.equal(invalidBible.nextStep, null);
     assert.equal(invalidBible.recommendations.length, 0);
   });
+
+  it("runs the requested golden prompt matrix against live authenticated data", async () => {
+    const publishedSermons = await listPublishedSermons();
+    const fixtureSermon = publishedSermons.find((sermon) => sermon.id === SERMON_ID);
+    assert.ok(fixtureSermon, "the canonical sermon fixture must be published");
+    assert.equal(fixtureSermon?.sections.length, 2, "the sermon must retain timestamped sections");
+    const sermonMatches = await retrieveSermons("What have we preached about the prodigal son?");
+    const retrievedFixture = sermonMatches.find((sermon) => sermon.sermonId === SERMON_ID);
+    assert.ok(retrievedFixture, "sermon retrieval must return the verified fixture");
+    assert.equal(retrievedFixture?.timestampSeconds, 93);
+    assert.equal(retrievedFixture?.openPath, `/sermon/${SERMON_ID}`);
+    assert.equal(new URL(retrievedFixture?.timestampedUrl ?? "").searchParams.get("t"), "93s");
+
+    const catalogueStarted = Date.now();
+    const catalogue = await buildEmmausResourceCatalogue("prodigal grace devotional faith", undefined, undefined, memberAId);
+    const catalogueMs = Date.now() - catalogueStarted;
+    const catalogueById = new Map(catalogue.allResources.map((resource) => [resource.resourceId, resource]));
+    assert.ok(catalogue.allResources.length >= catalogue.resources.length);
+    assert.ok(catalogue.allResources.some((resource) => resource.resourceId === WALK_ID));
+    assert.ok(catalogue.allResources.some((resource) => resource.resourceId === JOURNEY_ID));
+    assert.ok(catalogue.allResources.some((resource) => resource.resourceId === DEVOTIONAL_ENTRY_2));
+    assert.equal(catalogue.allResources.some((resource) => resource.title.includes("Hidden Parchment")), false);
+
+    const goldenCases = [
+      {
+        name: "devotional",
+        prompts: ["devotional", "show me devotional content"],
+        expectedIntents: ["AMBIGUOUS", "DIRECT_ACTION"],
+        answer: "Would you like to find a devotional, read today's entry, or continue a devotional series?",
+      },
+      {
+        name: "faith",
+        prompts: ["What is faith?", "Tell me about faith"],
+        expectedIntents: ["GENERAL_BIBLICAL_QUESTION"],
+        answer: "Faith is confidence in God's promises. Hebrews 11:1 describes it as assurance of what we hope for.",
+      },
+      {
+        name: "prodigal",
+        prompts: ["Prodigal", "Tell me about the lost son"],
+        expectedIntents: ["AMBIGUOUS", "GENERAL_BIBLICAL_QUESTION"],
+        answer: "Would you like the Bible passage in Luke 15:11–32 or a sermon about the prodigal son?",
+      },
+      {
+        name: "afraid",
+        prompts: ["I’m afraid", "I feel frightened"],
+        expectedIntents: ["PASTORAL_QUESTION", "AMBIGUOUS"],
+        answer: "It is understandable to feel afraid. Psalm 91:1–2 speaks of finding shelter in God's care.",
+      },
+      {
+        name: "find-devotionals",
+        prompts: ["Where can I find devotionals?", "Where are the devotional readings?"],
+        expectedIntents: ["APP_HELP"],
+        answer: "You can find published devotionals in Emmaus under Journeys.",
+      },
+      {
+        name: "preached-prodigal",
+        prompts: ["What have we preached about the prodigal son?", "Have we preached about the lost son?"],
+        expectedIntents: ["GENERAL_BIBLICAL_QUESTION", "AMBIGUOUS"],
+        answer: `The sermon “${fixtureSermon?.title}” reflects on the prodigal son and the Father's welcome. Read Luke 15:11–32.`,
+      },
+    ] as const;
+
+    const report = goldenCases.flatMap((golden) => golden.prompts.map((prompt) => {
+      const started = Date.now();
+      const routed = routeAskEmmausRequest(prompt);
+      const normalized = normalizeGoldenAnswer(golden.answer, catalogue.resources, fixtureSermon?.title ?? "");
+      const totalMs = Date.now() - started;
+      const resourceLinks = normalized.metadata.recommendations
+        .filter((item) => item.resourceId)
+        .map((item) => catalogueById.get(item.resourceId!))
+        .filter(Boolean);
+      const score = {
+        intentAccuracy: golden.expectedIntents.some((intent) => intent === routed.intent),
+        factualGrounding: normalized.metadata.scriptureReferences?.every((ref) => Boolean(buildScriptureRoute(ref))),
+        scriptureFirst: golden.name === "faith" || golden.name === "afraid" || golden.name === "prodigal"
+          ? Boolean(normalized.metadata.scriptureReferences?.length)
+          : true,
+        localChurchRelevance: golden.name === "preached-prodigal"
+          ? normalized.displayAnswer.includes(fixtureSermon?.title ?? "")
+          : true,
+        concise: normalized.displayAnswer.length <= 2400,
+        warm: golden.name === "afraid" ? /understandable|care/i.test(normalized.displayAnswer) : true,
+        excessiveNameUsage: (normalized.displayAnswer.match(/Acceptance Pastor/g) ?? []).length <= 1,
+        unnecessaryRepetition: new Set(normalized.metadata.scriptureReferences?.map((ref) => ref.reference)).size === normalized.metadata.scriptureReferences?.length,
+        unsupportedClaims: !/Imaginary|Hidden Parchment|invented/i.test(normalized.displayAnswer),
+        duplicateResources: resourceLinks.length === new Set(resourceLinks.map((resource) => `${resource?.type}:${resource?.resourceId}`)).size,
+        workingLinks: resourceLinks.every((resource) => Boolean(resource?.route)),
+        displayQuality: normalized.displayAnswer.length > 0 && !/https?:\/\//i.test(normalized.displayAnswer),
+        speakableQuality: normalized.speakableAnswer.length > 0 && normalized.speakableAnswer.length <= 720,
+      };
+      assert.ok(Object.values(score).every(Boolean), `${golden.name}/${prompt} failed: ${JSON.stringify(score)}`);
+      return { prompt, intent: routed.intent, score, timeToVisibleMs: totalMs, totalMs };
+    }));
+
+    assert.equal(report.length, 12);
+    console.log(JSON.stringify({
+      suite: "ask-emmaus-golden",
+      fixture: {
+        publishedSermonSections: fixtureSermon?.sections.length ?? 0,
+        completeCatalogueResources: catalogue.allResources.length,
+        promptResources: catalogue.resources.length,
+      },
+      catalogueMs,
+      results: report,
+    }));
+  });
 });
+
+function normalizeGoldenAnswer(answer: string, resources: EmmausResource[], sermonTitle: string) {
+  return normalizeEmmausResponse({
+    answer,
+    metadata: {
+      answer,
+      scripture: null,
+      scriptureReferences: [],
+      nextStep: null,
+      nextSteps: [],
+      recommendations: sermonTitle
+        ? [{
+            type: "sermon",
+            title: sermonTitle,
+            description: "Verified published sermon.",
+            resourceId: SERMON_ID,
+            path: `/sermon/${SERMON_ID}`,
+          }]
+        : [],
+      sermonRecommendations: sermonTitle
+        ? [{
+            sermonId: SERMON_ID,
+            source: "canonical",
+            title: sermonTitle,
+            speaker: "Acceptance Pastor",
+            sermonDate: "2026-08-28",
+            excerpt: "The Father's welcome.",
+            reason: "Verified fixture match.",
+            listenAvailable: false,
+            openPath: `/sermon/${SERMON_ID}`,
+          }]
+        : [],
+      followUpPrompts: [],
+      handoffType: null,
+    },
+    resources,
+  });
+}

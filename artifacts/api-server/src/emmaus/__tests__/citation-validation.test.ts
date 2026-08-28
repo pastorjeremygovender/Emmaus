@@ -60,4 +60,32 @@ describe("Ask Emmaus citation validation", () => {
     const refs = extractValidatedScriptureReferences("First Corinthians 13 and First John 1:9.");
     assert.deepEqual(refs.map(ref => ref.book), ["1corinthians", "1john"]);
   });
+
+  it("covers production reference forms and preserves every valid occurrence", () => {
+    const refs = extractValidatedScriptureReferences(
+      "Psalm 91:1–2 gives shelter. Hebrews 11:1 defines faith. " +
+      "John 20:30–31 points to belief. Genesis 50:1–14 and Luke 15:11–32 " +
+      "also speak here. See 1 Sam 17:45, 2 Kgs 5:1, and 1 Chr 16:8.",
+    );
+    assert.deepEqual(refs.map(ref => ref.reference), [
+      "Psalm 91:1–2",
+      "Hebrews 11:1",
+      "John 20:30–31",
+      "Genesis 50:1–14",
+      "Luke 15:11–32",
+      "1 Samuel 17:45",
+      "2 Kings 5:1",
+      "1 Chronicles 16:8",
+    ]);
+    assert.equal(buildScriptureRoute(refs[0]), "/bible/read/psalms/91?startVerse=1&endVerse=2");
+    assert.equal(buildScriptureRoute(refs[4]), "/bible/read/luke/15?startVerse=11&endVerse=32");
+  });
+
+  it("understands spoken references without turning dates or step numbers into Scripture", () => {
+    const refs = extractValidatedScriptureReferences(
+      "Read Psalm chapter ninety-one verses one through two, then Hebrews chapter eleven verse one. " +
+      "The meeting is on 29 March 2026; this is Day 3 and Step 5.",
+    );
+    assert.deepEqual(refs.map(ref => ref.reference), ["Psalm 91:1–2", "Hebrews 11:1"]);
+  });
 });

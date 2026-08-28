@@ -230,7 +230,11 @@ export async function buildEmmausResourceCatalogue(
   bibleBookId?: string,
   bibleChapter?: number,
   userId?: string,
-): Promise<{ resources: EmmausResource[]; sourceFailures: string[] }> {
+): Promise<{
+  resources: EmmausResource[];
+  allResources: EmmausResource[];
+  sourceFailures: string[];
+}> {
   const sourceFailures: string[] = [];
   const [journeys, series, companions, sermons, notes] = await Promise.all([
     listPublishedJourneys().catch(err => { sourceFailures.push("journeys"); logger.warn({ err: String(err) }, "Ask Emmaus journey catalogue unavailable"); return [] as FrontendJourney[]; }),
@@ -317,18 +321,22 @@ export async function buildEmmausResourceCatalogue(
     }, query, bibleBookId, bibleChapter));
   }
 
-  return {
-    resources: Array.from(
+  const completeResources = Array.from(
       new Map(
         resources.map((resource) => [
           `${resource.type}:${resource.resourceId}:${resource.parentId ?? ""}`,
           resource,
         ]),
       ).values(),
-    )
-      .sort((a, b) => b.relevance - a.relevance)
+    ).sort((a, b) => b.relevance - a.relevance);
+
+  return {
+    // Bounded context keeps prompts predictable; allResources remains the
+    // authoritative set for final grounding and validation.
+    resources: completeResources
       .slice(0, MAX_RESOURCES_IN_PROMPT)
       .map(r => ({ ...r, excerpts: r.excerpts.slice(0, MAX_EXCERPTS_PER_RESOURCE) })),
+    allResources: completeResources,
     sourceFailures,
   };
 }
