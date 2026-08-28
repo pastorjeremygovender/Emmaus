@@ -30,7 +30,7 @@ const clean = (value: string) => value.toLowerCase().replace(/[’']/g, "'").rep
 
 function isAppHelp(value: string): boolean {
   return /^(?:where|how|what|show|find|tell me about|can you explain)\b/.test(value)
-    && /\b(?:where|access|open|use|help|do|is|are|what can)\b/.test(value);
+    && /\b(?:where|access|open|use|help|do|is|are)\b/.test(value);
 }
 
 function capabilityForText(value: string): EmmausCapability | null {
@@ -86,6 +86,17 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^what (?:devotional|daily devotional) resources?\b/.test(value)) {
+    return {
+      intent: "RESOURCE_SEARCH",
+      requestedCapability: "daily-devotional",
+      requestedOperation: "FIND",
+      resourceQuery: "devotional",
+      confidence: 0.96,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:what(?:'s| is)|show me)\s+(?:in|on)\s+(?:my\s+)?(?:journey|walk)\b/.test(value)
     || /^what am i currently (?:doing|working through)\b/.test(value)
     || /^which (?:walk|journey) am i (?:currently )?(?:on|doing)\b/.test(value)) {
@@ -108,12 +119,23 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^(?:help me\s+)?(?:find|search for|show me)\s+(?:a\s+|the\s+)?(?:daily\s+)?devotional\b/.test(value)) {
+    return {
+      intent: "RESOURCE_SEARCH",
+      requestedCapability: "daily-devotional",
+      requestedOperation: "FIND",
+      resourceQuery: "devotional",
+      confidence: 0.97,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:read|show me|open|go to|take me to|get to|access)\s+(?:my\s+|today's\s+|todays\s+|the current\s+)?(?:daily\s+)?devotional\b/.test(value)
     || /^can you open my devotional\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "daily-devotional",
-      requestedOperation: "READ",
+      requestedOperation: /^(?:open|go to|take me to|get to|access)\b/.test(value) ? "OPEN" : "READ",
       confidence: 0.99,
       clarificationRequired: false,
     };
@@ -139,7 +161,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:continue|resume)\s+(?:my\s+)?walk\b/.test(value)
+  if (/^(?:continue|resume)\s+(?:my\s+)?(?:current\s+)?walk\b/.test(value)
     || /^i want to continue my current walk\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
@@ -202,6 +224,17 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^(?:take me to|open|go to|show me|get me to)\b.*\b(?:passage|verse)\b.*\b(?:god(?:'s)? love|lov(?:e|ing) the world)\b/.test(value)) {
+    return {
+      intent: "BIBLE_READ",
+      requestedCapability: "my-bible",
+      requestedOperation: "READ",
+      bibleReference: { bookId: "john", bookName: "John", chapter: 3, verse: 16 },
+      confidence: 0.94,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:what journey|which journey|what walk)\b.*\b(?:busy with|doing|active|on)\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
@@ -253,6 +286,10 @@ export function promptIntentMode(intent: TypedAskEmmausIntent): EmmausIntentMode
       return intent.requestedOperation === "OPEN" ? "OPEN" : "READ";
     case "RESOURCE_SEARCH":
       return "FIND";
+    case "DIRECT_ACTION":
+      return intent.requestedOperation === "OPEN" || intent.requestedOperation === "READ"
+        ? intent.requestedOperation
+        : "ASK";
     default:
       return "ASK";
   }

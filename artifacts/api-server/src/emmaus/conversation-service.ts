@@ -58,10 +58,9 @@ import {
   validateCitations,
   validateModelResponse,
 } from "./citation-validation.js";
-import { classifyEmmausIntent } from "@workspace/api-zod";
 import { checkSafetyKeywordsOnly } from "./safety-layer.js";
 import { resolveCanonicalAskRequest } from "./canonical-tools.js";
-import { routeAskEmmausRequest } from "./intent-router.js";
+import { promptIntentMode, routeAskEmmausRequest } from "./intent-router.js";
 import { normalizeEmmausResponse } from "./response-normalization.js";
 import { createTypedStreamConsumer } from "./typed-stream-normalizer.js";
 
@@ -464,7 +463,7 @@ async function completeCanonicalResponse(
   requestId?: string,
 ): Promise<void> {
   const userId = builtCtx.userId;
-  const requestedIntent = classifyEmmausIntent(req.message);
+  const requestedIntent = { mode: promptIntentMode(routeAskEmmausRequest(req.message)) };
   let conversationId = contextInput.conversationId;
 
   if (!conversationId) {
@@ -589,7 +588,7 @@ export async function handleConversation(
   // ── 1. Route classification + name-update detection ───────────────────────
   const routingStart = Date.now();
   const route = classifyRoute(req.message);
-  const requestedIntent = classifyEmmausIntent(req.message);
+  const requestedIntent = { mode: promptIntentMode(routeAskEmmausRequest(req.message)) };
   const settings = routeSettings(route);
   const detectedNameUpdate = detectNameUpdate(req.message);
   pipelineTimings.routingMs = Date.now() - routingStart;
@@ -983,7 +982,9 @@ export async function handleConversation(
           emitBuffer = "";
         } else {
           const safeLen = isVoiceRequest
-            ? safeStreamingLength(emitBuffer)
+            ? sermonResults.length > 0
+              ? safeStreamingLength(emitBuffer)
+              : 0
             : Math.max(0, emitBuffer.length - (META_OPEN.length - 1));
           if (safeLen > 0) {
             const safeText = emitBuffer.slice(0, safeLen);
@@ -1127,7 +1128,8 @@ export async function handleConversation(
   const safeCleanText = sanitizeStreamingText(cleanText)
     .replace(/\s{2,}/g, " ")
     .trim();
-  const safeAnswer = sermonResults.length === 0
+  const hasVerifiedSermonForAnswer = (finalMeta.sermonRecommendations?.length ?? 0) > 0;
+  const safeAnswer = !hasVerifiedSermonForAnswer
     ? stripUnverifiedSermonMentions(safeCleanText)
     : safeCleanText;
 
@@ -1154,7 +1156,7 @@ export async function handleConversation(
     ).values(),
   );
   if (!finalMeta.scripture && proseScriptures[0]) finalMeta.scripture = proseScriptures[0];
-  if (sermonResults.length === 0) {
+  if (!hasVerifiedSermonForAnswer) {
     // A "listen" item is a sermon action and must be server-verified just
     // like sermonRecommendations. The model is never allowed to create one.
     finalMeta.nextSteps = finalMeta.nextSteps.filter((step) => step.type !== "listen");

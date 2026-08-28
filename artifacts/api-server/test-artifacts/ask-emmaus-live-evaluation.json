@@ -1,0 +1,2427 @@
+{
+  "generatedAt": "2026-08-28T19:59:05.777Z",
+  "baseUrl": "http://localhost:8080",
+  "provider": "openai-configured",
+  "caseCount": 17,
+  "passedCount": 17,
+  "results": [
+    {
+      "id": "devotional",
+      "prompt": "Help me find a devotional for today",
+      "expectedIntent": "FIND",
+      "expectedSignals": [
+        "devotional"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 123,
+      "totalMs": 124,
+      "streamEventCount": 1,
+      "text": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "displayAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "speakableAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": {
+          "action": "Open Psalms Daily Devotional.",
+          "primaryButtonText": "Open result",
+          "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+        },
+        "nextSteps": [],
+        "recommendations": [
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional",
+            "description": "Published Daily Devotional series",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Blessed Is the One",
+            "description": "Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing.",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Choose Your Company",
+            "description": "Good morning. It's good to have you back. Today we're going to think about the influence that other people have on our lives—and the influence we have on theirs.",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Choose Wise Advice",
+            "description": "Good morning. It’s good to have you back. Today we’re going to think about the voices we allow to influence the decisions we make.",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3"
+          }
+        ],
+        "resourceRecommendations": [
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Published Daily Devotional series"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing."
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. It's good to have you back. Today we're going to think about the influence that other people have on our lives—and the influence we have on theirs."
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. It’s good to have you back. Today we’re going to think about the voices we allow to influence the decisions we make."
+          }
+        ],
+        "followUpPrompts": [
+          "What does this resource say?",
+          "Search another Emmaus topic."
+        ],
+        "handoffType": null,
+        "answer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+        "resourceActions": [
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "CONTINUE"
+          }
+        ],
+        "retrievalFailures": [],
+        "requestedIntent": "FIND",
+        "requestId": "2bf6dh",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 2,
+          "routingMs": 6,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 83
+        },
+        "sermonRecommendations": [],
+        "capabilityActions": [],
+        "displayAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+        "speakableAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”."
+      },
+      "links": [
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "devotional-discovery",
+      "prompt": "What devotional resources could help me build a steady habit?",
+      "expectedIntent": "FIND",
+      "expectedSignals": [
+        "devotional",
+        "resource"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 118,
+      "totalMs": 119,
+      "streamEventCount": 1,
+      "text": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "displayAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "speakableAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": {
+          "action": "Open Psalms Daily Devotional.",
+          "primaryButtonText": "Open result",
+          "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+        },
+        "nextSteps": [],
+        "recommendations": [
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional",
+            "description": "Published Daily Devotional series",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Blessed Is the One",
+            "description": "Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing.",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Choose Your Company",
+            "description": "Good morning. It's good to have you back. Today we're going to think about the influence that other people have on our lives—and the influence we have on theirs.",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2"
+          },
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Choose Wise Advice",
+            "description": "Good morning. It’s good to have you back. Today we’re going to think about the voices we allow to influence the decisions we make.",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3"
+          }
+        ],
+        "resourceRecommendations": [
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Published Daily Devotional series"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing."
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. It's good to have you back. Today we're going to think about the influence that other people have on our lives—and the influence we have on theirs."
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Good morning. It’s good to have you back. Today we’re going to think about the voices we allow to influence the decisions we make."
+          }
+        ],
+        "followUpPrompts": [
+          "What does this resource say?",
+          "Search another Emmaus topic."
+        ],
+        "handoffType": null,
+        "answer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+        "resourceActions": [
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "4ba01001-6e92-491b-936a-3ebeb805397a",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "f3de0906-08aa-47b7-ba20-741e7f560943",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3",
+            "kind": "CONTINUE"
+          }
+        ],
+        "retrievalFailures": [],
+        "requestedIntent": "FIND",
+        "requestId": "aizwzd",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 110
+        },
+        "sermonRecommendations": [],
+        "capabilityActions": [],
+        "displayAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”.",
+        "speakableAnswer": "I found 4 published Emmaus resources related to “devotional”: “Psalms Daily Devotional”, “Psalms Daily Devotional — Blessed Is the One”, “Psalms Daily Devotional — Choose Your Company”, “Psalms Daily Devotional — Choose Wise Advice”."
+      },
+      "links": [
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/2",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/3"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "todays-devotional",
+      "prompt": "Open today's devotional for me",
+      "expectedIntent": "OPEN",
+      "expectedSignals": [
+        "devotional"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 19,
+      "totalMs": 19,
+      "streamEventCount": 1,
+      "text": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives. Think about the things you're trusting God for—a stronger marriage, healing, joy, wisdom, provision, or a deeper relationship with Him. While not every difficulty is the result of personal sin, Scripture reminds us that persistent, unrepentant sin always harms us and hinders our walk with God. A loving parent delights in blessing a child who listens and learns. In the same way, our heavenly Father calls us to obedience—not because He wants to restrict us, but because He wants what is best for us. If the Holy Spirit has been gently pointing out an area of your life that needs to change, don't ignore His voice. Jesus is ready to forgive, restore, and help you walk in freedom. Every step away from sin is a step closer to the life God desires for you. Father, thank You for loving me enough to show me a better way. Please reveal anything in my life that is drawing me away from You. Give me the courage to turn from sin and the strength to walk in obedience each day. Thank You for Your grace, Your forgiveness, and the new life I have in Jesus. Amen. Take a few quiet moments today and ask the Lord if there is one habit, attitude, or behaviour He is calling you to leave behind. Write it down and commit it to Him in prayer. Tomorrow we'll continue reflecting on the Psalms together.",
+      "displayAnswer": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives. Think about the things you're trusting God for—a stronger marriage, healing, joy, wisdom, provision, or a deeper relationship with Him. While not every difficulty is the result of personal sin, Scripture reminds us that persistent, unrepentant sin always harms us and hinders our walk with God. A loving parent delights in blessing a child who listens and learns. In the same way, our heavenly Father calls us to obedience—not because He wants to restrict us, but because He wants what is best for us. If the Holy Spirit has been gently pointing out an area of your life that needs to change, don't ignore His voice. Jesus is ready to forgive, restore, and help you walk in freedom. Every step away from sin is a step closer to the life God desires for you. Father, thank You for loving me enough to show me a better way. Please reveal anything in my life that is drawing me away from You. Give me the courage to turn from sin and the strength to walk in obedience each day. Thank You for Your grace, Your forgiveness, and the new life I have in Jesus. Amen. Take a few quiet moments today and ask the Lord if there is one habit, attitude, or behaviour He is calling you to leave behind. Write it down and commit it to Him in prayer. Tomorrow we'll continue reflecting on the Psalms together.",
+      "speakableAnswer": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives.",
+      "metadata": {
+        "scripture": {
+          "reference": "Psalm 1",
+          "book": "psalms",
+          "chapter": 1,
+          "displayText": "Psalm 1"
+        },
+        "scriptureReferences": [
+          {
+            "reference": "Psalm 1",
+            "book": "psalms",
+            "chapter": 1,
+            "displayText": "Psalm 1"
+          }
+        ],
+        "nextStep": {
+          "action": "Read Day 1 of Psalms Daily Devotional.",
+          "primaryButtonText": "Open today's devotional",
+          "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+        },
+        "nextSteps": [],
+        "recommendations": [
+          {
+            "type": "devotional",
+            "title": "Psalms Daily Devotional — Blessed Is the One",
+            "description": "Today's published Daily Devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "path": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          }
+        ],
+        "resourceRecommendations": [
+          {
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "reason": "Today's published Daily Devotional"
+          }
+        ],
+        "followUpPrompts": [
+          "Help me reflect on this devotional.",
+          "Show me my other devotionals."
+        ],
+        "handoffType": null,
+        "answer": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives. Think about the things you're trusting God for—a stronger marriage, healing, joy, wisdom, provision, or a deeper relationship with Him. While not every difficulty is the result of personal sin, Scripture reminds us that persistent, unrepentant sin always harms us and hinders our walk with God. A loving parent delights in blessing a child who listens and learns. In the same way, our heavenly Father calls us to obedience—not because He wants to restrict us, but because He wants what is best for us. If the Holy Spirit has been gently pointing out an area of your life that needs to change, don't ignore His voice. Jesus is ready to forgive, restore, and help you walk in freedom. Every step away from sin is a step closer to the life God desires for you. Father, thank You for loving me enough to show me a better way. Please reveal anything in my life that is drawing me away from You. Give me the courage to turn from sin and the strength to walk in obedience each day. Thank You for Your grace, Your forgiveness, and the new life I have in Jesus. Amen. Take a few quiet moments today and ask the Lord if there is one habit, attitude, or behaviour He is calling you to leave behind. Write it down and commit it to Him in prayer. Tomorrow we'll continue reflecting on the Psalms together.",
+        "resourceActions": [
+          {
+            "kind": "OPEN",
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "kind": "READ",
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          },
+          {
+            "kind": "CONTINUE",
+            "resourceType": "devotional",
+            "resourceId": "4b81f5b1-1e56-4a75-b214-290fbacebd0e",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+          }
+        ],
+        "requestedIntent": "OPEN",
+        "requestId": "r7zbzk",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 1,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 11
+        },
+        "sermonRecommendations": [],
+        "capabilityActions": [],
+        "displayAnswer": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives. Think about the things you're trusting God for—a stronger marriage, healing, joy, wisdom, provision, or a deeper relationship with Him. While not every difficulty is the result of personal sin, Scripture reminds us that persistent, unrepentant sin always harms us and hinders our walk with God. A loving parent delights in blessing a child who listens and learns. In the same way, our heavenly Father calls us to obedience—not because He wants to restrict us, but because He wants what is best for us. If the Holy Spirit has been gently pointing out an area of your life that needs to change, don't ignore His voice. Jesus is ready to forgive, restore, and help you walk in freedom. Every step away from sin is a step closer to the life God desires for you. Father, thank You for loving me enough to show me a better way. Please reveal anything in my life that is drawing me away from You. Give me the courage to turn from sin and the strength to walk in obedience each day. Thank You for Your grace, Your forgiveness, and the new life I have in Jesus. Amen. Take a few quiet moments today and ask the Lord if there is one habit, attitude, or behaviour He is calling you to leave behind. Write it down and commit it to Him in prayer. Tomorrow we'll continue reflecting on the Psalms together.",
+        "speakableAnswer": "Here is today's Daily Devotional, “Blessed Is the One.” Good morning. I'm glad you're here today. Let's begin by looking at what it means to live a life that experiences God's blessing. Psalm 1 begins with a simple but powerful truth: the person who is blessed is the one who chooses to walk away from sin instead of following its path. Sometimes we think our bad habits only cost us money or temporary pleasure. But sin often costs far more than we realise. It can rob us of peace, damage relationships, weaken our witness, and keep us from experiencing the fullness of God's work in our lives."
+      },
+      "links": [
+        "/bible/read/psalms/1",
+        "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/1"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "faith",
+      "prompt": "How can I grow in faith when I feel uncertain?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "faith"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 2143,
+      "totalMs": 14571,
+      "streamEventCount": 16,
+      "text": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith. Faith grows not merely by human effort or wisdom, but through reliance on God's power. In a sermon, Pastor Jeremy reminded listeners to put on their \"big boy pants\" and act with maturity and intention, even when they don't feel like it. This means taking steps in faith, trusting God even in moments of doubt. Consider Hebrews 11:24, which reflects on Moses' faith: \"By faith Moses, when he was grown, refused to be called the son of Pharaoh’s daughter. \" Moses faced his uncertainties by choosing God’s path over immediate security and identity within Pharaoh's household. His story assures us that faith often involves making choices anchored in trust, not just clarity or certainty. Today, you might choose to take a small step toward God even amidst uncertainty—perhaps by reading a Psalm, like Psalm 63, which portrays David's desperate longing for God. Turning to worship and honest prayer can open up pathways for God’s presence to reassure and strengthen you. A practical next step could be to reflect on a scripture that speaks to uncertainty and faith, allowing it to guide your prayers. Perhaps you could ask God to deepen your trust by leaning on His promises and love, as shown through Scripture and in your own life. Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith. Faith grows not merely by human effort or wisdom, but through reliance on God's power. In a sermon, Pastor Jeremy reminded listeners to put on their \"big boy pants\" and act with maturity and intention, even when they don't feel like it. This means taking steps in faith, trusting God even in moments of doubt. Consider Hebrews 11:24, which reflects on Moses' faith: \"By faith Moses, when he was grown, refused to be called the son of Pharaoh’s daughter. \" Moses faced his uncertainties by choosing God’s path over immediate security and identity within Pharaoh's household. His story assures us that faith often involves making choices anchored in trust, not just clarity or certainty. Today, you might choose to take a small step toward God even amidst uncertainty—perhaps by reading a Psalm, like Psalm 63, which portrays David's desperate longing for God. Turning to worship and honest prayer can open up pathways for God’s presence to reassure and strengthen you. A practical next step could be to reflect on a scripture that speaks to uncertainty and faith, allowing it to guide your prayers. Perhaps you could ask God to deepen your trust by leaning on His promises and love, as shown through Scripture and in your own life.",
+      "displayAnswer": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith. Faith grows not merely by human effort or wisdom, but through reliance on God's power. In a sermon, Pastor Jeremy reminded listeners to put on their \"big boy pants\" and act with maturity and intention, even when they don't feel like it. This means taking steps in faith, trusting God even in moments of doubt. Consider Hebrews 11:24, which reflects on Moses' faith: \"By faith Moses, when he was grown, refused to be called the son of Pharaoh’s daughter. \" Moses faced his uncertainties by choosing God’s path over immediate security and identity within Pharaoh's household. His story assures us that faith often involves making choices anchored in trust, not just clarity or certainty. Today, you might choose to take a small step toward God even amidst uncertainty—perhaps by reading a Psalm, like Psalm 63, which portrays David's desperate longing for God. Turning to worship and honest prayer can open up pathways for God’s presence to reassure and strengthen you. A practical next step could be to reflect on a scripture that speaks to uncertainty and faith, allowing it to guide your prayers. Perhaps you could ask God to deepen your trust by leaning on His promises and love, as shown through Scripture and in your own life.",
+      "speakableAnswer": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith.",
+      "metadata": {
+        "scripture": {
+          "reference": "1 Corinthians 3:6–7",
+          "book": "1corinthians",
+          "chapter": 3,
+          "verseStart": 6,
+          "verseEnd": 7,
+          "displayText": "1 Corinthians 3:6–7"
+        },
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 53:31",
+            "path": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3211s",
+            "watchUrl": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3211s",
+            "timestampSeconds": 3211,
+            "absoluteStartSeconds": 3211,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 2421
+          }
+        ],
+        "recommendations": [],
+        "followUpPrompts": [
+          "Help me pray through this.",
+          "Show me a Journey.",
+          "What does Scripture say about this?"
+        ],
+        "handoffType": null,
+        "requestId": "wykzqk",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "48b6a764-fa48-449a-a7ef-adae0dae74cc",
+            "segmentId": "7bd55056-4906-4205-83d4-ea4c34aa9f13",
+            "source": "archive",
+            "title": "TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-18",
+            "excerpt": "and realize that there's a way that and realize that there's a way that things are done things are done things are done and put on your big boy pants and put on your big boy pants and put on your big boy pants and be an adult. I don't feel like going to work today. I don't feel like going to work to",
+            "reason": "Matches an approved ICC sermon archive segment at 53:31.",
+            "watchUrl": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3211s",
+            "watchTimestampSeconds": 3211,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "357f04cc-7096-42f5-9b0e-acdbbe48d4b4",
+            "segmentId": "6925bb3c-fcbd-4129-9773-8bcedf4bfce6",
+            "source": "archive",
+            "title": "JESUS IN THE STORM I 22 MARCH 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "who were afraid and unsure if it was Jesus. He says, \"If it is you, Lord.\" Jesus. He says, \"If it is you, Lord.\" Jesus. He says, \"If it is you, Lord.\" Again, I love it because sometimes all Again, I love it because sometimes all Again, I love it because sometimes all we have is an if kind of faith. ",
+            "reason": "Matches an approved ICC sermon archive segment at 46:56.",
+            "watchUrl": "https://www.youtube.com/watch?v=CMrJyoNk9Pc&t=2816s",
+            "watchTimestampSeconds": 2816,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "7f1a59ef-b2a7-4f49-916b-498a7836f442",
+            "segmentId": "58defd0c-ad6b-4c88-adcb-6af002dd1f77",
+            "source": "archive",
+            "title": "HOPE IN THE RUINS I 7 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-11",
+            "excerpt": "because Jesus loves me. This I know for because Jesus loves me. This I know for the Bible tells me so. But maybe let's the Bible tells me so. But maybe let's the Bible tells me so. But maybe let's partake through the tears today. partake through the tears today. partake through the tears today. Mayb",
+            "reason": "Matches an approved ICC sermon archive segment at 66:02.",
+            "watchUrl": "https://www.youtube.com/watch?v=i30SzFImUOc&t=3962s",
+            "watchTimestampSeconds": 3962,
+            "listenAvailable": false
+          }
+        ],
+        "scriptureReferences": [
+          {
+            "reference": "1 Corinthians 3:6–7",
+            "book": "1corinthians",
+            "chapter": 3,
+            "verseStart": 6,
+            "verseEnd": 7,
+            "displayText": "1 Corinthians 3:6–7"
+          },
+          {
+            "reference": "Hebrews 11:24",
+            "book": "hebrews",
+            "chapter": 11,
+            "verseStart": 24,
+            "verseEnd": 24,
+            "displayText": "Hebrews 11:24"
+          },
+          {
+            "reference": "Psalm 63",
+            "book": "psalms",
+            "chapter": 63,
+            "displayText": "Psalm 63"
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 3,
+          "retrievalScriptureMs": 476,
+          "retrievalSermonsMs": 512,
+          "retrievalResourcesMs": 252,
+          "retrievalMemoriesMs": 1,
+          "retrievalRoomsMs": 42,
+          "modelTtftMs": 716,
+          "firstValidatedVisibleMs": 2134,
+          "modelGenerationMs": 13554,
+          "validationMs": 2,
+          "totalMs": 14560
+        },
+        "resourceRecommendations": [],
+        "capabilityActions": [],
+        "answer": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith. Faith grows not merely by human effort or wisdom, but through reliance on God's power. In a sermon, Pastor Jeremy reminded listeners to put on their \"big boy pants\" and act with maturity and intention, even when they don't feel like it. This means taking steps in faith, trusting God even in moments of doubt. Consider Hebrews 11:24, which reflects on Moses' faith: \"By faith Moses, when he was grown, refused to be called the son of Pharaoh’s daughter. \" Moses faced his uncertainties by choosing God’s path over immediate security and identity within Pharaoh's household. His story assures us that faith often involves making choices anchored in trust, not just clarity or certainty. Today, you might choose to take a small step toward God even amidst uncertainty—perhaps by reading a Psalm, like Psalm 63, which portrays David's desperate longing for God. Turning to worship and honest prayer can open up pathways for God’s presence to reassure and strengthen you. A practical next step could be to reflect on a scripture that speaks to uncertainty and faith, allowing it to guide your prayers. Perhaps you could ask God to deepen your trust by leaning on His promises and love, as shown through Scripture and in your own life.",
+        "displayAnswer": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith. Faith grows not merely by human effort or wisdom, but through reliance on God's power. In a sermon, Pastor Jeremy reminded listeners to put on their \"big boy pants\" and act with maturity and intention, even when they don't feel like it. This means taking steps in faith, trusting God even in moments of doubt. Consider Hebrews 11:24, which reflects on Moses' faith: \"By faith Moses, when he was grown, refused to be called the son of Pharaoh’s daughter. \" Moses faced his uncertainties by choosing God’s path over immediate security and identity within Pharaoh's household. His story assures us that faith often involves making choices anchored in trust, not just clarity or certainty. Today, you might choose to take a small step toward God even amidst uncertainty—perhaps by reading a Psalm, like Psalm 63, which portrays David's desperate longing for God. Turning to worship and honest prayer can open up pathways for God’s presence to reassure and strengthen you. A practical next step could be to reflect on a scripture that speaks to uncertainty and faith, allowing it to guide your prayers. Perhaps you could ask God to deepen your trust by leaning on His promises and love, as shown through Scripture and in your own life.",
+        "speakableAnswer": "Feeling uncertain is a genuine experience many share, Integration Test user, and it's honest to bring it forward as you seek to grow in faith. Just like a sturdy tree grows its roots deep into the soil to withstand storms, our faith can deepen through life's uncertainties. Sometimes uncertainty comes from life situations that shake our usual confidence or expectations. Apostle Paul speaks in 1 Corinthians 3:6–7 about spiritual growth, reminding us that \"I planted the seed, Apollos watered it, but God made it grow. \" This passage teaches us that while we can nurture and seek growth through practices like prayer and reading Scripture, ultimately, it is God who strengthens our faith."
+      },
+      "links": [
+        "/bible/read/1corinthians/3?startVerse=6&endVerse=7",
+        "/bible/read/hebrews/11?startVerse=24&endVerse=24",
+        "/bible/read/psalms/63"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "prodigal",
+      "prompt": "What can the story of the Prodigal Son teach me about coming home?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "prodigal"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 1814,
+      "totalMs": 15008,
+      "streamEventCount": 22,
+      "text": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God. The father's response in the story portrays how God welcomes us — not with judgment, but with joy and compassion. When we turn towards God, acknowledging our need for Him, He meets us with love and forgiveness, celebrating our return just as the father celebrated the son's homecoming. Pastor Jeremy recently preached about how this story resonates with us in our lives, especially when we feel lost or far from God. He reminded us that the Father's love is constant, reaching out to us even when we're wavering or struggling. This love draws us back into His embrace, offering us a new beginning. Consider what might draw you towards 'home. ' Are there areas of your life where you long to experience this kind of welcoming grace? Returning to God often starts with recognizing our need for His presence and His mercy. The Bible encourages us in 1 John 2:27, saying that the anointing you received from Him remains in you. This is a reminder that God’s presence and guidance are always available to us, leading us back to Him. When our hearts are open, even our simplest prayer becomes a step toward home. As you reflect on your journey, remember that returning to God brings healing and restores the relationship we were always meant to have with Him. Today, take a moment in prayer, asking God to help you feel at home with Him. “Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen. ” The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God. The father's response in the story portrays how God welcomes us — not with judgment, but with joy and compassion. When we turn towards God, acknowledging our need for Him, He meets us with love and forgiveness, celebrating our return just as the father celebrated the son's homecoming. Pastor Jeremy recently preached about how this story resonates with us in our lives, especially when we feel lost or far from God. He reminded us that the Father's love is constant, reaching out to us even when we're wavering or struggling. This love draws us back into His embrace, offering us a new beginning. Consider what might draw you towards 'home. ' Are there areas of your life where you long to experience this kind of welcoming grace? Returning to God often starts with recognizing our need for His presence and His mercy. The Bible encourages us in 1 John 2:27, saying that the anointing you received from Him remains in you. This is a reminder that God’s presence and guidance are always available to us, leading us back to Him. When our hearts are open, even our simplest prayer becomes a step toward home. As you reflect on your journey, remember that returning to God brings healing and restores the relationship we were always meant to have with Him. Today, take a moment in prayer, asking God to help you feel at home with Him. “Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen.",
+      "displayAnswer": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God. The father's response in the story portrays how God welcomes us — not with judgment, but with joy and compassion. When we turn towards God, acknowledging our need for Him, He meets us with love and forgiveness, celebrating our return just as the father celebrated the son's homecoming. Pastor Jeremy recently preached about how this story resonates with us in our lives, especially when we feel lost or far from God. He reminded us that the Father's love is constant, reaching out to us even when we're wavering or struggling. This love draws us back into His embrace, offering us a new beginning. Consider what might draw you towards 'home. ' Are there areas of your life where you long to experience this kind of welcoming grace? Returning to God often starts with recognizing our need for His presence and His mercy. The Bible encourages us in 1 John 2:27, saying that the anointing you received from Him remains in you. This is a reminder that God’s presence and guidance are always available to us, leading us back to Him. When our hearts are open, even our simplest prayer becomes a step toward home. As you reflect on your journey, remember that returning to God brings healing and restores the relationship we were always meant to have with Him. Today, take a moment in prayer, asking God to help you feel at home with Him. “Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen.",
+      "speakableAnswer": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God.",
+      "metadata": {
+        "answer": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God. The father's response in the story portrays how God welcomes us — not with judgment, but with joy and compassion. When we turn towards God, acknowledging our need for Him, He meets us with love and forgiveness, celebrating our return just as the father celebrated the son's homecoming. Pastor Jeremy recently preached about how this story resonates with us in our lives, especially when we feel lost or far from God. He reminded us that the Father's love is constant, reaching out to us even when we're wavering or struggling. This love draws us back into His embrace, offering us a new beginning. Consider what might draw you towards 'home. ' Are there areas of your life where you long to experience this kind of welcoming grace? Returning to God often starts with recognizing our need for His presence and His mercy. The Bible encourages us in 1 John 2:27, saying that the anointing you received from Him remains in you. This is a reminder that God’s presence and guidance are always available to us, leading us back to Him. When our hearts are open, even our simplest prayer becomes a step toward home. As you reflect on your journey, remember that returning to God brings healing and restores the relationship we were always meant to have with Him. Today, take a moment in prayer, asking God to help you feel at home with Him. “Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen.",
+        "scripture": {
+          "reference": "Luke 15:11–32",
+          "book": "luke",
+          "chapter": 15,
+          "verseStart": 11,
+          "verseEnd": 32,
+          "displayText": "Luke 15:11–32"
+        },
+        "scriptureReferences": [
+          {
+            "reference": "Luke 15:11–32",
+            "book": "luke",
+            "chapter": 15,
+            "verseStart": 11,
+            "verseEnd": 32,
+            "displayText": "Luke 15:11–32"
+          },
+          {
+            "reference": "1 John 2:27",
+            "book": "1john",
+            "chapter": 2,
+            "verseStart": 27,
+            "verseEnd": 27,
+            "displayText": "1 John 2:27"
+          }
+        ],
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 36:10",
+            "path": "https://www.youtube.com/watch?v=T232HmSl1z8&t=2170s",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=2170s",
+            "timestampSeconds": 2170,
+            "absoluteStartSeconds": 2170,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 1676
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "prayer": "Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen.",
+        "followUpPrompts": [],
+        "handoffType": null,
+        "requestId": "iw7clx",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [
+          {
+            "resourceType": "walk_step",
+            "resourceId": "3486689d-37ca-4595-9d59-f6687c6ebca5",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/2",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "3486689d-37ca-4595-9d59-f6687c6ebca5",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/2",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "3486689d-37ca-4595-9d59-f6687c6ebca5",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/2",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "24a81838-ee80-4c27-a72b-97a45ffdf545",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/3",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "24a81838-ee80-4c27-a72b-97a45ffdf545",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/3",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "24a81838-ee80-4c27-a72b-97a45ffdf545",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/3",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "55466a62-e675-4d88-a066-b5f7dbdb5864",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/5",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "55466a62-e675-4d88-a066-b5f7dbdb5864",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/5",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "devotional",
+            "resourceId": "55466a62-e675-4d88-a066-b5f7dbdb5864",
+            "parentId": "d5319697-1a29-43ec-9e08-1c95e4ea7b1d",
+            "route": "/devotional/d5319697-1a29-43ec-9e08-1c95e4ea7b1d/day/5",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "4734bf4f-87ec-4299-b2d0-79dac159516b",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/4",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "4734bf4f-87ec-4299-b2d0-79dac159516b",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/4",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "4734bf4f-87ec-4299-b2d0-79dac159516b",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/4",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "b24bae42-9ab6-4ffb-98da-3de3108c7d3a",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/5",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "b24bae42-9ab6-4ffb-98da-3de3108c7d3a",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/5",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "walk_step",
+            "resourceId": "b24bae42-9ab6-4ffb-98da-3de3108c7d3a",
+            "parentId": "the-emmaus-road-2",
+            "route": "/journey/the-emmaus-road-2/day/5",
+            "kind": "CONTINUE"
+          },
+          {
+            "resourceType": "sermon_companion",
+            "resourceId": "aa30e50c-93fc-458f-8734-3a6dd65e2d45",
+            "parentId": "38355cef-72d4-4654-8ebb-374bd7b540b1",
+            "route": "/sermon-companion/38355cef-72d4-4654-8ebb-374bd7b540b1/day/2",
+            "kind": "OPEN"
+          },
+          {
+            "resourceType": "sermon_companion",
+            "resourceId": "aa30e50c-93fc-458f-8734-3a6dd65e2d45",
+            "parentId": "38355cef-72d4-4654-8ebb-374bd7b540b1",
+            "route": "/sermon-companion/38355cef-72d4-4654-8ebb-374bd7b540b1/day/2",
+            "kind": "READ"
+          },
+          {
+            "resourceType": "sermon_companion",
+            "resourceId": "aa30e50c-93fc-458f-8734-3a6dd65e2d45",
+            "parentId": "38355cef-72d4-4654-8ebb-374bd7b540b1",
+            "route": "/sermon-companion/38355cef-72d4-4654-8ebb-374bd7b540b1/day/2",
+            "kind": "CONTINUE"
+          }
+        ],
+        "sermonRecommendations": [
+          {
+            "sermonId": "86e7a0ac-dcfe-41b3-b1ba-3b200f320fe4",
+            "segmentId": "7d665d4e-4eab-43e5-99a7-eee23ea9a859",
+            "source": "archive",
+            "title": "IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-23",
+            "excerpt": "fit us so often in so many ways. We find fit us so often in so many ways. We find the story of the prodigal, the story of the prodigal, the story of the prodigal, the son who was wavered, the son who was the son who was wavered, the son who was the son who was wavered, the son who was lost, the son ",
+            "reason": "Matches an approved ICC sermon archive segment at 36:10.",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=2170s",
+            "watchTimestampSeconds": 2170,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "48b6a764-fa48-449a-a7ef-adae0dae74cc",
+            "segmentId": "93442bf4-8103-4715-b352-276cd10a9827",
+            "source": "archive",
+            "title": "TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-18",
+            "excerpt": "I'm not here to speak about outsiders or people of other faiths. I know church people of other faiths. I know church people of other faiths. I know church people. But the father loves you nonetheless. But the father loves you nonetheless. God, let this be a church where we God, let this be a church ",
+            "reason": "Matches an approved ICC sermon archive segment at 58:09.",
+            "watchUrl": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3489s",
+            "watchTimestampSeconds": 3489,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "5a231505-b52d-4821-b615-d2bc9dd6b8e7",
+            "segmentId": "e3053dc0-3f35-494f-8e7d-f2abb0dab398",
+            "source": "archive",
+            "title": "WHAT'S THE QUESTION? I 17 MAY 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-05-22",
+            "excerpt": "giving no answers when the Bible is full of he is the answer. It doesn't care of he is the answer. It doesn't care of he is the answer. It doesn't care matter what the story is because his matter what the story is because his matter what the story is because his blood washed my story away and his gr",
+            "reason": "Matches an approved ICC sermon archive segment at 48:07.",
+            "watchUrl": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=2887s",
+            "watchTimestampSeconds": 2887,
+            "listenAvailable": false
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 57,
+          "retrievalSermonsMs": 85,
+          "retrievalResourcesMs": 93,
+          "retrievalMemoriesMs": 1,
+          "retrievalRoomsMs": 29,
+          "modelTtftMs": 1456,
+          "firstValidatedVisibleMs": 1807,
+          "modelGenerationMs": 14840,
+          "validationMs": 5,
+          "totalMs": 14996
+        },
+        "capabilityActions": [],
+        "displayAnswer": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God. The father's response in the story portrays how God welcomes us — not with judgment, but with joy and compassion. When we turn towards God, acknowledging our need for Him, He meets us with love and forgiveness, celebrating our return just as the father celebrated the son's homecoming. Pastor Jeremy recently preached about how this story resonates with us in our lives, especially when we feel lost or far from God. He reminded us that the Father's love is constant, reaching out to us even when we're wavering or struggling. This love draws us back into His embrace, offering us a new beginning. Consider what might draw you towards 'home. ' Are there areas of your life where you long to experience this kind of welcoming grace? Returning to God often starts with recognizing our need for His presence and His mercy. The Bible encourages us in 1 John 2:27, saying that the anointing you received from Him remains in you. This is a reminder that God’s presence and guidance are always available to us, leading us back to Him. When our hearts are open, even our simplest prayer becomes a step toward home. As you reflect on your journey, remember that returning to God brings healing and restores the relationship we were always meant to have with Him. Today, take a moment in prayer, asking God to help you feel at home with Him. “Father, thank You for welcoming me back with love. Help me to trust in Your embrace. Amen.",
+        "speakableAnswer": "The parable of the Prodigal Son is rich with lessons about grace, forgiveness, and the journey back to God. It's the story of a young man who demands his inheritance, leaves his father's house, and eventually finds himself destitute and alone. Feeling the weight of his decisions and the emptiness of his situation, he decides to return home, uncertain of the reception he'll receive. But what he finds is unexpected: his father sees him from a distance and runs to embrace him, celebrating his return with open arms and lavish grace. This parable teaches us that no matter how far we've strayed, there is always a path back to God."
+      },
+      "links": [
+        "/bible/read/luke/15?startVerse=11&endVerse=32",
+        "/bible/read/1john/2?startVerse=27&endVerse=27"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "fear",
+      "prompt": "I am afraid. How does God meet us in fear?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "fear"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 958,
+      "totalMs": 7454,
+      "streamEventCount": 17,
+      "text": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid. God’s presence is meant to give us peace, not just relief from our immediate fear. It's about the assurance that He is with us and works through our circumstances. Fear often highlights our limitations, but God’s limitless presence invites us into trust. During a sermon, Pastor Jeremy spoke about God's unique role as \"the holy way,\" emphasizing that God is our guide through every fear and uncertainty. This means we aren't left to navigate our fears alone. Today, consider resting in these truths. One next step could be to take Isaiah 41:10 and make it your own prayer. Let it be your reminder of God’s steady hand guiding and strengthening you. That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid. God’s presence is meant to give us peace, not just relief from our immediate fear. It's about the assurance that He is with us and works through our circumstances. Fear often highlights our limitations, but God’s limitless presence invites us into trust. During a sermon, Pastor Jeremy spoke about God's unique role as \"the holy way,\" emphasizing that God is our guide through every fear and uncertainty. This means we aren't left to navigate our fears alone. Today, consider resting in these truths. One next step could be to take Isaiah 41:10 and make it your own prayer. Let it be your reminder of God’s steady hand guiding and strengthening you.",
+      "displayAnswer": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid. God’s presence is meant to give us peace, not just relief from our immediate fear. It's about the assurance that He is with us and works through our circumstances. Fear often highlights our limitations, but God’s limitless presence invites us into trust. During a sermon, Pastor Jeremy spoke about God's unique role as \"the holy way,\" emphasizing that God is our guide through every fear and uncertainty. This means we aren't left to navigate our fears alone. Today, consider resting in these truths. One next step could be to take Isaiah 41:10 and make it your own prayer. Let it be your reminder of God’s steady hand guiding and strengthening you.",
+      "speakableAnswer": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid.",
+      "metadata": {
+        "answer": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid. God’s presence is meant to give us peace, not just relief from our immediate fear. It's about the assurance that He is with us and works through our circumstances. Fear often highlights our limitations, but God’s limitless presence invites us into trust. During a sermon, Pastor Jeremy spoke about God's unique role as \"the holy way,\" emphasizing that God is our guide through every fear and uncertainty. This means we aren't left to navigate our fears alone. Today, consider resting in these truths. One next step could be to take Isaiah 41:10 and make it your own prayer. Let it be your reminder of God’s steady hand guiding and strengthening you.",
+        "scripture": {
+          "reference": "Isaiah 41:10",
+          "book": "isaiah",
+          "chapter": 41,
+          "verseStart": 10,
+          "verseEnd": 10,
+          "displayText": "Isaiah 41:10"
+        },
+        "scriptureReferences": [
+          {
+            "reference": "Isaiah 41:10",
+            "book": "isaiah",
+            "chapter": 41,
+            "verseStart": 10,
+            "verseEnd": 10,
+            "displayText": "Isaiah 41:10"
+          }
+        ],
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"WHAT'S THE QUESTION? I 17 MAY 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 25:08",
+            "path": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=1508s",
+            "watchUrl": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=1508s",
+            "timestampSeconds": 1508,
+            "absoluteStartSeconds": 1508,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 749
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "prayer": "Father, thank You for Your comforting presence. Help me trust in Your strength today.",
+        "followUpPrompts": [],
+        "handoffType": null,
+        "requestId": "vdukh0",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "5a231505-b52d-4821-b615-d2bc9dd6b8e7",
+            "segmentId": "08dcab08-0ab3-4096-9135-bc4fa5a94c1d",
+            "source": "archive",
+            "title": "WHAT'S THE QUESTION? I 17 MAY 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-05-22",
+            "excerpt": "again. Our God is the one. again. Our God is the one. Our God is the holy way. Our God is the holy way. Our God is the holy way. Whatever you say, whatever you touch, whatever you touch, God is telling me, God is telling me, God is telling me, God is the only way God is the only way God is the only ",
+            "reason": "Matches an approved ICC sermon archive segment at 25:08.",
+            "watchUrl": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=1508s",
+            "watchTimestampSeconds": 1508,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "0834bf51-7d21-4e78-b047-a7eb9ffc5e89",
+            "segmentId": "6d8b78e3-43b6-450e-85ca-eaf6f9c830fc",
+            "source": "archive",
+            "title": "FROM BAD TO WORSE I 12 APRIL 2026 I PASTOR JEREMY GOVENDER",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "make it through because a whole army saw Goliath and the because a whole army saw Goliath and the because a whole army saw Goliath and the Bible uses the words ran in great fear. Bible uses the words ran in great fear. Bible uses the words ran in great fear. You know what they were right to run in Y",
+            "reason": "Matches an approved ICC sermon archive segment at 55:21.",
+            "watchUrl": "https://www.youtube.com/watch?v=rQ4pl47Iwfo&t=3321s",
+            "watchTimestampSeconds": 3321,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "86e7a0ac-dcfe-41b3-b1ba-3b200f320fe4",
+            "segmentId": "72b6b6e1-20fd-4f43-a346-5efed0cefa58",
+            "source": "archive",
+            "title": "IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-23",
+            "excerpt": "forth, Father, let your word fuel us, my God, and let your word help us to apply God, and let your word help us to apply God, and let your word help us to apply it to be the best ambassadors for Christ it to be the best ambassadors for Christ it to be the best ambassadors for Christ that we can be. ",
+            "reason": "Matches an approved ICC sermon archive segment at 9:40.",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=580s",
+            "watchTimestampSeconds": 580,
+            "listenAvailable": false
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 6,
+          "retrievalScriptureMs": 36,
+          "retrievalSermonsMs": 28,
+          "retrievalResourcesMs": 92,
+          "retrievalMemoriesMs": 8,
+          "retrievalRoomsMs": 74,
+          "modelTtftMs": 658,
+          "firstValidatedVisibleMs": 951,
+          "modelGenerationMs": 7308,
+          "validationMs": 1,
+          "totalMs": 7445
+        },
+        "capabilityActions": [],
+        "displayAnswer": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid. God’s presence is meant to give us peace, not just relief from our immediate fear. It's about the assurance that He is with us and works through our circumstances. Fear often highlights our limitations, but God’s limitless presence invites us into trust. During a sermon, Pastor Jeremy spoke about God's unique role as \"the holy way,\" emphasizing that God is our guide through every fear and uncertainty. This means we aren't left to navigate our fears alone. Today, consider resting in these truths. One next step could be to take Isaiah 41:10 and make it your own prayer. Let it be your reminder of God’s steady hand guiding and strengthening you.",
+        "speakableAnswer": "That is a real and honest thing to bring, Integration Test user. Fear can be a heavy weight, and it's an experience many share. In those moments, it's significant to remember that God is actively present and doesn't leave us to face our fears alone. The Bible offers many reminders of God's presence and strength. In Isaiah 41:10, God says, \"Do not fear, for I am with you; do not be afraid, for I am your God. I will strengthen you; I will surely help you; I will uphold you with My right hand of righteousness. \" This passage reassures us that God’s presence is a comforting constant. His strength and help are not just words but His active engagement with us, especially when we're afraid."
+      },
+      "links": [
+        "/bible/read/isaiah/41?startVerse=10&endVerse=10"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "loneliness",
+      "prompt": "I feel lonely and far from people. What does Scripture say?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "lonely"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 1314,
+      "totalMs": 12830,
+      "streamEventCount": 22,
+      "text": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons. He encouraged us to remember that God's presence doesn't waver, even in our loneliness. He reminded us that it is within these moments of solitude that we often find a unique opportunity to draw near to God. Turning to God in humility and trust can transform our understanding of loneliness. In Psalm 68:6, we see that \"God sets the lonely in families. \" This isn't just a promise of future relationship restoration; it's a reminder that God actively moves to bring us into community and fellowship, both spiritually and physically. His family isn't limited by physical boundaries—it's an expansive, welcoming embrace available to us all. Today, take a step towards connecting with God in your solitude. Consider meditating on Psalm 68:1–6, which speaks of God's active presence and how He delights in bringing joy to His people. Let your prayer invite His presence into your loneliness: \"Father, I bring my loneliness to you. Help me feel your presence and find comfort in your eternal companionship. \" Next time you feel this loneliness, ask yourself: How have I seen God move in my solitude before? Where might He be inviting me to find connection now? Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons. He encouraged us to remember that God's presence doesn't waver, even in our loneliness. He reminded us that it is within these moments of solitude that we often find a unique opportunity to draw near to God. Turning to God in humility and trust can transform our understanding of loneliness. In Psalm 68:6, we see that \"God sets the lonely in families. \" This isn't just a promise of future relationship restoration; it's a reminder that God actively moves to bring us into community and fellowship, both spiritually and physically. His family isn't limited by physical boundaries—it's an expansive, welcoming embrace available to us all. Today, take a step towards connecting with God in your solitude. Consider meditating on Psalm 68:1–6, which speaks of God's active presence and how He delights in bringing joy to His people. Let your prayer invite His presence into your loneliness: \"Father, I bring my loneliness to you. Help me feel your presence and find comfort in your eternal companionship. Next time you feel this loneliness, ask yourself: How have I seen God move in my solitude before? Where might He be inviting me to find connection now?",
+      "displayAnswer": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons. He encouraged us to remember that God's presence doesn't waver, even in our loneliness. He reminded us that it is within these moments of solitude that we often find a unique opportunity to draw near to God. Turning to God in humility and trust can transform our understanding of loneliness. In Psalm 68:6, we see that \"God sets the lonely in families. \" This isn't just a promise of future relationship restoration; it's a reminder that God actively moves to bring us into community and fellowship, both spiritually and physically. His family isn't limited by physical boundaries—it's an expansive, welcoming embrace available to us all. Today, take a step towards connecting with God in your solitude. Consider meditating on Psalm 68:1–6, which speaks of God's active presence and how He delights in bringing joy to His people. Let your prayer invite His presence into your loneliness: \"Father, I bring my loneliness to you. Help me feel your presence and find comfort in your eternal companionship. Next time you feel this loneliness, ask yourself: How have I seen God move in my solitude before? Where might He be inviting me to find connection now?",
+      "speakableAnswer": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons.",
+      "metadata": {
+        "scripture": {
+          "reference": "Lamentations 1:1",
+          "book": "lamentations",
+          "chapter": 1,
+          "verseStart": 1,
+          "verseEnd": 1,
+          "displayText": "Lamentations 1:1"
+        },
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"GOOD FRIDAY - ONLY JESUS I 3 APRIL 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 38:41",
+            "path": "https://www.youtube.com/watch?v=63PPjNpraEY&t=2321s",
+            "watchUrl": "https://www.youtube.com/watch?v=63PPjNpraEY&t=2321s",
+            "timestampSeconds": 2321,
+            "absoluteStartSeconds": 2321,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 109
+          }
+        ],
+        "recommendations": [],
+        "followUpPrompts": [
+          "Help me pray through this.",
+          "Show me a Journey.",
+          "What does Scripture say about this?"
+        ],
+        "handoffType": null,
+        "requestId": "72a5rw",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "f8dfc0a6-7e24-47b1-b962-d3a013e62a8e",
+            "segmentId": "fcf05f87-0342-43ca-adb2-32b4d0d27ec8",
+            "source": "archive",
+            "title": "GOOD FRIDAY - ONLY JESUS I 3 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "to be that way. But all of you given the right set of circumstances and in the right set of circumstances and in the right set of circumstances and in the general state of your being general state of your being general state of your being are good people. are good people. are good people. And even i",
+            "reason": "Matches an approved ICC sermon archive segment at 38:41.",
+            "watchUrl": "https://www.youtube.com/watch?v=63PPjNpraEY&t=2321s",
+            "watchTimestampSeconds": 2321,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "b1287891-5cfc-4323-afb2-48be0229cd58",
+            "segmentId": "e8f47111-42ac-481a-a87a-9462a07f0207",
+            "source": "archive",
+            "title": "WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "just put our hand inside, pick one coin, just put our hand inside, pick one coin, and drop it. And people think you put and drop it. And people think you put and drop it. And people think you put you put one as long as they hear the you put one as long as they hear the you put one as long as they he",
+            "reason": "Matches an approved ICC sermon archive segment at 58:32.",
+            "watchUrl": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=3512s",
+            "watchTimestampSeconds": 3512,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "48b6a764-fa48-449a-a7ef-adae0dae74cc",
+            "segmentId": "f1f23b65-9d0e-4d86-bbcb-f69fe862cdcc",
+            "source": "archive",
+            "title": "TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-18",
+            "excerpt": "I wonder how long the magi wrestled with the decision to ignore Herod and go the decision to ignore Herod and go the decision to ignore Herod and go another way. another way. another way. I wonder Lord how long Jesus wrestled I wonder Lord how long Jesus wrestled I wonder Lord how long Jesus wrestle",
+            "reason": "Matches an approved ICC sermon archive segment at 64:02.",
+            "watchUrl": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3842s",
+            "watchTimestampSeconds": 3842,
+            "listenAvailable": false
+          }
+        ],
+        "scriptureReferences": [
+          {
+            "reference": "Lamentations 1:1",
+            "book": "lamentations",
+            "chapter": 1,
+            "verseStart": 1,
+            "verseEnd": 1,
+            "displayText": "Lamentations 1:1"
+          },
+          {
+            "reference": "Romans 11:2",
+            "book": "romans",
+            "chapter": 11,
+            "verseStart": 2,
+            "verseEnd": 2,
+            "displayText": "Romans 11:2"
+          },
+          {
+            "reference": "Psalm 68:6",
+            "book": "psalms",
+            "chapter": 68,
+            "verseStart": 6,
+            "verseEnd": 6,
+            "displayText": "Psalm 68:6"
+          },
+          {
+            "reference": "Psalm 68:1–6",
+            "book": "psalms",
+            "chapter": 68,
+            "verseStart": 1,
+            "verseEnd": 6,
+            "displayText": "Psalm 68:1–6"
+          },
+          {
+            "reference": "Psalm 142:5–7",
+            "book": "psalms",
+            "chapter": 142,
+            "verseStart": 5,
+            "verseEnd": 7,
+            "displayText": "Psalm 142:5–7"
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 25,
+          "retrievalSermonsMs": 6,
+          "retrievalResourcesMs": 65,
+          "retrievalMemoriesMs": 2,
+          "retrievalRoomsMs": 6,
+          "modelTtftMs": 991,
+          "firstValidatedVisibleMs": 1306,
+          "modelGenerationMs": 12729,
+          "validationMs": 1,
+          "totalMs": 12821
+        },
+        "resourceRecommendations": [],
+        "capabilityActions": [],
+        "answer": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons. He encouraged us to remember that God's presence doesn't waver, even in our loneliness. He reminded us that it is within these moments of solitude that we often find a unique opportunity to draw near to God. Turning to God in humility and trust can transform our understanding of loneliness. In Psalm 68:6, we see that \"God sets the lonely in families. \" This isn't just a promise of future relationship restoration; it's a reminder that God actively moves to bring us into community and fellowship, both spiritually and physically. His family isn't limited by physical boundaries—it's an expansive, welcoming embrace available to us all. Today, take a step towards connecting with God in your solitude. Consider meditating on Psalm 68:1–6, which speaks of God's active presence and how He delights in bringing joy to His people. Let your prayer invite His presence into your loneliness: \"Father, I bring my loneliness to you. Help me feel your presence and find comfort in your eternal companionship. Next time you feel this loneliness, ask yourself: How have I seen God move in my solitude before? Where might He be inviting me to find connection now?",
+        "displayAnswer": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons. He encouraged us to remember that God's presence doesn't waver, even in our loneliness. He reminded us that it is within these moments of solitude that we often find a unique opportunity to draw near to God. Turning to God in humility and trust can transform our understanding of loneliness. In Psalm 68:6, we see that \"God sets the lonely in families. \" This isn't just a promise of future relationship restoration; it's a reminder that God actively moves to bring us into community and fellowship, both spiritually and physically. His family isn't limited by physical boundaries—it's an expansive, welcoming embrace available to us all. Today, take a step towards connecting with God in your solitude. Consider meditating on Psalm 68:1–6, which speaks of God's active presence and how He delights in bringing joy to His people. Let your prayer invite His presence into your loneliness: \"Father, I bring my loneliness to you. Help me feel your presence and find comfort in your eternal companionship. Next time you feel this loneliness, ask yourself: How have I seen God move in my solitude before? Where might He be inviting me to find connection now?",
+        "speakableAnswer": "Feeling lonely is a deeply human experience, and it's one that Scripture doesn't shy away from addressing. A passage from Lamentations captures a poignant sense of isolation: \"How lonely lies the city, once so full of people! \" (Lamentations 1:1). It's a candid reflection of the desolation that comes when once lively spaces become empty. But Scripture also offers profound hope and connection amidst loneliness. In Romans 11:2, we're reminded that \"God did not reject His people. \" Even if it feels like we're alone, God remains steadfast and present, actively engaged with His creation and intimately aware of our needs. This was a theme that Pastor Jeremy touched on in one of his past sermons."
+      },
+      "links": [
+        "/bible/read/lamentations/1?startVerse=1&endVerse=1",
+        "/bible/read/romans/11?startVerse=2&endVerse=2",
+        "/bible/read/psalms/68?startVerse=6&endVerse=6",
+        "/bible/read/psalms/68?startVerse=1&endVerse=6",
+        "/bible/read/psalms/142?startVerse=5&endVerse=7"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "forgiveness",
+      "prompt": "How do I begin forgiving someone who hurt me?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "forgiv"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 1162,
+      "totalMs": 22229,
+      "streamEventCount": 23,
+      "text": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release. Scripture gives us a profound basis for forgiveness in passages like Ephesians 4:32, where Paul writes, \"Be kind and compassionate to one another, forgiving each other, just as in Christ God forgave you. \" This verse invites us to reflect on the depth of God’s forgiveness towards us. Our decision to forgive can flow out of the recognition that we, too, have received immense grace from God. Pastor Jeremy spoke about forgiveness in one of his sermons. He emphasized that a life reflecting God's character, like a \"godly shoemaker,\" integrates forgiveness as a core value, striving to love and serve even amid hurt. It's about embodying Christ in our daily actions. Walking together in this, you may find it helpful to start with prayer. Ask God to soften your heart and to give you the grace to forgive. Pray for the person who hurt you, asking God for the strength to love as He loves and to release any bitterness. A practical step you might take today is to write a prayer, asking God for help to forgive and for healing from the hurt you've experienced. Daily presenting this to God can be transformational. To continue this journey, engaging with the Emmaus resource titled \"Blessing Persecutors and Practicing Empathy\" may also be enlightening. It discusses the supernatural love that shapes our response to those who have hurt us by choosing blessings over bitterness. As you reflect, consider these follow-up questions:\n- What aspect of God’s forgiveness towards you can you mirror towards the person who hurt you? - How might praying for the person change your heart's posture over time? May God grant you peace and strength as you step forward in love. That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release. Scripture gives us a profound basis for forgiveness in passages like Ephesians 4:32, where Paul writes, \"Be kind and compassionate to one another, forgiving each other, just as in Christ God forgave you. \" This verse invites us to reflect on the depth of God’s forgiveness towards us. Our decision to forgive can flow out of the recognition that we, too, have received immense grace from God. Pastor Jeremy spoke about forgiveness in one of his sermons. He emphasized that a life reflecting God's character, like a \"godly shoemaker,\" integrates forgiveness as a core value, striving to love and serve even amid hurt. It's about embodying Christ in our daily actions. Walking together in this, you may find it helpful to start with prayer. Ask God to soften your heart and to give you the grace to forgive. Pray for the person who hurt you, asking God for the strength to love as He loves and to release any bitterness. A practical step you might take today is to write a prayer, asking God for help to forgive and for healing from the hurt you've experienced. Daily presenting this to God can be transformational. To continue this journey, engaging with the Emmaus resource titled \"Blessing Persecutors and Practicing Empathy\" may also be enlightening. It discusses the supernatural love that shapes our response to those who have hurt us by choosing blessings over bitterness. As you reflect, consider these follow-up questions:\n- What aspect of God’s forgiveness towards you can you mirror towards the person who hurt you? - How might praying for the person change your heart's posture over time? May God grant you peace and strength as you step forward in love.",
+      "displayAnswer": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release. Scripture gives us a profound basis for forgiveness in passages like Ephesians 4:32, where Paul writes, \"Be kind and compassionate to one another, forgiving each other, just as in Christ God forgave you. \" This verse invites us to reflect on the depth of God’s forgiveness towards us. Our decision to forgive can flow out of the recognition that we, too, have received immense grace from God. Pastor Jeremy spoke about forgiveness in one of his sermons. He emphasized that a life reflecting God's character, like a \"godly shoemaker,\" integrates forgiveness as a core value, striving to love and serve even amid hurt. It's about embodying Christ in our daily actions. Walking together in this, you may find it helpful to start with prayer. Ask God to soften your heart and to give you the grace to forgive. Pray for the person who hurt you, asking God for the strength to love as He loves and to release any bitterness. A practical step you might take today is to write a prayer, asking God for help to forgive and for healing from the hurt you've experienced. Daily presenting this to God can be transformational. To continue this journey, engaging with the Emmaus resource titled \"Blessing Persecutors and Practicing Empathy\" may also be enlightening. It discusses the supernatural love that shapes our response to those who have hurt us by choosing blessings over bitterness. As you reflect, consider these follow-up questions:\n- What aspect of God’s forgiveness towards you can you mirror towards the person who hurt you? - How might praying for the person change your heart's posture over time? May God grant you peace and strength as you step forward in love.",
+      "speakableAnswer": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release.",
+      "metadata": {
+        "answer": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release. Scripture gives us a profound basis for forgiveness in passages like Ephesians 4:32, where Paul writes, \"Be kind and compassionate to one another, forgiving each other, just as in Christ God forgave you. \" This verse invites us to reflect on the depth of God’s forgiveness towards us. Our decision to forgive can flow out of the recognition that we, too, have received immense grace from God. Pastor Jeremy spoke about forgiveness in one of his sermons. He emphasized that a life reflecting God's character, like a \"godly shoemaker,\" integrates forgiveness as a core value, striving to love and serve even amid hurt. It's about embodying Christ in our daily actions. Walking together in this, you may find it helpful to start with prayer. Ask God to soften your heart and to give you the grace to forgive. Pray for the person who hurt you, asking God for the strength to love as He loves and to release any bitterness. A practical step you might take today is to write a prayer, asking God for help to forgive and for healing from the hurt you've experienced. Daily presenting this to God can be transformational. To continue this journey, engaging with the Emmaus resource titled \"Blessing Persecutors and Practicing Empathy\" may also be enlightening. It discusses the supernatural love that shapes our response to those who have hurt us by choosing blessings over bitterness. As you reflect, consider these follow-up questions:\n- What aspect of God’s forgiveness towards you can you mirror towards the person who hurt you? - How might praying for the person change your heart's posture over time? May God grant you peace and strength as you step forward in love.",
+        "scripture": {
+          "reference": "Ephesians 4:32",
+          "book": "ephesians",
+          "chapter": 4,
+          "verseStart": 32,
+          "verseEnd": 32,
+          "displayText": "Ephesians 4:32"
+        },
+        "scriptureReferences": [
+          {
+            "reference": "Ephesians 4:32",
+            "book": "ephesians",
+            "chapter": 4,
+            "verseStart": 32,
+            "verseEnd": 32,
+            "displayText": "Ephesians 4:32"
+          }
+        ],
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 50:44",
+            "path": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=3044s",
+            "watchUrl": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=3044s",
+            "timestampSeconds": 3044,
+            "absoluteStartSeconds": 3044,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 786
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "prayer": "Father, help me forgive as You forgive. Soften my heart towards the person who hurt me.",
+        "followUpPrompts": [],
+        "handoffType": null,
+        "requestId": "mjmuul",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "b1287891-5cfc-4323-afb2-48be0229cd58",
+            "segmentId": "9e4ce050-62c2-4f6c-9f6f-79f52467649e",
+            "source": "archive",
+            "title": "WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "shelf. you had to go and get your shoes made. And he said, \"A godly shoe maker,\" made. And he said, \"A godly shoe maker,\" made. And he said, \"A godly shoe maker,\" I'm paraphrasing, \"A godly shoemaker is I'm paraphrasing, \"A godly shoemaker is I'm paraphrasing, \"A godly shoemaker is not someone who s",
+            "reason": "Matches an approved ICC sermon archive segment at 50:44.",
+            "watchUrl": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=3044s",
+            "watchTimestampSeconds": 3044,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "5a231505-b52d-4821-b615-d2bc9dd6b8e7",
+            "segmentId": "3f2bdef1-797d-4dc2-9944-d4cdd8dd898f",
+            "source": "archive",
+            "title": "WHAT'S THE QUESTION? I 17 MAY 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-05-22",
+            "excerpt": "and ask him whose fault was it. We went and ask him whose fault was it. We went there and we said, \"I know somebody who there and we said, \"I know somebody who there and we said, \"I know somebody who can help.\" And then we introduced them can help.\" And then we introduced them can help.\" And then we",
+            "reason": "Matches an approved ICC sermon archive segment at 59:54.",
+            "watchUrl": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=3594s",
+            "watchTimestampSeconds": 3594,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "48b77ab7-e769-4c8e-86b1-21af1428c3ae",
+            "segmentId": "0a168ac6-9516-4a02-80d2-94b41ad02b8b",
+            "source": "archive",
+            "title": "SPOILER ALERT I 21 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-24",
+            "excerpt": "Because we say happy Father's Day to some people because somebody calls them some people because somebody calls them some people because somebody calls them dad. dad. dad. Otherwise, you're not going to walk up Otherwise, you're not going to walk up Otherwise, you're not going to walk up to random m",
+            "reason": "Matches an approved ICC sermon archive segment at 55:30.",
+            "watchUrl": "https://www.youtube.com/watch?v=nljCMF4ayk8&t=3330s",
+            "watchTimestampSeconds": 3330,
+            "listenAvailable": false
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 37,
+          "retrievalSermonsMs": 23,
+          "retrievalResourcesMs": 99,
+          "retrievalMemoriesMs": 1,
+          "retrievalRoomsMs": 24,
+          "modelTtftMs": 757,
+          "firstValidatedVisibleMs": 1154,
+          "modelGenerationMs": 22079,
+          "validationMs": 1,
+          "totalMs": 22219
+        },
+        "capabilityActions": [],
+        "displayAnswer": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release. Scripture gives us a profound basis for forgiveness in passages like Ephesians 4:32, where Paul writes, \"Be kind and compassionate to one another, forgiving each other, just as in Christ God forgave you. \" This verse invites us to reflect on the depth of God’s forgiveness towards us. Our decision to forgive can flow out of the recognition that we, too, have received immense grace from God. Pastor Jeremy spoke about forgiveness in one of his sermons. He emphasized that a life reflecting God's character, like a \"godly shoemaker,\" integrates forgiveness as a core value, striving to love and serve even amid hurt. It's about embodying Christ in our daily actions. Walking together in this, you may find it helpful to start with prayer. Ask God to soften your heart and to give you the grace to forgive. Pray for the person who hurt you, asking God for the strength to love as He loves and to release any bitterness. A practical step you might take today is to write a prayer, asking God for help to forgive and for healing from the hurt you've experienced. Daily presenting this to God can be transformational. To continue this journey, engaging with the Emmaus resource titled \"Blessing Persecutors and Practicing Empathy\" may also be enlightening. It discusses the supernatural love that shapes our response to those who have hurt us by choosing blessings over bitterness. As you reflect, consider these follow-up questions:\n- What aspect of God’s forgiveness towards you can you mirror towards the person who hurt you? - How might praying for the person change your heart's posture over time? May God grant you peace and strength as you step forward in love.",
+        "speakableAnswer": "That's a sincere and significant question, and it deserves thoughtful attention. Forgiveness can be a profound and sometimes difficult journey. It's a journey that reflects God's own heart, and you are taking a brave step in contemplating it. To open space for this process, it can be helpful to consider what forgiveness truly means in your own context. It's more than just a feeling; it's a decision to release someone from the debt of their wrong, trusting God to handle justice in His perfect way. Sometimes it involves a gradual process of letting go, rather than a sudden release."
+      },
+      "links": [
+        "/bible/read/ephesians/4?startVerse=32&endVerse=32"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "prodigal-sermon-search",
+      "prompt": "Find a sermon about the Prodigal Son",
+      "expectedIntent": "FIND",
+      "expectedSignals": [
+        "sermon",
+        "prodigal"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 22,
+      "totalMs": 23,
+      "streamEventCount": 1,
+      "text": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”.",
+      "displayAnswer": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”.",
+      "speakableAnswer": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": null,
+        "nextSteps": [],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [
+          "Search another sermon topic",
+          "What does Scripture say about this?"
+        ],
+        "handoffType": null,
+        "answer": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”.",
+        "sermonRecommendations": [
+          {
+            "sermonId": "86e7a0ac-dcfe-41b3-b1ba-3b200f320fe4",
+            "segmentId": "7d665d4e-4eab-43e5-99a7-eee23ea9a859",
+            "source": "archive",
+            "title": "IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-23",
+            "excerpt": "fit us so often in so many ways. We find fit us so often in so many ways. We find the story of the prodigal, the story of the prodigal, the story of the prodigal, the son who was wavered, the son who was the son who was wavered, the son who was the son who was wavered, the son who was lost, the son ",
+            "reason": "Matches an approved ICC sermon archive segment at 36:10.",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=2170s",
+            "watchTimestampSeconds": 2170,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "48b6a764-fa48-449a-a7ef-adae0dae74cc",
+            "segmentId": "d34cf144-2c49-4086-9068-a06676308722",
+            "source": "archive",
+            "title": "TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-06-18",
+            "excerpt": "don't have to go that way yourself.\" You know, the prodigal, if he ever had a know, the prodigal, if he ever had a know, the prodigal, if he ever had a son, he would have told him when his son son, he would have told him when his son son, he would have told him when his son dares to come and mouth o",
+            "reason": "Matches an approved ICC sermon archive segment at 50:35.",
+            "watchUrl": "https://www.youtube.com/watch?v=2XR9hT82zkQ&t=3035s",
+            "watchTimestampSeconds": 3035,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "b1287891-5cfc-4323-afb2-48be0229cd58",
+            "segmentId": "102df9ef-8990-4ef1-b469-814760962e25",
+            "source": "archive",
+            "title": "WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "don't know. Maybe I just sound like that all the time. all the time. all the time. Nobody could preach like her son for all Nobody could preach like her son for all Nobody could preach like her son for all my life. Best preacher she knows. And my life. Best preacher she knows. And my life. Best prea",
+            "reason": "Matches an approved ICC sermon archive segment at 57:11.",
+            "watchUrl": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=3431s",
+            "watchTimestampSeconds": 3431,
+            "listenAvailable": false
+          }
+        ],
+        "requestedIntent": "FIND",
+        "requestId": "29lndp",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 1,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 16
+        },
+        "resourceActions": [],
+        "capabilityActions": [],
+        "displayAnswer": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”.",
+        "speakableAnswer": "I found 3 verified sermons related to your search: “IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ”, “TURNING POINTS I 14 JUNE 2026 I PASTOR JEREMY GOVENDER ”, “WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ”."
+      },
+      "links": [],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "faith-bible-study",
+      "prompt": "Show me a Bible Study about faith",
+      "expectedIntent": "FIND",
+      "expectedSignals": [
+        "bible study",
+        "faith"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 64,
+      "totalMs": 64,
+      "streamEventCount": 1,
+      "text": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”.",
+      "displayAnswer": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”.",
+      "speakableAnswer": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": {
+          "action": "Open Doxology: The Revealed Mystery.",
+          "primaryButtonText": "Open result",
+          "path": "/bible/read/romans/16?startVerse=25&endVerse=27"
+        },
+        "nextSteps": [],
+        "recommendations": [
+          {
+            "type": "bible_study",
+            "title": "Doxology: The Revealed Mystery",
+            "description": "God’s mysterious plan for salvation has been revealed in Jesus Christ, leading to the obedience of faith among all nations.",
+            "resourceId": "bible-study-note:romans:16:25",
+            "path": "/bible/read/romans/16?startVerse=25&endVerse=27"
+          },
+          {
+            "type": "bible_study",
+            "title": "Warning Against Divisive Teachers",
+            "description": "Christians are called to discern and resist divisive teachings, anchored in the hope that God will ultimately bring peace and defeat evil.",
+            "resourceId": "bible-study-note:romans:16:17",
+            "path": "/bible/read/romans/16?startVerse=17&endVerse=20"
+          },
+          {
+            "type": "bible_study",
+            "title": "Greetings to Coworkers and House Churches",
+            "description": "The gospel unites diverse believers into one family, highlighting sacrificial love and shared mission beyond cultural and social boundaries.",
+            "resourceId": "bible-study-note:romans:16:3",
+            "path": "/bible/read/romans/16?startVerse=3&endVerse=16"
+          },
+          {
+            "type": "bible_study",
+            "title": "Scripture’s Promise: Gentiles Included; Prayer of Hope",
+            "description": "In Christ, both Jew and Gentile are united in a shared hope, fulfilled through God's promises and empowered by the Holy Spirit.",
+            "resourceId": "bible-study-note:romans:15:8",
+            "path": "/bible/read/romans/15?startVerse=8&endVerse=13"
+          }
+        ],
+        "resourceRecommendations": [
+          {
+            "resourceType": "bible_study",
+            "resourceId": "bible-study-note:romans:16:25",
+            "reason": "God’s mysterious plan for salvation has been revealed in Jesus Christ, leading to the obedience of faith among all nations."
+          },
+          {
+            "resourceType": "bible_study",
+            "resourceId": "bible-study-note:romans:16:17",
+            "reason": "Christians are called to discern and resist divisive teachings, anchored in the hope that God will ultimately bring peace and defeat evil."
+          },
+          {
+            "resourceType": "bible_study",
+            "resourceId": "bible-study-note:romans:16:3",
+            "reason": "The gospel unites diverse believers into one family, highlighting sacrificial love and shared mission beyond cultural and social boundaries."
+          },
+          {
+            "resourceType": "bible_study",
+            "resourceId": "bible-study-note:romans:15:8",
+            "reason": "In Christ, both Jew and Gentile are united in a shared hope, fulfilled through God's promises and empowered by the Holy Spirit."
+          }
+        ],
+        "followUpPrompts": [
+          "What does this resource say?",
+          "Search another Emmaus topic."
+        ],
+        "handoffType": null,
+        "answer": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”.",
+        "resourceActions": [],
+        "retrievalFailures": [],
+        "requestedIntent": "FIND",
+        "requestId": "j06849",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 1,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 59
+        },
+        "sermonRecommendations": [],
+        "capabilityActions": [],
+        "displayAnswer": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”.",
+        "speakableAnswer": "I found 4 published Emmaus resources related to “faith”: “Doxology: The Revealed Mystery”, “Warning Against Divisive Teachers”, “Greetings to Coworkers and House Churches”, “Scripture’s Promise: Gentiles Included; Prayer of Hope”."
+      },
+      "links": [
+        "/bible/read/romans/16?startVerse=25&endVerse=27",
+        "/bible/read/romans/16?startVerse=17&endVerse=20",
+        "/bible/read/romans/16?startVerse=3&endVerse=16",
+        "/bible/read/romans/15?startVerse=8&endVerse=13"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "walk-continuation",
+      "prompt": "Continue my current Walk",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "walk",
+        "continue"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 7,
+      "totalMs": 8,
+      "streamEventCount": 1,
+      "text": "You do not have an active Walk to continue yet. You can browse published Walks in Discover.",
+      "displayAnswer": "You do not have an active Walk to continue yet. You can browse published Walks in Discover.",
+      "speakableAnswer": "You do not have an active Walk to continue yet. You can browse published Walks in Discover.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": {
+          "action": "Open Walks in Emmaus.",
+          "primaryButtonText": "Open Walks",
+          "path": "/journeys?tab=walks"
+        },
+        "nextSteps": [],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [],
+        "handoffType": null,
+        "answer": "You do not have an active Walk to continue yet. You can browse published Walks in Discover.",
+        "requestedIntent": "ASK",
+        "requestId": "ylrnum",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 3
+        },
+        "sermonRecommendations": [],
+        "resourceActions": [],
+        "capabilityActions": [],
+        "displayAnswer": "You do not have an active Walk to continue yet. You can browse published Walks in Discover.",
+        "speakableAnswer": "You do not have an active Walk to continue yet. You can browse published Walks in Discover."
+      },
+      "links": [],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "journey-continuation",
+      "prompt": "Continue my current Journey",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "journey",
+        "continue"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 4389,
+      "totalMs": 14143,
+      "streamEventCount": 15,
+      "text": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth. He shared how, even when our circumstances might not seem grand, there is still a mighty reason to give thanks and move forward with faith. This perspective aligns with knowing that our worth is often much deeper than our current circumstances might suggest. As you continue on your journey today, perhaps reflect on what it means for you to walk with purpose, trusting in God's guidance. You might find it helpful to read Psalm 121:1–4 next, which speaks about looking up and finding help from the Lord. Consider making this your prayer today: \"Lord, help me lift my eyes to You and find strength in Your presence. \" Would you like a suggestion for a specific passage or resource to focus on in the meantime? It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth. He shared how, even when our circumstances might not seem grand, there is still a mighty reason to give thanks and move forward with faith. This perspective aligns with knowing that our worth is often much deeper than our current circumstances might suggest. As you continue on your journey today, perhaps reflect on what it means for you to walk with purpose, trusting in God's guidance. You might find it helpful to read Psalm 121:1–4 next, which speaks about looking up and finding help from the Lord. Consider making this your prayer today: \"Lord, help me lift my eyes to You and find strength in Your presence. Would you like a suggestion for a specific passage or resource to focus on in the meantime?",
+      "displayAnswer": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth. He shared how, even when our circumstances might not seem grand, there is still a mighty reason to give thanks and move forward with faith. This perspective aligns with knowing that our worth is often much deeper than our current circumstances might suggest. As you continue on your journey today, perhaps reflect on what it means for you to walk with purpose, trusting in God's guidance. You might find it helpful to read Psalm 121:1–4 next, which speaks about looking up and finding help from the Lord. Consider making this your prayer today: \"Lord, help me lift my eyes to You and find strength in Your presence. Would you like a suggestion for a specific passage or resource to focus on in the meantime?",
+      "speakableAnswer": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth.",
+      "metadata": {
+        "scripture": {
+          "reference": "Deuteronomy 10:11",
+          "book": "deuteronomy",
+          "chapter": 10,
+          "verseStart": 11,
+          "verseEnd": 11,
+          "displayText": "Deuteronomy 10:11"
+        },
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"YOUR WORTH I 3 MAY 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 60:59",
+            "path": "https://www.youtube.com/watch?v=oHpDI4h6llA&t=3659s",
+            "watchUrl": "https://www.youtube.com/watch?v=oHpDI4h6llA&t=3659s",
+            "timestampSeconds": 3659,
+            "absoluteStartSeconds": 3659,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 1802
+          }
+        ],
+        "recommendations": [],
+        "followUpPrompts": [
+          "Help me pray through this.",
+          "Show me a Journey.",
+          "What does Scripture say about this?"
+        ],
+        "handoffType": null,
+        "requestId": "kzqw2p",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "0bb35b20-aba8-455f-a828-7f5f2a5d4a7f",
+            "segmentId": "bbf56ab1-0f07-4439-ba50-49f134773448",
+            "source": "archive",
+            "title": "YOUR WORTH I 3 MAY 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-05-05",
+            "excerpt": "us and we join us as we continue to sing us and we join us as we continue to sing this beautiful song. And I know it's not much And I know it's not much else for me. else for me. else for me. He said for a mighty He said for a mighty He said for a mighty hallelujah.",
+            "reason": "Matches an approved ICC sermon archive segment at 60:59.",
+            "watchUrl": "https://www.youtube.com/watch?v=oHpDI4h6llA&t=3659s",
+            "watchTimestampSeconds": 3659,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "b1287891-5cfc-4323-afb2-48be0229cd58",
+            "segmentId": "0211ca3a-39a6-4688-b699-f29c97b1c5bb",
+            "source": "archive",
+            "title": "WHAT'S THE POINT I 29 MARCH 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "great we just want to be a part of that journey and then this is how things run journey and then this is how things run journey and then this is how things run in this place and I think we need to be a part of that and I think we need to be a part of that voice today that stops beating people voice ",
+            "reason": "Matches an approved ICC sermon archive segment at 41:56.",
+            "watchUrl": "https://www.youtube.com/watch?v=5TkprTjLpi8&t=2516s",
+            "watchTimestampSeconds": 2516,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "86e7a0ac-dcfe-41b3-b1ba-3b200f320fe4",
+            "segmentId": "6abbf87c-1aeb-4d7c-9464-bb06f79f414a",
+            "source": "archive",
+            "title": "IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-23",
+            "excerpt": "as we further continue that you continue be in our midst in Jesus name. Amen. be in our midst in Jesus name. Amen. be in our midst in Jesus name. Amen. Amen. Thank you. You may take your Amen. Thank you. You may take your Amen. Thank you. You may take your seats. seats. seats. I greet you all this m",
+            "reason": "Matches an approved ICC sermon archive segment at 29:15.",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=1755s",
+            "watchTimestampSeconds": 1755,
+            "listenAvailable": false
+          }
+        ],
+        "scriptureReferences": [
+          {
+            "reference": "Deuteronomy 10:11",
+            "book": "deuteronomy",
+            "chapter": 10,
+            "verseStart": 11,
+            "verseEnd": 11,
+            "displayText": "Deuteronomy 10:11"
+          },
+          {
+            "reference": "Psalm 121:1–4",
+            "book": "psalms",
+            "chapter": 121,
+            "verseStart": 1,
+            "verseEnd": 4,
+            "displayText": "Psalm 121:1–4"
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 1,
+          "retrievalScriptureMs": 18,
+          "retrievalSermonsMs": 3,
+          "retrievalResourcesMs": 70,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 43,
+          "modelTtftMs": 3792,
+          "firstValidatedVisibleMs": 4387,
+          "modelGenerationMs": 14048,
+          "validationMs": 1,
+          "totalMs": 14139
+        },
+        "resourceRecommendations": [],
+        "capabilityActions": [],
+        "answer": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth. He shared how, even when our circumstances might not seem grand, there is still a mighty reason to give thanks and move forward with faith. This perspective aligns with knowing that our worth is often much deeper than our current circumstances might suggest. As you continue on your journey today, perhaps reflect on what it means for you to walk with purpose, trusting in God's guidance. You might find it helpful to read Psalm 121:1–4 next, which speaks about looking up and finding help from the Lord. Consider making this your prayer today: \"Lord, help me lift my eyes to You and find strength in Your presence. Would you like a suggestion for a specific passage or resource to focus on in the meantime?",
+        "displayAnswer": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth. He shared how, even when our circumstances might not seem grand, there is still a mighty reason to give thanks and move forward with faith. This perspective aligns with knowing that our worth is often much deeper than our current circumstances might suggest. As you continue on your journey today, perhaps reflect on what it means for you to walk with purpose, trusting in God's guidance. You might find it helpful to read Psalm 121:1–4 next, which speaks about looking up and finding help from the Lord. Consider making this your prayer today: \"Lord, help me lift my eyes to You and find strength in Your presence. Would you like a suggestion for a specific passage or resource to focus on in the meantime?",
+        "speakableAnswer": "It sounds like you're eager to keep moving forward on your spiritual journey. Sometimes our paths may seem uncertain, and it's good to remember how God has guided His people in the past. In Deuteronomy 10:11, God told His people to \"Get up. Continue your journey ahead of the people... \" This reminds us that God has plans and promises for us as well. Thinking back to God's faithfulness, what are ways you've seen Him guide and provide for you on your journey so far? If it's been challenging, where have you found moments of grace or insight along the way? Pastor Jeremy recently preached about our worth."
+      },
+      "links": [
+        "/bible/read/deuteronomy/10?startVerse=11&endVerse=11",
+        "/bible/read/psalms/121?startVerse=1&endVerse=4"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "psalm-23",
+      "prompt": "Please open Psalm 23",
+      "expectedIntent": "OPEN",
+      "expectedSignals": [
+        "psalm 23"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 9,
+      "totalMs": 9,
+      "streamEventCount": 1,
+      "text": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
+      "displayAnswer": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
+      "speakableAnswer": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
+      "metadata": {
+        "scripture": {
+          "reference": "Psalm 23",
+          "book": "psalms",
+          "chapter": 23
+        },
+        "scriptureReferences": [
+          {
+            "reference": "Psalm 23",
+            "book": "psalms",
+            "chapter": 23,
+            "displayText": "Psalm 23"
+          }
+        ],
+        "nextStep": {
+          "action": "Open Psalm 23 in My Bible.",
+          "primaryButtonText": "Open Psalm 23",
+          "path": "/bible/read/psalms/23"
+        },
+        "nextSteps": [
+          {
+            "type": "read",
+            "text": "Psalm 23",
+            "path": "/bible/read/psalms/23"
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [
+          "What does this passage mean?",
+          "Help me pray through this passage."
+        ],
+        "handoffType": null,
+        "answer": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
+        "requestedIntent": "OPEN",
+        "requestId": "4fkyrh",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 2
+        },
+        "sermonRecommendations": [],
+        "resourceActions": [],
+        "capabilityActions": [],
+        "displayAnswer": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
+        "speakableAnswer": "Here is Psalm 23: 1. A Psalm of David. The LORD is my shepherd; I shall not want.\n2. He makes me lie down in green pastures; He leads me beside quiet waters.\n3. He restores my soul; He guides me in the paths of righteousness for the sake of His name.\n4. Even though I walk through the valley of the shadow of death, I will fear no evil, for You are with me; Your rod and Your staff, they comfort me.\n5. You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.\n6. Surely goodness and mercy will follow me all the days of my life, and I will dwell in the house of the LORD forever."
+      },
+      "links": [
+        "/bible/read/psalms/23"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "john-3-16-18",
+      "prompt": "Read John 3:16–18",
+      "expectedIntent": "READ",
+      "expectedSignals": [
+        "john 3:16"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 7,
+      "totalMs": 7,
+      "streamEventCount": 1,
+      "text": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son.",
+      "displayAnswer": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son.",
+      "speakableAnswer": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son.",
+      "metadata": {
+        "scripture": {
+          "reference": "John 3:16–18",
+          "book": "john",
+          "chapter": 3,
+          "verseStart": 16,
+          "verseEnd": 18
+        },
+        "scriptureReferences": [
+          {
+            "reference": "John 3:16–18",
+            "book": "john",
+            "chapter": 3,
+            "verseStart": 16,
+            "verseEnd": 18
+          },
+          {
+            "reference": "John 3",
+            "book": "john",
+            "chapter": 3,
+            "displayText": "John 3"
+          }
+        ],
+        "nextStep": {
+          "action": "Open John 3:16–18 in My Bible.",
+          "primaryButtonText": "Open John 3:16–18",
+          "path": "/bible/read/john/3?startVerse=16&endVerse=18"
+        },
+        "nextSteps": [
+          {
+            "type": "read",
+            "text": "John 3:16–18",
+            "path": "/bible/read/john/3?startVerse=16&endVerse=18"
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [
+          "What does this passage mean?",
+          "Help me pray through this passage."
+        ],
+        "handoffType": null,
+        "answer": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son.",
+        "requestedIntent": "READ",
+        "requestId": "kmzduv",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 2,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 3
+        },
+        "sermonRecommendations": [],
+        "resourceActions": [],
+        "capabilityActions": [],
+        "displayAnswer": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son.",
+        "speakableAnswer": "Here is John 3: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.\n17. For God did not send His Son into the world to condemn the world, but to save the world through Him.\n18. Whoever believes in Him is not condemned, but whoever does not believe has already been condemned, because he has not believed in the name of God’s one and only Son."
+      },
+      "links": [
+        "/bible/read/john/3?startVerse=16&endVerse=18",
+        "/bible/read/john/3"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "capability-discovery",
+      "prompt": "What can Emmaus help me with?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "emmaus"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 4,
+      "totalMs": 4,
+      "streamEventCount": 1,
+      "text": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey.",
+      "displayAnswer": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey.",
+      "speakableAnswer": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey.",
+      "metadata": {
+        "scripture": null,
+        "scriptureReferences": [],
+        "nextStep": {
+          "action": "Open Today's Steps in Emmaus.",
+          "primaryButtonText": "Open Today's Steps",
+          "path": "/walk"
+        },
+        "nextSteps": [],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [
+          "Where can I find devotionals?",
+          "How do I continue my Journey?"
+        ],
+        "handoffType": null,
+        "answer": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey.",
+        "capabilityActions": [
+          {
+            "kind": "OPEN",
+            "capabilityId": "todays-steps",
+            "label": "Open Today's Steps",
+            "route": "/walk"
+          }
+        ],
+        "requestedIntent": "ASK",
+        "requestId": "16c9zt",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 1
+        },
+        "sermonRecommendations": [],
+        "resourceActions": [],
+        "displayAnswer": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey.",
+        "speakableAnswer": "Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: Today's Steps, My Bible, Daily Devotional, Daily Rhythm, Sermons, Bible Studies, Walks, Journeys, Discover, My Journey."
+      },
+      "links": [],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "paraphrase-faith",
+      "prompt": "I want to become more trusting of God, where should I start?",
+      "expectedIntent": "ASK",
+      "expectedSignals": [
+        "faith"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 1179,
+      "totalMs": 6260,
+      "streamEventCount": 17,
+      "text": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation. Additionally, pursuing a rhythm of prayer and worship plays a key role. Pastor Jeremy preached about this, emphasizing the importance of prayer and regular engagement with the Bible to strengthen our hearts in reliance on God. Setting aside dedicated time each day to communicate with God can nurture deeper trust. Today, you can start by reflecting on a part of Psalm 127 and turning it into a prayer, asking God to help you rely on Him more fully in your daily life. You might pray something like, \"Father, help me to trust in your building and guarding my life, not just in my own efforts. \" This can provide further insight into reshaping your understanding of trust in God. Some questions you might ponder along this journey could be: What areas of my life am I most resistant to surrender to God? How have I seen God’s faithfulness in the past, and how can that inform my trust today? How can I create a daily habit of bringing my fears and hopes before Him in prayer? That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation. Additionally, pursuing a rhythm of prayer and worship plays a key role. Pastor Jeremy preached about this, emphasizing the importance of prayer and regular engagement with the Bible to strengthen our hearts in reliance on God. Setting aside dedicated time each day to communicate with God can nurture deeper trust. Today, you can start by reflecting on a part of Psalm 127 and turning it into a prayer, asking God to help you rely on Him more fully in your daily life. You might pray something like, \"Father, help me to trust in your building and guarding my life, not just in my own efforts. This can provide further insight into reshaping your understanding of trust in God. Some questions you might ponder along this journey could be: What areas of my life am I most resistant to surrender to God? How have I seen God’s faithfulness in the past, and how can that inform my trust today? How can I create a daily habit of bringing my fears and hopes before Him in prayer?",
+      "displayAnswer": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation. Additionally, pursuing a rhythm of prayer and worship plays a key role. Pastor Jeremy preached about this, emphasizing the importance of prayer and regular engagement with the Bible to strengthen our hearts in reliance on God. Setting aside dedicated time each day to communicate with God can nurture deeper trust. Today, you can start by reflecting on a part of Psalm 127 and turning it into a prayer, asking God to help you rely on Him more fully in your daily life. You might pray something like, \"Father, help me to trust in your building and guarding my life, not just in my own efforts. This can provide further insight into reshaping your understanding of trust in God. Some questions you might ponder along this journey could be: What areas of my life am I most resistant to surrender to God? How have I seen God’s faithfulness in the past, and how can that inform my trust today? How can I create a daily habit of bringing my fears and hopes before Him in prayer?",
+      "speakableAnswer": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation.",
+      "metadata": {
+        "scripture": {
+          "reference": "Psalm 127:1–2",
+          "book": "psalms",
+          "chapter": 127,
+          "verseStart": 1,
+          "verseEnd": 2,
+          "displayText": "Psalm 127:1–2"
+        },
+        "nextStep": null,
+        "nextSteps": [
+          {
+            "type": "listen",
+            "text": "\"IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER\" — Pastor Jeremy, 32:58",
+            "path": "https://www.youtube.com/watch?v=T232HmSl1z8&t=1978s",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=1978s",
+            "timestampSeconds": 1978,
+            "absoluteStartSeconds": 1978,
+            "speakerName": "Pastor Jeremy",
+            "relativeStartSeconds": 1484
+          }
+        ],
+        "recommendations": [],
+        "followUpPrompts": [
+          "Help me pray through this.",
+          "Show me a Journey.",
+          "What does Scripture say about this?"
+        ],
+        "handoffType": null,
+        "requestId": "91031a",
+        "requestedIntent": "ASK",
+        "retrievalFailures": [],
+        "resourceActions": [],
+        "sermonRecommendations": [
+          {
+            "sermonId": "86e7a0ac-dcfe-41b3-b1ba-3b200f320fe4",
+            "segmentId": "38bd3656-5636-47a3-a9cf-4c3ace6ed186",
+            "source": "archive",
+            "title": "IT STARTS WITH ME I 19 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-23",
+            "excerpt": "to be a strong marriage. We want to pray. We want to read our Bible. We want pray. We want to read our Bible. We want pray. We want to read our Bible. We want to go to church. to go to church. to go to church. Forget the other things like favor, Forget the other things like favor, Forget the other t",
+            "reason": "Matches an approved ICC sermon archive segment at 32:58.",
+            "watchUrl": "https://www.youtube.com/watch?v=T232HmSl1z8&t=1978s",
+            "watchTimestampSeconds": 1978,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "ce58c749-bfc7-447f-94e6-ab9d28d34ed9",
+            "segmentId": "1f6fe3b0-8203-4ec3-a265-af36d063658e",
+            "source": "archive",
+            "title": "LET JESUS LOOSE! I 5 APRIL 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-04-15",
+            "excerpt": "because we don't pray. because we don't read our Bibles. because we don't read our Bibles. because we don't read our Bibles. Because we don't do the basics. We want Because we don't do the basics. We want Because we don't do the basics. We want some supernatural thing to happen. We some supernatural",
+            "reason": "Matches an approved ICC sermon archive segment at 56:41.",
+            "watchUrl": "https://www.youtube.com/watch?v=FBAlAwhgLNE&t=3401s",
+            "watchTimestampSeconds": 3401,
+            "listenAvailable": false
+          },
+          {
+            "sermonId": "5a231505-b52d-4821-b615-d2bc9dd6b8e7",
+            "segmentId": "019b4f3a-38c6-478f-ac94-a9cf636f888c",
+            "source": "archive",
+            "title": "WHAT'S THE QUESTION? I 17 MAY 2026 I PASTOR JEREMY GOVENDER ",
+            "speaker": "Pastor Jeremy",
+            "sermonDate": "2026-05-22",
+            "excerpt": "I want to touch you, Jesus. I want to touch you, Jesus. Come down. Oh Jesus, Oh Jesus, I live without you. I live without you. I live without you. I want your presence. I want your presence. I want your presence. How do you do your heart just do your heart just for your glory?",
+            "reason": "Matches an approved ICC sermon archive segment at 29:52.",
+            "watchUrl": "https://www.youtube.com/watch?v=k4IA22uGmOA&t=1792s",
+            "watchTimestampSeconds": 1792,
+            "listenAvailable": false
+          }
+        ],
+        "scriptureReferences": [
+          {
+            "reference": "Psalm 127:1–2",
+            "book": "psalms",
+            "chapter": 127,
+            "verseStart": 1,
+            "verseEnd": 2,
+            "displayText": "Psalm 127:1–2"
+          },
+          {
+            "reference": "Psalm 127",
+            "book": "psalms",
+            "chapter": 127,
+            "displayText": "Psalm 127"
+          }
+        ],
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 1,
+          "retrievalScriptureMs": 39,
+          "retrievalSermonsMs": 20,
+          "retrievalResourcesMs": 77,
+          "retrievalMemoriesMs": 3,
+          "retrievalRoomsMs": 25,
+          "modelTtftMs": 936,
+          "firstValidatedVisibleMs": 1177,
+          "modelGenerationMs": 6137,
+          "validationMs": 1,
+          "totalMs": 6256
+        },
+        "resourceRecommendations": [],
+        "capabilityActions": [],
+        "answer": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation. Additionally, pursuing a rhythm of prayer and worship plays a key role. Pastor Jeremy preached about this, emphasizing the importance of prayer and regular engagement with the Bible to strengthen our hearts in reliance on God. Setting aside dedicated time each day to communicate with God can nurture deeper trust. Today, you can start by reflecting on a part of Psalm 127 and turning it into a prayer, asking God to help you rely on Him more fully in your daily life. You might pray something like, \"Father, help me to trust in your building and guarding my life, not just in my own efforts. This can provide further insight into reshaping your understanding of trust in God. Some questions you might ponder along this journey could be: What areas of my life am I most resistant to surrender to God? How have I seen God’s faithfulness in the past, and how can that inform my trust today? How can I create a daily habit of bringing my fears and hopes before Him in prayer?",
+        "displayAnswer": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation. Additionally, pursuing a rhythm of prayer and worship plays a key role. Pastor Jeremy preached about this, emphasizing the importance of prayer and regular engagement with the Bible to strengthen our hearts in reliance on God. Setting aside dedicated time each day to communicate with God can nurture deeper trust. Today, you can start by reflecting on a part of Psalm 127 and turning it into a prayer, asking God to help you rely on Him more fully in your daily life. You might pray something like, \"Father, help me to trust in your building and guarding my life, not just in my own efforts. This can provide further insight into reshaping your understanding of trust in God. Some questions you might ponder along this journey could be: What areas of my life am I most resistant to surrender to God? How have I seen God’s faithfulness in the past, and how can that inform my trust today? How can I create a daily habit of bringing my fears and hopes before Him in prayer?",
+        "speakableAnswer": "That's a sincere and important journey to undertake, Integration Test user. Learning to trust God more deeply is a gradual process that involves both the heart and the mind. One of the most foundational places to begin is by immersing yourself in Scripture and prayer, letting God's Word shape your understanding and perception of Him. Psalm 127:1–2 offers a powerful reminder: \"Unless the LORD builds the house, its builders labor in vain. \" This passage helps us recognize that true security and productivity come not merely from our efforts but from relying on God. The psalm teaches us that when we trust God to build and guard our endeavors, our lives find their true foundation."
+      },
+      "links": [
+        "/bible/read/psalms/127?startVerse=1&endVerse=2",
+        "/bible/read/psalms/127"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    },
+    {
+      "id": "paraphrase-john",
+      "prompt": "Take me to the passage about God loving the world",
+      "expectedIntent": "READ",
+      "expectedSignals": [
+        "john 3:16"
+      ],
+      "status": 200,
+      "provider": "openai-configured",
+      "firstTextMs": 7,
+      "totalMs": 8,
+      "streamEventCount": 1,
+      "text": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.",
+      "displayAnswer": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.",
+      "speakableAnswer": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.",
+      "metadata": {
+        "scripture": {
+          "reference": "John 3:16",
+          "book": "john",
+          "chapter": 3,
+          "verseStart": 16,
+          "verseEnd": 16
+        },
+        "scriptureReferences": [
+          {
+            "reference": "John 3:16",
+            "book": "john",
+            "chapter": 3,
+            "verseStart": 16,
+            "verseEnd": 16,
+            "displayText": "John 3:16"
+          }
+        ],
+        "nextStep": {
+          "action": "Open John 3:16 in My Bible.",
+          "primaryButtonText": "Open John 3:16",
+          "path": "/bible/read/john/3?startVerse=16&endVerse=16"
+        },
+        "nextSteps": [
+          {
+            "type": "read",
+            "text": "John 3:16",
+            "path": "/bible/read/john/3?startVerse=16&endVerse=16"
+          }
+        ],
+        "recommendations": [],
+        "resourceRecommendations": [],
+        "followUpPrompts": [
+          "What does this passage mean?",
+          "Help me pray through this passage."
+        ],
+        "handoffType": null,
+        "answer": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.",
+        "requestedIntent": "READ",
+        "requestId": "ns6nvw",
+        "pipelineTimings": {
+          "authMs": 0,
+          "contextMs": 0,
+          "routingMs": 0,
+          "retrievalScriptureMs": 0,
+          "retrievalSermonsMs": 0,
+          "retrievalResourcesMs": 0,
+          "retrievalMemoriesMs": 0,
+          "retrievalRoomsMs": 0,
+          "modelTtftMs": null,
+          "firstValidatedVisibleMs": null,
+          "modelGenerationMs": 0,
+          "validationMs": 0,
+          "totalMs": 2
+        },
+        "sermonRecommendations": [],
+        "resourceActions": [],
+        "capabilityActions": [],
+        "displayAnswer": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.",
+        "speakableAnswer": "Here is John 3:16: 16. For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life."
+      },
+      "links": [
+        "/bible/read/john/3?startVerse=16&endVerse=16"
+      ],
+      "checks": {
+        "done": true,
+        "expectedIntent": true,
+        "signalCoverage": true,
+        "displayAnswerPresent": true,
+        "displayAnswerConcise": true,
+        "speakableAnswerPresent": true,
+        "speakableAnswerConcise": true,
+        "noUrlsInDisplay": true,
+        "citationsHaveCanonicalRoutes": true,
+        "streamedTextReconcilesOnDone": true,
+        "typedModelStreamsIncrementally": true,
+        "noControlTagsInStream": true,
+        "dedupedRecommendations": true
+      },
+      "passed": true
+    }
+  ]
+}

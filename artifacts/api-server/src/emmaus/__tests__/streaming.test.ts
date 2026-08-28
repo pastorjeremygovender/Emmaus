@@ -7,8 +7,9 @@
  *   3. Tag beginning mid-chunk    — text before tag in that chunk is still emitted
  *   4. No tag present             — full text is emitted, fallback metadata used
  *
- * These tests hit the live dev server and use a known MockProvider response so
- * the exact chunk boundaries can be inferred from the mock's word-by-word delivery.
+ * These tests hit the live dev server. Typed model prose is released only as
+ * complete, validated units; canonical actions remain a single deterministic
+ * event.
  */
 
 import http from "node:http";
@@ -77,14 +78,13 @@ async function postConversation(message: string): Promise<{
 
 describe("Emmaus streaming — metadata stripping", () => {
   it("text events contain no <EMMAUS_META> tag bytes", async () => {
-    const { events } = await postConversation("I feel far from God");
+    const { events, timeToFirstTextMs } = await postConversation("I feel far from God");
     const allText = events.join("");
     assert.ok(!allText.includes("<EMMAUS_META"), "no EMMAUS_META tag should appear in emitted text");
     assert.ok(!allText.includes("</EMMAUS_META"), "no EMMAUS_META close tag should appear in emitted text");
     assert.ok(allText.length > 10, "emitted text should be non-empty");
-    // Typed Ask Emmaus responses are intentionally buffered until the final
-    // grounding/normalization boundary, so one clean text event is valid.
     assert.ok(events.length >= 1, "response should contain a visible text event before done");
+    assert.ok(timeToFirstTextMs != null, "visible typed text should arrive before done");
   });
 
   it("done event is received with structured metadata", async () => {

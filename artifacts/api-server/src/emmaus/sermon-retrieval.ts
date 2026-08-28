@@ -165,7 +165,7 @@ function canonicalCard(
 }
 
 function archiveCard(result: SermonSearchResult): SermonSearchCardResult {
-  const excerpt = (result.summary ?? result.transcriptEvidence ?? "").slice(0, 300);
+  const excerpt = (result.summary?.trim() || result.transcriptEvidence || "").slice(0, 300);
   return {
     sermonId: result.sermonId,
     segmentId: result.segmentId,

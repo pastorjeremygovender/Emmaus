@@ -164,12 +164,16 @@ function recommendationType(resource: EmmausResource): Recommendation["type"] {
 async function resolveCatalogueSearch(
   message: string,
   userId: string,
-  capabilityId: "discover" | "bible-studies",
+  capabilityId: "discover" | "bible-studies" | "daily-devotional",
   query: string,
 ): Promise<EmmausResponseMetadata> {
   const metadata = emptyMetadata();
   const catalogue = await buildEmmausResourceCatalogue(query, undefined, undefined, userId);
-  const allowedType = capabilityId === "bible-studies" ? "bible-study" : null;
+  const allowedType = capabilityId === "bible-studies"
+    ? "bible-study"
+    : capabilityId === "daily-devotional"
+      ? "devotional"
+      : null;
   const matches = catalogue.resources
     .filter((resource) => resource.relevance > 0 && (!allowedType || resource.type === allowedType))
     .filter((resource, index, all) =>
@@ -574,7 +578,11 @@ export async function resolveCanonicalAskRequest(
       case "BIBLE_CONTINUE":
         return { handled: true, metadata: await resolveBibleContinue(userId) };
       case "RESOURCE_SEARCH":
-        if (routed.requestedCapability === "bible-studies" || routed.requestedCapability === "discover") {
+        if (
+          routed.requestedCapability === "bible-studies"
+          || routed.requestedCapability === "discover"
+          || routed.requestedCapability === "daily-devotional"
+        ) {
           const query = routed.resourceQuery ?? message;
           if (routed.requestedCapability === "discover" && /\b(?:sermon|sermons|preached|preaching)\b/i.test(message)) {
             return { handled: true, metadata: await resolveSermonSearch(query) };
