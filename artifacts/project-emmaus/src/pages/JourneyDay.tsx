@@ -91,13 +91,23 @@ export default function JourneyDay() {
     requiredStepDays.length > 0 && requiredStepDays.every(d => completedDaysSet.has(d));
 
   // Read return context from URL — set by the navigation caller
-  const source   = new URLSearchParams(window.location.search).get('source');
-  const sourceId = new URLSearchParams(window.location.search).get('sourceId');
-  const displayOrigin = journeyDisplayOriginForSource(source, journey?.journeyType);
+  const routeParams = new URLSearchParams(window.location.search);
+  const source   = routeParams.get('source');
+  const sourceId = routeParams.get('sourceId');
+  // `journeyDetail` is the immediate parent of this page, so preserve the
+  // original Walks/Journeys surface explicitly when the overview handed us
+  // here. This prevents collection-based Bible Studies from becoming Walks
+  // when a member opens a step directly from the overview.
+  const displayOrigin = journeyDisplayOriginForSource(
+    source,
+    journey?.journeyType,
+    routeParams.get('displayOrigin'),
+  );
+  const displayOriginSuffix = `&displayOrigin=${encodeURIComponent(displayOrigin)}`;
 
   // URL for the dedicated Walk Complete page — used when the final step is done.
   const walkCompleteUrl = journeyId
-    ? `/journey/${journeyId}/complete?source=${encodeURIComponent(source ?? 'nextStepsJourneys')}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+    ? `/journey/${journeyId}/complete?source=${encodeURIComponent(source ?? 'nextStepsJourneys')}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}${displayOriginSuffix}`
     : '/journeys?tab=journeys';
 
   const [reflection, setReflection] = useState('');
@@ -349,7 +359,7 @@ export default function JourneyDay() {
     ? publishedCompletionStep
     : nextRegularStep;
   const nextStepUrl = !isFinalStep && nextStep && journeyId
-    ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}`
+    ? `/journey/${journeyId}/day/${nextStep.day}${source ? `?source=${encodeURIComponent(source)}` : '?source=nextStepsJourneys'}${sourceId ? `&sourceId=${encodeURIComponent(sourceId)}` : ''}${displayOriginSuffix}`
     : undefined;
 
   // ── Completion card — standard Emmaus pattern (spec-locked) ──────────────────
@@ -370,7 +380,7 @@ export default function JourneyDay() {
           subMessage={`You've completed this Step. There ${remainingCount === 1 ? 'is still 1 part' : `are still ${remainingCount} parts`} of this Walk waiting for you.`}
           returnLabel={backLabel}
            onReturn={() => goBackOrFallback(returnPath, setLocation)}
-          onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
+          onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
           previousDaysLabel="View Previous Steps →"
         />
       );
@@ -385,7 +395,7 @@ export default function JourneyDay() {
         continueLabel={nextStepUrl ? (nextStep?.isCompletionStep ? 'Walk Complete →' : 'Continue to Next Day') : undefined}
         returnLabel={backLabel}
          onReturn={() => goBackOrFallback(returnPath, setLocation)}
-        onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
+        onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
         previousDaysLabel="View Previous Steps →"
       />
     );
@@ -657,7 +667,7 @@ export default function JourneyDay() {
                 }
                 returnLabel={backLabel}
                 onReturn={() => goBackOrFallback(returnPath, setLocation)}
-                onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}`) : undefined}
+                  onPreviousDays={day > 1 && journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${source ?? 'walk'}${sourceId ? `&sourceId=${sourceId}` : ''}${displayOriginSuffix}`) : undefined}
                 previousDaysLabel="View Previous Steps →"
               />
             ) : (

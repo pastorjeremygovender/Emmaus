@@ -27,6 +27,11 @@ export default function JourneyPreviousDays() {
   const qs = new URLSearchParams(window.location.search);
   // Accept both ?source= (current) and legacy ?from= so old links and bookmarks keep working.
   const from     = qs.get('source') ?? qs.get('from');
+  const displayOrigin = qs.get('displayOrigin');
+  const displayOriginSuffix =
+    displayOrigin === 'walk' || displayOrigin === 'journey'
+      ? `&displayOrigin=${encodeURIComponent(displayOrigin)}`
+      : '';
   const sourceId = qs.get('sourceId');
   const { path: backPath, label: backLabel } = resolveReturn(from, sourceId, '/journeys?tab=walks');
 
@@ -56,7 +61,7 @@ export default function JourneyPreviousDays() {
       entries={entries}
       loading={loading}
       onBack={() => goBackOrFallback(backPath, setLocation)}
-      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?source=journeyPrevious&sourceId=${journeyId}`)}
+      onReviewDay={(day) => setLocation(`/journey/${journeyId}/day/${day}?source=journeyPrevious&sourceId=${journeyId}${displayOriginSuffix}`)}
       backLabel={backLabel}
       emptyMessage="No previous days are available yet."
     />

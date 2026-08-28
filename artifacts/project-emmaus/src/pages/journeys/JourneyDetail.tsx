@@ -63,6 +63,11 @@ export default function JourneyDetail() {
 
   const journey = journeys.find(j => j.id === journeyId);
   const displayOrigin = journeyDisplayOriginForSource(source, journey?.journeyType);
+  // Carry the resolved surface into every step route. Once a member enters a
+  // step, `source=journeyDetail` describes the immediate parent page and no
+  // longer identifies whether the Walk came from Discover → Walks or
+  // Discover → Journeys.
+  const displayOriginSuffix = `&displayOrigin=${encodeURIComponent(displayOrigin)}`;
   const prog = journey ? progress[journey.id] : undefined;
   const startedIds = useMemo(() => new Set(Object.keys(progress)), [progress]);
   // Exclude completion steps — they are their own content type (Walk Complete page),
@@ -183,13 +188,13 @@ export default function JourneyDetail() {
     // Navigate to the next unfinished published step (not prog.currentDay which may point
     // to a deleted or Draft step and trigger the JourneyDay route-guard bounce).
     if (isActive) {
-      setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+      setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`);
       return;
     }
     if (isPaused) {
       if (canActivateMore(journeys, startedIds)) {
         resumeJourney(journey.id);
-        setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+        setLocation(`/journey/${journey.id}/day/${nextUnfinishedDay}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`);
       } else { setShowLimitMsg(true); }
       return;
     }
@@ -208,7 +213,7 @@ export default function JourneyDetail() {
     if (!journey) return;
     // Throws on failure — the modal catches this and shows an inline error message.
     await startJourney(journey.id, displayOrigin);
-    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`);
     setPendingStart(false);
   }
 
@@ -219,7 +224,7 @@ export default function JourneyDetail() {
     await apiStartShared(user.id, { journeyId: journey.id, roomId, displayOrigin });
     // Sync the local progress cache (DB already has the record; this is a no-op at the DB level).
     await startJourney(journey.id, displayOrigin);
-    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`);
     setPendingStart(false);
   }
 
@@ -229,7 +234,7 @@ export default function JourneyDetail() {
     const { roomId } = await apiStartShared(user.id, { journeyId: journey.id, roomName, displayOrigin });
     // Sync frontend caches: progress (no-op at DB) + rooms list (shows the new room).
     await Promise.all([startJourney(journey.id, displayOrigin), loadRooms()]);
-    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`);
+    setLocation(`/journey/${journey.id}/day/${firstStepDay}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`);
     setPendingStart(false);
   }
 
@@ -455,7 +460,7 @@ export default function JourneyDetail() {
                     title={s.title || getStepLabel(s, journey)}
                     completed={done}
                     current={isUpNext}
-                    onClick={() => setLocation(`/journey/${journey.id}/day/${s.day}?source=journeyDetail&sourceId=${journey.id}${backContextSuffix}`)}
+                    onClick={() => setLocation(`/journey/${journey.id}/day/${s.day}?source=journeyDetail&sourceId=${journey.id}${displayOriginSuffix}${backContextSuffix}`)}
                     ariaLabel={isUpNext ? `Up next: step ${s.day}: ${s.title || `Step ${s.day}`}` : done ? `Review step ${s.day}: ${s.title || `Step ${s.day}`}` : `Go to step ${s.day}: ${s.title || `Step ${s.day}`}`}
                   />
                 );

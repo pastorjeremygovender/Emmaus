@@ -20,6 +20,7 @@ import { EmmausCompletionCard } from '@/components/EmmausCompletionCard';
 import { RoomPickerSheet } from '@/components/RoomPickerSheet';
 import { goBackOrFallback } from '@/lib/return-context';
 import { apiLinkJourney } from '@/lib/rooms-api';
+import { journeyDisplayOriginForSource } from '@/lib/journeys-api';
 import { Users } from 'lucide-react';
 
 export default function WalkCompletePage() {
@@ -31,6 +32,13 @@ export default function WalkCompletePage() {
   const [showRoomPicker, setShowRoomPicker] = useState(false);
 
   const journey = getJourney(journeyId ?? '');
+  const routeParams = new URLSearchParams(window.location.search);
+  const source = routeParams.get('source');
+  const displayOrigin = journeyDisplayOriginForSource(
+    source,
+    journey?.journeyType,
+    routeParams.get('displayOrigin'),
+  );
 
   // WJ-1: honour the source/sourceId query params so members land back where
   // they came from (Walk, Bible, Sermon) rather than always on the journey overview.
@@ -88,7 +96,7 @@ export default function WalkCompletePage() {
                   onContinue: () => setLocation(`/journeys/${nextJourneyId}`),
                 }
               : {})}
-            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=nextStepsWalks`) : undefined}
+            onPreviousDays={journeyId ? () => setLocation(`/journey/${journeyId}/previous?source=${displayOrigin === 'journey' ? 'nextStepsJourneys' : 'nextStepsWalks'}&displayOrigin=${encodeURIComponent(displayOrigin)}`) : undefined}
             previousDaysLabel="View Previous Steps →"
           />
 

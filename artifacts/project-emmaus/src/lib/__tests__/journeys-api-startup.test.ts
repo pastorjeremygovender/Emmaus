@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDailyRhythmStartup } from '@/lib/journeys-api';
+import {
+  getDailyRhythmStartup,
+  journeyDisplayOriginForSource,
+  parseJourneyDisplayOrigin,
+} from '@/lib/journeys-api';
 
 describe('getDailyRhythmStartup response contract', () => {
   beforeEach(() => {
@@ -60,5 +64,26 @@ describe('getDailyRhythmStartup response contract', () => {
     expect(firstHeaders.get('X-Emmaus-Startup-Session')).toBeTruthy();
     expect(retryHeaders.get('X-Emmaus-Startup-Session'))
       .toBe(firstHeaders.get('X-Emmaus-Startup-Session'));
+  });
+});
+
+describe('journey display origin route contract', () => {
+  it('keeps a collection Journey origin after entering the Walk detail route', () => {
+    expect(
+      journeyDisplayOriginForSource('journeyDetail', 'walk', 'journey'),
+    ).toBe('journey');
+  });
+
+  it('keeps a standalone Walk origin after entering the Walk detail route', () => {
+    expect(
+      journeyDisplayOriginForSource('journeyDetail', 'walk', 'walk'),
+    ).toBe('walk');
+  });
+
+  it('falls back to the source mapping when the explicit origin is invalid', () => {
+    expect(
+      journeyDisplayOriginForSource('collectionDetail', 'walk', 'unexpected'),
+    ).toBe('journey');
+    expect(parseJourneyDisplayOrigin('unexpected')).toBeNull();
   });
 });

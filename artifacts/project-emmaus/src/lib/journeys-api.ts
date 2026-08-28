@@ -171,10 +171,18 @@ export type Progress = {
 
 export type JourneyDisplayOrigin = 'walk' | 'journey';
 
+/** Parse the optional route-carried origin without trusting arbitrary values. */
+export function parseJourneyDisplayOrigin(value: unknown): JourneyDisplayOrigin | null {
+  return value === 'walk' || value === 'journey' ? value : null;
+}
+
 export function journeyDisplayOriginForSource(
   source: string | null | undefined,
   journeyType?: string,
+  explicitOrigin?: unknown,
 ): JourneyDisplayOrigin {
+  const parsedOrigin = parseJourneyDisplayOrigin(explicitOrigin);
+  if (parsedOrigin) return parsedOrigin;
   if (source === 'today' || source === 'nextStepsWalks') return 'walk';
   if (source === 'nextStepsJourneys' || source === 'collectionDetail') return 'journey';
   // Shared room study belongs to the Journey surface. Direct/legacy routes

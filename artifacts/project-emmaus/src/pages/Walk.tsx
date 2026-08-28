@@ -235,7 +235,23 @@ export default function Walk() {
 
   // Collections — used to look up the parent collection title for journey cards
   const [collections, setCollections] = useState<Collection[]>([]);
-  useEffect(() => { listCollections().then(setCollections).catch(() => {}); }, []);
+  const [collectionsReady, setCollectionsReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    listCollections()
+      .then(nextCollections => {
+        if (!cancelled) setCollections(nextCollections);
+      })
+      .catch(() => {
+        // Keep the section usable if the supplementary catalogue is unavailable.
+        // Collection-backed cards remain in the Journeys section; they only use
+        // the child title when there is no parent title to display.
+      })
+      .finally(() => {
+        if (!cancelled) setCollectionsReady(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
   const collectionMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of collections) m.set(c.id, c.title);
@@ -766,7 +782,9 @@ export default function Walk() {
 
         {/* ── 4. Journeys (Longer Studies) — always visible ─────────────────── */}
         <SectionWrapper color="indigo" label="Journeys (Longer Studies)" delay={0.11}>
-          {startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
+          {!collectionsReady && startedLongerJourneys.some(({ journey }) => journey.collectionId) ? (
+            <SkeletonCard />
+          ) : startedLongerJourneys.map(({ journey, prog, currentStep, totalPublishedSteps }) => {
             const completedCount  = prog.completedDays.length;
             const isCompleted     = totalPublishedSteps > 0 && completedCount >= totalPublishedSteps;
             const journeySubtitle = isCompleted ? 'Walk Complete' : (currentStep?.title || undefined);
