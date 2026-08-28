@@ -73,7 +73,12 @@ interface UseFollowLeaderResult {
   /** Accumulated text chunks from the current stream. Reset on each new question. */
   emmausStreamText: string;
   /** Set when the current stream completes; cleared when a new question starts. */
-  emmausAnswer: { question: string; fullText: string; answerId: string | null } | null;
+  emmausAnswer: {
+    question: string;
+    fullText: string;
+    answerId: string | null;
+    error?: boolean;
+  } | null;
 
   // ── Polls (Task #437) ──────────────────────────────────────────────────
   /** New poll received via SSE (auto-show PollCard when followLeader is ON). */

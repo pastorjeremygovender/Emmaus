@@ -34,7 +34,6 @@ const followLeaderSource = readFileSync(
   resolve(process.cwd(), 'src/hooks/useFollowLeader.ts'),
   'utf8',
 );
-
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
     expect(roomDetailSource).not.toContain('Attendance auto-record');
@@ -121,8 +120,12 @@ describe('active meeting synchronization contract', () => {
   it('recovers Ask Emmaus state after reconnects and leaves no indefinite spinner', () => {
     expect(followLeaderSource).toContain('metadata?.activeEmmaus');
     expect(followLeaderSource).toContain('requestId !== emmausRequestRef.current');
+    expect(followLeaderSource).toContain("hydratedEmmaus.status === 'generating'");
+    expect(followLeaderSource).toContain('error: hydratedEmmaus.status === \'failed\'');
     expect(sharedAskSource).toContain('generationTimedOut');
     expect(sharedAskSource).toContain('30_000');
     expect(sharedAskSource).toContain('try the question again');
+    expect(sharedAskSource).toContain('latestAnswer?.error');
+    expect(sharedAskSource).toContain('Try this question again');
   });
 });

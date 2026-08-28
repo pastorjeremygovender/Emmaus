@@ -66,6 +66,7 @@ import {
   clearSharedTool,
   replaceSharedTool,
   updateSharedEmmausState,
+  claimSharedEmmausRequest,
   broadcastRoomEvent,
   subscribeToSessionEvents,
   recordSessionJoin,
@@ -2698,22 +2699,25 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
   }
 
   const requestId = randomUUID();
+  let claimedSession: Awaited<ReturnType<typeof claimSharedEmmausRequest>>;
   try {
-    await replaceSharedTool(String(roomId), "ask-emmaus");
-    await updateSessionState(String(roomId), {
-      metadata: {
-        ...(await getActiveSession(String(roomId)))?.metadata,
-        activeTool: "ask-emmaus",
-        activeEmmaus: {
-          requestId,
-          question: trimmedQ,
-          text: "",
-          status: "generating",
-          answerId: null,
-        },
-      },
-    });
-  } catch {
+    claimedSession = await claimSharedEmmausRequest(
+      String(roomId),
+      session.id,
+      requestId,
+      { question: trimmedQ },
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message === "EMMAUS_REQUEST_ACTIVE") {
+      res.status(409).json({
+        error: "Emmaus is already generating a response for this group.",
+      });
+      return;
+    }
+    if (err instanceof Error && err.message === "SESSION_NOT_ACTIVE") {
+      res.status(409).json({ error: "There is no active meeting for this session." });
+      return;
+    }
     res.status(500).json({ error: "Could not start the shared Ask Emmaus request." });
     return;
   }
@@ -2737,14 +2741,14 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
   void (async () => {
     try {
       const room = await getRoomById(String(roomId));
-      const scriptureCtx = session.currentScripture
+       const scriptureCtx = claimedSession.currentScripture
         ? `The group is currently studying: ${
-            session.currentScripture.displayLabel ??
-            `${session.currentScripture.book} ${session.currentScripture.chapter}`
+             claimedSession.currentScripture.displayLabel ??
+             `${claimedSession.currentScripture.book} ${claimedSession.currentScripture.chapter}`
           }`
         : "";
-      const stepCtx = session.currentStep
-        ? `Current session step: ${session.currentStep}`
+       const stepCtx = claimedSession.currentStep
+         ? `Current session step: ${claimedSession.currentStep}`
         : "";
 
       const contextBlock = [
@@ -2808,7 +2812,7 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
       }
 
       const answer = await addEmmausAnswer(
-        session.id, String(roomId), userId, trimmedQ, cleanText
+        claimedSession.id, String(roomId), userId, trimmedQ, cleanText
       );
       const stillCurrent = await updateSharedEmmausState(String(roomId), requestId, {
         text: cleanText,

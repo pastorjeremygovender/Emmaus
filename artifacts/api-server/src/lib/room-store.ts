@@ -1715,6 +1715,125 @@ export async function updateSharedEmmausState(
   return true;
 }
 
+/**
+ * Recover shared Ask Emmaus requests that were interrupted by an API restart.
+ * The provider stream is in-memory, so a request left as "generating" can never
+ * finish after the process that owned it has gone away. Keep the tool visible
+ * during hydration, but give every member a durable, retryable outcome.
+ */
+export async function recoverInterruptedSharedEmmausRequests(): Promise<number> {
+  const interruptedMessage =
+    "This group question was interrupted when Emmaus restarted. The leader can try it again.";
+  const result = await pool.query(
+    `UPDATE room_sessions
+     SET metadata = jsonb_set(
+       metadata,
+       '{activeEmmaus}',
+       (metadata->'activeEmmaus')
+         || jsonb_build_object(
+              'status', 'failed',
+              'error', $1::text,
+              'text', $1::text
+            ),
+       true
+     )
+     WHERE status = 'active'
+       AND metadata->>'activeTool' = 'ask-emmaus'
+       AND metadata->'activeEmmaus'->>'status' = 'generating'`,
+    [interruptedMessage],
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Atomically claim the shared Ask Emmaus tool for a new generation.
+ *
+ * Locking the session row makes the generation state authoritative across
+ * concurrent leaders, tabs, and retries. A retry may replace a failed request,
+ * but it may never replace a request that is still generating.
+ */
+export async function claimSharedEmmausRequest(
+  roomId: string,
+  sessionId: string,
+  requestId: string,
+  state: Pick<ActiveEmmausState, "question">,
+): Promise<RoomSession> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `SELECT *
+       FROM room_sessions
+       WHERE id = $1 AND room_id = $2 AND status = 'active'
+       FOR UPDATE`,
+      [sessionId, roomId],
+    );
+    if (!rows[0]) {
+      throw new Error("SESSION_NOT_ACTIVE");
+    }
+
+    const row = rows[0] as Record<string, unknown>;
+    const metadata = (row.metadata as Record<string, unknown>) ?? {};
+    const currentEmmaus = metadata.activeEmmaus as ActiveEmmausState | undefined;
+    if (metadata.activeTool === "ask-emmaus" && currentEmmaus?.status === "generating") {
+      throw new Error("EMMAUS_REQUEST_ACTIVE");
+    }
+
+    // Match replaceSharedTool's cleanup semantics while keeping the claim
+    // itself atomic. These rows otherwise reappear on reconnect hydration.
+    if (metadata.activeTool === "poll") {
+      await client.query(
+        `DELETE FROM room_poll_votes
+         WHERE poll_id IN (
+           SELECT id FROM room_polls
+           WHERE room_id = $1 AND session_id = $2
+           ORDER BY created_at DESC
+           LIMIT 1
+         )`,
+        [roomId, sessionId],
+      );
+      await client.query(
+        `DELETE FROM room_polls
+         WHERE id = (
+           SELECT id FROM room_polls
+           WHERE room_id = $1 AND session_id = $2
+           ORDER BY created_at DESC
+           LIMIT 1
+         )`,
+        [roomId, sessionId],
+      );
+    } else if (metadata.activeTool === "presentation") {
+      await client.query(
+        `DELETE FROM room_media_presentations WHERE room_id = $1`,
+        [roomId],
+      );
+    }
+
+    const nextMetadata = {
+      ...metadata,
+      activeTool: "ask-emmaus",
+      activeEmmaus: {
+        requestId,
+        question: state.question,
+        text: "",
+        status: "generating",
+        answerId: null,
+      } satisfies ActiveEmmausState,
+    };
+    await client.query(
+      `UPDATE room_sessions SET metadata = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(nextMetadata), sessionId],
+    );
+    await client.query("COMMIT");
+    return rowToSession({ ...row, metadata: nextMetadata });
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** Record a member joining the active session for attendance.
  *  Validates the session is still active before inserting — rejects post-completion
  *  joins so they cannot inflate the attendance count or re-open left_at.

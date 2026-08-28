@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const storeSource = readFileSync(resolve(here, "../room-store.ts"), "utf8");
 const routesSource = readFileSync(resolve(here, "../../routes/rooms.ts"), "utf8");
+const appSource = readFileSync(resolve(here, "../../app.ts"), "utf8");
 
 test("explicit attendance joins return a row scoped to the exact active session", () => {
   assert.match(storeSource, /WHERE id = \$1::uuid AND room_id = \$2 AND status = 'active'/);
@@ -28,4 +29,20 @@ test("Live Meetings settings route is registered before the generic admin room r
   assert.notEqual(settingsRoute, -1);
   assert.notEqual(genericRoomRoute, -1);
   assert.ok(settingsRoute < genericRoomRoute);
+});
+
+test("API restart recovery turns an in-flight shared Emmaus request into a retryable failure", () => {
+  assert.match(storeSource, /recoverInterruptedSharedEmmausRequests/);
+  assert.match(storeSource, /status = 'active'/);
+  assert.match(storeSource, /activeEmmaus.*status.*generating/s);
+  assert.match(storeSource, /interrupted when Emmaus restarted/);
+  assert.match(appSource, /recoverInterruptedSharedEmmausRequests/);
+});
+
+test("shared Emmaus retries claim the session atomically and reject overlapping generations", () => {
+  assert.match(storeSource, /claimSharedEmmausRequest/);
+  assert.match(storeSource, /FOR UPDATE/);
+  assert.match(storeSource, /EMMAUS_REQUEST_ACTIVE/);
+  assert.match(routesSource, /claimSharedEmmausRequest/);
+  assert.match(routesSource, /status\(409\)/);
 });

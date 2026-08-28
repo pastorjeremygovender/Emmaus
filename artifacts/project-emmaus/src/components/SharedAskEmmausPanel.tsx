@@ -24,7 +24,12 @@ interface SharedAskEmmausPanelProps {
   /** Accumulated streaming text from SSE chunks. */
   streamText: string;
   /** Set when the stream completes. Cleared on next question. */
-  latestAnswer: { question: string; fullText: string; answerId: string | null } | null;
+  latestAnswer: {
+    question: string;
+    fullText: string;
+    answerId: string | null;
+    error?: boolean;
+  } | null;
   onClose: () => void;
 }
 
@@ -110,7 +115,10 @@ export function SharedAskEmmausPanel({
 
   // When the stream completes and we get a new answer, add it to the list
   useEffect(() => {
-    if (!latestAnswer) return;
+    // Failed requests remain in the live state so the leader can retry them
+    // and reconnecting members can see the explicit outcome. They are not
+    // historical answers and should not be added to the answer list.
+    if (!latestAnswer || latestAnswer.error) return;
     if (latestAnswer.answerId && latestAnswer.answerId === latestAnswerIdRef.current) return;
     latestAnswerIdRef.current = latestAnswer.answerId;
     setPreviousAnswers(prev => {
@@ -139,8 +147,7 @@ export function SharedAskEmmausPanel({
     }
   }, [previousAnswers, streamText, activeQuestion]);
 
-  const handleSubmit = async () => {
-    const q = question.trim();
+  const submitQuestion = async (q: string) => {
     if (!q || submitting || (activeQuestion !== null && !generationTimedOut)) return;
     setSubmitting(true);
     setSubmitError('');
@@ -149,11 +156,22 @@ export function SharedAskEmmausPanel({
       await apiSharedAskEmmaus(userId, roomId, sessionId, q, userName);
       setQuestion('');
       inputRef.current?.focus();
-    } catch {
-      setSubmitError('Failed to send. Please try again.');
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : 'Failed to send. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    await submitQuestion(question.trim());
+  };
+
+  const handleRetry = async () => {
+    if (!latestAnswer?.error) return;
+    await submitQuestion(latestAnswer.question.trim());
   };
 
   const isGenerating = activeQuestion !== null && !generationTimedOut;
@@ -243,6 +261,31 @@ export function SharedAskEmmausPanel({
                 The group can try the question again. A completed response will
                 still appear here if it arrives shortly.
               </p>
+            </div>
+          )}
+          {latestAnswer?.error && !isGenerating && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3.5">
+              <p className="text-[13px] font-semibold text-amber-700 dark:text-amber-300">
+                This group question was not completed
+              </p>
+              <div className="mt-2 flex items-start gap-2 text-[13px] text-foreground">
+                <MessageSquare size={14} className="mt-0.5 shrink-0 text-primary" />
+                <span>{latestAnswer.question}</span>
+              </div>
+              <p className="text-[13px] text-muted-foreground mt-1">
+                {latestAnswer.fullText ||
+                  'Emmaus stopped before the group received an answer.'}
+              </p>
+              {isLeader && (
+                <button
+                  type="button"
+                  onClick={() => void handleRetry()}
+                  disabled={submitting}
+                  className="mt-3 rounded-xl bg-amber-600 px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-50"
+                >
+                  {submitting ? 'Trying again…' : 'Try this question again'}
+                </button>
+              )}
             </div>
           )}
         </div>
