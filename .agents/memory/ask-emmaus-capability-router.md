@@ -20,3 +20,9 @@ Typed responses must pass through one final server normalizer before SSE complet
 **Why:** Model metadata and prose are separate trust surfaces, and normalizing only cards or only canonical actions leaves streamed text and conversation history inconsistent.
 
 **How to apply:** Buffer typed model prose until final validation, normalize canonical and model responses through the same function, and keep the authenticated Voice envelope on its existing streaming contract.
+
+Bible-shaped navigation paths must be validated through the canonical book/chapter/verse rules, not only a path-shape regular expression, before they enter metadata or history.
+
+**Why:** A route such as `/bible/read/fakebook/999` has a valid-looking shape but is still an invented destination that can survive into persisted responses.
+
+**How to apply:** Reuse the same route builder used for Bible actions when validating `nextStep` and `nextSteps`; reject impossible references before display or persistence.

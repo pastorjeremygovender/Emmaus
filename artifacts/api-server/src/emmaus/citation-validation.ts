@@ -113,7 +113,7 @@ function canonicalType(type: unknown): EmmausResourceType | null {
   return TYPE_ALIASES[String(type ?? "").toLowerCase()] ?? null;
 }
 
-function stripModelUrls(text: string): string {
+export function stripModelUrls(text: string): string {
   // Internal paths and absolute URLs are application-owned data, not prose.
   return text
     .replace(/https?:\/\/[^\s)\]}"']+/gi, "")
@@ -122,6 +122,34 @@ function stripModelUrls(text: string): string {
     .trim();
 }
 
+/**
+ * Validate a Bible reader path against the same canonical book/chapter rules
+ * used to build routes. A shape-only regular expression would allow a model to
+ * persist destinations such as `/bible/read/fakebook/999`.
+ */
+function isValidBibleReadPath(path: string): boolean {
+  const match = path.match(/^\/bible\/read\/([^/]+)\/(\d+)(?:\?([^#]+))?$/);
+  if (!match) return false;
+
+  let book: string;
+  try {
+    book = decodeURIComponent(match[1]);
+  } catch {
+    return false;
+  }
+  const query = new URLSearchParams(match[3] ?? "");
+  const startVerse = query.get("startVerse");
+  const endVerse = query.get("endVerse");
+  if ([...query.keys()].some((key) => key !== "startVerse" && key !== "endVerse")) return false;
+
+  const canonical = buildScriptureRoute({
+    book,
+    chapter: Number(match[2]),
+    verseStart: startVerse == null ? undefined : Number(startVerse),
+    verseEnd: endVerse == null ? undefined : Number(endVerse),
+  });
+  return canonical === path;
+}
 const PROSE_BOOK_NAMES = [
   "First Cor", "Second Cor", "First Thess", "Second Thess", "First Tim", "Second Tim",
   "First Pet", "Second Pet", "First Jn", "Second Jn", "Third Jn",
@@ -253,7 +281,9 @@ export function normalizeValidatedScriptureProse(text: string): string {
       reference: full,
       displayText: full,
     });
-    return ref?.reference ?? full;
+    // A Bible-shaped but impossible citation is not safe to leave in prose:
+    // it would still look authoritative in the member's answer/history.
+    return ref?.reference ?? "";
   });
 
   const spokenPattern = new RegExp(
@@ -269,7 +299,7 @@ export function normalizeValidatedScriptureProse(text: string): string {
       reference: full,
       displayText: full,
     });
-    return ref?.reference ?? full;
+    return ref?.reference ?? "";
   });
   return normalized;
 }
@@ -383,6 +413,7 @@ export function validateCitations(
   resources: EmmausResource[],
 ): EmmausResponseMetadata {
   const validRoutes = new Set(resources.map(r => r.route));
+  const isValidPath = (path: string) => validRoutes.has(path) || isValidBibleReadPath(path);
   const recommendations = (metadata.recommendations ?? []).filter((item: Recommendation) => {
     if (item.type === "sermon") return false;
     if (item.type === "pastor" || item.type === "prayer") return true;
@@ -399,7 +430,7 @@ export function validateCitations(
   }
 
   const nextStep = metadata.nextStep && typeof metadata.nextStep.path === "string" &&
-    (validRoutes.has(metadata.nextStep.path) || /^\/bible\/read\/[a-z0-9]+\/\d+(?:\?.*)?$/.test(metadata.nextStep.path))
+    isValidPath(metadata.nextStep.path)
     ? { ...metadata.nextStep, path: metadata.nextStep.path.startsWith("http") ? "" : metadata.nextStep.path }
     : null;
 
@@ -408,6 +439,15 @@ export function validateCitations(
     scripture,
     scriptureReferences: metadata.scriptureReferences?.map(validateScripture).filter((r): r is ScriptureRef => !!r) ?? (scripture ? [scripture] : []),
     nextStep,
+    nextSteps: (metadata.nextSteps ?? []).filter((step) => {
+      if (!step.path) return true;
+      if (step.type === "listen") {
+        return (metadata.sermonRecommendations ?? []).some((sermon) =>
+          sermon.watchUrl === step.path || sermon.listenPath === step.path,
+        );
+      }
+      return isValidPath(step.path);
+    }),
     recommendations: recommendations.map(r => ({ ...r, description: r.description ? stripModelUrls(r.description) : r.description })),
   };
 }

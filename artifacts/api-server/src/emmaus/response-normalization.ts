@@ -7,6 +7,7 @@ import type {
 import {
   extractValidatedScriptureReferences,
   normalizeValidatedScriptureProse,
+  stripModelUrls,
   validateCitations,
 } from "./citation-validation.js";
 import type { EmmausResource } from "./resource-catalogue.js";
@@ -116,14 +117,32 @@ function groundResourceClaims(
     ...resources.map((resource) => resource.title.toLowerCase()),
     ...sermons.map((sermon) => sermon.title.toLowerCase()),
   ]);
+  const knownSpeakers = sermons
+    .map((sermon) => sermon.speaker.toLowerCase())
+    .filter((speaker) => speaker.length >= 2);
+  const resourceNamePattern = /\b((?:[A-Z][\w'’-]*\s+){0,5}(?:Walk|Journey|Devotional|Bible Study|Sermon Companion))\b/g;
+  const speakerNamePattern = /\b(?:Pastor|Rev\.?|Reverend|Speaker|Preacher)\s+[A-Za-z][\w'’-]*(?:\s+[A-Za-z][\w'’-]*){0,3}\b/gi;
+  const isKnownTitle = (candidate: string) => {
+    const name = candidate.toLowerCase().trim();
+    if (/^(?:a|an|the|my|your)\s+/i.test(name)) return true;
+    return Array.from(knownTitles).some((title) => title === name || title.includes(name));
+  };
 
   return sentenceParts(answer)
-    .map((sentence) => sentence
-      .replace(/\bPastor Jeremy Govender\b/gi, "Pastor Jeremy")
-      .trim())
+    .map((sentence) => sentence.trim())
     .flatMap((sentence) => {
       const lower = sentence.toLowerCase();
       if (/\bpastor jeremy\b/i.test(sentence) && sermons.length === 0) return [];
+
+      const namedSpeakers = Array.from(sentence.matchAll(speakerNamePattern), (match) => match[0]);
+      if (namedSpeakers.length > 0 && !knownSpeakers.some((speaker) => lower.includes(speaker))) return [];
+
+      const namedResources = Array.from(sentence.matchAll(resourceNamePattern), (match) => match[1]);
+      if (namedResources.some((name) => !isKnownTitle(name))) {
+        return unresolvedSources.length > 0
+          ? ["I couldn't verify that Emmaus resource right now."]
+          : [];
+      }
 
       const titleMentioned = Array.from(knownTitles).some((title) =>
         title.length >= 4 && lower.includes(title),
@@ -136,11 +155,11 @@ function groundResourceClaims(
       const namedResource = sentence.match(
         /\b([A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,5})\s+(Walk|Journey|Devotional|Bible Study|Sermon Companion)\b/,
       );
-       if (namedResource && !titleMentioned) {
+      if (namedResource && !titleMentioned) {
         return unresolvedSources.length > 0
           ? ["I couldn't verify that Emmaus resource right now."]
           : [];
-       }
+      }
 
       const specificResourceClaim =
         /\b(?:this|the|a|an|my|your|emmaus(?:'s)?|in emmaus)\s+(?:emmaus\s+)?(?:walk|journey|devotional(?: series)?|bible study|sermon|sermon companion)\b/i.test(sentence);
@@ -211,7 +230,7 @@ export function normalizeEmmausResponse(input: {
   resources?: ResourceForGrounding[];
   unresolvedSources?: string[];
 }): NormalizedEmmausResponse {
-  const normalizedInputAnswer = normalizeValidatedScriptureProse(input.answer);
+  const normalizedInputAnswer = stripModelUrls(normalizeValidatedScriptureProse(input.answer));
   const metadata = input.resources
     ? validateCitations(input.metadata, input.resources as EmmausResource[])
     : { ...input.metadata };
