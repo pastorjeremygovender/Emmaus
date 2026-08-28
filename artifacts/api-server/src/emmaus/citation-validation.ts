@@ -4,7 +4,24 @@ import type { EmmausResource } from "./resource-catalogue.js";
 import { logger } from "../lib/logger.js";
 
 const aliases: Record<string, string> = {
-  psalm: "psalms", ps: "psalms", "song of solomon": "songofsolomon",
+  psalm: "psalms", psalms: "psalms", ps: "psalms", psa: "psalms",
+  genesis: "genesis", gen: "genesis", ge: "genesis",
+  exodus: "exodus", ex: "exodus",
+  john: "john", jn: "john", jhn: "john",
+  romans: "romans", rom: "romans",
+  hebrews: "hebrews", heb: "hebrews",
+  "1 cor": "1corinthians", "1 corinthians": "1corinthians", "first corinthians": "1corinthians",
+  "2 cor": "2corinthians", "2 corinthians": "2corinthians", "second corinthians": "2corinthians",
+  "1 thess": "1thessalonians", "1 thessalonians": "1thessalonians", "first thessalonians": "1thessalonians",
+  "2 thess": "2thessalonians", "2 thessalonians": "2thessalonians", "second thessalonians": "2thessalonians",
+  "1 tim": "1timothy", "1 timothy": "1timothy", "first timothy": "1timothy",
+  "2 tim": "2timothy", "2 timothy": "2timothy", "second timothy": "2timothy",
+  "1 pet": "1peter", "1 peter": "1peter", "first peter": "1peter",
+  "2 pet": "2peter", "2 peter": "2peter", "second peter": "2peter",
+  "1 jn": "1john", "1 john": "1john", "first john": "1john",
+  "2 jn": "2john", "2 john": "2john", "second john": "2john",
+  "3 jn": "3john", "3 john": "3john", "third john": "3john",
+  "song of solomon": "songofsolomon",
   "song of songs": "songofsolomon", "1 samuel": "1samuel", "2 samuel": "2samuel",
   "1 kings": "1kings", "2 kings": "2kings", "1 chronicles": "1chronicles",
   "2 chronicles": "2chronicles", "1 corinthians": "1corinthians", "2 corinthians": "2corinthians",
@@ -14,14 +31,26 @@ const aliases: Record<string, string> = {
 
 export function normalizeBibleBook(book: string): string | null {
   const raw = book.trim().toLowerCase().replace(/\s+/g, " ");
-  const id = aliases[raw] ?? raw.replace(/\s/g, "");
+  const compact = raw.replace(/\s/g, "");
+  const id = aliases[raw] ?? aliases[compact] ?? compact;
   return Object.prototype.hasOwnProperty.call(BOOK_INTROS, id) ? id : null;
 }
 
-const CANONICAL_BIBLE_BOOK_NAMES: Record<string, string> = {
-  ...Object.fromEntries(Object.keys(BOOK_INTROS).map(id => [id, id])),
-  psalms: "Psalms", songofsolomon: "Song of Solomon", revelation: "Revelation",
-};
+function titleCaseBookId(id: string): string {
+  const numbered = id.match(/^([123])(.*)$/);
+  const base = numbered ? numbered[2] : id;
+  const display = base.replace(/(^|[a-z])([a-z]+)/g, (_, prefix, word) =>
+    `${prefix}${word.charAt(0).toUpperCase()}${word.slice(1)}`,
+  );
+  return numbered ? `${numbered[1]} ${display}` : display;
+}
+
+const CANONICAL_BIBLE_BOOK_NAMES: Record<string, string> = Object.fromEntries(
+  Object.keys(BOOK_INTROS).map(id => [
+    id,
+    id === "psalms" ? "Psalm" : id === "songofsolomon" ? "Song of Solomon" : titleCaseBookId(id),
+  ]),
+);
 
 // Display names are application data, never generic title-casing.
 export function canonicalBibleBookName(book: string): string {
@@ -93,6 +122,10 @@ function stripModelUrls(text: string): string {
 }
 
 const PROSE_BOOK_NAMES = [
+  "First Cor", "Second Cor", "First Thess", "Second Thess", "First Tim", "Second Tim",
+  "First Pet", "Second Pet", "First Jn", "Second Jn", "Third Jn",
+  "1 Cor", "2 Cor", "1 Thess", "2 Thess", "1 Tim", "2 Tim", "1 Pet", "2 Pet",
+  "1 Jn", "2 Jn", "3 Jn", "Jhn", "Jn", "Heb", "Rom", "Gen",
   "First Corinthians", "Second Corinthians", "First Thessalonians",
   "Second Thessalonians", "First Timothy", "Second Timothy", "First Peter",
   "Second Peter", "First John", "Second John", "Third John",
@@ -122,7 +155,10 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
   );
   const found: ScriptureRef[] = [];
   for (const match of text.matchAll(pattern)) {
-    const book = match[1].replace(/^First /i, "1 ").replace(/^Second /i, "2 ").replace(/^Third /i, "3 ");
+    const book = match[1]
+      .replace(/^First /i, "1 ")
+      .replace(/^Second /i, "2 ")
+      .replace(/^Third /i, "3 ");
     const chapter = Number(match[2]);
     const verseStart = match[3] == null ? undefined : Number(match[3]);
     const verseEnd = match[4] == null ? verseStart : Number(match[4]);
@@ -131,6 +167,28 @@ export function extractValidatedScriptureReferences(text: string): ScriptureRef[
       chapter,
       verseStart,
       verseEnd,
+      reference: match[0],
+      displayText: match[0],
+    });
+    if (ref && !found.some(existing => existing.reference.toLowerCase() === ref.reference.toLowerCase())) {
+      found.push(ref);
+    }
+  }
+
+  const spokenPattern = new RegExp(
+    `\\b((?:${proseBookPattern()}))\\s+chapter\\s+(\\d{1,3})(?:\\s*,?\\s*verse\\s+(\\d{1,3})(?:\\s*(?:to|through|[-–—])\\s*(\\d{1,3}))?)?\\b`,
+    "gi",
+  );
+  for (const match of text.matchAll(spokenPattern)) {
+    const book = match[1]
+      .replace(/^First /i, "1 ")
+      .replace(/^Second /i, "2 ")
+      .replace(/^Third /i, "3 ");
+    const ref = validateScripture({
+      book,
+      chapter: Number(match[2]),
+      verseStart: match[3] == null ? undefined : Number(match[3]),
+      verseEnd: match[4] == null ? undefined : Number(match[4]),
       reference: match[0],
       displayText: match[0],
     });
@@ -222,7 +280,7 @@ export function resolveResourceRoute(
   return resource?.route ?? null;
 }
 
-function validateScripture(value: unknown): ScriptureRef | null {
+export function validateScripture(value: unknown): ScriptureRef | null {
   if (!value || typeof value !== "object") return null;
   const ref = value as Record<string, unknown>;
   const book = normalizeBibleBook(String(ref.book ?? ""));
@@ -230,13 +288,18 @@ function validateScripture(value: unknown): ScriptureRef | null {
   const verseStart = ref.verseStart == null ? undefined : Number(ref.verseStart);
   const verseEnd = ref.verseEnd == null ? undefined : Number(ref.verseEnd);
   if (!book || !Number.isInteger(chapter) || !buildScriptureRoute({ book, chapter, verseStart, verseEnd })) return null;
+  const canonicalReference = `${canonicalBibleBookName(book)} ${chapter}${
+    verseStart === undefined
+      ? ""
+      : `:${verseStart}${verseEnd !== undefined && verseEnd !== verseStart ? `–${verseEnd}` : ""}`
+  }`;
   return {
-    reference: typeof ref.reference === "string" ? stripModelUrls(ref.reference) : `${canonicalBibleBookName(book)} ${chapter}`,
+    reference: canonicalReference,
     book,
     chapter,
     ...(verseStart !== undefined ? { verseStart } : {}),
     ...(verseEnd !== undefined ? { verseEnd } : {}),
-    displayText: typeof ref.displayText === "string" ? stripModelUrls(ref.displayText).slice(0, 1000) : undefined,
+    displayText: canonicalReference,
   };
 }
 

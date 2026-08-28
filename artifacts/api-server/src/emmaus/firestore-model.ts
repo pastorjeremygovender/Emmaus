@@ -131,6 +131,10 @@ export type EmmausResourceType =
 
 export interface EmmausResponseMetadata {
   answer?: string;
+  /** Final server-normalized answer used by typed Ask Emmaus rendering. */
+  displayAnswer?: string;
+  /** Plain-language form reserved for future non-visual clients. */
+  speakableAnswer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer rendered with emoji icons (📖 🙏 🎧 🚶).

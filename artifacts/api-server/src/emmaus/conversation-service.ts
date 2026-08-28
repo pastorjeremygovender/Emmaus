@@ -57,6 +57,7 @@ import { classifyEmmausIntent } from "@workspace/api-zod";
 import { checkSafetyKeywordsOnly } from "./safety-layer.js";
 import { resolveCanonicalAskRequest } from "./canonical-tools.js";
 import { routeAskEmmausRequest } from "./intent-router.js";
+import { normalizeEmmausResponse } from "./response-normalization.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -438,19 +439,27 @@ async function completeCanonicalResponse(
       ? { pipelineTimings: { ...pipelineTimings, totalMs: pipelineStartMs ? Date.now() - pipelineStartMs : pipelineTimings.totalMs } }
       : {}),
   };
-  const answer = finalMeta.answer ?? "I found the relevant Emmaus destination for you.";
+  const canonicalAnswer = finalMeta.answer ?? "I found the relevant Emmaus destination for you.";
+  const normalized = normalizeEmmausResponse({
+    answer: canonicalAnswer,
+    metadata: finalMeta,
+  });
+  const normalizedMeta = {
+    ...normalized.metadata,
+    requestedIntent: requestedIntent.mode,
+    ...(requestId ? { requestId } : {}),
+  };
+  const answer = normalized.displayAnswer;
   // Keep canonical responses progressive for the existing client experience,
   // without pretending that a deterministic result is an LLM token stream.
-  for (const chunk of answer.match(/.{1,180}(?:\s|$)/g) ?? [answer]) {
-    sseWrite(res, "text", { content: chunk });
-  }
+  sseWrite(res, "text", { content: answer });
 
   const assistantMsg = await store.addMessage({
     conversationId,
     userId,
     role: "assistant",
     content: answer,
-    metadata: finalMeta,
+    metadata: normalizedMeta,
     promptVersion: PROMPT_VERSION,
     entryPoint: builtCtx.entryPoint,
     safetyChecked: true,
@@ -460,7 +469,7 @@ async function completeCanonicalResponse(
   sseWrite(res, "done", {
     conversationId,
     messageId: assistantMsg.id,
-    metadata: finalMeta,
+    metadata: normalizedMeta,
     promptVersion: PROMPT_VERSION,
   } satisfies SseDonePayload);
   res.end();

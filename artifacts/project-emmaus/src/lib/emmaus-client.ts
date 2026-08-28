@@ -115,6 +115,8 @@ export interface SermonRecommendation {
 
 export interface EmmausMetadata {
   answer?: string;
+  displayAnswer?: string;
+  speakableAnswer?: string;
   scripture: ScriptureRef | null;
   nextStep: NextStep | null;
   /** Practical next-steps footer (📖 🙏 🎧 🚶). */
