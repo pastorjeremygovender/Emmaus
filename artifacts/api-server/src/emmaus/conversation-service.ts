@@ -63,6 +63,7 @@ import { checkSafetyKeywordsOnly } from "./safety-layer.js";
 import { resolveCanonicalAskRequest } from "./canonical-tools.js";
 import { routeAskEmmausRequest } from "./intent-router.js";
 import { normalizeEmmausResponse } from "./response-normalization.js";
+import { createTypedStreamConsumer } from "./typed-stream-normalizer.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -576,6 +577,7 @@ export async function handleConversation(
     retrievalMemoriesMs: 0,
     retrievalRoomsMs: 0,
     modelTtftMs: null,
+    firstValidatedVisibleMs: null,
     modelGenerationMs: 0,
     validationMs: 0,
     totalMs: 0,
@@ -905,6 +907,39 @@ export async function handleConversation(
   let pastMetaOpen = false;
   let streamedText = "";
   let firstTextEmitted = false;
+  const typedStream = !isVoiceRequest
+    ? createTypedStreamConsumer(
+        {
+          resources: resourceCatalogue.allResources ?? resourceCatalogue.resources,
+          sermonRecommendations: sermonResults.map((sermon) => ({
+            sermonId: sermon.sermonId,
+            ...(sermon.segmentId ? { segmentId: sermon.segmentId } : {}),
+            source: sermon.source,
+            title: sermon.title,
+            speaker: sermon.speaker,
+            sermonDate: sermon.sermonDate,
+            excerpt: sermon.excerpt,
+            reason: sermon.reason,
+            ...(sermon.openPath ? { openPath: sermon.openPath } : {}),
+            ...(sermon.timestampedUrl ? { watchUrl: sermon.timestampedUrl } : {}),
+            listenAvailable: Boolean(sermon.audioUrl),
+            ...(sermon.listenPath ? { listenPath: sermon.listenPath } : {}),
+          })),
+          unresolvedSources: resourceCatalogue.sourceFailures,
+        },
+        (content) => {
+          if (!content) return;
+          if (pipelineTimings.firstValidatedVisibleMs == null) {
+            pipelineTimings.firstValidatedVisibleMs = ms();
+            logger.info(
+              `[emmaus:${reqId}] first_validated_visible_ms=${pipelineTimings.firstValidatedVisibleMs}`,
+            );
+          }
+          sseWrite(res, "text", { content });
+          streamedText += content;
+        },
+      )
+    : null;
   const tLLM = Date.now();
 
   logger.info(`[emmaus:${reqId}] llm_start context_ms=${tLLM - t0}`);
@@ -932,24 +967,34 @@ export async function handleConversation(
         const metaIdx = emitBuffer.indexOf(META_OPEN);
         if (metaIdx !== -1) {
           const beforeMeta = emitBuffer.slice(0, metaIdx);
-          const safeChunk = isVoiceRequest && sermonResults.length > 0
-            ? sanitizeStreamingText(beforeMeta)
-            : "";
-          if (isVoiceRequest && safeChunk) {
-            sseWrite(res, "text", { content: safeChunk });
-            streamedText += safeChunk;
+          if (isVoiceRequest) {
+            const safeChunk = sermonResults.length > 0
+              ? sanitizeStreamingText(beforeMeta)
+              : "";
+            if (safeChunk) {
+              sseWrite(res, "text", { content: safeChunk });
+              streamedText += safeChunk;
+            }
+          } else {
+            typedStream?.push(beforeMeta);
+            typedStream?.flush();
           }
           pastMetaOpen = true;
           emitBuffer = "";
         } else {
-          const safeLen = isVoiceRequest && sermonResults.length > 0
+          const safeLen = isVoiceRequest
             ? safeStreamingLength(emitBuffer)
-            : 0;
+            : Math.max(0, emitBuffer.length - (META_OPEN.length - 1));
           if (safeLen > 0) {
-            const safeChunk = sanitizeStreamingText(emitBuffer.slice(0, safeLen));
-            if (isVoiceRequest && safeChunk) {
-              sseWrite(res, "text", { content: safeChunk });
-              streamedText += safeChunk;
+            const safeText = emitBuffer.slice(0, safeLen);
+            if (isVoiceRequest) {
+              const safeChunk = sanitizeStreamingText(safeText);
+              if (safeChunk) {
+                sseWrite(res, "text", { content: safeChunk });
+                streamedText += safeChunk;
+              }
+            } else {
+              typedStream?.push(safeText);
             }
             emitBuffer = emitBuffer.slice(safeLen);
           }
@@ -976,6 +1021,10 @@ export async function handleConversation(
       sseWrite(res, "text", { content: safeChunk });
       streamedText += safeChunk;
     }
+  }
+  if (!isVoiceRequest) {
+    if (!pastMetaOpen && emitBuffer) typedStream?.push(emitBuffer);
+    typedStream?.flush();
   }
 
   // Flush remaining buffer

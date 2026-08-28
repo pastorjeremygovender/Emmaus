@@ -187,6 +187,7 @@ export interface EmmausResponseMetadata {
     retrievalMemoriesMs: number;
     retrievalRoomsMs: number;
     modelTtftMs: number | null;
+    firstValidatedVisibleMs: number | null;
     modelGenerationMs: number;
     validationMs: number;
     totalMs: number;

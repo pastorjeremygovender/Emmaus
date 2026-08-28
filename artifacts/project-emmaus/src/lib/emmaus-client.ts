@@ -149,6 +149,21 @@ export interface EmmausMetadata {
     label: string;
     route: string;
   }>;
+  pipelineTimings?: {
+    authMs: number | null;
+    contextMs: number;
+    routingMs: number;
+    retrievalScriptureMs: number;
+    retrievalSermonsMs: number;
+    retrievalResourcesMs: number;
+    retrievalMemoriesMs: number;
+    retrievalRoomsMs: number;
+    modelTtftMs: number | null;
+    firstValidatedVisibleMs: number | null;
+    modelGenerationMs: number;
+    validationMs: number;
+    totalMs: number;
+  };
 }
 
 export interface ConversationStub {

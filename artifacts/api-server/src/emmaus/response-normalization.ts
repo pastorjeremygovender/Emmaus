@@ -20,6 +20,12 @@ type ResourceForGrounding = Pick<
   "type" | "resourceId" | "parentId" | "title" | "route" | "relevanceReasons"
 >;
 
+export interface StreamingGrounding {
+  resources?: ResourceForGrounding[];
+  sermonRecommendations?: SermonRecommendation[];
+  unresolvedSources?: string[];
+}
+
 export interface NormalizedEmmausResponse {
   metadata: EmmausResponseMetadata;
   displayAnswer: string;
@@ -97,6 +103,16 @@ function dedupeActions(metadata: EmmausResponseMetadata): void {
 
 function sentenceParts(text: string): string[] {
   return text.match(/[^.!?]+[.!?]+|[^.!?]+$/gu)?.map((part) => part.trim()).filter(Boolean) ?? [];
+}
+
+export function stripUnverifiedSermonMentions(
+  text: string,
+  sermons: SermonRecommendation[] = [],
+): string {
+  if (sermons.length > 0) return text;
+  return sentenceParts(text)
+    .filter((sentence) => !/\b(?:sermon|preach(?:ed|es|ing)?|preacher)\b/i.test(sentence))
+    .join(" ");
 }
 
 function hasResourceType(resources: ResourceForGrounding[], types: EmmausResourceType[]): boolean {
@@ -208,6 +224,30 @@ function speakableAnswer(answer: string): string {
   const shortened = plain.slice(0, MAX_SPEAKABLE_CHARS);
   const boundary = Math.max(shortened.lastIndexOf(". "), shortened.lastIndexOf("! "), shortened.lastIndexOf("? "));
   return (boundary >= 180 ? shortened.slice(0, boundary + 1) : shortened).trim();
+}
+
+/**
+ * Normalize one complete typed-stream unit with the same citation and resource
+ * grounding rules as the final response. It intentionally has no fallback or
+ * length truncation: the final full-answer normalizer remains authoritative.
+ */
+export function normalizeEmmausStreamingUnit(
+  answer: string,
+  grounding: StreamingGrounding = {},
+): string {
+  const normalized = stripUnverifiedSermonMentions(
+    stripModelUrls(normalizeValidatedScriptureProse(answer)),
+    grounding.sermonRecommendations ?? [],
+  );
+  const grounded = grounding.resources
+    ? groundResourceClaims(
+        normalized,
+        grounding.resources,
+        grounding.sermonRecommendations ?? [],
+        grounding.unresolvedSources,
+      )
+    : normalized;
+  return grounded.replace(/\s{2,}/g, " ").trim();
 }
 
 function normalizeFollowUps(prompts: string[]): string[] {
