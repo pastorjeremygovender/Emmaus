@@ -20,6 +20,12 @@ import { mergeRoomMessages, reconcileSentRoomMessage } from '@/lib/room-message-
 const MAX_RECONNECT_ATTEMPTS = 6;
 const BASE_BACKOFF_MS = 1_000;
 
+interface RoomChatProps {
+  /** Embedded Discussion keeps the parent Room and its LiveKit connection mounted. */
+  embedded?: boolean;
+  onClose?: () => void;
+}
+
 function formatTime(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -61,7 +67,7 @@ function groupByDate(messages: RoomMessage[]): { date: string; items: RoomMessag
   return groups;
 }
 
-export default function RoomChat() {
+export default function RoomChat({ embedded = false, onClose }: RoomChatProps = {}) {
   const { roomId } = useParams<{ roomId: string }>();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -95,6 +101,17 @@ export default function RoomChat() {
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  const closeDiscussionView = useCallback(() => {
+    if (onCloseRef.current) {
+      onCloseRef.current();
+      return;
+    }
+    setLocation(`/rooms/${String(roomId)}`);
+  }, [roomId, setLocation]);
 
   // Load room name and context from history state
   useEffect(() => {
@@ -132,7 +149,7 @@ export default function RoomChat() {
           !detail.activeSession ||
           detail.activeSession.metadata?.activeTool !== 'discussion'
         ) {
-          setLocation(`/rooms/${String(roomId)}`);
+          closeDiscussionView();
           return;
         }
         if (!discussionId && detail.activeSession?.id) {
@@ -146,7 +163,7 @@ export default function RoomChat() {
         }
       });
     return () => { cancelled = true; };
-  }, [roomId, user?.id, discussionId]);
+  }, [roomId, user?.id, discussionId, closeDiscussionView]);
 
   // RoomChat has its own message SSE stream, so it must also observe the
   // session stream while open. Otherwise a leader's tool_closed event reaches
@@ -161,7 +178,7 @@ export default function RoomChat() {
     const closeDiscussion = () => {
       if (cancelled || closed) return;
       closed = true;
-      setLocation(`/rooms/${String(roomId)}`);
+      closeDiscussionView();
     };
 
     const connect = async () => {
@@ -241,7 +258,7 @@ export default function RoomChat() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [roomId, sessionId, user?.id, setLocation]);
+  }, [roomId, sessionId, user?.id, setLocation, discussionId, closeDiscussionView]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -496,7 +513,7 @@ export default function RoomChat() {
     setClosingDiscussion(true);
     try {
       await apiCloseSharedTool(user.id, String(roomId), 'discussion');
-      setLocation(`/rooms/${roomId}`);
+      closeDiscussionView();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Could not close Group Discussion.');
     } finally {
@@ -525,12 +542,12 @@ export default function RoomChat() {
   const groups = groupByDate(mergeRoomMessages(messages, []));
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col">
+    <div className={`${embedded ? 'fixed inset-0 z-[60]' : 'min-h-[100dvh]'} bg-background flex flex-col`}>
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b border-border/50 shrink-0">
         <div className="flex items-center h-14 px-4 max-w-[480px] mx-auto gap-3">
           <button
-            onClick={() => goBackOrFallback(`/rooms/${roomId}`, setLocation)}
+            onClick={() => embedded ? closeDiscussionView() : goBackOrFallback(`/rooms/${roomId}`, setLocation)}
             className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Back"
           >

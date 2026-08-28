@@ -5,10 +5,10 @@ description: Durable synchronization rules for shared Room tools and group Ask E
 
 The session event stream is the authoritative coordination channel for shared
 Room tools, while the active session metadata is the reconnect/late-subscriber
-source of truth. A page that owns a separate message stream must also subscribe
-to session events when it renders a shared tool.
+source of truth. A surface that owns a separate message stream must also
+subscribe to session events when it renders a shared tool.
 
-**Why:** Group Discussion is rendered on its own route, so listening only to
+**Why:** Group Discussion has its own message stream, so listening only to
 message SSE cannot receive a leader's tool-close event. Shared Ask Emmaus can
 also begin or finish while a browser is reconnecting; ephemeral chunks alone
 leave a member stuck in a loading state.
@@ -57,3 +57,15 @@ first visible text and full completion in about two seconds in a real Room test.
 **How to apply:** Keep private/deep Ask Emmaus routing separate from the shared
 Room path. Preserve immediate SSE delivery, periodic reconnect-safe snapshots,
 final persistence, stale-request cancellation, and the existing retryable timeout.
+
+An active live audio/video connection must remain owned by the Room meeting
+screen. Shared tools, including Discussion, must render as in-Room overlays or
+surfaces rather than replacing the Room route.
+
+**Why:** Route replacement unmounted the LiveKit component, which removed every
+participant from audio/video whenever Discussion or a presentation transition
+left the Room screen.
+
+**How to apply:** Keep the Room and LiveKit subtree mounted while changing only
+query-controlled tool surfaces. Legacy tool URLs may redirect into that surface,
+but opening or closing a tool must never create a new media connection.

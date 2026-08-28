@@ -42,6 +42,10 @@ const mediaBubbleSource = readFileSync(
   resolve(process.cwd(), 'src/components/MediaMessageBubble.tsx'),
   'utf8',
 );
+const appSource = readFileSync(
+  resolve(process.cwd(), 'src/App.tsx'),
+  'utf8',
+);
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
     expect(roomDetailSource).not.toContain('Attendance auto-record');
@@ -179,7 +183,19 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('scrollIntoView');
     expect(roomDetailSource).toContain('onStop={() => {');
     expect(roomDetailSource).toContain('onClose={() =>');
-    expect(roomDetailSource).toContain('`/rooms/${String(roomId)}/chat${discussion}`');
+    expect(roomDetailSource).toContain('?surface=discussion');
+  });
+
+  it('keeps Discussion inside the mounted Room so LiveKit survives tool transitions', () => {
+    expect(roomDetailSource).toContain('<RoomChat');
+    expect(roomDetailSource).toContain('embedded');
+    expect(roomDetailSource).toContain("presentationQuery.get('surface') === 'discussion'");
+    expect(roomChatSource).toContain("'fixed inset-0 z-[60]'");
+    expect(roomChatSource).toContain('Embedded Discussion keeps the parent Room and its LiveKit connection mounted.');
+    expect(appSource).toContain('function LegacyRoomChatRedirect');
+    expect(appSource).toContain('?surface=discussion');
+    expect(appSource).not.toContain('component={RoomChat}');
+    expect(roomDetailSource).not.toContain('`/rooms/${roomId}/chat');
   });
 
   it('shares a transient raise-hand signal through LiveKit attributes', () => {

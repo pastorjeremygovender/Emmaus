@@ -1,5 +1,5 @@
 import React, { useLayoutEffect } from 'react';
-import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
+import { Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
 import { AuthProvider } from './contexts/AuthContext';
 import { JourneyProvider } from './contexts/JourneyContext';
 import { RoomsProvider } from './contexts/RoomsContext';
@@ -69,7 +69,6 @@ import InviteMembers from '@/pages/rooms/InviteMembers';
 import SharedJourneyView from '@/pages/rooms/SharedJourneyView';
 import RoomDiscussion from '@/pages/rooms/RoomDiscussion';
 import RoomSettings from '@/pages/rooms/RoomSettings';
-import RoomChat from '@/pages/rooms/RoomChat';
 
 /**
  * ScrollToTop — scrolls to (0, 0) on every pathname change.
@@ -96,6 +95,21 @@ function LegacyDailyRhythmRedirect({ day }: { day: string }) {
   React.useEffect(() => {
     setLocation(`/daily-rhythm/day/${day}`);
   }, [day]);
+  return null;
+}
+
+/** Keep old Discussion URLs working without mounting a separate Room screen. */
+function LegacyRoomChatRedirect() {
+  const { roomId } = useParams<{ roomId: string }>();
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    if (!roomId) return;
+    const discussionId = new URLSearchParams(window.location.search).get('discussionId');
+    const discussion = discussionId
+      ? `&discussionId=${encodeURIComponent(discussionId)}`
+      : '';
+    setLocation(`/rooms/${roomId}?surface=discussion${discussion}`, { replace: true });
+  }, [roomId, setLocation]);
   return null;
 }
 
@@ -162,7 +176,7 @@ function Router() {
       <Route path="/rooms" component={Rooms} />
       <Route path="/rooms/create" component={CreateRoom} />
       <Route path="/rooms/join" component={JoinRoom} />
-      <Route path="/rooms/:roomId/chat" component={RoomChat} />
+      <Route path="/rooms/:roomId/chat" component={LegacyRoomChatRedirect} />
       <Route path="/rooms/:roomId/invite" component={InviteMembers} />
       <Route path="/rooms/:roomId/settings" component={RoomSettings} />
       <Route path="/rooms/:roomId/journey/:journeyId/view" component={SharedJourneyView} />

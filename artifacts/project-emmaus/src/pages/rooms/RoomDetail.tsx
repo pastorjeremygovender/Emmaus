@@ -50,6 +50,7 @@ import {
 } from '@/lib/rooms-api-media';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { MediaMessageBubble } from '@/components/MediaMessageBubble';
+import RoomChat from '@/pages/rooms/RoomChat';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -111,6 +112,7 @@ export default function RoomDetail() {
   const presentationQuery = new URLSearchParams(window.location.search);
   const presentationReturnToChat = presentationQuery.get('return') === 'chat';
   const presentationDiscussionId = presentationQuery.get('discussionId');
+  const discussionSurfaceOpen = presentationQuery.get('surface') === 'discussion';
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [room, setRoom] = useState<RoomDetailType | null>(null);
@@ -306,7 +308,7 @@ export default function RoomDetail() {
       const discussion = presentationDiscussionId
         ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
         : '';
-      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+      setLocation(`/rooms/${String(roomId)}?surface=discussion${discussion ? `&${discussion.slice(1)}` : ''}`);
     }
   }, [lastEvent, presentationDiscussionId, presentationReturnToChat, roomId, setLocation]);
 
@@ -643,7 +645,7 @@ export default function RoomDetail() {
       sessionId: activeSession?.id ?? null,
       discussionId: discussionId ?? null,
     }, '');
-    setLocation(`/rooms/${roomId}/chat${discussionId ? `?discussionId=${encodeURIComponent(discussionId)}` : ''}`);
+    setLocation(`/rooms/${roomId}?surface=discussion${discussionId ? `&discussionId=${encodeURIComponent(discussionId)}` : ''}`);
   };
 
   // OPEN_GROUP_DISCUSSION is authoritative: every joined device receives the
@@ -1321,6 +1323,13 @@ export default function RoomDetail() {
         />
       )}
 
+      {discussionSurfaceOpen && activeSession && hasJoinedCurrentMeeting && (
+        <RoomChat
+          embedded
+          onClose={() => setLocation(`/rooms/${String(roomId)}`)}
+        />
+      )}
+
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <main className="px-5 pt-5 max-w-[480px] mx-auto pb-6">
 
@@ -1924,7 +1933,7 @@ export default function RoomDetail() {
                       const discussion = presentationDiscussionId
                         ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
                         : '';
-                      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+                      setLocation(`/rooms/${String(roomId)}?surface=discussion${discussion ? `&${discussion.slice(1)}` : ''}`);
                     }
                   }}
                   onClose={() => {
@@ -1933,7 +1942,7 @@ export default function RoomDetail() {
                       const discussion = presentationDiscussionId
                         ? `?discussionId=${encodeURIComponent(presentationDiscussionId)}`
                         : '';
-                      setLocation(`/rooms/${String(roomId)}/chat${discussion}`);
+                      setLocation(`/rooms/${String(roomId)}?surface=discussion${discussion ? `&${discussion.slice(1)}` : ''}`);
                     }
                   }}
                 />
