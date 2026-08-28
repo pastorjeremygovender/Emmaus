@@ -21,3 +21,11 @@ test("Group Discussion requires current-session attendance while a meeting is ac
   assert.match(routesSource, /AND left_at IS NULL/);
   assert.match(routesSource, /Join the active meeting before opening Group Discussion/);
 });
+
+test("Live Meetings settings route is registered before the generic admin room route", () => {
+  const settingsRoute = routesSource.indexOf('router.get("/admin/video-settings"');
+  const genericRoomRoute = routesSource.indexOf('router.get("/admin/:roomId"');
+  assert.notEqual(settingsRoute, -1);
+  assert.notEqual(genericRoomRoute, -1);
+  assert.ok(settingsRoute < genericRoomRoute);
+});
