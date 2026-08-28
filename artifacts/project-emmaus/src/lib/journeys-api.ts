@@ -399,6 +399,10 @@ async function apiFetch<T>(
   };
   const res = await fetch(getApiUrl(path), {
     ...fetchOptions,
+    // Journey catalogue and progress are account-specific. Do not let the
+    // browser turn a valid response into a bare 304 that this JSON client
+    // cannot rehydrate.
+    cache: 'no-store',
     credentials: 'include',   // always send the signed emmaus_uid session cookie; cannot be overridden
     headers,
   });

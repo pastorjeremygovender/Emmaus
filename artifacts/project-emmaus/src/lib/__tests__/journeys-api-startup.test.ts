@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getDailyRhythmStartup,
+  listPublishedJourneys,
   journeyDisplayOriginForSource,
   parseJourneyDisplayOrigin,
 } from '@/lib/journeys-api';
@@ -64,6 +65,28 @@ describe('getDailyRhythmStartup response contract', () => {
     expect(firstHeaders.get('X-Emmaus-Startup-Session')).toBeTruthy();
     expect(retryHeaders.get('X-Emmaus-Startup-Session'))
       .toBe(firstHeaders.get('X-Emmaus-Startup-Session'));
+  });
+});
+
+describe('journey catalogue cache policy', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('bypasses conditional browser caching for the published catalogue', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ journeys: [] }), { status: 200 }),
+    );
+
+    await expect(listPublishedJourneys()).resolves.toEqual([]);
+    expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({
+      cache: 'no-store',
+      credentials: 'include',
+    });
   });
 });
 

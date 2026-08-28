@@ -95,7 +95,10 @@ export async function fetchNextSteps(params?: {
   const url = `/api/next-steps${qs.toString() ? `?${qs}` : ''}`;
   // credentials:'include' sends the session cookie so the server can resolve
   // user identity via extractUserId() and return personalised progress + badges.
-  const res = await fetch(url, { credentials: 'include' });
+  // Discovery includes account-specific progress and badges. A conditional
+  // browser request can produce a body-less 304, which this JSON client
+  // cannot rehydrate.
+  const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to load Next Steps (${res.status})`);
   return res.json() as Promise<NextStepsData>;
 }

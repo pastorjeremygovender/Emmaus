@@ -39,6 +39,9 @@ async function apiFetch<T>(
   };
   const res = await fetch(getApiUrl(path), {
     credentials: 'include',
+    // Collection visibility and membership are part of the authenticated
+    // discovery experience; avoid body-less 304 responses.
+    cache: 'no-store',
     headers,
     ...fetchOptions,
   });
