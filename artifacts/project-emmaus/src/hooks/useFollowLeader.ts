@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
+import { apiGetSession, apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
 import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary, PresentationState } from '@/lib/rooms-types';
 import { roomSessionAckKey } from '@/lib/account-storage';
 
@@ -588,6 +588,60 @@ export function useFollowLeader({
       es?.close();
     };
   }, [roomId, userId, handleEvent]);
+
+  // SSE is intentionally best-effort. Reconcile a generating group question
+  // against the durable session row so a dropped emmaus_done event can never
+  // leave every client behind an indefinite spinner.
+  useEffect(() => {
+    if (!roomId || !userId || emmausQuestion === null) return;
+    let destroyed = false;
+
+    const reconcile = async () => {
+      try {
+        const session = await apiGetSession(userId, roomId);
+        if (destroyed) return;
+        const state = session?.metadata?.activeEmmaus as {
+          requestId?: string;
+          question?: string;
+          text?: string;
+          status?: 'generating' | 'completed' | 'failed';
+          answerId?: string | null;
+        } | undefined;
+        if (
+          !session ||
+          session.metadata?.activeTool !== 'ask-emmaus' ||
+          !state?.requestId
+        ) {
+          emmausRequestRef.current = null;
+          setEmmausQuestion(null);
+          setEmmausStreamText('');
+          setEmmausAnswer(null);
+          return;
+        }
+        if (state.requestId !== emmausRequestRef.current) return;
+        setEmmausStreamText(state.text ?? '');
+        if (state.status === 'completed' || state.status === 'failed') {
+          setEmmausAnswer({
+            question: state.question ?? emmausQuestion,
+            fullText: state.text ?? '',
+            answerId: state.answerId ?? null,
+            error: state.status === 'failed',
+          });
+          setEmmausQuestion(null);
+        }
+      } catch {
+        // Keep the realtime state and try again; temporary HTTP failures must
+        // not replace a valid in-progress answer with an error.
+      }
+    };
+
+    void reconcile();
+    const timer = setInterval(() => void reconcile(), 3_000);
+    return () => {
+      destroyed = true;
+      clearInterval(timer);
+    };
+  }, [roomId, userId, emmausQuestion]);
 
   return {
     activeSession,

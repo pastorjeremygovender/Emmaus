@@ -332,6 +332,10 @@ export function VideoRoom({
   }, [isInCall, fetchStatus]);
 
   const handleStart = async () => {
+    if (hasJoinedMeeting === false) {
+      setActionError(`Join the meeting first, then start Live ${meetingMode === 'audio' ? 'Audio' : 'Video'}.`);
+      return;
+    }
     setActioning(true);
     setActionError('');
     try {
@@ -568,7 +572,7 @@ export function VideoRoom({
       <div className="space-y-2">
         <button
           onClick={handleStart}
-          disabled={actioning}
+          disabled={actioning || hasJoinedMeeting === false}
           className="w-full text-left p-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
         >
           <div className="flex items-center gap-4">
@@ -588,6 +592,11 @@ export function VideoRoom({
             </div>
           </div>
         </button>
+        {hasJoinedMeeting === false && (
+          <p className="text-[12px] text-center text-muted-foreground">
+            Join the meeting before starting live {meetingMode}.
+          </p>
+        )}
         {actionError && (
           <div className="flex items-start gap-2 rounded-xl bg-destructive/10 px-4 py-3">
             <AlertCircle size={14} className="text-destructive mt-0.5 shrink-0" />

@@ -329,6 +329,20 @@ router.post("/:roomId/video/start", async (req, res) => {
       return;
     }
 
+    // The standalone live control may be used while a text meeting is already
+    // active. It must obey the same explicit-attendance boundary as token
+    // issuance; Room membership or host permission alone is not attendance.
+    const activeSession = await getActiveSession(String(roomId));
+    if (!activeSession) {
+      res.status(409).json({ error: "Start or join the meeting before starting live audio or video." });
+      return;
+    }
+    const attending = await hasActiveSessionAttendance(activeSession.id, String(roomId), userId);
+    if (!attending) {
+      res.status(403).json({ error: "Join the meeting before starting live audio or video." });
+      return;
+    }
+
     // Concurrent room limit
     const activeCount = await getActiveVideoRoomCount();
     if (activeCount >= settings.maxConcurrentRooms) {
@@ -1995,10 +2009,11 @@ router.post("/:roomId/session/tool-close", async (req, res) => {
       res.status(409).json({ error: "There is no active meeting." });
       return;
     }
-    if (session.metadata.activeTool && session.metadata.activeTool !== tool) {
-      res.json({ ok: true, ignored: true });
-      return;
-    }
+    // Always broadcast the close for the requested surface. A member may still
+    // have an older Discussion route open after another shared tool replaced
+    // it; silently ignoring that close strands those clients in the old route.
+    // clearSharedTool itself only clears durable state when this tool still
+    // owns activeTool, so closing an older surface cannot erase the replacement.
     await clearSharedTool(String(roomId), tool as Parameters<typeof clearSharedTool>[1]);
     if (tool === "poll") await clearActivePoll(String(roomId), session.id);
     if (tool === "presentation") await stopPresentation(String(roomId));
@@ -2845,6 +2860,12 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
         sentBy: userId,
         at: new Date().toISOString(),
       });
+      console.info("[Rooms] Shared Ask Emmaus completed", {
+        roomId: String(roomId),
+        sessionId: claimedSession.id,
+        requestId,
+        answerId: answer.id,
+      });
     } catch (err) {
       const errorMessage = err instanceof Error && err.message.includes("timed out")
         ? "Emmaus took too long to respond. Please try again."
@@ -2871,6 +2892,12 @@ router.post("/:roomId/session/ask-emmaus", async (req, res) => {
         },
         sentBy: userId,
         at: new Date().toISOString(),
+      });
+      console.error("[Rooms] Shared Ask Emmaus failed", {
+        roomId: String(roomId),
+        sessionId: claimedSession.id,
+        requestId,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   })();

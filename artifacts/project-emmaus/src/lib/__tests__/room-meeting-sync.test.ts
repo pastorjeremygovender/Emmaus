@@ -79,6 +79,15 @@ describe('active meeting synchronization contract', () => {
     expect(videoRoomSource).toContain("'Microphone' : 'Camera and microphone'");
   });
 
+  it('requires meeting attendance before opening the LiveKit connection', () => {
+    expect(roomDetailSource).toContain('hasJoinedMeeting={hasJoinedCurrentMeeting}');
+    expect(roomDetailSource).toContain('if (!hasJoinedCurrentMeeting)');
+    expect(roomDetailSource).toContain('Join the meeting before starting live');
+    expect(videoRoomSource).toContain('hasJoinedMeeting === false');
+    expect(videoRoomSource).toContain('disabled={actioning || hasJoinedMeeting === false}');
+    expect(videoRoomSource).toContain('Join the meeting first, then join Live Audio.');
+  });
+
   it('persists shared-tool replacement and closes it for every connected device', () => {
     expect(roomsApiSource).toContain('/session/tool-close');
     expect(roomDetailSource).toContain("handleCloseSharedTool('scripture'");
@@ -127,5 +136,7 @@ describe('active meeting synchronization contract', () => {
     expect(sharedAskSource).toContain('try the question again');
     expect(sharedAskSource).toContain('latestAnswer?.error');
     expect(sharedAskSource).toContain('Try this question again');
+    expect(followLeaderSource).toContain('apiGetSession(userId, roomId)');
+    expect(followLeaderSource).toContain('setInterval(() => void reconcile(), 3_000)');
   });
 });

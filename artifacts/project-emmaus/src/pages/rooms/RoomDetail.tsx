@@ -399,10 +399,11 @@ export default function RoomDetail() {
   useEffect(() => {
     if (!lastEvent) return;
     if (lastEvent.type === 'tool_closed') {
-      setShowSharedScripture(false);
-      setShowSharedAskEmmaus(false);
-      setActivePoll(null);
-      setDiscussionPendingNotice(null);
+      const closedTool = String(lastEvent.payload.tool ?? '');
+      if (closedTool === 'scripture') setShowSharedScripture(false);
+      if (closedTool === 'ask-emmaus') setShowSharedAskEmmaus(false);
+      if (closedTool === 'poll') setActivePoll(null);
+      if (closedTool === 'discussion') setDiscussionPendingNotice(null);
       return;
     }
     if (
@@ -856,6 +857,9 @@ export default function RoomDetail() {
   // ── Live Video handlers ────────────────────────────────────────────────────
 
   const handleStartVideo = async (mode: 'audio' | 'video' = 'video') => {
+    if (!hasJoinedCurrentMeeting) {
+      throw new Error(`Join the meeting before starting live ${mode}.`);
+    }
     await apiStartVideo(user.id, String(roomId), mode);
     setVideoActive(true);
     setLiveMeetingMode(mode);
@@ -1723,7 +1727,7 @@ export default function RoomDetail() {
                 leaderName={leaderName}
                 hideStart={true}
                 meetingMode={liveMeetingMode}
-                 hasJoinedMeeting={hasJoinedCurrentMeeting}
+                hasJoinedMeeting={hasJoinedCurrentMeeting}
                 onOpenDiscussion={() => openChat()}
                 onOpenNotes={() => setShowSharedNotes(true)}
                 onOpenPresentedContent={() => {

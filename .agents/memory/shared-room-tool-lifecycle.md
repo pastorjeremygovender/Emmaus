@@ -32,3 +32,15 @@ overlapping generations.
 hydration can show the question and recovery message. Allow a new claim only
 from failed/completed state, and use the same locked transition for every
 shared-generation start.
+
+While a shared Ask Emmaus request is generating, connected clients must also
+periodically reconcile the active session metadata. A saved completed or failed
+state is authoritative even when the one-time SSE completion event was missed.
+
+**Why:** A provider can complete and persist successfully while a browser loses
+the completion event, leaving the visible panel spinning despite a full answer
+already existing in the database.
+
+**How to apply:** Poll only during active generation, match the persisted request
+identity, then stop polling as soon as the state becomes completed/failed or the
+tool is closed/replaced.

@@ -9,8 +9,8 @@ Opening a Room is observation only and must never create attendance. Starting a 
 
 **How to apply:** Preserve explicit Join Meeting UI and server-returned attendance rows. Clear participant state when the active session changes, refetch on session/realtime/focus/visibility/online transitions, and rehydrate Discussion room context from the server on direct or reload navigation. Following the leader controls study navigation only; it must not be coupled to attendance, presence, membership, or chat. Validate any supplied discussion ID against the room before reading, streaming, or writing.
 
-Shared Meeting Tools are a single authoritative lifecycle: replacing or closing a tool must clear its durable poll/presentation/scripture state before broadcasting, and a stale close request must not close a newer tool.
+Shared Meeting Tools are a single authoritative lifecycle: replacing or closing a tool must clear its durable poll/presentation/scripture state before broadcasting. A stale close may close its own older route (especially Discussion), but must never clear or hide the newer active tool.
 
 **Why:** SSE delivery can be delayed or missed, so hiding a panel locally is insufficient; reconnect hydration must not resurrect a superseded tool or let an out-of-order close erase the current one.
 
-**How to apply:** Persist the active tool on the room session, clear superseded durable artefacts server-side, broadcast the replacement/close after persistence, and ignore close requests whose tool no longer matches the active session tool.
+**How to apply:** Persist the active tool on the room session, clear superseded durable artefacts server-side, and broadcast replacement/close after persistence. Durable clearing remains ownership-checked; clients handle `tool_closed` only for the named surface, so an old Discussion can close without erasing a newer shared tool.
