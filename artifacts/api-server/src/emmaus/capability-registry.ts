@@ -69,7 +69,7 @@ export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
   {
     id: "daily-devotional",
     displayName: "Daily Devotional",
-    aliases: ["daily devotional", "daily devotionals", "devotional", "devotionals"],
+    aliases: ["daily devotional", "daily devotionals", "devotional", "devotionals", "my devotional", "today's devotion", "today's devotional"],
     description: "Self-paced devotional series available from the Daily Devotionals section of your Walk.",
     location: "The Daily Devotionals section on Walk; Discover can show more series.",
     route: "/journeys?tab=devotionals",
@@ -81,7 +81,7 @@ export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
   {
     id: "daily-rhythm",
     displayName: "Daily Rhythm",
-    aliases: ["daily rhythm", "rhythm", "daily reading"],
+    aliases: ["daily rhythm", "rhythm", "daily reading", "today's rhythm", "today's daily rhythm"],
     description: "Your once-a-day discipleship step, shown through Today's Steps when it is eligible.",
     location: "Today's Steps on Walk",
     route: "/daily-rhythm/navigate",
@@ -165,7 +165,7 @@ export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
   {
     id: "saved-bible-position",
     displayName: "Saved Bible position",
-    aliases: ["saved bible position", "where i left off", "continue reading my bible"],
+    aliases: ["saved bible position", "where i left off", "where i stopped reading", "continue reading my bible", "carry on from where i stopped reading"],
     description: "The last Bible chapter you opened, saved to your signed-in account.",
     location: "My Bible",
     route: "/bible",
@@ -177,7 +177,7 @@ export const EMMAUS_CAPABILITIES: readonly EmmausCapability[] = [
   {
     id: "active-progress",
     displayName: "Active Walk and Journey progress",
-    aliases: ["active progress", "progress through my journey", "progress through my walk"],
+    aliases: ["active progress", "progress through my journey", "progress through my walk", "what journey am i busy with", "what walk am i busy with"],
     description: "Your server-saved position in active Walks and Journeys.",
     location: "The Walk tab",
     route: "/walk",

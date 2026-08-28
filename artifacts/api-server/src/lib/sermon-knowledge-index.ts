@@ -50,6 +50,12 @@ export interface KnowledgeIndexEntry {
   youtubeUrl: string;
   audioPath: string;
   publishedAt?: string | null;
+  /**
+   * Full lifecycle reconciliation should replace companion-derived fields,
+   * including clearing them after an unpublish. Ordinary sermon metadata edits
+   * leave this false so a concurrent companion publish is not overwritten.
+   */
+  replaceCompanionContent?: boolean;
 }
 
 export interface KnowledgeIndexResult extends KnowledgeIndexEntry {
@@ -61,6 +67,7 @@ export interface KnowledgeIndexDiagnostics {
   indexedPublished: number;
   staleIndexRows: number;
   orphanedIndexRows: number;
+  missingIndexRows: number;
 }
 
 /**
@@ -95,7 +102,24 @@ export async function getKnowledgeIndexDiagnostics(): Promise<KnowledgeIndexDiag
     indexedPublished: Number(row?.indexed_published ?? 0),
     staleIndexRows: Number(row?.stale_index_rows ?? 0),
     orphanedIndexRows: Number(row?.orphaned_index_rows ?? 0),
+    missingIndexRows: await countMissingEligibleRows(),
   };
+}
+
+async function countMissingEligibleRows(): Promise<number> {
+  const result = await pool.query(`
+    SELECT COUNT(*) AS count
+      FROM sermons s
+     WHERE s.status = 'Published'
+       AND NULLIF(BTRIM(s.title), '') IS NOT NULL
+       AND NULLIF(BTRIM(s.speaker), '') IS NOT NULL
+       AND LOWER(BTRIM(s.speaker)) <> 'unknown speaker'
+       AND s.title !~* '\\mshorts?\\M'
+       AND NOT EXISTS (
+         SELECT 1 FROM emmaus_knowledge_index k WHERE k.sermon_id = s.id::text
+       )
+  `);
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 // ─── Upsert ───────────────────────────────────────────────────────────────────
@@ -154,10 +178,16 @@ export async function upsertKnowledgeIndex(entry: KnowledgeIndexEntry): Promise<
        -- Sermon publish/edit calls pass empty arrays/strings; companion publish passes
        -- real content. COALESCE/CASE preserves step text when a sermon metadata edit
        -- runs after the companion has already been indexed.
-       companion_id        = COALESCE(EXCLUDED.companion_id, emmaus_knowledge_index.companion_id),
-       step_titles         = CASE WHEN EXCLUDED.step_titles::text = '[]' THEN emmaus_knowledge_index.step_titles ELSE EXCLUDED.step_titles END,
-       step_content        = CASE WHEN EXCLUDED.step_content = '' THEN emmaus_knowledge_index.step_content ELSE EXCLUDED.step_content END,
-       prayer_themes       = CASE WHEN EXCLUDED.prayer_themes = '' THEN emmaus_knowledge_index.prayer_themes ELSE EXCLUDED.prayer_themes END`,
+        companion_id        = CASE WHEN $20::boolean THEN EXCLUDED.companion_id ELSE COALESCE(EXCLUDED.companion_id, emmaus_knowledge_index.companion_id) END,
+        step_titles         = CASE WHEN $20::boolean THEN EXCLUDED.step_titles
+                                   WHEN EXCLUDED.step_titles::text = '[]' THEN emmaus_knowledge_index.step_titles
+                                   ELSE EXCLUDED.step_titles END,
+        step_content        = CASE WHEN $20::boolean THEN EXCLUDED.step_content
+                                   WHEN EXCLUDED.step_content = '' THEN emmaus_knowledge_index.step_content
+                                   ELSE EXCLUDED.step_content END,
+        prayer_themes       = CASE WHEN $20::boolean THEN EXCLUDED.prayer_themes
+                                   WHEN EXCLUDED.prayer_themes = '' THEN emmaus_knowledge_index.prayer_themes
+                                   ELSE EXCLUDED.prayer_themes END`,
     [
       entry.sermonId,
       entry.companionId ?? null,
@@ -178,12 +208,229 @@ export async function upsertKnowledgeIndex(entry: KnowledgeIndexEntry): Promise<
       entry.youtubeUrl,
       entry.audioPath,
       entry.publishedAt ?? null,
+      entry.replaceCompanionContent === true,
     ],
   );
   logger.info(
     { sermonId: entry.sermonId, companionId: entry.companionId ?? null },
     "knowledge-index: upserted",
   );
+}
+
+type CompanionIndexRow = Record<string, unknown> & {
+  companion_entries?: Array<Record<string, unknown>> | null;
+};
+
+function jsonArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function isoTimestamp(value: unknown): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function expectedEntry(row: CompanionIndexRow): KnowledgeIndexEntry {
+  const entries = jsonArray(row.companion_entries) as Array<Record<string, unknown>>;
+  const hasPublishedCompanion = Boolean(row.companion_id);
+  const stepTitles = hasPublishedCompanion
+    ? entries.map((entry) => String(entry.title ?? "")).filter(Boolean)
+    : [];
+  const stepContent = hasPublishedCompanion
+    ? entries.map((entry) =>
+      [entry.greeting, entry.reflection, entry.next_step, entry.closing]
+        .filter(Boolean)
+        .join(" "),
+    ).join(" ")
+    : "";
+  const prayerThemes = hasPublishedCompanion
+    ? entries.map((entry) => String(entry.prayer ?? "")).filter(Boolean).join(" ")
+    : "";
+
+  return {
+    sermonId: String(row.sermon_id),
+    companionId: hasPublishedCompanion ? String(row.companion_id) : null,
+    title: String(row.title ?? ""),
+    speaker: String(row.speaker ?? ""),
+    sermonDate: String(row.sermon_date ?? ""),
+    series: String(row.series ?? ""),
+    scriptureReference: String(row.scripture_reference ?? ""),
+    scriptureBookIds: jsonArray(row.scripture_book_ids) as string[],
+    scriptureChapters: jsonArray(row.scripture_chapters).map(Number),
+    themes: jsonArray(row.themes) as string[],
+    keywords: jsonArray(row.keywords) as string[],
+    mainTheme: String(row.main_theme ?? ""),
+    summary: String(row.summary ?? ""),
+    stepTitles,
+    stepContent,
+    prayerThemes,
+    youtubeUrl: String(row.youtube_url ?? ""),
+    audioPath: String(row.audio_path ?? ""),
+    publishedAt: isoTimestamp(row.published_at),
+    replaceCompanionContent: true,
+  };
+}
+
+/**
+ * Rebuild one sermon entry from the canonical sermon and its currently
+ * published companion content. This is awaited by companion lifecycle routes,
+ * so an unpublish cannot return while old companion text remains searchable.
+ */
+export async function syncKnowledgeIndexForSermon(sermonId: string): Promise<void> {
+  const result = await pool.query<CompanionIndexRow>(`
+    SELECT
+      s.id AS sermon_id, s.title, s.speaker, s.sermon_date, s.series,
+      s.scripture_reference, s.scripture_book_ids, s.scripture_chapters,
+      s.themes, s.keywords, s.main_theme, s.summary, s.youtube_url,
+      s.audio_path, s.published_at,
+      sc.id AS companion_id,
+      COALESCE(
+        json_agg(json_build_object(
+          'title', sce.title,
+          'greeting', sce.greeting,
+          'reflection', sce.reflection,
+          'prayer', sce.prayer,
+          'next_step', sce.next_step,
+          'closing', sce.closing
+        ) ORDER BY sce.day_number) FILTER (WHERE sce.id IS NOT NULL),
+        '[]'::json
+      ) AS companion_entries
+    FROM sermons s
+    LEFT JOIN sermon_companion sc
+      ON (sc.sermon_uuid = s.id
+          OR sc.sermon_id = s.id::text
+          OR (s.legacy_json_id IS NOT NULL AND sc.sermon_id = s.legacy_json_id))
+     AND sc.status = 'Published'
+     AND EXISTS (
+       SELECT 1 FROM sermon_companion_entry visible_entry
+        WHERE visible_entry.companion_id = sc.id
+          AND visible_entry.status = 'Published'
+     )
+    LEFT JOIN sermon_companion_entry sce
+      ON sce.companion_id = sc.id AND sce.status = 'Published'
+    WHERE s.id = $1::uuid
+    GROUP BY s.id, sc.id
+    ORDER BY sc.published_at DESC NULLS LAST
+    LIMIT 1
+  `, [sermonId]);
+
+  const row = result.rows[0];
+  if (!row
+    || String(row.speaker ?? "").trim().toLowerCase() === "unknown speaker"
+    || /\bshorts?\b/i.test(String(row.title ?? ""))) {
+    await removeFromKnowledgeIndex(sermonId);
+    return;
+  }
+  if (String(row.title ?? "").trim() === "" || String(row.speaker ?? "").trim() === "") {
+    await removeFromKnowledgeIndex(sermonId);
+    return;
+  }
+  await upsertKnowledgeIndex(expectedEntry(row));
+}
+
+export interface KnowledgeIndexRepairResult extends KnowledgeIndexDiagnostics {
+  repaired: boolean;
+  removedRows: number;
+  backfilledRows: number;
+  failures: string[];
+}
+
+/**
+ * Compare the persistent index with canonical Published sermons. Without
+ * repair this is a read-only report; with repair it removes stale/orphaned
+ * rows and backfills every eligible published sermon. Each write is
+ * idempotent and the conditional upsert refuses to resurrect an unpublish
+ * racing the repair.
+ */
+export async function reconcileKnowledgeIndex(
+  repair = false,
+): Promise<KnowledgeIndexRepairResult> {
+  const before = await getKnowledgeIndexDiagnostics();
+  const failures: string[] = [];
+  let removedRows = 0;
+  let backfilledRows = 0;
+
+  const expected = await pool.query<CompanionIndexRow>(`
+    SELECT
+      s.id AS sermon_id, s.title, s.speaker, s.sermon_date, s.series,
+      s.scripture_reference, s.scripture_book_ids, s.scripture_chapters,
+      s.themes, s.keywords, s.main_theme, s.summary, s.youtube_url,
+      s.audio_path, s.published_at,
+      sc.id AS companion_id,
+      COALESCE(
+        json_agg(json_build_object(
+          'title', sce.title, 'greeting', sce.greeting,
+          'reflection', sce.reflection, 'prayer', sce.prayer,
+          'next_step', sce.next_step, 'closing', sce.closing
+        ) ORDER BY sce.day_number) FILTER (WHERE sce.id IS NOT NULL),
+        '[]'::json
+      ) AS companion_entries
+    FROM sermons s
+    LEFT JOIN sermon_companion sc
+      ON (sc.sermon_uuid = s.id
+          OR sc.sermon_id = s.id::text
+          OR (s.legacy_json_id IS NOT NULL AND sc.sermon_id = s.legacy_json_id))
+     AND sc.status = 'Published'
+     AND EXISTS (
+       SELECT 1 FROM sermon_companion_entry visible_entry
+        WHERE visible_entry.companion_id = sc.id
+          AND visible_entry.status = 'Published'
+     )
+    LEFT JOIN sermon_companion_entry sce
+      ON sce.companion_id = sc.id AND sce.status = 'Published'
+    WHERE s.status = 'Published'
+      AND NULLIF(BTRIM(s.title), '') IS NOT NULL
+      AND NULLIF(BTRIM(s.speaker), '') IS NOT NULL
+      AND LOWER(BTRIM(s.speaker)) <> 'unknown speaker'
+      AND s.title !~* '\\mshorts?\\M'
+    GROUP BY s.id, sc.id
+  `);
+
+  if (!repair) {
+    return { ...before, repaired: false, removedRows: 0, backfilledRows: 0, failures };
+  }
+
+  try {
+    const validIds = expected.rows.map((row) => String(row.sermon_id));
+    const deleted = validIds.length
+      ? await pool.query(
+        `DELETE FROM emmaus_knowledge_index
+          WHERE sermon_id <> ALL($1::text[]) OR sermon_id IN (
+            SELECT k.sermon_id FROM emmaus_knowledge_index k
+             LEFT JOIN sermons s ON s.id::text = k.sermon_id
+            WHERE s.id IS NULL OR s.status <> 'Published'
+          )`,
+        [validIds],
+      )
+      : await pool.query("DELETE FROM emmaus_knowledge_index");
+    removedRows = deleted.rowCount ?? 0;
+  } catch (err) {
+    failures.push(`remove stale/orphan rows: ${String(err)}`);
+  }
+
+  for (const row of expected.rows) {
+    try {
+      await upsertKnowledgeIndex(expectedEntry(row));
+      backfilledRows++;
+    } catch (err) {
+      failures.push(`${row.sermon_id}: ${String(err)}`);
+    }
+  }
+
+  const after = await getKnowledgeIndexDiagnostics();
+  logger.info({ before, after, removedRows, backfilledRows, failures }, "knowledge-index: reconciliation complete");
+  return { ...after, repaired: true, removedRows, backfilledRows, failures };
 }
 
 // ─── Remove ───────────────────────────────────────────────────────────────────

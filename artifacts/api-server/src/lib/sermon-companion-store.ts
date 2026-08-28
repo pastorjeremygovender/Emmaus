@@ -8,6 +8,7 @@
 import { db, pool } from "@workspace/db";
 import { randomUUID } from "node:crypto";
 import { logger } from "./logger.js";
+import { syncKnowledgeIndexForSermon } from "./sermon-knowledge-index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,10 +151,16 @@ export async function createCompanion(data: {
  * Used as a compensating transaction when sermon persistence fails after companion creation.
  */
 export async function deleteCompanion(companionId: string): Promise<void> {
+  const linked = await pool.query<{ sermon_id: string | null }>(
+    `SELECT sermon_uuid::text AS sermon_id FROM sermon_companion WHERE id = $1`,
+    [companionId],
+  );
+  const sermonId = linked.rows[0]?.sermon_id ?? null;
   // Entries reference companion via foreign key — delete them first to avoid
   // constraint violations on DBs without ON DELETE CASCADE configured.
   await pool.query(`DELETE FROM sermon_companion_entry WHERE companion_id = $1`, [companionId]);
   await pool.query(`DELETE FROM sermon_companion WHERE id = $1`, [companionId]);
+  if (sermonId) await syncKnowledgeIndexForSermon(sermonId);
 }
 
 // ─── UUID helpers ─────────────────────────────────────────────────────────────

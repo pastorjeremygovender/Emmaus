@@ -20,7 +20,7 @@ export interface TypedAskEmmausIntent {
   intent: CanonicalAskIntent;
   requestedCapability?: EmmausCapabilityId;
   requestedOperation?: EmmausCapabilityOperation;
-  bibleReference?: ReturnType<typeof classifyEmmausIntent>["bibleRef"];
+  bibleReference?: (ReturnType<typeof classifyEmmausIntent>["bibleRef"] & { verseEnd?: number });
   resourceQuery?: string;
   confidence: number;
   clarificationRequired: boolean;
@@ -37,15 +37,63 @@ function capabilityForText(value: string): EmmausCapability | null {
   return findEmmausCapability(value);
 }
 
+function classifyBibleRange(message: string): ReturnType<typeof classifyEmmausIntent> {
+  // The shared classifier intentionally accepts the same compact reference
+  // grammar for typed and voice transcripts. Add the range end locally so
+  // typed Ask Emmaus can preserve exact starting/ending verses without
+  // creating a second navigation implementation.
+  const spokenNumber: Record<string, number> = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7,
+    eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13,
+  };
+  const spokenMessage = message.replace(
+    /\bchapter\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)\s+verses?\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)\s+(?:through|to)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)\b/i,
+    (_, chapter: string, start: string, end: string) =>
+      `${spokenNumber[chapter.toLowerCase()]}:${spokenNumber[start.toLowerCase()]}–${spokenNumber[end.toLowerCase()]}`,
+  );
+  const range = spokenMessage.match(/\b(\d{1,3})[:\s](\d{1,3})\s*[-–—]\s*(\d{1,3})\b/);
+  if (!range) return classifyEmmausIntent(message);
+  const base = spokenMessage.slice(0, range.index!)
+    + `${range[1]}:${range[2]}`
+    + spokenMessage.slice(range.index! + range[0].length);
+  const classified = classifyEmmausIntent(base);
+  if (!classified.bibleRef) return classified;
+  return {
+    ...classified,
+    bibleRef: {
+      ...classified.bibleRef,
+      verse: Number(range[2]),
+      verseEnd: Number(range[3]),
+    } as routeBibleRef,
+  };
+}
+
+type routeBibleRef = NonNullable<ReturnType<typeof classifyEmmausIntent>["bibleRef"]> & {
+  verseEnd?: number;
+};
+
 export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
   const value = clean(message);
-  const shared = classifyEmmausIntent(message);
+  const shared = classifyBibleRange(message);
   const capability = capabilityForText(value);
+  const routingValue = value.replace(/^please\s+/, "");
 
   if (/^what can (?:emmaus|you) (?:help me with|do)|^what can emmaus help me with/.test(value)) {
     return {
       intent: "APP_HELP",
       confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:what(?:'s| is)|show me)\s+(?:in|on)\s+(?:my\s+)?(?:journey|walk)\b/.test(value)
+    || /^what am i currently (?:doing|working through)\b/.test(value)
+    || /^which (?:walk|journey) am i (?:currently )?(?:on|doing)\b/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "active-progress",
+      requestedOperation: "READ",
+      confidence: 0.94,
       clarificationRequired: false,
     };
   }
@@ -60,7 +108,8 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:read|show me|open|go to|take me to)\s+(?:today's|todays|the current)\s+devotional\b/.test(value)) {
+  if (/^(?:read|show me|open|go to|take me to|get to|access)\s+(?:my\s+|today's\s+|todays\s+|the current\s+)?(?:daily\s+)?devotional\b/.test(value)
+    || /^can you open my devotional\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "daily-devotional",
@@ -70,7 +119,7 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:read|show me|open|go to|take me to)\s+(?:today's|todays|the current)\s+(?:daily rhythm|rhythm)\b/.test(value)) {
+  if (/^(?:read|show me|open|go to|take me to|get to)\s+(?:today's|todays|the current)\s+(?:daily rhythm|rhythm)\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "daily-rhythm",
@@ -90,7 +139,8 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:continue|resume)\s+(?:my\s+)?walk\b/.test(value)) {
+  if (/^(?:continue|resume)\s+(?:my\s+)?walk\b/.test(value)
+    || /^i want to continue my current walk\b/.test(value)) {
     return {
       intent: "DIRECT_ACTION",
       requestedCapability: "walks",
@@ -110,14 +160,54 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
-  if (/^(?:what have we preached|find|search|show me).*\b(?:sermon|sermons|preached|preaching)\b/.test(value)
-    || /\bsermon archive\b/.test(value)) {
+  if (/^(?:what have we preached|find|search|show me).*\b(?:sermon|sermons|preached|preaching)\b/.test(routingValue)
+    || /^(?:show me|find|search for)\b.*\b(?:teaching|message|talk)\b.*\b(?:in|on)\b/.test(routingValue)
+    || /^has .*\bpreached on\b/.test(routingValue)
+    || /\bsermon archive\b/.test(routingValue)) {
     return {
       intent: "RESOURCE_SEARCH",
       requestedCapability: "sermons",
       requestedOperation: "FIND",
-      resourceQuery: message.replace(/^(?:what have we preached|find|search|show me)\s+(?:about\s+)?/i, "").trim() || message.trim(),
+      resourceQuery: message.trim(),
       confidence: 0.96,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:take me to|open|go to|show me|get me to)\s+(?:the\s+)?(?:my\s+)?bible\b/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "my-bible",
+      requestedOperation: "OPEN",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:show me|find|search for|do we have anything in emmaus about|what resources can help me with|what resources can help me when)\b/.test(routingValue)
+    || /^has .*\bpreached on\b/.test(routingValue)) {
+    const study = /\bbible stud(?:y|ies)\b/.test(value);
+    const pastoral = /\b(?:resources can help|anxious|afraid|lonely|grief|ashamed|overwhelmed)\b/.test(value);
+    return {
+      intent: "RESOURCE_SEARCH",
+      requestedCapability: study ? "bible-studies" : pastoral ? "discover" : "discover",
+      requestedOperation: "FIND",
+      resourceQuery: message
+        .replace(/^(?:please\s+)?(?:show me|find|search for)\s+/i, "")
+        .replace(/^(?:a\s+)?bible stud(?:y|ies)\s+(?:about|on)\s+/i, "")
+        .replace(/^.*?\babout\s+/i, "")
+        .trim() || message.trim(),
+      confidence: 0.9,
+      clarificationRequired: false,
+    };
+  }
+
+  if (/^(?:what journey|which journey|what walk)\b.*\b(?:busy with|doing|active|on)\b/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "active-progress",
+      requestedOperation: "READ",
+      confidence: 0.94,
       clarificationRequired: false,
     };
   }

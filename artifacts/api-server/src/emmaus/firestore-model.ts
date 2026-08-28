@@ -169,6 +169,21 @@ export interface EmmausResponseMetadata {
     label: string;
     route: string;
   }>;
+  /** Structured stage timings used for release acceptance comparisons. */
+  pipelineTimings?: {
+    authMs: number | null;
+    contextMs: number;
+    routingMs: number;
+    retrievalScriptureMs: number;
+    retrievalSermonsMs: number;
+    retrievalResourcesMs: number;
+    retrievalMemoriesMs: number;
+    retrievalRoomsMs: number;
+    modelTtftMs: number | null;
+    modelGenerationMs: number;
+    validationMs: number;
+    totalMs: number;
+  };
 }
 
 // ─── Firestore Document Interfaces ───────────────────────────────────────────

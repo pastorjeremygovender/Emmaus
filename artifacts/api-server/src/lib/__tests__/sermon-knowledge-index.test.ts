@@ -21,7 +21,12 @@ import {
   updateSermonLifecycle,
   deleteSermonFully,
 } from "../canonical-sermon-store.js";
-import { removeFromKnowledgeIndex, searchKnowledgeIndex } from "../sermon-knowledge-index.js";
+import {
+  getKnowledgeIndexDiagnostics,
+  reconcileKnowledgeIndex,
+  removeFromKnowledgeIndex,
+  searchKnowledgeIndex,
+} from "../sermon-knowledge-index.js";
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -186,5 +191,34 @@ describe("removeFromKnowledgeIndex — safety", () => {
       () => removeFromKnowledgeIndex("00000000-0000-0000-0000-000000000000"),
       "removeFromKnowledgeIndex must not throw for a missing id",
     );
+  });
+});
+
+describe("knowledge-index reconciliation", () => {
+  it("reports and repairs a missed published row plus an orphan", async () => {
+    const s = await createSermon(baseData("Reconciliation-Missed-Published"));
+    toCleanup.push(s.id);
+    await publishSermon(s.id);
+    await removeFromKnowledgeIndex(s.id);
+
+    const before = await getKnowledgeIndexDiagnostics();
+    assert.ok(before.missingIndexRows >= 1, "diagnostics must report the missed published row");
+
+    await pool.query(
+      `INSERT INTO emmaus_knowledge_index (sermon_id, title, speaker)
+       VALUES ('00000000-0000-0000-0000-000000000001', 'Orphaned index row', 'Test Speaker')
+       ON CONFLICT (sermon_id) DO NOTHING`,
+    );
+    const repaired = await reconcileKnowledgeIndex(true);
+    assert.equal(repaired.repaired, true);
+    assert.ok(repaired.backfilledRows >= 1, "repair must backfill the published sermon");
+    assert.ok(repaired.removedRows >= 1, "repair must remove the orphan");
+    assert.ok(await inIndex(s.id), "repaired published sermon must be searchable");
+
+    const orphan = await pool.query(
+      "SELECT 1 FROM emmaus_knowledge_index WHERE sermon_id = $1",
+      ["00000000-0000-0000-0000-000000000001"],
+    );
+    assert.equal(orphan.rowCount, 0, "orphan must not remain after repair");
   });
 });

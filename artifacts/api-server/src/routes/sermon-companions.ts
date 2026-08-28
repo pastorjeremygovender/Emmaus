@@ -21,7 +21,7 @@ import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
 import { logAuditEvent } from "../lib/audit-log.js";
-import { upsertKnowledgeIndex } from "../lib/sermon-knowledge-index.js";
+import { syncKnowledgeIndexForSermon } from "../lib/sermon-knowledge-index.js";
 
 export const sermonCompanionsRouter = Router();
 
@@ -222,6 +222,10 @@ sermonCompanionsRouter.patch("/:companionId", async (req: Request, res: Response
   const companionId = String(req.params.companionId);
   try {
     await store.updateCompanion(companionId, { title, description, status: status as CompanionStatus | undefined });
+    const updatedCompanion = await store.getCompanionById(companionId);
+    const linkedSermonId = updatedCompanion?.sermonUuid
+      ?? (updatedCompanion ? (await sermonStore.getSermonByLegacyId?.(updatedCompanion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
     await logAuditEvent({
       contentType: "sermon_companion",
       contentId: companionId,
@@ -261,6 +265,10 @@ sermonCompanionsRouter.patch("/:companionId/entries/:day", async (req: Request, 
       res.status(404).json({ error: "Entry not found" });
       return;
     }
+    const companion = await store.getCompanionById(companionId);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
     await logAuditEvent({
       contentType: "sermon_companion_entry",
       contentId: `${companionId}:day:${day}`,
@@ -357,56 +365,10 @@ sermonCompanionsRouter.post("/:companionId/publish", async (req: Request, res: R
       newState: { status: "Published" },
     });
 
-    // Upsert knowledge index so Ask Emmaus can find this companion's step content,
-    // prayer themes, and reflection text immediately after publish.
-    // Non-blocking fire-and-forget: indexing failure must never prevent publish.
-    (async () => {
-      try {
-        const companion = await store.getCompanionById(id);
-        // Resolve canonical sermon — prefer sermonUuid FK, fall back to sermonId text column
-        // for legacy companions created before the FK was introduced.
-        let canonical = null;
-        if (companion?.sermonUuid) {
-          canonical = await sermonStore.getSermonById(companion.sermonUuid);
-        } else if (companion?.sermonId) {
-          canonical = await sermonStore.getSermonByLegacyId?.(companion.sermonId)
-            ?? await sermonStore.getSermonById(companion.sermonId);
-        }
-        if (!canonical) return;
-
-        const allEntries = await store.getEntriesForCompanion(id);
-        const pubEntries = allEntries.filter(e => e.status === "Published");
-        const stepTitles   = pubEntries.map(e => e.title).filter(Boolean);
-        const prayerThemes = pubEntries.map(e => e.prayer).filter(Boolean).join(" ");
-        const stepContent  = pubEntries
-          .map(e => [e.greeting, e.reflection, e.nextStep, e.closing].filter(Boolean).join(" "))
-          .join(" ");
-
-        await upsertKnowledgeIndex({
-          sermonId:           canonical.id,
-          companionId:        id,
-          title:              canonical.title,
-          speaker:            canonical.speaker,
-          sermonDate:         canonical.sermonDate,
-          series:             canonical.series,
-          scriptureReference: canonical.scriptureReference,
-          scriptureBookIds:   canonical.scriptureBookIds,
-          scriptureChapters:  canonical.scriptureChapters,
-          themes:             canonical.themes,
-          keywords:           canonical.keywords,
-          mainTheme:          canonical.mainTheme,
-          summary:            canonical.summary,
-          stepTitles,
-          stepContent,
-          prayerThemes,
-          youtubeUrl:         canonical.youtubeUrl,
-          audioPath:          canonical.audioPath,
-          publishedAt:        canonical.publishedAt ?? null,
-        });
-      } catch (err) {
-        logger.warn({ err, companionId: id }, "sermon-companions: knowledge index upsert failed (non-fatal)");
-      }
-    })();
+    const companion = await store.getCompanionById(id);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
 
     res.json({ ok: true, status: "Published" });
   } catch (err) {
@@ -424,6 +386,10 @@ sermonCompanionsRouter.post("/:companionId/unpublish", async (req: Request, res:
   try {
     const id = String(req.params.companionId);
     await store.updateCompanion(id, { status: "Draft" });
+    const companion = await store.getCompanionById(id);
+    const linkedSermonId = companion?.sermonUuid
+      ?? (companion ? (await sermonStore.getSermonByLegacyId?.(companion.sermonId))?.id : undefined);
+    if (linkedSermonId) await syncKnowledgeIndexForSermon(linkedSermonId);
     await logAuditEvent({
       contentType: "sermon_companion",
       contentId: id,

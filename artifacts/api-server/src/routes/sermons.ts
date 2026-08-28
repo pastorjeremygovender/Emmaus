@@ -31,7 +31,10 @@ import { deleteSermonCompanionContent } from "../lib/sermon-companion-store.js";
 import { requireAuth } from "../emmaus/auth.js";
 import { isAdmin } from "../lib/user-role-store.js";
 import { logger } from "../lib/logger.js";
-import { getKnowledgeIndexDiagnostics } from "../lib/sermon-knowledge-index.js";
+import {
+  getKnowledgeIndexDiagnostics,
+  reconcileKnowledgeIndex,
+} from "../lib/sermon-knowledge-index.js";
 
 export const sermonsRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -115,6 +118,24 @@ sermonsRouter.get("/admin/retrieval-diagnostics", async (req: Request, res: Resp
   } catch (err) {
     logger.error({ err }, "sermons: retrieval diagnostics failed");
     res.status(500).json({ error: "Failed to load retrieval diagnostics" });
+  }
+});
+
+// ─── Admin: explicit retrieval-index repair ──────────────────────────────────
+// This is intentionally separate from the read-only diagnostics endpoint. A
+// repair is an auditable admin action and is safe to repeat.
+
+sermonsRouter.post("/admin/retrieval-diagnostics/repair", async (req: Request, res: Response) => {
+  const adminId = await guardAdmin(req, res);
+  if (!adminId) return;
+  try {
+    const result = await reconcileKnowledgeIndex(true);
+    logger.info({ adminId, ...result }, "sermons: retrieval index repair requested");
+    res.set("Cache-Control", "no-store");
+    res.json(result);
+  } catch (err) {
+    logger.error({ err, adminId }, "sermons: retrieval index repair failed");
+    res.status(500).json({ error: "Failed to repair retrieval index" });
   }
 });
 

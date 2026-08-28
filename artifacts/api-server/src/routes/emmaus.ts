@@ -66,8 +66,10 @@ function parseHistory(raw: unknown): Array<{ role: "user" | "assistant"; content
  */
 router.post("/emmaus/conversation", async (req: Request, res: Response) => {
   const body = req.body as EmmausConversationBody;
+  const authStarted = Date.now();
   const userId = requireAuth(req, res);
   if (!userId) return;
+  const authMs = Date.now() - authStarted;
 
   if (!body.message || typeof body.message !== "string" || !body.message.trim()) {
     res.status(400).json({ error: "message is required" });
@@ -81,6 +83,7 @@ router.post("/emmaus/conversation", async (req: Request, res: Response) => {
       message: body.message.trim(),
        context: toEmmausContextInput(body.context, userId),
       history: parseHistory(body.history),
+      authMs,
     },
     res
   );
@@ -93,8 +96,10 @@ router.post("/emmaus/conversation", async (req: Request, res: Response) => {
  */
 router.post("/emmaus/conversation/:id/message", async (req: Request, res: Response) => {
   const body = req.body as EmmausConversationBody;
+  const authStarted = Date.now();
   const userId = requireAuth(req, res);
   if (!userId) return;
+  const authMs = Date.now() - authStarted;
 
   const conversationId = String(req.params.id);
 
@@ -123,6 +128,7 @@ router.post("/emmaus/conversation/:id/message", async (req: Request, res: Respon
         conversationId,
       },
       history: parseHistory(body.history),
+      authMs,
     },
     res
   );

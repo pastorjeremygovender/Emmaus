@@ -18,6 +18,8 @@ describe("Ask Emmaus citation validation", () => {
   it("creates a safe deep link including the first verse", () => {
     assert.equal(buildScriptureRoute({ book: "1 John", chapter: 4, verseStart: 7 }), "/bible/read/1john/4?startVerse=7");
     assert.equal(buildScriptureRoute({ book: "Psalm", chapter: 42 }), "/bible/read/psalms/42");
+    assert.equal(buildScriptureRoute({ book: "John", chapter: 3, verseStart: 16, verseEnd: 18 }), "/bible/read/john/3?startVerse=16&endVerse=18");
+    assert.equal(buildScriptureRoute({ book: "Song of Songs", chapter: 2, verseStart: 1 }), "/bible/read/songofsolomon/2?startVerse=1");
   });
 
   it("removes fabricated resources and invalid Scripture", () => {

@@ -13,6 +13,7 @@
     "repair:step-statuses": "node --experimental-strip-types src/scripts/repair-step-statuses.ts",
     "repair:progress-duplicates": "node --experimental-strip-types src/scripts/repair-progress-duplicates.ts",
     "backfill:knowledge-index": "node --experimental-strip-types src/scripts/backfill-knowledge-index.ts",
+    "repair:knowledge-index": "node --experimental-strip-types src/scripts/repair-knowledge-index.ts",
     "export:seed": "node --experimental-strip-types src/scripts/export-seed.ts",
     "checksum:content": "node --experimental-strip-types src/scripts/content-checksum.ts",
     "test:unit": "node --test --experimental-strip-types src/lib/__tests__/sermon-start-detector.test.ts src/emmaus/__tests__/system-instructions.test.ts src/lib/__tests__/sermon-companion-description.test.ts src/lib/__tests__/devotional-completion-pct.test.ts src/lib/__tests__/room-role-policy.test.ts src/test-utils/__tests__/test-auth-guard.test.ts && pnpm run test:emmaus-canonical && pnpm run test:share-image-style && pnpm run test:bible-import && pnpm run test:bible-import-api && pnpm run test:session-refresh && pnpm run test:auth-identity && pnpm run test:progress-isolation && pnpm run test:auth-recovery-status && pnpm run test:admin-account-source && pnpm run test:account-lifecycle",

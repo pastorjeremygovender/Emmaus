@@ -139,6 +139,29 @@ function sermonResults(response: SseResponse): Array<Record<string, unknown>> {
   return Array.isArray(results) ? results as Array<Record<string, unknown>> : [];
 }
 
+function assertPipelineTimings(response: SseResponse, label: string): void {
+  const timings = response.done.metadata?.pipelineTimings as Record<string, unknown> | undefined;
+  assert.ok(timings, `${label} should expose structured pipeline timings`);
+  for (const field of [
+    "authMs",
+    "contextMs",
+    "routingMs",
+    "retrievalScriptureMs",
+    "retrievalSermonsMs",
+    "retrievalResourcesMs",
+    "retrievalMemoriesMs",
+    "retrievalRoomsMs",
+    "modelGenerationMs",
+    "validationMs",
+    "totalMs",
+  ]) {
+    assert.ok(
+      timings[field] === null || typeof timings[field] === "number",
+      `${label} ${field} should be numeric or null`,
+    );
+  }
+}
+
 function assertNoUnverifiedSermonAction(response: SseResponse, label: string): void {
   assert.deepEqual(sermonResults(response), [], `${label} should have no sermon card`);
   assert.doesNotMatch(response.text, /\bsermon\b|https?:\/\/|\/sermon\//i,
@@ -296,6 +319,9 @@ describe("authenticated Ask Emmaus sermon action parity", { concurrency: 1 }, ()
     const typedResult = sermonResults(typed).find((result) => result.sermonId === canonicalId);
     const voiceResult = sermonResults(voice).find((result) => result.sermonId === canonicalId);
     const resumedResult = sermonResults(resumedVoice).find((result) => result.sermonId === canonicalId);
+    assertPipelineTimings(typed, "typed");
+    assertPipelineTimings(voice, "Voice");
+    assertPipelineTimings(resumedVoice, "resumed Voice");
     assert.ok(typedResult, "typed Ask Emmaus should return the tagged canonical sermon");
     assert.deepEqual(voiceResult, typedResult);
     assert.deepEqual(
