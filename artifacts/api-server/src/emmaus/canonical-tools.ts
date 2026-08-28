@@ -1,0 +1,488 @@
+import { getBibleData } from "../bible/store.js";
+import {
+  getProgress,
+  getDailyRhythmState,
+  listPublishedJourneys,
+  listSteps,
+  type FrontendJourney,
+} from "../lib/journey-store.js";
+import {
+  getAllProgressForUser,
+  getSeriesById,
+  listPublishedSeries,
+  type DevotionalProgress,
+} from "../lib/devotional-store.js";
+import { retrieveSermons } from "./sermon-retrieval.js";
+import {
+  describeCapability,
+  EMMAUS_CAPABILITIES,
+  getEmmausCapability,
+  type EmmausCapabilityId,
+} from "./capability-registry.js";
+import { routeAskEmmausRequest, type TypedAskEmmausIntent } from "./intent-router.js";
+import type {
+  EmmausResponseMetadata,
+  NextStep,
+  Recommendation,
+  SermonRecommendation,
+  ScriptureRef,
+} from "./firestore-model.js";
+import { buildScriptureRoute, canonicalBibleBookName } from "./citation-validation.js";
+import { readBiblePassage } from "../lib/bible-verse-search.js";
+import { logger } from "../lib/logger.js";
+
+export type CanonicalToolResolution =
+  | { handled: true; metadata: EmmausResponseMetadata }
+  | { handled: false };
+
+const emptyMetadata = (): EmmausResponseMetadata => ({
+  scripture: null,
+  scriptureReferences: [],
+  nextStep: null,
+  nextSteps: [],
+  recommendations: [],
+  resourceRecommendations: [],
+  followUpPrompts: [],
+  handoffType: null,
+});
+
+const routeForBible = (ref: {
+  book: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+}) => buildScriptureRoute(ref);
+
+function scriptureRef(
+  bookId: string,
+  chapter: number,
+  verseStart?: number,
+  verseEnd?: number,
+  displayText?: string,
+  displayBookName?: string,
+): ScriptureRef {
+  const book = displayBookName ?? canonicalBibleBookName(bookId);
+  return {
+    reference: `${book} ${chapter}${verseStart == null ? "" : `:${verseStart}${verseEnd != null && verseEnd !== verseStart ? `–${verseEnd}` : ""}`}`,
+    book: bookId,
+    chapter,
+    ...(verseStart != null ? { verseStart } : {}),
+    ...(verseEnd != null ? { verseEnd } : {}),
+    ...(displayText ? { displayText } : {}),
+  };
+}
+
+function capabilityRecommendation(capabilityId: EmmausCapabilityId): Recommendation {
+  const capability = getEmmausCapability(capabilityId);
+  return {
+    type: capabilityId === "sermons" ? "sermon"
+      : capabilityId === "daily-rhythm" ? "daily_rhythm"
+        : capabilityId === "daily-devotional" ? "devotional"
+          : capabilityId === "walks" ? "walk"
+            : capabilityId === "bible-studies" ? "bible_study"
+              : "journey",
+    title: capability.displayName,
+    description: `${capability.description} ${capability.location}.`,
+    path: capability.route,
+  };
+}
+
+function capabilityNextStep(capabilityId: EmmausCapabilityId, operation: "OPEN" | "READ" | "CONTINUE" = "OPEN"): NextStep {
+  const capability = getEmmausCapability(capabilityId);
+  const verb = operation === "CONTINUE" ? "Continue" : operation === "READ" ? "Read" : "Open";
+  return {
+    action: `${verb} ${capability.displayName} in Emmaus.`,
+    primaryButtonText: `${verb} ${capability.displayName}`,
+    path: capability.route,
+  };
+}
+
+function capabilityAction(
+  capabilityId: EmmausCapabilityId,
+  kind: "OPEN" | "READ" | "CONTINUE" = "OPEN",
+) {
+  const capability = getEmmausCapability(capabilityId);
+  const verb = kind === "CONTINUE" ? "Continue" : kind === "READ" ? "Read" : "Open";
+  return {
+    kind,
+    capabilityId,
+    label: `${verb} ${capability.displayName}`,
+    route: capability.route,
+  };
+}
+
+function appHelp(capabilityId?: EmmausCapabilityId): EmmausResponseMetadata {
+  const metadata = emptyMetadata();
+  if (capabilityId) {
+    const capability = getEmmausCapability(capabilityId);
+    metadata.answer = `${describeCapability(capability)} Use the button below to open it.`;
+    metadata.nextStep = capabilityNextStep(capabilityId);
+    metadata.capabilityActions = [capabilityAction(capabilityId)];
+    metadata.recommendations = [capabilityRecommendation(capabilityId)];
+    metadata.followUpPrompts = [`What can I do in ${capability.displayName}?`];
+    return metadata;
+  }
+
+  const names = EMMAUS_CAPABILITIES
+    .filter((capability) => !["saved-bible-position", "active-progress", "ask-emmaus"].includes(capability.id))
+    .map((capability) => capability.displayName)
+    .join(", ");
+  metadata.answer = `Emmaus can help you read Scripture, keep your place in My Bible, take Today's Steps, continue Walks and Journeys, read Daily Devotionals and Bible Studies, find published sermons, and discover new content. You can find these in: ${names}.`;
+  metadata.nextStep = capabilityNextStep("todays-steps");
+  metadata.capabilityActions = [capabilityAction("todays-steps")];
+  metadata.followUpPrompts = ["Where can I find devotionals?", "How do I continue my Journey?"];
+  return metadata;
+}
+
+function actionForCapabilityResource(
+  kind: "OPEN" | "READ" | "CONTINUE",
+  type: Recommendation["type"],
+  resourceId: string,
+  route: string,
+  parentId?: string,
+) {
+  return {
+    kind,
+    resourceType: type,
+    resourceId,
+    ...(parentId ? { parentId } : {}),
+    route,
+  } as NonNullable<EmmausResponseMetadata["resourceActions"]>[number];
+}
+
+async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const [series, progress] = await Promise.all([
+    listPublishedSeries(),
+    getAllProgressForUser(userId),
+  ]);
+  const published = new Map(series.map((item) => [item.id, item]));
+  const active = progress
+    .filter((item) => published.has(item.seriesId) && item.status !== "paused" && item.status !== "hidden")
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  if (active.length > 1) {
+    metadata.answer = "You have more than one Daily Devotional in progress. Which one would you like to continue?";
+    metadata.nextStep = capabilityNextStep("daily-devotional", "OPEN");
+    metadata.recommendations = [capabilityRecommendation("daily-devotional")];
+    metadata.followUpPrompts = ["Show me my active devotionals."];
+    return metadata;
+  }
+
+  const selected = active[0] ?? (series.length === 1 ? {
+    seriesId: series[0].id,
+    currentDay: 1,
+  } as DevotionalProgress : null);
+  if (!selected) {
+    metadata.answer = "I couldn't find a Daily Devotional available to you yet. You can browse the published series from Discover.";
+    metadata.nextStep = capabilityNextStep("daily-devotional");
+    return metadata;
+  }
+
+  const selectedSeries = published.get(selected.seriesId) ?? series[0];
+  const full = await getSeriesById(selectedSeries.id);
+  const day = Math.max(1, selected.currentDay || 1);
+  const entry = full?.entries.find((item) => item.status === "Published" && item.dayNumber === day)
+    ?? full?.entries.find((item) => item.status === "Published");
+  if (!entry) {
+    metadata.answer = `The published Daily Devotional "${selectedSeries.title}" is not ready for Day ${day}. You can browse other available devotionals from Discover.`;
+    metadata.nextStep = capabilityNextStep("daily-devotional");
+    return metadata;
+  }
+
+  const resource: Recommendation = {
+    type: "devotional",
+    title: `${selectedSeries.title} — ${entry.title}`,
+    description: "Today's published Daily Devotional",
+    resourceId: entry.id,
+    parentId: selectedSeries.id,
+    path: `/devotional/${selectedSeries.id}/day/${entry.dayNumber}`,
+  };
+  const resourcePath = resource.path;
+  if (!resourcePath) {
+    metadata.answer = "That Daily Devotional is published, but its member route could not be validated.";
+    metadata.nextStep = capabilityNextStep("daily-devotional");
+    return metadata;
+  }
+  const parts = [entry.greeting, entry.considerThis, entry.prayer, entry.nextStep, entry.closing]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim());
+  metadata.answer = `Here is today's Daily Devotional, “${entry.title}.”${parts.length ? `\n\n${parts.join("\n\n")}` : ""}`;
+  metadata.recommendations = [resource];
+  metadata.resourceRecommendations = [{
+    resourceType: "devotional",
+    resourceId: entry.id,
+    parentId: selectedSeries.id,
+    reason: "The signed-in user's current published Daily Devotional.",
+  }];
+  metadata.resourceActions = [
+    actionForCapabilityResource("OPEN", "devotional", entry.id, resourcePath, selectedSeries.id),
+    actionForCapabilityResource("READ", "devotional", entry.id, resourcePath, selectedSeries.id),
+    actionForCapabilityResource("CONTINUE", "devotional", entry.id, resourcePath, selectedSeries.id),
+  ];
+  metadata.nextStep = {
+    action: `Read Day ${entry.dayNumber} of ${selectedSeries.title}.`,
+    primaryButtonText: "Open today's devotional",
+    path: resourcePath,
+  };
+  metadata.followUpPrompts = ["Help me reflect on this devotional.", "Show me my other devotionals."];
+  return metadata;
+}
+
+async function resolveBibleRead(intent: TypedAskEmmausIntent): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const ref = intent.bibleReference;
+  if (!ref) {
+    metadata.answer = "Which Bible book and chapter would you like me to open?";
+    metadata.followUpPrompts = ["Read Psalm 23", "Read John 3:16"];
+    return metadata;
+  }
+  const route = routeForBible({
+    book: ref.bookId,
+    chapter: ref.chapter,
+    verseStart: ref.verse,
+    verseEnd: ref.verse,
+  });
+  if (!route) {
+    metadata.answer = "I couldn't validate that Bible reference. Please give me a book and chapter, such as Psalm 23 or John 3:16.";
+    metadata.followUpPrompts = ["Read Psalm 23", "Read John 3:16"];
+    return metadata;
+  }
+  const verses = readBiblePassage(ref.bookId, ref.chapter, ref.verse, ref.verse);
+  if (verses.length === 0) {
+    metadata.answer = `I can open ${ref.bookName} ${ref.chapter}${ref.verse ? `:${ref.verse}` : ""}, but that passage text is not available in the local Bible provider right now.`;
+  } else {
+    const label = verses.length === 1 ? verses[0].reference : `${ref.bookName} ${ref.chapter}`;
+    metadata.answer = `Here is ${label}:\n\n${verses.map((verse) => `${verse.verse}. ${verse.text}`).join("\n")}`;
+  }
+  const scripture = scriptureRef(ref.bookId, ref.chapter, ref.verse, ref.verse, undefined, ref.bookName);
+  metadata.scripture = scripture;
+  metadata.scriptureReferences = [scripture];
+  metadata.nextStep = {
+    action: `Open ${scripture.reference} in My Bible.`,
+    primaryButtonText: `Open ${scripture.reference}`,
+    path: route,
+  };
+  metadata.nextSteps = [{
+    type: "read",
+    text: scripture.reference,
+    path: route,
+  }];
+  metadata.followUpPrompts = ["What does this passage mean?", "Help me pray through this passage."];
+  return metadata;
+}
+
+async function resolveBibleContinue(userId: string): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const data = await getBibleData(userId);
+  // The Bible store keeps history newest-first.
+  const last = data?.history?.[0];
+  if (!last) {
+    metadata.answer = "I couldn't find a saved Bible position for you yet. Open My Bible and Emmaus will remember the chapter you read.";
+    metadata.nextStep = capabilityNextStep("my-bible");
+    return metadata;
+  }
+  const route = routeForBible({ book: last.bookId, chapter: last.chapter });
+  if (!route) {
+    metadata.answer = "Your saved Bible position could not be validated. Open My Bible to choose a chapter again.";
+    metadata.nextStep = capabilityNextStep("my-bible");
+    return metadata;
+  }
+  const scripture = scriptureRef(last.bookId, last.chapter, undefined, undefined, undefined, last.bookName);
+  metadata.answer = `You last opened ${scripture.reference}. I can take you back there.`;
+  metadata.scripture = scripture;
+  metadata.scriptureReferences = [scripture];
+  metadata.nextStep = {
+    action: `Continue reading at ${scripture.reference}.`,
+    primaryButtonText: `Continue at ${scripture.reference}`,
+    path: route,
+  };
+  metadata.nextSteps = [{ type: "continue", text: scripture.reference, path: route }];
+  metadata.followUpPrompts = ["Read the next chapter.", "What is this chapter about?"];
+  return metadata;
+}
+
+async function resolveDailyRhythm(userId: string): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const state = await getDailyRhythmState(userId);
+  if (!state || !state.currentStepId) {
+    metadata.answer = "Today's Daily Rhythm is not available to your account yet.";
+    metadata.nextStep = capabilityNextStep("todays-steps");
+    return metadata;
+  }
+
+  if (state.nextStepLocked || state.currentStepCompleted) {
+    const unlockText = state.nextEligibleUnlockDate
+      ? ` Your next step is available on ${state.nextEligibleUnlockDate}.`
+      : " Your next step will unlock on a later day.";
+    metadata.answer = `You have completed today's Daily Rhythm step.${unlockText}`;
+    metadata.nextStep = capabilityNextStep("todays-steps");
+    return metadata;
+  }
+
+  const path = `/daily-rhythm/day/${state.currentDayNumber}`;
+  const resource: Recommendation = {
+    type: "daily_rhythm",
+    resourceId: state.currentStepId,
+    title: state.currentStepTitle ?? `Daily Rhythm — Day ${state.currentDayNumber}`,
+    description: `Today's available Daily Rhythm step.`,
+    path,
+  };
+  metadata.answer = `Today's Daily Rhythm is Day ${state.currentDayNumber}${state.currentStepTitle ? `, “${state.currentStepTitle}”` : ""}.`;
+  metadata.recommendations = [resource];
+  metadata.resourceRecommendations = [{
+    resourceType: "daily_rhythm",
+    resourceId: state.currentStepId,
+    reason: "The signed-in user's eligible Daily Rhythm step.",
+  }];
+  metadata.resourceActions = [
+    actionForCapabilityResource("OPEN", "daily_rhythm", state.currentStepId, path),
+    actionForCapabilityResource("READ", "daily_rhythm", state.currentStepId, path),
+  ];
+  metadata.nextStep = {
+    action: `Read Daily Rhythm Day ${state.currentDayNumber}.`,
+    primaryButtonText: "Read today's step",
+    path,
+  };
+  return metadata;
+}
+
+async function resolveContinueJourney(userId: string, type: "walk" | "journey"): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const journeys = await listPublishedJourneys();
+  const matches: Array<{ journey: FrontendJourney; currentDay: number; stepId?: string }> = [];
+  for (const journey of journeys) {
+    const isWalk = journey.journeyType === "walk" || journey.journeyType === "core";
+    if ((type === "walk") !== isWalk || journey.journeyType === "daily-rhythm") continue;
+    const progress = await getProgress(userId, journey.id);
+    if (!progress || progress.status === "paused" || progress.status === "hidden" || progress.completedDays.length >= journey.durationDays) continue;
+    const steps = await listSteps(journey.id);
+    const current = steps.find((step) => step.day === progress.currentDay && step.status === "Published" && !step.isCompletionStep);
+    matches.push({ journey, currentDay: progress.currentDay, stepId: current?.id });
+  }
+
+  if (matches.length === 0) {
+    metadata.answer = `You do not have an active ${type === "walk" ? "Walk" : "Journey"} to continue yet. You can browse published ${type === "walk" ? "Walks" : "Journeys"} in Discover.`;
+    metadata.nextStep = capabilityNextStep(type === "walk" ? "walks" : "journeys");
+    return metadata;
+  }
+  if (matches.length > 1) {
+    metadata.answer = `You have more than one active ${type === "walk" ? "Walk" : "Journey"}. Which one would you like to continue?`;
+    metadata.nextStep = capabilityNextStep(type === "walk" ? "walks" : "journeys");
+    metadata.followUpPrompts = matches.slice(0, 3).map(({ journey }) => `Continue ${journey.title}`);
+    return metadata;
+  }
+
+  const { journey, currentDay, stepId } = matches[0];
+  const route = `/journey/${journey.id}/day/${currentDay}`;
+  const recommendation: Recommendation = {
+    type: type === "walk" ? "walk" : "journey",
+    resourceId: journey.id,
+    title: journey.title,
+    description: `Continue at Day ${currentDay}.`,
+    path: route,
+  };
+  metadata.answer = `You can continue “${journey.title}” at Day ${currentDay}.`;
+  metadata.recommendations = [recommendation];
+  metadata.resourceRecommendations = [{
+    resourceType: type,
+    resourceId: journey.id,
+    reason: "The signed-in user's active progress.",
+  }];
+  metadata.resourceActions = [
+    actionForCapabilityResource("OPEN", type, journey.id, route),
+    actionForCapabilityResource("CONTINUE", type, journey.id, route),
+  ];
+  metadata.nextStep = {
+    action: `Continue ${journey.title} at Day ${currentDay}.`,
+    primaryButtonText: "Continue",
+    path: route,
+  };
+  metadata.nextSteps = [{
+    type: "continue",
+    text: `${journey.title} — Day ${currentDay}`,
+    path: route,
+  }];
+  if (stepId) {
+    logger.debug({ userId, journeyId: journey.id, stepId }, "emmaus: resolved active journey step");
+  }
+  metadata.followUpPrompts = ["What is this step about?", "Help me reflect on this step."];
+  return metadata;
+}
+
+async function resolveSermonSearch(message: string): Promise<EmmausResponseMetadata> {
+  const metadata = emptyMetadata();
+  const results = await retrieveSermons(message, undefined, undefined, 3);
+  if (results.length === 0) {
+    metadata.answer = "I couldn't find a verified published sermon matching that search.";
+    metadata.followUpPrompts = ["Search sermons about faith", "Search sermons about hope"];
+    return metadata;
+  }
+  const sermons: SermonRecommendation[] = results.map((sermon) => ({
+    sermonId: sermon.sermonId,
+    ...(sermon.segmentId ? { segmentId: sermon.segmentId } : {}),
+    source: sermon.source,
+    title: sermon.title,
+    speaker: sermon.speaker,
+    sermonDate: sermon.sermonDate,
+    excerpt: sermon.excerpt,
+    reason: sermon.reason,
+    ...(sermon.openPath ? { openPath: sermon.openPath } : {}),
+    ...(sermon.timestampedUrl ? { watchUrl: sermon.timestampedUrl } : {}),
+    ...(sermon.timestampSeconds != null ? { watchTimestampSeconds: sermon.timestampSeconds } : {}),
+    listenAvailable: Boolean(sermon.audioUrl),
+    ...(sermon.listenPath ? { listenPath: sermon.listenPath } : {}),
+    ...(sermon.audioUrl ? { audioUrl: sermon.audioUrl } : {}),
+  }));
+  metadata.answer = `I found ${sermons.length === 1 ? "a verified sermon" : `${sermons.length} verified sermons`} related to your search: ${sermons.map((sermon) => `“${sermon.title}”`).join(", ")}.`;
+  metadata.sermonRecommendations = sermons;
+  metadata.recommendations = sermons.map((sermon) => ({
+    type: "sermon",
+    title: sermon.title,
+    description: sermon.excerpt,
+    path: sermon.watchUrl ?? sermon.openPath,
+    sermonId: sermon.sermonId,
+    timestampSeconds: sermon.watchTimestampSeconds,
+    speakerName: sermon.speaker,
+  }));
+  metadata.followUpPrompts = ["Search another sermon topic", "What does Scripture say about this?"];
+  return metadata;
+}
+
+export async function resolveCanonicalAskRequest(
+  message: string,
+  userId: string,
+): Promise<CanonicalToolResolution> {
+  const routed = routeAskEmmausRequest(message);
+  try {
+    switch (routed.intent) {
+      case "APP_HELP":
+        return { handled: true, metadata: appHelp(routed.requestedCapability) };
+      case "BIBLE_READ":
+        return { handled: true, metadata: await resolveBibleRead(routed) };
+      case "BIBLE_CONTINUE":
+        return { handled: true, metadata: await resolveBibleContinue(userId) };
+      case "RESOURCE_SEARCH":
+        return { handled: true, metadata: await resolveSermonSearch(routed.resourceQuery ?? message) };
+      case "DIRECT_ACTION":
+        if (routed.requestedCapability === "daily-devotional") {
+          return { handled: true, metadata: await resolveTodayDevotional(userId) };
+        }
+        if (routed.requestedCapability === "daily-rhythm") {
+          return { handled: true, metadata: await resolveDailyRhythm(userId) };
+        }
+        if (routed.requestedCapability === "walks") {
+          return { handled: true, metadata: await resolveContinueJourney(userId, "walk") };
+        }
+        if (routed.requestedCapability === "journeys") {
+          return { handled: true, metadata: await resolveContinueJourney(userId, "journey") };
+        }
+        return { handled: false };
+      default:
+        return { handled: false };
+    }
+  } catch (error) {
+    logger.warn({ intent: routed.intent, err: String(error) }, "emmaus: canonical tool resolution failed");
+    return { handled: false };
+  }
+}

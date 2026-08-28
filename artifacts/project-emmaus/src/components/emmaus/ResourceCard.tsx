@@ -13,6 +13,13 @@ import type { Recommendation } from '@/lib/emmaus-client';
 
 interface ResourceCardProps {
   recommendation: Recommendation;
+  actions?: Array<{
+    kind: 'OPEN' | 'READ' | 'CONTINUE';
+    resourceType: string;
+    resourceId: string;
+    parentId?: string;
+    route: string;
+  }>;
 }
 
 const TYPE_CONFIG: Record<
@@ -82,24 +89,35 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function ResourceCard({ recommendation }: ResourceCardProps) {
+export function ResourceCard({ recommendation, actions = [] }: ResourceCardProps) {
   const [, setLocation] = useLocation();
   const config = TYPE_CONFIG[recommendation.type] ?? TYPE_CONFIG.bible;
   const isPreachedHere = recommendation.label === 'Preached Here';
 
-  function handleClick() {
-    if (!recommendation.path) return;
-    if (/^https?:\/\//i.test(recommendation.path)) {
-      window.open(recommendation.path, '_blank', 'noopener noreferrer');
+  function openRoute(path: string | undefined) {
+    if (!path) return;
+    if (/^https?:\/\//i.test(path)) {
+      window.open(path, '_blank', 'noopener,noreferrer');
     } else if (
-      recommendation.path.startsWith('/') &&
-      !recommendation.path.startsWith('//') &&
-      !recommendation.path.includes('\n') &&
-      !recommendation.path.includes('\r')
+      path.startsWith('/') &&
+      !path.startsWith('//') &&
+      !path.includes('\n') &&
+      !path.includes('\r')
     ) {
-      setLocation(recommendation.path);
+      setLocation(path);
     }
   }
+
+  function handleClick() {
+    openRoute(recommendation.path);
+  }
+
+  const safeActions = actions.filter((action, index, all) =>
+    action.resourceId === recommendation.resourceId &&
+    all.findIndex((candidate) => candidate.kind === action.kind && candidate.route === action.route) === index
+  );
+  const actionLabel = (kind: 'OPEN' | 'READ' | 'CONTINUE') =>
+    kind === 'CONTINUE' ? 'Continue' : kind === 'READ' ? 'Read' : 'Open';
 
   if (isPreachedHere) {
     // ── Preached Here card ─────────────────────────────────────────────────
@@ -169,13 +187,14 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
 
   // ── Standard resource card ─────────────────────────────────────────────────
   return (
-    <button
-      onClick={handleClick}
-      className="w-full text-left"
-      disabled={!recommendation.path}
-    >
-      <Card className="border-border bg-card hover:border-primary/30 transition-all">
-        <CardContent className="p-3.5 flex items-start gap-3">
+    <Card className="border-border bg-card hover:border-primary/30 transition-all">
+      <CardContent className="p-3.5 flex items-start gap-3">
+        <button
+          type="button"
+          onClick={handleClick}
+          className="flex items-start gap-3 flex-1 min-w-0 text-left"
+          disabled={!recommendation.path}
+        >
           <div
             className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${config.color}`}
             aria-hidden="true"
@@ -195,8 +214,22 @@ export function ResourceCard({ recommendation }: ResourceCardProps) {
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
-    </button>
+        </button>
+        {safeActions.length > 0 && (
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {safeActions.map((action) => (
+              <button
+                key={`${action.kind}:${action.route}`}
+                type="button"
+                onClick={() => openRoute(action.route)}
+                className="rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10"
+              >
+                {actionLabel(action.kind)}
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

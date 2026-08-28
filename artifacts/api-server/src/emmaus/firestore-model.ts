@@ -162,6 +162,13 @@ export interface EmmausResponseMetadata {
     parentId?: string;
     route: string;
   }>;
+  /** Server-owned actions for application capabilities that are not content records. */
+  capabilityActions?: Array<{
+    kind: "OPEN" | "READ" | "CONTINUE";
+    capabilityId: string;
+    label: string;
+    route: string;
+  }>;
 }
 
 // ─── Firestore Document Interfaces ───────────────────────────────────────────

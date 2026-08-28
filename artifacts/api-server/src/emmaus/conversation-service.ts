@@ -54,6 +54,9 @@ import {
   validateModelResponse,
 } from "./citation-validation.js";
 import { classifyEmmausIntent } from "@workspace/api-zod";
+import { checkSafetyKeywordsOnly } from "./safety-layer.js";
+import { resolveCanonicalAskRequest } from "./canonical-tools.js";
+import { routeAskEmmausRequest } from "./intent-router.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -370,6 +373,90 @@ function sseWrite(res: Response, type: SseEventType, payload: unknown) {
   (res as Response & { flush?: () => void }).flush?.();
 }
 
+/**
+ * Complete a request resolved by a server-owned canonical tool.
+ *
+ * Canonical responses deliberately use the same persistence and SSE boundary as
+ * model responses. The client therefore has one contract, while clear
+ * navigation/read requests do not incur broad retrieval or model drift.
+ */
+async function completeCanonicalResponse(
+  req: ConversationRequest,
+  res: Response,
+  store: ReturnType<typeof getConversationStore>,
+  builtCtx: ReturnType<typeof buildContext>,
+  contextInput: EmmausContextInput,
+  metadata: EmmausResponseMetadata,
+): Promise<void> {
+  const userId = builtCtx.userId;
+  const requestedIntent = classifyEmmausIntent(req.message);
+  let conversationId = contextInput.conversationId;
+
+  if (!conversationId) {
+    const conversation = await store.createConversation({
+      userId,
+      title: builtCtx.conversationTitle,
+      entryPoint: builtCtx.entryPoint,
+    });
+    conversationId = conversation.id;
+  } else {
+    const existing = await store.getConversation(conversationId);
+    if (!existing) {
+      sseWrite(res, "error", { message: "Conversation not found." });
+      res.end();
+      return;
+    }
+    if (!isOwner(userId, existing.userId)) {
+      sseWrite(res, "error", { message: "Forbidden." });
+      res.end();
+      return;
+    }
+  }
+
+  await store.addMessage({
+    conversationId,
+    userId,
+    role: "user",
+    content: req.message,
+    promptVersion: PROMPT_VERSION,
+    entryPoint: builtCtx.entryPoint,
+    safetyChecked: true,
+    resourceInteractions: [],
+  });
+
+  const finalMeta: EmmausResponseMetadata = {
+    ...metadata,
+    requestedIntent: requestedIntent.mode,
+    scriptureReferences: metadata.scriptureReferences ?? (metadata.scripture ? [metadata.scripture] : []),
+  };
+  const answer = finalMeta.answer ?? "I found the relevant Emmaus destination for you.";
+  // Keep canonical responses progressive for the existing client experience,
+  // without pretending that a deterministic result is an LLM token stream.
+  for (const chunk of answer.match(/.{1,180}(?:\s|$)/g) ?? [answer]) {
+    sseWrite(res, "text", { content: chunk });
+  }
+
+  const assistantMsg = await store.addMessage({
+    conversationId,
+    userId,
+    role: "assistant",
+    content: answer,
+    metadata: finalMeta,
+    promptVersion: PROMPT_VERSION,
+    entryPoint: builtCtx.entryPoint,
+    safetyChecked: true,
+    resourceInteractions: [],
+  });
+
+  sseWrite(res, "done", {
+    conversationId,
+    messageId: assistantMsg.id,
+    metadata: finalMeta,
+    promptVersion: PROMPT_VERSION,
+  } satisfies SseDonePayload);
+  res.end();
+}
+
 export function setSseHeaders(res: Response) {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -416,7 +503,26 @@ export async function handleConversation(
 
   logger.info(`[emmaus:${reqId}] context_built ms=${ms()}`);
 
-  // ── 3. Scripture-first retrieval ─────────────────────────────────────────
+  // ── 3. Canonical typed request router ─────────────────────────────────────
+  //
+  // Safety remains the first authority. For safe, high-confidence requests we
+  // resolve against authenticated application data before any sermon/resource
+  // retrieval or LLM call. General and pastoral language falls through to the
+  // established Scripture-first conversation pipeline below.
+  // Voice deliberately remains on the existing shared retrieval pipeline.
+  // Its authenticated envelope is the transport boundary, not a user hint.
+  if (!contextInput.voiceContextEnvelope && checkSafetyKeywordsOnly(req.message).isSafe) {
+    const canonical = await resolveCanonicalAskRequest(req.message, userId);
+    if (canonical.handled) {
+      logger.info(
+        `[emmaus:${reqId}] canonical_resolved intent=${routeAskEmmausRequest(req.message).intent} ms=${ms()}`
+      );
+      await completeCanonicalResponse(req, res, store, builtCtx, contextInput, canonical.metadata);
+      return;
+    }
+  }
+
+  // ── 4. Scripture-first retrieval ─────────────────────────────────────────
   //
   // All three run concurrently — Bible search injects relevant BSB passages;
   // sermon retrieval finds a verified timestamped match; memories personalise
@@ -462,7 +568,7 @@ export async function handleConversation(
   );
   const sermonResult = sermonResults[0] ?? null;
 
-  // ── 4. Get or create conversation ─────────────────────────────────────────
+  // ── 5. Get or create conversation ─────────────────────────────────────────
   let conversationId = contextInput.conversationId;
   let canonicalHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
   if (!conversationId) {
@@ -491,7 +597,7 @@ export async function handleConversation(
       .slice(-settings.historyTurns);
   }
 
-  // ── 5. Persist user message ───────────────────────────────────────────────
+  // ── 6. Persist user message ───────────────────────────────────────────────
   await store.addMessage({
     conversationId,
     userId,
@@ -503,7 +609,7 @@ export async function handleConversation(
     resourceInteractions: [],
   });
 
-  // ── 6. Safety check ───────────────────────────────────────────────────────
+  // ── 7. Safety check ───────────────────────────────────────────────────────
   const safetyResult = checkSafety(req.message, store, {
     userId,
     conversationId,
@@ -541,10 +647,10 @@ export async function handleConversation(
     return;
   }
 
-  // ── 7. Check for pastoral handoff (soft) ─────────────────────────────────
+  // ── 8. Check for pastoral handoff (soft) ─────────────────────────────────
   const needsPastoralNote = checkPastoralHandoff(req.message);
 
-  // ── 8. Build messages for LLM ─────────────────────────────────────────────
+  // ── 9. Build messages for LLM ─────────────────────────────────────────────
   //
   // Inject verified sermon info into the context block so the model can
   // reference it naturally in prose — but card data comes from retrieval only.
@@ -659,7 +765,7 @@ export async function handleConversation(
 
   messages.push({ role: "user", content: req.message });
 
-  // ── 9. Stream LLM response ────────────────────────────────────────────────
+  // ── 10. Stream LLM response ───────────────────────────────────────────────
   //
   // Rolling-buffer streaming parser — handles <EMMAUS_META> appearing:
   //   • fully in one chunk
@@ -740,7 +846,7 @@ export async function handleConversation(
     `[emmaus:${reqId}] llm_done llm_ms=${Date.now() - tLLM} total_ms=${ms()} chars=${fullResponse.length}`
   );
 
-  // ── 10. Parse metadata ────────────────────────────────────────────────────
+  // ── 11. Parse metadata ────────────────────────────────────────────────────
   const { cleanText, metadata } = extractMeta(fullResponse);
   const finalMeta: EmmausResponseMetadata = metadata
     ? validateModelResponse(metadata, resourceCatalogue.resources)
@@ -750,7 +856,7 @@ export async function handleConversation(
     finalMeta.handoffType = "pastoral";
   }
 
-  // ── 11. Inject verified sermon result (strip LLM-generated sermon recs) ───
+  // ── 12. Inject verified sermon result (strip LLM-generated sermon recs) ───
   //
   // The LLM is instructed not to include sermon recommendations in metadata,
   // but strip any that appear anyway to prevent fabricated data reaching the UI.
@@ -904,7 +1010,7 @@ export async function handleConversation(
     }
   }
 
-  // ── 12. Persist assistant message ─────────────────────────────────────────
+  // ── 13. Persist assistant message ─────────────────────────────────────────
   const assistantMsg = await store.addMessage({
     conversationId,
     userId,
@@ -917,7 +1023,7 @@ export async function handleConversation(
     resourceInteractions: [],
   });
 
-  // ── 13. Send done event ───────────────────────────────────────────────────
+  // ── 14. Send done event ───────────────────────────────────────────────────
   const donePayload: SseDonePayload = {
     conversationId,
     messageId: assistantMsg.id,

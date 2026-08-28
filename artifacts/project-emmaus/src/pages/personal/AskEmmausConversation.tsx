@@ -348,11 +348,22 @@ export default function AskEmmausConversation() {
           callbacks,
         });
       } else {
+        const appendContext = contextOverride
+          ? {
+              ...contextOverride,
+              conversationId: convId,
+              userName: user.preferredName,
+            }
+          : {
+              entryPoint: 'personal' as const,
+              conversationId: convId,
+              userName: user.preferredName,
+            };
         appendMessage({
           userId: user.id,
           conversationId: convId,
           message: text,
-          context: { entryPoint: 'personal', conversationId: convId, userName: user.preferredName },
+          context: appendContext,
           history,
           callbacks,
         });
@@ -421,7 +432,10 @@ export default function AskEmmausConversation() {
     setMemoryPrompt(null);
     setMemoryDecided(false);
 
-    streamResponse(trimmed, conversationId, history);
+    // Preserve the originating Bible/Walk/Journey context for typed follow-ups
+    // such as "what about this verse?" instead of silently falling back to the
+    // generic Personal context.
+    streamResponse(trimmed, conversationId, history, initialContext ?? undefined);
   }
 
   function handleRetryRetrieval() {
@@ -433,7 +447,7 @@ export default function AskEmmausConversation() {
       .map((m) => ({ role: m.role, content: m.content }));
     const userMsgId = `user-${Date.now()}`;
     setMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: previousUser.content }]);
-    streamResponse(previousUser.content, conversationId, history);
+    streamResponse(previousUser.content, conversationId, history, initialContext ?? undefined);
   }
 
   // ─── Memory consent ──────────────────────────────────────────────────────────
@@ -545,8 +559,28 @@ export default function AskEmmausConversation() {
                     {msg.metadata.nextStep && (
                       <NextStepCard nextStep={msg.metadata.nextStep} />
                     )}
+                    {msg.metadata.capabilityActions?.map((action) => (
+                      <button
+                        key={`${action.capabilityId}:${action.kind}:${action.route}`}
+                        type="button"
+                        onClick={() => {
+                          if (action.route.startsWith('/') && !action.route.includes('\n') && !action.route.includes('\r')) {
+                            setLocation(action.route);
+                          }
+                        }}
+                        className="w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-[13px] font-semibold text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
                     {msg.metadata.recommendations.slice(0, 3).map((rec, i) => (
-                      <ResourceCard key={i} recommendation={rec} />
+                      <ResourceCard
+                        key={i}
+                        recommendation={rec}
+                        actions={msg.metadata.resourceActions?.filter((action) =>
+                          action.resourceId === rec.resourceId
+                        )}
+                      />
                     ))}
                     {msg.metadata.sermonRecommendations?.slice(0, 3).map((sermon) => (
                       <SermonRecommendationCard key={sermon.sermonId} sermon={sermon} />

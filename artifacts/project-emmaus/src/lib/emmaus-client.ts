@@ -140,6 +140,12 @@ export interface EmmausMetadata {
     parentId?: string;
     route: string;
   }>;
+  capabilityActions?: Array<{
+    kind: 'OPEN' | 'READ' | 'CONTINUE';
+    capabilityId: string;
+    label: string;
+    route: string;
+  }>;
 }
 
 export interface ConversationStub {
