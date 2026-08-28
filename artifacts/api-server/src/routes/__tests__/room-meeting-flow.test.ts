@@ -41,6 +41,7 @@ let roomId = "";
 let sessionId = "";
 let leaderHeaders: { Authorization: string };
 let memberHeaders: { Authorization: string };
+let preparedMediaId = "";
 const nonce = crypto.randomBytes(6).toString("hex");
 const leaderKey = `room-meeting-leader-${nonce}`;
 const memberKey = `room-meeting-member-${nonce}`;
@@ -218,6 +219,76 @@ after(async () => {
 });
 
 describe("two-device active Group Meeting flow", () => {
+  it("keeps prepared media private until its leader shares it", async () => {
+    const prepared = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/media`,
+      headers: leaderHeaders,
+      body: {
+        attachment: {
+          type: "link",
+          filename: "Preparation guide",
+          objectPath: "",
+          mimeType: "text/uri-list",
+          size: 0,
+          url: "https://example.com/preparation",
+        },
+      },
+    });
+    assert.equal(prepared.status, 201, prepared.body);
+
+    const [leaderPrivate, memberPrivate] = await Promise.all([
+      request({ path: `/api/rooms/${roomId}/media`, headers: leaderHeaders }),
+      request({ path: `/api/rooms/${roomId}/media`, headers: memberHeaders }),
+    ]);
+    const leaderItems = json<{ media: Array<{ messageId: string; attachment: { sharedBeforeMeeting?: boolean } }> }>(leaderPrivate).media;
+    preparedMediaId = leaderItems.find(item => item.attachment.sharedBeforeMeeting === false)?.messageId ?? "";
+    assert.ok(preparedMediaId);
+    assert.equal(
+      json<{ media: Array<{ messageId: string }> }>(memberPrivate).media
+        .some(item => item.messageId === preparedMediaId),
+      false,
+    );
+
+    const shared = await request({
+      method: "PATCH",
+      path: `/api/rooms/${roomId}/media/${preparedMediaId}/visibility`,
+      headers: leaderHeaders,
+      body: { shared: true },
+    });
+    assert.equal(shared.status, 200, shared.body);
+    const memberShared = await request({
+      path: `/api/rooms/${roomId}/media`,
+      headers: memberHeaders,
+    });
+    assert.equal(
+      json<{ media: Array<{ messageId: string }> }>(memberShared).media
+        .some(item => item.messageId === preparedMediaId),
+      true,
+    );
+
+    const forbidden = await request({
+      method: "PATCH",
+      path: `/api/rooms/${roomId}/media/visibility`,
+      headers: memberHeaders,
+      body: { shared: false },
+    });
+    assert.equal(forbidden.status, 403, forbidden.body);
+
+    const hidden = await request({
+      method: "PATCH",
+      path: `/api/rooms/${roomId}/media/visibility`,
+      headers: leaderHeaders,
+      body: { shared: false },
+    });
+    assert.equal(hidden.status, 200, hidden.body);
+    const memberHidden = await request({
+      path: `/api/rooms/${roomId}/media`,
+      headers: memberHeaders,
+    });
+    assert.equal(json<{ media: unknown[] }>(memberHidden).media.length, 0);
+  });
+
   it("keeps pre-join state identical and does not authorize discussion early", async () => {
     const roomDetail = await request({
       path: `/api/rooms/${roomId}`,

@@ -104,6 +104,8 @@ export interface MediaAttachment {
   url?: string;
   /** Set when a leader removes the media while retaining the discussion message. */
   removed?: boolean;
+  /** Whether participants may view this item on the pre-meeting preparation screen. */
+  sharedBeforeMeeting?: boolean;
 }
 
 export interface RoomMessage {
@@ -794,8 +796,12 @@ export async function addMessage(
 
 // ─── Room Media helpers ───────────────────────────────────────────────────────
 
-/** Return all messages that have attachments, newest first. */
-export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMediaItem[]> {
+/** Return room attachments, optionally limited to items shared before the meeting. */
+export async function getRoomMedia(
+  roomId: string,
+  limit = 100,
+  sharedBeforeMeetingOnly = false,
+): Promise<RoomMediaItem[]> {
   const res = await pool.query(
     `SELECT rm.id, rm.user_id, rm.attachment, rm.created_at, up.preferred_name
      FROM   room_messages rm
@@ -804,9 +810,13 @@ export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMed
      WHERE  rm.room_id = $1
        AND rm.attachment IS NOT NULL
        AND COALESCE(rm.attachment->>'removed', 'false') <> 'true'
+       AND (
+         $3::boolean = false
+         OR COALESCE(rm.attachment->>'sharedBeforeMeeting', 'false') = 'true'
+       )
      ORDER  BY rm.created_at DESC
      LIMIT  $2`,
-    [roomId, limit]
+    [roomId, limit, sharedBeforeMeetingOnly]
   );
   return res.rows.map(row => ({
     messageId: String(row.id),
@@ -818,6 +828,48 @@ export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMed
     attachment: row.attachment as MediaAttachment,
     createdAt: String(row.created_at),
   }));
+}
+
+export async function setRoomMediaVisibility(
+  roomId: string,
+  messageId: string,
+  sharedBeforeMeeting: boolean,
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE room_messages
+     SET attachment = jsonb_set(
+       attachment,
+       '{sharedBeforeMeeting}',
+       to_jsonb($3::boolean),
+       true
+     )
+     WHERE room_id = $1
+       AND id = $2
+       AND attachment IS NOT NULL
+       AND COALESCE(attachment->>'removed', 'false') <> 'true'`,
+    [roomId, messageId, sharedBeforeMeeting],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function setAllRoomMediaVisibility(
+  roomId: string,
+  sharedBeforeMeeting: boolean,
+): Promise<number> {
+  const result = await pool.query(
+    `UPDATE room_messages
+     SET attachment = jsonb_set(
+       attachment,
+       '{sharedBeforeMeeting}',
+       to_jsonb($2::boolean),
+       true
+     )
+     WHERE room_id = $1
+       AND attachment IS NOT NULL
+       AND COALESCE(attachment->>'removed', 'false') <> 'true'`,
+    [roomId, sharedBeforeMeeting],
+  );
+  return result.rowCount ?? 0;
 }
 
 /**

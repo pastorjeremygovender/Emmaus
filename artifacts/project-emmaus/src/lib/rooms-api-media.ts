@@ -92,6 +92,43 @@ export async function apiRemoveRoomMedia(
   );
 }
 
+export async function apiAddPreparedRoomMedia(
+  userId: string,
+  roomId: string,
+  attachment: MediaAttachment,
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/media`,
+    userId,
+    { method: 'POST', body: JSON.stringify({ attachment }) },
+  );
+}
+
+export async function apiSetRoomMediaVisibility(
+  userId: string,
+  roomId: string,
+  messageId: string,
+  shared: boolean,
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/media/${messageId}/visibility`,
+    userId,
+    { method: 'PATCH', body: JSON.stringify({ shared }) },
+  );
+}
+
+export async function apiSetAllRoomMediaVisibility(
+  userId: string,
+  roomId: string,
+  shared: boolean,
+): Promise<void> {
+  await roomsFetch(
+    `/api/rooms/${roomId}/media/visibility`,
+    userId,
+    { method: 'PATCH', body: JSON.stringify({ shared }) },
+  );
+}
+
 // ─── Presentation ─────────────────────────────────────────────────────────────
 
 export async function apiGetActivePresentation(

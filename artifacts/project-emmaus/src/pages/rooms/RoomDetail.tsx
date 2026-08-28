@@ -10,12 +10,12 @@ import {
   Share2, Trash2, LogOut, Pencil, Settings, Users2,
   StickyNote, HandHeart, CheckCircle2, Clock, MapPin, StopCircle,
   Crown, Calendar, RefreshCw,
-  FileText, X, Edit2, Check,
+  FileText, X, Edit2, Check, Presentation, Eye, EyeOff, Plus, Trash2 as MediaTrash,
 } from 'lucide-react';
 import { useJourney } from '@/contexts/JourneyContext';
 import type {
   RoomDetail as RoomDetailType, RoomMember, MemberJourneyProgress,
-  RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionAttendee,
+  RoomSession, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionAttendee, RoomMediaItem,
 } from '@/lib/rooms-types';
 import { isRoomLeaderRole, isRoomOwnerRole } from '@/lib/rooms-types';
 import { goBackOrFallback } from '@/lib/return-context';
@@ -39,7 +39,17 @@ import {
 } from '@/lib/rooms-api';
 import { VideoRoom } from '@/components/VideoRoom';
 import { PresentationPanel } from '@/components/PresentationPanel';
-import { apiGetActivePresentation, apiSetAllowMemberPresent } from '@/lib/rooms-api-media';
+import {
+  apiAddPreparedRoomMedia,
+  apiGetActivePresentation,
+  apiGetRoomMedia,
+  apiRemoveRoomMedia,
+  apiSetAllRoomMediaVisibility,
+  apiSetAllowMemberPresent,
+  apiSetRoomMediaVisibility,
+} from '@/lib/rooms-api-media';
+import { AttachmentPicker } from '@/components/AttachmentPicker';
+import { MediaMessageBubble } from '@/components/MediaMessageBubble';
 
 const PROGRESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -131,6 +141,10 @@ export default function RoomDetail() {
   const [endingMeeting, setEndingMeeting] = useState(false);
   // (showDiscussion removed — Discussion is now a plain card, not an accordion)
   const [refreshing, setRefreshing] = useState(false);
+  const [preparedMedia, setPreparedMedia] = useState<RoomMediaItem[]>([]);
+  const [preparedMediaLoading, setPreparedMediaLoading] = useState(false);
+  const [preparedMediaBusy, setPreparedMediaBusy] = useState<string | null>(null);
+  const [showPreparedMediaPicker, setShowPreparedMediaPicker] = useState(false);
 
   // ── Shared Scripture & Notes state ─────────────────────────────────────────
   const [showSharedScripture, setShowSharedScripture] = useState(false);
@@ -477,6 +491,23 @@ export default function RoomDetail() {
     });
   }, [roomId, user, loadRoomDetail]);
 
+  const refreshPreparedMedia = useCallback(async () => {
+    if (!roomId || !user?.id) return;
+    setPreparedMediaLoading(true);
+    try {
+      setPreparedMedia(await apiGetRoomMedia(user.id, String(roomId)));
+    } catch {
+      setPreparedMedia([]);
+    } finally {
+      setPreparedMediaLoading(false);
+    }
+  }, [roomId, user?.id]);
+
+  useEffect(() => {
+    if (!room || !user?.id || !roomId || activeSession) return;
+    void refreshPreparedMedia();
+  }, [activeSession, refreshPreparedMedia, room, roomId, user?.id]);
+
   // Room roles can change from another device. Refresh the authoritative room
   // detail periodically so stale SSE/session state cannot leave management
   // controls visible after an Owner demotes or removes this user.
@@ -668,6 +699,50 @@ export default function RoomDetail() {
 
   const handleBack = () => {
     goBackOrFallback('/rooms', setLocation);
+  };
+
+  const handlePreparedMediaVisibility = async (messageId: string, shared: boolean) => {
+    setPreparedMediaBusy(`visibility-${messageId}`);
+    try {
+      await apiSetRoomMediaVisibility(user.id, String(roomId), messageId, shared);
+      setPreparedMedia(items => items.map(item => (
+        item.messageId === messageId
+          ? { ...item, attachment: { ...item.attachment, sharedBeforeMeeting: shared } }
+          : item
+      )));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not update media visibility.');
+    } finally {
+      setPreparedMediaBusy(null);
+    }
+  };
+
+  const handleAllPreparedMediaVisibility = async (shared: boolean) => {
+    setPreparedMediaBusy('visibility-all');
+    try {
+      await apiSetAllRoomMediaVisibility(user.id, String(roomId), shared);
+      setPreparedMedia(items => items.map(item => ({
+        ...item,
+        attachment: { ...item.attachment, sharedBeforeMeeting: shared },
+      })));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not update media visibility.');
+    } finally {
+      setPreparedMediaBusy(null);
+    }
+  };
+
+  const handleRemovePreparedMedia = async (item: RoomMediaItem) => {
+    if (!window.confirm(`Remove “${item.attachment.filename}” from prepared media?`)) return;
+    setPreparedMediaBusy(`remove-${item.messageId}`);
+    try {
+      await apiRemoveRoomMedia(user.id, String(roomId), item.messageId);
+      setPreparedMedia(items => items.filter(media => media.messageId !== item.messageId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not remove prepared media.');
+    } finally {
+      setPreparedMediaBusy(null);
+    }
   };
 
   const handleLeave = async () => {
@@ -1458,6 +1533,97 @@ export default function RoomDetail() {
               )}
             </section>
 
+            {/* Prepared Media */}
+            <section>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Meeting Media</p>
+                  <p className="text-[12px] text-muted-foreground mt-1">
+                    {isAuthorizedLeader
+                      ? 'Prepare files now and choose what participants can see.'
+                      : 'Shared by your leader for this meeting.'}
+                  </p>
+                </div>
+                {isAuthorizedLeader && (
+                  <button
+                    onClick={() => setShowPreparedMediaPicker(true)}
+                    className="shrink-0 flex items-center gap-1.5 text-[13px] text-primary font-semibold"
+                  >
+                    <Plus size={14} /> Add media
+                  </button>
+                )}
+              </div>
+
+              {isAuthorizedLeader && preparedMedia.length > 0 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    disabled={preparedMediaBusy !== null}
+                    onClick={() => void handleAllPreparedMediaVisibility(true)}
+                    className="flex-1 py-2.5 rounded-xl border border-border bg-card text-[13px] font-semibold text-foreground disabled:opacity-50"
+                  >
+                    Share all
+                  </button>
+                  <button
+                    disabled={preparedMediaBusy !== null}
+                    onClick={() => void handleAllPreparedMediaVisibility(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-border bg-card text-[13px] font-semibold text-foreground disabled:opacity-50"
+                  >
+                    Hide all
+                  </button>
+                </div>
+              )}
+
+              {preparedMediaLoading ? (
+                <div className="p-6 rounded-2xl border border-border bg-card flex justify-center">
+                  <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                </div>
+              ) : preparedMedia.length === 0 ? (
+                <div className="p-5 rounded-2xl border border-dashed border-border bg-card/40 text-center">
+                  <Presentation size={24} className="mx-auto text-muted-foreground/50 mb-2" />
+                  <p className="text-[13px] text-muted-foreground">
+                    {isAuthorizedLeader ? 'No media prepared yet.' : 'No media has been shared yet.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {preparedMedia.map(item => {
+                    const shared = item.attachment.sharedBeforeMeeting === true;
+                    return (
+                      <div key={item.messageId} className="p-4 rounded-2xl border border-border bg-card space-y-3">
+                        <MediaMessageBubble attachment={item.attachment} isMe={false} />
+                        {isAuthorizedLeader && (
+                          <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+                            <button
+                              disabled={preparedMediaBusy !== null}
+                              onClick={() => void handlePreparedMediaVisibility(item.messageId, !shared)}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-50 ${
+                                shared ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              {preparedMediaBusy === `visibility-${item.messageId}`
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : shared ? <Eye size={14} /> : <EyeOff size={14} />}
+                              {shared ? 'Shared with participants' : 'Hidden from participants'}
+                            </button>
+                            <button
+                              aria-label={`Remove ${item.attachment.filename}`}
+                              disabled={preparedMediaBusy !== null}
+                              onClick={() => void handleRemovePreparedMedia(item)}
+                              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                            >
+                              {preparedMediaBusy === `remove-${item.messageId}`
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <MediaTrash size={15} />}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
             {/* Members */}
             <section>
               <div className="flex items-center justify-between mb-3">
@@ -1476,6 +1642,7 @@ export default function RoomDetail() {
                     </button>
                   )}
                 </div>
+
               </div>
               <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
                 {[...room.members].sort((a, b) => {
@@ -1993,6 +2160,23 @@ export default function RoomDetail() {
         )}
 
       </main>
+
+      {showPreparedMediaPicker && (
+        <AttachmentPicker
+          userId={user.id}
+          roomId={String(roomId)}
+          onAttachment={attachment => {
+            setShowPreparedMediaPicker(false);
+            setPreparedMediaBusy('add-media');
+            void apiAddPreparedRoomMedia(user.id, String(roomId), attachment)
+              .then(refreshPreparedMedia)
+              .catch(err => alert(err instanceof Error ? err.message : 'Could not add prepared media.'))
+              .finally(() => setPreparedMediaBusy(null));
+          }}
+          onClose={() => setShowPreparedMediaPicker(false)}
+        />
+      )}
+
       <BottomNav />
 
       {/* ── Session Complete Card ────────────────────────────────────────── */}

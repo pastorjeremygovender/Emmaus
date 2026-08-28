@@ -207,6 +207,8 @@ export interface MediaAttachment {
   url?: string;
   /** Set when a leader removes the media while retaining the discussion message. */
   removed?: boolean;
+  /** Whether participants may view this item before the meeting starts. */
+  sharedBeforeMeeting?: boolean;
 }
 
 export interface PresentationState {

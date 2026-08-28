@@ -106,10 +106,15 @@ describe('active meeting synchronization contract', () => {
     expect(roomDetailSource).toContain('setDiscussionPendingNotice(null);');
   });
 
-  it('allows members to stage media before a meeting but only present during one', () => {
-    expect(guidePanelSource).toContain('Add media before the meeting');
+  it('moves media preparation out of Meeting Tools and keeps presentation session-gated', () => {
+    expect(guidePanelSource).not.toContain('Add media before the meeting');
     expect(guidePanelSource).toContain('disabled={!sessionActive || busy === `present-${item.messageId}`}');
-    expect(guidePanelSource).toContain('await apiSendMessage(userId, roomId, \'\', attachment);');
+    expect(roomDetailSource).toContain('Meeting Media');
+    expect(roomDetailSource).toContain('Share all');
+    expect(roomDetailSource).toContain('Hide all');
+    expect(roomDetailSource).toContain('apiAddPreparedRoomMedia');
+    expect(roomDetailSource).toContain('apiSetRoomMediaVisibility');
+    expect(roomDetailSource).toContain('<MediaMessageBubble attachment={item.attachment} isMe={false} />');
   });
 
   it('keeps the completion card focused on summary counts', () => {

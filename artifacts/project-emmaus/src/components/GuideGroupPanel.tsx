@@ -30,8 +30,6 @@ import {
   apiOpenGroupDiscussion,
 } from '@/lib/rooms-api';
 import { apiGetRoomMedia, apiRemoveRoomMedia, apiStartPresentation } from '@/lib/rooms-api-media';
-import { apiSendMessage } from '@/lib/rooms-api';
-import { AttachmentPicker } from '@/components/AttachmentPicker';
 import type { RoomSession, ScriptureRef, SessionCompleteSummary, RoomMediaItem, MediaAttachmentType } from '@/lib/rooms-types';
 
 const MEDIA_TYPE_ICON: Record<MediaAttachmentType, React.ReactNode> = {
@@ -119,7 +117,6 @@ export function GuideGroupPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [mediaItems, setMediaItems] = useState<RoomMediaItem[]>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
-  const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
 
   // Scripture picker state
   const [book, setBook] = useState('John');
@@ -369,18 +366,6 @@ export function GuideGroupPanel({
       {view === 'media-picker' && (
         <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-10 pt-4">
           <div className="space-y-3">
-            <button
-              onClick={() => setShowAttachmentPicker(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-primary/40 text-primary text-[14px] font-semibold hover:bg-primary/5 transition-all"
-            >
-              <Presentation size={16} />
-              Add media before the meeting
-            </button>
-            {!sessionActive && (
-              <p className="text-[12px] text-muted-foreground text-center">
-                You can stage media now. Start the meeting before presenting it.
-              </p>
-            )}
             {mediaItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Presentation size={32} className="mx-auto mb-3 opacity-30" />
@@ -451,22 +436,6 @@ export function GuideGroupPanel({
             )}
           </div>
         </div>
-      )}
-
-      {showAttachmentPicker && (
-        <AttachmentPicker
-          userId={userId}
-          roomId={roomId}
-          onAttachment={attachment => {
-            setShowAttachmentPicker(false);
-            void run('upload-media', async () => {
-              await apiSendMessage(userId, roomId, '', attachment);
-              const items = await apiGetRoomMedia(userId, roomId);
-              setMediaItems(items);
-            });
-          }}
-          onClose={() => setShowAttachmentPicker(false)}
-        />
       )}
 
       {/* ── Scripture picker ───────────────────────────────────────────────── */}

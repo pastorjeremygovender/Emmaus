@@ -97,6 +97,8 @@ import {
   getRecentlyCompletedSession,
   acknowledgeSessionCompletion,
   getRoomMedia,
+  setRoomMediaVisibility,
+  setAllRoomMediaVisibility,
   removeRoomMedia,
   RoomMediaStorageCleanupError,
   startPresentation,
@@ -1592,10 +1594,68 @@ router.get("/:roomId/media", async (req, res) => {
       res.status(403).json({ error: "You are not a member of this room." });
       return;
     }
-    const media = await getRoomMedia(String(roomId));
+    const media = await getRoomMedia(String(roomId), 100, !isRoomLeaderRole(role));
     res.json({ media });
   } catch {
     res.status(500).json({ error: "Failed to load media." });
+  }
+});
+
+router.post("/:roomId/media", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const attachment = (req.body as { attachment?: MediaAttachment })?.attachment;
+  if (!attachment || !attachment.filename || !attachment.type) {
+    res.status(400).json({ error: "A valid media attachment is required." });
+    return;
+  }
+  try {
+    await addMessage(String(roomId), userId, "", {
+      ...attachment,
+      sharedBeforeMeeting: false,
+    });
+    res.status(201).json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to add prepared media." });
+  }
+});
+
+router.patch("/:roomId/media/visibility", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const shared = (req.body as { shared?: unknown })?.shared;
+  if (typeof shared !== "boolean") {
+    res.status(400).json({ error: "shared must be a boolean." });
+    return;
+  }
+  try {
+    const updated = await setAllRoomMediaVisibility(String(roomId), shared);
+    res.json({ ok: true, updated });
+  } catch {
+    res.status(500).json({ error: "Failed to update prepared media visibility." });
+  }
+});
+
+router.patch("/:roomId/media/:messageId/visibility", async (req, res) => {
+  const { roomId, messageId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const shared = (req.body as { shared?: unknown })?.shared;
+  if (typeof shared !== "boolean") {
+    res.status(400).json({ error: "shared must be a boolean." });
+    return;
+  }
+  try {
+    const updated = await setRoomMediaVisibility(String(roomId), String(messageId), shared);
+    if (!updated) {
+      res.status(404).json({ error: "Prepared media not found in this room." });
+      return;
+    }
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to update prepared media visibility." });
   }
 });
 
