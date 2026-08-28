@@ -10,6 +10,7 @@ release remains blocked until the authenticated browser checklist is completed.
 |---|---|---|
 | Preview authentication boundary | Observed only while signed out | `evidence/task-712-preview-sign-in.jpg`; the preview displayed the sign-in form and browser logs reported `authenticated: false` |
 | Authenticated API transport parity | Passed with isolated test identities | `pnpm run test:sermon-action-parity` — 3/3 tests passed for typed Ask Emmaus, Voice, resumed Voice, canonical/archive sermon actions, negative retrieval, timing fields, and correlatable request IDs |
+| Multi-user capability matrix | Passed with isolated database-backed fixtures | `pnpm --filter @workspace/api-server run test:multi-user-acceptance` — separate real member identities cover Bible Studies, Discover, Daily Devotional, Walks, Journeys, Daily Rhythm locks, saved Bible position, private progress, unpublished resources, and invalid targets |
 | Authenticated browser flow | **Not verified** | This environment has no real member/admin credentials or browser interaction capability; the screenshot is not evidence of a signed-in account |
 | Frontend account isolation/path regression suite | Passed as automated tests | `App.browser-paths.test.tsx`, `App.startup-performance.test.tsx`, and `provider-account-isolation.test.tsx` — 13/13 tests passed |
 | API restart/persistence boundary | Observed | API workflow restarted cleanly; the current conversation store remains memory-backed and is not restart-safe |
@@ -33,11 +34,11 @@ not publication evidence.
 | Explicit stale/orphan/missed-index repair | Fully verified | `POST /api/sermons/admin/retrieval-diagnostics/repair`; `repair:knowledge-index` |
 | Live publication-safe catalogue for devotionals, Bible Studies, Walks, Journeys | Fully verified | `resource-catalogue.ts`; `citation-validation.test.ts`; publication predicates are applied at query time |
 | Natural-language devotional, Bible, saved-position, Walk/Journey routing | Fully verified | `src/emmaus/__tests__/intent-router.test.ts`; `canonical-tools.ts` |
-| Bible Study and pastoral resource discovery | Partially implemented | Shared router and catalogue-backed action validation are present; authenticated DB fixture coverage is still required |
+| Bible Study and pastoral resource discovery | Partially implemented | Shared router and catalogue-backed action validation are covered by `multi-user-acceptance.test.ts`; pastoral resource discovery remains outside this suite |
 | Sermon topic and timestamped segment search | Fully verified | `sermon-retrieval.ts`, authenticated DB-backed `sermon-action-parity.test.ts`; canonical and archive Watch/Listen actions plus timestamp offsets match across typed and Voice transports |
 | Exact Bible route and aliases | Fully verified | `intent-router.test.ts`, `citation-validation.test.ts`; Psalm 23, John 3:16/3:16–18, 1 Corinthians 13, 2 Thessalonians 3:6–10, Song of Songs 2:1 |
 | Scripture-first general questions | Fully verified | `conversation-service.ts` retrieval ordering and citation validation tests |
-| No fabricated/unpublished/locked/other-user resources or actions | Partially implemented | server-owned action registry and publication filters; full multi-user DB acceptance suite remains |
+| No fabricated/unpublished/locked/other-user resources or actions | Fully verified in automated acceptance scope | `multi-user-acceptance.test.ts` rejects unpublished resources, locked Daily Rhythm content, member A's progress and saved position for member B, invented/mismatched targets, and invalid Bible destinations |
 | Structured stage latency evidence | Partially implemented | existing request/retrieval/TTFT/total logs; authenticated comparison of deterministic vs general requests remains |
 | Conversation persistence across restarts | Not implemented | `getConversationStore()` is memory-backed; Firestore model is inactive. Do not claim restart durability |
 | Voice and Live Audio/Video in this release | Fully verified as excluded | Voice transport remains outside the typed canonical branch; no LiveKit/TTS changes are part of this work |

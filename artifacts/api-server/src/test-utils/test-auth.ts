@@ -34,6 +34,8 @@ import {
   pool,
   sermonCompanionProgressTable,
   sessionsTable,
+  stepReflectionsTable,
+  userJourneyProgressTable,
   userProfilesTable,
   usersTable,
   type UserRole,
@@ -302,6 +304,20 @@ async function purgeDomainResidue(userIds: string[]): Promise<void> {
   await db
     .delete(sermonCompanionProgressTable)
     .where(inArray(sermonCompanionProgressTable.userId, userIds));
+  await db
+    .delete(stepReflectionsTable)
+    .where(inArray(stepReflectionsTable.userId, userIds));
+  await db
+    .delete(userJourneyProgressTable)
+    .where(inArray(userJourneyProgressTable.userId, userIds));
+  await pool.query(
+    `DELETE FROM user_bible_data WHERE user_id = ANY($1::text[])`,
+    [userIds],
+  );
+  await pool.query(
+    `DELETE FROM daily_rhythm_opening_ledger WHERE user_id = ANY($1::text[])`,
+    [userIds],
+  );
 
   // Devotional series authored by a test admin (created_by), plus their
   // cascade children (entries + any remaining progress cascade on series id).
