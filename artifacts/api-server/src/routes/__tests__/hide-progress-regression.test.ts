@@ -188,13 +188,13 @@ after(async () => {
   }
 });
 
-// ─── RC-1: Daily Rhythm cannot be hidden ─────────────────────────────────────
+// ─── RC-1: Journey hide is idempotent for an unstarted Daily Rhythm ──────────
 
-describe("RC-1 — Daily Rhythm has no hide option", () => {
-  it("POST /api/engagements/journey/:id/hide returns 400", async () => {
-    // The hide endpoint only supports devotional and sermon-companion.
-    // For any other type — including journeys (which covers daily-rhythm) —
-    // the server must reject with 400 rather than silently no-op.
+describe("RC-1 — Journey hide is safe for an unstarted Daily Rhythm", () => {
+  it("POST /api/engagements/journey/:id/hide returns 200", async () => {
+    // Journey content supports the same non-destructive hide operation as
+    // devotionals and sermon companions. An unknown journey is a no-op, but
+    // remains a successful, idempotent request.
     const fakeJourneyId = `fake-journey-${RUN}`;
     const res = await request({
       method: "POST",
@@ -203,8 +203,8 @@ describe("RC-1 — Daily Rhythm has no hide option", () => {
     });
     assert.equal(
       res.status,
-      400,
-      `Expected 400 for journey hide, got ${res.status}: ${res.body}`,
+      200,
+      `Expected 200 for journey hide, got ${res.status}: ${res.body}`,
     );
   });
 });

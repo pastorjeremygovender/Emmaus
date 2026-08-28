@@ -99,12 +99,13 @@ export function guardEnv(): void {
 
 /**
  * A unique, clearly test-only prefix for every identity this helper creates.
- * `pid` + `nonce` keeps IDs unique across concurrent `node --test` files while
- * still being obviously test-scoped and easy to bulk-clean.
+ * A process id plus a high-entropy nonce keeps IDs unique across concurrent
+ * `node --test` files while still being obviously test-scoped and easy to
+ * bulk-clean.
  */
 const TEST_PREFIX = "itest-auth";
 const PROCESS_NONCE = `${process.pid.toString(36)}-${crypto
-  .randomBytes(4)
+  .randomBytes(12)
   .toString("hex")}`;
 
 /** Domain used for generated emails — clearly synthetic, never a real domain. */

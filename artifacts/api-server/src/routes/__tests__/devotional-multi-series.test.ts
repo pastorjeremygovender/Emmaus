@@ -24,6 +24,7 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
@@ -79,7 +80,7 @@ async function request(opts: ReqOpts): Promise<{ status: number; body: string }>
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
-const RUN_TAG = Date.now();
+const RUN_TAG = `${Date.now()}-${process.pid}-${randomBytes(8).toString("hex")}`;
 // Synthetic superAdmin setup key — the harness maps it to a real test session
 // with app_role superAdmin. No demo-user ownership semantics.
 const ADMIN_USER_ID = `test-admin-mseries-${RUN_TAG}`;

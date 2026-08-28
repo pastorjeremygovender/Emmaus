@@ -20,6 +20,7 @@
 
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { authHeader, cleanupTestAuth } from "../../test-utils/test-auth.ts";
@@ -79,7 +80,7 @@ async function request(opts: ReqOpts): Promise<{ status: number; body: string }>
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
 // Stable unique IDs scoped to this test run — avoids collision with real data.
-const RUN_TAG = Date.now();
+const RUN_TAG = `${Date.now()}-${process.pid}-${randomBytes(8).toString("hex")}`;
 const ADMIN_USER_ID = `test-admin-${RUN_TAG}`;
 const MEMBER_USER_ID = `test-member-${RUN_TAG}`;
 // Deliberately verbose generic description — the test asserts this string never
@@ -494,12 +495,13 @@ describe("F — Non-contiguous published entries: cap uses maxPublishedDay not c
     const data = await fetchNextSteps(SPARSE_MEMBER_USER_ID);
     const item = data.dailyDevotionals.find(d => d.id === sparseSeriesId);
     assert.ok(item, "Sparse series not found");
-    // Description: completedCount=1, not allComplete (1 < 2); currentDay=3 (maxDay cap).
+    // Description uses the positional display index within published entries:
+    // day 3 is the second published entry, so it displays as Day 2 of 2.
     // Entry at day 3 = SPARSE_ENTRY_TITLES[1] = "Sparse Conclusion".
     assert.equal(
       item.description,
-      `Day 3 of 2 · ${SPARSE_ENTRY_TITLES[1]}`,
-      `expected "Day 3 of 2 · ${SPARSE_ENTRY_TITLES[1]}", got: "${item.description}"`
+      `Day 2 of 2 · ${SPARSE_ENTRY_TITLES[1]}`,
+      `expected "Day 2 of 2 · ${SPARSE_ENTRY_TITLES[1]}", got: "${item.description}"`
     );
   });
 
@@ -577,13 +579,14 @@ describe("G — Sermon companion description matches Today's Steps formula", () 
 
     // Step 5: assert description format.
     // After completing day 1, currentDay = 2 (companion.markDayComplete increments it).
-    // Walk.tsx formula: allComplete ? "N of N completed" : completedCount > 0 ? "Day N of M · Title" : "Day 1 of M"
+    // Current card contract: allComplete ? "N of N completed" :
+    // completedCount > 0 ? "Step N of M · Title" : "Step 1 of M".
     // completedCount = 1, allComplete = (1 >= numberOfDays)? only if 1-day companion.
-    const expectedDay = companion.numberOfDays === 1 ? "completed" : "Day 2";
+    const expectedStep = companion.numberOfDays === 1 ? "completed" : "Step 2";
     assert.ok(
-      item.description?.startsWith(expectedDay) ||
+      item.description?.startsWith(expectedStep) ||
         (companion.numberOfDays === 1 && item.description?.endsWith("completed")),
-      `description "${item.description}" should start with "${expectedDay}" ` +
+      `description "${item.description}" should start with "${expectedStep}" ` +
         `for a ${companion.numberOfDays}-day companion after completing day 1`
     );
 
@@ -597,12 +600,13 @@ describe("G — Sermon companion description matches Today's Steps formula", () 
       `description is suspiciously long (${item.description?.length} chars): "${item.description}"`
     );
 
-    // Route must point to day 2 (in-progress) or /previous (if 1-day complete).
+    // Companion cards always open the overview; the overview owns the next-step
+    // decision instead of coupling the card to a specific day route.
     if (companion.numberOfDays > 1) {
       assert.equal(
         item.route,
-        `/sermon-companion/${companion.id}/day/2`,
-        `route should be /day/2 after completing day 1`
+        `/sermon-companion/${companion.id}/overview`,
+        `route should be /overview after completing day 1`
       );
     }
   });
