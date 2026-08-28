@@ -2,11 +2,10 @@
  * SessionCompleteCard.tsx — Full-screen overlay shown to ALL room members when
  * the leader formally completes the session.
  *
- * Displays which modes were actually entered (Studied / Discussed / Prayed),
- * session summary counts, and a dismiss button.
+ * Displays session summary counts and a dismiss button.
  */
 
-import { CheckCircle2, Circle, HandHeart, MessageSquare, BookOpen, X } from 'lucide-react';
+import { CheckCircle2, X } from 'lucide-react';
 import type { SessionCompleteSummary } from '@/lib/rooms-types';
 
 interface SessionCompleteCardProps {
@@ -15,32 +14,7 @@ interface SessionCompleteCardProps {
 }
 
 export function SessionCompleteCard({ summary, onDismiss }: SessionCompleteCardProps) {
-  const { modesEntered, memberCount, prayerRequestCount, sharedNoteCount } = summary;
-
-  const studied = true; // sessions always start in study mode
-  const discussed = modesEntered.includes('discussion');
-  const prayed = modesEntered.includes('prayer');
-
-  const moments = [
-    {
-      key: 'studied',
-      done: studied,
-      icon: <BookOpen size={17} />,
-      label: 'Studied the Word together',
-    },
-    {
-      key: 'discussed',
-      done: discussed,
-      icon: <MessageSquare size={17} />,
-      label: 'Discussed together',
-    },
-    {
-      key: 'prayed',
-      done: prayed,
-      icon: <HandHeart size={17} />,
-      label: 'Prayed together',
-    },
-  ];
+  const { memberCount, prayerRequestCount, sharedNoteCount } = summary;
 
   const stats = [
     memberCount > 0 && `${memberCount} member${memberCount !== 1 ? 's' : ''} attended`,
@@ -73,23 +47,6 @@ export function SessionCompleteCard({ summary, onDismiss }: SessionCompleteCardP
           </div>
 
           <div className="px-6 py-5 space-y-5">
-            {/* Moments checklist */}
-            <div className="space-y-3">
-              {moments.map(m => (
-                <div key={m.key} className="flex items-center gap-3">
-                  <div className={`shrink-0 ${m.done ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground/30'}`}>
-                    {m.done
-                      ? <CheckCircle2 size={20} />
-                      : <Circle size={20} />}
-                  </div>
-                  <div className={`flex items-center gap-2 ${m.done ? 'text-foreground' : 'text-muted-foreground/40'}`}>
-                    <span className="shrink-0">{m.icon}</span>
-                    <p className={`text-[15px] font-medium ${m.done ? '' : 'line-through'}`}>{m.label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
             {/* Stats */}
             {stats.length > 0 && (
               <div className="px-4 py-3 rounded-2xl bg-muted/50 border border-border/60">

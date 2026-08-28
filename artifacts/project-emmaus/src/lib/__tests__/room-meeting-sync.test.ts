@@ -18,6 +18,14 @@ const videoRoomSource = readFileSync(
   resolve(process.cwd(), 'src/components/VideoRoom.tsx'),
   'utf8',
 );
+const sessionCompleteCardSource = readFileSync(
+  resolve(process.cwd(), 'src/components/SessionCompleteCard.tsx'),
+  'utf8',
+);
+const roomChatSource = readFileSync(
+  resolve(process.cwd(), 'src/pages/rooms/RoomChat.tsx'),
+  'utf8',
+);
 
 describe('active meeting synchronization contract', () => {
   it('does not record attendance when the room page merely observes an active session', () => {
@@ -77,5 +85,19 @@ describe('active meeting synchronization contract', () => {
     expect(guidePanelSource).toContain('Add media before the meeting');
     expect(guidePanelSource).toContain('disabled={!sessionActive || busy === `present-${item.messageId}`}');
     expect(guidePanelSource).toContain('await apiSendMessage(userId, roomId, \'\', attachment);');
+  });
+
+  it('keeps the completion card focused on summary counts', () => {
+    expect(sessionCompleteCardSource).not.toContain('Studied the Word together');
+    expect(sessionCompleteCardSource).not.toContain('Discussed together');
+    expect(sessionCompleteCardSource).not.toContain('Prayed together');
+    expect(sessionCompleteCardSource).toContain('Session Complete');
+  });
+
+  it('lets joined members leave without ending the meeting and leaders close discussion', () => {
+    expect(roomDetailSource).toContain('apiRecordAttendanceLeave');
+    expect(roomDetailSource).toContain('Leave Meeting');
+    expect(roomChatSource).toContain("apiCloseSharedTool(user.id, String(roomId), 'discussion')");
+    expect(roomChatSource).toContain('Close Discussion');
   });
 });
