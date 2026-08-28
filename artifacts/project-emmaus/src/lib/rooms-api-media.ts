@@ -80,6 +80,18 @@ export async function apiGetRoomMedia(
   return data.media;
 }
 
+export async function apiRemoveRoomMedia(
+  userId: string,
+  roomId: string,
+  messageId: string,
+): Promise<{ ok: boolean; alreadyRemoved?: boolean; presentationStopped?: boolean }> {
+  return roomsFetch(
+    `/api/rooms/${roomId}/media/${messageId}`,
+    userId,
+    { method: 'DELETE' },
+  );
+}
+
 // ─── Presentation ─────────────────────────────────────────────────────────────
 
 export async function apiGetActivePresentation(

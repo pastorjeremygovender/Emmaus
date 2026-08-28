@@ -102,6 +102,8 @@ export interface MediaAttachment {
   pageCount?: number;
   /** URL — link type only. */
   url?: string;
+  /** Set when a leader removes the media while retaining the discussion message. */
+  removed?: boolean;
 }
 
 export interface RoomMessage {
@@ -121,6 +123,21 @@ export interface RoomMediaItem {
   senderName: string;
   attachment: MediaAttachment;
   createdAt: string;
+}
+
+export class RoomMediaStorageCleanupError extends Error {
+  constructor(cause?: unknown) {
+    super("Stored media could not be removed. No catalogue changes were saved.");
+    this.name = "RoomMediaStorageCleanupError";
+    Object.setPrototypeOf(this, RoomMediaStorageCleanupError.prototype);
+    if (cause !== undefined) this.cause = cause;
+  }
+}
+
+export interface RemoveRoomMediaResult {
+  status: "removed" | "already_removed" | "not_found";
+  messageId: string;
+  presentationStopped: boolean;
 }
 
 export interface MediaPresentation {
@@ -784,7 +801,9 @@ export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMed
      FROM   room_messages rm
      LEFT JOIN user_profiles up
        ON up.auth_subject = rm.user_id OR up.email = rm.user_id
-     WHERE  rm.room_id = $1 AND rm.attachment IS NOT NULL
+     WHERE  rm.room_id = $1
+       AND rm.attachment IS NOT NULL
+       AND COALESCE(rm.attachment->>'removed', 'false') <> 'true'
      ORDER  BY rm.created_at DESC
      LIMIT  $2`,
     [roomId, limit]
@@ -799,6 +818,99 @@ export async function getRoomMedia(roomId: string, limit = 100): Promise<RoomMed
     attachment: row.attachment as MediaAttachment,
     createdAt: String(row.created_at),
   }));
+}
+
+/**
+ * Remove a shared media attachment without deleting its chat message. The
+ * database update and object deletion are coordinated so a storage failure
+ * rolls back the catalogue change and can be retried by the leader.
+ */
+export async function removeRoomMedia(
+  roomId: string,
+  messageId: string,
+  deleteStoredObject: (objectPath: string) => Promise<void>,
+): Promise<RemoveRoomMediaResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const result = await client.query(
+      `SELECT attachment
+       FROM room_messages
+       WHERE id = $1 AND room_id = $2
+       FOR UPDATE`,
+      [messageId, roomId],
+    );
+    if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return { status: "not_found", messageId, presentationStopped: false };
+    }
+
+    const rawAttachment = result.rows[0].attachment;
+    if (!rawAttachment) {
+      await client.query("ROLLBACK");
+      return { status: "not_found", messageId, presentationStopped: false };
+    }
+
+    const attachment = (
+      typeof rawAttachment === "string" ? JSON.parse(rawAttachment) : rawAttachment
+    ) as MediaAttachment & { removed?: boolean };
+    if (attachment.removed) {
+      await client.query("ROLLBACK");
+      return { status: "already_removed", messageId, presentationStopped: false };
+    }
+
+    const objectPath = typeof attachment.objectPath === "string"
+      ? attachment.objectPath
+      : "";
+    const removedAttachment = {
+      ...attachment,
+      objectPath: "",
+      removed: true,
+    };
+
+    await client.query(
+      `UPDATE room_messages
+       SET attachment = $1
+       WHERE id = $2 AND room_id = $3`,
+      [JSON.stringify(removedAttachment), messageId, roomId],
+    );
+
+    let presentationStopped = false;
+    const presentation = await client.query(
+      `DELETE FROM room_media_presentations
+       WHERE room_id = $1 AND message_id = $2
+       RETURNING id`,
+      [roomId, messageId],
+    );
+    if ((presentation.rowCount ?? 0) > 0) {
+      presentationStopped = true;
+      await client.query(
+        `UPDATE room_sessions
+         SET metadata = metadata - 'activeTool'
+         WHERE room_id = $1
+           AND status = 'active'
+           AND metadata->>'activeTool' = 'presentation'`,
+        [roomId],
+      );
+    }
+
+    if (objectPath) {
+      try {
+        await deleteStoredObject(objectPath);
+      } catch (err) {
+        throw new RoomMediaStorageCleanupError(err);
+      }
+    }
+
+    await client.query("COMMIT");
+    return { status: "removed", messageId, presentationStopped };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** Start a new presentation, stopping any existing one for this room. */

@@ -94,6 +94,8 @@ import {
   getRecentlyCompletedSession,
   acknowledgeSessionCompletion,
   getRoomMedia,
+  removeRoomMedia,
+  RoomMediaStorageCleanupError,
   startPresentation,
   getActivePresentation,
   updatePresentationPage,
@@ -1569,6 +1571,58 @@ router.get("/:roomId/media", async (req, res) => {
   }
 });
 
+// ─── Chat — remove shared media from the catalogue (leader only) ───────────────
+
+router.delete("/:roomId/media/:messageId", async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+  const { roomId, messageId } = req.params;
+
+  try {
+    const role = await getMemberRole(String(roomId), userId);
+    if (!isRoomLeaderRole(role)) {
+      res.status(403).json({ error: "Only room Owners or Leaders may remove shared media." });
+      return;
+    }
+
+    const result = await removeRoomMedia(
+      String(roomId),
+      String(messageId),
+      objectPath => objectStorage.deleteObjectEntity(objectPath),
+    );
+
+    if (result.status === "not_found") {
+      res.status(404).json({ error: "Shared media not found in this room." });
+      return;
+    }
+
+    if (result.presentationStopped) {
+      broadcastRoomEvent(String(roomId), {
+        type: "presentation_stopped",
+        payload: { messageId: String(messageId), reason: "media_removed" },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      ok: true,
+      messageId: String(messageId),
+      alreadyRemoved: result.status === "already_removed",
+      presentationStopped: result.presentationStopped,
+    });
+  } catch (err) {
+    if (err instanceof RoomMediaStorageCleanupError) {
+      res.status(502).json({
+        error: "The media could not be removed from storage. Nothing was changed; please try again.",
+        recoverable: true,
+      });
+      return;
+    }
+    res.status(500).json({ error: "Failed to remove shared media." });
+  }
+});
+
 // ─── Prayer requests ──────────────────────────────────────────────────────────
 //
 //  GET   /:roomId/prayer                        — any member; list all requests
@@ -3016,6 +3070,36 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     }
 
     // Resolve presenter name
+    if (messageId) {
+      const mediaResult = await pool.query(
+        `SELECT attachment
+         FROM room_messages
+         WHERE id = $1 AND room_id = $2`,
+        [messageId, String(roomId)],
+      );
+      if (mediaResult.rows.length === 0 || !mediaResult.rows[0].attachment) {
+        res.status(404).json({ error: "Shared media not found in this room." });
+        return;
+      }
+      const savedAttachment = (
+        typeof mediaResult.rows[0].attachment === "string"
+          ? JSON.parse(mediaResult.rows[0].attachment)
+          : mediaResult.rows[0].attachment
+      ) as MediaAttachment & { removed?: boolean };
+      if (savedAttachment.removed) {
+        res.status(410).json({ error: "This shared media has been removed from the catalogue." });
+        return;
+      }
+      if (
+        filename !== savedAttachment.filename
+        || mediaType !== savedAttachment.type
+        || (objectPath ?? "") !== (savedAttachment.objectPath ?? "")
+      ) {
+        res.status(400).json({ error: "Shared media details no longer match the saved message." });
+        return;
+      }
+    }
+
     const { rows: nameRows } = await pool.query(
       `SELECT preferred_name FROM user_profiles WHERE auth_subject = $1 OR email = $1`, [userId]
     );

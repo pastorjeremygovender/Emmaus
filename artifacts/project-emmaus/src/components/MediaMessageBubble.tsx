@@ -246,6 +246,17 @@ function DocumentBubble({ attachment, isMe, canPresent, onPresent }: MediaMessag
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function MediaMessageBubble({ attachment, isMe, canPresent, onPresent }: MediaMessageBubbleProps) {
+  if (attachment.removed) {
+    return (
+      <div className="rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5 max-w-[260px]">
+        <p className="text-[13px] font-medium text-muted-foreground">Shared media removed</p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5 truncate">
+          {attachment.filename}
+        </p>
+      </div>
+    );
+  }
+
   switch (attachment.type) {
     case 'image':
       return <ImageBubble attachment={attachment} isMe={isMe} canPresent={canPresent} onPresent={onPresent} />;

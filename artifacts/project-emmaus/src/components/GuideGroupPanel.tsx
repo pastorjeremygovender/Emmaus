@@ -19,7 +19,7 @@ import {
   ArrowLeft, BookOpen, MessageSquare,
   BarChart2, Sparkles,
   X, Loader2, ChevronRight, Video, VideoOff, Presentation,
-  Image, FileText, Film, Mic, Link as LinkIcon,
+  Image, FileText, Film, Mic, Link as LinkIcon, Trash2,
 } from 'lucide-react';
 import {
   apiEndSession,
@@ -29,7 +29,7 @@ import {
   apiCompleteSession,
   apiOpenGroupDiscussion,
 } from '@/lib/rooms-api';
-import { apiGetRoomMedia, apiStartPresentation } from '@/lib/rooms-api-media';
+import { apiGetRoomMedia, apiRemoveRoomMedia, apiStartPresentation } from '@/lib/rooms-api-media';
 import { apiSendMessage } from '@/lib/rooms-api';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import type { RoomSession, ScriptureRef, SessionCompleteSummary, RoomMediaItem, MediaAttachmentType } from '@/lib/rooms-types';
@@ -390,37 +390,62 @@ export function GuideGroupPanel({
             ) : (
               <div className="space-y-2">
                 {mediaItems.map(item => (
-                  <button
+                  <div
                     key={item.messageId}
-                    disabled={!sessionActive || busy === `present-${item.messageId}`}
-                    onClick={() => run(`present-${item.messageId}`, async () => {
-                      if (!activeSession) return;
-                      await apiStartPresentation(userId, roomId, {
-                        messageId: item.messageId,
-                        filename: item.attachment.filename,
-                        mediaType: item.attachment.type,
-                        objectPath: item.attachment.objectPath,
-                        sessionId: activeSession.id,
-                        pageCount: item.attachment.pageCount ?? null,
-                      });
-                      setView('main');
-                      onClose();
-                    })}
-                    className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl border border-border bg-card hover:bg-muted/50 transition-all text-left disabled:opacity-50"
+                    className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border border-border bg-card"
                   >
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      {MEDIA_TYPE_ICON[item.attachment.type]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-foreground truncate">{item.attachment.filename}</p>
-                      <p className="text-[12px] text-muted-foreground">Shared by {item.senderName}</p>
-                    </div>
-                    {busy === `present-${item.messageId}` ? (
-                      <Loader2 size={16} className="animate-spin text-primary shrink-0" />
-                    ) : (
-                      <ChevronRight size={16} className="text-muted-foreground shrink-0" />
-                    )}
-                  </button>
+                    <button
+                      disabled={!sessionActive || busy === `present-${item.messageId}`}
+                      onClick={() => run(`present-${item.messageId}`, async () => {
+                        if (!activeSession) return;
+                        await apiStartPresentation(userId, roomId, {
+                          messageId: item.messageId,
+                          filename: item.attachment.filename,
+                          mediaType: item.attachment.type,
+                          objectPath: item.attachment.objectPath,
+                          sessionId: activeSession.id,
+                          pageCount: item.attachment.pageCount ?? null,
+                        });
+                        setView('main');
+                        onClose();
+                      })}
+                      className="flex items-center gap-4 flex-1 min-w-0 text-left disabled:opacity-50"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        {MEDIA_TYPE_ICON[item.attachment.type]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-foreground truncate">{item.attachment.filename}</p>
+                        <p className="text-[12px] text-muted-foreground">Shared by {item.senderName}</p>
+                      </div>
+                      {busy === `present-${item.messageId}` ? (
+                        <Loader2 size={16} className="animate-spin text-primary shrink-0" />
+                      ) : (
+                        <ChevronRight size={16} className="text-muted-foreground shrink-0" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${item.attachment.filename} from shared media`}
+                      disabled={busy === `remove-${item.messageId}`}
+                      onClick={() => {
+                        if (!window.confirm(
+                          `Remove “${item.attachment.filename}” from shared media?\n\nThe discussion message will stay in chat, but nobody will be able to present this media again.`,
+                        )) return;
+                        void run(`remove-${item.messageId}`, async () => {
+                          await apiRemoveRoomMedia(userId, roomId, item.messageId);
+                          setMediaItems(prev => prev.filter(media => media.messageId !== item.messageId));
+                        });
+                      }}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      {busy === `remove-${item.messageId}` ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

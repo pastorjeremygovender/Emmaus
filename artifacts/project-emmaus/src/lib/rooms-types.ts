@@ -205,6 +205,8 @@ export interface MediaAttachment {
   pageCount?: number;
   /** URL — link type only. */
   url?: string;
+  /** Set when a leader removes the media while retaining the discussion message. */
+  removed?: boolean;
 }
 
 export interface PresentationState {

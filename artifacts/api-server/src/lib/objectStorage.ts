@@ -175,6 +175,24 @@ export class ObjectStorageService {
     return objectFile;
   }
 
+  /**
+   * Delete a private object entity. Missing objects are treated as already
+   * cleaned up so media removal remains safely retryable.
+   */
+  async deleteObjectEntity(objectPath: string): Promise<void> {
+    if (!objectPath.startsWith('/objects/')) {
+      throw new ObjectNotFoundError();
+    }
+
+    try {
+      const objectFile = await this.getObjectEntityFile(objectPath);
+      await objectFile.delete({ ignoreNotFound: true });
+    } catch (err) {
+      if (err instanceof ObjectNotFoundError) return;
+      throw err;
+    }
+  }
+
   normalizeObjectEntityPath(rawPath: string): string {
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;
