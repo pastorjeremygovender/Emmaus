@@ -4,7 +4,7 @@ import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceCon
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-import { Moon, Settings, Sun, User } from 'lucide-react';
+import { Info, Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
 
 export function MemberHeaderActions({ compact = false }: { compact?: boolean }) {
@@ -16,6 +16,46 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
 
   return (
     <div className="flex items-center gap-1">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary active:bg-primary/10 ${
+              compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
+            }`}
+            aria-label="About Emmaus"
+            title="About Emmaus"
+            data-testid="about-emmaus-trigger"
+          >
+            <Info size={iconSize} aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={8}
+          className="w-[min(22rem,calc(100vw-1rem))] max-h-[min(30rem,calc(100dvh-2rem))] overflow-y-auto rounded-2xl p-4"
+        >
+          <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
+            <Info size={17} className="text-primary" aria-hidden="true" />
+            <h2 className="text-sm font-semibold">About Emmaus</h2>
+          </div>
+          <div className="space-y-3 pt-3 text-[13px] leading-relaxed text-muted-foreground">
+            <p>
+              Emmaus is a Christian discipleship app created to help you walk with Jesus, engage with Scripture and stay connected to the life of the Local Church.
+            </p>
+            <p>
+              It offers a calm place to read the Bible, pray, reflect, follow Walks and take your next faithful step with Jesus.
+            </p>
+            <p>
+              Emmaus uses technology—including AI—to assist you, but it does not replace Scripture, the Holy Spirit, pastors, Christian community or the Local Church.
+            </p>
+            <p>Everything in Emmaus is guided by one conviction:</p>
+            <p className="font-semibold tracking-wide text-foreground">
+              It’s All About JESUS.
+            </p>
+          </div>
+        </PopoverContent>
+      </Popover>
       <Link
         href="/personal"
         className={`flex items-center justify-center rounded-full transition-colors hover:bg-primary/5 active:bg-primary/10 ${
