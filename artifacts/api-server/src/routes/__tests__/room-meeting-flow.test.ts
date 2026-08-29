@@ -502,7 +502,7 @@ describe("two-device active Group Meeting flow", () => {
         method: "POST",
         path: `/api/rooms/${roomId}/session/mode`,
         headers: leaderHeaders,
-        body: { mode: "discussion" },
+        body: { sessionId, mode: "discussion" },
       });
       assert.equal(mode.status, 200, mode.body);
       await waitFor("mode_change");
@@ -511,7 +511,7 @@ describe("two-device active Group Meeting flow", () => {
         method: "POST",
         path: `/api/rooms/${roomId}/session/tool-close`,
         headers: leaderHeaders,
-        body: { tool: "discussion" },
+        body: { sessionId, tool: "discussion" },
       });
       assert.equal(closed.status, 200, closed.body);
       await waitFor("tool_closed");
@@ -552,5 +552,372 @@ describe("two-device active Group Meeting flow", () => {
     } finally {
       closeLateStream();
     }
+  });
+
+  it("serializes competing presentation starts so durable panel data matches the winning row", async () => {
+    const starts = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { filename: "race-a.pdf", mediaType: "pdf", objectPath: "" },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { filename: "race-b.pdf", mediaType: "pdf", objectPath: "" },
+      }),
+    ]);
+    for (const response of starts) assert.equal(response.status, 200, response.body);
+
+    const [presentationResponse, sessionResponse] = await Promise.all([
+      request({ path: `/api/rooms/${roomId}/session/presentation`, headers: memberHeaders }),
+      request({ path: `/api/rooms/${roomId}/session`, headers: memberHeaders }),
+    ]);
+    assert.equal(presentationResponse.status, 200, presentationResponse.body);
+    assert.equal(sessionResponse.status, 200, sessionResponse.body);
+    const presentation = json<{
+      presentation: { id: string; messageId: string | null; currentPage: number };
+    }>(presentationResponse).presentation;
+    const panel = json<{
+      sharedPanel: {
+        panel: string; version: number;
+        data?: { presentationId?: string; messageId?: string | null; currentPage?: number };
+      };
+    }>(sessionResponse).sharedPanel;
+    assert.ok(presentation);
+    assert.equal(panel.panel, "presentation");
+    assert.ok(Number.isInteger(panel.version) && panel.version > 0);
+    assert.equal(panel.data?.presentationId, presentation.id);
+    assert.equal(panel.data?.messageId, presentation.messageId);
+    assert.equal(panel.data?.currentPage, presentation.currentPage);
+  });
+
+  it("does not deadlock concurrent presentation start, stop, and media removal", async () => {
+    const assertCoherent = async () => {
+      const [presentationResponse, sessionResponse] = await Promise.all([
+        request({ path: `/api/rooms/${roomId}/session/presentation`, headers: leaderHeaders }),
+        request({ path: `/api/rooms/${roomId}/session`, headers: leaderHeaders }),
+      ]);
+      assert.equal(presentationResponse.status, 200, presentationResponse.body);
+      assert.equal(sessionResponse.status, 200, sessionResponse.body);
+      const presentation = json<{ presentation: { id: string } | null }>(presentationResponse).presentation;
+      const panel = json<{ sharedPanel: { panel: string; data?: { presentationId?: string } } }>(
+        sessionResponse,
+      ).sharedPanel;
+      if (presentation) {
+        assert.equal(panel.panel, "presentation");
+        assert.equal(panel.data?.presentationId, presentation.id);
+      } else {
+        assert.notEqual(panel.panel, "presentation");
+      }
+    };
+
+    const [started, stopped] = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { filename: "start-stop.pdf", mediaType: "pdf", objectPath: "" },
+      }),
+      request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { sessionId, presentationId: "not-yet-started" },
+      }),
+    ]);
+    assert.notEqual(started.status, 500, started.body);
+    assert.notEqual(stopped.status, 500, stopped.body);
+    await assertCoherent();
+
+    const prepared = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/media`,
+      headers: leaderHeaders,
+      body: {
+        attachment: {
+          type: "link", filename: "race-removal-link", objectPath: "",
+          mimeType: "text/uri-list", size: 0, url: "https://example.com/race",
+        },
+      },
+    });
+    assert.equal(prepared.status, 201, prepared.body);
+    const media = await request({ path: `/api/rooms/${roomId}/media`, headers: leaderHeaders });
+    const messageId = json<{ media: Array<{ messageId: string; attachment: { filename: string } }> }>(media)
+      .media.find(item => item.attachment.filename === "race-removal-link")?.messageId;
+    assert.ok(messageId);
+
+    const [startWithMedia, removed] = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: {
+          messageId, filename: "race-removal-link", mediaType: "link", objectPath: "",
+        },
+      }),
+      request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/media/${messageId}`,
+        headers: leaderHeaders,
+      }),
+    ]);
+    assert.notEqual(startWithMedia.status, 500, startWithMedia.body);
+    assert.notEqual(removed.status, 500, removed.body);
+    await assertCoherent();
+    const afterRemove = await request({
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+    });
+    assert.notEqual(
+      json<{ presentation: { messageId: string | null } | null }>(afterRemove).presentation?.messageId,
+      messageId,
+    );
+
+    const sourceMessage = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/messages`,
+      headers: leaderHeaders,
+      body: {
+        attachment: {
+          type: "link", filename: "race-delete-link", objectPath: "",
+          mimeType: "text/uri-list", size: 0, url: "https://example.com/delete-race",
+        },
+      },
+    });
+    assert.equal(sourceMessage.status, 201, sourceMessage.body);
+    const sourceMessageId = json<{ message: { id: string } }>(sourceMessage).message.id;
+    const [startBeforeDelete, deleted] = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: {
+          messageId: sourceMessageId,
+          filename: "race-delete-link",
+          mediaType: "link",
+          objectPath: "",
+        },
+      }),
+      request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/messages/${sourceMessageId}`,
+        headers: leaderHeaders,
+      }),
+    ]);
+    assert.notEqual(startBeforeDelete.status, 500, startBeforeDelete.body);
+    assert.notEqual(deleted.status, 500, deleted.body);
+    await assertCoherent();
+    const afterDelete = await request({
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+    });
+    assert.notEqual(
+      json<{ presentation: { messageId: string | null } | null }>(afterDelete).presentation?.messageId,
+      sourceMessageId,
+    );
+
+    const initial = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+      body: { filename: "old-pages.pdf", mediaType: "pdf", objectPath: "" },
+    });
+    assert.equal(initial.status, 200, initial.body);
+    const initialId = json<{ presentation: { id: string } }>(initial).presentation.id;
+    const [pageDuringStart, replacement] = await Promise.all([
+      request({
+        method: "PATCH",
+        path: `/api/rooms/${roomId}/session/presentation/page`,
+        headers: leaderHeaders,
+        body: { presentationId: initialId, page: 2 },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { filename: "new-pages.pdf", mediaType: "pdf", objectPath: "" },
+      }),
+    ]);
+    assert.notEqual(pageDuringStart.status, 500, pageDuringStart.body);
+    assert.notEqual(replacement.status, 500, replacement.body);
+    await assertCoherent();
+
+    const current = await request({
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+    });
+    const currentId = json<{ presentation: { id: string } }>(current).presentation.id;
+    const [pageDuringStop, stopDuringPage] = await Promise.all([
+      request({
+        method: "PATCH",
+        path: `/api/rooms/${roomId}/session/presentation/page`,
+        headers: leaderHeaders,
+        body: { presentationId: currentId, page: 3 },
+      }),
+      request({
+        method: "DELETE",
+        path: `/api/rooms/${roomId}/session/presentation`,
+        headers: leaderHeaders,
+        body: { sessionId, presentationId: currentId },
+      }),
+    ]);
+    assert.notEqual(pageDuringStop.status, 500, pageDuringStop.body);
+    assert.notEqual(stopDuringPage.status, 500, stopDuringPage.body);
+    await assertCoherent();
+  });
+
+  it("rejects delayed presentation mutations from a replaced meeting session", async () => {
+    const oldSessionId = sessionId;
+    const ended = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/end`,
+      headers: leaderHeaders,
+      body: { status: "ended" },
+    });
+    assert.equal(ended.status, 200, ended.body);
+    const restarted = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/start`,
+      headers: leaderHeaders,
+    });
+    assert.equal(restarted.status, 201, restarted.body);
+    sessionId = json<{ session: { id: string } }>(restarted).session.id;
+    assert.notEqual(sessionId, oldSessionId);
+
+    const staleStart = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+      body: {
+        sessionId: oldSessionId,
+        filename: "stale-session.pdf",
+        mediaType: "pdf",
+        objectPath: "",
+      },
+    });
+    assert.equal(staleStart.status, 409, staleStart.body);
+    let presentationResponse = await request({
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+    });
+    assert.equal(json<{ presentation: unknown }>(presentationResponse).presentation, null);
+
+    const currentStart = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+      body: {
+        sessionId,
+        filename: "current-session.pdf",
+        mediaType: "pdf",
+        objectPath: "",
+      },
+    });
+    assert.equal(currentStart.status, 200, currentStart.body);
+    const currentPresentation = json<{ presentation: { id: string } }>(currentStart).presentation;
+
+    const stalePage = await request({
+      method: "PATCH",
+      path: `/api/rooms/${roomId}/session/presentation/page`,
+      headers: leaderHeaders,
+      body: {
+        sessionId: oldSessionId,
+        presentationId: currentPresentation.id,
+        page: 9,
+      },
+    });
+    assert.equal(stalePage.status, 409, stalePage.body);
+    const replacementStart = await request({
+      method: "POST",
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+      body: {
+        sessionId,
+        filename: "replacement-session.pdf",
+        mediaType: "pdf",
+        objectPath: "",
+      },
+    });
+    assert.equal(replacementStart.status, 200, replacementStart.body);
+    const replacementPresentation = json<{ presentation: { id: string } }>(replacementStart).presentation;
+
+    const staleStop = await request({
+      method: "DELETE",
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+      body: { sessionId, presentationId: currentPresentation.id },
+    });
+    assert.equal(staleStop.status, 409, staleStop.body);
+
+    presentationResponse = await request({
+      path: `/api/rooms/${roomId}/session/presentation`,
+      headers: leaderHeaders,
+    });
+    const surviving = json<{ presentation: { id: string; currentPage: number } }>(
+      presentationResponse,
+    ).presentation;
+    assert.equal(surviving.id, replacementPresentation.id);
+    assert.equal(surviving.currentPage, 1);
+    const sessionResponse = await request({
+      path: `/api/rooms/${roomId}/session`,
+      headers: leaderHeaders,
+    });
+    const panel = json<{
+      sharedPanel: { panel: string; data?: { presentationId?: string; currentPage?: number } };
+    }>(sessionResponse).sharedPanel;
+    assert.equal(panel.panel, "presentation");
+    assert.equal(panel.data?.presentationId, surviving.id);
+    assert.equal(panel.data?.currentPage, 1);
+
+    const delayedCommands = await Promise.all([
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/mode`,
+        headers: leaderHeaders,
+        body: { sessionId: oldSessionId, mode: "discussion" },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/navigate`,
+        headers: leaderHeaders,
+        body: { sessionId: oldSessionId, stepId: "stale-step" },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/tool-close`,
+        headers: leaderHeaders,
+        body: { sessionId: oldSessionId, tool: "presentation" },
+      }),
+      request({
+        method: "POST",
+        path: `/api/rooms/${roomId}/session/poll`,
+        headers: leaderHeaders,
+        body: { sessionId: oldSessionId, question: "Stale poll?" },
+      }),
+      request({
+        method: "PUT",
+        path: `/api/rooms/${roomId}/session/panel`,
+        headers: leaderHeaders,
+        body: { sessionId: oldSessionId, panel: "notes", expectedVersion: 0 },
+      }),
+    ]);
+    for (const response of delayedCommands) assert.equal(response.status, 409, response.body);
+
+    const unchangedSession = await request({
+      path: `/api/rooms/${roomId}/session`,
+      headers: leaderHeaders,
+    });
+    const unchanged = json<{
+      session: { id: string; currentStep: string | null };
+      sharedPanel: { panel: string; data?: { presentationId?: string; currentPage?: number } };
+    }>(unchangedSession);
+    assert.equal(unchanged.session.id, sessionId);
+    assert.notEqual(unchanged.session.currentStep, "stale-step");
+    assert.equal(unchanged.sharedPanel.panel, "presentation");
+    assert.equal(unchanged.sharedPanel.data?.presentationId, surviving.id);
+    assert.equal(unchanged.sharedPanel.data?.currentPage, 1);
   });
 });

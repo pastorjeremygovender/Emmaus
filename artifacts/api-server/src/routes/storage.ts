@@ -11,6 +11,7 @@ import {
 } from '../lib/objectStorage';
 import { requireAuth } from '../emmaus/auth.js';
 import { isAdmin } from '../lib/user-role-store.js';
+import { canAccessRoomMediaObject } from '../lib/room-store.js';
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -111,6 +112,21 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join('/') : raw;
     const objectPath = `/objects/${wildcardPath}`;
+    // Room chat media is private to current Room membership. New room-media
+    // paths are always treated as protected (even before a catalogue row is
+    // visible); legacy /uploads paths are protected once they are known Room
+    // attachments. All unrelated private storage keeps its existing behavior.
+    const roomScopedPrefix = objectPath.startsWith('/objects/room-media/');
+    const probe = await canAccessRoomMediaObject(objectPath, '');
+    if (roomScopedPrefix || probe !== null) {
+      const userId = requireAuth(req, res);
+      if (!userId) return;
+      const allowed = await canAccessRoomMediaObject(objectPath, userId);
+      if (allowed !== true) {
+        res.status(403).json({ error: 'You are not authorized to access this Room attachment.' });
+        return;
+      }
+    }
     const objectFile =
       await objectStorageService.getObjectEntityFile(objectPath);
 

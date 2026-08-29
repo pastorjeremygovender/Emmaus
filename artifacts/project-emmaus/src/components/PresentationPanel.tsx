@@ -33,6 +33,17 @@ export function PresentationPanel({
   onClose,
 }: PresentationPanelProps) {
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const presentationId = presentation.id;
+  const sessionId = presentation.sessionId;
+
+  const requireActiveIds = (): { sessionId: string; presentationId: string } | null => {
+    if (!sessionId || !presentationId) {
+      setActionError('This presentation is stale or the meeting has ended. Reopen it from the current meeting.');
+      return null;
+    }
+    return { sessionId, presentationId };
+  };
 
   const mediaUrl = presentation.objectPath
     ? getMediaUrl(presentation.objectPath)
@@ -40,9 +51,14 @@ export function PresentationPanel({
 
   const handlePrevPage = async () => {
     if (busy || presentation.currentPage <= 1) return;
+    const ids = requireActiveIds();
+    if (!ids) return;
     setBusy(true);
     try {
-      await apiChangePresentationPage(userId, roomId, presentation.currentPage - 1);
+      await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage - 1);
+      setActionError('');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The presentation changed before the page was updated.');
     } finally {
       setBusy(false);
     }
@@ -52,9 +68,14 @@ export function PresentationPanel({
 
   const handleNextPage = async () => {
     if (busy || isLastPage) return;
+    const ids = requireActiveIds();
+    if (!ids) return;
     setBusy(true);
     try {
-      await apiChangePresentationPage(userId, roomId, presentation.currentPage + 1);
+      await apiChangePresentationPage(userId, roomId, ids.sessionId, ids.presentationId, presentation.currentPage + 1);
+      setActionError('');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The presentation changed before the page was updated.');
     } finally {
       setBusy(false);
     }
@@ -62,12 +83,24 @@ export function PresentationPanel({
 
   const handleStop = async () => {
     if (busy) return;
+    const ids = requireActiveIds();
+    if (!ids) return;
     setBusy(true);
     try {
-      await apiStopPresentation(userId, roomId);
+      await apiStopPresentation(userId, roomId, ids.sessionId, ids.presentationId);
       onStop?.();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The meeting ended before the presentation could be stopped.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openExternalLink = () => {
+    const url = (presentation as unknown as { url?: string }).url;
+    if (!url) return;
+    if (window.confirm('This link opens an external website. Continue?')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -137,10 +170,9 @@ export function PresentationPanel({
         )}
 
         {presentation.mediaType === 'link' && (
-          <a
-            href={(presentation as unknown as { url?: string }).url ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={openExternalLink}
             className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:bg-muted/50 transition-all"
           >
             <LinkIcon size={20} className="text-primary shrink-0" />
@@ -148,11 +180,12 @@ export function PresentationPanel({
               {presentation.filename}
             </span>
             <ExternalLink size={14} className="text-muted-foreground shrink-0" />
-          </a>
+          </button>
         )}
       </div>
 
       {/* Controls */}
+      {actionError && <p role="alert" className="px-4 pb-2 text-[12px] text-destructive">{actionError}</p>}
       <div className="px-4 pb-4 flex items-center gap-2">
         {isLeader && presentation.mediaType === 'pdf' && (
           <>

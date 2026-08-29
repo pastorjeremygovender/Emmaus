@@ -50,7 +50,11 @@ describe('OpeningGate', () => {
     });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    window.history.replaceState({}, '', '/');
+    vi.restoreAllMocks();
+  });
 
   it('asks the server to decide even when an authenticated member launches at root', async () => {
     render(<OpeningGate><div>member content</div></OpeningGate>);
@@ -69,6 +73,46 @@ describe('OpeningGate', () => {
     expect(getDailyRhythmStartup).not.toHaveBeenCalled();
     expect(setLocation).not.toHaveBeenCalled();
     expect(screen.getByText('room content')).toBeInTheDocument();
+  });
+
+  it('lets a cold Bible launch continue without requesting the Daily Rhythm opening', async () => {
+    currentLocation = '/bible';
+    sessionStorage.clear();
+    vi.useFakeTimers();
+
+    render(<OpeningGate><div>bible content</div></OpeningGate>);
+
+    expect(screen.getByRole('status', { name: 'Emmaus is loading' })).toBeInTheDocument();
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(screen.getByText('bible content')).toBeInTheDocument();
+    expect(setLocation).not.toHaveBeenCalled();
+  });
+
+  it('lets Bible deep links retain their query and hash without opening redirects', async () => {
+    currentLocation = '/bible/read/john/3?translation=esv#verse-16';
+    render(<OpeningGate><div>bible reader</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).not.toHaveBeenCalled();
+    expect(setLocation).not.toHaveBeenCalled();
+    expect(screen.getByText('bible reader')).toBeInTheDocument();
+  });
+
+  it('preserves query and hash when another gated destination is held', async () => {
+    currentLocation = '/personal?source=shared#overview';
+    window.history.replaceState({}, '', currentLocation);
+    render(<OpeningGate><div>personal content</div></OpeningGate>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(getDailyRhythmStartup).toHaveBeenCalledTimes(1);
+    expect(setLocation).toHaveBeenCalledWith('/daily-rhythm/day/1', { replace: true });
+    expect(sessionStorage.getItem('emmaus_pending_opening_destination_v1'))
+      .toBe('/personal?source=shared#overview');
   });
 
   it('opens the Walk immediately on a same-day reload after the opening is resolved', async () => {

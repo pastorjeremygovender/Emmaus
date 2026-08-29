@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGetSession, apiGetSessionEventsToken, apiSessionEventsUrl } from '@/lib/rooms-api';
-import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary, PresentationState } from '@/lib/rooms-types';
+import type { RoomSession, SessionEvent, SessionMode, ScriptureRef, RoomHighlight, SharedNote, RoomPoll, SessionCompleteSummary, PresentationState, SharedPanelState, SharedPanel } from '@/lib/rooms-types';
 import { roomSessionAckKey } from '@/lib/account-storage';
 
 export interface NavigatePayload {
@@ -92,6 +92,8 @@ interface UseFollowLeaderResult {
   setActivePresentation: (p: PresentationState | null) => void;
    /** The server-authoritative tool currently shared with the meeting. */
    activeTool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation' | 'study' | null;
+   /** Versioned server-authoritative meeting surface; chat is legacy discussion. */
+   sharedPanel: SharedPanelState;
 }
 
 export function useFollowLeader({
@@ -132,6 +134,7 @@ export function useFollowLeader({
   // ── Group Media Presentation ──────────────────────────────────────────────
   const [activePresentation, setActivePresentation] = useState<PresentationState | null>(null);
   const [activeTool, setActiveTool] = useState<UseFollowLeaderResult['activeTool']>(null);
+  const [sharedPanel, setSharedPanel] = useState<SharedPanelState>({ panel: 'none', version: 0 });
 
   // Refs for stable callbacks in the SSE loop
   const followLeaderRef = useRef(followLeader);
@@ -145,6 +148,21 @@ export function useFollowLeader({
   const activeSessionRef = useRef<RoomSession | null>(null);
   const emmausRequestRef = useRef<string | null>(null);
   const closedToolsRef = useRef(new Set<string>());
+  const sharedPanelRef = useRef<{ sessionId: string | null; version: number; panel: SharedPanel }>({ sessionId: null, version: 0, panel: 'none' });
+
+  const applySharedPanel = useCallback((candidate: unknown, sessionId?: string | null) => {
+    const value = candidate as Partial<SharedPanelState> | null;
+    const panels: SharedPanel[] = ['none', 'chat', 'scripture', 'presentation', 'poll', 'ask-emmaus', 'study', 'notes', 'participants'];
+    if (!value || typeof value.version !== 'number' || !Number.isInteger(value.version) ||
+      value.version < 0 || typeof value.panel !== 'string' || !panels.includes(value.panel as SharedPanel)) return;
+    const id = sessionId ?? activeSessionRef.current?.id ?? null;
+    const current = sharedPanelRef.current;
+    // A new session starts its own sequence. Within a session, delayed and
+    // duplicated SSE messages can never move the visible surface backwards.
+    if (current.sessionId === id && value.version < current.version) return;
+    sharedPanelRef.current = { sessionId: id, version: value.version, panel: value.panel as SharedPanel };
+    setSharedPanel({ panel: value.panel as SharedPanel, version: value.version, ...(value.data && typeof value.data === 'object' ? { data: value.data } : {}) });
+  }, []);
 
   useEffect(() => { followLeaderRef.current = followLeader; }, [followLeader]);
   useEffect(() => { onNavigateRef.current = onNavigate; }, [onNavigate]);
@@ -163,6 +181,10 @@ export function useFollowLeader({
           sessionExplicitlyEndedRef.current = false;
           activeSessionRef.current = session;
           setActiveSession(session);
+           applySharedPanel(
+             (event.payload as { sharedPanel?: unknown }).sharedPanel ?? session.metadata?.sharedPanel,
+             session.id,
+           );
           if (session.currentMode) {
             setSessionMode(session.currentMode as SessionMode);
           }
@@ -223,6 +245,8 @@ export function useFollowLeader({
           if (sessionExplicitlyEndedRef.current) {
             activeSessionRef.current = null;
             setActiveSession(null);
+             sharedPanelRef.current = { sessionId: null, version: 0, panel: 'none' };
+             setSharedPanel({ panel: 'none', version: 0 });
             setSessionMode('study');
             setActiveScripture(null);
              setActiveTool(null);
@@ -292,6 +316,8 @@ export function useFollowLeader({
         setIncomingPinChange(null);
         setIncomingFocusChange(null);
         setActivePresentation(null);
+         sharedPanelRef.current = { sessionId: null, version: 0, panel: 'none' };
+         setSharedPanel({ panel: 'none', version: 0 });
         break;
       }
 
@@ -322,16 +348,23 @@ export function useFollowLeader({
         setIncomingPinChange(null);
         setIncomingFocusChange(null);
         setActivePresentation(null);
+         sharedPanelRef.current = { sessionId: null, version: 0, panel: 'none' };
+         setSharedPanel({ panel: 'none', version: 0 });
         break;
       }
 
       case 'media_presented': {
+        // Legacy media events carry no panel version. Once the server has
+        // established a versioned panel, they must not resurrect a viewer
+        // after a newer chat/none assignment arrived out of order.
+        if (sharedPanelRef.current.version > 0 && sharedPanelRef.current.panel !== 'presentation') break;
         const p = event.payload as {
           messageId: string | null; filename: string; mediaType: string;
           objectPath: string; presentedBy: string; presentedByName: string;
           currentPage: number; pageCount?: number | null; sessionId: string | null;
         };
         setActivePresentation({
+          sessionId: p.sessionId ?? undefined,
           messageId: p.messageId,
           filename: p.filename,
           mediaType: p.mediaType as import('@/lib/rooms-types').MediaAttachmentType,
@@ -342,6 +375,22 @@ export function useFollowLeader({
           pageCount: p.pageCount ?? undefined,
         });
         setActiveTool('presentation');
+        break;
+      }
+
+      case 'shared_panel': {
+        const payload = event.payload as { sessionId?: string; sharedPanel?: unknown };
+        const activeId = activeSessionRef.current?.id;
+        if (payload.sessionId && activeId && payload.sessionId !== activeId) break;
+        applySharedPanel(payload.sharedPanel, payload.sessionId ?? activeId);
+        const panel = payload.sharedPanel as SharedPanelState | undefined;
+        if (panel?.panel === 'presentation' && typeof panel.data?.presentationId === 'string') {
+          setActivePresentation(prev => prev ? {
+            ...prev,
+            id: panel.data!.presentationId as string,
+            sessionId: payload.sessionId ?? prev.sessionId,
+          } : prev);
+        }
         break;
       }
 
@@ -532,7 +581,7 @@ export function useFollowLeader({
       default:
         break;
     }
-  }, []);
+  }, [applySharedPanel]);
 
   // SSE connection with token handshake + exponential backoff reconnect
   useEffect(() => {
@@ -668,5 +717,6 @@ export function useFollowLeader({
     activePresentation,
     setActivePresentation,
     activeTool,
+    sharedPanel,
   };
 }

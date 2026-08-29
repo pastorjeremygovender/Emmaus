@@ -359,11 +359,12 @@ export async function apiGetStreamToken(
 export async function apiOpenGroupDiscussion(
   userId: string,
   roomId: string,
+  sessionId: string,
 ): Promise<{ id: string; roomId: string; sessionId: string; createdAt: string }> {
   const data = await roomsFetch<{ discussion: { id: string; roomId: string; sessionId: string; createdAt: string } }>(
     `/api/rooms/${roomId}/session/discussion/open`,
     userId,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({ sessionId }) },
   );
   return data.discussion;
 }
@@ -583,11 +584,12 @@ export async function apiGetSession(
 export async function apiNavigate(
   userId: string,
   roomId: string,
+  sessionId: string,
   payload: { stepId?: string; scripture?: ScriptureRef; leaderName?: string }
 ): Promise<void> {
   await roomsFetch(`/api/rooms/${roomId}/session/navigate`, userId, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ sessionId, ...payload }),
   });
 }
 
@@ -595,12 +597,13 @@ export async function apiNavigate(
 export async function apiChangeMode(
   userId: string,
   roomId: string,
+  sessionId: string,
   mode: SessionMode,
   leaderName?: string
 ): Promise<void> {
   await roomsFetch(`/api/rooms/${roomId}/session/mode`, userId, {
     method: 'POST',
-    body: JSON.stringify({ mode, leaderName }),
+    body: JSON.stringify({ sessionId, mode, leaderName }),
   });
 }
 
@@ -608,11 +611,12 @@ export async function apiChangeMode(
 export async function apiCloseSharedTool(
   userId: string,
   roomId: string,
+  sessionId: string,
   tool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation',
 ): Promise<void> {
   await roomsFetch(`/api/rooms/${roomId}/session/tool-close`, userId, {
     method: 'POST',
-    body: JSON.stringify({ tool }),
+    body: JSON.stringify({ sessionId, tool }),
   });
 }
 
@@ -620,12 +624,13 @@ export async function apiCloseSharedTool(
 export async function apiBroadcastEvent(
   userId: string,
   roomId: string,
+  sessionId: string,
   type: string,
   payload: Record<string, unknown>
 ): Promise<void> {
   await roomsFetch(`/api/rooms/${roomId}/session/broadcast`, userId, {
     method: 'POST',
-    body: JSON.stringify({ type, payload }),
+    body: JSON.stringify({ sessionId, type, payload }),
   });
 }
 

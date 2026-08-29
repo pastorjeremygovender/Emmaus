@@ -10,6 +10,7 @@ import { accountStorageKey } from '@/lib/account-storage';
 import { localDateKey } from '@/lib/daily-lock';
 import { isColdMemberLaunchPath } from '@/lib/tab-paths';
 import { resetStartupRouting } from '@/lib/startup-routing';
+import { bypassesDailyRhythmOpening, routePathname } from '@/lib/route-access';
 import BrandedSplash, {
   SPLASH_FADE_MS,
   SPLASH_STORAGE_KEY,
@@ -103,7 +104,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
   const requestedPathRef = useRef<string | null>(null);
   const previousUserIdRef = useRef<string | null>(user?.id ?? null);
 
-  const pathname = location.split('?')[0];
+  const pathname = routePathname(location);
   const needsOnboarding = Boolean(user && !user.preferredName?.trim());
   const needsRecovery = Boolean(user?.passwordRecovery) && pathname !== '/auth/callback';
   const cachedOpening = Boolean(user && hasResolvedOpeningToday(user.id));
@@ -120,6 +121,7 @@ export default function OpeningGate({ children }: { children: ReactNode }) {
     !authenticatedExempt &&
     !isAdminPath(pathname) &&
     !needsRecovery &&
+    !bypassesDailyRhythmOpening(location) &&
     isOpeningEntryPath &&
     !openingResolved;
   const retry = () => {

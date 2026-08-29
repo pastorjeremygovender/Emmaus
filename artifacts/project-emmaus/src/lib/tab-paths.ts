@@ -7,15 +7,13 @@
  */
 
 /**
- * Tab section prefixes that must route through Welcome on every cold start
- * or warm resume so that auth, profile loading, onboarding and
- * resolveEntryRoute() can run and land on /walk.
+ * Member-facing tab section prefixes that can be restored by a browser or
+ * PWA. OpeningGate applies the route-access policy to determine whether each
+ * section needs the Daily Rhythm opening flow.
  *
  * IMPORTANT: matched with startsWith so that deep paths such as
  * /bible/read/john/3 or /journeys/explore are caught in addition to
- * the tab roots themselves.  Previously only the three exact root strings
- * were checked, which meant any sub-path within a tab bypassed Welcome
- * entirely on relaunch — the root cause of "always opens on My Bible".
+ * the tab roots themselves.
  */
 export const TAB_PREFIXES = ['/bible', '/journeys', '/personal'];
 

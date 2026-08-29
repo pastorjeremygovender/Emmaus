@@ -491,6 +491,10 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
 
   const handlePresent = async (msg: RoomMessage) => {
     if (!user || !roomId || !msg.attachment) return;
+    if (!sessionId) {
+      setLoadError('This meeting has ended. Reopen the current meeting before presenting media.');
+      return;
+    }
     setPresentingMessageId(msg.id);
     try {
       await apiStartPresentation(user.id, String(roomId), {
@@ -510,9 +514,13 @@ export default function RoomChat({ embedded = false, onClose }: RoomChatProps = 
 
   const handleCloseDiscussion = async () => {
     if (!user || !roomId || closingDiscussion) return;
+    if (!sessionId) {
+      setLoadError('This discussion belongs to a meeting that has ended.');
+      return;
+    }
     setClosingDiscussion(true);
     try {
-      await apiCloseSharedTool(user.id, String(roomId), 'discussion');
+      await apiCloseSharedTool(user.id, String(roomId), sessionId, 'discussion');
       closeDiscussionView();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Could not close Group Discussion.');

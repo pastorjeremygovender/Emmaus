@@ -106,6 +106,8 @@ export interface MediaAttachment {
   removed?: boolean;
   /** Whether participants may view this item on the pre-meeting preparation screen. */
   sharedBeforeMeeting?: boolean;
+  /** Owning Room, retained with the attachment for room-scoped audit/access metadata. */
+  roomId?: string;
 }
 
 export interface RoomMessage {
@@ -160,6 +162,14 @@ export interface MediaPresentation {
   /** Total page count — PDF only. Null when not set. */
   pageCount: number | null;
   startedAt: string;
+}
+
+export class StalePresentationSessionError extends Error {
+  constructor() {
+    super("STALE_PRESENTATION_SESSION");
+    this.name = "StalePresentationSessionError";
+    Object.setPrototypeOf(this, StalePresentationSessionError.prototype);
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -828,6 +838,14 @@ export async function deleteRoomMessage(
   let presentationStopped = false;
   try {
     await client.query("BEGIN");
+    // Lock ordering for every presentation lifecycle mutation: session first,
+    // then presentation/message rows. This matches presentation start.
+    await client.query(
+      `SELECT id FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
     const result = await client.query(
       `SELECT rm.*, up.preferred_name
        FROM room_messages rm
@@ -866,10 +884,17 @@ export async function deleteRoomMessage(
     if (presentationStopped) {
       await client.query(
         `UPDATE room_sessions
-         SET metadata = metadata - 'activeTool'
+         SET metadata = (metadata - 'activeTool') ||
+           jsonb_build_object('sharedPanel', jsonb_build_object(
+             'panel', 'none',
+             'version', COALESCE((metadata->'sharedPanel'->>'version')::integer, 0) + 1
+           ))
          WHERE room_id = $1
            AND status = 'active'
-           AND metadata->>'activeTool' = 'presentation'`,
+            AND (
+              metadata->'sharedPanel'->>'panel' = 'presentation'
+              OR (metadata->'sharedPanel' IS NULL AND metadata->>'activeTool' = 'presentation')
+            )`,
         [roomId],
       );
     }
@@ -935,6 +960,49 @@ export async function getRoomMedia(
   }));
 }
 
+/**
+ * Resolve a private object path back to a Room attachment and verify current
+ * membership. `null` means this object is not a Room attachment, so callers
+ * must preserve the existing policy for unrelated private storage.
+ */
+export async function canAccessRoomMediaObject(
+  objectPath: string,
+  userId: string,
+): Promise<boolean | null> {
+  const { rows } = await pool.query(
+    `SELECT rm.room_id
+       FROM room_messages rm
+      WHERE rm.attachment IS NOT NULL
+        AND rm.attachment->>'objectPath' = $1
+      LIMIT 1`,
+    [objectPath],
+  );
+  if (!rows[0]) return null;
+  const membership = await pool.query(
+    `SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2`,
+    [String(rows[0].room_id), userId],
+  );
+  return (membership.rowCount ?? 0) > 0;
+}
+
+/** Legacy /objects/uploads paths may only be re-attached by their original author. */
+export async function canReuseLegacyRoomAttachment(
+  roomId: string,
+  userId: string,
+  objectPath: string,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM room_messages
+      WHERE room_id = $1
+        AND user_id = $2
+        AND attachment IS NOT NULL
+        AND attachment->>'objectPath' = $3
+      LIMIT 1`,
+    [roomId, userId, objectPath],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 export async function setRoomMediaVisibility(
   roomId: string,
   messageId: string,
@@ -990,6 +1058,15 @@ export async function removeRoomMedia(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Acquire the session lock before the attachment/presentation locks. A
+    // completed room has no active row; proceeding is still safe because no
+    // concurrent start can target that ended session.
+    await client.query(
+      `SELECT id FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
 
     const result = await client.query(
       `SELECT attachment
@@ -1044,10 +1121,17 @@ export async function removeRoomMedia(
       presentationStopped = true;
       await client.query(
         `UPDATE room_sessions
-         SET metadata = metadata - 'activeTool'
+         SET metadata = (metadata - 'activeTool') ||
+           jsonb_build_object('sharedPanel', jsonb_build_object(
+             'panel', 'none',
+             'version', COALESCE((metadata->'sharedPanel'->>'version')::integer, 0) + 1
+           ))
          WHERE room_id = $1
            AND status = 'active'
-           AND metadata->>'activeTool' = 'presentation'`,
+           AND (
+             metadata->'sharedPanel'->>'panel' = 'presentation'
+             OR (metadata->'sharedPanel' IS NULL AND metadata->>'activeTool' = 'presentation')
+           )`,
         [roomId],
       );
     }
@@ -1094,6 +1178,121 @@ export async function startPresentation(
   return rowToPresentation(res.rows[0] as Record<string, unknown>);
 }
 
+/**
+ * Atomically replace the meeting's shared surface with a presentation. The
+ * session row lock serializes competing presenters, so the presentation row,
+ * compatibility metadata, and authoritative panel can never describe
+ * different media.
+ */
+export async function startPresentationForActiveSession(
+  roomId: string,
+  expectedSessionId: string,
+  messageId: string | null,
+  filename: string,
+  mediaType: string,
+  objectPath: string,
+  presentedBy: string,
+  presentedByName: string,
+  pageCount?: number | null,
+): Promise<{ presentation: MediaPresentation; sharedPanel: SharedPanelState }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT * FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!locked.rows[0]) throw new Error("NO_ACTIVE_SESSION");
+    const session = rowToSession(locked.rows[0] as Record<string, unknown>);
+    if (session.id !== expectedSessionId) throw new StalePresentationSessionError();
+    const previousPanel = sharedPanelFromSession(session);
+    // The route's earlier lookup is only advisory. Re-lock and revalidate the
+    // source attachment after the session lock so remove/delete cannot race a
+    // now-stale presentation into existence.
+    if (messageId) {
+      const source = await client.query(
+        `SELECT attachment FROM room_messages
+          WHERE id = $1 AND room_id = $2
+          FOR UPDATE`,
+        [messageId, roomId],
+      );
+      if (!source.rows[0]?.attachment) throw new Error("PRESENTATION_MEDIA_UNAVAILABLE");
+      const attachment = (
+        typeof source.rows[0].attachment === "string"
+          ? JSON.parse(source.rows[0].attachment)
+          : source.rows[0].attachment
+      ) as MediaAttachment;
+      if (
+        attachment.removed ||
+        attachment.filename !== filename ||
+        attachment.type !== mediaType ||
+        (attachment.objectPath ?? "") !== objectPath
+      ) {
+        throw new Error("PRESENTATION_MEDIA_UNAVAILABLE");
+      }
+    } else if (objectPath) {
+      // Stored objects must always be anchored to a live Room message.
+      throw new Error("PRESENTATION_MEDIA_UNAVAILABLE");
+    }
+    if (previousPanel.panel === "poll") {
+      await client.query(
+        `DELETE FROM room_poll_votes WHERE poll_id IN (
+           SELECT id FROM room_polls WHERE room_id = $1 AND session_id = $2
+           ORDER BY created_at DESC LIMIT 1
+         )`,
+        [roomId, session.id],
+      );
+      await client.query(
+        `DELETE FROM room_polls WHERE id = (
+           SELECT id FROM room_polls WHERE room_id = $1 AND session_id = $2
+           ORDER BY created_at DESC LIMIT 1
+         )`,
+        [roomId, session.id],
+      );
+    }
+    await client.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+    const inserted = await client.query(
+      `INSERT INTO room_media_presentations
+         (room_id, session_id, message_id, filename, media_type, object_path,
+          presented_by, presented_by_name, current_page, page_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, $9)
+       RETURNING *`,
+      [roomId, session.id, messageId, filename, mediaType, objectPath, presentedBy, presentedByName, pageCount ?? null],
+    );
+    const presentation = rowToPresentation(inserted.rows[0] as Record<string, unknown>);
+    const sharedPanel: SharedPanelState = {
+      panel: "presentation",
+      version: previousPanel.version + 1,
+      data: {
+        presentationId: presentation.id,
+        messageId: presentation.messageId,
+        currentPage: presentation.currentPage,
+      },
+    };
+    const metadata: Record<string, unknown> = {
+      ...session.metadata,
+      activeTool: "presentation",
+      sharedPanel,
+    };
+    delete metadata.activeEmmaus;
+    await client.query(
+      `UPDATE room_sessions
+          SET metadata = $1, poll = CASE WHEN $2 THEN NULL ELSE poll END
+        WHERE id = $3`,
+      [JSON.stringify(metadata), previousPanel.panel === "poll", session.id],
+    );
+    await client.query("COMMIT");
+    return { presentation, sharedPanel };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getActivePresentation(roomId: string): Promise<MediaPresentation | null> {
   const res = await pool.query(
     `SELECT * FROM room_media_presentations WHERE room_id = $1 ORDER BY started_at DESC LIMIT 1`,
@@ -1102,15 +1301,137 @@ export async function getActivePresentation(roomId: string): Promise<MediaPresen
   return res.rows.length > 0 ? rowToPresentation(res.rows[0] as Record<string, unknown>) : null;
 }
 
-export async function updatePresentationPage(roomId: string, page: number): Promise<void> {
-  await pool.query(
-    `UPDATE room_media_presentations SET current_page = $1 WHERE room_id = $2`,
-    [page, roomId]
-  );
+export async function updatePresentationPage(
+  roomId: string,
+  expectedSessionId: string,
+  presentationId: string,
+  page: number,
+): Promise<"updated" | "stale" | "stale_session"> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const sessionResult = await client.query(
+      `SELECT * FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!sessionResult.rows[0]) {
+      await client.query("ROLLBACK");
+      return "stale_session";
+    }
+    if (String(sessionResult.rows[0].id) !== expectedSessionId) {
+      await client.query("ROLLBACK");
+      return "stale_session";
+    }
+    const presentation = await client.query(
+      `SELECT id FROM room_media_presentations
+        WHERE id = $1 AND room_id = $2
+        FOR UPDATE`,
+      [presentationId, roomId],
+    );
+    if (!presentation.rows[0]) {
+      await client.query("ROLLBACK");
+      return "stale";
+    }
+    const session = rowToSession(sessionResult.rows[0] as Record<string, unknown>);
+    const panel = sharedPanelFromSession(session);
+    if (
+      panel.panel !== "presentation" ||
+      panel.data?.presentationId !== presentationId
+    ) {
+      await client.query("ROLLBACK");
+      return "stale";
+    }
+    await client.query(
+      `UPDATE room_media_presentations SET current_page = $1
+        WHERE id = $2 AND room_id = $3`,
+      [page, presentationId, roomId],
+    );
+    const nextPanel: SharedPanelState = {
+      panel: "presentation",
+      version: panel.version + 1,
+      data: { ...panel.data, currentPage: page },
+    };
+    await client.query(
+      `UPDATE room_sessions
+          SET metadata = jsonb_set(metadata, '{sharedPanel}', $1::jsonb, true)
+        WHERE id = $2`,
+      [JSON.stringify(nextPanel), session.id],
+    );
+    await client.query("COMMIT");
+    return "updated";
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function stopPresentation(roomId: string): Promise<void> {
   await pool.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+}
+
+/** Stop the presentation and clear its authoritative panel in one transaction. */
+export async function stopPresentationAndClearPanel(
+  roomId: string,
+  expectedSessionId: string,
+  presentationId: string,
+): Promise<"stopped" | "stale" | "stale_session"> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Always lock the session before presentation rows (the same order used
+    // by startPresentationForActiveSession).
+    const session = await client.query(
+      `SELECT * FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!session.rows[0] || String(session.rows[0].id) !== expectedSessionId) {
+      await client.query("ROLLBACK");
+      return "stale_session";
+    }
+    const lockedSession = rowToSession(session.rows[0] as Record<string, unknown>);
+    const panel = sharedPanelFromSession(lockedSession);
+    if (
+      panel.panel !== "presentation" ||
+      panel.data?.presentationId !== presentationId
+    ) {
+      await client.query("ROLLBACK");
+      return "stale";
+    }
+    const presentation = await client.query(
+      `SELECT id FROM room_media_presentations
+       WHERE id = $1 AND room_id = $2 FOR UPDATE`,
+      [presentationId, roomId],
+    );
+    if (!presentation.rows[0]) {
+      await client.query("ROLLBACK");
+      return "stale";
+    }
+    await client.query(
+      `DELETE FROM room_media_presentations WHERE id = $1 AND room_id = $2`,
+      [presentationId, roomId],
+    );
+    const nextPanel: SharedPanelState = { panel: "none", version: panel.version + 1 };
+    await client.query(
+      `UPDATE room_sessions
+       SET metadata = (metadata - 'activeTool') ||
+         jsonb_build_object('sharedPanel', $1::jsonb)
+       WHERE id = $2`,
+      [JSON.stringify(nextPanel), expectedSessionId],
+    );
+    await client.query("COMMIT");
+    return "stopped";
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function setAllowMemberPresent(roomId: string, allow: boolean): Promise<void> {
@@ -1612,6 +1933,246 @@ export interface ActiveEmmausState {
   error?: string;
 }
 
+/**
+ * The one authoritative, session-scoped surface shown to every meeting device.
+ * `version` is incremented for every accepted assignment. Callers that send an
+ * expectedVersion can safely discard delayed/replayed commands without a
+ * toggle-style "flip it back" race.
+ */
+export type SharedPanel =
+  | "none" | "chat" | "scripture" | "presentation" | "poll"
+  | "ask-emmaus" | "study" | "notes" | "participants";
+
+export interface SharedPanelState {
+  panel: SharedPanel;
+  version: number;
+  data?: Record<string, unknown>;
+}
+
+export type AssignSharedPanelResult =
+  | { status: "applied"; state: SharedPanelState; session: RoomSession }
+  | { status: "stale"; state: SharedPanelState; session: RoomSession }
+  | { status: "no_active_session" };
+
+export interface SharedPanelTransitionPatch {
+  currentMode?: SessionMode;
+  currentStep?: string;
+  currentScripture?: ScriptureRef | null;
+  poll?: unknown | null;
+  data?: Record<string, unknown>;
+  /** Close only this panel; a different current panel is left untouched. */
+  fromPanel?: SharedPanel;
+  expectedVersion?: number;
+  modeEntered?: string;
+}
+
+const SHARED_PANELS = new Set<SharedPanel>([
+  "none", "chat", "scripture", "presentation", "poll",
+  "ask-emmaus", "study", "notes", "participants",
+]);
+
+function sharedPanelForTool(
+  tool: "study" | "scripture" | "discussion" | "poll" | "presentation" | "ask-emmaus",
+): SharedPanel {
+  return tool === "discussion" ? "chat" : tool;
+}
+
+function sharedPanelFromSession(session: RoomSession): SharedPanelState {
+  const candidate = session.metadata.sharedPanel as Partial<SharedPanelState> | undefined;
+  if (
+    candidate &&
+    typeof candidate.version === "number" &&
+    Number.isInteger(candidate.version) &&
+    candidate.version >= 0 &&
+    typeof candidate.panel === "string" &&
+    SHARED_PANELS.has(candidate.panel as SharedPanel)
+  ) {
+    return {
+      panel: candidate.panel as SharedPanel,
+      version: candidate.version,
+      ...(candidate.data && typeof candidate.data === "object"
+        ? { data: candidate.data as Record<string, unknown> }
+        : {}),
+    };
+  }
+  // Migration compatibility: sessions written before sharedPanel retain their
+  // visible legacy tool, but all new writes establish an explicit state.
+  const legacy = session.metadata.activeTool;
+  return {
+    panel: legacy === "discussion"
+      ? "chat"
+      : typeof legacy === "string" && SHARED_PANELS.has(legacy as SharedPanel)
+      ? legacy as SharedPanel
+      : "none",
+    version: 0,
+  };
+}
+
+export function getSharedPanelState(session: RoomSession | null): SharedPanelState {
+  return session ? sharedPanelFromSession(session) : { panel: "none", version: 0 };
+}
+
+/**
+ * Atomically assign (never toggle) the shared panel. expectedVersion is an
+ * optimistic-concurrency precondition: an old client event returns `stale`
+ * with the current state and never mutates the session.
+ */
+export async function assignSharedPanel(
+  roomId: string,
+  panel: SharedPanel,
+  data?: Record<string, unknown>,
+  expectedVersion?: number,
+): Promise<AssignSharedPanelResult> {
+  if (!SHARED_PANELS.has(panel)) throw new Error("INVALID_SHARED_PANEL");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      `SELECT * FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!rows[0]) {
+      await client.query("ROLLBACK");
+      return { status: "no_active_session" };
+    }
+    const session = rowToSession(rows[0] as Record<string, unknown>);
+    const current = sharedPanelFromSession(session);
+    if (expectedVersion !== undefined && expectedVersion !== current.version) {
+      await client.query("COMMIT");
+      return { status: "stale", state: current, session };
+    }
+    const state: SharedPanelState = {
+      panel,
+      version: current.version + 1,
+      ...(data && Object.keys(data).length ? { data } : {}),
+    };
+    const metadata: Record<string, unknown> = { ...session.metadata, sharedPanel: state };
+    // activeTool remains a compatibility mirror for existing clients/routes;
+    // sharedPanel is the authoritative field.
+    if (panel === "none" || panel === "notes" || panel === "participants") {
+      delete metadata.activeTool;
+    } else {
+      metadata.activeTool = panel === "chat" ? "discussion" : panel;
+    }
+    const updated = await client.query(
+      `UPDATE room_sessions SET metadata = $1 WHERE id = $2 RETURNING *`,
+      [JSON.stringify(metadata), session.id],
+    );
+    await client.query("COMMIT");
+    return { status: "applied", state, session: rowToSession(updated.rows[0] as Record<string, unknown>) };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Common user-command transition. It serializes on the active session, checks
+ * the caller's exact session, cleans superseded durable tools, and commits the
+ * compatibility fields and versioned panel as one unit.
+ */
+export async function transitionSharedPanel(
+  roomId: string,
+  expectedSessionId: string,
+  panel: SharedPanel,
+  patch: SharedPanelTransitionPatch = {},
+): Promise<AssignSharedPanelResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT * FROM room_sessions
+       WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!locked.rows[0]) {
+      await client.query("ROLLBACK");
+      return { status: "no_active_session" };
+    }
+    const session = rowToSession(locked.rows[0] as Record<string, unknown>);
+    const current = sharedPanelFromSession(session);
+    if (session.id !== expectedSessionId) {
+      await client.query("COMMIT");
+      return { status: "stale", state: current, session };
+    }
+    if (patch.expectedVersion !== undefined && patch.expectedVersion !== current.version) {
+      await client.query("COMMIT");
+      return { status: "stale", state: current, session };
+    }
+    if (patch.fromPanel && current.panel !== patch.fromPanel) {
+      await client.query("COMMIT");
+      return { status: "applied", state: current, session };
+    }
+    if (current.panel === "poll" && panel !== "poll") {
+      await client.query(
+        `DELETE FROM room_poll_votes WHERE poll_id IN (
+           SELECT id FROM room_polls WHERE room_id = $1 AND session_id = $2
+         )`,
+        [roomId, session.id],
+      );
+      await client.query(
+        `DELETE FROM room_polls WHERE room_id = $1 AND session_id = $2`,
+        [roomId, session.id],
+      );
+    }
+    if (current.panel === "presentation" && panel !== "presentation") {
+      await client.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+    }
+    const state: SharedPanelState = {
+      panel,
+      version: current.version + 1,
+      ...(patch.data && Object.keys(patch.data).length ? { data: patch.data } : {}),
+    };
+    const metadata: Record<string, unknown> = { ...session.metadata, sharedPanel: state };
+    if (panel === "none" || panel === "notes" || panel === "participants") {
+      delete metadata.activeTool;
+    } else {
+      metadata.activeTool = panel === "chat" ? "discussion" : panel;
+    }
+    if (current.panel === "ask-emmaus" && panel !== "ask-emmaus") delete metadata.activeEmmaus;
+    if (patch.modeEntered) {
+      const entered = Array.isArray(metadata.modesEntered)
+        ? metadata.modesEntered.map(String)
+        : [];
+      metadata.modesEntered = entered.includes(patch.modeEntered)
+        ? entered
+        : [...entered, patch.modeEntered];
+    }
+    const updated = await client.query(
+      `UPDATE room_sessions
+          SET metadata = $1,
+              current_mode = COALESCE($2, current_mode),
+              current_step = COALESCE($3, current_step),
+              current_scripture = CASE WHEN $4 THEN $5 ELSE current_scripture END,
+              poll = CASE WHEN $6 THEN $7 ELSE poll END
+        WHERE id = $8
+        RETURNING *`,
+      [
+        JSON.stringify(metadata),
+        patch.currentMode ?? null,
+        patch.currentStep ?? null,
+        Object.prototype.hasOwnProperty.call(patch, "currentScripture"),
+        patch.currentScripture ? JSON.stringify(patch.currentScripture) : null,
+        Object.prototype.hasOwnProperty.call(patch, "poll") || (current.panel === "poll" && panel !== "poll"),
+        patch.poll ? JSON.stringify(patch.poll) : null,
+        session.id,
+      ],
+    );
+    await client.query("COMMIT");
+    return { status: "applied", state, session: rowToSession(updated.rows[0] as Record<string, unknown>) };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export interface SessionCompleteSummary {
   sessionId: string;
   modesEntered: string[];
@@ -1645,6 +2206,7 @@ export interface SessionEvent {
     | "presentation_page"
      | "presentation_stopped"
     | "tool_closed"
+     | "shared_panel"
      | "OPEN_GROUP_DISCUSSION";
   payload: Record<string, unknown>;
   sentBy: string;
@@ -1690,10 +2252,12 @@ export async function startSession(
   try {
     await client.query("BEGIN");
     const { rows } = await client.query(
-      `INSERT INTO room_sessions (room_id, started_by)
-       VALUES ($1, $2)
+      `INSERT INTO room_sessions (room_id, started_by, metadata)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [roomId, startedBy]
+      [roomId, startedBy, JSON.stringify({
+        sharedPanel: { panel: "none", version: 0 },
+      })]
     );
     const session = rowToSession(rows[0] as Record<string, unknown>);
     // Starting a meeting is the leader's explicit entry action. Record the
@@ -1827,6 +2391,11 @@ export async function clearSharedTool(
     ...(tool === "poll" ? { poll: null } : {}),
     metadata,
   });
+  // Keep legacy metadata coherent while establishing the explicit shared-panel
+  // contract. Do not clear a newer replacement panel.
+  if (sharedPanelFromSession(session).panel === sharedPanelForTool(tool)) {
+    await assignSharedPanel(roomId, "none");
+  }
 }
 
 /** Replace the current shared tool and clear any durable presentation/poll it supersedes. */
@@ -1846,6 +2415,7 @@ export async function replaceSharedTool(
     delete metadata.activeEmmaus;
   }
   await updateSessionState(roomId, { metadata });
+  await assignSharedPanel(roomId, sharedPanelForTool(tool));
 }
 
 /**
@@ -1931,6 +2501,8 @@ export async function claimSharedEmmausRequest(
 
     const row = rows[0] as Record<string, unknown>;
     const metadata = (row.metadata as Record<string, unknown>) ?? {};
+    const lockedSession = rowToSession(row);
+    const currentPanel = sharedPanelFromSession(lockedSession);
     const currentEmmaus = metadata.activeEmmaus as ActiveEmmausState | undefined;
     if (metadata.activeTool === "ask-emmaus" && currentEmmaus?.status === "generating") {
       throw new Error("EMMAUS_REQUEST_ACTIVE");
@@ -1969,6 +2541,11 @@ export async function claimSharedEmmausRequest(
     const nextMetadata = {
       ...metadata,
       activeTool: "ask-emmaus",
+      sharedPanel: {
+        panel: "ask-emmaus",
+        version: currentPanel.version + 1,
+        data: { requestId },
+      } satisfies SharedPanelState,
       activeEmmaus: {
         requestId,
         question: state.question,
@@ -3131,6 +3708,70 @@ export async function createPoll(
     [sessionId, roomId, createdBy, question, pollType, JSON.stringify(options)]
   );
   return rowToPoll(rows[0] as Record<string, unknown>);
+}
+
+/** Create a poll and make it the shared panel under the common session lock. */
+export async function createPollForActiveSession(
+  sessionId: string,
+  roomId: string,
+  createdBy: string,
+  question: string,
+  pollType: "yes_no" | "multiple_choice",
+  options: string[],
+): Promise<{ status: "applied"; poll: RoomPoll; state: SharedPanelState } | { status: "stale" }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT * FROM room_sessions WHERE room_id = $1 AND status = 'active'
+       ORDER BY started_at DESC LIMIT 1 FOR UPDATE`,
+      [roomId],
+    );
+    if (!locked.rows[0] || String(locked.rows[0].id) !== sessionId) {
+      await client.query("ROLLBACK");
+      return { status: "stale" };
+    }
+    const session = rowToSession(locked.rows[0] as Record<string, unknown>);
+    const current = sharedPanelFromSession(session);
+    if (current.panel === "presentation") {
+      await client.query(`DELETE FROM room_media_presentations WHERE room_id = $1`, [roomId]);
+    }
+    await client.query(
+      `DELETE FROM room_poll_votes WHERE poll_id IN (
+         SELECT id FROM room_polls WHERE room_id = $1 AND session_id = $2
+       )`,
+      [roomId, sessionId],
+    );
+    await client.query(`DELETE FROM room_polls WHERE room_id = $1 AND session_id = $2`, [roomId, sessionId]);
+    const inserted = await client.query(
+      `INSERT INTO room_polls (session_id, room_id, created_by, question, poll_type, options)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING *`,
+      [sessionId, roomId, createdBy, question, pollType, JSON.stringify(options)],
+    );
+    const poll = rowToPoll(inserted.rows[0] as Record<string, unknown>);
+    const state: SharedPanelState = {
+      panel: "poll",
+      version: current.version + 1,
+      data: { pollId: poll.id },
+    };
+    const metadata: Record<string, unknown> = {
+      ...session.metadata,
+      activeTool: "poll",
+      sharedPanel: state,
+    };
+    delete metadata.activeEmmaus;
+    await client.query(
+      `UPDATE room_sessions SET metadata = $1, poll = $2 WHERE id = $3`,
+      [JSON.stringify(metadata), JSON.stringify(poll), sessionId],
+    );
+    await client.query("COMMIT");
+    return { status: "applied", poll, state };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** Get the most recent poll for a session (active or revealed). */

@@ -212,6 +212,10 @@ export interface MediaAttachment {
 }
 
 export interface PresentationState {
+  /** Authoritative presentation row identifier. */
+  id?: string;
+  /** Meeting that owns this presentation. */
+  sessionId?: string;
   messageId: string | null;
   filename: string;
   mediaType: MediaAttachmentType;
@@ -275,6 +279,15 @@ export interface RoomSession {
   metadata: Record<string, unknown>;
 }
 
+/** Authoritative shared meeting surface. `chat` replaces legacy `discussion`. */
+export type SharedPanel = 'none' | 'chat' | 'scripture' | 'presentation' | 'poll' | 'ask-emmaus' | 'study' | 'notes' | 'participants';
+export interface SharedPanelState {
+  panel: SharedPanel;
+  /** Increasing per session; clients discard older SSE/hydration snapshots. */
+  version: number;
+  data?: Record<string, unknown>;
+}
+
 // ─── Highlights & Shared Notes ────────────────────────────────────────────────
 
 export interface RoomHighlight {
@@ -327,7 +340,8 @@ export type SessionEventType =
   | 'presentation_page'
   | 'presentation_stopped'
    | 'tool_closed'
-  | 'OPEN_GROUP_DISCUSSION';
+   | 'OPEN_GROUP_DISCUSSION'
+   | 'shared_panel';
 
 export interface SessionCompleteSummary {
   sessionId: string;

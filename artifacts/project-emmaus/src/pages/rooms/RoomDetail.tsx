@@ -112,7 +112,7 @@ export default function RoomDetail() {
   const presentationQuery = new URLSearchParams(window.location.search);
   const presentationReturnToChat = presentationQuery.get('return') === 'chat';
   const presentationDiscussionId = presentationQuery.get('discussionId');
-  const discussionSurfaceOpen = presentationQuery.get('surface') === 'discussion';
+  const discussionSurfaceRequested = presentationQuery.get('surface') === 'discussion';
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [room, setRoom] = useState<RoomDetailType | null>(null);
@@ -220,6 +220,7 @@ export default function RoomDetail() {
     activePresentation,
     setActivePresentation,
     activeTool,
+    sharedPanel = { panel: 'none', version: 0 },
     lastEvent,
   } = useFollowLeader({
     roomId: String(roomId),
@@ -232,6 +233,14 @@ export default function RoomDetail() {
       setScripturePendingNotice(null);
     },
   });
+  // New sessions assign one authoritative panel. Keep the query compatibility
+  // path for older servers/deep links, but never require a route transition to
+  // keep the in-room LiveKit shell mounted.
+  const discussionSurfaceOpen =
+    sharedPanel.panel === 'chat' ||
+    // Preserve deep links only until an authoritative versioned assignment
+    // arrives; a later `none` must close a stale chat URL.
+    (discussionSurfaceRequested && sharedPanel.version === 0);
 
   const sessionComplete = leaderSessionComplete ?? sseSessionComplete;
   const clearSessionComplete = () => {
@@ -482,6 +491,22 @@ export default function RoomDetail() {
       setShowSharedScripture(true);
     }
   }, [activeTool, activeScripture]);
+
+  // `sharedPanel` is authoritative for new servers. These assignments (rather
+  // than toggles) make reconnects and duplicate/out-of-order events converge.
+  useEffect(() => {
+    if (!activeSession) return;
+    if (sharedPanel.panel === 'none') {
+      setShowSharedScripture(false);
+      setShowSharedAskEmmaus(false);
+      setActivePoll(null);
+      return;
+    }
+    setShowSharedScripture(sharedPanel.panel === 'scripture');
+    setShowSharedAskEmmaus(sharedPanel.panel === 'ask-emmaus');
+    if (sharedPanel.panel !== 'poll') setActivePoll(null);
+    if (sharedPanel.panel !== 'presentation') setActivePresentation(null);
+  }, [activeSession, sharedPanel.panel, sharedPanel.version]);
 
   const refreshProgress = useCallback(async (silent = true) => {
     if (!roomRef.current || !user || !roomId) return;
@@ -852,8 +877,12 @@ export default function RoomDetail() {
     tool: 'scripture' | 'discussion' | 'poll' | 'ask-emmaus' | 'presentation',
     closeLocal: () => void,
   ) => {
+    if (!activeSession?.id) {
+      alert('This meeting has ended. Reopen the current meeting before closing a shared tool.');
+      return;
+    }
     try {
-      await apiCloseSharedTool(user.id, String(roomId), tool);
+      await apiCloseSharedTool(user.id, String(roomId), activeSession.id, tool);
       closeLocal();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not close the shared tool.');
@@ -1911,7 +1940,14 @@ export default function RoomDetail() {
                     <p className="text-[11px] text-violet-600 dark:text-violet-400">Share requests below</p>
                   </div>
                   {isAuthorizedLeader && (
-                    <button onClick={() => void apiChangeMode(user.id, String(roomId), 'study', user.preferredName || 'Leader').catch(() => {})}
+                    <button onClick={() => {
+                      if (!activeSession?.id) {
+                        alert('This meeting has ended.');
+                        return;
+                      }
+                      void apiChangeMode(user.id, String(roomId), activeSession.id, 'study', user.preferredName || 'Leader')
+                        .catch(err => alert(err instanceof Error ? err.message : 'The meeting changed before prayer ended.'));
+                    }}
                       className="shrink-0 text-[11px] text-violet-600 dark:text-violet-400 font-semibold"
                     >End →</button>
                   )}
@@ -1920,7 +1956,7 @@ export default function RoomDetail() {
             </div>
 
             {/* Active presentation has priority over the live meeting card. */}
-            {activePresentation && (
+            {sharedPanel.panel === 'presentation' && activePresentation && (
               <div id="room-active-presentation" className="scroll-mt-16 mb-4">
                 <PresentationPanel
                   presentation={activePresentation}

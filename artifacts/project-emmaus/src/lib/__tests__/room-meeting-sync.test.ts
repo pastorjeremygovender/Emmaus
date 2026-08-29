@@ -75,8 +75,8 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('routes the leader command through one persisted discussion identity', () => {
-    expect(guidePanelSource).toContain('await apiChangeMode(userId, roomId, \'discussion\', leaderName);');
-    expect(guidePanelSource).toContain('const discussion = await apiOpenGroupDiscussion(userId, roomId);');
+    expect(guidePanelSource).toContain("await apiChangeMode(userId, roomId, activeSession.id, 'discussion', leaderName);");
+    expect(guidePanelSource).toContain('const discussion = await apiOpenGroupDiscussion(userId, roomId, activeSession.id);');
     expect(guidePanelSource).toContain('onOpenDiscussion?.(discussion.id);');
     expect(roomDetailSource).toContain("lastEvent?.type !== 'OPEN_GROUP_DISCUSSION'");
     expect(roomDetailSource).toContain('setDiscussionPendingNotice(payload.discussionId);');
@@ -93,8 +93,9 @@ describe('active meeting synchronization contract', () => {
   });
 
   it('keeps LiveKit audio microphone-only and removes camera controls', () => {
-    expect(videoRoomSource).toContain('video={meetingMode === \'video\'}');
-    expect(videoRoomSource).toContain('controls={{ camera: false, microphone: true');
+    expect(videoRoomSource).toContain("video={meetingMode === 'video' && deviceIntent.camera && !deviceIntent.listenOnly");
+    expect(videoRoomSource).toContain("audio={deviceIntent.microphone && !deviceIntent.listenOnly");
+    expect(videoRoomSource).toContain("{mode === 'video' && <Button");
     expect(videoRoomSource).toContain('function AudioParticipantGrid');
     expect(videoRoomSource).toContain('Live Audio');
     expect(videoRoomSource).toContain("'Microphone' : 'Camera and microphone'");
@@ -140,7 +141,7 @@ describe('active meeting synchronization contract', () => {
   it('lets joined members leave without ending the meeting and leaders close discussion', () => {
     expect(roomDetailSource).toContain('apiRecordAttendanceLeave');
     expect(roomDetailSource).toContain('Leave Meeting');
-    expect(roomChatSource).toContain("apiCloseSharedTool(user.id, String(roomId), 'discussion')");
+    expect(roomChatSource).toContain("apiCloseSharedTool(user.id, String(roomId), sessionId, 'discussion')");
     expect(roomChatSource).toContain('Close Discussion');
   });
 
@@ -204,6 +205,34 @@ describe('active meeting synchronization contract', () => {
     expect(videoRoomSource).toContain('Raise hand / ask a question');
     expect(videoRoomSource).toContain('RaisedHandsSummary');
     expect(videoRoomSource).toContain('hasRaisedHand(participant)');
+  });
+
+  it('uses the versioned shared-panel contract and rejects stale panel events', () => {
+    expect(followLeaderSource).toContain('const applySharedPanel');
+    expect(followLeaderSource).toContain('value.version < current.version');
+    expect(followLeaderSource).toContain("case 'shared_panel'");
+    expect(roomDetailSource).toContain("sharedPanel.panel === 'chat'");
+  });
+
+  it('keeps device publication and hand controls in the persistent call dock', () => {
+    expect(videoRoomSource).toContain('function PrejoinCheck');
+    expect(videoRoomSource).toContain('navigator.mediaDevices.getUserMedia');
+    expect(videoRoomSource).toContain('navigator.permissions?.query');
+    expect(videoRoomSource).toContain("'setSinkId' in HTMLMediaElement.prototype");
+    expect(videoRoomSource).toContain('function MeetingDock');
+    expect(videoRoomSource).toContain('<RaiseHandControl />');
+    expect(videoRoomSource).toContain('Microphone change was not published');
+    expect(videoRoomSource).toContain('onDisconnected={() => {');
+    expect(videoRoomSource).toContain('microphoneId?: string');
+    expect(videoRoomSource).toContain("audio={deviceIntent.microphone");
+    expect(videoRoomSource).toContain('function InCallDeviceCheck');
+    expect(videoRoomSource).toContain('onClose={() => setShowPrejoin(false)}');
+  });
+
+  it('lets only the authoritative presentation panel render media', () => {
+    expect(roomDetailSource).toContain("sharedPanel.panel !== 'presentation'");
+    expect(roomDetailSource).toContain("sharedPanel.panel === 'presentation' && activePresentation");
+    expect(followLeaderSource).toContain("sharedPanelRef.current.panel !== 'presentation'");
   });
 
   it('clears raised hands across reconnects and participant departures in both layouts', () => {

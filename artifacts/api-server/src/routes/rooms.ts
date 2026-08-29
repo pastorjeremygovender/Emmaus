@@ -67,6 +67,9 @@ import {
   clearSharedTool,
   replaceSharedTool,
   updateSharedEmmausState,
+  assignSharedPanel,
+  transitionSharedPanel,
+  getSharedPanelState,
   claimSharedEmmausRequest,
   broadcastRoomEvent,
   subscribeToSessionEvents,
@@ -86,6 +89,7 @@ import {
   getSessionDiscussion,
   getDiscussionById,
   createPoll,
+  createPollForActiveSession,
   getActivePoll,
   clearActivePoll,
   getPollWithResults,
@@ -98,14 +102,17 @@ import {
   getRecentlyCompletedSession,
   acknowledgeSessionCompletion,
   getRoomMedia,
+  canReuseLegacyRoomAttachment,
   setRoomMediaVisibility,
   setAllRoomMediaVisibility,
   removeRoomMedia,
   RoomMediaStorageCleanupError,
-  startPresentation,
+  StalePresentationSessionError,
+  startPresentationForActiveSession,
   getActivePresentation,
   updatePresentationPage,
   stopPresentation,
+  stopPresentationAndClearPanel,
   setAllowMemberPresent,
   getAllowMemberPresent,
   updateMemberRole,
@@ -117,6 +124,7 @@ import {
   type SessionMode,
   type ScriptureRef,
   type SessionEvent,
+  type SharedPanel,
   type MediaAttachment,
 } from "../lib/room-store.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
@@ -816,7 +824,13 @@ router.get("/:roomId", async (req, res) => {
     const activeSession = await getActiveSession(String(roomId));
     const isLeader = isRoomLeaderRole(role);
 
-    res.json({ room: sanitisedRoom, currentUserRole: role, isLeader, activeSession: activeSession ?? null });
+    res.json({
+      room: sanitisedRoom,
+      currentUserRole: role,
+      isLeader,
+      activeSession: activeSession ?? null,
+      sharedPanel: getSharedPanelState(activeSession),
+    });
   } catch (err) {
     res.status(500).json({ error: "Failed to load room." });
   }
@@ -1541,8 +1555,35 @@ router.post("/:roomId/messages", async (req, res) => {
     res.status(400).json({ error: "Invalid client message ID." });
     return;
   }
+  if (attachment && attachment.type !== "link") {
+    const allowedAttachment = ALLOWED_MEDIA[attachment.mimeType];
+    if (
+      !allowedAttachment ||
+      allowedAttachment.attachmentType !== attachment.type ||
+      typeof attachment.filename !== "string" || attachment.filename.length < 1 || attachment.filename.length > 255 ||
+      !Number.isSafeInteger(attachment.size) || attachment.size < 0 || attachment.size > allowedAttachment.maxBytes ||
+      typeof attachment.objectPath !== "string" ||
+      // /uploads is accepted only for clients issued a URL before room-scoped
+      // prefixes were introduced; the persisted roomId still scopes its use.
+      (!attachment.objectPath.startsWith(`/objects/room-media/${String(roomId)}/`) &&
+        !attachment.objectPath.startsWith("/objects/uploads/"))
+    ) {
+      res.status(400).json({ error: "Attachment metadata is invalid for this room upload." });
+      return;
+    }
+  }
 
   try {
+    const attachmentPath = attachment?.objectPath;
+    if (
+      attachment?.type !== "link" &&
+      typeof attachmentPath === "string" &&
+      attachmentPath.startsWith("/objects/uploads/") &&
+      !(await canReuseLegacyRoomAttachment(String(roomId), userId, attachmentPath))
+    ) {
+      res.status(403).json({ error: "Legacy upload ownership could not be verified for this room." });
+      return;
+    }
     if (discussionId && !(await getDiscussionById(String(roomId), discussionId))) {
       res.status(404).json({ error: "Discussion not found in this room." });
       return;
@@ -1551,7 +1592,7 @@ router.post("/:roomId/messages", async (req, res) => {
       String(roomId),
       userId,
       trimmedBody,
-      attachment ?? undefined,
+      attachment ? { ...attachment, roomId: String(roomId) } : undefined,
       discussionId,
       clientMessageId,
     );
@@ -1595,6 +1636,7 @@ router.delete("/:roomId/messages/:messageId", async (req, res) => {
         sentBy: userId,
         at: new Date().toISOString(),
       });
+      await broadcastSharedPanelState(String(roomId), userId);
     }
     res.json({ ok: true });
   } catch {
@@ -1617,6 +1659,14 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
     res.status(400).json({ error: "filename, contentType and size are required." });
     return;
   }
+  if (
+    typeof filename !== "string" || filename.trim().length === 0 || filename.length > 255 ||
+    typeof contentType !== "string" ||
+    typeof size !== "number" || !Number.isSafeInteger(size) || size < 0
+  ) {
+    res.status(400).json({ error: "filename, contentType, and a non-negative integer size are required." });
+    return;
+  }
 
   const allowed = ALLOWED_MEDIA[contentType];
   if (!allowed) {
@@ -1635,9 +1685,18 @@ router.post("/:roomId/messages/upload-url", async (req, res) => {
       res.status(403).json({ error: "You are not a member of this room." });
       return;
     }
-    const uploadUrl = await objectStorage.getObjectEntityUploadURL();
+    // This endpoint intentionally checks membership, not leader authority:
+    // chat attachments are member content, unlike presentation control.
+    const uploadUrl = await objectStorage.getObjectEntityUploadURL(`room-media/${String(roomId)}`);
     const objectPath = objectStorage.normalizeObjectEntityPath(uploadUrl);
-    res.json({ uploadUrl, objectPath, attachmentType: allowed.attachmentType });
+    res.json({
+      uploadUrl,
+      objectPath,
+      attachmentType: allowed.attachmentType,
+      roomId: String(roomId),
+      maxBytes: allowed.maxBytes,
+      contentType,
+    });
   } catch (err) {
     res.status(500).json({ error: "Failed to generate upload URL." });
   }
@@ -1752,6 +1811,7 @@ router.delete("/:roomId/media/:messageId", async (req, res) => {
         sentBy: userId,
         at: new Date().toISOString(),
       });
+      await broadcastSharedPanelState(String(roomId), userId);
     }
 
     res.json({
@@ -1884,6 +1944,18 @@ async function guardLeader(
   return userId;
 }
 
+/** Send the versioned counterpart to legacy surface events. */
+async function broadcastSharedPanelState(roomId: string, sentBy: string): Promise<void> {
+  const session = await getActiveSession(roomId);
+  if (!session) return;
+  broadcastRoomEvent(roomId, {
+    type: "shared_panel",
+    payload: { sessionId: session.id, sharedPanel: getSharedPanelState(session) },
+    sentBy,
+    at: new Date().toISOString(),
+  });
+}
+
 // POST /:roomId/session/start
 router.post("/:roomId/session/start", async (req, res) => {
   const { roomId } = req.params;
@@ -1998,6 +2070,7 @@ router.post("/:roomId/session/end", async (req, res) => {
       at: new Date().toISOString(),
     };
     broadcastRoomEvent(String(roomId), event);
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to end session." });
@@ -2016,9 +2089,80 @@ router.get("/:roomId/session", async (req, res) => {
   }
   try {
     const session = await getActiveSession(String(roomId));
-    res.json({ session });
+    res.json({ session, sharedPanel: getSharedPanelState(session) });
   } catch (err) {
     res.status(500).json({ error: "Failed to load session." });
+  }
+});
+
+// PUT /:roomId/session/panel
+// Explicit, versioned replacement for toggle-style shared-surface events.
+// A stale expectedVersion is deliberately a no-op and returns the durable
+// winner, allowing clients to hydrate rather than attempting a compensating
+// toggle. Panel selection remains leader controlled; chat uploads are guarded
+// separately by membership at /messages/upload-url.
+router.put("/:roomId/session/panel", async (req, res) => {
+  const { roomId } = req.params;
+  const userId = await guardLeader(req, res, String(roomId));
+  if (!userId) return;
+  const { panel, data, expectedVersion, sessionId } = req.body as {
+    panel?: unknown;
+    data?: unknown;
+    expectedVersion?: unknown;
+    sessionId?: unknown;
+  };
+  const panels: SharedPanel[] = [
+    "none", "chat", "scripture", "presentation", "poll",
+    "ask-emmaus", "study", "notes", "participants",
+  ];
+  if (typeof panel !== "string" || !panels.includes(panel as SharedPanel)) {
+    res.status(400).json({ error: `panel must be one of: ${panels.join(", ")}` });
+    return;
+  }
+  if (!Number.isSafeInteger(expectedVersion) || (expectedVersion as number) < 0) {
+    res.status(400).json({ error: "expectedVersion must be a non-negative integer." });
+    return;
+  }
+  if (typeof sessionId !== "string" || !sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  if (data !== undefined && (!data || typeof data !== "object" || Array.isArray(data))) {
+    res.status(400).json({ error: "data must be an object when provided." });
+    return;
+  }
+  try {
+    const result = await transitionSharedPanel(
+      String(roomId),
+      sessionId,
+      panel as SharedPanel,
+      {
+        data: data as Record<string, unknown> | undefined,
+        expectedVersion: expectedVersion as number,
+      },
+    );
+    if (result.status === "no_active_session") {
+      res.status(409).json({ error: "There is no active meeting." });
+      return;
+    }
+    if (result.status === "stale") {
+      res.status(409).json({
+        error: "Stale shared-panel event rejected.",
+        code: "STALE_SHARED_PANEL_VERSION",
+        sharedPanel: result.state,
+      });
+      return;
+    }
+    const event: SessionEvent = {
+      type: "shared_panel",
+      payload: { sessionId: result.session.id, sharedPanel: result.state },
+      sentBy: userId,
+      at: new Date().toISOString(),
+    };
+    broadcastRoomEvent(String(roomId), event);
+    res.json({ ok: true, sharedPanel: result.state });
+  } catch {
+    res.status(500).json({ error: "Failed to assign shared panel." });
   }
 });
 
@@ -2028,23 +2172,29 @@ router.post("/:roomId/session/navigate", async (req, res) => {
   const { roomId } = req.params;
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
-  const { stepId, scripture, leaderName } = req.body as {
+  const { sessionId, stepId, scripture, leaderName } = req.body as {
+    sessionId?: string;
     stepId?: string;
     scripture?: ScriptureRef;
     leaderName?: string;
   };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
   try {
-    await replaceSharedTool(String(roomId), scripture !== undefined ? "scripture" : "study");
-    await updateSessionState(String(roomId), {
+    const panel = scripture !== undefined ? "scripture" : "study";
+    const result = await transitionSharedPanel(String(roomId), sessionId, panel, {
       ...(stepId !== undefined ? { currentStep: stepId } : {}),
       ...(scripture !== undefined ? { currentScripture: scripture } : {}),
-      metadata: {
-        ...(await getActiveSession(String(roomId)))?.metadata,
-        activeTool: scripture !== undefined ? "scripture" : "study",
-      },
+      data: scripture !== undefined ? { scripture } : stepId !== undefined ? { stepId } : undefined,
       ...(stepId !== undefined && scripture === undefined ? { currentMode: "study" as SessionMode } : {}),
       ...(scripture !== undefined && stepId === undefined ? { currentMode: "scripture" as SessionMode } : {}),
     });
+    if (result.status !== "applied") {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before navigation was applied." });
+      return;
+    }
     const event: SessionEvent = {
       type: "navigate",
       payload: {
@@ -2056,6 +2206,7 @@ router.post("/:roomId/session/navigate", async (req, res) => {
       at: new Date().toISOString(),
     };
     broadcastRoomEvent(String(roomId), event);
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to navigate." });
@@ -2068,30 +2219,28 @@ router.post("/:roomId/session/mode", async (req, res) => {
   const { roomId } = req.params;
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
-  const { mode, leaderName } = req.body as { mode?: SessionMode; leaderName?: string };
+  const { sessionId, mode, leaderName } = req.body as { sessionId?: string; mode?: SessionMode; leaderName?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
   const validModes: SessionMode[] = ["study", "scripture", "discussion", "prayer", "poll"];
   if (!mode || !validModes.includes(mode)) {
     res.status(400).json({ error: "Valid mode is required." });
     return;
   }
   try {
-    const activeTool = mode === "scripture" ? "scripture"
-      : mode === "discussion" ? "discussion"
+    const activeTool: SharedPanel = mode === "scripture" ? "scripture"
+      : mode === "discussion" ? "chat"
       : mode === "poll" ? "poll"
       : "study";
-    await replaceSharedTool(String(roomId), activeTool);
-    await updateSessionState(String(roomId), {
+    const result = await transitionSharedPanel(String(roomId), sessionId, activeTool, {
       currentMode: mode,
-      metadata: {
-        ...(await getActiveSession(String(roomId)))?.metadata,
-        activeTool,
-      },
+      ...(mode === "discussion" || mode === "prayer" ? { modeEntered: mode } : {}),
     });
-    // Durably record which modes were entered — awaited so completeSession()
-    // can rely on metadata.modesEntered being current before the leader
-    // taps Complete Session.
-    if (mode === "discussion" || mode === "prayer") {
-      await trackModeEntered(String(roomId), mode);
+    if (result.status !== "applied") {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the mode was applied." });
+      return;
     }
     const event: SessionEvent = {
       type: "mode_change",
@@ -2100,6 +2249,7 @@ router.post("/:roomId/session/mode", async (req, res) => {
       at: new Date().toISOString(),
     };
     broadcastRoomEvent(String(roomId), event);
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to change mode." });
@@ -2118,7 +2268,11 @@ router.post("/:roomId/session/tool-close", async (req, res) => {
     res.status(403).json({ error: "You are not a member of this room." });
     return;
   }
-  const tool = (req.body as { tool?: string })?.tool;
+  const { tool, sessionId } = req.body as { tool?: string; sessionId?: string };
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
   const validTools = ["scripture", "discussion", "poll", "ask-emmaus", "presentation"];
   if (!tool || !validTools.includes(tool)) {
     res.status(400).json({ error: `tool must be one of: ${validTools.join(", ")}` });
@@ -2126,8 +2280,28 @@ router.post("/:roomId/session/tool-close", async (req, res) => {
   }
   try {
     const session = await getActiveSession(String(roomId));
-    if (!session) {
-      res.status(409).json({ error: "There is no active meeting." });
+    if (tool === "presentation") {
+      const presentation = await getActivePresentation(String(roomId));
+      if (!presentation) {
+        res.status(409).json({ code: "STALE_PRESENTATION", error: "The presentation is no longer active." });
+        return;
+      }
+      const stopped = await stopPresentationAndClearPanel(String(roomId), sessionId, presentation.id);
+      if (stopped !== "stopped" || !session || session.id !== sessionId) {
+        res.status(409).json({
+          code: stopped === "stale" ? "STALE_PRESENTATION" : "STALE_SESSION",
+          error: "The presentation changed before it was stopped.",
+        });
+        return;
+      }
+      broadcastRoomEvent(String(roomId), {
+        type: "tool_closed",
+        payload: { tool, sessionId },
+        sentBy: userId,
+        at: new Date().toISOString(),
+      });
+      await broadcastSharedPanelState(String(roomId), userId);
+      res.json({ ok: true });
       return;
     }
     // Always broadcast the close for the requested surface. A member may still
@@ -2135,15 +2309,22 @@ router.post("/:roomId/session/tool-close", async (req, res) => {
     // it; silently ignoring that close strands those clients in the old route.
     // clearSharedTool itself only clears durable state when this tool still
     // owns activeTool, so closing an older surface cannot erase the replacement.
-    await clearSharedTool(String(roomId), tool as Parameters<typeof clearSharedTool>[1]);
-    if (tool === "poll") await clearActivePoll(String(roomId), session.id);
-    if (tool === "presentation") await stopPresentation(String(roomId));
+    const result = await transitionSharedPanel(String(roomId), sessionId, "none", {
+      fromPanel: (tool === "discussion" ? "chat" : tool) as SharedPanel,
+      ...(tool === "scripture" ? { currentScripture: null } : {}),
+      ...(tool === "poll" ? { poll: null } : {}),
+    });
+    if (result.status !== "applied" || !session || session.id !== sessionId) {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the tool was closed." });
+      return;
+    }
     broadcastRoomEvent(String(roomId), {
       type: "tool_closed",
       payload: { tool, sessionId: session.id },
       sentBy: userId,
       at: new Date().toISOString(),
     });
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to close the shared tool." });
@@ -2203,18 +2384,45 @@ router.post("/:roomId/session/broadcast", async (req, res) => {
   const { roomId } = req.params;
   const userId = await guardLeader(req, res, String(roomId));
   if (!userId) return;
-  const { type, payload } = req.body as { type?: string; payload?: Record<string, unknown> };
+  const { type, payload, sessionId } = req.body as {
+    type?: string;
+    payload?: Record<string, unknown>;
+    sessionId?: string;
+  };
   const allowedTypes = ["focus_verse", "poll_started", "poll_result", "session_state"];
   if (!type || !allowedTypes.includes(type)) {
     res.status(400).json({ error: `type must be one of: ${allowedTypes.join(", ")}` });
     return;
   }
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required." });
+    return;
+  }
+  const active = await getActiveSession(String(roomId));
+  if (!active || active.id !== sessionId) {
+    res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the event was applied." });
+    return;
+  }
   // If broadcasting a poll, persist it to session state
   if (type === "poll_started" && payload?.poll) {
-    await updateSessionState(String(roomId), { poll: payload.poll as unknown });
+    const transitioned = await transitionSharedPanel(String(roomId), sessionId, "poll", {
+      poll: payload.poll,
+      data: { poll: payload.poll },
+    });
+    if (transitioned.status !== "applied") {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the event was applied." });
+      return;
+    }
   }
   if (type === "poll_result") {
-    await updateSessionState(String(roomId), { poll: null });
+    const transitioned = await transitionSharedPanel(String(roomId), sessionId, "none", {
+      fromPanel: "poll",
+      poll: null,
+    });
+    if (transitioned.status !== "applied") {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the event was applied." });
+      return;
+    }
   }
   const event: SessionEvent = {
     type: type as SessionEvent["type"],
@@ -2471,6 +2679,10 @@ router.get("/:roomId/session/events", async (req, res) => {
       type: "session_state",
       payload: {
         session: activeSessionOnConnect,
+        // Explicit authoritative panel state for late joins/reconnects.
+        // Kept alongside the full session for legacy clients that still read
+        // metadata.activeTool.
+        sharedPanel: getSharedPanelState(activeSessionOnConnect),
         highlights: sessionHighlights,
         notes: sessionNotes,
         activePoll: sessionActivePoll,
@@ -3122,21 +3334,22 @@ router.post("/:roomId/session/poll", async (req, res) => {
   }
 
   try {
-    const poll = await createPoll(
+    const created = await createPollForActiveSession(
       session.id, String(roomId), userId,
       question.trim(), resolvedType, resolvedOptions
     );
-    await replaceSharedTool(String(roomId), "poll");
-    await updateSessionState(String(roomId), {
-      poll,
-      metadata: { ...(await getActiveSession(String(roomId)))?.metadata, activeTool: "poll" },
-    });
+    if (created.status === "stale") {
+      res.status(409).json({ code: "STALE_SESSION", error: "The meeting changed before the poll was created." });
+      return;
+    }
+    const { poll } = created;
     broadcastRoomEvent(String(roomId), {
       type: "poll_started",
       payload: { poll },
       sentBy: userId,
       at: new Date().toISOString(),
     });
+    await broadcastSharedPanelState(String(roomId), userId);
     res.status(201).json({ poll });
   } catch {
     res.status(500).json({ error: "Failed to create poll." });
@@ -3372,8 +3585,7 @@ router.post("/:roomId/session/presentation", async (req, res) => {
     );
     const presenterName = String(nameRows[0]?.preferred_name ?? "").trim() || "Member";
 
-    await replaceSharedTool(String(roomId), "presentation");
-    const presentation = await startPresentation(
+    const { presentation } = await startPresentationForActiveSession(
       String(roomId),
       activeSession.id,
       messageId ?? null,
@@ -3384,9 +3596,6 @@ router.post("/:roomId/session/presentation", async (req, res) => {
       presenterName,
       typeof pageCount === "number" ? pageCount : null,
     );
-    await updateSessionState(String(roomId), {
-      metadata: { ...(await getActiveSession(String(roomId)))?.metadata, activeTool: "presentation" },
-    });
 
     broadcastRoomEvent(String(roomId), {
       type: "media_presented",
@@ -3404,9 +3613,24 @@ router.post("/:roomId/session/presentation", async (req, res) => {
       sentBy: userId,
       at: new Date().toISOString(),
     });
+    await broadcastSharedPanelState(String(roomId), userId);
 
     res.json({ presentation });
   } catch (err) {
+    if (err instanceof StalePresentationSessionError) {
+      res.status(409).json({
+        code: "STALE_PRESENTATION_SESSION",
+        error: "The meeting changed before the presentation was started.",
+      });
+      return;
+    }
+    if (err instanceof Error && (
+      err.message === "PRESENTATION_MEDIA_UNAVAILABLE" ||
+      err.message === "NO_ACTIVE_SESSION"
+    )) {
+      res.status(409).json({ error: "The presentation media is no longer available." });
+      return;
+    }
     res.status(500).json({ error: "Failed to start presentation." });
   }
 });
@@ -3415,7 +3639,11 @@ router.patch("/:roomId/session/presentation/page", async (req, res) => {
   const userId = requireAuth(req, res);
   if (!userId) return;
   const { roomId } = req.params;
-  const { page } = req.body as { page?: number };
+  const { page, presentationId: requestedPresentationId, sessionId: requestedSessionId } = req.body as {
+    page?: number;
+    presentationId?: string;
+    sessionId?: string;
+  };
   if (typeof page !== "number" || page < 1) {
     res.status(400).json({ error: "page must be a positive integer." });
     return;
@@ -3426,13 +3654,43 @@ router.patch("/:roomId/session/presentation/page", async (req, res) => {
       res.status(403).json({ error: "Only room Owners or Leaders may change presentation pages." });
       return;
     }
-    await updatePresentationPage(String(roomId), page);
+    // Legacy callers omit presentationId. Snapshot the intended row before
+    // entering the store transaction; if it is replaced while waiting for the
+    // session lock, the targeted update is rejected as stale.
+    const [intended, expectedSession] = await Promise.all([
+      requestedPresentationId
+        ? Promise.resolve({ id: requestedPresentationId })
+        : getActivePresentation(String(roomId)),
+      requestedSessionId
+        ? Promise.resolve({ id: requestedSessionId })
+        : getActiveSession(String(roomId)),
+    ]);
+    if (!intended || !expectedSession) {
+      res.status(409).json({ error: "There is no active presentation." });
+      return;
+    }
+    const result = await updatePresentationPage(String(roomId), expectedSession.id, intended.id, page);
+    if (result === "stale_session") {
+      res.status(409).json({
+        code: "STALE_PRESENTATION_SESSION",
+        error: "The meeting changed before this page update was applied.",
+      });
+      return;
+    }
+    if (result === "stale") {
+      res.status(409).json({
+        code: "STALE_PRESENTATION",
+        error: "The presentation changed before this page update was applied.",
+      });
+      return;
+    }
     broadcastRoomEvent(String(roomId), {
       type: "presentation_page",
-      payload: { currentPage: page },
+      payload: { presentationId: intended.id, currentPage: page },
       sentBy: userId,
       at: new Date().toISOString(),
     });
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to update page." });
@@ -3449,14 +3707,36 @@ router.delete("/:roomId/session/presentation", async (req, res) => {
       res.status(403).json({ error: "Only room Owners or Leaders may stop the presentation." });
       return;
     }
-    await stopPresentation(String(roomId));
-    await clearSharedTool(String(roomId), "presentation");
+    const { sessionId, presentationId } = (req.body as {
+      sessionId?: string;
+      presentationId?: string;
+    } | undefined) ?? {};
+    if (!sessionId || !presentationId) {
+      res.status(400).json({ error: "sessionId and presentationId are required." });
+      return;
+    }
+    const stopped = await stopPresentationAndClearPanel(String(roomId), sessionId, presentationId);
+    if (stopped === "stale_session") {
+      res.status(409).json({
+        code: "STALE_PRESENTATION_SESSION",
+        error: "The meeting changed before the presentation was stopped.",
+      });
+      return;
+    }
+    if (stopped === "stale") {
+      res.status(409).json({
+        code: "STALE_PRESENTATION",
+        error: "The presentation changed before it was stopped.",
+      });
+      return;
+    }
     broadcastRoomEvent(String(roomId), {
       type: "presentation_stopped",
       payload: {},
       sentBy: userId,
       at: new Date().toISOString(),
     });
+    await broadcastSharedPanelState(String(roomId), userId);
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to stop presentation." });

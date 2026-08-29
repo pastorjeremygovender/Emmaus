@@ -150,7 +150,7 @@ export async function apiStartPresentation(
     filename: string;
     mediaType: string;
     objectPath: string;
-    sessionId?: string | null;
+    sessionId: string;
     pageCount?: number | null;
   },
 ): Promise<PresentationState> {
@@ -165,23 +165,27 @@ export async function apiStartPresentation(
 export async function apiChangePresentationPage(
   userId: string,
   roomId: string,
+  sessionId: string,
+  presentationId: string,
   page: number,
 ): Promise<void> {
   await roomsFetch(
     `/api/rooms/${roomId}/session/presentation/page`,
     userId,
-    { method: 'PATCH', body: JSON.stringify({ page }) },
+    { method: 'PATCH', body: JSON.stringify({ sessionId, presentationId, page }) },
   );
 }
 
 export async function apiStopPresentation(
   userId: string,
   roomId: string,
+  sessionId: string,
+  presentationId: string,
 ): Promise<void> {
   await roomsFetch(
     `/api/rooms/${roomId}/session/presentation`,
     userId,
-    { method: 'DELETE' },
+    { method: 'DELETE', body: JSON.stringify({ sessionId, presentationId }) },
   );
 }
 

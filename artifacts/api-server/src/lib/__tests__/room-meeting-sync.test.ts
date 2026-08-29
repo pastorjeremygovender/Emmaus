@@ -50,3 +50,42 @@ test("shared Emmaus retries claim the session atomically and reject overlapping 
 test("LiveKit meeting tokens allow participants to publish raise-hand attributes", () => {
   assert.match(routesSource, /canUpdateOwnMetadata:\s*true/);
 });
+
+test("shared panel assignments are session-scoped, explicit, and monotonically versioned", () => {
+  assert.match(storeSource, /export type SharedPanel =/);
+  assert.match(storeSource, /SELECT \* FROM room_sessions[\s\S]*room_id = \$1 AND status = 'active'[\s\S]*FOR UPDATE/);
+  assert.match(storeSource, /expectedVersion !== current\.version/);
+  assert.match(storeSource, /version: current\.version \+ 1/);
+  assert.match(storeSource, /status: "stale"/);
+});
+
+test("late session-event hydration includes the authoritative shared panel", () => {
+  assert.match(routesSource, /sharedPanel: getSharedPanelState\(activeSessionOnConnect\)/);
+  assert.match(routesSource, /type: "shared_panel"/);
+});
+
+test("room members can request bounded chat attachment URLs without presentation authority", () => {
+  const uploadRoute = routesSource.slice(
+    routesSource.indexOf('router.post("/:roomId/messages/upload-url"'),
+    routesSource.indexOf('// ─── Chat — list media', routesSource.indexOf('router.post("/:roomId/messages/upload-url"')),
+  );
+  assert.match(uploadRoute, /getMemberRole\(String\(roomId\), userId\)/);
+  assert.doesNotMatch(uploadRoute, /guardLeader/);
+  assert.match(uploadRoute, /Number\.isSafeInteger\(size\)/);
+  assert.match(uploadRoute, /getObjectEntityUploadURL\(`room-media\/\$\{String\(roomId\)\}`\)/);
+});
+
+test("removing a currently presented message atomically clears the versioned panel", () => {
+  assert.match(storeSource, /DELETE FROM room_media_presentations[\s\S]*message_id = \$2[\s\S]*RETURNING id/);
+  assert.match(storeSource, /'panel', 'none'/);
+  assert.match(storeSource, /COALESCE\(\(metadata->'sharedPanel'->>'version'\)::integer, 0\) \+ 1/);
+});
+
+test("Room attachment serving requires current membership without changing unrelated storage", () => {
+  const storageSource = readFileSync(resolve(here, "../../routes/storage.ts"), "utf8");
+  assert.match(storageSource, /canAccessRoomMediaObject/);
+  assert.match(storageSource, /roomScopedPrefix \|\| probe !== null/);
+  assert.match(storageSource, /requireAuth\(req, res\)/);
+  assert.match(storageSource, /allowed !== true/);
+  assert.match(storeSource, /canReuseLegacyRoomAttachment/);
+});

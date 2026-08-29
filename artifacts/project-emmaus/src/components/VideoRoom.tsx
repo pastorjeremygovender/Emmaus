@@ -23,13 +23,13 @@ import {
   useRemoteParticipants,
   useLocalParticipant,
   useConnectionState,
-  ControlBar,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
 import { ConnectionState, Track } from 'livekit-client';
 import {
   AlertCircle, Loader2, Users, Settings,
   Maximize2, Minimize2, Hand,
+  Mic, MicOff, Video, VideoOff, PhoneOff, Wifi, Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { VideoSessionStatus } from '@/lib/rooms-types';
@@ -109,6 +109,7 @@ function RaiseHandControl() {
   const connectionState = useConnectionState();
   const [raised, setRaised] = useState(() => hasRaisedHand(localParticipant));
   const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setRaised(hasRaisedHand(localParticipant));
@@ -149,14 +150,17 @@ function RaiseHandControl() {
       await localParticipant.setAttributes({
         [RAISE_HAND_ATTRIBUTE]: next ? 'true' : '',
       });
+      setError('');
     } catch {
       setRaised(!next);
+      setError('Your hand signal was not sent. Please try again after reconnecting.');
     } finally {
       setUpdating(false);
     }
   };
 
   return (
+    <div className="space-y-1">
     <button
       type="button"
       onClick={() => void toggle()}
@@ -171,6 +175,8 @@ function RaiseHandControl() {
       <Hand size={15} />
       {raised ? 'Lower hand' : 'Raise hand / ask a question'}
     </button>
+    {error && <p role="alert" className="text-center text-[11px] text-destructive">{error}</p>}
+    </div>
   );
 }
 
@@ -188,6 +194,262 @@ function RaisedHandsSummary({ participants }: { participants: HandParticipant[] 
         {raised.map(participant => participant.name?.trim() || 'Member').join(', ')}{' '}
         {raised.length === 1 ? 'would like to ask a question.' : 'would like to ask questions.'}
       </p>
+    </div>
+  );
+}
+
+type DeviceIntent = {
+  microphone: boolean;
+  camera: boolean;
+  listenOnly: boolean;
+  microphoneId?: string;
+  cameraId?: string;
+};
+
+const defaultIntent: DeviceIntent = { microphone: true, camera: true, listenOnly: false };
+
+/**
+ * Permissions are requested only from this explicit user gesture. Keeping this
+ * outside LiveKitRoom prevents a token request or a reconnect from surprising
+ * somebody with a browser permission prompt.
+ */
+function PrejoinCheck({ mode, initialIntent, onJoin, onCancel }: {
+  mode: 'audio' | 'video';
+  initialIntent?: DeviceIntent;
+  onJoin: (intent: DeviceIntent) => void;
+  onCancel: () => void;
+}) {
+  const [intent, setIntent] = useState<DeviceIntent>(initialIntent ?? {
+    ...defaultIntent,
+    camera: mode === 'video',
+  });
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [micId, setMicId] = useState('');
+  const [cameraId, setCameraId] = useState('');
+  const [speakerId, setSpeakerId] = useState('');
+  const [permissionNote, setPermissionNote] = useState('');
+  const [state, setState] = useState<'ready' | 'checking' | 'granted' | 'blocked' | 'unavailable'>('ready');
+  const [message, setMessage] = useState('');
+  const [level, setLevel] = useState(0);
+  const previewRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const stopPreview = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    analyserRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    if (previewRef.current) previewRef.current.srcObject = null;
+  }, []);
+
+  const refreshDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const next = await navigator.mediaDevices.enumerateDevices();
+    setDevices(next.filter(d => d.kind === 'audioinput' || d.kind === 'videoinput' || d.kind === 'audiooutput'));
+    if (navigator.permissions?.query) {
+      const [mic, camera] = await Promise.all([
+        navigator.permissions.query({ name: 'microphone' as PermissionName }).catch(() => null),
+        navigator.permissions.query({ name: 'camera' as PermissionName }).catch(() => null),
+      ]);
+      setPermissionNote(`Microphone: ${mic?.state ?? 'not reported'} · Camera: ${camera?.state ?? 'not reported'}`);
+    }
+  }, []);
+
+  const check = useCallback(async () => {
+    stopPreview();
+    if (intent.listenOnly || (!intent.microphone && !intent.camera)) {
+      setState('granted');
+      setMessage('Listening only — no microphone or camera will be shared.');
+      void refreshDevices();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setState('unavailable');
+      setMessage('This browser does not support microphone or camera access. You can still join as a listener.');
+      return;
+    }
+    setState('checking');
+    setMessage('Checking your devices…');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: intent.microphone ? (micId ? { deviceId: { exact: micId } } : true) : false,
+        video: intent.camera ? (cameraId ? { deviceId: { exact: cameraId } } : true) : false,
+      });
+      streamRef.current = stream;
+      if (previewRef.current) previewRef.current.srcObject = stream;
+      if (intent.microphone) {
+        const context = new AudioContext();
+        audioContextRef.current = context;
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 256;
+        context.createMediaStreamSource(stream).connect(analyser);
+        analyserRef.current = analyser;
+        const meter = () => {
+          const data = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteFrequencyData(data);
+          setLevel(Math.min(100, Math.round(data.reduce((sum, value) => sum + value, 0) / data.length * 1.8)));
+          rafRef.current = requestAnimationFrame(meter);
+        };
+        meter();
+      }
+      await refreshDevices();
+      setState('granted');
+      setMessage('Your device check is complete.');
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : '';
+      setState(name === 'NotFoundError' ? 'unavailable' : 'blocked');
+      setMessage(
+        name === 'NotAllowedError' || name === 'SecurityError'
+          ? 'Browser access is blocked. Allow microphone/camera for this site in browser settings, then try again.'
+          : 'We could not use that device. Check that it is connected and not in use by another app.',
+      );
+    }
+  }, [cameraId, intent, micId, refreshDevices, stopPreview]);
+
+  useEffect(() => {
+    const recheck = () => { if (document.visibilityState === 'visible') void refreshDevices(); };
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', recheck);
+    return () => {
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', recheck);
+      stopPreview();
+    };
+  }, [refreshDevices, stopPreview]);
+
+  const continueJoin = () => {
+    if (!intent.microphone && !intent.listenOnly) {
+      setState('blocked');
+      setMessage('Turn on your microphone, or choose Listen only to join without one.');
+      return;
+    }
+    stopPreview();
+    onJoin({ ...intent, microphoneId: micId || undefined, cameraId: cameraId || undefined });
+  };
+  const microphones = devices.filter(d => d.kind === 'audioinput');
+  const cameras = devices.filter(d => d.kind === 'videoinput');
+  const speakers = devices.filter(d => d.kind === 'audiooutput');
+  const speakerSupported = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+  const chooseSpeaker = async (id: string) => {
+    setSpeakerId(id);
+    if (!speakerSupported) return;
+    await Promise.all(Array.from(document.querySelectorAll('audio')).map(audio =>
+      (audio as HTMLAudioElement & { setSinkId?: (deviceId: string) => Promise<void> }).setSinkId?.(id),
+    ));
+  };
+  return (
+    <div className="rounded-2xl border border-primary/30 bg-card p-5 space-y-4">
+      <div>
+        <p className="text-[16px] font-semibold">Check your devices</p>
+        <p className="text-[13px] text-muted-foreground mt-1">Choose how you want to join before connecting to the gathering.</p>
+      </div>
+      <div className="flex gap-2">
+        <Button variant={!intent.listenOnly && intent.microphone ? 'default' : 'outline'} size="sm" onClick={() => setIntent(v => v.microphone ? { ...v, listenOnly: true, microphone: false, camera: false } : { ...v, listenOnly: false, microphone: true })}>
+          <Mic size={14} className="mr-1" /> {intent.microphone ? 'Mic on' : 'Mic off'}
+        </Button>
+        {mode === 'video' && <Button variant={!intent.listenOnly && intent.camera ? 'default' : 'outline'} size="sm" onClick={() => setIntent(v => ({ ...v, listenOnly: false, camera: !v.camera }))}>
+          <Video size={14} className="mr-1" /> {intent.camera ? 'Camera on' : 'Camera off'}
+        </Button>}
+        <Button variant={intent.listenOnly ? 'default' : 'outline'} size="sm" onClick={() => setIntent(v => ({ ...v, listenOnly: true, microphone: false, camera: false }))}>Listen only</Button>
+      </div>
+      {!intent.listenOnly && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {microphones.length > 0 && <label className="text-[12px] text-muted-foreground">Microphone<select value={micId} onChange={e => setMicId(e.target.value)} className="mt-1 block w-full rounded-lg border bg-background p-2 text-foreground">{microphones.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Microphone'}</option>)}</select></label>}
+          {intent.camera && cameras.length > 0 && <label className="text-[12px] text-muted-foreground">Camera<select value={cameraId} onChange={e => setCameraId(e.target.value)} className="mt-1 block w-full rounded-lg border bg-background p-2 text-foreground">{cameras.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Camera'}</option>)}</select></label>}
+          {speakerSupported && speakers.length > 0 && <label className="text-[12px] text-muted-foreground">Speaker<select value={speakerId} onChange={e => void chooseSpeaker(e.target.value)} className="mt-1 block w-full rounded-lg border bg-background p-2 text-foreground">{speakers.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Speaker'}</option>)}</select></label>}
+        </div>
+      )}
+      {intent.camera && !intent.listenOnly && <video ref={previewRef} muted playsInline autoPlay className="w-full max-h-44 rounded-xl bg-muted object-contain" aria-label="Camera preview" />}
+      {intent.microphone && !intent.listenOnly && <div><div className="flex justify-between text-[12px] text-muted-foreground"><span>Microphone level</span><span>{state === 'granted' ? 'Receiving sound' : 'Not checked'}</span></div><div className="mt-1 h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${level}%` }} /></div></div>}
+      {message && <p role="status" className={`text-[12px] ${state === 'blocked' || state === 'unavailable' ? 'text-destructive' : 'text-muted-foreground'}`}>{message}</p>}
+      {permissionNote && <p className="text-[11px] text-muted-foreground">{permissionNote}</p>}
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button variant="outline" disabled={state === 'checking'} onClick={() => void check()}>{state === 'checking' ? <Loader2 size={14} className="animate-spin mr-1" /> : <Wrench size={14} className="mr-1" />}Check devices</Button>
+        <Button className="ml-auto" disabled={state !== 'granted'} onClick={continueJoin}>Join gathering</Button>
+      </div>
+    </div>
+  );
+}
+
+function MeetingDock({ mode, canHost, onLeave, onEnd, ending, onTroubleshoot }: {
+  mode: 'audio' | 'video';
+  canHost: boolean;
+  onLeave: () => void;
+  onEnd: () => void;
+  ending: boolean;
+  onTroubleshoot: () => void;
+}) {
+  const { localParticipant } = useLocalParticipant();
+  const connectionState = useConnectionState();
+  const [busy, setBusy] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  const connected = connectionState === ConnectionState.Connected;
+  const toggleMic = async () => {
+    setBusy(true);
+    try { await localParticipant.setMicrophoneEnabled(!localParticipant.isMicrophoneEnabled); setPublishError(''); }
+    catch { setPublishError('Microphone change was not published. Reopen Devices and check browser permission.'); }
+    finally { setBusy(false); }
+  };
+  const toggleCamera = async () => {
+    setBusy(true);
+    try { await localParticipant.setCameraEnabled(!localParticipant.isCameraEnabled); setPublishError(''); }
+    catch { setPublishError('Camera change was not published. Reopen Devices and check browser permission.'); }
+    finally { setBusy(false); }
+  };
+  const status = connected ? 'Connected' : connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting ? 'Reconnecting…' : 'Connecting…';
+  return (
+    <div className="sticky bottom-0 z-10 mt-3 rounded-xl border border-border bg-card/95 p-2 backdrop-blur flex flex-wrap items-center justify-center gap-2">
+      <span className="mr-auto inline-flex items-center gap-1 px-2 text-[11px] text-muted-foreground"><Wifi size={13} className={connected ? 'text-emerald-500' : 'text-amber-500'} />{status}</span>
+      <Button size="sm" variant="outline" disabled={busy || !connected} onClick={() => void toggleMic()} aria-label={localParticipant.isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}>
+        {localParticipant.isMicrophoneEnabled ? <Mic size={15} /> : <MicOff size={15} />}
+      </Button>
+      {mode === 'video' && <Button size="sm" variant="outline" disabled={busy || !connected} onClick={() => void toggleCamera()} aria-label={localParticipant.isCameraEnabled ? 'Turn camera off' : 'Turn camera on'}>
+        {localParticipant.isCameraEnabled ? <Video size={15} /> : <VideoOff size={15} />}
+      </Button>}
+      <Button size="sm" variant="outline" onClick={onTroubleshoot}><Wrench size={14} className="mr-1" />Devices</Button>
+      <div className="w-full"><RaiseHandControl /></div>
+      <Button size="sm" variant="destructive" onClick={onLeave}><PhoneOff size={14} className="mr-1" />Leave</Button>
+      {canHost && <Button size="sm" variant="destructive" disabled={ending} onClick={onEnd}>End</Button>}
+      {publishError && <p role="alert" className="w-full px-2 text-[11px] text-destructive">{publishError}</p>}
+    </div>
+  );
+}
+
+/** Device setup rendered inside the LiveKit provider so switches affect tracks,
+ * rather than reconnecting or unmounting the meeting shell. */
+function InCallDeviceCheck({ mode, intent, onClose, onApplied }: {
+  mode: 'audio' | 'video';
+  intent: DeviceIntent;
+  onClose: () => void;
+  onApplied: (intent: DeviceIntent) => void;
+}) {
+  const { localParticipant } = useLocalParticipant();
+  const apply = async (next: DeviceIntent) => {
+    try {
+      if (next.listenOnly) {
+        await localParticipant.setMicrophoneEnabled(false);
+        if (mode === 'video') await localParticipant.setCameraEnabled(false);
+      } else {
+        await localParticipant.setMicrophoneEnabled(next.microphone, next.microphoneId ? { deviceId: next.microphoneId } : undefined);
+        if (mode === 'video') await localParticipant.setCameraEnabled(next.camera, next.cameraId ? { deviceId: next.cameraId } : undefined);
+      }
+      onApplied(next);
+      onClose();
+    } catch {
+      // PrejoinCheck keeps its clear device/permission recovery message visible.
+    }
+  };
+  return (
+    <div className="absolute inset-0 z-30 overflow-y-auto bg-background/95 p-4 backdrop-blur">
+      <div className="mx-auto max-w-lg">
+        <PrejoinCheck mode={mode} initialIntent={intent} onJoin={next => void apply(next)} onCancel={onClose} />
+      </div>
     </div>
   );
 }
@@ -234,14 +496,6 @@ function VideoParticipantGrid({ canHost, onEnd, ending }: {
       </div>
 
       <RaisedHandsSummary participants={allParticipants} />
-      <RaiseHandControl />
-
-      <div className="pt-1">
-        <ControlBar
-          controls={{ camera: true, microphone: true, screenShare: false, leave: false, chat: false }}
-          style={{ background: 'transparent', padding: 0, justifyContent: 'center' }}
-        />
-      </div>
 
       {canHost && (
         <Button
@@ -311,12 +565,6 @@ function AudioParticipantGrid({ canHost, onEnd, ending }: {
       </div>
 
       <RaisedHandsSummary participants={participants} />
-      <RaiseHandControl />
-
-      <ControlBar
-        controls={{ camera: false, microphone: true, screenShare: false, leave: false, chat: false }}
-        style={{ background: 'transparent', padding: 0, justifyContent: 'center' }}
-      />
 
       {canHost && (
         <Button variant="destructive" size="sm" className="w-full rounded-xl h-10" onClick={onEnd} disabled={ending}>
@@ -346,6 +594,8 @@ export function VideoRoom({
   const [livekitUrl, setLivekitUrl] = useState<string | null>(null);
   const [isInCall, setIsInCall] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [showPrejoin, setShowPrejoin] = useState(false);
+  const [deviceIntent, setDeviceIntent] = useState<DeviceIntent>(defaultIntent);
 
   const maxDurationRef = useRef<number | undefined>(undefined);
   const durationWarning = useDurationWarning(
@@ -386,10 +636,7 @@ export function VideoRoom({
     setActionError('');
     try {
       await apiStartVideo(userId, roomId, meetingMode);
-      const { token: t, livekitUrl: url } = await apiGetVideoToken(userId, roomId);
-      setToken(t);
-      setLivekitUrl(url);
-      setIsInCall(true);
+      setShowPrejoin(true);
       await fetchStatus(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
@@ -405,17 +652,23 @@ export function VideoRoom({
     }
   };
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     if (hasJoinedMeeting === false) {
       setActionError('Join the meeting first, then join Live Audio.');
       return;
     }
+    setActionError('');
+    setShowPrejoin(true);
+  };
+
+  const completePrejoin = async (intent: DeviceIntent) => {
     setActioning(true);
     setActionError('');
     try {
       const { token: t, livekitUrl: url } = await apiGetVideoToken(userId, roomId);
       setToken(t);
       setLivekitUrl(url);
+      setDeviceIntent(intent);
       setIsInCall(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
@@ -426,6 +679,7 @@ export function VideoRoom({
       );
     } finally {
       setActioning(false);
+      setShowPrejoin(false);
     }
   };
 
@@ -503,6 +757,21 @@ export function VideoRoom({
 
   // ── Connected — embedded video card ────────────────────────────────────────
 
+  if (showPrejoin && !isInCall) {
+    return (
+      <PrejoinCheck
+        mode={meetingMode}
+        initialIntent={deviceIntent}
+        onJoin={completePrejoin}
+        onCancel={() => {
+          setShowPrejoin(false);
+          // Starting a gathering is server-authoritative and remains active;
+          // cancelling setup merely leaves this browser in the lobby.
+        }}
+      />
+    );
+  }
+
   if (isInCall && token && livekitUrl) {
     return (
       <div
@@ -544,14 +813,22 @@ export function VideoRoom({
         )}
 
         {/* LiveKit stays mounted through expand/collapse */}
-        <div className={expanded ? 'flex-1 px-4 py-4 overflow-y-auto' : 'px-4 py-4'}>
+        <div className={`${expanded ? 'flex-1 px-4 py-4 overflow-y-auto' : 'px-4 py-4'} relative`}>
           <LiveKitRoom
             serverUrl={livekitUrl}
             token={token}
             connect={true}
-             audio={true}
-             video={meetingMode === 'video'}
-            onDisconnected={handleLeave}
+             audio={deviceIntent.microphone && !deviceIntent.listenOnly
+               ? { deviceId: deviceIntent.microphoneId }
+               : false}
+             video={meetingMode === 'video' && deviceIntent.camera && !deviceIntent.listenOnly
+               ? { deviceId: deviceIntent.cameraId }
+               : false}
+             onDisconnected={() => {
+               // A disconnect may be a transient LiveKit reconnect. Retain the
+               // room/token and intentions; only the explicit Leave control
+               // tears down this shell.
+             }}
             onError={(err) => {
               const msg = err.message?.toLowerCase() ?? '';
               setActionError(
@@ -561,7 +838,6 @@ export function VideoRoom({
                   ? 'Connection lost. Check your internet connection and try rejoining.'
                   : "We couldn't connect. Try again."
               );
-              handleLeave();
             }}
             data-lk-theme="default"
             style={{ background: 'transparent' }}
@@ -580,6 +856,22 @@ export function VideoRoom({
                   ending={actioning}
                 />
              )}
+              <MeetingDock
+                mode={meetingMode}
+                canHost={status.canHost ?? false}
+                onLeave={handleLeave}
+                onEnd={handleEnd}
+                ending={actioning}
+                onTroubleshoot={() => setShowPrejoin(true)}
+              />
+              {showPrejoin && (
+                <InCallDeviceCheck
+                  mode={meetingMode}
+                  intent={deviceIntent}
+                  onClose={() => setShowPrejoin(false)}
+                  onApplied={setDeviceIntent}
+                />
+              )}
           </LiveKitRoom>
         </div>
 

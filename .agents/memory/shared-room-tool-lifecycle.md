@@ -69,3 +69,24 @@ left the Room screen.
 **How to apply:** Keep the Room and LiveKit subtree mounted while changing only
 query-controlled tool surfaces. Legacy tool URLs may redirect into that surface,
 but opening or closing a tool must never create a new media connection.
+
+Shared panel state must be an explicit, monotonically versioned assignment
+scoped to one exact active session.
+
+**Why:** A delayed command from an ended meeting can otherwise mutate its
+replacement, while split writes can make durable content disagree with the
+panel late joiners hydrate.
+
+**How to apply:** Every shared-tool command must verify its expected session
+under the same lock used for the state change, commit related content and panel
+state atomically, publish only after commit, and ignore older client versions.
+
+Room attachments are private to current Room members, not merely hard-to-guess
+object URLs.
+
+**Why:** A room-prefixed upload path does not protect downloads by itself, and
+legacy upload paths can otherwise be reused across rooms.
+
+**How to apply:** Mint new objects under a room-specific prefix, authenticate
+downloads and recheck current membership, and allow legacy attachment reuse only
+when database ownership proves the same author and Room.

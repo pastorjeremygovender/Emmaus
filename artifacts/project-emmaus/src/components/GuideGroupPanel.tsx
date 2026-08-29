@@ -165,6 +165,7 @@ export function GuideGroupPanel({
   // ── Scripture picker (Present Bible) ──────────────────────────────────────
 
   const handleOpenScripture = () => run('scripture', async () => {
+    if (!activeSession) throw new Error('This meeting has ended. Start a new meeting before sharing Scripture.');
     const ref: ScriptureRef = {
       book,
       chapter,
@@ -174,15 +175,16 @@ export function GuideGroupPanel({
         ? `${book} ${chapter}:${verseStart}${verseEnd ? `–${verseEnd}` : ''}`
         : `${book} ${chapter}`,
     };
-    await apiNavigate(userId, roomId, { scripture: ref, leaderName });
+    await apiNavigate(userId, roomId, activeSession.id, { scripture: ref, leaderName });
     setView('main');
   });
 
   // ── Discussion ─────────────────────────────────────────────────────────────
 
   const handleStartDiscussion = () => run('discussion', async () => {
-    await apiChangeMode(userId, roomId, 'discussion', leaderName);
-    const discussion = await apiOpenGroupDiscussion(userId, roomId);
+    if (!activeSession) throw new Error('This meeting has ended. Start a new meeting before opening Discussion.');
+    await apiChangeMode(userId, roomId, activeSession.id, 'discussion', leaderName);
+    const discussion = await apiOpenGroupDiscussion(userId, roomId, activeSession.id);
     onClose();
     onOpenDiscussion?.(discussion.id);
   });
