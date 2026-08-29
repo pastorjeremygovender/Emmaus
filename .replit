@@ -59,6 +59,7 @@ timeoutMs = 20000
 [userenv.shared]
 EMMAUS_DEEP_MODEL = "gpt-5"
 EMMAUS_FAST_MODEL = "gpt-4o"
+VAPID_SUBJECT = "https://emmaus.co.za"
 
 [userenv.production]
 EMMAUS_PUBLIC_ORIGIN = "https://emmaus.co.za"
