@@ -61,3 +61,14 @@ response could replace a successful recovery with the normal Walk fallback.
 **How to apply:** Use a dedicated retry/lifecycle key to trigger startup
 requests and keep transient decision/error state out of that effect's trigger
 dependencies.
+
+The fixed bottom navigation uses native, artifact-scoped links rather than
+client-router click handlers.
+
+**Why:** In a real mobile browser on an incomplete Daily Rhythm reader, both a
+router Link and an explicit router navigation callback left the URL unchanged,
+while native links reliably exited to Bible and Today's Steps.
+
+**How to apply:** Keep the same-day opening cache as the protection against a
+full-page link navigation reopening Daily Rhythm. Verify both exits in a real
+browser before changing the bottom bar back to client-only routing.

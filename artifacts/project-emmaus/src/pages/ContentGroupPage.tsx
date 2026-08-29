@@ -13,7 +13,6 @@ import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useJourney } from '@/contexts/JourneyContext';
-import { useDailyGate } from '@/lib/daily-gate';
 import { isExemptJourney, useEnrollment } from '@/lib/enrollment';
 import { navigatorRoute } from '@/lib/content-navigation';
 import { goBackOrFallback } from '@/lib/return-context';
@@ -59,7 +58,6 @@ export default function ContentGroupPage() {
   const { user } = useAuth();
   const { journeys, progress } = useJourney();
   const { canActivateMore } = useEnrollment();
-  const { gateClear } = useDailyGate();
 
   const filter = parseFilter(search);
   const [group, setGroup] = useState<ContentGroupEntry | null>(null);
@@ -89,11 +87,6 @@ export default function ContentGroupPage() {
   );
 
   const openItem = async (item: NextStepsItem) => {
-    if (item.contentType !== 'daily-rhythm' && !gateClear) {
-      setLocation('/walk');
-      return;
-    }
-
     setOpeningId(item.id);
     try {
       if (item.contentType === 'daily-rhythm') {
@@ -214,10 +207,7 @@ export default function ContentGroupPage() {
             ) : (
               <div className="space-y-3">
                 {items.map(item => {
-                  const locked = item.contentType !== 'daily-rhythm' && !gateClear;
-                  const cta = locked
-                    ? 'Complete Today’s Steps'
-                    : item.memberProgressState === 'not-started'
+                  const cta = item.memberProgressState === 'not-started'
                       ? 'Open'
                       : item.memberProgressState === 'completed'
                         ? 'Review'

@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-import { useDailyGate, isGatedByDailyGate } from '@/lib/daily-gate';
 import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
@@ -39,7 +38,6 @@ export default function JourneyDetail() {
   const { journeys, progress, startJourney, getStepsForJourney, loading } = useJourney();
   const { user } = useAuth();
   const { getState, saveForLater, resumeJourney, canActivateMore } = useEnrollment();
-  const { gateClear, coreJourney: coreJ } = useDailyGate();
   const { getMyRooms, loadRooms, loadRoomDetail, getRoomDetail } = useRooms();
 
   // Read return context from URL — set by the navigation caller.
@@ -169,22 +167,8 @@ export default function JourneyDetail() {
     );
   }
 
-  // Daily gate — applies to non-exempt, non-override growth journeys.
-  // Never gated when the content was opened from a Group — group study is
-  // independent of personal Daily Rhythm progression.
-  const isGated = !gateClear && source !== 'room' && isGatedByDailyGate(journey ?? { journeyType: '' } as any);
-
-  function openCore() {
-    if (!coreJ) { setLocation('/walk'); return; }
-    if (!progress[coreJ.id]) startJourney(coreJ.id);
-    const p = progress[coreJ.id];
-    setLocation(`/journey/${coreJ.id}/day/${p?.currentDay ?? 1}?source=journeyDetail&sourceId=${coreJ.id}`);
-  }
-
   function handlePrimaryAction() {
     if (!journey) return;
-    // Gate check — before core is done, redirect non-exempt journeys to core
-    if (isGated && !isCompleted) { openCore(); return; }
     // Navigate to the next unfinished published step (not prog.currentDay which may point
     // to a deleted or Draft step and trigger the JourneyDay route-guard bounce).
     if (isActive) {
@@ -253,10 +237,7 @@ export default function JourneyDetail() {
   }
 
   // All self-paced journeys use "Continue" regardless of started/paused/completed state.
-  // The gated case (isGated) only applies to Daily Rhythm (journeyType === 'core').
-  const primaryLabel =
-    (isGated && !isCompleted) ? 'Complete 10 minutes with Jesus to proceed' :
-                                 'Continue';
+  const primaryLabel = 'Continue';
 
   const backDest = resolveReturn(source, sourceId, '/journeys?tab=journeys');
   const backLabel = backDest.label === 'Collection' ? 'Journeys' : backDest.label;
@@ -352,16 +333,11 @@ export default function JourneyDetail() {
           <div className="space-y-2.5">
             <Button
               className="w-full h-12 rounded-xl font-medium"
-              style={{ fontSize: isGated ? '14px' : '16px' }}
+              style={{ fontSize: '16px' }}
               onClick={handlePrimaryAction}
             >
               {primaryLabel}
             </Button>
-            {isGated && (
-              <p className="text-[12px] text-muted-foreground text-center leading-snug">
-                Begin with today's time with Jesus. Your Journey will be ready afterwards.
-              </p>
-            )}
             {!isStarted && (
               <button
                 onClick={toggleSave}

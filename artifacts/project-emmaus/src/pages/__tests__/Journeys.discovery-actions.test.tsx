@@ -118,10 +118,6 @@ vi.mock('@/lib/enrollment', () => ({
   isExemptJourney: () => false,
 }));
 
-vi.mock('@/lib/daily-gate', () => ({
-  useDailyGate: () => ({ gateClear: true }),
-}));
-
 vi.mock('@/lib/next-steps-api', () => ({
   fetchNextSteps: mocks.fetchNextSteps,
   startSeries: mocks.startSeries,
@@ -166,6 +162,14 @@ describe('Discovery content activation contract', () => {
       '/journeys/walk-1?source=nextStepsWalks',
     );
     expect(startJourney).not.toHaveBeenCalled();
+  });
+
+  it('shows no Daily Rhythm completion lock on discovered content', async () => {
+    render(<Journeys />);
+    await screen.findByText(walk.title);
+
+    expect(screen.queryByText('Locked')).not.toBeInTheDocument();
+    expect(screen.queryByText("Complete Today's Steps first")).not.toBeInTheDocument();
   });
 
   it('opens a published content group from the Walks tab', async () => {

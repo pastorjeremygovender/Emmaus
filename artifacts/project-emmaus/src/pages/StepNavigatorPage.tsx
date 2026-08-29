@@ -17,7 +17,6 @@ import { BottomNav } from '@/components/BottomNav';
 import { ContentStepList } from '@/components/ContentStepList';
 import { BrowseModeToggle } from '@/components/BrowseModeToggle';
 import { listDailyRhythmGroups, type DailyRhythmGroup } from '@/lib/journeys-api';
-import { isCompletedToday } from '@/lib/daily-lock';
 import type { Journey } from '@/contexts/JourneyContext';
 import { goBackOrFallback } from '@/lib/return-context';
 
@@ -46,8 +45,6 @@ export function StepNavigatorPage({ mode }: Props) {
 
   const prog = journey ? progress[journey.id] : undefined;
   const completedSet = new Set(prog?.completedDays ?? []);
-  const dailyRhythmLockedToday =
-    mode === 'daily-rhythm' && isCompletedToday(prog?.lastCompletedAt);
   // The current day remains visible after completion so the Days screen agrees
   // with Today's Steps. It is still the server's current day; showing it does
   // not unlock the next day.

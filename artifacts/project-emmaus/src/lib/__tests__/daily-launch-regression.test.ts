@@ -38,6 +38,20 @@ describe('Daily Rhythm launch contract', () => {
     expect(localStorage.getItem(key)).toBe('2026-08-23');
   });
 
+  it('opens again on the first entry of the following day', () => {
+    const key = accountStorageKey('emmaus_last_opened_v3', 'member-a');
+    localStorage.setItem(key, '2026-08-23');
+    vi.setSystemTime(new Date('2026-08-24T07:00:00'));
+
+    expect(resolveDailyOpenRoute(
+      'member-a',
+      journeys,
+      { 'daily-rhythm-id': { currentDay: 4, completedDays: [1, 2, 3] } },
+      () => steps,
+    )).toBe('/daily-rhythm/day/4');
+    expect(localStorage.getItem(key)).toBe('2026-08-24');
+  });
+
   it('does not consume the daily opening when auth data is incomplete', () => {
     const key = accountStorageKey('emmaus_last_opened_v2', 'member-a');
 

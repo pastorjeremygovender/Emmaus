@@ -23,7 +23,6 @@ import { cn } from '@/lib/utils';
 import { useJourney } from '@/contexts/JourneyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEnrollment, isExemptJourney } from '@/lib/enrollment';
-import { useDailyGate } from '@/lib/daily-gate';
 import JourneyStartSheet from '@/components/JourneyStartSheet';
 import { useRooms } from '@/contexts/RoomsContext';
 import { apiStartShared } from '@/lib/rooms-api';
@@ -155,7 +154,7 @@ function TabBar({ active, onChange }: { active: TabId; onChange: (id: TabId) => 
 
 function DiscoverCompactCard({
   title, subtitle, ctaLabel, onAction,
-  badge, state, isGated, onGate, secondaryLabel, onSecondary,
+  badge, state, secondaryLabel, onSecondary,
 }: {
   title: string;
   subtitle?: string;
@@ -163,15 +162,13 @@ function DiscoverCompactCard({
   onAction?: () => void;
   badge?: string | null;
   state?: NextStepsItem['memberProgressState'];
-  isGated?: boolean;
-  onGate?: () => void;
   secondaryLabel?: string;
   onSecondary?: () => void;
 }) {
   return (
     <div
       className="bg-card rounded-xl border border-border/50 px-3.5 py-2.5 cursor-pointer hover:border-primary/25 active:opacity-75 transition-colors select-none"
-      onClick={isGated ? onGate : onAction}
+      onClick={onAction}
     >
       <div className="flex items-center gap-2 min-w-0">
         <div className="flex-1 min-w-0 space-y-0.5">
@@ -193,21 +190,19 @@ function DiscoverCompactCard({
               </span>
             )}
           </div>
-          {(subtitle || isGated) && (
+          {subtitle && (
             <p className="text-[11px] text-muted-foreground leading-snug line-clamp-1">
-              {isGated ? "Complete Today's Steps first" : subtitle}
+              {subtitle}
             </p>
           )}
         </div>
-        {isGated ? (
-          <span className="shrink-0 text-[12px] text-muted-foreground/50 whitespace-nowrap leading-none">Locked</span>
-        ) : (onAction && !ctaLabel) ? (
+        {(onAction && !ctaLabel) ? (
           <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         ) : ctaLabel ? (
           <ChevronRight size={15} className="shrink-0 text-muted-foreground/40" aria-hidden="true" />
         ) : null}
       </div>
-      {!isGated && secondaryLabel && onSecondary && (
+      {secondaryLabel && onSecondary && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onSecondary(); }}
@@ -294,13 +289,11 @@ function SwitchDevotionalDialog({
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
 function DiscoveryCard({
-  item, onAction, isGated, onGate, enrollmentState: _es,
+  item, onAction, enrollmentState: _es,
   currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
-  isGated?: boolean;
-  onGate?: () => void;
   enrollmentState?: string | null;
   currentDay?: number;
 }) {
@@ -326,22 +319,18 @@ function DiscoveryCard({
       onAction={onAction}
       badge={item.badge ?? null}
       state={state}
-      isGated={isGated}
-      onGate={onGate}
     />
   );
 }
 
 function DevotionalCard({
-  item, onAction, starting: _starting, onViewPreviousDays, currentDay, isGated, onGate,
+  item, onAction, starting: _starting, onViewPreviousDays, currentDay,
 }: {
   item: NextStepsItem;
   onAction: () => void;
   starting: boolean;
   onViewPreviousDays?: () => void;
   currentDay?: number;
-  isGated?: boolean;
-  onGate?: () => void;
 }) {
   const total = item.metadata.durationDays ?? 0;
   const state = item.memberProgressState;
@@ -358,12 +347,10 @@ function DevotionalCard({
     <DiscoverCompactCard
       title={item.title}
       subtitle={subtitle}
-      ctaLabel={isGated ? undefined : (item.primaryActionLabel ?? undefined)}
+      ctaLabel={item.primaryActionLabel ?? undefined}
       onAction={onAction}
       badge={item.badge ?? null}
       state={state}
-      isGated={isGated}
-      onGate={onGate}
       secondaryLabel={undefined}
       onSecondary={onViewPreviousDays}
     />
@@ -375,14 +362,12 @@ function DevotionalCard({
 // ─── Tab content panels ───────────────────────────────────────────────────────
 
 function DevotionalsPanel({
-  items, onAction, startingId, onViewPreviousDays, isGated, onGate, getProgressDay, sort,
+  items, onAction, startingId, onViewPreviousDays, getProgressDay, sort,
 }: {
   items: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
   startingId: string | null;
   onViewPreviousDays: (seriesId: string) => void;
-  isGated: boolean;
-  onGate: () => void;
   getProgressDay: (id: string) => number;
   sort: DiscoverSort;
 }) {
@@ -396,8 +381,6 @@ function DevotionalsPanel({
           onAction={() => onAction(item)}
           starting={startingId === item.id}
           currentDay={item.metadata.currentDay ?? getProgressDay(item.id)}
-          isGated={isGated}
-          onGate={onGate}
           onViewPreviousDays={
             item.memberProgressState !== 'not-started'
               ? () => onViewPreviousDays(item.id)
@@ -412,11 +395,9 @@ function DevotionalsPanel({
 // Shared card-list helper used by both JourneysPanel and WalksPanel.
 function journeyItemCards(
   items: NextStepsItem[],
-  { onAction, isGated, onGate, getEnrollmentState, getProgressDay }:
+  { onAction, getEnrollmentState, getProgressDay }:
   {
     onAction: (item: NextStepsItem) => void;
-    isGated: (item: NextStepsItem) => boolean;
-    onGate: () => void;
     getEnrollmentState: (id: string) => string | null;
     getProgressDay: (id: string) => number;
   }
@@ -426,8 +407,6 @@ function journeyItemCards(
       key={item.id}
       item={item}
       onAction={() => onAction(item)}
-      isGated={isGated(item)}
-      onGate={onGate}
       enrollmentState={getEnrollmentState(item.id)}
       currentDay={getProgressDay(item.id)}
     />
@@ -438,12 +417,10 @@ function journeyItemCards(
 // Tapping a Journey opens the Collection page (Journey Details), which lists
 // every Walk. Only tapping a Walk inside that page opens the Walk itself.
 export function JourneysPanel({
-  collections, onOpenJourney, isGated, onGate, progress, sort,
+  collections, onOpenJourney, progress, sort,
 }: {
   collections: JourneyCollectionGroup[];
   onOpenJourney: (col: JourneyCollectionGroup) => void;
-  isGated: boolean;
-  onGate: () => void;
   /** Client-side progress map from JourneyContext — always reflects the latest
    *  completed steps, even before the next-steps API cache refreshes. */
   progress: Record<string, { completedDays: number[] }>;
@@ -497,11 +474,9 @@ export function JourneysPanel({
             key={col.id}
             title={col.title}
             subtitle={subtitle}
-            ctaLabel={isGated ? undefined : actionLabel}
+            ctaLabel={actionLabel}
             onAction={() => onOpenJourney(col)}
             state={hasInProgress ? 'in-progress' : completed === walkCount && walkCount > 0 ? 'completed' : 'not-started'}
-            isGated={isGated}
-            onGate={onGate}
           />
         );
       })}
@@ -511,19 +486,17 @@ export function JourneysPanel({
 
 // Walks tab — shows standalone walks that are not assigned to any Journey.
 function WalksPanel({
-  standalone, onAction, isGated, onGate, getEnrollmentState,
+  standalone, onAction, getEnrollmentState,
   getProgressDay, sort,
 }: {
   standalone: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  isGated: (item: NextStepsItem) => boolean;
-  onGate: () => void;
   getEnrollmentState: (id: string) => string | null;
   getProgressDay: (id: string) => number;
   sort: DiscoverSort;
 }) {
   if (standalone.length === 0) return <EmptyState message="No Walks available yet." />;
-  const cardProps = { onAction, isGated, onGate, getEnrollmentState, getProgressDay };
+  const cardProps = { onAction, getEnrollmentState, getProgressDay };
   return (
     <div className="space-y-3">
       {journeyItemCards(sortItems(standalone, sort), cardProps)}
@@ -532,13 +505,11 @@ function WalksPanel({
 }
 
 function ContentGroupsPanel({
-  groups, type, onOpen, isGated, onGate, sort,
+  groups, type, onOpen, sort,
 }: {
   groups: ContentGroupEntry[];
   type: 'journey' | 'daily-rhythm' | 'daily-devotional';
   onOpen: (group: ContentGroupEntry) => void;
-  isGated: boolean;
-  onGate: () => void;
   sort: DiscoverSort;
 }) {
   const matching = groups
@@ -579,10 +550,8 @@ function ContentGroupsPanel({
           key={group.id}
           title={group.title}
           subtitle={group.description || `${count} ${count === 1 ? 'item' : 'items'}`}
-          ctaLabel={isGated ? undefined : 'Open'}
+          ctaLabel="Open"
           onAction={() => onOpen(group)}
-          isGated={isGated}
-          onGate={onGate}
         />
       ))}
     </div>
@@ -610,13 +579,11 @@ function SortBySelect({ value, onChange }: { value: DiscoverSort; onChange: (val
 }
 
 function SermonCompanionsPanel({
-  current, previous, onAction: _onAction, isGated, onGate, getProgressDay, sort,
+  current, previous, onAction: _onAction, getProgressDay, sort,
 }: {
   current: NextStepsItem | null;
   previous: NextStepsItem[];
   onAction: (item: NextStepsItem) => void;
-  isGated: boolean;
-  onGate: () => void;
   getProgressDay: (id: string) => number;
   sort: DiscoverSort;
 }) {
@@ -656,11 +623,9 @@ function SermonCompanionsPanel({
         key={item.id}
         title={item.title}
         subtitle={subtitle}
-        ctaLabel={isGated ? undefined : actionLabel}
+          ctaLabel={actionLabel}
         onAction={() => setLocation(destination)}
         state={state}
-        isGated={isGated}
-        onGate={onGate}
       />
     );
   }
@@ -863,16 +828,6 @@ export default function Journeys() {
     }
   }
 
-  // ── Daily gate — all non-Daily-Rhythm content requires 10 Minutes with Jesus ─
-  const { gateClear } = useDailyGate();
-
-  // Gate applies to every item in the Discover library. The daily rhythm itself
-  // is never shown here, so a simple !gateClear covers all cases.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function isItemGated(_item: NextStepsItem): boolean {
-    return !gateClear;
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -926,11 +881,9 @@ export default function Journeys() {
                   groups={data.contentGroups}
                   type="journey"
                   onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
                   sort={walksSort}
                 />
-                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} isGated={isItemGated} onGate={() => setLocation('/walk')} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
+                <WalksPanel standalone={data.standaloneJourneys} sort={walksSort} onAction={handleWalkAction} getEnrollmentState={(id) => getState(id)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}
             {activeTab === 'journeys' && (
@@ -939,11 +892,9 @@ export default function Journeys() {
                   groups={data.contentGroups}
                   type="journey"
                   onOpen={(group) => setLocation(`/content-groups/${group.id}?type=journey`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
                   sort={journeysSort}
                 />
-                <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} isGated={!gateClear} onGate={() => setLocation('/walk')} progress={progress} />
+                <JourneysPanel collections={data.journeyCollections} sort={journeysSort} onOpenJourney={(col) => setLocation(`/journeys/collections/${col.id}?source=nextStepsJourneys`)} progress={progress} />
               </SectionWrapper>
             )}
             {activeTab === 'devotionals' && (
@@ -952,11 +903,9 @@ export default function Journeys() {
                   groups={data.contentGroups}
                   type="daily-devotional"
                   onOpen={(group) => setLocation(`/content-groups/${group.id}?type=daily-devotional`)}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
                   sort={devotionalsSort}
                 />
-                <DevotionalsPanel items={data.dailyDevotionals} sort={devotionalsSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} isGated={!gateClear} onGate={() => setLocation('/walk')} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
+                <DevotionalsPanel items={data.dailyDevotionals} sort={devotionalsSort} onAction={handleDevotionalAction} startingId={startingDevId} onViewPreviousDays={(id) => setLocation(`/devotional/${id}/previous?source=nextStepsDevotionals`)} getProgressDay={(id) => progress[id]?.currentDay ?? 1} />
               </SectionWrapper>
             )}
             {activeTab === 'sermons' && (
@@ -965,8 +914,6 @@ export default function Journeys() {
                   current={data.currentSermonCompanion}
                   previous={data.previousSermonCompanions}
                   onAction={handleSermonCompanionAction}
-                  isGated={!gateClear}
-                  onGate={() => setLocation('/walk')}
                   getProgressDay={(id) => progress[id]?.currentDay ?? 1}
                    sort={sermonsSort}
                 />

@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'wouter';
+import { useLocation } from 'wouter';
 import { Footprints, BookOpen } from 'lucide-react';
 import { getReturnDestination } from '@/lib/emmaus-pending';
 
@@ -9,6 +9,7 @@ import { getReturnDestination } from '@/lib/emmaus-pending';
 
 export function BottomNav() {
   const [location] = useLocation();
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   const navItems = [
     { path: '/walk',      label: "Today's Steps", icon: Footprints },
@@ -54,9 +55,9 @@ export function BottomNav() {
         {navItems.map(({ path, label, icon: Icon }) => {
           const active = isActive(path);
           return (
-            <Link
+            <a
               key={path}
-              href={path}
+              href={`${base}${path}`}
               data-testid={`nav-${path.slice(1)}`}
               className="relative flex h-full min-h-[44px] w-28 shrink-0 flex-col items-center justify-center gap-1 px-1"
               aria-current={active ? 'page' : undefined}
@@ -77,7 +78,7 @@ export function BottomNav() {
               >
                 {label}
               </span>
-            </Link>
+            </a>
           );
         })}
       </nav>
