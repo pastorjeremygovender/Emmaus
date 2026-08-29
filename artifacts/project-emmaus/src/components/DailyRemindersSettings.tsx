@@ -232,10 +232,12 @@ export function DailyRemindersSettings() {
       </div>
       {state !== 'unsupported' && state !== 'loading' && (
         <div className="mt-3 border-t border-border/50 pt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Label htmlFor="reminder-time" className="text-[12px] font-medium">Daily time</Label>
-            <Input id="reminder-time" type="time" value={time} disabled={working} onChange={(event) => void saveTime(event.target.value)} className="h-9 w-28 text-sm" />
-            {state === 'on' && <Button type="button" variant="ghost" size="sm" disabled={working} onClick={() => void sendTest()} className="ml-0 gap-1 text-xs sm:ml-auto"><Send size={14} /> Send test</Button>}
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 sm:flex">
+            <Label htmlFor="reminder-time" className="shrink-0 text-[12px] font-medium">Daily time</Label>
+            <div className="min-w-0 w-full max-w-32">
+              <Input id="reminder-time" type="time" value={time} disabled={working} onChange={(event) => void saveTime(event.target.value)} className="h-9 w-full min-w-0 text-sm" />
+            </div>
+            {state === 'on' && <Button type="button" variant="ghost" size="sm" disabled={working} onClick={() => void sendTest()} className="col-span-2 justify-self-start gap-1 text-xs sm:ml-auto"><Send size={14} /> Send test</Button>}
           </div>
           {state === 'on' && <button type="button" disabled={working} onClick={() => void disable()} className="mt-2 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">Disable on this device</button>}
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{guidance}</p>
