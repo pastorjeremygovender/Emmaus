@@ -34,18 +34,18 @@ export function SermonRecommendationCard({ sermon }: { sermon: SermonRecommendat
         </div>
         <div>
           {sermon.openPath ? (
-            <button onClick={() => open(sermon.openPath)} className="text-left text-[15px] font-semibold leading-snug hover:underline">
+            <button onClick={() => open(sermon.openPath)} className="w-full text-left text-[15px] font-semibold leading-snug break-words hover:underline">
               {sermon.title}
             </button>
           ) : (
-            <p className="text-[15px] font-semibold leading-snug">{sermon.title}</p>
+            <p className="text-[15px] font-semibold leading-snug break-words">{sermon.title}</p>
           )}
-          <p className="text-[12px] text-muted-foreground mt-1">
+          <p className="text-[12px] text-muted-foreground mt-1 break-words">
             {sermon.speaker}{sermon.sermonDate ? ` · ${dateLabel(sermon.sermonDate)}` : ''}
           </p>
         </div>
-        <p className="text-[13px] text-muted-foreground leading-snug line-clamp-3">{sermon.excerpt}</p>
-        <p className="text-[12px] text-muted-foreground/80">{sermon.reason}</p>
+        <p className="text-[13px] text-muted-foreground leading-snug line-clamp-3 break-words">{sermon.excerpt}</p>
+        <p className="text-[12px] text-muted-foreground/80 break-words">{sermon.reason}</p>
         <div className="flex flex-wrap gap-2">
           {sermon.openPath && (
             <button onClick={() => open(sermon.openPath)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-amber-700">

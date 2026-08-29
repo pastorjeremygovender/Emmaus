@@ -503,8 +503,8 @@ export default function ChapterReader() {
           <span className="text-[11px] text-muted-foreground/60">Tap any verse to open Bible Study options.</span>
         </div>
 
-        {/* Preached Here badge — appears when ICC sermons reference this chapter */}
-        {preachedHereSermons.length > 0 && (
+        {/* Preached Here badge — appears when chapter-specific or book-level ICC sermons exist */}
+        {(preachedHereSermons.length > 0 || preachedHereBookSermons.length > 0) && (
           <div className="flex justify-center pb-2 px-4">
             <button
               onClick={() => setPreachedHereOpen(true)}

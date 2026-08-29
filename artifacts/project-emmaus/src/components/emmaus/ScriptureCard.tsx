@@ -52,11 +52,11 @@ export function ScriptureCard({ scripture }: ScriptureCardProps) {
           <p className="text-[11px] font-semibold text-primary uppercase tracking-widest mb-1">
             Scripture
           </p>
-          <p className="text-[16px] font-sans font-medium text-foreground">
+          <p className="text-[16px] font-sans font-medium text-foreground break-words">
             {displayReference}
           </p>
           {scripture.displayText && (
-            <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed">
+            <p className="text-[14px] text-muted-foreground mt-1 leading-relaxed break-words">
               {scripture.displayText}
             </p>
           )}

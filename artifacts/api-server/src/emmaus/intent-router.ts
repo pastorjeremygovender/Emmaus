@@ -130,6 +130,16 @@ export function routeAskEmmausRequest(message: string): TypedAskEmmausIntent {
     };
   }
 
+  if (/^(?:(?:my|today's|todays|the current)\s+)?(?:daily\s+)?devotional[.!?]*$/.test(value)) {
+    return {
+      intent: "DIRECT_ACTION",
+      requestedCapability: "daily-devotional",
+      requestedOperation: "READ",
+      confidence: 0.99,
+      clarificationRequired: false,
+    };
+  }
+
   if (/^(?:read|show me|open|go to|take me to|get to|access)\s+(?:my\s+|today's\s+|todays\s+|the current\s+)?(?:daily\s+)?devotional\b/.test(value)
     || /^can you open my devotional\b/.test(value)) {
     return {

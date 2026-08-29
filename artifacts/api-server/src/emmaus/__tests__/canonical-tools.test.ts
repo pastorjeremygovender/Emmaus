@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveCanonicalAskRequest } from "../canonical-tools.ts";
+import {
+  resolveCanonicalAskRequest,
+  resolveCurrentDevotionalEntry,
+} from "../canonical-tools.ts";
 
 describe("canonical Ask Emmaus tools", () => {
   it("returns a capability-owned location for application help", async () => {
@@ -28,5 +31,18 @@ describe("canonical Ask Emmaus tools", () => {
     if (!result.handled) return;
     assert.equal(result.metadata.nextStep, null);
     assert.match(result.metadata.answer ?? "", /validate/i);
+  });
+
+  it("resolves a devotional to the first published day not yet completed", () => {
+    const entries = [
+      { status: "Published", dayNumber: 240, scripture: "Psalm 91" },
+      { status: "Published", dayNumber: 241, scripture: "Psalm 92" },
+      { status: "Draft", dayNumber: 242, scripture: "Psalm 93" },
+    ];
+
+    const entry = resolveCurrentDevotionalEntry(entries, [240]);
+
+    assert.equal(entry?.dayNumber, 241);
+    assert.equal(entry?.scripture, "Psalm 92");
   });
 });

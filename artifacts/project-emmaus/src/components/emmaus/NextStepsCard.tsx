@@ -111,7 +111,7 @@ export function NextStepsCard({ steps }: NextStepsCardProps) {
 
                   {/* Watch + Listen buttons when audio is available */}
                   {hasAudio && (
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleStep(step); }}
                         className="flex items-center gap-1 text-[12px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"

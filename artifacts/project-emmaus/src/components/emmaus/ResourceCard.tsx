@@ -188,47 +188,49 @@ export function ResourceCard({ recommendation, actions = [] }: ResourceCardProps
   // ── Standard resource card ─────────────────────────────────────────────────
   return (
     <Card className="border-border bg-card hover:border-primary/30 transition-all">
-      <CardContent className="p-3.5 flex items-start gap-3">
-        <button
-          type="button"
-          onClick={handleClick}
-          className="flex items-start gap-3 flex-1 min-w-0 text-left"
-          disabled={!recommendation.path}
-        >
-          <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${config.color}`}
-            aria-hidden="true"
+      <CardContent className="p-3.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <button
+            type="button"
+            onClick={handleClick}
+            className="flex items-start gap-3 flex-1 min-w-0 text-left"
+            disabled={!recommendation.path}
           >
-            {config.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
-              {recommendation.label ?? config.label}
-            </p>
-            <p className="text-[14px] font-medium text-foreground truncate">
-              {recommendation.title}
-            </p>
-            {recommendation.description && (
-              <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
-                {recommendation.description}
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${config.color}`}
+              aria-hidden="true"
+            >
+              {config.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+                {recommendation.label ?? config.label}
               </p>
-            )}
-          </div>
-        </button>
-        {safeActions.length > 0 && (
-          <div className="flex flex-wrap gap-2 shrink-0">
-            {safeActions.map((action) => (
-              <button
-                key={`${action.kind}:${action.route}`}
-                type="button"
-                onClick={() => openRoute(action.route)}
-                className="rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10"
-              >
-                {actionLabel(action.kind)}
-              </button>
-            ))}
-          </div>
-        )}
+              <p className="text-[14px] font-medium text-foreground leading-snug break-words">
+                {recommendation.title}
+              </p>
+              {recommendation.description && (
+                <p className="text-[13px] text-muted-foreground mt-0.5 line-clamp-2 leading-snug break-words">
+                  {recommendation.description}
+                </p>
+              )}
+            </div>
+          </button>
+          {safeActions.length > 0 && (
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:max-w-[48%] sm:shrink-0 sm:justify-end">
+              {safeActions.map((action) => (
+                <button
+                  key={`${action.kind}:${action.route}`}
+                  type="button"
+                  onClick={() => openRoute(action.route)}
+                  className="min-h-8 rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 whitespace-nowrap"
+                >
+                  {actionLabel(action.kind)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

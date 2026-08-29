@@ -3,10 +3,9 @@
  *
  * Visual hierarchy (top → bottom):
  *   1. Today's 10 Minutes with Jesus   (highest priority — always first)
- *   2. This Week's Sermon              (permanent card — always visible; empty state when no companion)
+ *   2. Sermon Companions               (this week's sermon + up to two accessed companions)
  *   3. Daily Devotionals               (self-paced series the member has started)
  *   4. Your Journeys                   (started growth journeys)
- *   5. Sermon Companions               (other in-progress companions beyond the current week)
  *
  * Ask Emmaus floats above the nav — not part of this hierarchy.
  */
@@ -44,6 +43,21 @@ import { listCollections, type Collection } from '@/lib/collections-api';
 import { projectTodaysJourneys } from '@/lib/todays-journey-projection';
 
 const BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+interface SermonCompanionEngagement {
+  id: string;
+  title: string;
+  numberOfDays: number;
+  isCurrentWeek: boolean;
+  entries: Array<{ dayNumber: number; title: string }>;
+  progress: {
+    currentDay: number;
+    completedDays: number[];
+    status: string;
+    hiddenFromToday?: boolean;
+  } | null;
+  badge: 'UPDATED' | 'NEW' | null;
+}
 
 /** Fire-and-forget engagement action (hide / unhide / remove).
  *  Identity is derived server-side from the secure session cookie. */
@@ -312,69 +326,39 @@ export default function Walk() {
     }
   }, [user, reloadDevotionals, setLocation]);
 
-  // handleBeginCompanion removed — the permanent This Week's Sermon card routes
-  // directly to /sermon-companion/:id/overview which handles starting the companion.
-
   // ── Journey hide state — optimistic local removal ────────────────────────────
   // Journey progress is loaded from JourneyContext (not a local fetch like
   // devotionals), so we track hidden IDs in a local Set for instant UI updates
   // rather than mutating the shared context.
   const [hiddenJourneyIds, setHiddenJourneyIds] = useState<Set<string>>(new Set());
 
-  // ── This Week's Sermon — permanent card (section 2) ─────────────────────────
-  // Always rendered. null = loading, 'none' = no current companion published.
-  // Fetched from the dedicated current-week endpoint (is_current_week flag in DB).
-  const [thisWeekCompanion, setThisWeekCompanion] = useState<
-    | null
-    | 'none'
-    | {
-        id: string;
-        title: string;
-        /** Number of published entries — the definitive day count. */
-        publishedDayCount: number;
-        progress: {
-          currentDay: number;
-          completedDays: number[];
-          status: string;
-        } | null;
-      }
-  >(null);
+  // ── Sermon Companions — this week first, then accessed companions ───────────
+  const [sermonCompanionEngagements, setSermonCompanionEngagements] =
+    useState<SermonCompanionEngagement[] | null>(null);
 
-  const reloadThisWeekCompanion = useCallback((userId: string) => {
-    fetch(`${BASE_URL}/api/sermon-companions/current-week/member`, { credentials: 'include' })
+  const reloadSermonCompanions = useCallback(() => {
+    fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, {
+      credentials: 'include',
+      cache: 'no-store',
+    })
       .then(r => {
-        if (r.status === 404) return null;
-        if (!r.ok) return null;
-        return r.json();
+        if (!r.ok) throw new Error(`Could not load sermon companions (${r.status})`);
+        return r.json() as Promise<SermonCompanionEngagement[]>;
       })
-      .then((data: {
-        id: string;
-        title: string;
-        entries: { id: string; dayNumber: number }[];
-        progress: { currentDay: number; completedDays: number[]; status: string } | null;
-      } | null) => {
-        if (!data) { setThisWeekCompanion('none'); return; }
-        setThisWeekCompanion({
-          id: data.id,
-          title: data.title,
-          publishedDayCount: data.entries.length,
-          progress: data.progress ?? null,
-        });
-      })
-      .catch(() => setThisWeekCompanion('none'));
-    // userId is referenced via closure so the server always receives the correct
-    // session identity; the param is accepted so callers can pass it explicitly.
-    void userId;
+      .then(setSermonCompanionEngagements)
+      .catch(() => setSermonCompanionEngagements([]));
   }, []);
 
   // Initial fetch — runs once when the user is known.
   useEffect(() => {
     if (!user?.id) return;
-    reloadThisWeekCompanion(user.id);
+    reloadSermonCompanions();
     loadRooms().catch(() => {/* rooms are supplementary */});
-  }, [user?.id, reloadThisWeekCompanion, loadRooms]);
+    const refreshTimer = window.setInterval(reloadSermonCompanions, 60_000);
+    return () => window.clearInterval(refreshTimer);
+  }, [user?.id, reloadSermonCompanions, loadRooms]);
 
-  // Visibility-change refresh — refreshes the This Week's Sermon card whenever
+  // Visibility-change refresh — refreshes the Sermon Companions card whenever
   // the member returns to this tab.
   // Critical for Sunday mornings: admin marks a new companion as This Week's
   // Sermon while the member has Today's Steps open; when they switch back to the
@@ -389,13 +373,13 @@ export default function Walk() {
     const userId = user.id;
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        reloadThisWeekCompanion(userId);
+        reloadSermonCompanions();
         reloadDevotionals(userId).catch(() => {/* non-fatal */});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [user?.id, reloadThisWeekCompanion, reloadDevotionals]);
+  }, [user?.id, reloadSermonCompanions, reloadDevotionals]);
 
   if (!user) return null;
 
@@ -411,6 +395,9 @@ export default function Walk() {
           <div className="rounded-2xl border bg-amber-50/60 border-amber-200/40 p-4 space-y-2 animate-pulse">
             <div className="h-2 w-16 rounded bg-amber-200/60" />
             <SkeletonCard />
+          </div>
+          <div className="rounded-2xl border bg-blue-50/60 border-blue-200/40 p-4 space-y-2 animate-pulse">
+            <div className="h-2 w-24 rounded bg-blue-200/60" />
             <SkeletonCard />
           </div>
           <div className="rounded-2xl border bg-violet-50/60 border-violet-200/40 p-4 space-y-2 animate-pulse">
@@ -430,6 +417,18 @@ export default function Walk() {
   // journey is an admin-created growth journey and must NOT be shown here.
   const coreJourney = publishedJourneys.find(j => j.journeyType === 'daily-rhythm');
   const coreProg = coreJourney ? progress[coreJourney.id] : undefined;
+
+  const visibleSermonCompanions = (() => {
+    const companions = sermonCompanionEngagements ?? [];
+    const current = companions.find(companion => companion.isCurrentWeek);
+    const accessed = companions.filter(companion =>
+      companion.id !== current?.id &&
+      companion.progress !== null &&
+      companion.progress.status !== 'paused' &&
+      !companion.progress.hiddenFromToday
+    );
+    return [...(current ? [current] : []), ...accessed].slice(0, 3);
+  })();
 
   const devMode = isDevelopmentMode(user);
 
@@ -627,11 +626,9 @@ export default function Walk() {
         {/* ── Ask Emmaus / Search ───────────────────────────────────────────── */}
         <UnifiedEmmausInput launchOnly />
 
-        {/* ── 1. Start Here — Daily Rhythm + This Week's Sermon ─────────────── */}
+        {/* ── 1. Start Here — Daily Rhythm only ─────────────────────────────── */}
         {coreJourney ? (
           <SectionWrapper color="amber" label="Start Here" delay={0.05}>
-
-            {/* Daily Rhythm */}
             <CompactCard
               title={coreJourney.title}
               subtitle={drSubtitle}
@@ -639,34 +636,6 @@ export default function Walk() {
               onAction={handleDrAction}
               done={drState === 'uptodate'}
             />
-
-            {/* This Week's Sermon */}
-            {thisWeekCompanion === null ? (
-              <SkeletonCard />
-            ) : thisWeekCompanion === 'none' ? (
-              <div className="bg-card/70 rounded-xl border border-border/40 px-3.5 py-2.5">
-                <p className="text-[12px] text-muted-foreground leading-snug">
-                  This week's sermon companion will appear here when published.
-                </p>
-              </div>
-            ) : (() => {
-              const { id, title, publishedDayCount, progress: scProg } = thisWeekCompanion;
-              const completedCount = scProg?.completedDays.length ?? 0;
-              const currentDay     = scProg?.currentDay ?? 1;
-              const allComplete    = publishedDayCount > 0 && currentDay > publishedDayCount;
-              const hasStarted     = scProg !== null;
-              const displayTitle   = title.includes(': ') ? title.split(': ')[0].trim() : title;
-              return (
-                <CompactCard
-                  title={displayTitle}
-                  subtitle="This week's sermon"
-                  ctaLabel={!hasStarted ? 'Start' : allComplete ? 'Review' : 'Continue'}
-                  onAction={() => setLocation(`/sermon-companion/${id}/overview?source=today`)}
-                  done={allComplete}
-                />
-              );
-            })()}
-
           </SectionWrapper>
         ) : (
           <div className="rounded-2xl border border-dashed border-border p-5 text-center">
@@ -676,7 +645,54 @@ export default function Walk() {
           </div>
         )}
 
-        {/* ── 2. Daily Devotionals — always visible ────────────────────────── */}
+        {/* ── 2. Sermon Companions — current week + accessed, maximum three ──── */}
+        <SectionWrapper color="blue" label="Sermon Companions" delay={0.06}>
+          {sermonCompanionEngagements === null ? (
+            <SkeletonCard />
+          ) : visibleSermonCompanions.length === 0 ? (
+            <div className="bg-card/70 rounded-xl border border-border/40 px-3.5 py-2.5">
+              <p className="text-[12px] text-muted-foreground leading-snug">
+                Sermon Companions you start from Discover will appear here.
+              </p>
+            </div>
+          ) : (
+            visibleSermonCompanions.map(companion => {
+              const entryCount = companion.entries.length || companion.numberOfDays;
+              const completedCount = companion.progress?.completedDays.length ?? 0;
+              const allComplete = entryCount > 0 && completedCount >= entryCount;
+              const currentDay = companion.progress?.currentDay ?? 1;
+              const nextEntry = companion.entries.find(entry => entry.dayNumber === currentDay);
+              const displayTitle = companion.title.includes(': ')
+                ? companion.title.split(': ')[0].trim()
+                : companion.title;
+              const subtitle = companion.isCurrentWeek
+                ? "This week's sermon"
+                : allComplete
+                  ? 'Companion complete'
+                  : nextEntry?.title ?? `Step ${currentDay} of ${entryCount}`;
+              return (
+                <CompactCard
+                  key={companion.id}
+                  title={displayTitle}
+                  subtitle={subtitle}
+                  ctaLabel={!companion.progress ? 'Start' : allComplete ? 'Review' : 'Continue'}
+                  onAction={() => {
+                    void dismissBadge('companion', companion.id);
+                    setLocation(`/sermon-companion/${companion.id}/overview?source=today`);
+                  }}
+                  done={allComplete}
+                  badge={companion.badge}
+                />
+              );
+            })
+          )}
+          <AddMoreRow
+            label="Add a Sermon Companion"
+            onClick={() => navigateToDiscover('sermons')}
+          />
+        </SectionWrapper>
+
+        {/* ── 3. Daily Devotionals — always visible ────────────────────────── */}
         <SectionWrapper color="violet" label="Daily Devotionals" delay={0.07}>
           {activeDevotionals.map(ad => {
             const published      = ad.entries.filter(e => e.status === 'Published');

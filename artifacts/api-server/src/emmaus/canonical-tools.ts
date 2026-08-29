@@ -293,11 +293,12 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
 
   const selectedSeries = published.get(selected.seriesId) ?? series[0];
   const full = await getSeriesById(selectedSeries.id);
-  const day = Math.max(1, selected.currentDay || 1);
-  const entry = full?.entries.find((item) => item.status === "Published" && item.dayNumber === day)
-    ?? full?.entries.find((item) => item.status === "Published");
+  const entry = resolveCurrentDevotionalEntry(
+    full?.entries ?? [],
+    selected.completedDays ?? [],
+  );
   if (!entry) {
-    metadata.answer = `The published Daily Devotional "${selectedSeries.title}" is not ready for Day ${day}. You can browse other available devotionals from Discover.`;
+    metadata.answer = `The published Daily Devotional "${selectedSeries.title}" does not have a published entry available yet. You can browse other available devotionals from Discover.`;
     metadata.nextStep = capabilityNextStep("daily-devotional");
     return metadata;
   }
@@ -339,6 +340,23 @@ async function resolveTodayDevotional(userId: string): Promise<EmmausResponseMet
   };
   metadata.followUpPrompts = ["Help me reflect on this devotional.", "Show me my other devotionals."];
   return metadata;
+}
+
+export function resolveCurrentDevotionalEntry<T extends {
+  status: string;
+  dayNumber: number;
+}>(
+  entries: T[],
+  completedDays: number[],
+): T | undefined {
+  const published = entries
+    .filter((entry) => entry.status === "Published")
+    .sort((a, b) => a.dayNumber - b.dayNumber);
+  if (published.length === 0) return undefined;
+
+  const completed = new Set(completedDays);
+  return published.find((entry) => !completed.has(entry.dayNumber))
+    ?? published[published.length - 1];
 }
 
 async function resolveBibleRead(intent: TypedAskEmmausIntent): Promise<EmmausResponseMetadata> {

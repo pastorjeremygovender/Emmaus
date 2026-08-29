@@ -11,6 +11,9 @@ describe("typed Ask Emmaus request router", () => {
   });
 
   it("recognises direct canonical actions", () => {
+    assert.equal(routeAskEmmausRequest("devotional").intent, "DIRECT_ACTION");
+    assert.equal(routeAskEmmausRequest("devotional").requestedCapability, "daily-devotional");
+    assert.equal(routeAskEmmausRequest("today's devotional").requestedOperation, "READ");
     assert.deepEqual(
       routeAskEmmausRequest("Read today's devotional").requestedCapability,
       "daily-devotional",
