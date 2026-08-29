@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../emmaus/auth.js";
 import {
   deactivateReminderSubscription,
+  claimReminderWorkerInvocation,
   getOwnedReminderSubscription,
   getReminderSubscription,
   getUserReminderPreferences,
@@ -10,9 +11,41 @@ import {
   updateReminderPreferences,
   upsertReminderSubscription,
 } from "../lib/reminder-store.js";
-import { reminderConfig, sendReminderTest } from "../lib/reminder-service.js";
+import { deliverDueReminders, reminderConfig, sendReminderTest } from "../lib/reminder-service.js";
+import { verifyReminderWorkerRequest } from "../lib/reminder-worker-auth.js";
 
 export const remindersRouter = Router();
+
+remindersRouter.post("/internal/reminders/deliver", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-store");
+  const verification = verifyReminderWorkerRequest({
+    timestamp: req.get("x-emmaus-timestamp"),
+    nonce: req.get("x-emmaus-nonce"),
+    signature: req.get("x-emmaus-signature"),
+  });
+  if (!verification.ok) {
+    if (verification.reason === "not-configured") {
+      res.status(503).json({ error: "Reminder worker authentication is not configured." });
+      return;
+    }
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  if (!await claimReminderWorkerInvocation(verification.nonce, verification.requestedAt)) {
+    res.status(409).json({ error: "Request already accepted." });
+    return;
+  }
+
+  try {
+    const result = await deliverDueReminders();
+    req.log.info(result, "Authenticated reminder worker completed");
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    req.log.error({ err }, "Authenticated reminder worker failed");
+    res.status(500).json({ error: "Reminder worker failed." });
+  }
+});
 
 const EXACT_PUSH_SERVICE_HOSTS = new Set([
   "fcm.googleapis.com",

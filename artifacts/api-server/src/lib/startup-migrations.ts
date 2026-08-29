@@ -2654,6 +2654,13 @@ export async function runStartupMigrations(): Promise<void> {
         ON reminder_delivery_ledger(subscription_id, local_date);
       CREATE INDEX IF NOT EXISTS reminder_delivery_ledger_status_idx
         ON reminder_delivery_ledger(status);
+      CREATE TABLE IF NOT EXISTS reminder_worker_invocations (
+        nonce text PRIMARY KEY,
+        requested_at timestamptz NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS reminder_worker_invocations_created_idx
+        ON reminder_worker_invocations(created_at);
     `);
     logger.info("Startup migration: web push reminder tables ensured (idempotent)");
   } catch (err) {

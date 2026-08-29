@@ -41,4 +41,17 @@ export const reminderDeliveryLedgerTable = pgTable(
   ],
 );
 
+/** One accepted scheduler nonce, retained briefly to reject replay across instances. */
+export const reminderWorkerInvocationsTable = pgTable(
+  "reminder_worker_invocations",
+  {
+    nonce: text("nonce").primaryKey(),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("reminder_worker_invocations_created_idx").on(table.createdAt),
+  ],
+);
+
 export type ReminderSubscription = typeof reminderSubscriptionsTable.$inferSelect;

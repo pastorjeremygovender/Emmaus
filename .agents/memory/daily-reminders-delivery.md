@@ -3,19 +3,22 @@ name: Daily Reminders delivery
 description: Durable security, timezone, and delivery guarantees for member Web Push reminders.
 ---
 
-Daily Reminders must use a separate one-shot Scheduled Deployment, not an
-in-process timer in the Autoscale API. Push subscriptions are device-scoped and
-an endpoint can never be silently reassigned from one authenticated account to
-another.
+Daily Reminders must use an external one-shot scheduler when Scheduled
+Deployments are unavailable, never an in-process timer in the Autoscale API.
+The scheduler sends only a tick to an internal Emmaus endpoint; eligibility
+stays inside Emmaus. Push subscriptions are device-scoped and an endpoint can
+never be silently reassigned from one authenticated account to another.
 
 **Why:** Autoscale instances do not provide reliable scheduler lifetime, and a
 browser push endpoint is effectively a device capability whose cross-account
 transfer would violate member isolation.
 
-**How to apply:** Keep one permanent VAPID keypair in the API and worker
-environments. Schedule the worker periodically and reject ownership conflicts;
-the browser must unsubscribe before a different signed-in account creates a new
-subscription.
+**How to apply:** Keep one permanent VAPID keypair in Emmaus. Authenticate each
+external tick with an HMAC over the fixed method/path, millisecond timestamp,
+and cryptographic nonce. Enforce a short clock-skew window and atomically claim
+the nonce in PostgreSQL before invoking the existing worker. Keep the signing
+key only in server/provider secrets, schedule every five minutes, and reject
+subscription ownership conflicts.
 
 Only recognized browser push-service origins may be persisted. Never relax
 endpoint validation to accept arbitrary HTTPS URLs: the scheduled sender would

@@ -118,6 +118,30 @@ export async function markReminderDelivery(
   );
 }
 
+/** Persist a scheduler nonce before doing any work so signed requests cannot be replayed. */
+export async function claimReminderWorkerInvocation(
+  nonce: string,
+  requestedAt: Date,
+): Promise<boolean> {
+  const result = await pool.query(
+    `INSERT INTO reminder_worker_invocations (nonce, requested_at)
+     VALUES ($1, $2)
+     ON CONFLICT (nonce) DO NOTHING
+     RETURNING nonce`,
+    [nonce, requestedAt],
+  );
+  if ((result.rowCount ?? 0) > 0) {
+    // Operational replay records have no member data and need only outlive the
+    // accepted request window. Keep a generous margin for incident review.
+    await pool.query(
+      `DELETE FROM reminder_worker_invocations
+        WHERE created_at < now() - interval '7 days'`,
+    );
+    return true;
+  }
+  return false;
+}
+
 export async function deactivateReminderSubscriptionById(id: string): Promise<void> {
   await pool.query(
     `UPDATE reminder_subscriptions SET active = false, updated_at = now() WHERE id = $1`,

@@ -9,6 +9,10 @@ import {
   hasCompletedDailyRhythm,
   listReminderSubscriptions,
 } from "../../lib/reminder-store.ts";
+import {
+  REMINDER_WORKER_MAX_SKEW_MS,
+  signReminderWorkerRequest,
+} from "../../lib/reminder-worker-auth.ts";
 
 if (process.env.NODE_ENV !== "test" || process.env.ALLOW_TEST_AUTH_HARNESS !== "1" ||
     process.env.REPLIT_DEPLOYMENT) {
@@ -24,7 +28,16 @@ const keys = {
   p256dh: Buffer.concat([Buffer.from([4]), crypto.randomBytes(64)]).toString("base64url"),
   auth: crypto.randomBytes(16).toString("base64url"),
 };
+const workerSecret = process.env.REMINDER_WORKER_SIGNING_SECRET!;
 let server: http.Server;
+
+function workerHeaders(timestamp: string, workerNonce: string) {
+  return {
+    "x-emmaus-timestamp": timestamp,
+    "x-emmaus-nonce": workerNonce,
+    "x-emmaus-signature": signReminderWorkerRequest(workerSecret, timestamp, workerNonce),
+  };
+}
 
 function request(path: string, headers: Record<string, string>, method = "GET", body?: object) {
   return new Promise<{ status: number; body: string }>((resolve, reject) => {
@@ -57,6 +70,10 @@ before(async () => {
       created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE(subscription_id, local_date)
     );
+    CREATE TABLE IF NOT EXISTS reminder_worker_invocations (
+      nonce text PRIMARY KEY, requested_at timestamptz NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS daily_rhythm_opening_ledger (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id text NOT NULL, journey_id text NOT NULL,
       local_date text NOT NULL, local_timezone text NOT NULL DEFAULT 'Africa/Johannesburg', assigned_day integer NOT NULL,
@@ -87,8 +104,54 @@ after(async () => {
   const ids = [await testUserIdFor(alice), await testUserIdFor(bob)];
   await pool.query(`DELETE FROM daily_rhythm_opening_ledger WHERE user_id = ANY($1::text[])`, [ids]);
   await pool.query(`DELETE FROM reminder_subscriptions WHERE endpoint = $1`, [endpoint]);
+  await pool.query(`DELETE FROM reminder_worker_invocations WHERE nonce LIKE $1`, [`worker-${nonce}-%`]);
   await pool.query(`DELETE FROM journeys WHERE id = $1`, [journeyId]);
   await cleanupTestAuth();
+});
+
+describe("authenticated reminder worker trigger", () => {
+  it("rejects missing, invalid, and stale signatures", async () => {
+    assert.equal((await request("/api/internal/reminders/deliver", {}, "POST")).status, 401);
+
+    const now = Date.now();
+    const invalid = workerHeaders(String(now), `worker-${nonce}-invalid`);
+    invalid["x-emmaus-signature"] = "0".repeat(64);
+    assert.equal((await request("/api/internal/reminders/deliver", invalid, "POST")).status, 401);
+
+    const staleTimestamp = String(now - REMINDER_WORKER_MAX_SKEW_MS - 1);
+    const stale = workerHeaders(staleTimestamp, `worker-${nonce}-stale`);
+    assert.equal((await request("/api/internal/reminders/deliver", stale, "POST")).status, 401);
+
+    const futureTimestamp = String(now + REMINDER_WORKER_MAX_SKEW_MS + 10_000);
+    const future = workerHeaders(futureTimestamp, `worker-${nonce}-future`);
+    assert.equal((await request("/api/internal/reminders/deliver", future, "POST")).status, 401);
+
+    const rejectedNonces = [
+      `worker-${nonce}-invalid`,
+      `worker-${nonce}-stale`,
+      `worker-${nonce}-future`,
+    ];
+    const persisted = await pool.query(
+      `SELECT nonce FROM reminder_worker_invocations WHERE nonce = ANY($1::text[])`,
+      [rejectedNonces],
+    );
+    assert.equal(persisted.rowCount, 0);
+  });
+
+  it("atomically accepts one signed request across concurrent replays", async () => {
+    const timestamp = String(Date.now());
+    const headers = workerHeaders(timestamp, `worker-${nonce}-accepted`);
+    const attempts = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        request("/api/internal/reminders/deliver", headers, "POST")
+      ),
+    );
+    assert.equal(attempts.filter(item => item.status === 200).length, 1);
+    assert.equal(attempts.filter(item => item.status === 409).length, 7);
+    const accepted = attempts.find(item => item.status === 200)!;
+    assert.equal(JSON.parse(accepted.body).ok, true);
+    assert.equal((await request("/api/internal/reminders/deliver", headers, "POST")).status, 409);
+  });
 });
 
 describe("reminder subscription lifecycle and identity isolation", () => {
