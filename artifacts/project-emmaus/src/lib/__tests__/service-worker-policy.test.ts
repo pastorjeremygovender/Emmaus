@@ -67,6 +67,22 @@ function request(
 describe('Emmaus service-worker cache policy', () => {
   const policy = loadWorkerPolicy();
 
+  it('keeps reminder push handling separate from the cache policy', () => {
+    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
+
+    expect(source).toContain("self.addEventListener('push'");
+    expect(source).toContain("self.addEventListener('notificationclick'");
+    expect(source).toContain("const REMINDER_TITLE = 'A quiet moment with Jesus'");
+    expect(source).toContain(
+      "const REMINDER_BODY = 'Your next 10 Minutes with Jesus is ready whenever you are.'",
+    );
+    expect(source).toContain("const REMINDER_URL = '/daily-rhythm/navigate'");
+    expect(source).toContain('self.registration.showNotification');
+    expect(source).toContain("self.clients.matchAll({ type: 'window', includeUncontrolled: true })");
+    expect(source).toContain('self.clients.openWindow(url)');
+    expect(source).toContain("if (!isSafeStaticRequest(event.request)) return;");
+  });
+
   it('allows generated hashed Vite assets', () => {
     expect(
       policy.isSafeStaticRequest(

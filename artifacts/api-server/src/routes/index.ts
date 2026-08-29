@@ -31,6 +31,7 @@ import voiceRouter from "./voice";
 import shareImageRouter from "./share-image";
 import contentGroupsRouter from "./content-groups";
 import illustrationsRouter from "./illustrations";
+import { remindersRouter } from "./reminders";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(searchRouter);
 router.use(voiceRouter);
 router.use(shareImageRouter);
 router.use(illustrationsRouter);
+router.use(remindersRouter);
 
 export default router;

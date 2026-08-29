@@ -78,3 +78,4 @@
 - [Ask Emmaus capability router](ask-emmaus-capability-router.md) — typed app actions resolve from server-owned capabilities; preserve the Voice-context bypass in the shared service.
 - [Ask Emmaus release gate](ask-emmaus-release-gate.md) — final visible latency follows normalization; TTFT alone is not a user-facing release measure.
 - [Dated devotional resolution](ask-emmaus-dated-devotionals.md) — Ask Emmaus resolves date-labelled devotionals by Johannesburg date, never progress; Daily Rhythm remains server-gated.
+- [Daily Reminders delivery](daily-reminders-delivery.md) — Web Push uses per-device ownership, timezone-instant completion suppression, and an at-most-once scheduled worker.

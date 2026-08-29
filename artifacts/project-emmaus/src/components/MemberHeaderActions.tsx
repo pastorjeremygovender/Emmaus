@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAppearance, type AppearanceFontSize } from '@/contexts/AppearanceContext';
 import { Label } from '@/components/ui/label';
@@ -6,11 +5,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { Info, Moon, Settings, Sun, User } from 'lucide-react';
 import { ShareEmmausButton } from '@/components/ShareEmmausButton';
+import { DailyRemindersSettings } from '@/components/DailyRemindersSettings';
 
 export function MemberHeaderActions({ compact = false }: { compact?: boolean }) {
   const [location] = useLocation();
   const { theme, fontSize, setTheme, setFontSize } = useAppearance();
-  const [notifs, setNotifs] = useState(true);
   const actionSize = compact ? 40 : 44;
   const iconSize = compact ? 17 : 19;
 
@@ -89,23 +88,13 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
         <PopoverContent
           align="end"
           sideOffset={8}
-          className="w-[min(20rem,calc(100vw-1rem))] space-y-3 rounded-2xl p-3"
+          className="w-[min(20rem,calc(100vw-1rem))] max-h-[calc(100dvh-1rem)] space-y-3 overflow-y-auto rounded-2xl p-3"
         >
           <div className="flex items-center gap-2 border-b border-border/60 pb-2">
             <Settings size={16} className="text-primary" aria-hidden="true" />
             <h2 className="text-sm font-semibold">Settings</h2>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
-            <Label htmlFor="notifications-toggle" className="cursor-pointer text-[14px] font-semibold">
-              Daily Reminders
-            </Label>
-            <Switch
-              id="notifications-toggle"
-              checked={notifs}
-              onCheckedChange={setNotifs}
-              data-testid="toggle-notifications"
-            />
-          </div>
+          <DailyRemindersSettings />
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
               {theme === 'dark'

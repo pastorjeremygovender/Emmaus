@@ -56,4 +56,14 @@ describe('MemberHeaderActions', () => {
     expect(screen.getByText('Everything in Emmaus is guided by one conviction:')).toBeInTheDocument();
     expect(screen.getByText('It’s All About JESUS.')).toBeInTheDocument();
   });
+
+  it('shows an honest unsupported state when this browser cannot receive push reminders', async () => {
+    const user = userEvent.setup();
+    render(<MemberHeaderActions compact />);
+
+    await user.click(screen.getByTestId('settings-trigger'));
+
+    expect(screen.getByText('Unsupported on this browser')).toBeInTheDocument();
+    expect(screen.getByTestId('toggle-notifications')).toBeDisabled();
+  });
 });

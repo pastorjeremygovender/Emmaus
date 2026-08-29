@@ -103,3 +103,56 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+const REMINDER_TITLE = 'A quiet moment with Jesus';
+const REMINDER_BODY = 'Your next 10 Minutes with Jesus is ready whenever you are.';
+const REMINDER_URL = '/daily-rhythm/navigate';
+
+function safeReminderUrl(value, absolute) {
+  try {
+    const parsed = new URL(value, self.location.origin);
+    if (parsed.origin !== self.location.origin) throw new Error('cross-origin notification URL');
+    return absolute ? parsed.href : parsed.pathname + parsed.search;
+  } catch {
+    const fallback = new URL(REMINDER_URL, self.location.origin);
+    return absolute ? fallback.href : REMINDER_URL;
+  }
+}
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  const title = typeof payload.title === 'string' ? payload.title : REMINDER_TITLE;
+  const body = typeof payload.body === 'string' ? payload.body : REMINDER_BODY;
+  const requestedUrl = typeof payload.url === 'string' ? payload.url : REMINDER_URL;
+  const url = safeReminderUrl(requestedUrl, false);
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = safeReminderUrl(
+    event.notification.data && event.notification.data.url || REMINDER_URL,
+    true,
+  );
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const matchingClient = clients.find((client) => new URL(client.url).origin === self.location.origin);
+      if (matchingClient) {
+        return matchingClient.navigate(url).then(() => matchingClient.focus());
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

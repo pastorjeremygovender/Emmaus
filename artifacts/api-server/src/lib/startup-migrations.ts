@@ -2617,4 +2617,47 @@ export async function runStartupMigrations(): Promise<void> {
   } catch (err) {
     logger.warn({ err }, "Startup migration: illustrations table failed (non-fatal)");
   }
+
+  // ── Web Push reminders (Task #723) ───────────────────────────────────────
+  // Endpoint uniqueness makes subscriptions safe across repeat browser grants;
+  // the ledger unique key is the cross-worker exactly-once delivery guard.
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS reminder_subscriptions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint text NOT NULL,
+        subscription text NOT NULL,
+        reminder_time text NOT NULL,
+        timezone text NOT NULL,
+        active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS reminder_subscriptions_endpoint_unique
+        ON reminder_subscriptions(endpoint);
+      ALTER TABLE reminder_subscriptions
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+      CREATE INDEX IF NOT EXISTS reminder_subscriptions_user_idx
+        ON reminder_subscriptions(user_id);
+      CREATE TABLE IF NOT EXISTS reminder_delivery_ledger (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        subscription_id uuid NOT NULL REFERENCES reminder_subscriptions(id) ON DELETE CASCADE,
+        local_date text NOT NULL,
+        status text NOT NULL DEFAULT 'claimed',
+        error text,
+        delivered_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS reminder_delivery_subscription_date_unique
+        ON reminder_delivery_ledger(subscription_id, local_date);
+      CREATE INDEX IF NOT EXISTS reminder_delivery_ledger_status_idx
+        ON reminder_delivery_ledger(status);
+    `);
+    logger.info("Startup migration: web push reminder tables ensured (idempotent)");
+  } catch (err) {
+    logger.error({ err }, "Startup migration: web push reminder tables failed");
+    throw err;
+  }
 }
