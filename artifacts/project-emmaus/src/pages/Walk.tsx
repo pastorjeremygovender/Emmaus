@@ -335,6 +335,8 @@ export default function Walk() {
   // ── Sermon Companions — this week first, then accessed companions ───────────
   const [sermonCompanionEngagements, setSermonCompanionEngagements] =
     useState<SermonCompanionEngagement[] | null>(null);
+  const [hiddenSermonCompanionIds, setHiddenSermonCompanionIds] =
+    useState<Set<string>>(new Set());
 
   const reloadSermonCompanions = useCallback(() => {
     fetch(`${BASE_URL}/api/sermon-companions/member/engagements`, {
@@ -420,12 +422,17 @@ export default function Walk() {
 
   const visibleSermonCompanions = (() => {
     const companions = sermonCompanionEngagements ?? [];
-    const current = companions.find(companion => companion.isCurrentWeek);
+    const current = companions.find(companion =>
+      companion.isCurrentWeek &&
+      !companion.progress?.hiddenFromToday &&
+      !hiddenSermonCompanionIds.has(companion.id)
+    );
     const accessed = companions.filter(companion =>
       companion.id !== current?.id &&
       companion.progress !== null &&
       companion.progress.status !== 'paused' &&
-      !companion.progress.hiddenFromToday
+      !companion.progress.hiddenFromToday &&
+      !hiddenSermonCompanionIds.has(companion.id)
     );
     return [...(current ? [current] : []), ...accessed].slice(0, 3);
   })();
@@ -682,6 +689,14 @@ export default function Walk() {
                   }}
                   done={allComplete}
                   badge={companion.badge}
+                  trailing={
+                    <WalkDismissButton
+                      onDismiss={() => {
+                        setHiddenSermonCompanionIds(prev => new Set([...prev, companion.id]));
+                        void callEngagementAction('sermon-companion', companion.id, 'hide', user?.id);
+                      }}
+                    />
+                  }
                 />
               );
             })
