@@ -1,0 +1,105 @@
+The Daily Reminders setting is currently misleading.
+
+I have Daily Reminders switched on, but:
+- Emmaus has never asked for notification permission.
+- I receive no notifications from Emmaus.
+- I was never given an opportunity to enable notifications on my device.
+
+Do not assume the existing toggle is connected to a working notification system.
+
+FIRST AUDIT THE CURRENT IMPLEMENTATION
+
+Trace the Daily Reminders toggle completely and report:
+
+1. What database or local-storage value changes when it is enabled.
+2. Whether notification permission is ever requested.
+3. Whether Emmaus has a registered service worker.
+4. Whether Web Push is configured.
+5. Whether a push subscription is created and saved.
+6. Whether any backend process actually schedules or sends reminders.
+7. Whether notification tapping is configured to open the correct Emmaus screen.
+8. Whether the installed PWA and normal browser are handled differently.
+9. Whether notifications are supported in the user’s browser and Android device.
+10. Why the toggle currently appears enabled even though no notification permission was granted.
+
+THEN IMPLEMENT A COMPLETE DAILY REMINDER SYSTEM
+
+The toggle must not merely save a preference.
+
+When the user turns Daily Reminders on:
+
+- Check whether notifications and Web Push are supported.
+- Request notification permission through a genuine user-triggered action.
+- Do not mark the setting as enabled until permission is granted and a valid push subscription is saved.
+- If permission is denied, keep the toggle off and explain how the user can enable notifications in the device or browser settings.
+- If the browser does not support the required notification functionality, show a clear and calm explanation.
+- Do not repeatedly request permission after it has been denied.
+
+Once permission is granted:
+
+- Register and maintain the service worker.
+- Create a Web Push subscription.
+- Save the subscription securely against the correct authenticated user.
+- Allow the user to choose a daily reminder time.
+- Respect the user’s local timezone.
+- Schedule one daily reminder to open Emmaus and continue 10 Minutes with Jesus.
+- Do not send the reminder if the user has already completed that day’s 10 Minutes with Jesus.
+- Prevent duplicate subscriptions and duplicate notifications.
+- Remove or deactivate the subscription when Daily Reminders is switched off.
+- Tapping the notification must open the installed Emmaus PWA, or focus an existing Emmaus window, and navigate to the correct Daily Rhythm screen.
+
+IMPORTANT TECHNICAL REQUIREMENTS
+
+- Determine whether the current Replit deployment supports a reliable server-side scheduled job.
+- Do not rely only on a browser timer, setTimeout, or setInterval. These will not work reliably when Emmaus is closed.
+- Use a proper server-triggered Web Push implementation.
+- Store VAPID and other private credentials securely in environment secrets.
+- Never expose private keys in frontend code.
+- Make subscription handling safe across multiple devices.
+- Remove invalid or expired subscriptions when sending fails.
+- Keep notification content calm and non-pressuring.
+
+Suggested notification:
+
+Title:
+A quiet moment with Jesus
+
+Message:
+Your next 10 Minutes with Jesus is ready whenever you are.
+
+SETTINGS UI
+
+Change the setting to show its real state:
+
+Daily Reminders
+A gentle reminder to spend time with Jesus
+
+Possible statuses:
+- Off
+- Permission needed
+- On — daily at [time]
+- Blocked in device settings
+- Not supported on this device
+
+Do not display the switch as enabled if permission or a valid push subscription is missing.
+
+TEST THE REAL USER FLOW
+
+Test on an installed Android PWA, not only in the desktop development preview:
+
+1. New user has never granted notification permission.
+2. User enables Daily Reminders.
+3. Android/browser permission prompt appears.
+4. User grants permission.
+5. A valid subscription is created and saved.
+6. Send a test notification immediately from the Settings screen.
+7. Confirm it appears while Emmaus is open.
+8. Confirm it appears while Emmaus is closed.
+9. Confirm tapping it opens the correct Emmaus screen.
+10. Confirm disabling reminders prevents future notifications.
+11. Confirm denied and blocked permission states are explained correctly.
+12. Confirm signing in on another device does not break the first device.
+
+Add a temporary “Send test notification” action while validating the feature. It may be retained under a small “Test reminder” option if useful.
+
+Before making changes, explain what the current toggle actually does. After implementation, report the precise tests completed and any remaining platform limitations.
