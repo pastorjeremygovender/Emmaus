@@ -38,6 +38,8 @@ export async function runStartupMigrations(): Promise<void> {
   // Presentation ordering columns are additive and intentionally have no data
   // mutations here. Legacy rows remain stable via created_at/day fallbacks.
   for (const statement of [
+    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_theme text NOT NULL DEFAULT 'light'`,
+    `ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS appearance_text_size text NOT NULL DEFAULT 'standard'`,
     `ALTER TABLE journeys ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
     `ALTER TABLE journey_steps ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,
     `ALTER TABLE devotional_series ADD COLUMN IF NOT EXISTS display_order integer NOT NULL DEFAULT 0`,

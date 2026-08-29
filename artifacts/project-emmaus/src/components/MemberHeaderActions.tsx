@@ -146,6 +146,13 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
                 </button>
               ))}
             </div>
+            <p
+              className="mt-3 rounded-lg border border-border/60 bg-background/70 px-3 py-2 text-base leading-relaxed text-foreground"
+              data-testid="text-size-preview"
+              aria-live="polite"
+            >
+              Jesus walks with you through every season.
+            </p>
           </div>
         </PopoverContent>
       </Popover>

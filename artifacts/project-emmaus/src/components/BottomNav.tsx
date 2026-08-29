@@ -49,7 +49,7 @@ export function BottomNav() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/75 backdrop-blur-sm safe-area-bottom">
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background shadow-[0_-8px_24px_hsl(var(--background)/0.92)] safe-area-bottom">
       <nav className="flex h-16 items-center justify-around" aria-label="Main navigation">
         {navItems.map(({ path, label, icon: Icon }) => {
           const active = isActive(path);

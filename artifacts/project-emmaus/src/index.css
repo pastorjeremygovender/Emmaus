@@ -182,6 +182,13 @@
   --destructive-foreground: 35 25% 97%;
   --input: 35 15% 85%;
   --ring: 168 38% 35%;
+  --surface-raised: 35 24% 98%;
+  --surface-inset: 35 18% 91%;
+  --section-gold: 44 62% 93%;
+  --section-blue: 210 55% 94%;
+  --section-violet: 266 48% 94%;
+  --section-green: 151 36% 93%;
+  --section-journey: 188 34% 93%;
 
   --chart-1: 168 38% 35%;
   --chart-2: 44 40% 42%;
@@ -299,6 +306,13 @@
   --destructive-foreground: 222 20% 10%;
   --input: 222 14% 27%;
   --ring: 168 42% 50%;
+  --surface-raised: 222 16% 19%;
+  --surface-inset: 222 16% 13%;
+  --section-gold: 42 28% 18%;
+  --section-blue: 211 30% 18%;
+  --section-violet: 265 25% 19%;
+  --section-green: 154 23% 17%;
+  --section-journey: 188 23% 17%;
 
   --chart-1: 168 38% 35%;
   --chart-2: 44 40% 42%;
@@ -326,13 +340,9 @@
   --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
 }
 
-html[data-font-size="large"] {
-  font-size: 112.5%;
-}
-
-html[data-font-size="extra-large"] {
-  font-size: 125%;
-}
+:root { --font-scale: 1; }
+html[data-font-size="large"] { --font-scale: 1.125; }
+html[data-font-size="extra-large"] { --font-scale: 1.25; }
 
 @layer base {
   * {
@@ -345,6 +355,59 @@ html[data-font-size="extra-large"] {
 }
 
 @layer utilities {
+  /* Scale typography without browser zooming or inflating non-text dimensions. */
+  .text-xs { font-size: calc(0.75rem * var(--font-scale)); }
+  .text-sm { font-size: calc(0.875rem * var(--font-scale)); }
+  .text-base { font-size: calc(1rem * var(--font-scale)); }
+  .text-lg { font-size: calc(1.125rem * var(--font-scale)); }
+  .text-xl { font-size: calc(1.25rem * var(--font-scale)); }
+  .text-2xl { font-size: calc(1.5rem * var(--font-scale)); }
+  .text-3xl { font-size: calc(1.875rem * var(--font-scale)); }
+  .text-4xl { font-size: calc(2.25rem * var(--font-scale)); }
+  .text-\[10px\] { font-size: calc(10px * var(--font-scale)); }
+  .text-\[11px\] { font-size: calc(11px * var(--font-scale)); }
+  .text-\[12px\] { font-size: calc(12px * var(--font-scale)); }
+  .text-\[13px\] { font-size: calc(13px * var(--font-scale)); }
+  .text-\[14px\] { font-size: calc(14px * var(--font-scale)); }
+  .text-\[15px\] { font-size: calc(15px * var(--font-scale)); }
+  .text-\[16px\] { font-size: calc(16px * var(--font-scale)); }
+  .text-\[17px\] { font-size: calc(17px * var(--font-scale)); }
+  .text-\[18px\] { font-size: calc(18px * var(--font-scale)); }
+  .text-\[20px\] { font-size: calc(20px * var(--font-scale)); }
+  .text-\[22px\] { font-size: calc(22px * var(--font-scale)); }
+  .text-\[24px\] { font-size: calc(24px * var(--font-scale)); }
+  .text-\[26px\] { font-size: calc(26px * var(--font-scale)); }
+  .text-\[28px\] { font-size: calc(28px * var(--font-scale)); }
+  .text-\[30px\] { font-size: calc(30px * var(--font-scale)); }
+  .text-\[32px\] { font-size: calc(32px * var(--font-scale)); }
+
+  .bg-surface-raised { background-color: hsl(var(--surface-raised)); }
+  .bg-surface-inset { background-color: hsl(var(--surface-inset)); }
+  .bg-section-gold { background-color: hsl(var(--section-gold)); }
+  .bg-section-blue { background-color: hsl(var(--section-blue)); }
+  .bg-section-violet { background-color: hsl(var(--section-violet)); }
+  .bg-section-green { background-color: hsl(var(--section-green)); }
+  .bg-section-journey { background-color: hsl(var(--section-journey)); }
+
+  /* Legacy light utilities inherit calm semantic dark surfaces until migrated. */
+  .dark .bg-white { background-color: hsl(var(--surface-raised)); }
+  .dark .bg-gray-50, .dark .bg-gray-100 { background-color: hsl(var(--surface-inset)); }
+  .dark .bg-amber-50, .dark .bg-amber-50\/60 { background-color: hsl(var(--section-gold)); }
+  .dark .bg-sky-50, .dark .bg-sky-50\/60, .dark .bg-blue-50 { background-color: hsl(var(--section-blue)); }
+  .dark .bg-violet-50, .dark .bg-violet-50\/60, .dark .bg-purple-50 { background-color: hsl(var(--section-violet)); }
+  .dark .bg-emerald-50, .dark .bg-emerald-50\/60, .dark .bg-green-50 { background-color: hsl(var(--section-green)); }
+  .dark .bg-orange-50, .dark .bg-orange-50\/60, .dark .bg-teal-50 { background-color: hsl(var(--section-journey)); }
+  .dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-300 { border-color: hsl(var(--border)); }
+  .dark .border-amber-100, .dark .border-amber-200,
+  .dark .border-sky-100, .dark .border-sky-200,
+  .dark .border-violet-100, .dark .border-violet-200,
+  .dark .border-emerald-100, .dark .border-emerald-200,
+  .dark .border-orange-100, .dark .border-orange-200,
+  .dark .border-teal-100, .dark .border-teal-200 { border-color: hsl(var(--border)); }
+  .dark .text-gray-900, .dark .text-gray-800, .dark .text-gray-700, .dark .text-gray-600 { color: hsl(var(--foreground)); }
+  .dark .text-gray-500, .dark .text-gray-400, .dark .text-gray-300 { color: hsl(var(--muted-foreground)); }
+  .dark .hover\:bg-gray-50:hover, .dark .hover\:bg-gray-100:hover { background-color: hsl(var(--muted)); }
+
   input[type='search']::-webkit-search-cancel-button {
     @apply hidden;
   }

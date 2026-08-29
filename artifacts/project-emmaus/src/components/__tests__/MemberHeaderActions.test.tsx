@@ -66,4 +66,16 @@ describe('MemberHeaderActions', () => {
     expect(screen.getByText('Unsupported on this browser')).toBeInTheDocument();
     expect(screen.getByTestId('toggle-notifications')).toBeDisabled();
   });
+
+  it('shows the live text-size preview in Settings', async () => {
+    const user = userEvent.setup();
+    render(<MemberHeaderActions compact />);
+
+    await user.click(screen.getByTestId('settings-trigger'));
+
+    expect(screen.getAllByText('Standard')).toHaveLength(2);
+    expect(screen.getByTestId('text-size-preview')).toHaveTextContent(
+      'Jesus walks with you through every season.',
+    );
+  });
 });

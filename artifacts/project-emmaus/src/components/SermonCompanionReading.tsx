@@ -123,10 +123,10 @@ export function SermonCompanionReading({
       {/* ── Greeting / introductory paragraph ───────────────────────────────── */}
       {greeting && (
         <section className="mb-3.5">
-          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4">
+          <div className="rounded-2xl border border-amber-200/60 bg-amber-50/60 px-4 py-4 dark:border-amber-700/35 dark:bg-amber-950/24">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700">Greeting</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-300">Greeting</h2>
             </div>
             <p className="text-[17px] font-medium text-foreground leading-[1.65]">
               {greetingLead}
@@ -143,10 +143,10 @@ export function SermonCompanionReading({
       {/* ── Today's Reading ─────────────────────────────────────────────────── */}
       {scripture && (
         <section className="mb-3.5">
-          <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4">
+          <div className="rounded-2xl border border-sky-200/60 bg-sky-50/60 px-4 py-4 dark:border-sky-700/35 dark:bg-sky-950/24">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">Today's Reading</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700 dark:text-sky-300">Today's Reading</h2>
             </div>
             <EmbeddedScripture scripture={scripture} returnPath={returnPath} />
           </div>
@@ -156,10 +156,10 @@ export function SermonCompanionReading({
       {/* ── Consider This ───────────────────────────────────────────────────── */}
       {considerThis && (
         <section className="mb-3.5">
-          <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4">
+          <div className="rounded-2xl border border-violet-200/60 bg-violet-50/60 px-4 py-4 dark:border-violet-700/35 dark:bg-violet-950/24">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">Consider This</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-300">Consider This</h2>
             </div>
             <BodyParagraphs text={considerThis} />
           </div>
@@ -169,10 +169,10 @@ export function SermonCompanionReading({
       {/* ── Prayer ──────────────────────────────────────────────────────────── */}
       {prayer && (
         <section className="mb-3.5">
-          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4">
+          <div className="rounded-2xl border border-emerald-200/60 bg-emerald-50/60 px-4 py-4 dark:border-emerald-700/35 dark:bg-emerald-950/24">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">Prayer</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300">Prayer</h2>
             </div>
             <BodyParagraphs text={prayer} />
           </div>
@@ -182,10 +182,10 @@ export function SermonCompanionReading({
       {/* ── Your Next Step ───────────────────────────────────────────────────── */}
       {nextStep && (
         <section className="mb-3.5">
-          <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4">
+          <div className="rounded-2xl border border-orange-200/60 bg-orange-50/60 px-4 py-4 dark:border-orange-700/35 dark:bg-orange-950/24">
             <div className="flex items-center gap-1.5 mb-2.5">
               <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700">Your Next Step</h2>
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-700 dark:text-orange-300">Your Next Step</h2>
             </div>
             <BodyParagraphs text={nextStep} />
           </div>

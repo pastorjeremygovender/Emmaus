@@ -699,6 +699,74 @@ authRouter.get(
   },
 );
 
+authRouter.get(
+  "/users/appearance",
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const [profile] = await db
+      .select({
+        theme: userProfilesTable.appearanceTheme,
+        fontSize: userProfilesTable.appearanceTextSize,
+      })
+      .from(userProfilesTable)
+      .where(eq(userProfilesTable.authSubject, req.user.id))
+      .limit(1);
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      theme: profile?.theme === "dark" ? "dark" : "light",
+      fontSize:
+        profile?.fontSize === "large" || profile?.fontSize === "extra-large"
+          ? profile.fontSize
+          : "standard",
+    });
+  },
+);
+
+authRouter.put(
+  "/users/appearance",
+  async (req: Request, res: Response): Promise<void> => {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+
+    const theme = req.body?.theme;
+    const fontSize = req.body?.fontSize;
+    if (
+      (theme !== "light" && theme !== "dark") ||
+      (fontSize !== "standard" && fontSize !== "large" && fontSize !== "extra-large")
+    ) {
+      res.status(400).json({ error: "Invalid appearance preferences." });
+      return;
+    }
+
+    const [profile] = await db
+      .update(userProfilesTable)
+      .set({
+        appearanceTheme: theme,
+        appearanceTextSize: fontSize,
+        updatedAt: new Date(),
+      })
+      .where(eq(userProfilesTable.authSubject, req.user.id))
+      .returning({
+        theme: userProfilesTable.appearanceTheme,
+        fontSize: userProfilesTable.appearanceTextSize,
+      });
+
+    if (!profile) {
+      res.status(409).json({ error: "The verified account profile is not ready." });
+      return;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.json(profile);
+  },
+);
+
 authRouter.post(
   "/users/profile",
   async (req: Request, res: Response): Promise<void> => {
