@@ -50,7 +50,7 @@ export function BottomNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background shadow-[0_-8px_24px_hsl(var(--background)/0.92)] safe-area-bottom">
-      <nav className="flex h-16 items-center justify-around" aria-label="Main navigation">
+      <nav className="flex h-16 items-center justify-center gap-4" aria-label="Main navigation">
         {navItems.map(({ path, label, icon: Icon }) => {
           const active = isActive(path);
           return (
@@ -58,7 +58,7 @@ export function BottomNav() {
               key={path}
               href={path}
               data-testid={`nav-${path.slice(1)}`}
-              className="relative flex h-full min-h-[44px] flex-1 flex-col items-center justify-center gap-1 px-1"
+              className="relative flex h-full min-h-[44px] w-28 shrink-0 flex-col items-center justify-center gap-1 px-1"
               aria-current={active ? 'page' : undefined}
             >
               {active && (

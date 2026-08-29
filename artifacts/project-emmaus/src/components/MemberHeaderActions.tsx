@@ -19,7 +19,7 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary active:bg-primary/10 ${
+            className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 ${
               compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
             }`}
             aria-label="About Emmaus"
@@ -57,12 +57,8 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
       </Popover>
       <Link
         href="/personal"
-        className={`flex items-center justify-center rounded-full transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+        className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 ${
           compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
-        } ${
-          location === '/personal' || location.startsWith('/personal/')
-            ? 'text-primary'
-            : 'text-muted-foreground'
         }`}
         aria-label="My Journey"
         title="My Journey"
@@ -75,7 +71,7 @@ export function MemberHeaderActions({ compact = false }: { compact?: boolean }) 
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`flex items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+            className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 ${
               compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
             }`}
             aria-label="Open settings"

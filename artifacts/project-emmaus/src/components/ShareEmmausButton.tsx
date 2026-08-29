@@ -32,7 +32,7 @@ export function ShareEmmausButton({ compact = false }: { compact?: boolean }) {
     <button
       type="button"
       onClick={handleShare}
-      className={`flex items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/5 active:bg-primary/10 ${
+      className={`flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/5 active:bg-primary/10 ${
         compact ? 'min-h-[40px] min-w-[40px]' : 'min-h-[44px] min-w-[44px]'
       }`}
       aria-label={status === 'copied' ? 'Emmaus link copied' : 'Share Emmaus'}
